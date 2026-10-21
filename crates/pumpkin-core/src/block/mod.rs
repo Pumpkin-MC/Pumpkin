@@ -147,6 +147,9 @@ pub trait BlockBehaviour: Send + Sync {
         stop_vertical_movement_after_fall(args.entity);
     }
 
+    /// Called when a player starts digging this block, except in creative.
+    fn attack(&self, _args: AttackArgs<'_>) {}
+
     fn broken(&self, _args: BrokenArgs<'_>) {}
 
     fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
@@ -366,6 +369,14 @@ pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
     pub entity: &'a dyn EntityBase,
 }
 
+pub struct AttackArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub player: &'a Arc<Player>,
+}
+
 pub struct BrokenArgs<'a> {
     pub block: &'a Block,
     pub player: &'a Arc<Player>,
@@ -459,8 +470,7 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
-    if let Some(loot_table) = world.get_loot_table(&key) {
+    if let Some(loot_table) = block.loot_table.and_then(|key| world.get_loot_table(key)) {
         let seed: i64 = rand::random();
         let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
         if !items.is_empty() {

@@ -93,4 +93,9 @@ pub trait BlockAccessor: Send + Sync {
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId;
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState);
+
+    /// Clips a ray segment against the block and fluid shapes in this accessor.
+    fn clip(&self, context: &crate::clip::ClipContext) -> crate::clip::BlockHitResult {
+        crate::clip::clip(self, context)
+    }
 }

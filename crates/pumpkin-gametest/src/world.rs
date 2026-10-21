@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use pumpkin_data::BlockStateId;
 use pumpkin_nbt::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
-use crate::error::GameTestResult;
+use crate::error::{GameTestError, GameTestResult};
 use crate::model::GameTestRotation;
 
 #[async_trait]
@@ -29,6 +29,10 @@ pub trait GameTestWorld: Send + Sync {
         position: &BlockPos,
         nbt: &NbtCompound,
     ) -> GameTestResult<()>;
+
+    async fn block_entity_nbt(&self, _position: &BlockPos) -> GameTestResult<Option<NbtCompound>> {
+        Ok(None)
+    }
 
     /// Removes all non-player entities intersecting the half-open world-space box
     /// `[min, max)`. Vanilla does this before every `GameTest` structure placement,
@@ -78,4 +82,101 @@ pub trait GameTestWorld: Send + Sync {
     async fn test_block_message(&self, position: &BlockPos) -> GameTestResult<String>;
 
     async fn surface_height(&self, x: i32, z: i32) -> i32;
+
+    async fn spawn_entity(
+        &self,
+        _entity_name: &str,
+        _position: Vector3<f64>,
+    ) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "entity spawning is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn spawn_item(
+        &self,
+        _item_name: &str,
+        _count: u8,
+        _position: Vector3<f64>,
+    ) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "item spawning is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn entity_count_in_box(
+        &self,
+        _entity_name: &str,
+        _min: Vector3<f64>,
+        _max: Vector3<f64>,
+    ) -> GameTestResult<usize> {
+        Ok(0)
+    }
+
+    async fn item_count_in_box(
+        &self,
+        _item_name: &str,
+        _min: Vector3<f64>,
+        _max: Vector3<f64>,
+    ) -> GameTestResult<u32> {
+        Ok(0)
+    }
+
+    async fn container_item_count(
+        &self,
+        _position: &BlockPos,
+        _item_name: &str,
+    ) -> GameTestResult<u32> {
+        Ok(0)
+    }
+
+    async fn is_container_empty(&self, _position: &BlockPos) -> GameTestResult<bool> {
+        Ok(true)
+    }
+
+    async fn set_container_item(
+        &self,
+        _position: &BlockPos,
+        _slot: usize,
+        _item_name: &str,
+        _count: u8,
+    ) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "container mutation is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn press_button(&self, _position: &BlockPos) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "press_button is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn pull_lever(&self, _position: &BlockPos) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "pull_lever is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn use_block(&self, _position: &BlockPos) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "use_block is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn random_tick(&self, _position: &BlockPos) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "random_tick is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn execute_command(
+        &self,
+        _position: Vector3<f64>,
+        _command: &str,
+    ) -> GameTestResult<u32> {
+        Err(GameTestError::World(
+            "execute_command is not supported by this GameTestWorld".to_string(),
+        ))
+    }
 }
