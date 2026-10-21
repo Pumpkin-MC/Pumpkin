@@ -3146,8 +3146,10 @@ impl World {
         };
 
         let gamemode = player.gamemode.load();
+        let mut except = self.players_hiding(gameprofile.id);
+        except.push(gameprofile.id);
         self.broadcast_packet_except_editioned(
-            &[gameprofile.id],
+            &except,
             &CPlayerInfoUpdate::new(
                 (PlayerInfoFlags::ADD_PLAYER
                     | PlayerInfoFlags::UPDATE_GAME_MODE
@@ -3176,7 +3178,7 @@ impl World {
 
         // Bedrock gets `AddPlayer` from the tracker.
         self.broadcast_packet_except(
-            &[gameprofile.id],
+            &except,
             &CSpawnEntity::new(
                 (runtime_id as i32).into(),
                 gameprofile.id,
@@ -3210,7 +3212,7 @@ impl World {
 
         for existing_player in players
             .iter()
-            .filter(|p| p.gameprofile.id != gameprofile.id)
+            .filter(|p| p.gameprofile.id != gameprofile.id && player.can_see(&p.gameprofile.id))
         {
             client
                 .send_packet(&existing_player.bedrock_player_list())
@@ -3436,7 +3438,12 @@ impl World {
         }];
         let player_info_update = CPlayerInfoUpdate::new(Self::TAB_LIST_ADD_FLAGS, &java_player);
 
-        self.broadcast_editioned(&player_info_update, &bedrock_player_list);
+        let hidden_from = self.players_hiding(gameprofile.id);
+        self.broadcast_packet_except_editioned(
+            &hidden_from,
+            &player_info_update,
+            &bedrock_player_list,
+        );
 
         // If the player has a custom tab_list_name, send an update for it
         if let Some(tab_list_name) = player.get_tab_list_name() {
@@ -3445,10 +3452,10 @@ impl World {
                 uuid: gameprofile.id,
                 actions: &actions,
             }];
-            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                &java_player,
-            ));
+            self.broadcast_packet_except(
+                &hidden_from,
+                &CPlayerInfoUpdate::new(PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(), &java_player),
+            );
         }
 
         // Here, we send all the infos of players who already joined.
@@ -3456,10 +3463,9 @@ impl World {
         {
             let players = self.players.load();
             let mut data_to_process = Vec::new();
-            for p in players
-                .iter()
-                .filter(|p| p.gameprofile.id != player.gameprofile.id)
-            {
+            for p in players.iter().filter(|p| {
+                p.gameprofile.id != player.gameprofile.id && player.can_see(&p.gameprofile.id)
+            }) {
                 let props_guard = p.gameprofile.properties.load();
                 data_to_process.push((props_guard, p));
             }
@@ -3569,7 +3575,9 @@ impl World {
             velocity,
         );
 
-        self.broadcast_packet_except(&[player.gameprofile.id], &spawn_entity);
+        let mut except = hidden_from;
+        except.push(gameprofile.id);
+        self.broadcast_packet_except(&except, &spawn_entity);
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -3595,7 +3603,7 @@ impl World {
             .players
             .load()
             .iter()
-            .filter(|c| c.gameprofile.id != id)
+            .filter(|c| c.gameprofile.id != id && player.can_see(&c.gameprofile.id))
         {
             Self::with_player_list_entry(existing_player, |java, bedrock| {
                 player.client.try_enqueue_packet_editioned(java, bedrock);
@@ -4511,6 +4519,16 @@ impl World {
             .cloned()
     }
 
+    /// Players in this world that hid `id` with `Player::hide_player`.
+    fn players_hiding(&self, id: uuid::Uuid) -> Vec<uuid::Uuid> {
+        self.players
+            .load()
+            .iter()
+            .filter(|p| !p.can_see(&id))
+            .map(|p| p.gameprofile.id)
+            .collect()
+    }
+
     /// Retrieves an entity by their unique UUID.
     ///
     /// This function searches the world's entities for one with the specified UUID.
@@ -4777,7 +4795,7 @@ impl World {
     }
 
     /// Tab-list add entry for `player` from its stored state, as Java and Bedrock packets.
-    fn with_player_list_entry<R>(
+    pub(crate) fn with_player_list_entry<R>(
         player: &Player,
         f: impl FnOnce(&CPlayerInfoUpdate<'_>, &CPlayerList) -> R,
     ) -> R {
@@ -4807,14 +4825,16 @@ impl World {
     /// Publishes a player from another world -> tab list first, Java drops spawns without it.
     pub fn add_arriving_player(&self, player: &Arc<Player>) {
         let id = player.gameprofile.id;
+        let mut except = self.players_hiding(id);
+        except.push(id);
         Self::with_player_list_entry(player, |java, bedrock| {
-            self.broadcast_packet_except_editioned(&[id], java, bedrock);
+            self.broadcast_packet_except_editioned(&except, java, bedrock);
         });
         for existing in self
             .players
             .load()
             .iter()
-            .filter(|p| p.gameprofile.id != id)
+            .filter(|p| p.gameprofile.id != id && player.can_see(&p.gameprofile.id))
         {
             Self::with_player_list_entry(existing, |java, bedrock| {
                 player.client.try_enqueue_packet_editioned(java, bedrock);

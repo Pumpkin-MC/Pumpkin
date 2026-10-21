@@ -269,12 +269,12 @@ use pumpkin_protocol::java::client::play::{
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
     CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
     COpenBook, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
-    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
-    PreviousMessage, Statistic,
+    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRemovePlayerInfo, CRespawn,
+    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
+    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
+    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags,
+    PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -3912,18 +3912,68 @@ impl Player {
         self.respawn_location.load()
     }
 
+    /// Hides `other_id` from this player: its entity and tab-list entry are removed and not sent
+    /// again until `show_player`.
     pub fn hide_player(&self, other_id: uuid::Uuid) {
-        self.hidden_players
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(other_id);
+        if other_id == self.gameprofile.id
+            || !self
+                .hidden_players
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(other_id)
+        {
+            return;
+        }
+        let world = self.world();
+        let Some(other) = world.get_player_by_uuid(other_id) else {
+            return;
+        };
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(other.entity_id()) {
+            tracked.remove_player(self);
+        }
+        self.client.try_enqueue_packet_editioned(
+            &CRemovePlayerInfo::new(&[other_id]),
+            &CPlayerList {
+                action: CPlayerList::ACTION_REMOVE,
+                ..other.bedrock_player_list()
+            },
+        );
     }
 
+    /// Shows a player hidden with `hide_player` again: tab-list entry first, then the entity.
     pub fn show_player(&self, other_id: uuid::Uuid) {
-        self.hidden_players
+        if !self
+            .hidden_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&other_id);
+            .remove(&other_id)
+        {
+            return;
+        }
+        let world = self.world();
+        let Some(other) = world.get_player_by_uuid(other_id) else {
+            return;
+        };
+        World::with_player_list_entry(&other, |java, bedrock| {
+            self.client.try_enqueue_packet_editioned(java, bedrock);
+        });
+        if let Some(tab_list_name) = other.get_tab_list_name()
+            && let ClientPlatform::Java(java) = self.client.as_ref()
+            && let Ok(data) = java.serialize_packet(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: other_id,
+                    actions: &[PlayerAction::UpdateDisplayName(Some(&tab_list_name))],
+                }],
+            ))
+        {
+            java.try_enqueue_packet(data);
+        }
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(other.entity_id())
+            && let Some(viewer) = world.get_player_by_uuid(self.gameprofile.id)
+        {
+            tracked.update_player(&viewer, &world);
+        }
     }
 
     pub fn can_see(&self, other_id: &uuid::Uuid) -> bool {
