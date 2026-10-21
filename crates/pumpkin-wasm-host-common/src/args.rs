@@ -6,7 +6,7 @@ use pumpkin_core::{
     command::{
         argument_types::{
             argument_type::JavaClientArgumentType, coordinates::Coordinates,
-            entity_anchor::EntityAnchor,
+            entity_anchor::EntityAnchor, game_profile::GameProfileResult,
         },
         context::command_context::CommandContext,
         node::attached::AttachedNode,
@@ -112,6 +112,10 @@ pub fn build_consumed_args_from_context(context: &CommandContext) -> HashMap<Str
             } else if let Ok(entities) = selector.find_entities(&context.source) {
                 map.insert(name.clone(), OwnedArg::Entities(entities));
             }
+        } else if let Some(profile) = res.downcast_ref::<GameProfileResult>()
+            && let Some(arg) = game_profile_to_owned_arg(context, profile)
+        {
+            map.insert(name.clone(), arg);
         }
     }
     map
@@ -166,6 +170,22 @@ fn coordinates_to_owned_arg(
             ))
         }
         _ => None,
+    }
+}
+
+/// Converts a parsed `game_profile` argument: a typed name or UUID is passed
+/// on as text, a selector resolves to the online players it matches
+fn game_profile_to_owned_arg(
+    context: &CommandContext,
+    profile: &GameProfileResult,
+) -> Option<OwnedArg> {
+    match profile {
+        GameProfileResult::Name(name) => Some(OwnedArg::Simple(name.clone())),
+        GameProfileResult::Uuid(uuid) => Some(OwnedArg::Simple(uuid.to_string())),
+        GameProfileResult::Selector(selector) => selector
+            .find_players(&context.source)
+            .ok()
+            .map(OwnedArg::Players),
     }
 }
 
