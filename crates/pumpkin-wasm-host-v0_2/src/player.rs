@@ -3009,13 +3009,16 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
             let screen_handler: Arc<
                 std::sync::Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>,
-            > = Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
-                sync_id,
-                window_type,
-                &inventory,
-                allow_grab_items,
-                allow_put_items,
-            )));
+            > = Arc::new(std::sync::Mutex::new(
+                PluginScreenHandler::with_player_inventory(
+                    sync_id,
+                    window_type,
+                    player.inventory(),
+                    &inventory,
+                    allow_grab_items,
+                    allow_put_items,
+                ),
+            ));
             player.open_handled_screen_direct(screen_handler, &title);
         })
         .await
