@@ -1042,6 +1042,25 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         nbt.put_int("y", pos.y);
         nbt.put_int("z", pos.z);
 
+        // A loaded block entity never reads the pending NBT again, so swap in
+        // a new one like `/clone` does, which also sends it to clients.
+        if world_ref.get_block_entity(&internal_pos).is_some() {
+            let Some(block_entity) = pumpkin_core::block::entities::block_entity_from_nbt(&nbt)
+            else {
+                return Ok(Err("NBT is not a valid block entity".to_string()));
+            };
+            // Open screens hold the old block entity's inventory, and clicks
+            // there would no longer reach the block.
+            world_ref.close_container_screens_at(&internal_pos);
+            world_ref.add_block_entity(block_entity);
+            // Like vanilla `BlockEntity.setChanged`, so comparators see the change.
+            world_ref.update_neighbour_for_output_signal(
+                &internal_pos,
+                world_ref.get_block(&internal_pos),
+            );
+            return Ok(Ok(()));
+        }
+
         // Use add_block_entity_nbt for lazy loading — avoids broadcasting
         // a packet per tile entity during bulk operations.
         world_ref.add_block_entity_nbt(internal_pos, &nbt);
