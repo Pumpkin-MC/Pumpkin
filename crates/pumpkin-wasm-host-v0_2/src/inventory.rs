@@ -180,11 +180,7 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
             InventoryProvider::PlayerMain(player) => {
                 if slot < 36 {
                     player.inventory().set_stack(slot as usize, stack.clone());
-                    player.try_send_slot_set_packet(&CSetPlayerInventory::new(
-                        (slot as i32).into(),
-                        &ItemStackSerializer::from(stack),
-                    ));
-                    player.sync_inventory_to_client();
+                    player.sync_hand_slot(slot as usize, stack);
                 }
             }
             InventoryProvider::PlayerEnderChest(player) => {
@@ -216,13 +212,10 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
                         slot as usize,
                         pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
                     );
-                    player.try_send_slot_set_packet(&CSetPlayerInventory::new(
-                        (slot as i32).into(),
-                        &ItemStackSerializer::from(
-                            pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                        ),
-                    ));
-                    player.sync_inventory_to_client();
+                    player.sync_hand_slot(
+                        slot as usize,
+                        pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                    );
                     if s.is_empty() { None } else { Some(s) }
                 } else {
                     None
@@ -270,7 +263,10 @@ impl HostInventoryWithStore<PluginHostState> for HasSelf<PluginHostState> {
                         ),
                     ));
                 }
-                player.sync_inventory_to_client();
+                player.sync_hand_slot(
+                    player.inventory().get_selected_slot() as usize,
+                    pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
+                );
             }
             InventoryProvider::PlayerEnderChest(player) => {
                 player.ender_chest_inventory().clear();
