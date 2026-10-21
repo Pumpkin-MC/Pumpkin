@@ -19,6 +19,9 @@ type FarmlandProperties = FarmlandLikeProperties;
 /// Raw brightness `CropBlock` and `StemBlock` need at the plant to grow on a random tick.
 const MIN_GROWTH_LIGHT: u8 = 9;
 
+/// Raw brightness `CropBlock.canSurvive` needs at the plant.
+const MIN_SURVIVAL_LIGHT: u8 = 8;
+
 pub mod beetroot;
 pub mod carrot;
 pub mod gourds;
@@ -39,6 +42,30 @@ trait CropBlockBase: PlantBlockBase {
         block_accessor
             .get_block(pos)
             .has_tag(&tag::Block::MINECRAFT_SUPPORTS_CROPS)
+    }
+
+    /// Mirrors vanilla `CropBlock.canSurvive`. Without a world (world generation) there is no light to check yet.
+    fn can_crop_survive(
+        &self,
+        world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        world.is_none_or(|world| world.get_raw_brightness(pos, 0) >= MIN_SURVIVAL_LIGHT)
+            && <Self as PlantBlockBase>::can_place_at(self, block_accessor, pos)
+    }
+
+    fn crop_state_for_neighbor_update(
+        &self,
+        world: &World,
+        pos: &BlockPos,
+        state: BlockStateId,
+    ) -> BlockStateId {
+        if self.can_crop_survive(Some(world), world, pos) {
+            state
+        } else {
+            Block::AIR.default_state.id
+        }
     }
 
     fn max_age(&self) -> i32 {
