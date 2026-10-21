@@ -251,13 +251,19 @@ fn give_player_bucket_item(player: &Player, item: &'static Item) {
     player.inventory.set_held_item(held_stack);
 }
 
+/// `can_pickup` is asked with the position and the filled bucket right before
+/// the world changes; returning false leaves the world as it is.
 pub(crate) fn try_pickup_fluid_at(
     world: &Arc<World>,
     block_pos: BlockPos,
+    can_pickup: impl FnOnce(BlockPos, &'static Item) -> bool,
 ) -> Option<&'static Item> {
     let (block, state) = world.get_block_and_state_id(&block_pos);
 
     if block == &Block::POWDER_SNOW {
+        if !can_pickup(block_pos, &Item::POWDER_SNOW_BUCKET) {
+            return None;
+        }
         world.break_block(
             &block_pos,
             None,
@@ -267,6 +273,9 @@ pub(crate) fn try_pickup_fluid_at(
     }
 
     if block.is_waterlogged(state) {
+        if !can_pickup(block_pos, &Item::WATER_BUCKET) {
+            return None;
+        }
         let state_id = block.set_waterlogged(state, false).unwrap_or(state);
         world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
@@ -274,17 +283,21 @@ pub(crate) fn try_pickup_fluid_at(
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
+        let item = if state == Block::LAVA.default_state.id {
+            &Item::LAVA_BUCKET
+        } else {
+            &Item::WATER_BUCKET
+        };
+        if !can_pickup(block_pos, item) {
+            return None;
+        }
         world.break_block(&block_pos, None, BlockFlags::NOTIFY_ALL);
         world.set_block_state(
             &block_pos,
             Block::AIR.default_state.id,
             BlockFlags::NOTIFY_ALL,
         );
-        return Some(if state == Block::LAVA.default_state.id {
-            &Item::LAVA_BUCKET
-        } else {
-            &Item::WATER_BUCKET
-        });
+        return Some(item);
     }
 
     None
@@ -294,15 +307,27 @@ fn try_pickup_bucket_item(
     world: &Arc<World>,
     block_pos: BlockPos,
     direction: BlockDirection,
+    mut can_pickup: impl FnMut(BlockPos, &'static Item) -> bool,
 ) -> Option<&'static Item> {
-    if let Some(item) = try_pickup_fluid_at(world, block_pos) {
+    let mut asked = false;
+    if let Some(item) = try_pickup_fluid_at(world, block_pos, |pos, item| {
+        asked = true;
+        can_pickup(pos, item)
+    }) {
         return Some(item);
+    }
+    // A pickup refused at the clicked block must not fall through to its neighbour.
+    if asked {
+        return None;
     }
 
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
 
     let unwaterlogged = block.set_waterlogged(state, false)?;
+    if !can_pickup(target_pos, &Item::WATER_BUCKET) {
+        return None;
+    }
 
     world.set_block_state(&target_pos, unwaterlogged, BlockFlags::NOTIFY_ALL);
     world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
@@ -326,7 +351,12 @@ pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64
     );
 }
 
-fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDirection) -> bool {
+fn try_place_powder_snow(
+    world: &Arc<World>,
+    pos: BlockPos,
+    direction: BlockDirection,
+    can_place: impl FnOnce(BlockPos) -> bool,
+) -> bool {
     let state = world.get_block_state(&pos);
     let target_pos = if state.replaceable() {
         pos
@@ -337,6 +367,9 @@ fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDire
     if !target_state.is_air() && !target_state.is_liquid() && !target_state.replaceable() {
         return false;
     }
+    if !can_place(target_pos) {
+        return false;
+    }
     world.set_block_state(
         &target_pos,
         Block::POWDER_SNOW.default_state.id,
@@ -345,21 +378,27 @@ fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDire
     true
 }
 
+/// `can_place` is asked with the position that changes right before the world
+/// changes; returning false leaves the world as it is.
 pub(crate) fn try_place_filled_bucket(
     world: &Arc<World>,
     item: &Item,
     pos: BlockPos,
     direction: BlockDirection,
+    can_place: impl FnOnce(BlockPos) -> bool,
 ) -> bool {
     if item.id == Item::SULFUR_CUBE_BUCKET.id {
-        return true;
+        return can_place(pos.offset(direction.to_offset()));
     }
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
-        return try_place_powder_snow(world, pos, direction);
+        return try_place_powder_snow(world, pos, direction, can_place);
     }
 
     if item.id == Item::WATER_BUCKET.id && block.is_waterlogged(state.id) {
+        if !can_place(pos) {
+            return false;
+        }
         let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
         world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
@@ -370,7 +409,7 @@ pub(crate) fn try_place_filled_bucket(
     let (block, state) = world.get_block_and_state(&target_pos);
 
     if block.is_waterloggable() {
-        if item.id == Item::LAVA_BUCKET.id {
+        if item.id == Item::LAVA_BUCKET.id || !can_place(target_pos) {
             return false;
         }
         let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
@@ -380,6 +419,9 @@ pub(crate) fn try_place_filled_bucket(
     }
 
     if state.id == Block::AIR.default_state.id || state.is_liquid() {
+        if !can_place(target_pos) {
+            return false;
+        }
         world.set_block_state(
             &target_pos,
             if item.id == Item::LAVA_BUCKET.id {
@@ -418,24 +460,30 @@ impl ItemBehaviour for EmptyBucketItem {
         let block_pos = hit.block_pos;
         let direction = hit.direction;
 
-        let Some(item) = try_pickup_bucket_item(&world, block_pos, direction) else {
+        let Some(item) = try_pickup_bucket_item(&world, block_pos, direction, |pos, item| {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent::new(
+                        player_arc,
+                        pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    // The client already shows the filled bucket.
+                    player.sync_hand_slot(
+                        player.inventory.get_selected_slot() as usize,
+                        player.inventory.held_item(),
+                    );
+                    return false;
+                }
+            }
+            true
+        }) else {
             return;
         };
-
-        if let Some(server) = world.server.upgrade()
-            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent::new(
-                    player_arc,
-                    block_pos,
-                    item.registry_key.to_string(),
-                );
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-        }
 
         world.play_sound(
             get_fill_sound(item),
@@ -511,20 +559,29 @@ impl ItemBehaviour for FilledBucketItem {
             play_bucket_evaporation(&world, &player.position());
             return;
         }
-        if !try_place_filled_bucket(&world, item, pos, direction) {
+        if !try_place_filled_bucket(&world, item, pos, direction, |place_pos| {
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
+                        player_arc,
+                        place_pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    // The client already shows the empty bucket.
+                    player.sync_hand_slot(
+                        player.inventory.get_selected_slot() as usize,
+                        player.inventory.held_item(),
+                    );
+                    return false;
+                }
+            }
+            true
+        }) {
             return;
-        }
-
-        if let Some(server) = world.server.upgrade()
-            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
-        {
-            let mut event =
-                crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
-                    player_arc,
-                    pos,
-                    item.registry_key.to_string(),
-                );
-            server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
         let place_pos = if item.id != Item::SULFUR_CUBE_BUCKET.id
