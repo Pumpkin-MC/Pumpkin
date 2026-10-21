@@ -134,9 +134,6 @@ impl super::Phase for DyingPhase {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .set_dragon_killed(&world, entity.entity_uuid);
             }
-            for part in &dragon.parts {
-                part.entity.remove();
-            }
             entity.remove();
         }
     }
