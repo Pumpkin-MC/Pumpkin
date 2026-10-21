@@ -61,12 +61,16 @@ impl LpVector3d {
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
         let mut low_16 = [0u8; 2];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut low_16[..1])
             .map_err(|e| ReadingError::Message(e.to_string()))?;
 
-        if low_16[0] == 0 && low_16[1] == 0 {
+        if low_16[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+
+        reader
+            .read_exact(&mut low_16[1..])
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -166,5 +170,27 @@ mod tests {
         velocity.write_legacy(&mut buf)?;
         assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
         Ok(())
+    }
+
+    #[test]
+    fn zero_uses_one_byte_and_preserves_the_next_field() -> Result<(), Box<dyn std::error::Error>> {
+        let zero = LpVector3d(Vector3::new(0.0, 0.0, 0.0));
+        let mut encoded = Vec::new();
+        zero.write(&mut encoded)?;
+        assert_eq!(encoded, [0]);
+
+        let mut input = &[0, 1][..];
+        assert_eq!(LpVector3d::read(&mut input)?, zero);
+        assert_eq!(input, [1]);
+        assert_eq!(LpVector3d::read(&mut &[0][..])?, zero);
+        Ok(())
+    }
+
+    #[test]
+    fn truncated_nonzero_vector_is_rejected() {
+        for length in 1..6 {
+            let mut input = &[1, 0, 0, 0, 0][..length];
+            assert!(LpVector3d::read(&mut input).is_err());
+        }
     }
 }

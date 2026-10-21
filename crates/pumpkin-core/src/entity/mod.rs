@@ -67,6 +67,7 @@ use std::sync::{
     },
 };
 use uuid::Uuid;
+use vehicle::boat::BoatEntity;
 
 pub mod ageable;
 pub mod ai;
@@ -535,6 +536,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn push(&self, entity: &dyn EntityBase) {
+        if let Some(boat) = self.cast_any().downcast_ref::<BoatEntity>()
+            && !boat.can_push(entity.get_entity(), entity.cast_any().is::<BoatEntity>())
+        {
+            return;
+        }
+        if let Some(boat) = entity.cast_any().downcast_ref::<BoatEntity>()
+            && !boat.can_push(self.get_entity(), self.cast_any().is::<BoatEntity>())
+        {
+            return;
+        }
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -973,6 +984,10 @@ pub struct Entity {
 }
 
 impl Entity {
+    const WATER_FLOW_SCALE: f64 = 0.014;
+    const LAVA_FAST_FLOW_SCALE: f64 = 0.007;
+    const LAVA_SLOW_FLOW_SCALE: f64 = 0.002_333_333_333_333_333_5;
+
     pub fn new(
         world: Arc<World>,
         position: Vector3<f64>,
@@ -1414,90 +1429,148 @@ impl Entity {
 
         let bounding_box = self.bounding_box.load();
 
-        let (collisions, block_positions) = self
+        let (mut collisions, block_positions) = self
             .world
             .load()
             .get_block_collisions(bounding_box.stretch(movement), caller);
+        collisions.extend(self.get_boat_collisions(bounding_box.stretch(movement), caller));
 
-        if collisions.is_empty() {
-            return movement;
+        let (adjusted_movement, supporting_block, on_ground) =
+            Self::collide_with_shapes(movement, bounding_box, &collisions, &block_positions);
+        self.on_ground.store(on_ground, Ordering::SeqCst);
+        self.supporting_block_pos.store(supporting_block);
+        self.horizontal_collision.store(
+            movement.x != adjusted_movement.x || movement.z != adjusted_movement.z,
+            Ordering::SeqCst,
+        );
+
+        adjusted_movement
+    }
+
+    pub(crate) fn get_boat_collisions(
+        &self,
+        bounding_box: BoundingBox,
+        caller: &dyn EntityBase,
+    ) -> Vec<BoundingBox> {
+        const EPSILON: f64 = 1.0e-7;
+        let is_boat = caller.cast_any().is::<BoatEntity>();
+        let root_vehicle = self.get_root_vehicle_id();
+        self.world
+            .load()
+            .get_all_at_box(&bounding_box.expand(EPSILON, EPSILON, EPSILON))
+            .into_iter()
+            .filter(|other| {
+                let entity = other.get_entity();
+                entity.entity_id != self.entity_id
+                    && !entity.is_removed()
+                    && !other.is_spectator()
+                    && (other.cast_any().is::<BoatEntity>()
+                        || (is_boat && Self::can_collide_with_boat(other.as_ref())))
+                    && entity.get_root_vehicle_id() != root_vehicle
+            })
+            .map(|other| other.get_entity().bounding_box.load())
+            .collect()
+    }
+
+    fn can_collide_with_boat(other: &dyn EntityBase) -> bool {
+        let Some(living) = other.get_living_entity() else {
+            return other.is_collidable(None) || other.is_pushable();
+        };
+        let alive = living.health.load() > 0.0;
+        if !alive {
+            return false;
         }
-
-        let mut adjusted_movement = movement;
-
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
-
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                self.on_ground
-                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-                self.supporting_block_pos.store(supporting_block_pos);
-            }
+        if other.cast_any().is::<mob::shulker::ShulkerEntity>() {
+            return true;
         }
+        if let Some(ghast) = other
+            .cast_any()
+            .downcast_ref::<passive::happy_ghast::HappyGhastEntity>()
+            && !ageable::AgeableMob::is_baby(ghast)
+            && ghast.is_on_still_timeout()
+        {
+            return true;
+        }
+        (other.get_player().is_some() || other.is_pushable())
+            && !living.climbing.load(Ordering::Relaxed)
+    }
 
-        let mut horizontal_collision = false;
+    pub(crate) fn has_new_boat_collision(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+    ) -> bool {
+        if self.no_physics.load(Ordering::Relaxed) || caller.is_spectator() {
+            return false;
+        }
+        let bounds = self.bounding_box.load();
+        Self::has_new_collision(
+            bounds,
+            movement,
+            self.get_boat_collisions(bounds.stretch(movement), caller),
+        )
+    }
 
-        for axis in Axis::horizontal() {
+    fn has_new_collision(
+        bounds: BoundingBox,
+        movement: Vector3<f64>,
+        mut collisions: Vec<BoundingBox>,
+    ) -> bool {
+        const COLLISION_EPSILON: f64 = 1.0e-5f32 as f64;
+        const MOVED_WRONGLY_THRESHOLD: f64 = 0.0625;
+        let previous = bounds.expand_all(-COLLISION_EPSILON);
+        // Vanilla permits leaving a collider the player already intersects.
+        collisions.retain(|shape| !shape.intersects(&previous));
+        let target = bounds.shift(movement).expand_all(-COLLISION_EPSILON);
+        if collisions.iter().any(|shape| shape.intersects(&target)) {
+            return true;
+        }
+        let (resolved, _, _) = Self::collide_with_shapes(movement, bounds, &collisions, &[]);
+        (movement - resolved).horizontal_length_squared() > MOVED_WRONGLY_THRESHOLD
+    }
+
+    // Vanilla Entity.collideWithShapes resolves Y, then the larger horizontal component.
+    fn collide_with_shapes(
+        movement: Vector3<f64>,
+        bounding_box: BoundingBox,
+        shapes: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+    ) -> (Vector3<f64>, Option<BlockPos>, bool) {
+        let axes = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            Axis::all()
+        };
+        let mut resolved = Vector3::default();
+        let mut vertical_collision = None;
+        for axis in axes {
             if movement.get_axis(axis) == 0.0 {
                 continue;
             }
-
+            let mut axis_movement = Vector3::default();
+            axis_movement.set_axis(axis, movement.get_axis(axis));
+            let moved_box = bounding_box.shift(resolved);
             let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
+            for (index, shape) in shapes.iter().enumerate() {
+                if let Some(time) =
+                    moved_box.calculate_collision_time(shape, axis_movement, axis, max_time)
+                {
+                    max_time = time;
+                    if axis == Axis::Y {
+                        vertical_collision = Some(index);
+                    }
                 }
             }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
-            }
+            resolved.set_axis(axis, movement.get_axis(axis) * max_time);
         }
-
-        self.horizontal_collision
-            .store(horizontal_collision, Ordering::SeqCst);
-
-        adjusted_movement
+        let on_ground = movement.y < 0.0 && vertical_collision.is_some();
+        let supporting_block = vertical_collision.filter(|_| on_ground).and_then(|index| {
+            block_positions
+                .iter()
+                .find(|(end, _)| index < *end)
+                .map(|(_, position)| *position)
+        });
+        (resolved, supporting_block, on_ground)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -1749,7 +1822,13 @@ impl Entity {
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
         let entity_box = self.bounding_box.load();
-        let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
+        let Some(bounding_box) = self.get_fluid_interaction_box() else {
+            self.water_height.store(0.0);
+            self.lava_height.store(0.0);
+            self.touching_water.store(false, Ordering::SeqCst);
+            self.touching_lava.store(false, Ordering::SeqCst);
+            return Vec::new();
+        };
 
         let min = bounding_box.min_block_pos();
 
@@ -1802,12 +1881,12 @@ impl Entity {
         }
 
         let lava_speed = if world.dimension.fast_lava {
-            0.007
+            Self::LAVA_FAST_FLOW_SCALE
         } else {
-            0.002_333_333
+            Self::LAVA_SLOW_FLOW_SCALE
         };
 
-        self.push_by_fluid(0.014, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(Self::WATER_FLOW_SCALE, fluid_push[0], fluid_n[0]);
 
         self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
 
@@ -1850,27 +1929,42 @@ impl Entity {
         fluids.into_values().collect()
     }
 
-    fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
-        if push.length_squared() != 0.0 {
-            if n > 0 {
-                push = push * (1.0 / (n as f64));
-            }
-
-            if self.entity_type != &EntityType::PLAYER {
-                push = push.normalize();
-            }
-
-            push = push * speed;
-
-            let velo = self.velocity.load();
-
-            if velo.x.abs() < 0.003 && velo.z.abs() < 0.003 && velo.length_squared() < 0.000_020_25
-            {
-                push = push.normalize() * 0.0045;
-            }
-
-            self.velocity.store(velo + push);
+    fn get_fluid_interaction_box(&self) -> Option<BoundingBox> {
+        let bounds = self.bounding_box.load().expand_all(-0.001);
+        if let Some(vehicle) = self.get_vehicle()
+            && let Some(boat) = vehicle.cast_any().downcast_ref::<BoatEntity>()
+        {
+            return boat.modify_passenger_fluid_interaction_box(bounds);
         }
+        Some(bounds)
+    }
+
+    fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
+        const MIN_CURRENT_SPEED: f64 = 0.003;
+        const MIN_CURRENT_IMPULSE: f64 = MIN_CURRENT_SPEED * 1.5;
+        if n == 0 || push.length_squared() < f64::from(1.0e-5f32) {
+            return;
+        }
+        push = if self.entity_type == &EntityType::PLAYER {
+            push * (1.0 / n as f64)
+        } else {
+            push / push.length()
+        };
+        push = push * speed;
+
+        let velocity = self.velocity.load();
+        let impulse_length = push.length();
+        if velocity.x.abs() < MIN_CURRENT_SPEED
+            && velocity.z.abs() < MIN_CURRENT_SPEED
+            && impulse_length < MIN_CURRENT_IMPULSE
+        {
+            push = if impulse_length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                push / impulse_length * MIN_CURRENT_IMPULSE
+            };
+        }
+        self.velocity.store(velocity + push);
     }
 
     fn get_pos_with_y_offset(
@@ -2043,7 +2137,25 @@ impl Entity {
 
         let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
-        self.velocity.store(final_move * velocity_multiplier);
+        if caller.cast_any().is::<BoatEntity>() {
+            const COLLISION_EPSILON: f64 = 1.0e-5;
+            let velocity = self.velocity.load();
+            self.velocity.store(Vector3::new(
+                if (motion.x - final_move.x).abs() < COLLISION_EPSILON {
+                    velocity.x * velocity_multiplier
+                } else {
+                    0.0
+                },
+                velocity.y,
+                if (motion.z - final_move.z).abs() < COLLISION_EPSILON {
+                    velocity.z * velocity_multiplier
+                } else {
+                    0.0
+                },
+            ));
+        } else {
+            self.velocity.store(final_move * velocity_multiplier);
+        }
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -3486,6 +3598,16 @@ impl Entity {
             .clone()
     }
 
+    fn get_root_vehicle_id(&self) -> i32 {
+        let mut root = self.entity_id;
+        let mut vehicle = self.get_vehicle();
+        while let Some(current) = vehicle {
+            root = current.get_entity().entity_id;
+            vehicle = current.get_entity().get_vehicle();
+        }
+        root
+    }
+
     pub fn is_leashed(&self) -> bool {
         self.leashed_to
             .lock()
@@ -3516,7 +3638,8 @@ impl Entity {
             return;
         }
 
-        let passenger_entity = passenger.get_entity();
+        let mounted_passenger = passenger.clone();
+        let passenger_entity = mounted_passenger.get_entity();
         *passenger_entity
             .vehicle
             .lock()
@@ -3532,8 +3655,21 @@ impl Entity {
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
+        drop(passengers);
 
         let world = self.world.load();
+        if let Some(vehicle) = world.get_entity_by_id(self.entity_id)
+            && let Some(boat) = vehicle.cast_any().downcast_ref::<BoatEntity>()
+            && let Some(player) = mounted_passenger.get_player()
+        {
+            passenger_entity.set_pose(EntityPose::Standing);
+            if passenger_entity.pose.load() != EntityPose::Standing
+                || !boat.synchronize_mount(player)
+            {
+                self.remove_passenger_on_disconnect(passenger_entity.entity_id);
+                return;
+            }
+        }
         let chunk_pos = self.chunk_pos.load();
         world.broadcast_to_chunk(
             chunk_pos,
@@ -3659,8 +3795,14 @@ impl Entity {
                 None
             };
 
-            // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
-            passenger_entity.riding_cooldown.store(60, Relaxed);
+            passenger_entity.riding_cooldown.store(
+                if passenger.get_player().is_some() {
+                    0
+                } else {
+                    60
+                },
+                Relaxed,
+            );
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
@@ -3760,8 +3902,14 @@ impl Entity {
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
 
-            let dismount_pos = if is_water {
-                fallback_pos
+            let boat_target = world.get_entity_by_id(self.entity_id).and_then(|vehicle| {
+                vehicle
+                    .cast_any()
+                    .downcast_ref::<BoatEntity>()
+                    .map(|boat| boat.get_dismount_location_for_passenger(passenger.as_ref()))
+            });
+            let dismount_pos = if boat_target.is_some() || is_water {
+                boat_target.unwrap_or(fallback_pos)
             } else {
                 // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
                 let poses_and_heights = [
@@ -3885,8 +4033,7 @@ impl Entity {
                     ));
                 }
 
-                // Vanilla: setSneaking(false) after dismount via sneak input
-                if passenger_entity.sneaking.load(Relaxed) {
+                if boat_target.is_none() && passenger_entity.sneaking.load(Relaxed) {
                     passenger_entity.set_sneaking(false);
                 }
             } else {
@@ -4176,6 +4323,13 @@ impl Entity {
 
 impl EntityBase for Entity {
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        // Boat passengers begin rideTick without their previous movement velocity.
+        if self
+            .get_vehicle()
+            .is_some_and(|vehicle| vehicle.cast_any().is::<BoatEntity>())
+        {
+            self.velocity.store(Vector3::default());
+        }
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
@@ -4299,6 +4453,144 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boat_collision_rejects_fast_crossing_with_a_clear_destination() {
+        let boat = BoundingBox::new(
+            Vector3::new(-0.6875, 0.0, -0.6875),
+            Vector3::new(0.6875, 0.5625, 0.6875),
+        );
+        let player = BoundingBox::new(
+            Vector3::new(-2.3, 0.25, -0.3),
+            Vector3::new(-1.7, 2.05, 0.3),
+        );
+        assert!(Entity::has_new_collision(
+            player,
+            Vector3::new(4.0, 0.0, 0.0),
+            vec![boat],
+        ));
+    }
+
+    #[test]
+    fn boat_edge_walkoff_accepts_downward_movement_when_destination_is_clear() {
+        let boat = BoundingBox::new(
+            Vector3::new(-0.6875, 0.0, -0.6875),
+            Vector3::new(0.6875, 0.5625, 0.6875),
+        );
+        for side in [-1.0, 1.0] {
+            let player = BoundingBox::new(
+                Vector3::new(side * 0.95 - 0.3, 0.5625, -0.3),
+                Vector3::new(side * 0.95 + 0.3, 2.3625, 0.3),
+            );
+            assert!(!Entity::has_new_collision(
+                player,
+                Vector3::new(side * 0.1, -0.0625, 0.0),
+                vec![boat],
+            ));
+        }
+    }
+
+    #[test]
+    fn boat_dismount_rejects_downward_motion_from_a_rounding_overlap() {
+        let boat = BoundingBox::new(
+            Vector3::new(-0.6875, 62.523_213_439_048_09, -0.6875),
+            Vector3::new(0.6875, 63.085_713_439_048_09, 0.6875),
+        );
+        let player = BoundingBox::new(
+            Vector3::new(-0.3, 63.085_704_525_317_43, -0.3),
+            Vector3::new(0.3, 64.885_704_525_317_43, 0.3),
+        );
+        assert!(Entity::has_new_collision(
+            player,
+            Vector3::new(0.0, -0.1, 0.0),
+            vec![boat],
+        ));
+        assert!(!Entity::has_new_collision(
+            player,
+            Vector3::new(0.0, 0.1, 0.0),
+            vec![boat],
+        ));
+        assert!(!Entity::has_new_collision(
+            player.shift(Vector3::new(0.0, -0.1, 0.0)),
+            Vector3::new(2.0, 0.0, 0.0),
+            vec![boat],
+        ));
+    }
+
+    #[test]
+    fn swept_entity_collision_stops_fast_motion_on_each_axis() {
+        let bounds = BoundingBox::full_block();
+        let cases = [
+            (
+                BoundingBox::new(Vector3::new(4.0, 0.0, 0.0), Vector3::new(5.0, 1.0, 1.0)),
+                Vector3::new(100.0, 0.0, 0.0),
+                Vector3::new(3.0, 0.0, 0.0),
+                false,
+            ),
+            (
+                BoundingBox::new(Vector3::new(0.0, -4.0, 0.0), Vector3::new(1.0, -3.0, 1.0)),
+                Vector3::new(0.0, -100.0, 0.0),
+                Vector3::new(0.0, -3.0, 0.0),
+                true,
+            ),
+            (
+                BoundingBox::new(Vector3::new(0.0, 0.0, -4.0), Vector3::new(1.0, 1.0, -3.0)),
+                Vector3::new(0.0, 0.0, -100.0),
+                Vector3::new(0.0, 0.0, -3.0),
+                false,
+            ),
+        ];
+        for (shape, movement, expected, on_ground) in cases {
+            assert_eq!(
+                Entity::collide_with_shapes(movement, bounds, &[shape], &[]),
+                (expected, None, on_ground),
+            );
+        }
+    }
+
+    #[test]
+    fn landing_on_an_entity_does_not_report_a_supporting_block_below_it() {
+        let block = BoundingBox::new(Vector3::new(0.0, -4.0, 0.0), Vector3::new(1.0, -3.0, 1.0));
+        let boat = BoundingBox::new(Vector3::new(0.0, -2.0, 0.0), Vector3::new(1.0, -1.0, 1.0));
+        let block_positions = [(1, BlockPos::new(0, -4, 0))];
+        let movement = Vector3::new(0.0, -100.0, 0.0);
+        assert_eq!(
+            Entity::collide_with_shapes(
+                movement,
+                BoundingBox::full_block(),
+                &[block, boat],
+                &block_positions,
+            ),
+            (Vector3::new(0.0, -1.0, 0.0), None, true),
+        );
+        assert_eq!(
+            Entity::collide_with_shapes(
+                movement,
+                BoundingBox::full_block(),
+                &[block],
+                &block_positions,
+            ),
+            (
+                Vector3::new(0.0, -3.0, 0.0),
+                Some(BlockPos::new(0, -4, 0)),
+                true
+            ),
+        );
+    }
+
+    #[test]
+    fn entity_collision_resolves_horizontal_axes_from_the_updated_box() {
+        let shape = BoundingBox::new(Vector3::new(2.0, 0.0, 2.0), Vector3::new(4.0, 1.0, 4.0));
+        assert_eq!(
+            Entity::collide_with_shapes(
+                Vector3::new(3.0, 0.0, 3.0),
+                BoundingBox::full_block(),
+                &[shape],
+                &[],
+            ),
+            (Vector3::new(3.0, 0.0, 1.0), None, false),
+        );
+    }
 
     #[test]
     fn equipment_break_status_maps_all_slots() {
