@@ -192,3 +192,51 @@ fn game_profile_to_owned_arg(
 pub struct ConsumedArgsResource {
     pub provider: HashMap<String, OwnedArg>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_core::command::{
+        CommandDispatcher, CommandSender, CommandSource,
+        argument_builder::{ArgumentBuilder, argument, command},
+        argument_types::game_profile::GameProfileArgumentType,
+        source::ResultValueTaker,
+    };
+
+    /// A source without server, world or entity
+    fn source() -> Arc<CommandSource> {
+        Arc::new(CommandSource {
+            output: CommandSender::Dummy,
+            world: None,
+            entity: None,
+            position: Vector3::default(),
+            rotation: Vector2::default(),
+            name: String::new(),
+            display_name: TextComponent::empty(),
+            server: None,
+            silent: false,
+            command_result_taker: ResultValueTaker(Vec::new()),
+            entity_anchor: EntityAnchor::Feet,
+        })
+    }
+
+    fn consumed(input: &str) -> Option<OwnedArg> {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher
+            .register(command("profile", "").then(argument("target", GameProfileArgumentType)));
+        let parsed = dispatcher.parse_input(input, &source());
+        build_consumed_args_from_context(&parsed.context.build(input)).remove("target")
+    }
+
+    #[test]
+    fn game_profile_arguments_reach_plugins() {
+        assert!(
+            matches!(consumed("profile Notch"), Some(OwnedArg::Simple(name)) if name == "Notch")
+        );
+
+        let uuid = "069a79f4-44e9-4726-a5be-fca90e38aaf5";
+        assert!(
+            matches!(consumed(&format!("profile {uuid}")), Some(OwnedArg::Simple(text)) if text == uuid)
+        );
+    }
+}
