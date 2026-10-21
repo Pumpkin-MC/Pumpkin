@@ -69,6 +69,7 @@ pub use recipe::RecipeManager;
 use crate::data::advancement_data::AdvancementManager;
 
 /// Represents a Minecraft server instance.
+#[repr(C)]
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,

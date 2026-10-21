@@ -248,6 +248,7 @@ impl PumpkinError for GetBlockError {
 /// - Manages the `Level` instance for handling chunk-related operations.
 /// - Stores and tracks active `Player` entities within the world.
 /// - Provides a central hub for interacting with the world's entities and environment.
+#[repr(C)]
 pub struct World {
     /// Represents the World's Unique Identifier
     pub uuid: Uuid,

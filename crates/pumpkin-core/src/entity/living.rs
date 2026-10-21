@@ -72,6 +72,7 @@ use std::sync::RwLock;
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
+#[repr(C)]
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
@@ -3447,7 +3448,12 @@ impl EntityBase for LivingEntity {
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
-            if suffocating {
+            // Vanilla `LivingEntity.isInWall`: sleeping entities are never in a wall.
+            if suffocating
+                && !caller
+                    .get_player()
+                    .is_some_and(super::player::Player::is_sleeping)
+            {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
