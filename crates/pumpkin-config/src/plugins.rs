@@ -37,8 +37,8 @@ pub struct PluginsConfig {
     /// enabled = true
     /// allow_unsigned = true
     /// max_memory_mb = 128
-    /// allowed_permissions = ["fs:read:data", "fs:write:data"]
-    /// blocked_permissions = ["network:outbound"]
+    /// allowed_permissions = ["fs.read.data", "fs.write.data"]
+    /// blocked_permissions = ["network.outbound"]
     /// loopback_only = true
     ///
     /// [plugins.overrides.my_plugin.environment]
