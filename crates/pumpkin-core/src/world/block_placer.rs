@@ -1,7 +1,9 @@
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::chunk::ChunkHeightmapType;
 use pumpkin_world::generation::structure::template::BlockPlacer;
 use pumpkin_world::level::Level;
 
@@ -65,5 +67,17 @@ impl BlockPlacer for WorldBlockPlacer<'_> {
 
     fn add_block_entity(&mut self, nbt: NbtCompound) {
         self.block_entity_nbts.push(nbt);
+    }
+
+    fn get_height(&self, heightmap: HeightMap, x: i32, z: i32) -> Option<i32> {
+        // Like `GravityProcessor` on a `ServerLevel`, the worldgen heightmaps read their live
+        // counterparts. Loaded chunks keep no ocean floor heightmap.
+        let heightmap = match heightmap {
+            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => ChunkHeightmapType::WorldSurface,
+            HeightMap::MotionBlocking => ChunkHeightmapType::MotionBlocking,
+            HeightMap::MotionBlockingNoLeaves => ChunkHeightmapType::MotionBlockingNoLeaves,
+            HeightMap::OceanFloorWg | HeightMap::OceanFloor => return None,
+        };
+        Some(self.world.get_heightmap_height(heightmap, x, z) + 1)
     }
 }
