@@ -5966,9 +5966,6 @@ impl Player {
 
         let (
             sync_id,
-            container_slots,
-            allow_grab_items,
-            allow_put_items,
             can_use,
             is_slot_valid,
             available_slots,
@@ -5987,9 +5984,6 @@ impl Player {
 
             let b = screen_handler.get_behaviour();
             let sync_id = b.sync_id;
-            let container_slots = b.container_slots;
-            let allow_grab_items = b.allow_grab_items;
-            let allow_put_items = b.allow_put_items;
             let can_use = screen_handler.can_use(self.as_ref());
             let is_slot_valid = screen_handler.is_slot_valid(i32::from(packet.slot));
             let available_slots = b.slots.len();
@@ -6008,9 +6002,6 @@ impl Player {
 
             (
                 sync_id,
-                container_slots,
-                allow_grab_items,
-                allow_put_items,
                 can_use,
                 is_slot_valid,
                 available_slots,
@@ -6274,67 +6265,6 @@ impl Player {
         let mut screen_handler = screen_handler_arc
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        // Enforce flags
-        let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
-
-        match packet.mode {
-            SlotActionType::Pickup => {
-                let cursor_stack = screen_handler
-                    .get_behaviour()
-                    .cursor_stack
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if is_container_slot {
-                    if !cursor_stack.is_empty() && !allow_put_items {
-                        drop(cursor_stack);
-                        screen_handler.cancel();
-                        return;
-                    }
-                    if cursor_stack.is_empty() && !allow_grab_items {
-                        drop(cursor_stack);
-                        screen_handler.cancel();
-                        return;
-                    }
-                }
-            }
-            SlotActionType::QuickMove => {
-                if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-                if !is_container_slot && !allow_put_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Swap => {
-                if is_container_slot && (!allow_grab_items || !allow_put_items) {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Throw => {
-                if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::QuickCraft => {
-                if !allow_put_items {
-                    // Dragging items into slots
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::PickupAll => {
-                if !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Clone => {}
-        }
 
         let not_in_sync = packet.revision.0
             != (screen_handler
