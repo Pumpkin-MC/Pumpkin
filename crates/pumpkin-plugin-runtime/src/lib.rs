@@ -1388,6 +1388,38 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_store_rejects_pump_blocking_before_running_the_operation() {
+        let store = TestStore::new(test_store(StoreMode::Concurrent), StoreMode::Concurrent).await;
+        let ran = Arc::new(AtomicBool::new(false));
+        let nested = store.clone();
+        let flag = Arc::clone(&ran);
+
+        // Inside an active guest call, so a missing mode check would get as far as spawning.
+        let error = store
+            .call_guest(move |_| {
+                Box::pin(async move {
+                    let mut pump_store = test_store(StoreMode::Concurrent);
+                    nested
+                        .pump_blocking(&mut pump_store, move || flag.store(true, Ordering::SeqCst))
+                        .await
+                })
+            })
+            .await
+            .expect_err("a concurrent store cannot pump reentrant callbacks");
+        assert!(error.to_string().contains("sequential"), "{error}");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "the rejected operation must not run"
+        );
+        store
+            .shutdown(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect("shut down store");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_accepted_work() {
         timeout(Duration::from_secs(10), async {
             for mode in MODES {

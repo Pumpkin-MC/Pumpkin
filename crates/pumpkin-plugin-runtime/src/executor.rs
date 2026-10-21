@@ -801,8 +801,20 @@ where
         S: AsContextMut<Data = T> + Send,
         F: Future<Output = R> + Send,
     {
+        self.ensure_sequential()?;
         let context = self.next_reentry_context()?;
         self.pump_reentry_with_context(store, context, future).await
+    }
+
+    /// Pumping only works when guest calls run one at a time. Checked before any work starts, so a
+    /// rejected call never runs its operation.
+    fn ensure_sequential(&self) -> wasmtime::Result<()> {
+        if self.shared.mode == StoreMode::Concurrent {
+            return Err(wasmtime::Error::msg(
+                "Pumping reentrant callbacks needs a sequential Wasm plugin store",
+            ));
+        }
+        Ok(())
     }
 
     fn next_reentry_context(&self) -> wasmtime::Result<ReentryContext> {
@@ -826,11 +838,6 @@ where
         S: AsContextMut<Data = T> + Send,
         F: Future<Output = R> + Send,
     {
-        if self.shared.mode == StoreMode::Concurrent {
-            return Err(wasmtime::Error::msg(
-                "Pumping reentrant callbacks needs a sequential Wasm plugin store",
-            ));
-        }
         let (mut registration, mut receiver) = self.shared.reentry.register(context);
         let scoped_future = scope(context, future);
         tokio::pin!(scoped_future);
@@ -860,6 +867,7 @@ where
         S: AsContextMut<Data = T> + Send,
         F: FnOnce() -> R + Send + 'static,
     {
+        self.ensure_sequential()?;
         let context = self.next_reentry_context()?;
         let (result, receiver) = oneshot::channel();
         self.shared
