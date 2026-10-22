@@ -45,6 +45,10 @@ impl TNTEntity {
         }
     }
 
+    pub(crate) fn is_about_to_explode(&self) -> bool {
+        self.fuse.load(Relaxed) <= 1
+    }
+
     /// Vanilla primed-TNT constructor: block centre plus the random launch impulse.
     pub fn primed(world: &Arc<World>, position: &BlockPos, fuse: u32) -> Arc<Self> {
         let pos = Vector3::new(

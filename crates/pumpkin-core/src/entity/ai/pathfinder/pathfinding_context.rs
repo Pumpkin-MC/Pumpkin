@@ -55,13 +55,13 @@ impl PathfindingContext {
     }
 
     #[must_use]
-    pub const fn min_y(&self) -> i32 {
-        -64
+    pub fn min_y(&self) -> i32 {
+        self.world.get_bottom_y()
     }
 
     #[must_use]
-    pub const fn sea_level(&self) -> i32 {
-        63
+    pub fn sea_level(&self) -> i32 {
+        self.world.sea_level
     }
 
     pub fn get_path_type_from_state(&mut self, pos: Vector3<i32>) -> PathType {
