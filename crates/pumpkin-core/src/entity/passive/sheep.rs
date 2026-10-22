@@ -208,7 +208,6 @@ impl Mob for SheepEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
-        use pumpkin_data::data_component_impl::DyeImpl;
         let item = item_stack.get_item();
 
         if item == &Item::SHEARS {
@@ -234,15 +233,6 @@ impl Mob for SheepEntity {
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 let _ = item_stack.damage_item(1);
             }
-            return true;
-        }
-
-        if let Some(dye) = item_stack.get_data_component::<DyeImpl>()
-            && !self.is_sheared()
-            && dye.color.id() != self.get_color()
-        {
-            self.set_color(dye.color.id());
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             return true;
         }
 
