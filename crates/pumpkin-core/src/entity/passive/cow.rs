@@ -24,6 +24,7 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::item::items::bucket::fill_bucket_stack;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -202,14 +203,13 @@ impl Mob for CowEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = &self.mob_entity.living_entity.entity;
-            let world = entity.world.load();
-            world.play_sound(
+            self.get_entity().world.load().play_sound_expect(
+                player,
                 Sound::EntityCowMilk,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &entity.pos.load(),
+                pumpkin_data::sound::SoundCategory::Players,
+                &player.position(),
             );
+            fill_bucket_stack(item_stack, player, &Item::MILK_BUCKET);
             return true;
         }
         let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
