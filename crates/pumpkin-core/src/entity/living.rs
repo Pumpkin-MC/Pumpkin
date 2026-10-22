@@ -3658,9 +3658,10 @@ impl LivingEntity {
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
     fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
-        if let Some(consumable) = item.get_data_component::<ConsumableImpl>() {
-            self.apply_consume_effects(caller, &consumable.effects);
-        }
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+        self.apply_consume_effects(caller, &consumable.effects);
     }
 
     /// Vanilla: `ConsumeEffect.apply` for each effect in the list.

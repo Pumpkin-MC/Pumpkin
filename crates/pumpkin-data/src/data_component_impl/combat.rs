@@ -756,12 +756,13 @@ impl DeathProtectionImpl {
         let death_effects = data
             .extract_compound()
             .and_then(|compound| compound.get_list("death_effects"))
-            .map_or(Cow::Borrowed(&[][..]), |effects| {
+            .map(|effects| {
                 effects
                     .iter()
                     .filter_map(ConsumeEffect::read_data)
                     .collect()
-            });
+            })
+            .unwrap_or_default();
         Some(Self { death_effects })
     }
 }
