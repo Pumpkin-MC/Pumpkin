@@ -22,11 +22,12 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     passive::animal::Animal,
     player::Player,
 };
 use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
+use crate::world::World;
 
 const EGG_LAY_TIME: std::ops::Range<i32> = 6000..12000;
 const CHICKEN_JOCKEY_EXPERIENCE_REWARD: u32 = 10;
@@ -54,14 +55,11 @@ pub struct ChickenEntity {
 
 impl ChickenEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let world = entity.world.load();
-        let biome = world.get_biome(&entity.block_pos.load());
-        let variant = ChickenVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let egg_lay_time = rand::rng().random_range(EGG_LAY_TIME);
         let chicken = Self {
             mob_entity,
-            variant: AtomicU8::new(variant.id()),
+            variant: AtomicU8::new(ChickenVariant::default().id()),
             sound_variant: AtomicU8::new(ChickenSoundVariant::Classic as u8),
             egg_lay_time: AtomicI32::new(egg_lay_time),
             is_chicken_jockey: AtomicBool::new(false),
@@ -169,9 +167,43 @@ impl Animal for ChickenEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD)
             || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::CHICKEN,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            let parent = if self.get_random().random::<bool>() {
+                self
+            } else {
+                partner
+            };
+            baby.variant
+                .store(parent.variant.load(Ordering::Relaxed), Ordering::Relaxed);
+        }
+        baby
+    }
 }
 
 impl Mob for ChickenEntity {
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let biome = world.get_biome(&self.get_entity().block_pos.load());
+        self.set_variant(ChickenVariant::select_for_biome(biome.registry_id));
+        let sound_variants = ChickenSoundVariant::ALL;
+        self.set_sound_variant(
+            sound_variants[self.get_random().random_range(0..sound_variants.len())],
+        );
+        self.mob_entity.finalize_spawn_base();
+        group_data
+    }
+
     fn has_audited_tick(&self) -> bool {
         true
     }
