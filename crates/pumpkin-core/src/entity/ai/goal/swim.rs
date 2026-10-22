@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
 use rand::RngExt;
 
@@ -27,6 +27,10 @@ impl SwimGoal {
 }
 
 impl Goal for SwimGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach::default())
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         mob.get_mob_entity()
             .navigator
@@ -41,12 +45,12 @@ impl Goal for SwimGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        // No jump control yet; the flag it would set is what the movement tick reads anyway.
         if mob.get_random().random::<f32>() < 0.8 {
             mob.get_mob_entity()
-                .living_entity
-                .jumping
-                .store(true, Ordering::SeqCst);
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .jump();
         }
     }
 

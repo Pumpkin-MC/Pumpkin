@@ -210,10 +210,29 @@ impl PlayerInventory {
                     .entity_equipment
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let current = equipment.get(slot_type);
+                let mut current = equipment.get(slot_type);
                 if current.is_empty() {
-                    equipment.put(slot_type, stack);
-                    return 0;
+                    let max_stack = stack.get_max_stack_size();
+                    if stack.item_count <= max_stack {
+                        equipment.put(slot_type, stack);
+                        return 0;
+                    }
+
+                    equipment.put(slot_type, stack.copy_with_count(max_stack));
+
+                    return (stack.item_count - max_stack) as usize;
+                } else if matches!(slot_type, EquipmentSlot::OffHand(_))
+                    && current.are_items_and_components_equal(&stack)
+                {
+                    let count_left = current
+                        .get_max_stack_size()
+                        .saturating_sub(current.item_count);
+                    let count_min = stack.item_count.min(count_left);
+                    if count_min != 0 {
+                        current.increment(count_min);
+                        equipment.put(slot_type, current);
+                    }
+                    return (stack.item_count - count_min) as usize;
                 }
             }
             return stack.item_count as usize;
@@ -317,6 +336,7 @@ impl PlayerInventory {
         }
 
         let mut i;
+        let start_count = stack.item_count;
 
         loop {
             i = stack.item_count;
@@ -331,7 +351,7 @@ impl PlayerInventory {
             }
         }
 
-        stack.item_count < i
+        stack.item_count < start_count
     }
 
     /// Finds the first slot containing a matching stack.
@@ -617,5 +637,176 @@ impl PlayerInventory {
     /// Gets the currently selected hotbar slot index.
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build_equipment_slots;
+    use pumpkin_data::item::Item;
+
+    fn create_test_inventory() -> PlayerInventory {
+        let equipment_slots = Arc::new(build_equipment_slots());
+        let entity_equipment = Arc::new(Mutex::new(EntityEquipment::new()));
+        PlayerInventory::new(entity_equipment, equipment_slots)
+    }
+
+    #[test]
+    fn add_stack_to_slot_offhand_when_empty() {
+        let inv = create_test_inventory();
+        let stack = ItemStack::new(10, &Item::ARROW);
+
+        let leftover = inv.add_stack_to_slot(PlayerInventory::OFF_HAND_SLOT, stack);
+        assert_eq!(leftover, 0);
+
+        let off_hand = inv.off_hand_item();
+        assert_eq!(off_hand.item.id, Item::ARROW.id);
+        assert_eq!(off_hand.item_count, 10);
+    }
+
+    #[test]
+    fn add_stack_to_slot_offhand_stacks_matching_item() {
+        let inv = create_test_inventory();
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(10, &Item::ARROW));
+
+        let leftover = inv.add_stack_to_slot(
+            PlayerInventory::OFF_HAND_SLOT,
+            ItemStack::new(15, &Item::ARROW),
+        );
+        assert_eq!(leftover, 0);
+
+        let off_hand = inv.off_hand_item();
+        assert_eq!(off_hand.item.id, Item::ARROW.id);
+        assert_eq!(off_hand.item_count, 25);
+    }
+
+    #[test]
+    fn add_stack_to_slot_offhand_stacks_up_to_max() {
+        let inv = create_test_inventory();
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(60, &Item::ARROW));
+
+        let leftover = inv.add_stack_to_slot(
+            PlayerInventory::OFF_HAND_SLOT,
+            ItemStack::new(10, &Item::ARROW),
+        );
+        assert_eq!(leftover, 6);
+
+        let off_hand = inv.off_hand_item();
+        assert_eq!(off_hand.item.id, Item::ARROW.id);
+        assert_eq!(off_hand.item_count, 64);
+    }
+
+    #[test]
+    fn add_stack_to_slot_offhand_rejects_different_item() {
+        let inv = create_test_inventory();
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(1, &Item::SHIELD));
+
+        let leftover = inv.add_stack_to_slot(
+            PlayerInventory::OFF_HAND_SLOT,
+            ItemStack::new(10, &Item::ARROW),
+        );
+        assert_eq!(leftover, 10);
+
+        let off_hand = inv.off_hand_item();
+        assert_eq!(off_hand.item.id, Item::SHIELD.id);
+        assert_eq!(off_hand.item_count, 1);
+    }
+
+    #[test]
+    fn add_stack_to_slot_armor_does_not_stack() {
+        let inv = create_test_inventory();
+        let feet_slot = EquipmentSlot::FEET
+            .get_offset_entity_slot_id(PlayerInventory::MAIN_SIZE as i32)
+            as usize;
+        let boots = ItemStack::new(1, &Item::IRON_BOOTS);
+
+        let leftover = inv.add_stack_to_slot(feet_slot, boots.clone());
+        assert_eq!(leftover, 0);
+
+        let leftover_second = inv.add_stack_to_slot(feet_slot, boots);
+        assert_eq!(leftover_second, 1);
+    }
+
+    #[test]
+    fn pickup_stacks_into_offhand() {
+        let inv = create_test_inventory();
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(10, &Item::ARROW));
+
+        let mut pickup = ItemStack::new(5, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(inserted);
+        assert!(pickup.is_empty());
+        assert_eq!(inv.off_hand_item().item_count, 15);
+    }
+
+    #[test]
+    fn pickup_prioritizes_held_main_hand_over_offhand() {
+        let inv = create_test_inventory();
+        inv.set_held_item(ItemStack::new(60, &Item::ARROW));
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(10, &Item::ARROW));
+
+        let mut pickup = ItemStack::new(10, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(inserted);
+        assert!(pickup.is_empty());
+        assert_eq!(inv.held_item().item_count, 64);
+        assert_eq!(inv.off_hand_item().item_count, 16);
+    }
+
+    #[test]
+    fn pickup_offhand_full_overflows_to_main_inventory() {
+        let inv = create_test_inventory();
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(64, &Item::ARROW));
+
+        let mut pickup = ItemStack::new(10, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(inserted);
+        assert!(pickup.is_empty());
+        assert_eq!(inv.off_hand_item().item_count, 64);
+        assert_eq!(inv.get_slot(0).item.id, Item::ARROW.id);
+        assert_eq!(inv.get_slot(0).item_count, 10);
+    }
+
+    #[test]
+    fn pickup_does_not_fill_empty_offhand() {
+        let inv = create_test_inventory();
+
+        let mut pickup = ItemStack::new(10, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(inserted);
+        assert!(pickup.is_empty());
+        assert!(inv.off_hand_item().is_empty());
+        assert_eq!(inv.get_slot(0).item.id, Item::ARROW.id);
+        assert_eq!(inv.get_slot(0).item_count, 10);
+    }
+
+    /// When the main inventory is completely full and only the off-hand has
+    /// partial room, `insert_stack` must still return `true` even though the
+    /// second loop iteration makes no progress.
+    #[test]
+    fn insert_stack_returns_true_on_partial_offhand_with_full_main_inventory() {
+        let inv = create_test_inventory();
+        for i in 0..PlayerInventory::MAIN_SIZE {
+            inv.set_slot(i, ItemStack::new(64, &Item::DIRT));
+        }
+        inv.set_stack_in_hand(Hand::Left, ItemStack::new(60, &Item::ARROW));
+
+        let mut pickup = ItemStack::new(10, &Item::ARROW);
+        let inserted = inv.insert_stack_anywhere(&mut pickup);
+
+        assert!(
+            inserted,
+            "insert_stack must return true when some items were placed"
+        );
+        assert_eq!(
+            pickup.item_count, 6,
+            "6 arrows should remain after filling off-hand to 64"
+        );
+        assert_eq!(inv.off_hand_item().item_count, 64);
     }
 }
