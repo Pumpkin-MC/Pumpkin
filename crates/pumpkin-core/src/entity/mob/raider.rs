@@ -164,11 +164,7 @@ impl Goal for HoldGroundAttackGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
 
         let target = mob.get_mob_entity().get_target().clone();
         if let Some(target) = target {
@@ -266,11 +262,8 @@ impl Goal for ObtainRaidLeaderBannerGoal {
                     cand.get_entity().remove();
                     break;
                 }
-                let mut nav = mob
-                    .get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let steered = mob.get_mob_entity().steered();
+                let mut nav = steered.navigator();
                 nav.set_progress(NavigatorGoal {
                     current_progress: pos,
                     destination: cand_pos,
@@ -364,11 +357,8 @@ impl Goal for RaiderMoveThroughVillageGoal {
     fn tick(&mut self, mob: &dyn Mob) {
         let entity = mob.get_entity();
         let pos = entity.pos.load();
-        let mut nav = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut nav = steered.navigator();
 
         if nav.is_idle() {
             let dx: f64 = (rand::random::<f64>() - 0.5) * 32.0;
