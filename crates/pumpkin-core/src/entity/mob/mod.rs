@@ -1121,6 +1121,11 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    /// Vanilla `LookControl.resetXRotOnTick`: the look control levels the pitch each tick.
+    fn look_resets_pitch(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity;
 
     fn is_mob_immobile(&self) -> bool {

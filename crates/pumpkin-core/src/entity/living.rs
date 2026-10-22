@@ -2749,6 +2749,20 @@ impl LivingEntity {
 
     /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
     /// entity (0 when none), forgotten after 40 ticks.
+    /// Vanilla `getLastHurtByMob`: the living attacker, forgotten once dead or after 100 ticks.
+    #[must_use]
+    pub fn last_hurt_by_mob(&self, world: &crate::world::World) -> Option<Arc<dyn EntityBase>> {
+        let id = self.last_attacker_id.load(Relaxed);
+        if id == 0
+            || self.entity.tick_count.load(Relaxed) - self.last_attacked_time.load(Relaxed) > 100
+        {
+            return None;
+        }
+        world.get_entity_by_id(id).filter(|attacker| {
+            attacker.get_living_entity().is_some() && attacker.get_entity().is_alive()
+        })
+    }
+
     pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
         let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
         let mut last = self
