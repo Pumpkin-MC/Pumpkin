@@ -10,6 +10,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -20,11 +21,12 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     custom_sound::CustomSound,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     passive::animal::Animal,
     player::Player,
 };
 use crate::item::items::bucket::fill_bucket_stack;
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -40,14 +42,11 @@ pub struct CowEntity {
 
 impl CowEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let world = entity.world.load();
-        let biome = world.get_biome(&entity.block_pos.load());
-        let variant = CowVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let cow = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
-            variant: AtomicU8::new(variant.id()),
+            variant: AtomicU8::new(CowVariant::default().id()),
             sound_variant: AtomicU8::new(CowSoundVariant::Classic as u8),
         };
         let mob_arc = Arc::new(cow);
@@ -125,9 +124,43 @@ impl Animal for CowEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
             || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::COW,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            let parent = if self.get_random().random::<bool>() {
+                self
+            } else {
+                partner
+            };
+            baby.variant
+                .store(parent.variant.load(Ordering::Relaxed), Ordering::Relaxed);
+        }
+        baby
+    }
 }
 
 impl Mob for CowEntity {
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let biome = world.get_biome(&self.get_entity().block_pos.load());
+        self.set_variant(CowVariant::select_for_biome(biome.registry_id));
+        let sound_variants = CowSoundVariant::ALL;
+        self.set_sound_variant(
+            sound_variants[self.get_random().random_range(0..sound_variants.len())],
+        );
+        self.mob_entity.finalize_spawn_base();
+        group_data
+    }
+
     fn has_audited_tick(&self) -> bool {
         true
     }
