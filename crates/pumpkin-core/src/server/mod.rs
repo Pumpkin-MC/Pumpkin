@@ -51,6 +51,7 @@ use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
+pub mod builtin_game_tests;
 mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
@@ -67,6 +68,7 @@ pub use recipe::RecipeManager;
 use crate::data::advancement_data::AdvancementManager;
 
 /// Represents a Minecraft server instance.
+#[repr(C)]
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,

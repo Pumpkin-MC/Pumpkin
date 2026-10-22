@@ -1,4 +1,4 @@
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 use crate::entity::ageable::AgeableMob;
 use crate::entity::mob::Mob;
 use pumpkin_data::Block;
@@ -34,6 +34,14 @@ impl EatGrassGoal {
 }
 
 impl Goal for EatGrassGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        Some(GoalReach {
+            // `tick` eats at this timer value.
+            changes_blocks: running && (self.timer - 1).max(0) == self.get_tick_count(4),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let interval = self.get_tick_count(if mob.as_ageable().is_some_and(AgeableMob::is_baby) {
             BABY_INTERVAL
@@ -68,11 +76,8 @@ impl Goal for EatGrassGoal {
             .world
             .load()
             .send_entity_status(entity, EntityStatus::EatGrass, None);
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 

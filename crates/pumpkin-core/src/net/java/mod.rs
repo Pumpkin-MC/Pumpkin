@@ -77,6 +77,7 @@ use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
 
+#[repr(C)]
 pub struct JavaClient {
     pub id: u64,
     /// The protocol the client speaks. Play packets are always encoded/decoded as
@@ -397,11 +398,11 @@ impl JavaClient {
     }
 
     /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
-    fn reserve_pending_bytes(&self, packet_data: Bytes) -> Option<(Bytes, usize)> {
+    fn reserve_pending_bytes(&self, packet_data: Bytes, observe: bool) -> Option<(Bytes, usize)> {
         if self.close_token.is_cancelled() {
             return None;
         }
-        let packet_data = self.translate_outgoing(packet_data)?;
+        let packet_data = self.translate_outgoing(packet_data, observe)?;
 
         // Reserve first, release again if it does not fit.
         let packet_len = packet_data.len();
@@ -426,8 +427,16 @@ impl JavaClient {
     /// `PacketSentEvent` for clients the multiversion plugin admitted below
     /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
     /// `None` when cancelled.
-    fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
-        if self.version.load() == CURRENT_MC_VERSION {
+    ///
+    /// For clients on `CURRENT_MC_VERSION` the event is fired as a read-only observation
+    /// (cancellable) for packets in the play state when `observe` is set, so packet-level
+    /// plugins (anti-cheats, protocol libraries) see every outbound packet. `observe` is
+    /// `false` for packets a plugin injected itself, to avoid echoing them back.
+    fn translate_outgoing(&self, packet_data: Bytes, observe: bool) -> Option<Bytes> {
+        let current_version = self.version.load() == CURRENT_MC_VERSION;
+        if current_version
+            && (!observe || !matches!(self.connection_state.load(), ConnectionState::Play))
+        {
             return Some(packet_data);
         }
         // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
@@ -452,6 +461,9 @@ impl JavaClient {
         if event.cancelled {
             return None;
         }
+        if current_version {
+            return Some(packet_data);
+        }
 
         let mut framed = Vec::with_capacity(5 + event.payload.len());
         framed.write_var_int(&VarInt(event.packet_id)).ok()?;
@@ -465,7 +477,16 @@ impl JavaClient {
 
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
-        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data) else {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data, true) else {
+            return false;
+        };
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
+    }
+
+    /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
+    /// current-version clients. For packets that a plugin already observed itself.
+    pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) -> bool {
+        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data, false) else {
             return false;
         };
         self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
@@ -544,7 +565,7 @@ impl JavaClient {
     pub fn try_kick(&self, reason: &TextComponent) {
         if let Some(data) = self
             .serialize_disconnect(reason)
-            .and_then(|data| self.translate_outgoing(data))
+            .and_then(|data| self.translate_outgoing(data, false))
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
@@ -604,7 +625,7 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) -> bool {
-        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet) else {
+        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet, true) else {
             return false;
         };
 

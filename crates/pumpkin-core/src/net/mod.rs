@@ -136,6 +136,7 @@ pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
 
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
+#[repr(C)]
 pub enum ClientPlatform {
     Java(JavaClient),
     Bedrock(Arc<BedrockClient>),
@@ -203,6 +204,19 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => {
                 java.try_enqueue_packet_data(packet_data);
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.try_enqueue_packet_data(packet_data);
+            }
+        }
+    }
+
+    /// Like [`Self::try_enqueue_packet_data`] without firing `PacketSentEvent` (Java only), for
+    /// packets a plugin injected itself.
+    pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => {
+                java.try_enqueue_packet_data_unobserved(packet_data);
             }
             Self::Bedrock(bedrock) => {
                 bedrock.try_enqueue_packet_data(packet_data);
