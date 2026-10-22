@@ -814,8 +814,7 @@ impl LivingEntity {
 
     /// Like vanilla, the dead are not healed and a negative amount takes health.
     pub fn heal(&self, additional_health: f32) {
-        let health = self.health.load();
-        if health <= 0.0 || additional_health == 0.0 {
+        if self.health.load() <= 0.0 || additional_health == 0.0 {
             return;
         }
         let mut event =
@@ -829,7 +828,11 @@ impl LivingEntity {
                 return;
             }
         }
-        self.set_health(health + additional_health);
+        // A handler may have changed health, or killed the entity.
+        let health = self.health.load();
+        if health > 0.0 {
+            self.set_health(health + additional_health);
+        }
     }
 
     pub fn set_health(&self, health: f32) {
