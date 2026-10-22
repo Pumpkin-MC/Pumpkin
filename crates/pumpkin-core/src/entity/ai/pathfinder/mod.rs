@@ -478,6 +478,14 @@ impl Default for PathNavigation {
 }
 
 impl PathNavigation {
+    const fn waypoint_margin(width: f32) -> f32 {
+        if width > 0.75 {
+            width * 0.5
+        } else {
+            0.75 - width * 0.5
+        }
+    }
+
     #[must_use]
     pub fn new(evaluator: EvaluatorKind) -> Self {
         Self {
@@ -924,6 +932,13 @@ impl PathNavigation {
         }
     }
 
+    const fn can_cut_corner(path_type: PathType) -> bool {
+        !matches!(
+            path_type,
+            PathType::DangerFire | PathType::DangerOther | PathType::WalkableDoor
+        )
+    }
+
     #[must_use]
     pub fn should_target_next_node_in_direction(mob_pos: Vector3<f64>, path: &Path) -> bool {
         if path.get_next_node_index() + 1 >= path.get_node_count() {
@@ -1047,11 +1062,7 @@ impl PathNavigation {
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
                 let width = entity.entity.width();
-                self.max_distance_to_waypoint = if width > 0.75 {
-                    width * 0.5
-                } else {
-                    0.75 - width * 0.5
-                };
+                self.max_distance_to_waypoint = Self::waypoint_margin(width);
 
                 if !on_ground
                     && horizontal_dist < f64::from(self.max_distance_to_waypoint)
@@ -1402,26 +1413,34 @@ impl PathNavigationTrait for FlyingPathNavigation {
         self.inner.update_path(entity);
 
         let mob_pos = entity.entity.pos.load();
-        self.inner.do_stuck_detection(mob_pos, entity);
-
+        let can_update = self.inner.can_update_path(entity);
+        self.inner.max_distance_to_waypoint =
+            PathNavigation::waypoint_margin(entity.entity.width());
         if self.is_done() {
             self.inner.stop();
         } else if let Some(path) = &mut self.inner.path
             && let Some(pos) = path.get_next_node_pos()
         {
-            let target_pos = Vector3::new(
-                f64::from(pos.0.x) + 0.5,
-                f64::from(pos.0.y) + 0.5,
-                f64::from(pos.0.z) + 0.5,
-            );
-            let current_pos = entity.entity.pos.load();
-            let dx = target_pos.x - current_pos.x;
-            let dy = target_pos.y - current_pos.y;
-            let dz = target_pos.z - current_pos.z;
-            let dist_sq = dx * dx + dy * dy + dz * dz;
-
-            if dist_sq < 0.5 * 0.5 {
+            let reached = if can_update {
+                let margin = f64::from(self.inner.max_distance_to_waypoint);
+                ((mob_pos.x - (f64::from(pos.0.x) + 0.5)).abs() < margin
+                    && (mob_pos.z - (f64::from(pos.0.z) + 0.5)).abs() < margin
+                    && (mob_pos.y - f64::from(pos.0.y)).abs() < NODE_REACH_Y)
+                    || (path
+                        .get_next_node()
+                        .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
+                        && PathNavigation::should_target_next_node_in_direction(mob_pos, path))
+            } else {
+                path.get_next_entity_pos(entity.entity.width())
+                    .is_some_and(|target| {
+                        entity.entity.block_pos.load() == BlockPos::floored_v(target)
+                    })
+            };
+            if reached {
                 path.advance();
+            }
+            if can_update {
+                self.inner.do_stuck_detection(mob_pos, entity);
             }
         }
         self.inner.target(entity)
@@ -2535,6 +2554,64 @@ mod tests {
             paths[0]
                 .as_ref()
                 .is_some_and(|first| first.same_as(paths[1].as_ref()))
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_navigation_advances_from_the_start_node_and_gains_height() -> TestResult {
+        use crate::entity::{ai::control::MoveControlTrait, passive::allay::AllayEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let allay = AllayEntity::new(crate::entity::Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        let living = &allay.mob_entity.living_entity;
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = FlyingPathNavigation::new();
+        let target = BlockPos::new(2, 66, 0);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(1, 65, 0)),
+                    Node::new(target),
+                ],
+                target,
+                true,
+            )),
+            1.0,
+            living,
+        );
+        let next = navigation.tick(living).ok_or("missing flight waypoint")?;
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(1)
+        );
+        assert_eq!(next.position, Vector3::new(1.5, 65.0, 0.5));
+        let mut control =
+            crate::entity::ai::control::flying_move_control::FlyingMoveControl::new(20, true);
+        for _ in 0..80 {
+            if let Some(next) = navigation.tick(living) {
+                control.set_wanted_position(
+                    next.position.x,
+                    next.position.y,
+                    next.position.z,
+                    next.speed_modifier,
+                );
+            }
+            control.tick(allay.as_ref());
+            living.travel_flying(allay.as_ref());
+        }
+        let pos = living.entity.pos.load();
+        world.level.shutdown().await;
+        assert!(pos.y > 65.0, "Allay failed to gain height: {pos:?}");
+        assert!(
+            pos.x > 1.0,
+            "Allay stayed around its starting node: {pos:?}"
         );
         Ok(())
     }
