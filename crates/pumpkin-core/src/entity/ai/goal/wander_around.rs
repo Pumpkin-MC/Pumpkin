@@ -1,10 +1,11 @@
 use super::{Controls, Goal, GoalReach, to_goal_ticks};
-use crate::entity::ai::util::default_random_pos;
+use crate::entity::ai::util::{default_random_pos, land_random_pos};
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 pub const DEFAULT_INTERVAL: i32 = 120;
+pub const PROBABILITY: f32 = 0.001;
 
 pub struct WanderAroundGoal {
     goal_control: Controls,
@@ -12,6 +13,7 @@ pub struct WanderAroundGoal {
     target: Option<Vector3<f64>>,
     interval: i32,
     force_trigger: bool,
+    water_avoiding_probability: Option<f32>,
 }
 
 impl WanderAroundGoal {
@@ -28,7 +30,15 @@ impl WanderAroundGoal {
             target: None,
             interval,
             force_trigger: false,
+            water_avoiding_probability: None,
         }
+    }
+
+    #[must_use]
+    pub const fn water_avoiding(speed: f64) -> Self {
+        let mut goal = Self::new(speed);
+        goal.water_avoiding_probability = Some(PROBABILITY);
+        goal
     }
 
     /// Run once on the next check, ignoring the interval.
@@ -40,8 +50,17 @@ impl WanderAroundGoal {
         self.interval = interval;
     }
 
-    fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        default_random_pos::get_pos(mob, 10, 7)
+    fn get_position(&self, mob: &dyn Mob) -> Option<Vector3<f64>> {
+        let Some(probability) = self.water_avoiding_probability else {
+            return default_random_pos::get_pos(mob, 10, 7);
+        };
+        if mob.get_entity().is_in_water() {
+            land_random_pos::get_pos(mob, 15, 7).or_else(|| default_random_pos::get_pos(mob, 10, 7))
+        } else if mob.get_random().random::<f32>() >= probability {
+            land_random_pos::get_pos(mob, 10, 7)
+        } else {
+            default_random_pos::get_pos(mob, 10, 7)
+        }
     }
 }
 
@@ -70,7 +89,7 @@ impl Goal for WanderAroundGoal {
             }
         }
 
-        self.target = Self::get_position(mob);
+        self.target = self.get_position(mob);
         if self.target.is_none() {
             return false;
         }
