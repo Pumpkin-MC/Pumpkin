@@ -9,7 +9,7 @@ use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::{
     Entity,
-    ai::goal::{Goal, active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -52,16 +52,8 @@ impl ZombieEntityBase {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             if can_break_doors {
@@ -116,21 +108,14 @@ impl ZombieEntityBase {
             .swap(can_break_doors, Ordering::Relaxed)
             != can_break_doors
         {
-            let mut stopped = {
-                let mut goal_selector = self
-                    .mob_entity
+            if can_break_doors {
+                self.mob_entity
                     .goals_selector
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if can_break_doors {
-                    goal_selector.add_goal(1, Box::new(BreakDoorGoal::default()));
-                    Vec::new()
-                } else {
-                    goal_selector.remove_goals::<BreakDoorGoal>()
-                }
-            };
-            for goal in &mut stopped {
-                goal.stop(mob);
+                    .add_goal(1, Box::new(BreakDoorGoal::default()));
+            } else {
+                self.mob_entity
+                    .goals_selector
+                    .remove_goal::<BreakDoorGoal>(mob);
             }
         }
     }
