@@ -1044,11 +1044,19 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
 
         // A loaded block entity never reads the pending NBT again, so swap in
         // a new one like `/clone` does, which also sends it to clients.
-        if world_ref.get_block_entity(&internal_pos).is_some() {
+        if let Some(current) = world_ref.get_block_entity(&internal_pos) {
             let Some(block_entity) = pumpkin_core::block::entities::block_entity_from_nbt(&nbt)
             else {
                 return Ok(Err("NBT is not a valid block entity".to_string()));
             };
+            // The block decides the block entity type, as in vanilla.
+            if block_entity.resource_location() != current.resource_location() {
+                return Ok(Err(format!(
+                    "NBT id {} does not match the block entity {} at this position",
+                    block_entity.resource_location(),
+                    current.resource_location()
+                )));
+            }
             // Open screens hold the old block entity's inventory, and clicks
             // there would no longer reach the block.
             world_ref.close_container_screens_at(&internal_pos);
