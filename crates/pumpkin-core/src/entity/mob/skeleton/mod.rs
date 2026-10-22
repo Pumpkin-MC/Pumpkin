@@ -64,16 +64,24 @@ impl SkeletonEntityBase {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
-            goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
-            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
+            // TODO: RestrictSunGoal(2) and FleeSunGoal(3), once both match vanilla.
             fleeing::apply(goal_selector, SKELETON_FLEES);
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            // Vanilla `reassessWeaponGoal`: the bow or the melee goal at 4, by the held weapon.
+            // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
+            goal_selector.add_goal(4, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(
-                8,
+                4,
+                Box::new(
+                    MeleeAttackGoal::new(1.2, false)
+                        .gated_by(|mob| !BowAttackGoal::is_holding_bow(mob)),
+                ),
+            );
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
+            goal_selector.add_goal(
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             hunting::apply(target_selector, &mob_arc.mob_entity, extra);

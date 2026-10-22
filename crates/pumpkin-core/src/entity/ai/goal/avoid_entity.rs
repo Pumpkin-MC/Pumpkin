@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use super::{Controls, Goal};
 use crate::entity::ai::goal::revenge::MobFilter;
+use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
+use crate::entity::{EntityBase, mob::Mob};
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
 
 const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: i32 = 16;
@@ -46,7 +46,7 @@ pub struct AvoidEntityGoal {
     fast_speed: f64,
     selector: ThreatSelector,
     target: Option<Arc<dyn EntityBase>>,
-    flee_pos: Option<Vector3<f64>>,
+    path: Option<Path>,
     when: Option<MobFilter>,
     keep_when: bool,
     confirm: Option<ThreatFilter>,
@@ -73,7 +73,7 @@ impl AvoidEntityGoal {
             fast_speed,
             selector: not_creative_or_spectator,
             target: None,
-            flee_pos: None,
+            path: None,
             when: None,
             keep_when: false,
             confirm: None,
@@ -169,6 +169,19 @@ impl AvoidEntityGoal {
 }
 
 impl Goal for AvoidEntityGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<super::GoalReach> {
+        Some(super::GoalReach {
+            entities: self.flee_distance,
+            speed: self.fast_speed,
+            links: self
+                .target
+                .iter()
+                .map(|target| target.get_entity().entity_id)
+                .collect(),
+            ..super::GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if self.when.is_some_and(|when| !when(mob)) {
             return false;
@@ -198,8 +211,19 @@ impl Goal for AvoidEntityGoal {
             return false;
         }
 
+        // Vanilla `createPath(pos, 0)`, no route, no flee, so the current goal keeps running.
+        let mob_entity = mob.get_mob_entity();
+        let path = mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .create_path(&mob_entity.living_entity, flee_pos, 0);
+        let Some(path) = path else {
+            return false;
+        };
+
         self.target = Some(target);
-        self.flee_pos = Some(flee_pos);
+        self.path = Some(path);
         true
     }
 
@@ -214,15 +238,12 @@ impl Goal for AvoidEntityGoal {
         if self.drop_target {
             mob.set_mob_target(None, TargetReason::Fleeing);
         }
-        if let Some(flee_pos) = self.flee_pos {
-            let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.set_progress(NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed));
-        }
+        let mob_entity = mob.get_mob_entity();
+        mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .move_to_path(self.path.take(), self.slow_speed, &mob_entity.living_entity);
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
@@ -249,10 +270,96 @@ impl Goal for AvoidEntityGoal {
 
     fn stop(&mut self, _mob: &dyn Mob) {
         self.target = None;
-        self.flee_pos = None;
+        self.path = None;
     }
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::mob::creeper::CreeperEntity;
+    use crate::entity::passive::ocelot::OcelotEntity;
+    use crate::entity::{Entity, EntityBase};
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::chunk::ChunkData;
+    use pumpkin_world::world::BlockFlags;
+    use std::sync::atomic::Ordering;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn stone_floor(world: &std::sync::Arc<crate::world::World>) {
+        for chunk_x in -2..=1 {
+            for chunk_z in -2..=1 {
+                world.level.loaded_chunks.insert(
+                    Vector2::new(chunk_x, chunk_z),
+                    ChunkData::empty_sync(chunk_x, chunk_z),
+                );
+            }
+        }
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        for x in -20..=20 {
+            for z in -20..=20 {
+                world.set_block_state(
+                    &BlockPos::new(x, 63, z),
+                    Block::STONE.default_state.id,
+                    flags,
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn creeper_starts_fleeing_a_spawned_ocelot_within_vanilla_retry_window() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+
+        let creeper = CreeperEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::CREEPER,
+        ));
+        creeper
+            .get_entity()
+            .on_ground
+            .store(true, Ordering::Relaxed);
+        world.spawn_entity(creeper.clone());
+
+        let ocelot = OcelotEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 64.0, 0.5),
+            &EntityType::OCELOT,
+        ));
+        ocelot.get_entity().on_ground.store(true, Ordering::Relaxed);
+        world.spawn_entity(ocelot);
+
+        let mut started_at = None;
+        for tick in 1..=30 {
+            creeper
+                .get_entity()
+                .tick_count
+                .store(tick, Ordering::Relaxed);
+            creeper.mob_entity.server_ai_step(&*creeper, &*creeper);
+            if !creeper.is_navigator_idle() {
+                started_at = Some(tick);
+                break;
+            }
+        }
+        world.level.shutdown().await;
+
+        let started_at = started_at.ok_or("creeper never started fleeing the ocelot")?;
+        assert!(
+            started_at <= 20,
+            "flee started on tick {started_at}, later than vanilla's retry window"
+        );
+        Ok(())
     }
 }
