@@ -15,6 +15,7 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
+use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::ai::behavior::fleeing::{self, Flee};
@@ -393,6 +394,27 @@ impl Animal for FoxEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FOX_FOOD)
             || FOX_FOOD.iter().any(|i| i.id == item_stack.item.id)
+    }
+
+    /// Vanilla `Fox.getBreedOffspring`: the cub takes either parent's variant.
+    /// No `finalizeSpawn`, so like vanilla its hunts wait for the next load.
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::FOX,
+        ));
+        let partner_variant = partner
+            .cast_any()
+            .downcast_ref::<Self>()
+            .map_or_else(|| self.get_variant(), Self::get_variant);
+        baby.set_variant(if self.get_random().random::<bool>() {
+            self.get_variant()
+        } else {
+            partner_variant
+        });
+        baby
     }
 }
 
