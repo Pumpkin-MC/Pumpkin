@@ -10,7 +10,6 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
-use crate::plugin::api::events::entity::entity_breed::EntityBreedEvent;
 
 use super::{Controls, Goal, GoalReach};
 
@@ -132,15 +131,6 @@ impl Goal for BreedGoal {
     fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
         let mob_entity = mob.get_mob_entity();
         let world = mob.get_entity().world.load();
-        // A plugin handler may touch anything when the child is born.
-        if running
-            && world
-                .server
-                .upgrade()
-                .is_some_and(|server| server.plugin_manager.has_handlers::<EntityBreedEvent>())
-        {
-            return None;
-        }
         let mut links: Vec<i32> = self
             .mate
             .iter()
