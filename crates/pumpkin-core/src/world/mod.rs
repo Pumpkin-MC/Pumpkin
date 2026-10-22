@@ -254,6 +254,7 @@ impl PumpkinError for GetBlockError {
 /// - Manages the `Level` instance for handling chunk-related operations.
 /// - Stores and tracks active `Player` entities within the world.
 /// - Provides a central hub for interacting with the world's entities and environment.
+#[repr(C)]
 pub struct World {
     /// Represents the World's Unique Identifier
     pub uuid: Uuid,
@@ -5339,7 +5340,6 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
-    #[expect(clippy::too_many_lines)]
     fn on_block_state_set(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5358,6 +5358,8 @@ impl World {
 
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
+            && old_block.default_state.block_entity_type
+                != new_block.default_state.block_entity_type
             && let Some(entity) = self.get_block_entity(position)
         {
             if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
@@ -5377,20 +5379,10 @@ impl World {
         }
 
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
-            self.block_registry.on_placed(
-                self,
+            self.on_block_placed(
+                position,
                 new_block,
                 block_state_id,
-                position,
-                replaced_block_state_id,
-                block_moved,
-            );
-            let new_fluid = self.get_fluid(position);
-            self.block_registry.on_placed_fluid(
-                self,
-                new_fluid,
-                block_state_id,
-                position,
                 replaced_block_state_id,
                 block_moved,
             );
@@ -5469,6 +5461,34 @@ impl World {
         }
 
         replaced_block_state_id
+    }
+
+    /// Runs the placed callbacks for a block and its fluid, like vanilla `BlockState.onPlace`.
+    pub(crate) fn on_block_placed(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        new_block: &Block,
+        block_state_id: BlockStateId,
+        replaced_block_state_id: BlockStateId,
+        moved: bool,
+    ) {
+        self.block_registry.on_placed(
+            self,
+            new_block,
+            block_state_id,
+            position,
+            replaced_block_state_id,
+            moved,
+        );
+        let new_fluid = self.get_fluid(position);
+        self.block_registry.on_placed_fluid(
+            self,
+            new_fluid,
+            block_state_id,
+            position,
+            replaced_block_state_id,
+            moved,
+        );
     }
 
     pub fn break_block(

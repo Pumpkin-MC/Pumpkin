@@ -181,10 +181,11 @@ pub enum PluginState {
 }
 
 /// Core plugin management system
+#[repr(C)]
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
-    handlers: Arc<ArcSwap<HandlerMap>>,
+    pub handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
