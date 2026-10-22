@@ -18,7 +18,7 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, spawn::SpawnGroupData},
-    passive::animal::Animal,
+    passive::animal::{Animal, get_dye_color_from_item},
     player::Player,
 };
 use crate::world::World;
@@ -29,7 +29,11 @@ use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{Taggable, WorldgenBiome};
+use pumpkin_data::tag::{self, Taggable, WorldgenBiome};
+use pumpkin_inventory::Inventory;
+use pumpkin_inventory::crafting::crafting_inventory::CraftingInventory;
+use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -63,6 +67,38 @@ const COLD_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
     (SheepColorProvider::CommonColors(DyeColor::Black), 82),
 ];
 const COMMON_COLOR_WEIGHT: u32 = 499;
+
+fn find_color_mix_in_recipes(
+    world: &World,
+    color1: DyeColor,
+    color2: DyeColor,
+) -> Option<DyeColor> {
+    let dye_items = |color: DyeColor| {
+        tag::Item::C_DYES
+            .1
+            .iter()
+            .filter_map(|id| Item::from_id(*id))
+            .filter(move |item| get_dye_color_from_item(item) == Some(color.id()))
+    };
+    let server = world.server.upgrade();
+    let provider = server
+        .as_ref()
+        .map(|server| server.recipe_manager.as_ref() as &dyn RecipeProvider);
+    for dye1 in dye_items(color1) {
+        for dye2 in dye_items(color2) {
+            let input = CraftingInventory::new(2, 1);
+            input.set_stack(0, ItemStack::new(1, dye1));
+            input.set_stack(1, ItemStack::new(1, dye2));
+            if let Some(result) = match_crafting_recipe(&input, provider)
+                && let Some(item) = Item::from_registry_key(&result.item_id)
+                && let Some(color) = get_dye_color_from_item(item)
+            {
+                return Some(DyeColor::from(color));
+            }
+        }
+    }
+    None
+}
 const PINK_WEIGHT: u32 = 1;
 
 pub struct SheepEntity {
@@ -162,6 +198,16 @@ impl SheepEntity {
         }
     }
 
+    fn get_mixed_color(&self, world: &World, color1: DyeColor, color2: DyeColor) -> DyeColor {
+        find_color_mix_in_recipes(world, color1, color2).unwrap_or_else(|| {
+            if self.get_random().random::<bool>() {
+                color1
+            } else {
+                color2
+            }
+        })
+    }
+
     pub fn ready_for_shearing(&self) -> bool {
         !self.is_sheared() && !self.is_baby()
     }
@@ -218,11 +264,29 @@ impl AgeableMob for SheepEntity {
 
 impl Animal for SheepEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        use pumpkin_data::tag::Taggable;
         item_stack
             .item
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHEEP_FOOD)
             || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let world = entity.world.load_full();
+        let baby = Self::new(Entity::new(
+            world.clone(),
+            entity.pos.load(),
+            &EntityType::SHEEP,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            let color = self.get_mixed_color(
+                &world,
+                DyeColor::from(self.get_color()),
+                DyeColor::from(partner.get_color()),
+            );
+            baby.set_color(color.id());
+        }
+        baby
     }
 }
 
@@ -288,7 +352,6 @@ impl Mob for SheepEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::Animal;
         let item = item_stack.get_item();
 
         if item == &Item::SHEARS {
