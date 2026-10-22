@@ -2659,11 +2659,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         };
 
         player.inventory().set_stack(slot, stack.clone());
-
-        // Sync to client
-        let stack_serializer = ItemStackSerializer::from(stack);
-        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.send_client_packet(&packet).await;
+        player.sync_hand_slot(slot, stack);
 
         Ok(())
     }
@@ -2683,10 +2679,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
 
         player.inventory().set_stack(slot as usize, stack.clone());
 
-        // Sync to client
-        let stack_serializer = ItemStackSerializer::from(stack);
-        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-        player.send_client_packet(&packet).await;
+        player.sync_hand_slot(slot as usize, stack);
 
         Ok(())
     }
@@ -3012,6 +3005,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             > = Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
                 sync_id,
                 window_type,
+                player.inventory(),
                 &inventory,
                 allow_grab_items,
                 allow_put_items,

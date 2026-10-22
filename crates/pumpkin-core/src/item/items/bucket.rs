@@ -143,7 +143,7 @@ fn give_filled_bucket_stack(stack: &mut ItemStack, player: &Player, mut filled: 
     }
 }
 
-fn fill_bucket_stack(stack: &mut ItemStack, player: &Player, item: &'static Item) {
+pub(crate) fn fill_bucket_stack(stack: &mut ItemStack, player: &Player, item: &'static Item) {
     give_filled_bucket_stack(stack, player, ItemStack::new(1, item));
 }
 
@@ -440,9 +440,7 @@ impl ItemBehaviour for EmptyBucketItem {
             );
             fill_mob_bucket_stack(item, player, &Item::SULFUR_CUBE_BUCKET, entity.as_ref());
             ent.remove();
-        } else if (entity_type == &EntityType::COW
-            || entity_type == &EntityType::MOOSHROOM
-            || entity_type == &EntityType::GOAT)
+        } else if (entity_type == &EntityType::MOOSHROOM || entity_type == &EntityType::GOAT)
             && ent.age.load(Ordering::Relaxed) >= 0
         {
             let world = ent.world.load();

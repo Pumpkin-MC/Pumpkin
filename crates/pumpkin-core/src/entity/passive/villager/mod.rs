@@ -437,11 +437,7 @@ impl VillagerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
@@ -1657,7 +1653,7 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().age.load(Ordering::Relaxed);
+        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
         if age % 20 != 0 {
             return;
         }
