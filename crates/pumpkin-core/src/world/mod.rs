@@ -2262,32 +2262,6 @@ impl World {
             });
     }
 
-    pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
-        let min = bounding_box.min_block_pos();
-
-        let max = bounding_box.max_block_pos();
-
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
-
-                    let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
-
-                    if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
-
-                        if height >= bounding_box.min.y {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
     pub fn contains_any_liquid(&self, bounding_box: BoundingBox) -> bool {
         let min_x = bounding_box.min.x.floor() as i32;
         let max_x = bounding_box.max.x.ceil() as i32;

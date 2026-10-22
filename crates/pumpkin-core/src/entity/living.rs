@@ -1684,6 +1684,7 @@ impl LivingEntity {
     }
 
     pub(crate) fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
+        let old_y = self.entity.pos.load().y;
         let movement_input = self.movement_input.load();
         let effective_speed = if caller.get_mob().is_some() {
             f64::from(self.get_speed())
@@ -1729,7 +1730,7 @@ impl LivingEntity {
 
         self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
         self.entity.velocity.store(velo);
-        self.jump_out_of_fluid();
+        self.jump_out_of_fluid(old_y);
     }
 
     fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) {
@@ -1745,6 +1746,7 @@ impl LivingEntity {
                 self.travel_in_water(caller, gravity, falling);
             }
         } else {
+            let old_y = self.entity.pos.load().y;
             self.entity.update_velocity_from_input(movement_input, 0.02);
 
             self.make_move(caller);
@@ -1766,22 +1768,24 @@ impl LivingEntity {
             }
 
             self.entity.velocity.store(velo);
-            self.jump_out_of_fluid();
+            self.jump_out_of_fluid(old_y);
         }
     }
 
-    fn jump_out_of_fluid(&self) {
+    fn jump_out_of_fluid(&self, old_y: f64) {
         let mut velo = self.entity.velocity.load();
-
-        if self.entity.horizontal_collision.load(SeqCst)
-            && !self
-                .entity
-                .world
-                .load()
-                .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
-        {
-            velo.y = 0.3;
-
+        if !self.entity.horizontal_collision.load(SeqCst) {
+            return;
+        }
+        let lift = velo.y + f64::from(0.6f32) - self.entity.pos.load().y + old_y;
+        let bounding_box = self
+            .entity
+            .bounding_box
+            .load()
+            .shift(Vector3::new(velo.x, lift, velo.z));
+        let world = self.entity.world.load();
+        if world.is_space_empty(bounding_box) && !world.contains_any_liquid(bounding_box) {
+            velo.y = f64::from(0.3f32);
             self.entity.velocity.store(velo);
         }
     }
