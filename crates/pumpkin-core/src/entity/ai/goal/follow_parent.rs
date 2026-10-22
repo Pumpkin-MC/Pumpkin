@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
 
 const SEARCH_RADIUS: f64 = 8.0;
@@ -61,6 +61,21 @@ impl FollowParentGoal {
 }
 
 impl Goal for FollowParentGoal {
+    fn tick_reach(&self, mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        let baby = mob.get_mob_entity().living_entity.entity.age.load(Relaxed) < 0;
+        Some(GoalReach {
+            // Adults bail out before searching.
+            entities: if baby { SEARCH_RADIUS } else { 0.0 },
+            speed: if baby { self.speed } else { 0.0 },
+            links: self
+                .parent
+                .iter()
+                .map(|parent| parent.get_entity().entity_id)
+                .collect(),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let age = mob.get_mob_entity().living_entity.entity.age.load(Relaxed);
         if age >= 0 {
@@ -101,11 +116,8 @@ impl Goal for FollowParentGoal {
         if let Some(parent) = &self.parent {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let parent_pos = parent.get_entity().pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(mob_pos, parent_pos, self.speed));
         }
     }

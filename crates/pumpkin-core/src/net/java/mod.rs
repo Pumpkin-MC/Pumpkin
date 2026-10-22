@@ -78,6 +78,7 @@ use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::plugin::server::packet::{PacketReceivedEvent, PacketSentEvent};
 use crate::{error::PumpkinError, server::Server};
 
+#[repr(C)]
 pub struct JavaClient {
     pub id: u64,
     /// The protocol the client speaks. Play packets are always encoded/decoded as
@@ -150,6 +151,8 @@ struct PendingTranslation {
     /// Held in `pending_bytes` until the translated packet takes its place.
     reserved: usize,
     completion: Option<(MakeOutgoing, oneshot::Sender<()>)>,
+    /// `false`: queued only to keep the send order, goes out unchanged.
+    fire: bool,
 }
 
 impl JavaClient {
@@ -451,10 +454,18 @@ impl JavaClient {
         Some((packet_data, packet_len))
     }
 
-    /// Player and server when packets to this client go through `PacketSentEvent`:
-    /// a client below `CURRENT_MC_VERSION` and a plugin listening.
-    fn translation_target(&self) -> Option<(Arc<Player>, Arc<Server>)> {
-        if self.close_token.is_cancelled() || self.version.load() == CURRENT_MC_VERSION {
+    /// Whether `PacketSentEvent` fires for a packet: always below `CURRENT_MC_VERSION`
+    /// (the plugin rewrites it), on `CURRENT_MC_VERSION` as an observation in play when
+    /// `observe` is set. `observe` is `false` for packets a plugin injected itself.
+    fn fires_packet_sent(&self, observe: bool) -> bool {
+        self.version.load() != CURRENT_MC_VERSION
+            || (observe && matches!(self.connection_state.load(), ConnectionState::Play))
+    }
+
+    /// Player and server when packets to this client go through `PacketSentEvent`
+    /// and a plugin listens.
+    fn translation_target(&self, observe: bool) -> Option<(Arc<Player>, Arc<Server>)> {
+        if self.close_token.is_cancelled() || !self.fires_packet_sent(observe) {
             return None;
         }
         let player = Option::clone(&self.player.load())?;
@@ -468,11 +479,11 @@ impl JavaClient {
     /// Per-connection FIFO that fires `PacketSentEvent` off the sender's thread.
     /// A plugin host call that sends a packet would otherwise wait on its own plugin chain.
     /// Once started, every packet goes through it to keep the send order.
-    fn translation_queue(&self) -> Option<&UnboundedSender<PendingTranslation>> {
+    fn translation_queue(&self, observe: bool) -> Option<&UnboundedSender<PendingTranslation>> {
         if let Some(queue) = self.translations.get() {
             return Some(queue);
         }
-        let (player, server) = self.translation_target()?;
+        let (player, server) = self.translation_target(observe)?;
         let mut receiver = None;
         let queue = self.translations.get_or_init(|| {
             let (send, recv) = tokio::sync::mpsc::unbounded_channel();
@@ -499,6 +510,7 @@ impl JavaClient {
         queue: &UnboundedSender<PendingTranslation>,
         data: Bytes,
         completion: Option<(MakeOutgoing, oneshot::Sender<()>)>,
+        observe: bool,
     ) -> bool {
         let Some((data, reserved)) = self.reserve_pending_bytes(data) else {
             return false;
@@ -507,6 +519,7 @@ impl JavaClient {
             data,
             reserved,
             completion,
+            fire: self.fires_packet_sent(observe),
         };
         if queue.send(pending).is_err() {
             decrement_pending_bytes(&self.pending_bytes, reserved);
@@ -559,10 +572,15 @@ impl JavaClient {
 
     /// Translated clients: the disconnect goes through the translation queue and the
     /// connection closes once it is flushed. The caller does not wait.
-    fn kick_deferred(&self, queue: &UnboundedSender<PendingTranslation>, data: Option<Bytes>) {
+    fn kick_deferred(
+        &self,
+        queue: &UnboundedSender<PendingTranslation>,
+        data: Option<Bytes>,
+        observe: bool,
+    ) {
         let (done, flushed) = oneshot::channel();
         let queued = data.is_some_and(|data| {
-            self.defer_translation(queue, data, Some((OutgoingPacket::flushed, done)))
+            self.defer_translation(queue, data, Some((OutgoingPacket::flushed, done)), observe)
         });
         if !queued {
             self.close();
@@ -581,8 +599,18 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Some(queue) = self.translation_queue() {
-            self.defer_translation(queue, packet_data, None);
+        if let Some(queue) = self.translation_queue(true) {
+            self.defer_translation(queue, packet_data, None, true);
+        } else {
+            self.enqueue_translated(packet_data);
+        }
+    }
+
+    /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
+    /// current-version clients. For packets that a plugin already observed itself.
+    pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) {
+        if let Some(queue) = self.translation_queue(false) {
+            self.defer_translation(queue, packet_data, None, false);
         } else {
             self.enqueue_translated(packet_data);
         }
@@ -667,13 +695,13 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
-        if let Some(queue) = self.translation_queue() {
+        if let Some(queue) = self.translation_queue(false) {
             warn!(
                 "Closing connection for {}: {}",
                 self.id,
                 reason.clone().get_text()
             );
-            self.kick_deferred(queue, self.serialize_disconnect(reason));
+            self.kick_deferred(queue, self.serialize_disconnect(reason), false);
             return;
         }
         if let Some(data) = self.serialize_disconnect(reason) {
@@ -705,14 +733,14 @@ impl JavaClient {
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
         if send_packet
             && self.in_plugin_call()
-            && let Some(queue) = self.translation_queue()
+            && let Some(queue) = self.translation_queue(true)
         {
             warn!(
                 "Closing connection for {}: {}",
                 self.id,
                 reason.clone().get_text()
             );
-            self.kick_deferred(queue, self.serialize_disconnect(reason));
+            self.kick_deferred(queue, self.serialize_disconnect(reason), true);
             return;
         }
         if send_packet && let Some(data) = self.serialize_disconnect(reason) {
@@ -746,8 +774,8 @@ impl JavaClient {
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) {
         let (completion_tx, completion_rx) = oneshot::channel();
-        if let Some(queue) = self.translation_queue() {
-            if !self.defer_translation(queue, packet, Some((make, completion_tx)))
+        if let Some(queue) = self.translation_queue(true) {
+            if !self.defer_translation(queue, packet, Some((make, completion_tx)), true)
                 || self.in_plugin_call()
             {
                 return;
@@ -1300,7 +1328,15 @@ async fn run_translations(
         let ClientPlatform::Java(client) = player.client.as_ref() else {
             break;
         };
-        let (packet, extra) = fire_packet_sent(&server, &player, pending.data).await;
+        let (packet, extra) = if !pending.fire {
+            (Some(pending.data), Vec::new())
+        } else if client.version.load() == CURRENT_MC_VERSION {
+            // Observation only: cancellable, not rewritten.
+            let (packet, extra) = fire_packet_sent(&server, &player, pending.data.clone()).await;
+            (packet.map(|_| pending.data), extra)
+        } else {
+            fire_packet_sent(&server, &player, pending.data).await
+        };
         decrement_pending_bytes(&client.pending_bytes, pending.reserved);
         client.queue_translated(packet, extra, pending.completion);
     }
