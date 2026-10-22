@@ -457,16 +457,12 @@ impl VillagerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
-            fleeing::apply(&mut goal_selector, VILLAGER_FLEES);
+            fleeing::apply(goal_selector, VILLAGER_FLEES);
 
             goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
@@ -496,14 +492,18 @@ impl VillagerEntity {
     }
 
     pub fn count_food_points_in_inventory(&self) -> i32 {
+        use pumpkin_data::data_component_impl::VillagerFoodImpl;
+
         let inventory = self
             .inventory
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut total = 0;
         for stack in inventory.iter() {
-            if !stack.is_empty() {
-                total += get_food_points(stack.get_item()) * stack.item_count as i32;
+            if !stack.is_empty()
+                && let Some(food) = stack.get_data_component::<VillagerFoodImpl>()
+            {
+                total += food.nutrition * i32::from(stack.item_count);
             }
         }
         total
@@ -520,6 +520,8 @@ impl VillagerEntity {
     }
 
     pub fn eat_until_full(&self) {
+        use pumpkin_data::data_component_impl::VillagerFoodImpl;
+
         if self.food_level.load(Ordering::Relaxed) >= BREEDING_FOOD_THRESHOLD {
             return;
         }
@@ -529,7 +531,9 @@ impl VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for stack in inventory.iter_mut() {
             if !stack.is_empty() {
-                let points = get_food_points(stack.get_item());
+                let points = stack
+                    .get_data_component::<VillagerFoodImpl>()
+                    .map_or(0, |food| food.nutrition);
                 if points > 0 {
                     while stack.item_count > 0
                         && self.food_level.load(Ordering::Relaxed) < BREEDING_FOOD_THRESHOLD
@@ -1624,7 +1628,7 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().age.load(Ordering::Relaxed);
+        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
         if age % 20 != 0 {
             return;
         }

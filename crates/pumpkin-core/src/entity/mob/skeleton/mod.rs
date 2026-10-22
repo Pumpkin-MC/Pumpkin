@@ -60,22 +60,14 @@ impl SkeletonEntityBase {
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
             goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
-            fleeing::apply(&mut goal_selector, SKELETON_FLEES);
+            fleeing::apply(goal_selector, SKELETON_FLEES);
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
@@ -84,8 +76,8 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, extra);
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, SKELETON_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, extra);
+            hunting::apply(target_selector, &mob_arc.mob_entity, SKELETON_HUNTS);
         };
 
         mob_arc

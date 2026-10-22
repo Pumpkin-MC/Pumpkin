@@ -79,16 +79,8 @@ impl ShulkerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(
                 1,
@@ -106,7 +98,7 @@ impl ShulkerEntity {
                         .alerting_others(),
                 ),
             );
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, SHULKER_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, SHULKER_HUNTS);
             // TODO: search box flattened to 4 along the attach face; ShulkerDefenseAttackGoal at 3.
         };
 

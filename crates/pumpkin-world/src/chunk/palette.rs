@@ -352,11 +352,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                     counts[idx] += 1;
                 } else {
                     warn!("Lookup index out of bounds! Defaulting...");
-                    // value is already 0, and counts[0] will be updated correctly if we track it
+                    counts[0] += 1;
                 }
             }
-            // fix counts[0] if it was skipped in out-of-bounds cases (rare)
-            // But actually we should just ensure it's correct.
 
             return Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
                 storage: PaletteStorage::Indexed(indices),
@@ -447,6 +445,19 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 }
                 original
             }
+        }
+    }
+
+    /// Returns whether any stored value matches the predicate.
+    #[must_use]
+    pub fn contains_matching(&self, mut predicate: impl FnMut(V) -> bool) -> bool {
+        match self {
+            Self::Homogeneous(value) => predicate(*value),
+            Self::Heterogeneous(data) => data
+                .palette
+                .iter()
+                .zip(&data.counts)
+                .any(|(&value, &count)| count > 0 && predicate(value)),
         }
     }
 
@@ -1009,13 +1020,9 @@ impl BlockPalette {
                     ));
                 }
                 let mut palette = Vec::with_capacity(palette_len);
-                let mut counts = Vec::with_capacity(palette_len);
-                let mut count_sum = 0u32;
                 for _ in 0..palette_len {
                     palette.push(BlockStateId::new_or_air(buf.get_u16()));
-                    let c = buf.get_u16();
-                    counts.push(c);
-                    count_sum += u32::from(c);
+                    buf.advance(2);
                 }
                 if palette_len == 1 {
                     buf.advance(Self::VOLUME);
@@ -1026,18 +1033,12 @@ impl BlockPalette {
                 flat.copy_from_slice(&buf[..Self::VOLUME]);
                 buf.advance(Self::VOLUME);
 
-                let max_idx = flat.iter().copied().max().unwrap_or(0) as usize;
-                if count_sum != Self::VOLUME as u32 || max_idx >= palette_len {
-                    counts.fill(0);
-                    for idx in flat.iter_mut() {
-                        let i = *idx as usize;
-                        if i < palette_len {
-                            counts[i] += 1;
-                        } else {
-                            *idx = 0;
-                            counts[0] += 1;
-                        }
+                let mut counts = vec![0; palette_len];
+                for idx in flat.iter_mut() {
+                    if *idx as usize >= palette_len {
+                        *idx = 0;
                     }
+                    counts[*idx as usize] += 1;
                 }
                 Ok(Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
                     storage: PaletteStorage::Indexed(indices),
@@ -1213,8 +1214,69 @@ pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockPalette, NetworkPalette};
+    use super::{BlockPalette, NetworkPalette, PalettedContainer};
     use pumpkin_data::{Block, BlockStateId};
+
+    #[test]
+    fn matching_visits_distinct_values_after_mutations() {
+        let mut palette = BlockPalette::default();
+        let plate = Block::STONE_PRESSURE_PLATE.default_state.id;
+        assert!(!palette.contains_matching(|state| state == plate));
+        palette.set(1, 2, 3, plate);
+        assert!(palette.contains_matching(|state| state == plate));
+        let mut visited = Vec::new();
+        assert!(!palette.contains_matching(|state| {
+            visited.push(state);
+            false
+        }));
+        assert_eq!(visited.len(), 2);
+        palette.set(1, 2, 3, Block::AIR.default_state.id);
+        assert!(!palette.contains_matching(|state| state == plate));
+    }
+
+    #[test]
+    fn matching_ignores_unused_entries_in_packed_palettes() {
+        let indexed =
+            PalettedContainer::<u16, 2>::from_palette_and_packed_data(&[10, 20, 30], &[2], 2);
+        assert!(indexed.contains_matching(|value| value == 10));
+        assert!(indexed.contains_matching(|value| value == 30));
+        assert!(!indexed.contains_matching(|value| value == 20));
+
+        let dense =
+            PalettedContainer::<u8, 2>::from_palette_and_packed_data(&[10, 20, 30], &[2], 2);
+        assert!(dense.contains_matching(|value| value == 10));
+        assert!(dense.contains_matching(|value| value == 30));
+        assert!(!dense.contains_matching(|value| value == 20));
+    }
+
+    #[test]
+    fn matching_includes_fallback_for_invalid_packed_indices() {
+        let palette =
+            PalettedContainer::<u16, 2>::from_palette_and_packed_data(&[10, 20, 30], &[0xffff], 2);
+        assert!(palette.iter().all(|value| value == 10));
+        assert!(palette.contains_matching(|value| value == 10));
+        assert!(!palette.contains_matching(|value| value == 20 || value == 30));
+    }
+
+    #[test]
+    fn matching_uses_stored_indices_when_binary_counts_are_incorrect()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use bytes::BufMut;
+
+        let plate = Block::STONE_PRESSURE_PLATE.default_state.id;
+        let air = Block::AIR.default_state.id;
+        let mut encoded = vec![1, 0, 2];
+        encoded.put_u16(plate.as_u16());
+        encoded.put_u16(0);
+        encoded.put_u16(air.as_u16());
+        encoded.put_u16(BlockPalette::VOLUME as u16);
+        encoded.resize(encoded.len() + BlockPalette::VOLUME, 0);
+        let palette = BlockPalette::read_pump_binary(&mut encoded.as_slice())?;
+        assert!(palette.iter().all(|value| value == plate));
+        assert!(palette.contains_matching(|value| value == plate));
+        assert!(!palette.contains_matching(|value| value == air));
+        Ok(())
+    }
 
     fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
         match palette {

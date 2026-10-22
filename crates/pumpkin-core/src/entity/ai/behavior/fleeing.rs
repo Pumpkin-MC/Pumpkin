@@ -127,7 +127,7 @@ pub const FISH_FLEES: &[Flee] =
     &[Flee::new(2, TargetMatch::Type(&EntityType::PLAYER), 8.0, 1.6, 1.4).matching(not_spectator)];
 
 /// Registers every entry in order.
-pub fn apply(goals: &mut GoalSelector, flees: &[Flee]) {
+pub fn apply(goals: &GoalSelector, flees: &[Flee]) {
     for flee in flees {
         goals.add_goal(flee.priority, Box::new(flee.build()));
     }

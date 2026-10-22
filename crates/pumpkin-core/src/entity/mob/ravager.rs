@@ -53,11 +53,7 @@ impl RavagerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(HoldGroundAttackGoal::new(10.0)));
@@ -73,13 +69,9 @@ impl RavagerEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(2, raider::revenge_goal());
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, RAVAGER_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, RAVAGER_HUNTS);
         };
 
         mob_arc

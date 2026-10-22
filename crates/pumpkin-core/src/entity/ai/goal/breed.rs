@@ -10,8 +10,9 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
+use crate::plugin::api::events::entity::entity_breed::EntityBreedEvent;
 
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 
 const PARTNER_RANGE: f64 = 8.0;
 
@@ -60,7 +61,10 @@ impl BreedGoal {
         let world_full = entity.world.load_full();
         let parent_pos = entity.pos.load();
 
-        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
+        let baby = mob.as_animal().map_or_else(
+            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
+            |animal| animal.get_breed_offspring(mate),
+        );
         let experience = mob.get_random().random_range(1..8);
         let Some(experience) = mob.approve_breeding(
             mate.get_entity().entity_id,
@@ -125,6 +129,52 @@ impl BreedGoal {
 }
 
 impl Goal for BreedGoal {
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        let mob_entity = mob.get_mob_entity();
+        let world = mob.get_entity().world.load();
+        // A plugin handler may touch anything when the child is born.
+        if running
+            && world
+                .server
+                .upgrade()
+                .is_some_and(|server| server.plugin_manager.has_handlers::<EntityBreedEvent>())
+        {
+            return None;
+        }
+        let mut links: Vec<i32> = self
+            .mate
+            .iter()
+            .map(|mate| mate.get_entity().entity_id)
+            .collect();
+        if running {
+            // Both parents' breeders get trust, stats and the advancement.
+            let mate_breeder = self
+                .mate
+                .as_ref()
+                .and_then(|mate| mate.get_mob())
+                .and_then(|mate| mate.get_mob_entity().breeder.load());
+            for breeder in [mob_entity.breeder.load(), mate_breeder]
+                .into_iter()
+                .flatten()
+            {
+                if let Some(player) = world.get_player_by_uuid(breeder) {
+                    links.push(player.entity_id());
+                }
+            }
+        }
+        let searching = !running && mob_entity.is_breeding_ready() && mob_entity.is_in_love();
+        Some(GoalReach {
+            entities: if searching { PARTNER_RANGE } else { 0.0 },
+            speed: if running || searching {
+                self.speed
+            } else {
+                0.0
+            },
+            links,
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         if !mob_entity.is_breeding_ready() || !mob_entity.is_in_love() {
@@ -176,10 +226,8 @@ impl Goal for BreedGoal {
         let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
         {
-            let mut navigator = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob_entity.steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
         };
 

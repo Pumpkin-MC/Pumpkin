@@ -59,16 +59,8 @@ impl IronGolemEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(2, Box::new(MoveTowardsTargetGoal::new(0.9, 32.0)));
@@ -82,8 +74,8 @@ impl IronGolemEntity {
 
             // TODO: DefendVillageTargetGoal at 1.
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 4, false);
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, IRON_GOLEM_HUNTS);
+            apply_targets(target_selector, &mob_arc.mob_entity, 3, 4, false);
+            hunting::apply(target_selector, &mob_arc.mob_entity, IRON_GOLEM_HUNTS);
         };
 
         mob_arc

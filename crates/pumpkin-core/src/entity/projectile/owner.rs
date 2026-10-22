@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
@@ -11,22 +11,33 @@ use crate::world::World;
 
 /// Vanilla `EntityReference`: an entity known by UUID, found in any dimension.
 #[derive(Default)]
-pub struct EntityReference(AtomicCell<Option<Uuid>>);
+pub struct EntityReference {
+    uuid: AtomicCell<Option<Uuid>>,
+    /// Vanilla keeps the resolved entity until it is removed. Players are always looked up,
+    /// since leaving the server does not mark them removed.
+    resolved: Mutex<Option<Weak<dyn EntityBase>>>,
+}
 
 impl EntityReference {
     #[must_use]
     pub const fn none() -> Self {
-        Self(AtomicCell::new(None))
+        Self {
+            uuid: AtomicCell::new(None),
+            resolved: Mutex::new(None),
+        }
     }
 
     #[must_use]
     pub fn new(entity: Option<&Entity>) -> Self {
-        Self(AtomicCell::new(entity.map(|entity| entity.entity_uuid)))
+        Self {
+            uuid: AtomicCell::new(entity.map(|entity| entity.entity_uuid)),
+            resolved: Mutex::new(None),
+        }
     }
 
     #[must_use]
     pub fn uuid(&self) -> Option<Uuid> {
-        self.0.load()
+        self.uuid.load()
     }
 
     #[must_use]
@@ -37,21 +48,27 @@ impl EntityReference {
     #[must_use]
     pub fn get(&self, world: &World) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.uuid()?;
-        let find = |world: &World| {
-            world
-                .get_player_by_uuid(uuid)
-                .map(|player| player as Arc<dyn EntityBase>)
-                .or_else(|| world.get_entity_by_uuid(uuid))
-        };
-        find(world).or_else(|| {
+        let mut resolved = self.resolved.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(entity) = resolved.as_ref().and_then(Weak::upgrade)
+            && !entity.get_entity().is_removed()
+        {
+            return Some(entity);
+        }
+        *resolved = None;
+        if let Some(player) = self.get_player(world) {
+            return Some(player);
+        }
+        let entity = world.get_entity_by_uuid(uuid).or_else(|| {
             world
                 .server
                 .upgrade()?
                 .worlds
                 .load()
                 .iter()
-                .find_map(|other| find(other))
-        })
+                .find_map(|other| other.get_entity_by_uuid(uuid))
+        })?;
+        *resolved = Some(Arc::downgrade(&entity));
+        Some(entity)
     }
 
     #[must_use]
@@ -69,7 +86,8 @@ impl EntityReference {
     }
 
     pub fn read_nbt(&self, nbt: &NbtCompound, key: &str) {
-        self.0.store(nbt.get_uuid(key));
+        self.uuid.store(nbt.get_uuid(key));
+        *self.resolved.lock().unwrap_or_else(PoisonError::into_inner) = None;
     }
 }
 

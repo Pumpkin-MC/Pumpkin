@@ -128,12 +128,12 @@ impl TargetPredicate {
         }
 
         if self.base_max_distance > 0.0 {
-            let percent = if self.use_distance_scaling_factor {
+            let modifier = if self.use_distance_scaling_factor {
                 target_living.visibility_percent(Some(tester.get_entity().entity_type))
             } else {
                 1.0
             };
-            let max_dist = (self.base_max_distance * percent).max(MIN_DISTANCE);
+            let max_dist = (self.base_max_distance * modifier).max(MIN_DISTANCE);
             let dist_sq = tester
                 .get_entity()
                 .pos

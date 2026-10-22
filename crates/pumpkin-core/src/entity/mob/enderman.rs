@@ -14,7 +14,6 @@ use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     entity::EntityType,
-    item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
@@ -94,21 +93,12 @@ impl EndermanEntity {
             .navigator
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        navigator.set_mob_dimensions(0.6, 2.9);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
@@ -124,7 +114,7 @@ impl EndermanEntity {
 
             target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
             target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
         };
 
@@ -243,11 +233,7 @@ impl EndermanEntity {
 
         entity.teleport(new_pos, None, None, &world);
 
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.mob_entity.steered().navigator().stop();
 
         true
     }
@@ -338,7 +324,9 @@ impl EndermanEntity {
         if let Ok(equipment) = equipment
             && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
             && !head_stack.is_empty()
-            && head_stack.item == &Item::CARVED_PUMPKIN
+            && head_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_GAZE_DISGUISE_EQUIPMENT)
         {
             return false;
         }

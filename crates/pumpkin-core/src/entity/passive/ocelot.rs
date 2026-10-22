@@ -60,31 +60,23 @@ impl OcelotEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal 1: FloatGoal (SwimGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // Goal 3: OcelotTemptGoal
             goal_selector.add_goal(3, feline::tempt_goal());
             // Goal 4: OcelotAvoidEntityGoal (when not trusting)
-            fleeing::apply(&mut goal_selector, OCELOT_FLEES);
+            fleeing::apply(goal_selector, OCELOT_FLEES);
             // Goal 7-11: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
-            feline::apply_tail(&mut goal_selector, mob_weak, 7);
+            feline::apply_tail(goal_selector, mob_weak, 7);
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle (baby on land)
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, OCELOT_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, OCELOT_HUNTS);
         };
 
         mob_arc

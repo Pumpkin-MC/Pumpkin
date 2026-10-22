@@ -54,11 +54,7 @@ impl ZombifiedPiglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -69,13 +65,9 @@ impl ZombifiedPiglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 2, 3, true);
+            apply_targets(target_selector, &mob_arc.mob_entity, 2, 3, true);
         };
 
         mob_arc
@@ -124,6 +116,10 @@ impl NeutralMob for ZombifiedPiglinEntity {
         server.plugin_manager.fire_blocking(&server, &mut event);
         (!event.cancelled).then_some(event.new_anger)
     }
+
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
 }
 
 impl Mob for ZombifiedPiglinEntity {
@@ -159,7 +155,8 @@ impl Mob for ZombifiedPiglinEntity {
         equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        self.update_persistent_anger();
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;

@@ -6,7 +6,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{Entity, EntityBase};
-use crate::world::World;
+use crate::world::{World, entity_islands};
 
 /// Which entity types a target or threat search accepts.
 #[derive(Clone, Copy, Debug)]
@@ -86,32 +86,35 @@ impl TargetMatch {
         let player = self
             .matches(&EntityType::PLAYER)
             .then(|| {
-                world
-                    .players
-                    .load()
-                    .iter()
+                let players = if area.players_anywhere {
+                    world.players.load_full().to_vec()
+                } else {
+                    world.get_players_at_box(&area.area)
+                };
+                players
+                    .into_iter()
                     .filter(|player| {
-                        let player: &dyn EntityBase = player.as_ref();
-                        area.holds_player(player) && accept(player)
+                        let accepted = accept(player.as_ref());
+                        if accepted && area.players_anywhere {
+                            entity_islands::check_reached(player.entity_id());
+                        }
+                        accepted
                     })
                     .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())))
-                    .map(|player| player.clone() as Arc<dyn EntityBase>)
+                    .map(|player| player as Arc<dyn EntityBase>)
             })
             .flatten();
         if self.is_player() {
             return player;
         }
+        // The spatial index keeps list order, so ties go to the first like vanilla.
         let entity = world
-            .entities
-            .load()
-            .iter()
+            .get_entities_at_box(&area.area)
+            .into_iter()
             .filter(|entity| {
-                self.matches(entity.get_entity().entity_type)
-                    && area.holds(entity.as_ref())
-                    && accept(entity.as_ref())
+                self.matches(entity.get_entity().entity_type) && accept(entity.as_ref())
             })
-            .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())))
-            .cloned();
+            .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())));
         match (player, entity) {
             (Some(player), Some(entity)) => {
                 Some(if dist(player.as_ref()) <= dist(entity.as_ref()) {
@@ -171,10 +174,6 @@ impl SearchArea {
             .bounding_box
             .load()
             .intersects(&self.area)
-    }
-
-    fn holds_player(&self, player: &dyn EntityBase) -> bool {
-        self.players_anywhere || self.holds(player)
     }
 }
 

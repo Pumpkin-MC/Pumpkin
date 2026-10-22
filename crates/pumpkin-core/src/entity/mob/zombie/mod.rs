@@ -10,7 +10,7 @@ use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::{
     Entity,
     ai::behavior::hunting::{self, Hunt},
-    ai::goal::{Goal, look_at_entity::LookAtEntityGoal},
+    ai::goal::look_at_entity::LookAtEntityGoal,
     ai::target_match::TargetMatch,
 };
 use crate::world::World;
@@ -78,16 +78,8 @@ impl ZombieEntityBase {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             if can_break_doors {
@@ -103,7 +95,7 @@ impl ZombieEntityBase {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(revenge));
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, hunts);
+            hunting::apply(target_selector, &mob_arc.mob_entity, hunts);
         };
 
         mob_arc
@@ -120,21 +112,14 @@ impl ZombieEntityBase {
             .swap(can_break_doors, Ordering::Relaxed)
             != can_break_doors
         {
-            let mut stopped = {
-                let mut goal_selector = self
-                    .mob_entity
+            if can_break_doors {
+                self.mob_entity
                     .goals_selector
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if can_break_doors {
-                    goal_selector.add_goal(1, Box::new(BreakDoorGoal::default()));
-                    Vec::new()
-                } else {
-                    goal_selector.remove_goals::<BreakDoorGoal>()
-                }
-            };
-            for goal in &mut stopped {
-                goal.stop(mob);
+                    .add_goal(1, Box::new(BreakDoorGoal::default()));
+            } else {
+                self.mob_entity
+                    .goals_selector
+                    .remove_goal::<BreakDoorGoal>(mob);
             }
         }
     }

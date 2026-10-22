@@ -116,7 +116,7 @@ impl Hunt {
 }
 
 /// Registers every entry in order.
-pub fn apply(targets: &mut GoalSelector, mob: &MobEntity, hunts: &[Hunt]) {
+pub fn apply(targets: &GoalSelector, mob: &MobEntity, hunts: &[Hunt]) {
     for hunt in hunts {
         targets.add_goal(hunt.priority, hunt.build(mob));
     }

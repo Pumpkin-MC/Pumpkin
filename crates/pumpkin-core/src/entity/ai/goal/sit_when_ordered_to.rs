@@ -65,11 +65,7 @@ impl Goal for SitWhenOrderedToGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
         Self::set_pose(mob, true);
     }
 

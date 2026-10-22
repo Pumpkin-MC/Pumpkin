@@ -14,12 +14,17 @@ use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
+    ai::control::{
+        Control, LookControlTrait, flying_move_control::FlyingMoveControl,
+        look_control::LookControl,
+    },
     ai::goal::{
         active_target::TargetCondition, breed::BreedGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, reset_universal_anger::ResetUniversalAngerGoal,
         revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
@@ -62,7 +67,25 @@ pub struct BeeEntity {
 
 impl BeeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(FlyingMoveControl::new(20, true));
+        *mob_entity
+            .look_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(BeeLookControl::default());
+        let navigator = mob_entity
+            .navigator
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *navigator = Navigator::flying();
+        navigator.set_can_open_doors(false);
+        navigator.set_can_float(false);
+        navigator.set_required_path_length(48.0);
         let bee = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
@@ -80,11 +103,7 @@ impl BeeEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(
                 0,
@@ -103,11 +122,7 @@ impl BeeEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Vanilla BeeHurtByOtherGoal.
             target_selector.add_goal(
@@ -119,7 +134,7 @@ impl BeeEntity {
                         .continuing_while(is_angry),
                 ),
             );
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, BEE_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, BEE_HUNTS);
             target_selector.add_goal(3, ResetUniversalAngerGoal::new(true));
         };
 
@@ -184,6 +199,10 @@ impl Animal for BeeEntity {
 }
 
 impl NeutralMob for BeeEntity {
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
+
     fn get_neutral_data(&self) -> &NeutralData {
         &self.neutral_data
     }
@@ -194,7 +213,36 @@ impl NeutralMob for BeeEntity {
     }
 }
 
+#[derive(Default)]
+struct BeeLookControl(LookControl);
+
+impl Control for BeeLookControl {}
+
+impl LookControlTrait for BeeLookControl {
+    fn tick(&mut self, mob: &dyn Mob) {
+        if !is_angry(mob) {
+            self.0.tick(mob);
+        }
+    }
+
+    fn look_at_with_range(
+        &mut self,
+        x: f64,
+        y: f64,
+        z: f64,
+        max_yaw_change: f32,
+        max_pitch_change: f32,
+    ) {
+        self.0
+            .look_at_with_range(x, y, z, max_yaw_change, max_pitch_change);
+    }
+}
+
 impl Mob for BeeEntity {
+    fn omnidirectional_air_mover(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -250,15 +298,14 @@ impl Mob for BeeEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         if self.has_stung() {
             let time = self.time_since_sting.fetch_add(1, Ordering::Relaxed) + 1;
             if time >= 1200 {
                 self.mob_entity.living_entity.set_health(0.0);
             }
         }
+        self.update_persistent_anger();
     }
 
     fn mob_init_data_tracker(&self) {

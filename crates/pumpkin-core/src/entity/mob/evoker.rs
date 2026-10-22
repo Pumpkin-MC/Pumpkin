@@ -91,16 +91,12 @@ impl EvokerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(EvokerCastingSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(2, Box::new(ObtainRaidLeaderBannerGoal));
-            fleeing::apply(&mut goal_selector, EVOKER_FLEES);
+            fleeing::apply(goal_selector, EVOKER_FLEES);
             goal_selector.add_goal(3, Box::new(RaiderMoveThroughVillageGoal::new(1.05)));
             goal_selector.add_goal(3, Box::new(PathfindToRaidGoal::default()));
             goal_selector.add_goal(4, Box::new(EvokerSummonSpellGoal::new(mob_weak.clone())));
@@ -114,13 +110,9 @@ impl EvokerEntity {
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(1, raider::revenge_goal());
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, EVOKER_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, EVOKER_HUNTS);
         };
 
         mob_arc
@@ -277,7 +269,7 @@ impl Goal for EvokerAttackSpellGoal {
             return false;
         }
         let entity = &evoker.mob_entity.living_entity.entity;
-        if entity.age.load(Ordering::Relaxed) < self.next_attack_tick {
+        if entity.tick_count.load(Ordering::Relaxed) < self.next_attack_tick {
             return false;
         }
         let target = evoker.mob_entity.get_target();
@@ -296,7 +288,7 @@ impl Goal for EvokerAttackSpellGoal {
                 .mob_entity
                 .living_entity
                 .entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed);
             self.next_attack_tick = age + 100;
             evoker.set_is_casting_spell(IllagerSpell::Fangs);
@@ -423,7 +415,7 @@ impl Goal for EvokerSummonSpellGoal {
             return false;
         }
         let entity = &evoker.mob_entity.living_entity.entity;
-        if entity.age.load(Ordering::Relaxed) < self.next_attack_tick {
+        if entity.tick_count.load(Ordering::Relaxed) < self.next_attack_tick {
             return false;
         }
         let target = evoker.mob_entity.get_target();
@@ -456,7 +448,7 @@ impl Goal for EvokerSummonSpellGoal {
                 .mob_entity
                 .living_entity
                 .entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed);
             self.next_attack_tick = age + 340;
             evoker.set_is_casting_spell(IllagerSpell::SummonVex);
@@ -522,7 +514,7 @@ impl Goal for EvokerWololoSpellGoal {
             return false;
         }
         let entity = &evoker.mob_entity.living_entity.entity;
-        if entity.age.load(Ordering::Relaxed) < self.next_attack_tick {
+        if entity.tick_count.load(Ordering::Relaxed) < self.next_attack_tick {
             return false;
         }
         let target = evoker.mob_entity.get_target();
@@ -568,7 +560,7 @@ impl Goal for EvokerWololoSpellGoal {
                 .mob_entity
                 .living_entity
                 .entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed);
             self.next_attack_tick = age + 140;
             evoker.set_is_casting_spell(IllagerSpell::Wololo);

@@ -182,11 +182,7 @@ impl WanderingTraderEntity {
         let trader_weak = Arc::downgrade(&mob_arc);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Priority 0: FloatGoal
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
@@ -201,7 +197,7 @@ impl WanderingTraderEntity {
             goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
-            fleeing::apply(&mut goal_selector, TRADER_FLEES);
+            fleeing::apply(goal_selector, TRADER_FLEES);
 
             // Priority 1: PanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(0.5));
@@ -988,12 +984,7 @@ impl Goal for WanderToPositionGoal {
                 .wander_target
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-            trader
-                .mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .stop();
+            trader.mob_entity.steered().navigator().stop();
         }
     }
 
@@ -1008,12 +999,7 @@ impl Goal for WanderToPositionGoal {
         let Some(wander_pos) = wander_target else {
             return;
         };
-        let is_idle = trader
-            .mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle();
+        let is_idle = trader.mob_entity.steered().navigator().is_idle();
         if is_idle {
             let entity_pos = trader.mob_entity.living_entity.entity.pos.load();
             let center = Vector3::new(
@@ -1040,9 +1026,8 @@ impl Goal for WanderToPositionGoal {
             };
             trader
                 .mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .set_progress(NavigatorGoal::new(
                     entity_pos,
                     target_pos,
@@ -1075,11 +1060,7 @@ impl Goal for MoveTowardsRestrictionGoal {
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
-        !mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle()
+        !mob_entity.steered().navigator().is_idle()
             && mob_entity.has_position_target()
             && !mob_entity.is_in_position_target_range()
     }
@@ -1094,9 +1075,8 @@ impl Goal for MoveTowardsRestrictionGoal {
             target.0.z as f64 + 0.5,
         );
         mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .steered()
+            .navigator()
             .set_progress(NavigatorGoal::new(entity_pos, dest, self.speed));
     }
 

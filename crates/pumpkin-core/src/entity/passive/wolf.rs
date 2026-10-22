@@ -89,11 +89,7 @@ impl WolfEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal selector (matching Vanilla registerGoals):
             // 1: SwimGoal (FloatGoal)
@@ -103,7 +99,7 @@ impl WolfEntity {
             // 2: SitWhenOrderedToGoal
             goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
             // 3: WolfAvoidEntityGoal (Llama)
-            fleeing::apply(&mut goal_selector, WOLF_FLEES);
+            fleeing::apply(goal_selector, WOLF_FLEES);
             // 4: LeapAtTargetGoal
             goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             // 5: MeleeAttackGoal
@@ -126,11 +122,7 @@ impl WolfEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target selector (matching Vanilla registerGoals):
             // 1: OwnerHurtByTargetGoal
@@ -140,9 +132,9 @@ impl WolfEntity {
             // 3: HurtByTargetGoal (RevengeGoal)
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
+            apply_targets(target_selector, &mob_arc.mob_entity, 4, 8, true);
             // 5, 6: NonTameRandomTarget (prey, baby turtle), 7: NearestAttackableTarget (AbstractSkeleton)
-            hunting::apply(&mut target_selector, &mob_arc.mob_entity, WOLF_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, WOLF_HUNTS);
         };
 
         mob_arc
@@ -357,10 +349,11 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
-                if let Some(color) = super::animal::get_dye_color_from_item(item)
-                    && color != self.get_collar_color()
+                if let Some(dye) =
+                    item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                    && dye.color.id() != self.get_collar_color()
                 {
-                    self.set_collar_color(color);
+                    self.set_collar_color(dye.color.id());
                     item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                     return true;
                 }

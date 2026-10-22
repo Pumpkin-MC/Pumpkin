@@ -11,7 +11,7 @@ use crate::{
         palette::has_random_ticking_fluid,
     },
     generation::get_world_gen_with_all_settings,
-    tick::{OrderedTick, ScheduledTick, TickPriority},
+    tick::{OrderedTick, ScheduledTick, TickPriority, order},
     world::WorldPortalExt,
 };
 use arc_swap::ArcSwap;
@@ -239,6 +239,9 @@ impl Level {
             biome_source.as_ref(),
             structure_overrides.as_deref(),
         ));
+        if let Some(cache) = world_gen.global_structure_cache() {
+            cache.ensure_strongholds_generated();
+        }
 
         let target_format =
             crate::chunk::io::converter::RegionFormat::from_config(&level_config.chunk);
@@ -961,6 +964,15 @@ impl Level {
         self.loaded_entity_chunks.try_get(&coordinates).try_unwrap()
     }
 
+    /// Reserves tick orders for `entities` entities; entity `i` starts at
+    /// `first + i * ORDERS_PER_ENTITY`.
+    pub fn reserve_entity_tick_orders(&self, entities: usize) -> u64 {
+        self.schedule_tick_counts.fetch_add(
+            entities as u64 * order::ORDERS_PER_ENTITY,
+            Ordering::Relaxed,
+        )
+    }
+
     pub fn schedule_block_tick(
         &self,
         block: &Block,
@@ -968,7 +980,8 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
+        let tick_order = order::next_entity_order()
+            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed));
         let scheduled_tick = ScheduledTick {
             delay,
             position: block_pos,
@@ -995,7 +1008,8 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
+        let tick_order = order::next_entity_order()
+            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed));
         let scheduled_tick = ScheduledTick {
             delay,
             position: block_pos,
