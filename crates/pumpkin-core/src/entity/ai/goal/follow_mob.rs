@@ -1,9 +1,9 @@
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
-use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::mob::Mob;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 pub struct FollowMobGoal {
     goal_control: Controls,
@@ -32,13 +32,22 @@ impl Goal for FollowMobGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let entity = mob.get_entity();
         let world = entity.world.load();
-        let area = SearchArea::from_feet(entity, self.area_size, self.area_size);
+        let area =
+            entity
+                .bounding_box
+                .load()
+                .expand(self.area_size, self.area_size, self.area_size);
 
-        // Any mob of another type; vanilla takes the first listed, this the nearest.
-        self.following_mob = TargetMatch::Any.find_nearest(&world, &area, |candidate| {
-            candidate.get_entity().entity_type != entity.entity_type
-                && candidate.get_mob().is_some()
-        });
+        // The first visible mob of another type in list order
+        self.following_mob = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .find(|candidate| {
+                let candidate_entity = candidate.get_entity();
+                candidate_entity.entity_type != entity.entity_type
+                    && candidate.get_mob().is_some()
+                    && !candidate_entity.invisible.load(Ordering::Relaxed)
+            });
         self.following_mob.is_some()
     }
 

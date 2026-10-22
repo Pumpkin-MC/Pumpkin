@@ -172,6 +172,11 @@ impl Goal for AvoidEntityGoal {
     fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<super::GoalReach> {
         Some(super::GoalReach {
             entities: self.flee_distance,
+            players: if self.flee_from.matches(&EntityType::PLAYER) {
+                self.flee_distance
+            } else {
+                0.0
+            },
             speed: self.fast_speed,
             links: self
                 .target
@@ -212,12 +217,12 @@ impl Goal for AvoidEntityGoal {
         }
 
         // Vanilla `createPath(pos, 0)`, no route, no flee, so the current goal keeps running.
-        let mob_entity = mob.get_mob_entity();
-        let path = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .create_path(&mob_entity.living_entity, flee_pos, 0);
+        // A rider plans for the mob it steers, like vanilla `getNavigation`.
+        let steered = mob.get_mob_entity().steered();
+        let path =
+            steered
+                .navigator()
+                .create_path(&steered.mob_entity().living_entity, flee_pos, 0);
         let Some(path) = path else {
             return false;
         };
@@ -238,12 +243,12 @@ impl Goal for AvoidEntityGoal {
         if self.drop_target {
             mob.set_mob_target(None, TargetReason::Fleeing);
         }
-        let mob_entity = mob.get_mob_entity();
-        mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .move_to_path(self.path.take(), self.slow_speed, &mob_entity.living_entity);
+        let steered = mob.get_mob_entity().steered();
+        steered.navigator().move_to_path(
+            self.path.take(),
+            self.slow_speed,
+            &steered.mob_entity().living_entity,
+        );
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
@@ -259,12 +264,7 @@ impl Goal for AvoidEntityGoal {
             } else {
                 self.slow_speed
             };
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.set_speed(speed);
+            mob.get_mob_entity().steered().navigator().set_speed(speed);
         }
     }
 
@@ -283,7 +283,10 @@ mod tests {
     use super::*;
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::creeper::CreeperEntity;
+    use crate::entity::mob::skeleton::SkeletonEntityBase;
+    use crate::entity::mob::spider::SpiderEntity;
     use crate::entity::passive::ocelot::OcelotEntity;
+    use crate::entity::passive::wolf::WolfEntity;
     use crate::entity::{Entity, EntityBase};
     use pumpkin_data::Block;
     use pumpkin_util::math::position::BlockPos;
@@ -359,6 +362,68 @@ mod tests {
         assert!(
             started_at <= 20,
             "flee started on tick {started_at}, later than vanilla's retry window"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn jockey_skeleton_flees_a_wolf_on_its_spider() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+
+        let pos = Vector3::new(0.5, 64.0, 0.5);
+        let spider = SpiderEntity::new(Entity::new(world.clone(), pos, &EntityType::SPIDER));
+        let skeleton =
+            SkeletonEntityBase::new(Entity::new(world.clone(), pos, &EntityType::SKELETON));
+        for entity in [spider.get_entity(), skeleton.get_entity()] {
+            entity.on_ground.store(true, Ordering::Relaxed);
+        }
+        world.spawn_entity(spider.clone());
+        world.spawn_entity(skeleton.clone());
+        spider
+            .get_entity()
+            .add_passenger(spider.clone(), skeleton.clone());
+
+        let wolf = WolfEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 64.0, 0.5),
+            &EntityType::WOLF,
+        ));
+        wolf.get_entity().on_ground.store(true, Ordering::Relaxed);
+        world.spawn_entity(wolf);
+
+        // The flee route belongs to the spider, so it survives the next continue check.
+        let mut fleeing_ticks = 0;
+        for tick in 1..=40 {
+            skeleton
+                .get_entity()
+                .tick_count
+                .store(tick, Ordering::Relaxed);
+            skeleton.mob_entity.server_ai_step(&*skeleton, &*skeleton);
+            if spider.is_navigator_idle() {
+                fleeing_ticks = 0;
+            } else {
+                fleeing_ticks += 1;
+            }
+            if fleeing_ticks > 4 {
+                break;
+            }
+        }
+        world.level.shutdown().await;
+
+        assert!(
+            fleeing_ticks > 4,
+            "the jockey never kept a flee route on its spider"
+        );
+        assert!(
+            skeleton
+                .mob_entity
+                .navigator
+                .lock()
+                .map_err(|e| e.to_string())?
+                .is_idle(),
+            "the rider planned the flee on its own navigator"
         );
         Ok(())
     }
