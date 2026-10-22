@@ -1813,12 +1813,13 @@ impl World {
         }
     }
 
-    fn notify_navigation_block_changed(
+    fn send_block_updated(
         &self,
         position: &BlockPos,
         old_state: BlockStateId,
         new_state: BlockStateId,
     ) {
+        self.register_block_change(*position, new_state);
         // Extracted collision lists are canonical VoxelShape.toAabbs() geometry.
         if old_state.to_state().collision_shapes == new_state.to_state().collision_shapes {
             return;
@@ -5391,15 +5392,7 @@ impl World {
         // Level.java setBlock
         if self.get_block_state_id(position) == block_state_id {
             if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
-                self.unsent_block_changes
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(*position, block_state_id);
-                self.notify_navigation_block_changed(
-                    position,
-                    replaced_block_state_id,
-                    block_state_id,
-                );
+                self.send_block_updated(position, replaced_block_state_id, block_state_id);
             }
 
             if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
