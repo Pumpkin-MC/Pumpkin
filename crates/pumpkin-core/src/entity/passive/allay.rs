@@ -37,6 +37,7 @@ use crate::entity::{
 use crate::world::game_event::GameEventListener;
 
 mod ai;
+mod chunk_loading;
 mod vibration;
 
 const DUPLICATION_COOLDOWN_TICKS: i64 = 6000;
@@ -54,6 +55,7 @@ pub struct AllayEntity {
     jukebox_pos: AtomicCell<Option<BlockPos>>,
     vibration: Mutex<vibration::VibrationData>,
     ambient_sound_time: AtomicI32,
+    noteblock_chunk: Mutex<Option<chunk_loading::NoteBlockChunk>>,
 }
 
 impl AllayEntity {
@@ -80,6 +82,7 @@ impl AllayEntity {
             jukebox_pos: AtomicCell::new(None),
             vibration: Mutex::new(vibration::VibrationData::default()),
             ambient_sound_time: AtomicI32::new(0),
+            noteblock_chunk: Mutex::new(None),
         })
     }
 
@@ -103,11 +106,13 @@ impl AllayEntity {
     }
 
     fn set_duplication_cooldown(&self, ticks: i64) {
-        self.duplication_cooldown.store(ticks, Ordering::Relaxed);
-        self.get_entity().set_synced_data(
-            pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
-            ticks == 0,
-        );
+        let previous = self.duplication_cooldown.swap(ticks, Ordering::Relaxed);
+        if (previous == 0) != (ticks == 0) {
+            self.get_entity().set_synced_data(
+                pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
+                ticks == 0,
+            );
+        }
     }
 
     fn is_panicking(&self) -> bool {
@@ -515,6 +520,13 @@ impl Mob for AllayEntity {
         });
     }
 
+    fn on_removed(&self) {
+        self.noteblock_chunk
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+    }
+
     fn pre_damage_with_context(
         &self,
         _damage_type: DamageType,
@@ -548,6 +560,7 @@ impl Mob for AllayEntity {
     }
 
     fn post_tick(&self) {
+        self.finish_noteblock_chunk();
         self.pick_up_items();
         let entity = self.get_entity();
         let tick = entity.tick_count.load(Ordering::Relaxed);

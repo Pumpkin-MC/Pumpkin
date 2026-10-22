@@ -171,6 +171,19 @@ pub(super) fn hear_noteblock(allay: &AllayEntity, pos: BlockPos) {
 
 fn get_item_deposit_position(tick: &mut BrainTick<'_>) -> Option<Arc<dyn PositionTracker>> {
     if let Some(liked) = tick.state.get(types::LIKED_NOTEBLOCK_POSITION).copied() {
+        // Loading runs outside the brain tick; missing data is not air.
+        if liked.is_close_enough(
+            &tick.world.dimension,
+            tick.mob.get_entity().block_pos.load(),
+            MAX_NOTEBLOCK_DISTANCE,
+        ) && tick.world.is_in_build_limit(liked.pos)
+            && !tick.world.is_loaded(&liked.pos)
+        {
+            if let Some(allay) = tick.mob.cast_any().downcast_ref::<AllayEntity>() {
+                allay.request_noteblock_chunk(tick.world, liked.pos);
+            }
+            return None;
+        }
         if should_deposit_items_at_liked_noteblock(tick, &liked) {
             return Some(Arc::new(BlockPosTracker::new(liked.pos.up())));
         }
@@ -222,5 +235,98 @@ fn throw_item(tick: &mut BrainTick<'_>, target_pos: Vector3<f64>) {
             THROW_VELOCITY,
             liked_player(tick.state, tick.world, tick.mob),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{Entity, ai::test_support::world};
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_world::chunk::{
+        ChunkData,
+        io::{Dirtiable, FileIO},
+    };
+
+    #[tokio::test]
+    async fn unloaded_noteblock_is_reloaded_without_forgetting_the_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = BlockPos::new(32, 64, 0);
+        let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        chunk.set_block_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+            Block::NOTE_BLOCK.default_state.id,
+        );
+        chunk
+            .light_populated
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        chunk.mark_dirty(true);
+        world.level.loaded_chunks.insert(chunk_pos, chunk.clone());
+        world.level.write_chunks(vec![(chunk_pos, chunk)]).await;
+        world.level.chunk_saver.flush_all().await;
+
+        let allay = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        hear_noteblock(&allay, pos);
+        let deposit = || {
+            allay.mob_entity.with_brain(allay.as_ref(), |brain| {
+                get_item_deposit_position(&mut BrainTick {
+                    state: brain,
+                    world: &world,
+                    mob: allay.as_ref(),
+                    time: 0,
+                })
+                .map(|target| target.current_block_position())
+            })
+        };
+        assert_eq!(deposit(), Some(pos.up()));
+        world.level.loaded_chunks.remove(&chunk_pos);
+        assert!(deposit().is_none());
+        assert!(allay.mob_entity.with_brain(allay.as_ref(), |brain| {
+            brain.has_memory_value(types::LIKED_NOTEBLOCK_POSITION.id())
+        }));
+
+        tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            while !world.level.is_chunk_loaded(&chunk_pos) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await?;
+        assert_eq!(deposit(), Some(pos.up()));
+        allay.finish_noteblock_chunk();
+        assert!(
+            allay
+                .noteblock_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_none()
+        );
+        assert!(
+            !world
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .ticket
+                .contains_key(&chunk_pos)
+        );
+
+        world
+            .level
+            .set_block_state(&pos, Block::AIR.default_state.id);
+        assert!(deposit().is_none());
+        assert!(!allay.mob_entity.with_brain(allay.as_ref(), |brain| {
+            brain.has_memory_value(types::LIKED_NOTEBLOCK_POSITION.id())
+        }));
+        world.level.shutdown().await;
+        Ok(())
     }
 }
