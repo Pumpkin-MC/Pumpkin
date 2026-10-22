@@ -404,6 +404,7 @@ pub enum SpamType {
 /// Center chunk and levels of the view and simulation tickets a player holds.
 pub type HeldChunkTickets = (Vector2<i32>, Option<i8>, Option<i8>);
 
+#[repr(C)]
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -2181,9 +2182,10 @@ impl Player {
         // TODO: Stop riding
 
         self.get_entity().set_pose(EntityPose::Sleeping);
+        // Vanilla `setPosToBed`; `to_f64` already centers X and Z.
         self.living_entity
             .entity
-            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
+            .set_pos(bed_head_pos.to_f64().add_raw(0.0, 0.6875, 0.0));
         self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
             Some(bed_head_pos),
@@ -2229,9 +2231,9 @@ impl Player {
         self.living_entity.get_block_speed_factor()
     }
 
-    fn is_sleeping(&self) -> bool {
-        // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
-        self.sleeping_since.load().is_some()
+    #[must_use]
+    pub fn is_sleeping(&self) -> bool {
+        self.sleeping_bed_pos.load().is_some()
     }
 
     #[must_use]
@@ -3004,7 +3006,7 @@ impl Player {
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
         self.living_entity
             .entity
-            .age
+            .tick_count
             .fetch_add(1, Ordering::Relaxed);
         if let Some(sleeping_since) = self.sleeping_since.load()
             && sleeping_since < 101
@@ -6222,9 +6224,6 @@ impl Player {
 
         let (
             sync_id,
-            container_slots,
-            allow_grab_items,
-            allow_put_items,
             can_use,
             is_slot_valid,
             available_slots,
@@ -6243,9 +6242,6 @@ impl Player {
 
             let b = screen_handler.get_behaviour();
             let sync_id = b.sync_id;
-            let container_slots = b.container_slots;
-            let allow_grab_items = b.allow_grab_items;
-            let allow_put_items = b.allow_put_items;
             let can_use = screen_handler.can_use(self.as_ref());
             let is_slot_valid = screen_handler.is_slot_valid(i32::from(packet.slot));
             let available_slots = b.slots.len();
@@ -6264,9 +6260,6 @@ impl Player {
 
             (
                 sync_id,
-                container_slots,
-                allow_grab_items,
-                allow_put_items,
                 can_use,
                 is_slot_valid,
                 available_slots,
@@ -6276,53 +6269,7 @@ impl Player {
             )
         };
 
-        if i32::from(sync_id) != packet.sync_id.0 {
-            return;
-        }
-
-        if self.gamemode.load() == GameMode::Spectator {
-            let screen_handler_arc = self
-                .current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            screen_handler_arc
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .sync_state();
-            return;
-        }
-
-        if !can_use {
-            warn!(
-                "Player {} interacted with invalid menu {:?}",
-                self.gameprofile.name, window_type
-            );
-            return;
-        }
-
         let slot = packet.slot;
-
-        if !is_slot_valid {
-            warn!(
-                "Player {} clicked invalid slot index: {}, available slots: {}",
-                self.gameprofile.name, slot, available_slots
-            );
-            return;
-        }
-
-        let cancel_screen = || {
-            let screen_handler_arc = self
-                .current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            screen_handler_arc
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .cancel();
-        };
-
         let raw_slot = slot; // For now raw_slot == slot, as we don't have separate view/inventory indexing yet
         let hotbar_button = if matches!(packet.mode, SlotActionType::Swap) {
             packet.button
@@ -6364,6 +6311,66 @@ impl Player {
                 }
             }
             SlotActionType::PickupAll => ClickType::DoubleClick,
+        };
+
+        if i32::from(sync_id) != packet.sync_id.0 {
+            send_cancellable_blocking! {{
+                server;
+                InventoryClickEvent::new(
+                    self,
+                    window_type,
+                    click_type,
+                    slot,
+                    raw_slot,
+                    None,
+                    cursor_item,
+                    i32::from(hotbar_button),
+                );
+                'after: {}
+                'cancelled: {}
+            }}
+            return;
+        }
+
+        if self.gamemode.load() == GameMode::Spectator {
+            let screen_handler_arc = self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            screen_handler_arc
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .sync_state();
+            return;
+        }
+
+        if !can_use {
+            warn!(
+                "Player {} interacted with invalid menu {:?}",
+                self.gameprofile.name, window_type
+            );
+            return;
+        }
+
+        if !is_slot_valid {
+            warn!(
+                "Player {} clicked invalid slot index: {}, available slots: {}",
+                self.gameprofile.name, slot, available_slots
+            );
+            return;
+        }
+
+        let cancel_screen = || {
+            let screen_handler_arc = self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            screen_handler_arc
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .cancel();
         };
 
         send_cancellable_blocking! {{
@@ -6530,67 +6537,6 @@ impl Player {
         let mut screen_handler = screen_handler_arc
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        // Enforce flags
-        let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
-
-        match packet.mode {
-            SlotActionType::Pickup => {
-                let cursor_stack = screen_handler
-                    .get_behaviour()
-                    .cursor_stack
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if is_container_slot {
-                    if !cursor_stack.is_empty() && !allow_put_items {
-                        drop(cursor_stack);
-                        screen_handler.cancel();
-                        return;
-                    }
-                    if cursor_stack.is_empty() && !allow_grab_items {
-                        drop(cursor_stack);
-                        screen_handler.cancel();
-                        return;
-                    }
-                }
-            }
-            SlotActionType::QuickMove => {
-                if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-                if !is_container_slot && !allow_put_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Swap => {
-                if is_container_slot && (!allow_grab_items || !allow_put_items) {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Throw => {
-                if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::QuickCraft => {
-                if !allow_put_items {
-                    // Dragging items into slots
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::PickupAll => {
-                if !allow_grab_items {
-                    screen_handler.cancel();
-                    return;
-                }
-            }
-            SlotActionType::Clone => {}
-        }
 
         let not_in_sync = packet.revision.0
             != (screen_handler

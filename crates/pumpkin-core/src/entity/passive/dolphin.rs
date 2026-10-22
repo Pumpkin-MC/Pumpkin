@@ -13,12 +13,17 @@ use pumpkin_nbt::compound::NbtCompound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob, speed_up_seconds_when_feeding},
+    ai::control::{
+        smooth_swimming_look_control::SmoothSwimmingLookControl,
+        smooth_swimming_move_control::SmoothSwimmingMoveControl,
+    },
     ai::goal::{
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -34,7 +39,21 @@ pub struct DolphinEntity {
 
 impl DolphinEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(SmoothSwimmingMoveControl::new(85, 10, 0.02, 0.1, true));
+        *mob_entity
+            .look_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(SmoothSwimmingLookControl::new(10));
+        *mob_entity
+            .navigator
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::water_bound(true);
         let dolphin = Self {
             mob_entity,
             got_fish: AtomicBool::new(false),
@@ -48,11 +67,7 @@ impl DolphinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
@@ -68,11 +83,7 @@ impl DolphinEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
         };
@@ -106,6 +117,27 @@ impl Mob for DolphinEntity {
         !self.is_baby()
             && target.get_entity().entity_type != &EntityType::GHAST
             && self.get_mob_entity().living_entity.can_attack(target)
+    }
+
+    fn travel_in_water(&self, caller: &dyn EntityBase, _gravity: f64, _falling: bool) {
+        let living = &self.mob_entity.living_entity;
+        let entity = &living.entity;
+        entity.update_velocity_from_input(
+            living.movement_input.load(),
+            f64::from(living.get_speed()),
+        );
+        living.make_move(caller);
+        let mut velocity = entity.velocity.load() * 0.9;
+        if self
+            .mob_entity
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_none()
+        {
+            velocity.y -= 0.005;
+        }
+        entity.velocity.store(velocity);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

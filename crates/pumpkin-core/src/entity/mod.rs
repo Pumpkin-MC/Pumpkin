@@ -106,6 +106,34 @@ pub mod predicate;
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
 pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
+/// Push strength per axis in `Entity.push`.
+pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+
+/// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
+const WATER_PUSH_SPEED: f64 = 0.014;
+const FAST_LAVA_PUSH_SPEED: f64 = 0.007;
+const LAVA_PUSH_SPEED: f64 = 0.002_333_333;
+
+/// Speed range of `moveTowardsClosestSpace`.
+const PUSH_OUT_MIN_SPEED: f64 = 0.1;
+const PUSH_OUT_RANDOM_SPEED: f64 = 0.2;
+pub(crate) const MAX_PUSH_OUT_SPEED: f64 = PUSH_OUT_MIN_SPEED + PUSH_OUT_RANDOM_SPEED;
+
+#[must_use]
+pub(crate) const fn lava_push_speed(fast_lava: bool) -> f64 {
+    if fast_lava {
+        FAST_LAVA_PUSH_SPEED
+    } else {
+        LAVA_PUSH_SPEED
+    }
+}
+
+/// Speed water and lava currents can add together in one tick.
+#[must_use]
+pub(crate) const fn max_fluid_push_speed(fast_lava: bool) -> f64 {
+    WATER_PUSH_SPEED + lava_push_speed(fast_lava)
+}
+
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
 #[must_use]
@@ -298,6 +326,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         bedrock_pos.add_raw(0.0, -self.bedrock_y_offset(), 0.0)
     }
 
+    /// What this entity can touch next tick; `None` means a conservative reach.
+    fn audited_reach(&self) -> Option<crate::world::entity_islands::AuditedReach> {
+        self.get_mob()
+            .and_then(|mob| mob.get_mob_entity().audited_reach(mob))
+    }
+
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
     }
@@ -396,6 +430,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn can_hit(&self) -> bool {
         false
+    }
+
+    fn is_immobile(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(LivingEntity::is_dead_or_dying)
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        None
+    }
+
+    fn can_control_vehicle(&self) -> bool {
+        !self
+            .get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_NON_CONTROLLING_RIDER)
     }
 
     fn is_flutterer(&self) -> bool {
@@ -644,8 +694,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             }
             dx *= d2;
             dz *= d2;
-            dx *= 0.05;
-            dz *= 0.05;
+            dx *= PUSH_STRENGTH;
+            dz *= PUSH_STRENGTH;
 
             if !self_entity.has_passengers() && self.is_pushable() {
                 self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
@@ -909,6 +959,7 @@ struct SpawnState {
 }
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
+#[repr(C)]
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: i32,
@@ -968,7 +1019,7 @@ pub struct Entity {
     /// The entity's current pose (e.g., standing, sitting, swimming).
     pub pose: AtomicCell<EntityPose>,
     /// The bounding box of an entity (hitbox)
-    pub bounding_box: AtomicCell<BoundingBox>,
+    pub bounding_box: EntityBoundingBox,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
     /// Size before the pose: the type size, or a baby or slime size. Vanilla `getDefaultDimensions`.
@@ -1057,6 +1108,62 @@ pub struct Entity {
     pub custom_data: std::sync::Mutex<NbtCompound>,
 }
 
+/// Entity bounds that keep the world's spatial queries current when written.
+pub struct EntityBoundingBox {
+    value: AtomicCell<BoundingBox>,
+    index: std::sync::RwLock<std::sync::Weak<crate::world::EntityIndex>>,
+    indexed: bool,
+    entity_id: i32,
+}
+
+impl EntityBoundingBox {
+    fn new(world: &World, entity_id: i32, entity_type: &EntityType, bounds: BoundingBox) -> Self {
+        let index = if entity_type == &EntityType::PLAYER {
+            std::sync::Weak::new()
+        } else {
+            Arc::downgrade(&world.entity_index)
+        };
+        Self {
+            value: AtomicCell::new(bounds),
+            index: std::sync::RwLock::new(index),
+            indexed: entity_type != &EntityType::PLAYER,
+            entity_id,
+        }
+    }
+
+    /// Returns the current bounds.
+    #[must_use]
+    pub fn load(&self) -> BoundingBox {
+        self.value.load()
+    }
+
+    /// Publishes bounds and their spatial index membership together.
+    pub fn store(&self, bounds: BoundingBox) {
+        if !self.indexed {
+            self.value.store(bounds);
+            return;
+        }
+        let index = self
+            .index
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(index) = index.upgrade() {
+            index.set_bounds(self.entity_id, &self.value, bounds);
+        } else {
+            self.value.store(bounds);
+        }
+    }
+
+    fn set_index(&self, index: &Arc<crate::world::EntityIndex>) {
+        let mut owner = self
+            .index
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *owner = Arc::downgrade(index);
+        index.set_bounds(self.entity_id, &self.value, self.value.load());
+    }
+}
+
 impl Entity {
     pub fn new(
         world: Arc<World>,
@@ -1102,6 +1209,13 @@ impl Entity {
             .level
             .get_rough_biome(&BlockPos::new(floor_x, floor_y, floor_z));
 
+        let bounding_box = EntityBoundingBox::new(
+            &world,
+            entity_id,
+            entity_type,
+            BoundingBox::new_from_pos(position.x, position.y, position.z, &bounding_box_size),
+        );
+
         Self {
             entity_id,
             entity_uuid,
@@ -1134,12 +1248,7 @@ impl Entity {
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             pose: AtomicCell::new(EntityPose::Standing),
-            bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
-                position.x,
-                position.y,
-                position.z,
-                &bounding_box_size,
-            )),
+            bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
             default_dimension: AtomicCell::new(bounding_box_size),
             scale: AtomicCell::new(1.0),
@@ -1205,6 +1314,9 @@ impl Entity {
         let biome = world.level.get_rough_biome(&block_pos);
         self.current_biome.store(Arc::new(biome));
         self.last_biome_update_pos.store(block_pos);
+        if self.entity_type != &EntityType::PLAYER {
+            self.bounding_box.set_index(&world.entity_index);
+        }
         self.world.store(world);
     }
 
@@ -1995,13 +2107,9 @@ impl Entity {
             }
         }
 
-        let lava_speed = if world.dimension.fast_lava {
-            0.007
-        } else {
-            0.002_333_333
-        };
+        let lava_speed = lava_push_speed(world.dimension.fast_lava);
 
-        self.push_by_fluid(0.014, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(WATER_PUSH_SPEED, fluid_push[0], fluid_n[0]);
 
         self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
 
@@ -2293,7 +2401,7 @@ impl Entity {
             }
         }
 
-        let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
+        let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
 
@@ -3012,7 +3120,7 @@ impl Entity {
                 return;
             }
             for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
@@ -3061,7 +3169,7 @@ impl Entity {
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
             for player in players {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
@@ -3141,7 +3249,7 @@ impl Entity {
             && world
                 .entity_tracker
                 .get_tracked_entity(self.entity_id)
-                .is_some_and(|tracked| tracked.seen_by.is_empty())
+                .is_some_and(|tracked| !tracked.has_viewers())
         {
             self.synched_data.clear_dirty();
             return;
@@ -3258,13 +3366,14 @@ impl Entity {
     fn refresh_dimensions(&self) {
         let dimension = self.get_dimensions(self.pose.load());
         let old = self.entity_dimension.swap(dimension);
-        if old == dimension {
-            return;
-        }
+        // Vanilla `reapplyPosition`: the box is rebuilt even at the same size
         let position = self.pos.load();
         self.bounding_box.store(BoundingBox::new_from_pos(
             position.x, position.y, position.z, &dimension,
         ));
+        if old == dimension {
+            return;
+        }
         if !self.first_tick.load(Ordering::Relaxed)
             && !self.no_physics.load(Ordering::Relaxed)
             && dimension.width <= 4.0

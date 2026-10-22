@@ -4,12 +4,24 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::{ageable::speed_up_seconds_when_feeding, mob::Mob, player::Player};
+use crate::entity::{
+    EntityBase, ageable::speed_up_seconds_when_feeding, mob::Mob, player::Player, r#type::from_type,
+};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
+
+    fn get_breed_offspring(&self, _partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        from_type(
+            entity.entity_type,
+            entity.pos.load(),
+            &entity.world.load(),
+            uuid::Uuid::new_v4(),
+        )
+    }
 
     /// Animals prefer grass, then bright spots.
     fn animal_walk_target_value(&self, pos: &pumpkin_util::math::position::BlockPos) -> f32 {

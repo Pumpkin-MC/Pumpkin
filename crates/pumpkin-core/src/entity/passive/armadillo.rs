@@ -139,11 +139,7 @@ impl ArmadilloEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
@@ -349,6 +345,9 @@ impl Mob for ArmadilloEntity {
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.in_state_ticks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let danger_ticks = self.danger_detected_recently_ticks.load(Ordering::Relaxed);
         if danger_ticks > 0 {
             self.danger_detected_recently_ticks
