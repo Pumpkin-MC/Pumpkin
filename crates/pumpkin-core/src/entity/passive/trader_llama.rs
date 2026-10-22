@@ -78,7 +78,12 @@ impl TraderLlamaVariant {
     }
 }
 
-const TRADER_LLAMA_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::ILLAGER, true)];
+const TRADER_LLAMA_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::ZOMBIE_LIKE, true).matching(|_hunter, target, _world| {
+        target.entity.entity_type != &EntityType::ZOMBIFIED_PIGLIN
+    }),
+    Hunt::new(2, TargetMatch::ILLAGER, true),
+];
 
 pub struct TraderLlamaEntity {
     pub mob_entity: MobEntity,
