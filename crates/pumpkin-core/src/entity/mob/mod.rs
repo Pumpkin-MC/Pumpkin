@@ -327,7 +327,7 @@ impl MobEntity {
         self.process_navigation_updates();
     }
 
-    fn process_navigation_updates(&self) {
+    pub(crate) fn process_navigation_updates(&self) {
         if self.pending_navigation_updates.is_empty() {
             return;
         }
@@ -361,6 +361,8 @@ impl MobEntity {
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
         let tick_count = self.living_entity.entity.tick_count.load(Relaxed);
         let entity_id = self.living_entity.entity.entity_id;
+
+        self.process_navigation_updates();
 
         self.sensing
             .lock()
@@ -1935,6 +1937,7 @@ pub trait RangedAttackMob: Mob + Send + Sync {
 mod navigation_update_tests {
     use super::*;
     use crate::entity::ai::{
+        goal::Goal,
         pathfinder::{node::Node, path::Path},
         test_support::world,
     };
@@ -2005,6 +2008,78 @@ mod navigation_update_tests {
         world.level.shutdown().await;
         assert_eq!(index, Some(0));
         assert!(mob.is_no_ai());
+        Ok(())
+    }
+
+    struct Probe(MobEntity);
+
+    impl Mob for Probe {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.0
+        }
+    }
+
+    struct ChangeRouteBlock;
+
+    impl Goal for ChangeRouteBlock {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            true
+        }
+
+        fn tick(&mut self, mob: &dyn Mob) {
+            let mob = mob.get_mob_entity();
+            let _navigator = mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let world = mob.living_entity.entity.world.load();
+            let sequence = world
+                .navigation_change_sequence
+                .fetch_add(1, Ordering::AcqRel)
+                + 1;
+            mob.on_navigation_block_changed(BlockPos::new(4, 64, 0), world.uuid, sequence);
+        }
+    }
+
+    struct ReadRoute(Arc<std::sync::Mutex<Option<usize>>>);
+
+    impl Goal for ReadRoute {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            true
+        }
+
+        fn tick(&mut self, mob: &dyn Mob) {
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_path()
+                .map(Path::get_next_node_index);
+        }
+    }
+
+    #[tokio::test]
+    async fn later_goals_see_routes_recomputed_by_an_earlier_goal() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = Probe(mob(world.clone()));
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        mob.0.add_goal(0, ChangeRouteBlock);
+        mob.0.add_goal(1, ReadRoute(seen.clone()));
+
+        mob.0.server_ai_step(&mob, &mob);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            *seen
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            Some(0)
+        );
         Ok(())
     }
 

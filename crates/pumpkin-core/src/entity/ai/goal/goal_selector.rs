@@ -281,6 +281,7 @@ impl GoalSelector {
             None
         };
         drop(borrowed);
+        mob.get_mob_entity().process_navigation_updates();
         if !entry.registered.load(Relaxed) {
             entry.finish_retirement(mob);
             return None;
