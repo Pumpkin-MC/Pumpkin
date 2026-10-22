@@ -130,6 +130,17 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        if self.is_baby() {
+            entity.set_synced_data(pumpkin_data::tracked_data::sheep::DATA_BABY_ID, true);
+        }
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sheep::WOOL_ID,
+            self.get_packed_byte() as i8,
+        );
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Sheared", self.is_sheared());
         nbt.put_byte("Color", self.get_color() as i8);
