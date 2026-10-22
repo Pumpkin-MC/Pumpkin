@@ -4560,12 +4560,9 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
+        self.entity_index
+            .by_uuid(&self.entities.load_full(), id)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
-            .cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.
