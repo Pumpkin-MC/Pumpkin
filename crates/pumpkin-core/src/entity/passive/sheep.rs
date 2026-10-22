@@ -17,18 +17,53 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
+use pumpkin_data::chunk::Biome;
 use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{Taggable, WorldgenBiome};
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+
+#[derive(Clone, Copy)]
+enum SheepColorProvider {
+    Single(DyeColor),
+    CommonColors(DyeColor),
+}
+
+type SheepColorSpawnConfiguration = [(SheepColorProvider, u32); 5];
+
+const TEMPERATE_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
+    (SheepColorProvider::Single(DyeColor::Black), 5),
+    (SheepColorProvider::Single(DyeColor::Gray), 5),
+    (SheepColorProvider::Single(DyeColor::LightGray), 5),
+    (SheepColorProvider::Single(DyeColor::Brown), 3),
+    (SheepColorProvider::CommonColors(DyeColor::White), 82),
+];
+const WARM_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
+    (SheepColorProvider::Single(DyeColor::Gray), 5),
+    (SheepColorProvider::Single(DyeColor::LightGray), 5),
+    (SheepColorProvider::Single(DyeColor::White), 5),
+    (SheepColorProvider::Single(DyeColor::Black), 3),
+    (SheepColorProvider::CommonColors(DyeColor::Brown), 82),
+];
+const COLD_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
+    (SheepColorProvider::Single(DyeColor::LightGray), 5),
+    (SheepColorProvider::Single(DyeColor::Gray), 5),
+    (SheepColorProvider::Single(DyeColor::White), 5),
+    (SheepColorProvider::Single(DyeColor::Brown), 3),
+    (SheepColorProvider::CommonColors(DyeColor::Black), 82),
+];
+const COMMON_COLOR_WEIGHT: u32 = 499;
+const PINK_WEIGHT: u32 = 1;
 
 pub struct SheepEntity {
     pub mob_entity: MobEntity,
@@ -93,6 +128,38 @@ impl SheepEntity {
     pub fn set_color(&self, color: u8) {
         let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
         self.set_packed_and_sync(byte);
+    }
+
+    fn get_random_sheep_color(&self, biome: &Biome) -> DyeColor {
+        let configuration =
+            if biome.has_tag(&WorldgenBiome::MINECRAFT_SPAWNS_WARM_VARIANT_FARM_ANIMALS) {
+                WARM_SPAWN_CONFIGURATION
+            } else if biome.has_tag(&WorldgenBiome::MINECRAFT_SPAWNS_COLD_VARIANT_FARM_ANIMALS) {
+                COLD_SPAWN_CONFIGURATION
+            } else {
+                TEMPERATE_SPAWN_CONFIGURATION
+            };
+        let mut rng = self.get_random();
+        let mut roll =
+            rng.random_range(0..configuration.iter().map(|(_, weight)| weight).sum::<u32>());
+        let provider = configuration
+            .iter()
+            .find(|(_, weight)| {
+                let hit = roll < *weight;
+                roll = roll.saturating_sub(*weight);
+                hit
+            })
+            .map_or(configuration[0].0, |(provider, _)| *provider);
+        match provider {
+            SheepColorProvider::Single(color) => color,
+            SheepColorProvider::CommonColors(color) => {
+                if rng.random_range(0..COMMON_COLOR_WEIGHT + PINK_WEIGHT) < COMMON_COLOR_WEIGHT {
+                    color
+                } else {
+                    DyeColor::Pink
+                }
+            }
+        }
     }
 
     pub fn ready_for_shearing(&self) -> bool {
@@ -204,6 +271,20 @@ impl Mob for SheepEntity {
 
     fn on_eating_grass(&self) {
         self.set_sheared(false);
+        if self.can_age_up() {
+            self.age_up(60, false);
+        }
+    }
+
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let biome = world.get_biome(&self.get_entity().block_pos.load());
+        self.set_color(self.get_random_sheep_color(biome).id());
+        self.mob_entity.finalize_spawn_base();
+        group_data
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
