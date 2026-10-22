@@ -120,9 +120,9 @@ struct GoalRegistry {
 }
 
 impl GoalRegistry {
-    fn release_retired_controls(&mut self) {
+    fn release_controls(&mut self, keep: impl Fn(&RegisteredGoal) -> bool) {
         for owner in &mut self.goals_by_control {
-            if owner.as_ref().is_some_and(|entry| !entry.is_running()) {
+            if owner.as_ref().is_some_and(|entry| !keep(entry)) {
                 *owner = None;
             }
         }
@@ -184,7 +184,7 @@ impl GoalSelector {
             retired.push(entry.clone());
             false
         });
-        registry.release_retired_controls();
+        registry.release_controls(|entry| entry.registered.load(Relaxed));
         retired
     }
 
@@ -298,9 +298,7 @@ impl GoalSelector {
                 if !entry.controls.load().get(control) {
                     continue;
                 }
-                state.goals_by_control[control.idx()]
-                    .clone()
-                    .filter(|owner| owner.is_running())
+                state.goals_by_control[control.idx()].clone()
             };
             if let Some(owner) = owner {
                 if owner.priority <= entry.priority {
@@ -311,10 +309,9 @@ impl GoalSelector {
                 if !Self::candidate(entry, state.disabled_controls.load()) {
                     return false;
                 }
-                if owner.is_running()
-                    && state.goals_by_control[control.idx()]
-                        .as_ref()
-                        .is_some_and(|current| Arc::ptr_eq(current, &owner))
+                if state.goals_by_control[control.idx()]
+                    .as_ref()
+                    .is_some_and(|current| Arc::ptr_eq(current, &owner))
                     && can_stop != Some(true)
                 {
                     return false;
@@ -341,7 +338,7 @@ impl GoalSelector {
                 Self::call(selector, entry, mob, Some(false), |goal| goal.stop(mob));
             }
         }
-        Self::lock(selector).release_retired_controls();
+        Self::lock(selector).release_controls(RegisteredGoal::is_running);
         let entries = Self::snapshot(selector);
         for entry in entries.iter() {
             if !entry.registered.load(Relaxed) || entry.running.load(Relaxed) {
@@ -701,6 +698,44 @@ mod tests {
 
         assert_eq!(candidate.starts.load(Ordering::Relaxed), 0);
         assert_eq!(GoalSelector::lock(&mob.0.goals_selector).goals.len(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn goal_displaced_this_pass_keeps_its_other_controls_locked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let (world, mob) = probe(&folder);
+        let displaced = Arc::new(Counts::default());
+        let mover = Arc::new(Counts::default());
+        let looker = Arc::new(Counts::default());
+        let enabled = Arc::new(AtomicBool::new(false));
+        let goal = |priority, counts: &Arc<Counts>, enabled: Option<&Arc<AtomicBool>>, controls| {
+            mob.0.add_goal(
+                priority,
+                CountGoal {
+                    counts: counts.clone(),
+                    enabled: enabled.cloned(),
+                    controls,
+                    clear_on_stop: false,
+                },
+            );
+        };
+        goal(2, &displaced, None, Controls::MOVE | Controls::LOOK);
+        goal(1, &mover, Some(&enabled), Controls::MOVE);
+        goal(3, &looker, Some(&enabled), Controls::LOOK);
+
+        mob.0.server_ai_step(&mob, &mob);
+        enabled.store(true, Ordering::Relaxed);
+        mob.0.server_ai_step(&mob, &mob);
+        let looker_starts = looker.starts.load(Ordering::Relaxed);
+        mob.0.server_ai_step(&mob, &mob);
+        world.level.shutdown().await;
+
+        assert_eq!(displaced.stops.load(Ordering::Relaxed), 1);
+        assert_eq!(mover.starts.load(Ordering::Relaxed), 1);
+        assert_eq!(looker_starts, 0);
+        assert_eq!(looker.starts.load(Ordering::Relaxed), 1);
         Ok(())
     }
 
