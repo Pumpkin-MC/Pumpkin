@@ -4,6 +4,12 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use std::sync::{Arc, Mutex};
 
+/// How often, in ticks, the player icon picks a new random rotation in the Nether.
+const NETHER_SPIN_INTERVAL_TICKS: i64 = 10;
+/// Vanilla's arbitrary constants for the hash that picks the Nether icon rotation.
+const NETHER_SPIN_HASH_MULTIPLIER: i32 = 34_187_121;
+const NETHER_SPIN_HASH_INCREMENT: i32 = 121;
+
 pub struct MapManager {
     pub maps: DashMap<i32, Arc<Mutex<MapData>>>,
 }
@@ -84,11 +90,11 @@ impl MapData {
     #[must_use]
     pub fn calculate_rotation(&self, game_time: i64, y_rot: f64) -> i8 {
         if self.dimension == Dimension::THE_NETHER {
-            let s = (game_time / 10) as i32;
+            let s = (game_time / NETHER_SPIN_INTERVAL_TICKS) as i32;
             return ((s
                 .wrapping_mul(s)
-                .wrapping_mul(34_187_121)
-                .wrapping_add(s.wrapping_mul(121))
+                .wrapping_mul(NETHER_SPIN_HASH_MULTIPLIER)
+                .wrapping_add(s.wrapping_mul(NETHER_SPIN_HASH_INCREMENT))
                 >> 15)
                 & 15) as i8;
         }
