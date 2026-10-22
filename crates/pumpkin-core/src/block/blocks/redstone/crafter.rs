@@ -117,12 +117,13 @@ impl CrafterBlock {
 
         let recipe = match_crafting_recipe(crafter, None);
         if let Some(recipe_result) = recipe
-            && let Some(item) = Item::from_registry_key(
+            && Item::from_registry_key(
                 recipe_result
                     .item_id
                     .strip_prefix("minecraft:")
                     .unwrap_or(&recipe_result.item_id),
             )
+            .is_some()
             && recipe_result.count > 0
         {
             let state = world.get_block_state(pos);
@@ -132,7 +133,7 @@ impl CrafterBlock {
             props.crafting = true;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
-            let mut result_stack = ItemStack::new(recipe_result.count, item);
+            let mut result_stack = recipe_result.to_item_stack();
             if let Some(server) = world.server.upgrade() {
                 let mut event =
                     crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(

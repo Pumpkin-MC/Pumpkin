@@ -1,4 +1,4 @@
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
@@ -46,6 +46,13 @@ impl WanderAroundGoal {
 }
 
 impl Goal for WanderAroundGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach {
+            speed: self.speed,
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         // Every mob that carries a passenger is controlled by it.
         if mob.get_entity().has_passengers() {
@@ -80,20 +87,15 @@ impl Goal for WanderAroundGoal {
         if let Some(target) = self.target {
             let pos = mob.get_mob_entity().living_entity.entity.pos.load();
             mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .set_progress(NavigatorGoal::new(pos, target, self.speed));
         }
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn controls(&self) -> Controls {

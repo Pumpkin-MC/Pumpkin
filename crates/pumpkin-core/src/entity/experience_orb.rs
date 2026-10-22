@@ -11,7 +11,14 @@ use pumpkin_util::math::{
     vector3::{Axis, Vector3},
 };
 
-use crate::{server::Server, world::World};
+use crate::{
+    block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION,
+    server::Server,
+    world::{
+        World,
+        entity_islands::{self, AuditedReach},
+    },
+};
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
@@ -190,6 +197,29 @@ fn closest_free_center(
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    fn audited_reach(&self) -> Option<AuditedReach> {
+        let entity = &self.entity;
+        let world = entity.world.load();
+        let fluid_push = super::max_fluid_push_speed(world.dimension.fast_lava);
+        let velocity = entity.velocity.load();
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (
+                velocity.x.hypot(velocity.z) + fluid_push,
+                velocity.y.abs() + self.get_gravity() + SURFACE_UPWARD_ACCELERATION + fluid_push,
+            ),
+            entities: 0.0,
+            players: 0.0,
+            block_reads: 1.0,
+            route: None,
+            changes_blocks: false,
+            global: false,
+            links: entity_islands::links_of(self),
+        };
+        reach.scan_contact_blocks(&world);
+        Some(reach)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_short("Health", self.health.load(Ordering::Relaxed) as i16);
     }

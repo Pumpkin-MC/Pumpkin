@@ -141,6 +141,31 @@ macro_rules! impl_block_entity_for_chest {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .is_some()
             }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                if let Some(loot) = stack
+                    .get_data_component::<pumpkin_data::data_component_impl::ContainerLootImpl>()
+                {
+                    *self
+                        .loot_table
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some(loot.loot_table.clone());
+                }
+                if let Some(container) =
+                    stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+                {
+                    let mut items = self
+                        .items
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    for (slot, item) in &container.items {
+                        if let Some(target) = items.get_mut(*slot as usize) {
+                            *target = item.clone();
+                        }
+                    }
+                }
+            }
         }
     };
 }

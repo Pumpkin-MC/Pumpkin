@@ -47,11 +47,7 @@ impl SheepEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
@@ -122,6 +118,10 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn has_audited_tick(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -154,7 +154,8 @@ impl Mob for SheepEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::{Animal, get_dye_color_from_item, get_wool_item_for_color};
+        use super::animal::{Animal, get_wool_item_for_color};
+        use pumpkin_data::data_component_impl::DyeImpl;
         let item = item_stack.get_item();
 
         if item == &Item::SHEARS && !self.is_sheared() && !self.is_baby() {
@@ -180,11 +181,11 @@ impl Mob for SheepEntity {
             return true;
         }
 
-        if let Some(color) = get_dye_color_from_item(item)
+        if let Some(dye) = item_stack.get_data_component::<DyeImpl>()
             && !self.is_sheared()
-            && color != self.get_color()
+            && dye.color.id() != self.get_color()
         {
-            self.set_color(color);
+            self.set_color(dye.color.id());
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             return true;
         }

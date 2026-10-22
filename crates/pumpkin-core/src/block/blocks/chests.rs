@@ -100,8 +100,10 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     args: &PlacedArgs<'_>,
     create_entity: impl FnOnce(BlockPos) -> E,
 ) {
-    let chest = create_entity(*args.position);
-    args.world.add_block_entity(Arc::new(chest));
+    if args.world.get_block_entity(args.position).is_none() {
+        let chest = create_entity(*args.position);
+        args.world.add_block_entity(Arc::new(chest));
+    }
 
     let chest_props = ChestLikeProperties::from_state_id(args.state_id);
     let connected_towards = match chest_props.r#type {

@@ -11,6 +11,10 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::Hand;
 
+const ROLL: f32 = -20.0;
+const POWER: f32 = 0.7;
+const DIVERGENCE: f32 = 1.0;
+
 pub struct ExperienceBottleItem;
 
 impl ItemMetadata for ExperienceBottleItem {
@@ -43,7 +47,9 @@ impl ItemBehaviour for ExperienceBottleItem {
         let entity = Entity::new(world.clone(), pos, &EntityType::EXPERIENCE_BOTTLE);
         let bottle = ExperienceBottleEntity::new_shot(entity, player.get_entity());
         bottle.set_item_stack(held.split_unless_creative(player.gamemode.load(), 1));
-        bottle.thrown.set_velocity_from(pitch, yaw, -20.0, 0.7, 1.0);
+        bottle
+            .thrown
+            .set_velocity_from(pitch, yaw, ROLL, POWER, DIVERGENCE);
         world.spawn_entity(Arc::new(bottle));
 
         inventory.set_stack_in_hand(hand, held);

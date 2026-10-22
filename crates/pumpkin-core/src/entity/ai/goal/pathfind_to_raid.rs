@@ -93,7 +93,7 @@ impl Goal for PathfindToRaidGoal {
 
         let entity = mob.get_entity();
         let world = entity.world.load();
-        let current_age = entity.age.load(std::sync::atomic::Ordering::Relaxed);
+        let current_age = entity.tick_count.load(std::sync::atomic::Ordering::Relaxed);
 
         let raid_center = {
             let raids = world
@@ -149,9 +149,8 @@ impl Goal for PathfindToRaidGoal {
                 std::f64::consts::FRAC_PI_2,
             ) {
                 mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .steered()
+                    .navigator()
                     .set_progress(NavigatorGoal::new(
                         mob.get_entity().pos.load(),
                         dest,
