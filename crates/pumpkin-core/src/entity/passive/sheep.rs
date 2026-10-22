@@ -16,13 +16,17 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
+    item::ItemEntity,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
+use pumpkin_data::dye_color::DyeColor;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -89,6 +93,44 @@ impl SheepEntity {
     pub fn set_color(&self, color: u8) {
         let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
         self.set_packed_and_sync(byte);
+    }
+
+    pub fn ready_for_shearing(&self) -> bool {
+        !self.is_sheared() && !self.is_baby()
+    }
+
+    pub fn shear(&self, category: SoundCategory) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntitySheepShear, category, &pos);
+        let color = DyeColor::from(self.get_color());
+        if let Some(table) =
+            world.get_loot_table(&format!("minecraft:shearing/sheep/{}", color.name()))
+        {
+            let params = LootContextParameters {
+                position: Some(pos),
+                this_entity: Some(&EntityType::SHEEP),
+                ..Default::default()
+            };
+            let mut rng = self.get_random();
+            for stack in generate_loot_from_handle(&table, rng.random(), &params) {
+                for _ in 0..stack.item_count {
+                    let item_entity = ItemEntity::new(
+                        Entity::new(world.clone(), pos.add_raw(0.0, 1.0, 0.0), &EntityType::ITEM),
+                        stack.copy_with_count(1),
+                    );
+                    let velocity = &item_entity.get_entity().velocity;
+                    velocity.store(velocity.load().add_raw(
+                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                        f64::from(rng.random::<f32>() * 0.05),
+                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                    ));
+                    world.spawn_entity(Arc::new(item_entity));
+                }
+            }
+        }
+        self.set_sheared(true);
     }
 
     pub fn set_sheared(&self, sheared: bool) {
@@ -165,30 +207,33 @@ impl Mob for SheepEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::{Animal, get_wool_item_for_color};
+        use super::animal::Animal;
         use pumpkin_data::data_component_impl::DyeImpl;
         let item = item_stack.get_item();
 
-        if item == &Item::SHEARS && !self.is_sheared() && !self.is_baby() {
-            self.set_sheared(true);
+        if item == &Item::SHEARS {
+            if !self.ready_for_shearing() {
+                return true;
+            }
             let entity = self.get_entity();
             let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(
-                Sound::EntitySheepShear,
-                pumpkin_data::sound::SoundCategory::Players,
-                &pos,
-            );
-
-            let wool_item = get_wool_item_for_color(self.get_color());
-            let mut rng = rand::rng();
-            let count = rng.random_range(1..=3);
-            let item_entity = Arc::new(crate::entity::item::ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(count, wool_item),
-            ));
-            world.spawn_entity(item_entity);
-            player.damage_held_item(1);
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            self.shear(SoundCategory::Players);
+            world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item_stack.damage_item(1);
+            }
             return true;
         }
 

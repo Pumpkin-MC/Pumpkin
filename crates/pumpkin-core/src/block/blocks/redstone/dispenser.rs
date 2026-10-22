@@ -13,7 +13,6 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::passive::sheep::SheepEntity;
@@ -156,27 +155,6 @@ fn is_allowed_entity(
         None => true,
         Some(IDSet::Tag(tag)) => entity_type.is_tagged_with(tag).unwrap_or(false),
         Some(IDSet::IDs(types)) => types.contains(&entity_type),
-    }
-}
-
-const fn wool_of_color(color: u8) -> &'static Item {
-    match color {
-        1 => &Item::ORANGE_WOOL,
-        2 => &Item::MAGENTA_WOOL,
-        3 => &Item::LIGHT_BLUE_WOOL,
-        4 => &Item::YELLOW_WOOL,
-        5 => &Item::LIME_WOOL,
-        6 => &Item::PINK_WOOL,
-        7 => &Item::GRAY_WOOL,
-        8 => &Item::LIGHT_GRAY_WOOL,
-        9 => &Item::CYAN_WOOL,
-        10 => &Item::PURPLE_WOOL,
-        11 => &Item::BLUE_WOOL,
-        12 => &Item::BROWN_WOOL,
-        13 => &Item::GREEN_WOOL,
-        14 => &Item::RED_WOOL,
-        15 => &Item::BLACK_WOOL,
-        _ => &Item::WHITE_WOOL,
     }
 }
 
@@ -987,27 +965,20 @@ impl DispenserBlock {
     }
 
     fn shear_entity_in_front(ctx: &DispenseContext<'_>) -> bool {
-        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+        let target = Self::target_position(ctx);
+        let target_box = BoundingBox::from_block(&target);
 
         for entity in ctx.world.get_entities_at_box(&target_box) {
             let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>() else {
                 continue;
             };
-            if sheep.is_sheared() || sheep.is_baby() || !entity.get_entity().is_alive() {
+            if !sheep.ready_for_shearing() || !entity.get_entity().is_alive() {
                 continue;
             }
 
-            let position = entity.get_entity().pos.load();
-            sheep.set_sheared(true);
+            sheep.shear(SoundCategory::Blocks);
             ctx.world
-                .play_sound(Sound::EntitySheepShear, SoundCategory::Blocks, &position);
-
-            let count = rng().random_range(1..=3);
-            Self::drop_at(
-                ctx.world,
-                position,
-                ItemStack::new(count, wool_of_color(sheep.get_color())),
-            );
+                .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
 
             return true;
         }
