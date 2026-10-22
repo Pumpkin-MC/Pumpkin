@@ -1,12 +1,13 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, AtomicU8, Ordering, Ordering::Relaxed},
+    atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
 use pumpkin_data::chicken_sound_variant::ChickenSoundVariant;
 use pumpkin_data::chicken_variant::ChickenVariant;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -25,6 +26,9 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
+
+const EGG_LAY_TIME: std::ops::Range<i32> = 6000..12000;
 
 const TEMPT_ITEMS: &[&Item] = &[
     &Item::WHEAT_SEEDS,
@@ -52,7 +56,7 @@ impl ChickenEntity {
         let biome = world.get_biome(&entity.block_pos.load());
         let variant = ChickenVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
-        let egg_lay_time = rand::rng().random_range(6000..12000);
+        let egg_lay_time = rand::rng().random_range(EGG_LAY_TIME);
         let chicken = Self {
             mob_entity,
             variant: AtomicU8::new(variant.id()),
@@ -83,6 +87,22 @@ impl ChickenEntity {
         };
 
         mob_arc
+    }
+
+    fn lay_egg(&self) -> bool {
+        let entity = self.get_entity();
+        let mut drop_event =
+            EntityDropItemEvent::new(entity.entity_id, "minecraft:egg".to_string(), 1);
+        if let Some(server) = entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut drop_event);
+        }
+        if drop_event.cancelled {
+            return false;
+        }
+        entity.spawn_at_location(ItemStack::new(1, &Item::EGG));
+        true
     }
 
     pub fn set_variant(&self, variant: ChickenVariant) {
@@ -228,38 +248,33 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_ai_step(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
+        let living = &self.mob_entity.living_entity;
+        let entity = &living.entity;
         let velocity = entity.velocity.load();
         if !entity.on_ground.load(Ordering::Relaxed) && velocity.y < 0.0 {
             entity.set_velocity(velocity.multiply(1.0, 0.6, 1.0));
         }
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        if self.mob_entity.living_entity.dead.load(Relaxed) {
-            return;
-        }
-        let entity = &self.mob_entity.living_entity.entity;
-        if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
-            let next_time = rand::rng().random_range(6000..12000);
-            let world = entity.world.load_full();
-            let pos = entity.block_pos.load();
-            let entity_id = entity.entity_id;
-            let mut drop_event =
-                crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
-                    entity_id,
-                    "minecraft:egg".to_string(),
-                    1,
+        if entity.is_alive()
+            && !living.is_dead_or_dying()
+            && !self.is_baby()
+            && self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1
+        {
+            let mut rng = self.get_random();
+            if self.lay_egg() {
+                entity.world.load().play_sound_fine(
+                    Sound::EntityChickenEgg,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                    1.0,
+                    (rng.random::<f32>() - rng.random::<f32>()).mul_add(0.2, 1.0),
                 );
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut drop_event);
+                entity
+                    .world
+                    .load()
+                    .emit_game_event(GameEvent::EntityPlace.name(), entity.pos.load());
             }
-            if !drop_event.cancelled {
-                world.drop_stack(&pos, ItemStack::new(1, &Item::EGG));
-            }
-            self.egg_lay_time.store(next_time, Ordering::Relaxed);
+            self.egg_lay_time
+                .store(rng.random_range(EGG_LAY_TIME), Ordering::Relaxed);
         }
     }
 
