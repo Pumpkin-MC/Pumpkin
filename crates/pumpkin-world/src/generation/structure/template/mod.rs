@@ -165,13 +165,9 @@ pub fn place_template_with_options(
         let wy = origin.y + local_pos.y;
         let wz = world_z + local_pos.z;
 
+        // The y is checked after the processors, since gravity can move the block.
         if let Some(bbox) = chunk_box
-            && (wx < bbox.min.x
-                || wx > bbox.max.x
-                || wy < bbox.min.y
-                || wy > bbox.max.y
-                || wz < bbox.min.z
-                || wz > bbox.max.z)
+            && (wx < bbox.min.x || wx > bbox.max.x || wz < bbox.min.z || wz > bbox.max.z)
         {
             continue;
         }
