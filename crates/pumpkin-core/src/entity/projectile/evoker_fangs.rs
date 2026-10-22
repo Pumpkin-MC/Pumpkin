@@ -44,6 +44,12 @@ impl EntityBase for EvokerFangsEntity {
         self.owner.read_nbt(nbt, "Owner");
     }
 
+    fn remove_custom_nbt(&self, removed: &[Box<str>]) {
+        if removed.iter().any(|key| &**key == "Owner") {
+            self.owner.clear();
+        }
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let world = entity.world.load();

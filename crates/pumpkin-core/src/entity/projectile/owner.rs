@@ -85,8 +85,21 @@ impl EntityReference {
         }
     }
 
+    /// Updates only when `key` is present
+    /// an invalid UUID clears it like vanilla.
     pub fn read_nbt(&self, nbt: &NbtCompound, key: &str) {
-        self.uuid.store(nbt.get_uuid(key));
+        if nbt.has(key) {
+            self.set_uuid(nbt.get_uuid(key));
+        }
+    }
+
+    /// Forgets the entity, e.g. `data remove`.
+    pub fn clear(&self) {
+        self.set_uuid(None);
+    }
+
+    fn set_uuid(&self, uuid: Option<Uuid>) {
+        self.uuid.store(uuid);
         *self.resolved.lock().unwrap_or_else(PoisonError::into_inner) = None;
     }
 }
@@ -172,10 +185,24 @@ impl ProjectileOwner {
         }
     }
 
+    /// Updates only the keys present, so a partial read keeps the rest.
     pub fn read_nbt(&self, nbt: &NbtCompound) {
         self.owner.read_nbt(nbt, "Owner");
-        self.left_owner
-            .store(nbt.get_bool("LeftOwner").unwrap_or(false), Relaxed);
+        if nbt.has("LeftOwner") {
+            self.left_owner
+                .store(nbt.get_bool("LeftOwner").unwrap_or(false), Relaxed);
+        }
+    }
+
+    /// Resets the removed keys to vanilla's defaults.
+    pub fn remove_nbt(&self, removed: &[Box<str>]) {
+        for key in removed {
+            match &**key {
+                "Owner" => self.owner.clear(),
+                "LeftOwner" => self.left_owner.store(false, Relaxed),
+                _ => {}
+            }
+        }
     }
 }
 

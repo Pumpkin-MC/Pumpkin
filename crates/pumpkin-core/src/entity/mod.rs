@@ -185,6 +185,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn read_custom_nbt(&self, _nbt: &NbtCompound) {}
+
+    /// Explicit removal of top-level keys, since a missing key on read keeps the field.
+    fn remove_nbt(&self, removed: &[Box<str>]) {
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.remove_nbt(removed);
+        }
+        self.remove_custom_nbt(removed);
+    }
+
+    fn remove_custom_nbt(&self, _removed: &[Box<str>]) {}
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
