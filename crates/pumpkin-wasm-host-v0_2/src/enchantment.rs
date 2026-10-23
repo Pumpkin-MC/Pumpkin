@@ -1,20 +1,28 @@
+use super::AccessorExt;
 use crate::pumpkin::plugin::enchantments::{
     AttributeModifierSlot as WitAttributeModifierSlot, CustomEnchantment as WitCustomEnchantment,
     EnchantmentManager as WitEnchantmentManager, HostEnchantmentManager,
+    HostEnchantmentManagerWithStore,
 };
 use pumpkin_core::server::enchantment::CustomEnchantmentEntry;
 use pumpkin_data::enchantment::{AttributeModifierSlot, Enchantment};
 use pumpkin_util::text::TextComponent;
 use pumpkin_wasm_host_common::state::PluginHostState;
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 impl HostEnchantmentManager for PluginHostState {
+    fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+}
+
+impl HostEnchantmentManagerWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn register_enchantment(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitEnchantmentManager>,
         enchantment: WitCustomEnchantment,
     ) -> wasmtime::Result<Result<(), String>> {
-        let description = self.take(enchantment.description)?;
+        let description = accessor.take_res(enchantment.description)?;
         let entry = CustomEnchantmentEntry {
             id: enchantment.id,
             description,
@@ -26,25 +34,19 @@ impl HostEnchantmentManager for PluginHostState {
             exclusive_set: enchantment.exclusive_set,
         };
 
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         Ok(server.enchantment_manager.register(entry).await)
     }
 
     async fn get_enchantment(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitEnchantmentManager>,
         id: String,
     ) -> wasmtime::Result<Option<WitCustomEnchantment>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
 
         if let Some(entry) = server.enchantment_manager.get(&id).await {
-            let description = self.add(entry.description)?;
+            let description = accessor.add_res(entry.description)?;
             return Ok(Some(WitCustomEnchantment {
                 id: entry.id,
                 description,
@@ -58,7 +60,8 @@ impl HostEnchantmentManager for PluginHostState {
         }
 
         if let Some(vanilla) = find_vanilla_enchantment(&id) {
-            let description = self.add(TextComponent::translate(vanilla.description, []))?;
+            let description =
+                accessor.add_res(TextComponent::translate(vanilla.description, []))?;
             return Ok(Some(WitCustomEnchantment {
                 id: vanilla.name.to_string(),
                 description,
@@ -83,14 +86,11 @@ impl HostEnchantmentManager for PluginHostState {
     }
 
     async fn has_enchantment(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitEnchantmentManager>,
         id: String,
     ) -> wasmtime::Result<bool> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         if server.enchantment_manager.has(&id).await {
             return Ok(true);
         }
@@ -98,22 +98,15 @@ impl HostEnchantmentManager for PluginHostState {
     }
 
     async fn get_all_enchantment_ids(
-        &mut self,
+        accessor: &Accessor<PluginHostState, Self>,
         _res: Resource<WitEnchantmentManager>,
     ) -> wasmtime::Result<Vec<String>> {
-        let server = self
-            .server
-            .as_ref()
-            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        let server = accessor.server()?;
         let mut ids = server.enchantment_manager.get_all_ids().await;
         for enc in Enchantment::ALL {
             ids.push(enc.name.to_string());
         }
         Ok(ids)
-    }
-
-    fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
-        self.drop(rep)
     }
 }
 

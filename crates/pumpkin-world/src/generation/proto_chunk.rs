@@ -738,6 +738,7 @@ impl ProtoChunk {
 
         let chunk_start_x = self.start_block_x();
         let chunk_start_z = self.start_block_z();
+        let mut seen_collectors: Vec<&Arc<Mutex<StructurePiecesCollector>>> = Vec::new();
 
         for (key, collector) in self
             .structure_starts
@@ -751,6 +752,13 @@ impl ProtoChunk {
             })
             .chain(self.structure_references.iter().map(|(k, col)| (k, col)))
         {
+            if seen_collectors
+                .iter()
+                .any(|seen| Arc::ptr_eq(seen, collector))
+            {
+                continue;
+            }
+            seen_collectors.push(collector);
             let structure = pumpkin_data::structures::Structure::get(key);
             let terrain_adaptation = structure.terrain_adaptation;
 

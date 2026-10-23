@@ -1,10 +1,11 @@
-use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::util::default_random_pos;
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
+use crate::entity::ai::util::{default_random_pos, land_random_pos};
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 pub const DEFAULT_INTERVAL: i32 = 120;
+pub const PROBABILITY: f32 = 0.001;
 
 pub struct WanderAroundGoal {
     goal_control: Controls,
@@ -12,6 +13,7 @@ pub struct WanderAroundGoal {
     target: Option<Vector3<f64>>,
     interval: i32,
     force_trigger: bool,
+    water_avoiding_probability: Option<f32>,
 }
 
 impl WanderAroundGoal {
@@ -28,7 +30,15 @@ impl WanderAroundGoal {
             target: None,
             interval,
             force_trigger: false,
+            water_avoiding_probability: None,
         }
+    }
+
+    #[must_use]
+    pub const fn water_avoiding(speed: f64) -> Self {
+        let mut goal = Self::new(speed);
+        goal.water_avoiding_probability = Some(PROBABILITY);
+        goal
     }
 
     /// Run once on the next check, ignoring the interval.
@@ -40,12 +50,28 @@ impl WanderAroundGoal {
         self.interval = interval;
     }
 
-    fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        default_random_pos::get_pos(mob, 10, 7)
+    fn get_position(&self, mob: &dyn Mob) -> Option<Vector3<f64>> {
+        let Some(probability) = self.water_avoiding_probability else {
+            return default_random_pos::get_pos(mob, 10, 7);
+        };
+        if mob.get_entity().is_in_water() {
+            land_random_pos::get_pos(mob, 15, 7).or_else(|| default_random_pos::get_pos(mob, 10, 7))
+        } else if mob.get_random().random::<f32>() >= probability {
+            land_random_pos::get_pos(mob, 10, 7)
+        } else {
+            default_random_pos::get_pos(mob, 10, 7)
+        }
     }
 }
 
 impl Goal for WanderAroundGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach {
+            speed: self.speed,
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         // Every mob that carries a passenger is controlled by it.
         if mob.get_entity().has_passengers() {
@@ -63,7 +89,7 @@ impl Goal for WanderAroundGoal {
             }
         }
 
-        self.target = Self::get_position(mob);
+        self.target = self.get_position(mob);
         if self.target.is_none() {
             return false;
         }
@@ -80,20 +106,15 @@ impl Goal for WanderAroundGoal {
         if let Some(target) = self.target {
             let pos = mob.get_mob_entity().living_entity.entity.pos.load();
             mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .navigator()
                 .set_progress(NavigatorGoal::new(pos, target, self.speed));
         }
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn controls(&self) -> Controls {

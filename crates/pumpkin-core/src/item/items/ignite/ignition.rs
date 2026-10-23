@@ -58,11 +58,14 @@ fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
 
     let mut props = block.properties(state_id)?.to_props();
 
-    let (_, value) = props.iter_mut().find(|(k, _)| *k == "lit")?;
-    if *value == "true" {
+    let value = props.iter_mut().find_map(|p| match p {
+        pumpkin_data::Property::Lit(lit) => Some(lit),
+        _ => None,
+    })?;
+    if *value {
         return None;
     }
 
-    *value = "true";
+    *value = true;
     Some(block.from_properties(&props).to_state_id(block))
 }
