@@ -1791,10 +1791,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             neutral.update_persistent_anger();
         }
 
-        if let Some(ageable) = self.as_ageable() {
-            ageable.ageable_ai_step();
-        }
-
         self.mob_tick(caller);
         if mob_entity.living_entity.entity.is_removed() {
             return;
