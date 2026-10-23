@@ -1,6 +1,7 @@
 mod block_tuning_and_invert;
 mod commands_and_gamemode;
 mod login_and_movement;
+mod loot_tables;
 mod player_actions;
 mod status_ping;
 mod world_interaction;
@@ -28,6 +29,8 @@ pub async fn run_bot_tests(
         summary_lines,
     )
     .await?;
+
+    loot_tables::run_loot_table_tests(server, &mut bot1, summary_lines).await?;
 
     world_interaction::run_world_interaction_tests(server, &mut bot1, summary_lines).await?;
 

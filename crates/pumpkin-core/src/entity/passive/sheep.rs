@@ -118,6 +118,21 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn mob_get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        use pumpkin_data::{
+            data_component::DataComponent, data_component_impl::SheepColorImpl, dye_color::DyeColor,
+        };
+        match component {
+            DataComponent::SheepColor => Some(Box::new(SheepColorImpl {
+                value: DyeColor::from(self.get_color()).name().into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn has_audited_tick(&self) -> bool {
         true
     }

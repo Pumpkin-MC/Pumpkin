@@ -5516,6 +5516,7 @@ impl World {
                 if item.is_empty() { None } else { Some(item) }
             });
             let params = crate::world::loot::LootContextParameters {
+                world: Some(self),
                 tool,
                 block_state: Some(broken_block_state),
                 position: Some(position.to_f64()),

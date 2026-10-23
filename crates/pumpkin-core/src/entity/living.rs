@@ -2185,9 +2185,10 @@ impl LivingEntity {
 
             let params = LootContextParameters {
                 killed_by_player: Some(has_player_kill),
-                this_entity: Some(self.entity.entity_type),
-                killer_entity: killer.map(|c| c.get_entity().entity_type),
-                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+                world: Some(&world),
+                this_entity: Some(dyn_self.as_ref()),
+                killer_entity: killer,
+                direct_killer_entity: source,
                 position: Some(self.entity.pos.load()),
                 world_time: world.level_info.load().day_time as u64,
                 damage_type: Some(damage_type),
@@ -4100,7 +4101,7 @@ fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
     }
 }
 
-const fn attribute_modifier_slot_matches(
+pub(crate) const fn attribute_modifier_slot_matches(
     modifier_slot: &AttributeModifierSlot,
     equipment_slot: &EquipmentSlot,
 ) -> bool {
