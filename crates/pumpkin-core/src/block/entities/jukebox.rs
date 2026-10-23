@@ -119,6 +119,19 @@ impl BlockEntity for JukeboxBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let record_guard = self.record_stack.lock().ok();
+        let record = record_guard.as_deref();
+        Some(crate::block::entities::bedrock::build_jukebox_actor(
+            self.position,
+            record,
+            self.ticks_since_song_started.load(Ordering::Relaxed),
+        ))
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

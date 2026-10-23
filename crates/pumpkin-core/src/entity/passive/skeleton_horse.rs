@@ -54,11 +54,7 @@ impl SkeletonHorseEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
@@ -153,10 +149,6 @@ impl Mob for SkeletonHorseEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

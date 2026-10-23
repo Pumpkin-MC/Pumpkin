@@ -20,12 +20,18 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
             return BlockActionResult::Pass;
         }
         let mut props = WallTorchLikeProperties::default(&Block::CARVED_PUMPKIN);
-        props.facing = args
-            .player
-            .living_entity
-            .entity
-            .get_horizontal_facing()
-            .opposite();
+        props.facing = args.hit.face.to_horizontal_facing().unwrap_or_else(|| {
+            args.player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite()
+        });
+        args.world.play_sound(
+            pumpkin_data::sound::Sound::BlockPumpkinCarve,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            &args.position.to_f64(),
+        );
         args.world.set_block_state(
             args.position,
             props.to_state_id(&Block::CARVED_PUMPKIN),
@@ -33,7 +39,7 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
         );
         let entity = Entity::new(
             args.world.clone(),
-            args.position.to_f64(),
+            args.position.to_centered_f64(),
             &EntityType::ITEM,
         );
         let item_entity = Arc::new(ItemEntity::new(
@@ -42,6 +48,6 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
         ));
         args.world.spawn_entity(item_entity);
         args.player.damage_item_in_slot(args.equipment_slot, 1);
-        BlockActionResult::Consume
+        BlockActionResult::SuccessServer
     }
 }
