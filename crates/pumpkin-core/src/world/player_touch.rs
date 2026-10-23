@@ -70,16 +70,14 @@ impl<'a> PlayerTouch<'a> {
 
 /// Vanilla `Entity.playerTouch`, run for every player whose pickup area overlaps.
 /// Experience orbs are only collected here and touched by `touch_random_orb`.
-pub(super) fn touch_players(
-    entity: &Arc<dyn EntityBase>,
-    entity_chunk: Vector2<i32>,
-    players: &[PlayerTouch<'_>],
-) {
+pub(super) fn touch_players(entity: &Arc<dyn EntityBase>, players: &[PlayerTouch<'_>]) {
     if players.is_empty() || !entity.receives_player_touch() {
         return;
     }
     let entity_inner = entity.get_entity();
+    // Post-tick position; the entity may have crossed chunks this tick
     let entity_bb = entity_inner.bounding_box.load();
+    let entity_chunk = entity_inner.chunk_pos.load();
     let is_orb = entity_inner.entity_type == &EntityType::EXPERIENCE_ORB;
 
     for touch in players {

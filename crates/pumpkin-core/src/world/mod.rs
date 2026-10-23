@@ -1668,13 +1668,13 @@ impl World {
 
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
-            let (entity, entity_chunk) = &tickable[index];
+            let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
             entity.get_entity().tick_count.fetch_add(1, Relaxed);
             entity.tick(entity.as_ref(), server_ref);
 
-            touch_players(entity, *entity_chunk, &player_touches);
+            touch_players(entity, &player_touches);
         };
         if let Some(islands) = islands {
             islands
