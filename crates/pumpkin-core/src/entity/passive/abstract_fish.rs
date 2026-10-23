@@ -9,7 +9,7 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
-use pumpkin_data::{sound::Sound, tracked_data};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -18,7 +18,7 @@ use super::water_animal::{AMBIENT_SOUND_INTERVAL, WaterAnimal};
 
 #[derive(Default)]
 pub struct FishData {
-    from_bucket: AtomicBool,
+    pub from_bucket: AtomicBool,
     ambient_sound_time: AtomicI32,
 }
 
@@ -97,7 +97,7 @@ impl Goal for FishSwimGoal {
     }
 }
 
-pub trait AbstractFish: WaterAnimal {
+pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
     fn flop_sound(&self) -> Sound;
 
     fn can_random_swim(&self) -> bool {
@@ -158,16 +158,6 @@ pub trait AbstractFish: WaterAnimal {
     fn fish_data(&self) -> &FishData;
 
     fn ambient_sound(&self) -> Sound;
-
-    fn is_from_bucket(&self) -> bool {
-        self.fish_data().from_bucket.load(Relaxed)
-    }
-
-    fn set_from_bucket(&self, from_bucket: bool) {
-        self.fish_data().from_bucket.store(from_bucket, Relaxed);
-        self.get_entity()
-            .set_synced_data(tracked_data::abstract_fish::FROM_BUCKET, from_bucket);
-    }
 
     fn fish_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("FromBucket", self.is_from_bucket());

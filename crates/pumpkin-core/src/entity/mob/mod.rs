@@ -1384,6 +1384,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_bucketable(&self) -> Option<&dyn crate::entity::bucketable::Bucketable> {
+        None
+    }
+
     fn as_fish(&self) -> Option<&dyn crate::entity::passive::abstract_fish::AbstractFish> {
         None
     }

@@ -5,9 +5,10 @@ use super::{
     abstract_schooling_fish::{AbstractSchoolingFish, SchoolingFishData},
     water_animal::WaterAnimal,
 };
-use crate::entity::EntityBase;
+use crate::entity::{EntityBase, bucketable::Bucketable};
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
+use std::sync::atomic::Ordering::Relaxed;
 
 use crate::entity::{
     Entity,
@@ -41,6 +42,18 @@ impl CodEntity {
 }
 
 impl Mob for CodEntity {
+    fn as_bucketable(&self) -> Option<&dyn Bucketable> {
+        Some(self)
+    }
+    fn mob_interact_with_hand(
+        &self,
+        player: &Arc<crate::entity::player::Player>,
+        stack: &mut pumpkin_data::item_stack::ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        crate::entity::bucketable::bucket_mob_pickup(player, stack, self)
+    }
+
     fn as_schooling_fish(&self) -> Option<&dyn AbstractSchoolingFish> {
         Some(self)
     }
@@ -154,5 +167,24 @@ impl crate::entity::custom_sound::CustomSound for CodEntity {
 impl AbstractSchoolingFish for CodEntity {
     fn schooling_data(&self) -> &SchoolingFishData {
         &self.schooling_data
+    }
+}
+
+impl Bucketable for CodEntity {
+    fn is_from_bucket(&self) -> bool {
+        self.fish_data.from_bucket.load(Relaxed)
+    }
+    fn set_from_bucket(&self, from_bucket: bool) {
+        self.fish_data.from_bucket.store(from_bucket, Relaxed);
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::abstract_fish::FROM_BUCKET,
+            from_bucket,
+        );
+    }
+    fn bucket_item(&self) -> &'static pumpkin_data::item::Item {
+        &pumpkin_data::item::Item::COD_BUCKET
+    }
+    fn pickup_sound(&self) -> Sound {
+        Sound::ItemBucketFillFish
     }
 }
