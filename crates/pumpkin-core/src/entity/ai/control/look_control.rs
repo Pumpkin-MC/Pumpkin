@@ -6,10 +6,10 @@ use pumpkin_util::math::vector3::Vector3;
 // Please keep the atomic values out of here!!!
 #[derive(Default)]
 pub struct LookControl {
-    pub(super) max_yaw_change: f32,
-    pub(super) max_pitch_change: f32,
-    pub(super) look_at_timer: i32,
-    pub(super) position: Vector3<f64>,
+    pub(crate) max_yaw_change: f32,
+    pub(crate) max_pitch_change: f32,
+    pub(crate) look_at_timer: i32,
+    pub(crate) position: Vector3<f64>,
 }
 
 impl Control for LookControl {}
@@ -66,7 +66,7 @@ impl LookControl {
         true
     }
 
-    fn clamp_head_yaw(mob: &dyn Mob) {
+    pub(crate) fn clamp_head_yaw(mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
         let steered = mob_entity.steered();
         let navigator = steered.navigator();
@@ -81,7 +81,7 @@ impl LookControl {
         }
     }
 
-    pub(super) fn get_target_pitch(&self, mob: &MobEntity) -> Option<f32> {
+    pub(crate) fn get_target_pitch(&self, mob: &MobEntity) -> Option<f32> {
         let position = self.position;
         let mob_position = mob.living_entity.entity.pos.load();
         let d = position.x - mob_position.x;
@@ -95,7 +95,7 @@ impl LookControl {
         }
     }
 
-    pub(super) fn get_target_yaw(&self, mob: &MobEntity) -> Option<f32> {
+    pub(crate) fn get_target_yaw(&self, mob: &MobEntity) -> Option<f32> {
         let position = self.position;
         let mob_position = mob.living_entity.entity.pos.load();
         let d = position.x - mob_position.x;

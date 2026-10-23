@@ -27,6 +27,11 @@ pub enum SpawnGroupData {
     },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// Group data for foxes (pack variant and group count).
+    FoxGroupData {
+        variant: crate::entity::passive::fox::FoxVariant,
+        group_size: u32,
+    },
 }
 
 impl MobEntity {
