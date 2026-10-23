@@ -54,6 +54,7 @@ pub struct GameTestQueueEntry {
     test_id: String,
     world: Arc<World>,
     test_x: i32,
+    test_y: Option<i32>,
     test_z: i32,
     rotation_steps: i32,
     retry_options: GameTestRetryOptions,
@@ -75,21 +76,36 @@ impl GameTestQueueEntry {
             test_id: test_id.into(),
             world,
             test_x,
+            test_y: None,
             test_z,
             rotation_steps,
             retry_options,
             report,
         }
     }
+
+    #[must_use]
+    pub const fn with_y(mut self, test_y: i32) -> Self {
+        self.test_y = Some(test_y);
+        self
+    }
 }
 
 struct GameTestWorldReporter {
     world: Arc<World>,
+    fallback: Arc<dyn GameTestReporter>,
 }
 
 impl GameTestReporter for GameTestWorldReporter {
     fn send_message(&self, message: TextComponent) {
-        broadcast_world(&self.world, &message);
+        let players = self.world.players.load_full();
+        if players.is_empty() {
+            self.fallback.send_message(message);
+        } else {
+            for player in players.iter() {
+                player.send_system_message(&message);
+            }
+        }
     }
 }
 
@@ -106,7 +122,7 @@ pub async fn stop_game_tests() {
     STOP_GAME_TESTS.store(true, Ordering::Release);
 }
 
-pub(super) async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRunner) {
+pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRunner) {
     // Hold the same queue mutex used by stop_game_tests while consuming the stop
     // flag and draining requests. This closes the async race where a new /test run
     // could otherwise be drained before the old runner was cleared.
@@ -139,34 +155,67 @@ pub(super) async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut Gam
     }
 }
 
-async fn prepare_test_run(
+pub async fn prepare_test_run(
     server: &Arc<Server>,
     request: GameTestQueueEntry,
 ) -> GameTestResult<GameTestManager> {
+    let report_sink: Arc<dyn GameTestReporter> = Arc::new(GameTestWorldReporter {
+        world: request.world.clone(),
+        fallback: request.report.reporter().clone(),
+    });
+    prepare_test_run_with_reporter(server, request, report_sink).await
+}
+
+pub async fn prepare_test_run_with_reporter(
+    server: &Arc<Server>,
+    request: GameTestQueueEntry,
+    report_sink: Arc<dyn GameTestReporter>,
+) -> GameTestResult<GameTestManager> {
+    crate::server::builtin_game_tests::ensure_builtin_game_tests_registered();
     let test_instance = server
         .datapack_manager
         .get_test_instance(&request.test_id)
+        .or_else(|| {
+            pumpkin_gametest::registered_test_definitions()
+                .into_iter()
+                .find_map(|(id, def)| (id == request.test_id).then_some(def))
+        })
         .ok_or_else(|| {
             GameTestError::World(format!("Unknown test instance '{}'", request.test_id))
         })?;
 
-    if test_instance.instance_type != TestType::BlockBased {
-        return Err(GameTestError::World(format!(
-            "Test instance '{}' has unsupported type '{:?}' (only block-based tests can be executed currently)",
-            request.test_id, test_instance.instance_type
-        )));
-    }
+    let function = match test_instance.instance_type {
+        TestType::BlockBased => None,
+        TestType::Function => {
+            let function_id = test_instance.function.as_deref().ok_or_else(|| {
+                GameTestError::World(format!(
+                    "Function test instance '{}' is missing a 'function' field",
+                    request.test_id
+                ))
+            })?;
+            let func = pumpkin_gametest::get_test_function(function_id).ok_or_else(|| {
+                GameTestError::World(format!(
+                    "Unknown GameTest function '{function_id}' for test '{}'",
+                    request.test_id
+                ))
+            })?;
+            Some(func)
+        }
+    };
 
-    let structure = server
+    let template = match server
         .datapack_manager
         .load_structure(&test_instance.structure)
         .await
-        .map_err(GameTestError::World)?;
-    let template = GameTestStructureTemplate::from_nbt(&structure)?;
-    let test = BlockBasedTest::new(request.test_id, test_instance);
-    let report_sink: Arc<dyn GameTestReporter> = Arc::new(GameTestWorldReporter {
-        world: request.world.clone(),
-    });
+    {
+        Ok(structure) => GameTestStructureTemplate::from_nbt(&structure)?,
+        Err(error) => GameTestStructureTemplate::parse_empty_id(&test_instance.structure)
+            .ok_or(GameTestError::World(error))?,
+    };
+    let mut test = BlockBasedTest::new(request.test_id, test_instance);
+    if let Some(function) = function {
+        test = test.with_function(function);
+    }
     let adapter_world: Arc<dyn GameTestWorld> = Arc::new(ServerGameTestWorld {
         world: request.world,
         forced_chunks: StdMutex::new(HashSet::new()),
@@ -179,7 +228,8 @@ async fn prepare_test_run(
         request.test_x,
         request.test_z,
         extra_rotation,
-    );
+    )
+    .with_y(request.test_y);
 
     Ok(GameTestManager::new(
         run,
@@ -187,13 +237,6 @@ async fn prepare_test_run(
         request.report.clone(),
         report_sink,
     ))
-}
-
-fn broadcast_world(world: &World, message: &TextComponent) {
-    let players = world.players.load_full();
-    for player in players.iter() {
-        player.send_system_message(message);
-    }
 }
 
 struct ServerGameTestWorld {
@@ -316,6 +359,14 @@ fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
         forced_chunks.insert(chunk);
         was_forced
     };
+    let mut chunk_loading = world
+        .level
+        .chunk_loading
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    chunk_loading.add_force_ticket(chunk);
+    chunk_loading.send_change();
+    drop(chunk_loading);
     leases.insert(
         key,
         ForcedGameTestChunk {
@@ -340,6 +391,15 @@ fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
     };
     leases.remove(&key);
     drop(leases);
+
+    let mut chunk_loading = world
+        .level
+        .chunk_loading
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    chunk_loading.remove_force_ticket(chunk);
+    chunk_loading.send_change();
+    drop(chunk_loading);
 
     if release_world_chunk {
         world
@@ -479,6 +539,18 @@ impl GameTestWorld for ServerGameTestWorld {
     }
 
     async fn test_area_loaded_and_ticking(&self, min: &BlockPos, max: &BlockPos) -> bool {
+        if max.0.x > min.0.x && max.0.z > min.0.z {
+            let min_chunk_x = min.0.x >> 4;
+            let max_chunk_x = (max.0.x - 1) >> 4;
+            let min_chunk_z = min.0.z >> 4;
+            let max_chunk_z = (max.0.z - 1) >> 4;
+            for chunk_x in min_chunk_x..=max_chunk_x {
+                for chunk_z in min_chunk_z..=max_chunk_z {
+                    self.ensure_chunk_loaded(&BlockPos::new(chunk_x * 16, 0, chunk_z * 16))
+                        .await;
+                }
+            }
+        }
         self.area_loaded_and_ticking(min, max)
     }
 
@@ -533,8 +605,304 @@ impl GameTestWorld for ServerGameTestWorld {
     }
 
     async fn surface_height(&self, x: i32, z: i32) -> i32 {
+        self.ensure_chunk_loaded(&BlockPos::new(x, 0, z)).await;
         self.world
             .get_heightmap_height_async(ChunkHeightmapType::WorldSurface, x, z)
             .await
+    }
+
+    async fn block_entity_nbt(&self, position: &BlockPos) -> GameTestResult<Option<NbtCompound>> {
+        self.ensure_chunk_loaded(position).await;
+        let Some(entity) = self.world.get_block_entity(position) else {
+            return Ok(None);
+        };
+        let mut nbt = NbtCompound::new();
+        entity.write_internal(&mut nbt);
+        Ok(Some(nbt))
+    }
+
+    async fn spawn_entity(
+        &self,
+        entity_name: &str,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<()> {
+        let normalized = entity_name
+            .strip_prefix("minecraft:")
+            .unwrap_or(entity_name);
+        let entity_type = pumpkin_data::entity::EntityType::from_name(normalized)
+            .ok_or_else(|| GameTestError::World(format!("Unknown entity type '{entity_name}'")))?;
+        self.ensure_chunk_loaded(&BlockPos::floored_v(position))
+            .await;
+        let entity = crate::entity::r#type::from_type(
+            entity_type,
+            position,
+            &self.world,
+            uuid::Uuid::new_v4(),
+        );
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity()
+                .persistence_required
+                .store(true, Ordering::Relaxed);
+        }
+        self.world.spawn_entity(entity);
+        Ok(())
+    }
+
+    async fn spawn_item(
+        &self,
+        item_name: &str,
+        count: u8,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<()> {
+        let normalized = item_name.strip_prefix("minecraft:").unwrap_or(item_name);
+        let item = pumpkin_data::item::Item::from_registry_key(normalized)
+            .ok_or_else(|| GameTestError::World(format!("Unknown item '{item_name}'")))?;
+        self.ensure_chunk_loaded(&BlockPos::floored_v(position))
+            .await;
+        let base_entity = crate::entity::Entity::new(
+            self.world.clone(),
+            position,
+            &pumpkin_data::entity::EntityType::ITEM,
+        );
+        let item_entity = Arc::new(crate::entity::item::ItemEntity::new_with_velocity(
+            base_entity,
+            pumpkin_data::item_stack::ItemStack::new(count, item),
+            pumpkin_util::math::vector3::Vector3::default(),
+            0,
+        ));
+        self.world.spawn_entity(item_entity);
+        Ok(())
+    }
+
+    async fn entity_count_in_box(
+        &self,
+        entity_name: &str,
+        min: pumpkin_util::math::vector3::Vector3<f64>,
+        max: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<usize> {
+        let normalized = entity_name
+            .strip_prefix("minecraft:")
+            .unwrap_or(entity_name);
+        let box_bounds = pumpkin_util::math::boundingbox::BoundingBox::new(min, max);
+        let entities = self.world.entities.load_full();
+        let count = entities
+            .iter()
+            .filter(|entity| {
+                let base = entity.get_entity();
+                !base.is_removed()
+                    && base.entity_type.resource_name == normalized
+                    && base.bounding_box.load().intersects(&box_bounds)
+            })
+            .count();
+        Ok(count)
+    }
+
+    async fn item_count_in_box(
+        &self,
+        item_name: &str,
+        min: pumpkin_util::math::vector3::Vector3<f64>,
+        max: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<u32> {
+        let normalized = item_name.strip_prefix("minecraft:").unwrap_or(item_name);
+        let target_item = pumpkin_data::item::Item::from_registry_key(normalized)
+            .ok_or_else(|| GameTestError::World(format!("Unknown item '{item_name}'")))?;
+        let box_bounds = pumpkin_util::math::boundingbox::BoundingBox::new(min, max);
+        let entities = self.world.entities.load_full();
+        let mut total = 0u32;
+        for entity in entities.iter() {
+            let base = entity.get_entity();
+            if base.is_removed() || !base.bounding_box.load().intersects(&box_bounds) {
+                continue;
+            }
+            if let Some(item_entity) = entity.get_item_entity() {
+                let stack = item_entity
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !stack.is_empty() && stack.get_item().id == target_item.id {
+                    total = total.saturating_add(u32::from(stack.item_count));
+                }
+            }
+        }
+        Ok(total)
+    }
+
+    async fn container_item_count(
+        &self,
+        position: &BlockPos,
+        item_name: &str,
+    ) -> GameTestResult<u32> {
+        self.ensure_chunk_loaded(position).await;
+        let normalized = item_name.strip_prefix("minecraft:").unwrap_or(item_name);
+        let target_item = pumpkin_data::item::Item::from_registry_key(normalized)
+            .ok_or_else(|| GameTestError::World(format!("Unknown item '{item_name}'")))?;
+        let entity =
+            self.world
+                .get_block_entity(position)
+                .ok_or_else(|| GameTestError::Assertion {
+                    message: format!("Expected container block entity at {position}"),
+                    position: Some(*position),
+                    tick: 0,
+                })?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| GameTestError::Assertion {
+                message: format!("Block entity at {position} is not a container"),
+                position: Some(*position),
+                tick: 0,
+            })?;
+        let mut total = 0u32;
+        for slot in 0..inventory.size() {
+            let stack = inventory.get_stack(slot);
+            if !stack.is_empty() && stack.get_item().id == target_item.id {
+                total = total.saturating_add(u32::from(stack.item_count));
+            }
+        }
+        Ok(total)
+    }
+
+    async fn is_container_empty(&self, position: &BlockPos) -> GameTestResult<bool> {
+        self.ensure_chunk_loaded(position).await;
+        let entity =
+            self.world
+                .get_block_entity(position)
+                .ok_or_else(|| GameTestError::Assertion {
+                    message: format!("Expected container block entity at {position}"),
+                    position: Some(*position),
+                    tick: 0,
+                })?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| GameTestError::Assertion {
+                message: format!("Block entity at {position} is not a container"),
+                position: Some(*position),
+                tick: 0,
+            })?;
+        Ok(inventory.is_empty())
+    }
+
+    async fn set_container_item(
+        &self,
+        position: &BlockPos,
+        slot: usize,
+        item_name: &str,
+        count: u8,
+    ) -> GameTestResult<()> {
+        self.ensure_chunk_loaded(position).await;
+        let normalized = item_name.strip_prefix("minecraft:").unwrap_or(item_name);
+        let item = pumpkin_data::item::Item::from_registry_key(normalized)
+            .ok_or_else(|| GameTestError::World(format!("Unknown item '{item_name}'")))?;
+        let entity =
+            self.world
+                .get_block_entity(position)
+                .ok_or_else(|| GameTestError::Assertion {
+                    message: format!("Expected container block entity at {position}"),
+                    position: Some(*position),
+                    tick: 0,
+                })?;
+        let inventory = entity
+            .get_inventory()
+            .ok_or_else(|| GameTestError::Assertion {
+                message: format!("Block entity at {position} is not a container"),
+                position: Some(*position),
+                tick: 0,
+            })?;
+        if slot >= inventory.size() {
+            return Err(GameTestError::Assertion {
+                message: format!(
+                    "Slot {slot} is out of bounds for container at {position} (size {})",
+                    inventory.size()
+                ),
+                position: Some(*position),
+                tick: 0,
+            });
+        }
+        inventory.set_stack(slot, pumpkin_data::item_stack::ItemStack::new(count, item));
+        inventory.mark_dirty();
+        self.world.update_neighbors(position, None);
+        Ok(())
+    }
+
+    async fn press_button(&self, position: &BlockPos) -> GameTestResult<()> {
+        use pumpkin_data::block_properties::BlockProperties;
+        self.ensure_chunk_loaded(position).await;
+        let block = self.world.get_block(position);
+        if !pumpkin_data::block_properties::LeverLikeProperties::handles_block_id(block.id)
+            || block == &pumpkin_data::Block::LEVER
+        {
+            return Err(GameTestError::Assertion {
+                message: format!("Expected a button at {position}, found {}", block.name),
+                position: Some(*position),
+                tick: 0,
+            });
+        }
+        crate::block::blocks::redstone::buttons::ButtonBlock::press(&self.world, position);
+        Ok(())
+    }
+
+    async fn pull_lever(&self, position: &BlockPos) -> GameTestResult<()> {
+        self.ensure_chunk_loaded(position).await;
+        let block = self.world.get_block(position);
+        if block != &pumpkin_data::Block::LEVER {
+            return Err(GameTestError::Assertion {
+                message: format!("Expected a lever at {position}, found {}", block.name),
+                position: Some(*position),
+                tick: 0,
+            });
+        }
+        crate::block::blocks::redstone::lever::LeverBlock::pull(&self.world, position);
+        Ok(())
+    }
+
+    async fn random_tick(&self, position: &BlockPos) -> GameTestResult<()> {
+        self.ensure_chunk_loaded(position).await;
+        let (block, state_id) = self.world.get_block_and_state_id(position);
+        if let Some(pumpkin_block) = self.world.block_registry.get_pumpkin_block(block.id) {
+            pumpkin_block.random_tick(crate::block::RandomTickArgs {
+                world: &self.world,
+                block,
+                position,
+            });
+        }
+        if let Some(fluid) = pumpkin_data::fluid::Fluid::from_state_id(state_id)
+            && let Some(pumpkin_fluid) = self.world.block_registry.get_pumpkin_fluid(fluid.id)
+        {
+            pumpkin_fluid.random_tick(fluid, &self.world, position);
+        }
+        Ok(())
+    }
+
+    async fn execute_command(
+        &self,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+        command: &str,
+    ) -> GameTestResult<u32> {
+        let Some(server) = self.world.server.upgrade() else {
+            return Err(GameTestError::World(
+                "World is not attached to a running server".to_string(),
+            ));
+        };
+        let command = command.strip_prefix('/').unwrap_or(command);
+        let source = crate::command::CommandSource::new(
+            crate::command::CommandSender::Console,
+            self.world.clone(),
+            None,
+            position,
+            pumpkin_util::math::vector2::Vector2::new(0.0, 0.0),
+            "GameTest".to_string(),
+            TextComponent::text("GameTest"),
+            server.clone(),
+        )
+        .with_silent();
+        let dispatcher = server.command_dispatcher.load();
+        let count =
+            dispatcher
+                .execute_input(command, &source)
+                .map_err(|err| GameTestError::Assertion {
+                    message: err.message.get_text(),
+                    position: Some(BlockPos::floored_v(position)),
+                    tick: 0,
+                })?;
+        Ok(count.max(0).cast_unsigned())
     }
 }

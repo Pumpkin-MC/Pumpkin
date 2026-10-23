@@ -6,6 +6,7 @@ use pumpkin_util::{
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
 
+pub mod order;
 pub mod scheduler;
 
 const MAX_TICK_DELAY: usize = 1 << 8;

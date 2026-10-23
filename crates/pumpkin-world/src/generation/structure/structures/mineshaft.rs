@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{HorizontalFacing, WallTorchLikeProperties},
+    block_properties::{
+        HorizontalFacing, OakFenceLikeProperties, RailLikeProperties, RailShape,
+        WallTorchLikeProperties,
+    },
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -50,6 +53,14 @@ impl MineshaftType {
         match self {
             Self::Normal => Block::OAK_FENCE.default_state,
             Self::Mesa => Block::DARK_OAK_FENCE.default_state,
+        }
+    }
+
+    #[must_use]
+    pub const fn fence_block(self) -> &'static Block {
+        match self {
+            Self::Normal => &Block::OAK_FENCE,
+            Self::Mesa => &Block::DARK_OAK_FENCE,
         }
     }
 }
@@ -263,6 +274,110 @@ fn generate_and_add_piece(
     } else {
         None
     }
+}
+
+const fn is_falling_block(block: &Block) -> bool {
+    use pumpkin_data::BlockId;
+    matches!(
+        block.id,
+        BlockId::SAND
+            | BlockId::RED_SAND
+            | BlockId::GRAVEL
+            | BlockId::SUSPICIOUS_SAND
+            | BlockId::SUSPICIOUS_GRAVEL
+            | BlockId::ANVIL
+            | BlockId::CHIPPED_ANVIL
+            | BlockId::DAMAGED_ANVIL
+            | BlockId::DRAGON_EGG
+            | BlockId::WHITE_CONCRETE_POWDER
+            | BlockId::ORANGE_CONCRETE_POWDER
+            | BlockId::MAGENTA_CONCRETE_POWDER
+            | BlockId::LIGHT_BLUE_CONCRETE_POWDER
+            | BlockId::YELLOW_CONCRETE_POWDER
+            | BlockId::LIME_CONCRETE_POWDER
+            | BlockId::PINK_CONCRETE_POWDER
+            | BlockId::GRAY_CONCRETE_POWDER
+            | BlockId::LIGHT_GRAY_CONCRETE_POWDER
+            | BlockId::CYAN_CONCRETE_POWDER
+            | BlockId::PURPLE_CONCRETE_POWDER
+            | BlockId::BLUE_CONCRETE_POWDER
+            | BlockId::BROWN_CONCRETE_POWDER
+            | BlockId::GREEN_CONCRETE_POWDER
+            | BlockId::RED_CONCRETE_POWDER
+            | BlockId::BLACK_CONCRETE_POWDER
+    )
+}
+
+fn is_in_invalid_location(piece_bb: &BlockBox, chunk: &ProtoChunk, chunk_box: &BlockBox) -> bool {
+    let x0 = (piece_bb.min.x - 1).max(chunk_box.min.x);
+    let y0 = (piece_bb.min.y - 1).max(chunk_box.min.y);
+    let z0 = (piece_bb.min.z - 1).max(chunk_box.min.z);
+    let x1 = (piece_bb.max.x + 1).min(chunk_box.max.x);
+    let y1 = (piece_bb.max.y + 1).min(chunk_box.max.y);
+    let z1 = (piece_bb.max.z + 1).min(chunk_box.max.z);
+
+    if x0 > x1 || y0 > y1 || z0 > z1 {
+        return false;
+    }
+
+    let mid_x = i32::midpoint(x0, x1);
+    let mid_y = i32::midpoint(y0, y1);
+    let mid_z = i32::midpoint(z0, z1);
+    if chunk
+        .get_biome(mid_x >> 2, mid_y >> 2, mid_z >> 2)
+        .registry_id
+        == "minecraft:deep_dark"
+    {
+        return true;
+    }
+
+    for x in x0..=x1 {
+        for z in z0..=z1 {
+            if chunk
+                .get_block_state(&Vector3::new(x, y0, z))
+                .to_state()
+                .is_liquid()
+                || chunk
+                    .get_block_state(&Vector3::new(x, y1, z))
+                    .to_state()
+                    .is_liquid()
+            {
+                return true;
+            }
+        }
+    }
+    for x in x0..=x1 {
+        for y in y0..=y1 {
+            if chunk
+                .get_block_state(&Vector3::new(x, y, z0))
+                .to_state()
+                .is_liquid()
+                || chunk
+                    .get_block_state(&Vector3::new(x, y, z1))
+                    .to_state()
+                    .is_liquid()
+            {
+                return true;
+            }
+        }
+    }
+    for z in z0..=z1 {
+        for y in y0..=y1 {
+            if chunk
+                .get_block_state(&Vector3::new(x0, y, z))
+                .to_state()
+                .is_liquid()
+                || chunk
+                    .get_block_state(&Vector3::new(x1, y, z))
+                    .to_state()
+                    .is_liquid()
+            {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 pub struct MineShaftRoom {
@@ -487,6 +602,10 @@ impl StructurePieceBase for MineShaftRoom {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_location(&self.piece.bounding_box, chunk, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let bb = self.piece.bounding_box;
 
@@ -851,6 +970,92 @@ impl MineShaftCorridor {
         }
     }
 
+    const fn is_interior(
+        &self,
+        chunk: &ProtoChunk,
+        x: i32,
+        y: i32,
+        z: i32,
+        chunk_box: &BlockBox,
+    ) -> bool {
+        let pos = self.piece.offset_pos(x, y + 1, z);
+        chunk_box.contains_pos(&pos) && pos.y < chunk.ocean_floor_wg_height_exclusive(pos.x, pos.z)
+    }
+
+    fn has_sturdy_neighbours(
+        &self,
+        chunk: &ProtoChunk,
+        chunk_box: &BlockBox,
+        x: i32,
+        y: i32,
+        z: i32,
+        count: i32,
+    ) -> bool {
+        let world_pos = self.piece.offset_pos(x, y, z);
+        let mut sturdy = 0;
+        for dir in [
+            pumpkin_data::BlockDirection::Down,
+            pumpkin_data::BlockDirection::Up,
+            pumpkin_data::BlockDirection::North,
+            pumpkin_data::BlockDirection::South,
+            pumpkin_data::BlockDirection::West,
+            pumpkin_data::BlockDirection::East,
+        ] {
+            let neighbor_pos = world_pos + dir.to_offset();
+            if chunk_box.contains_pos(&neighbor_pos) {
+                let neighbor_state = chunk.get_block_state(&neighbor_pos);
+                if neighbor_state.to_state().is_side_solid(dir.opposite()) {
+                    sturdy += 1;
+                    if sturdy >= count {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn maybe_place_cobweb(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        random: &mut RandomGenerator,
+        prob: f32,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        if self.is_interior(chunk, x, y, z, chunk_box)
+            && random.next_f32() < prob
+            && self.has_sturdy_neighbours(chunk, chunk_box, x, y, z, 2)
+        {
+            self.piece
+                .add_block(chunk, Block::COBWEB.default_state, x, y, z, chunk_box);
+        }
+    }
+
+    fn is_supporting_box(
+        &self,
+        chunk: &ProtoChunk,
+        chunk_box: &BlockBox,
+        x0: i32,
+        x1: i32,
+        y1: i32,
+        z0: i32,
+    ) -> bool {
+        for x in x0..=x1 {
+            let world_pos = self.piece.offset_pos(x, y1 + 1, z0);
+            if !chunk_box.contains_pos(&world_pos) {
+                return false;
+            }
+            if chunk.get_block_state(&world_pos).to_state().is_air() {
+                return false;
+            }
+        }
+        true
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn place_support(
         &self,
@@ -863,13 +1068,25 @@ impl MineShaftCorridor {
         x1: i32,
         random: &mut RandomGenerator,
     ) {
+        if !self.is_supporting_box(chunk, chunk_box, x0, x1, y1, z) {
+            return;
+        }
+
         let planks = self.shaft_type.planks();
-        let fence = self.shaft_type.fence();
+        let fence_block = self.shaft_type.fence_block();
+
+        let mut props_w = OakFenceLikeProperties::default(fence_block);
+        props_w.west = true;
+        let fence_w = BlockState::from_id(props_w.to_state_id(fence_block));
+
+        let mut props_e = OakFenceLikeProperties::default(fence_block);
+        props_e.east = true;
+        let fence_e = BlockState::from_id(props_e.to_state_id(fence_block));
 
         self.piece
-            .fill(chunk, chunk_box, x0, y0, z, x0, y1 - 1, z, fence);
+            .fill(chunk, chunk_box, x0, y0, z, x0, y1 - 1, z, fence_w);
         self.piece
-            .fill(chunk, chunk_box, x1, y0, z, x1, y1 - 1, z, fence);
+            .fill(chunk, chunk_box, x1, y0, z, x1, y1 - 1, z, fence_e);
 
         if random.next_bounded_i32(4) == 0 {
             self.piece
@@ -899,9 +1116,107 @@ impl MineShaftCorridor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn create_chest(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+        loot_table: &str,
+    ) -> bool {
+        let pos = self.piece.offset_pos(x, y, z);
+        if chunk_box.contains_pos(&pos) {
+            let state = chunk.get_block_state(&pos);
+            let below_pos = Vector3::new(pos.x, pos.y - 1, pos.z);
+            let below_state = chunk.get_block_state(&below_pos);
+            if state.to_state().is_air() && !below_state.to_state().is_air() {
+                let shape = if random.next_bool() {
+                    RailShape::NorthSouth
+                } else {
+                    RailShape::EastWest
+                };
+                let mut rail_props = RailLikeProperties::default(&Block::RAIL);
+                rail_props.shape = shape;
+                let rail_state = BlockState::from_id(rail_props.to_state_id(&Block::RAIL));
+                self.piece.add_block(chunk, rail_state, x, y, z, chunk_box);
+                let seed = random.next_i64();
+
+                let mut nbt = NbtCompound::new();
+                nbt.put_string("id", "minecraft:chest_minecart".to_string());
+                nbt.put_list(
+                    "Pos",
+                    vec![
+                        (f64::from(pos.x) + 0.5).into(),
+                        (f64::from(pos.y) + 0.5).into(),
+                        (f64::from(pos.z) + 0.5).into(),
+                    ],
+                );
+                nbt.put_list("Motion", vec![0.0f64.into(), 0.0f64.into(), 0.0f64.into()]);
+                nbt.put_list("Rotation", vec![0.0f32.into(), 0.0f32.into()]);
+                nbt.put_string("LootTable", loot_table.to_string());
+                if seed != 0 {
+                    nbt.put_long("LootTableSeed", seed);
+                }
+                chunk.add_structure_entity(nbt);
+                return true;
+            }
+        }
+        false
+    }
+
+    fn set_planks_block(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        planks: &'static BlockState,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        if !self.is_interior(chunk, x, y, z, chunk_box) {
+            return;
+        }
+        let pos = self.piece.offset_pos(x, y, z);
+        let existing_state = chunk.get_block_state(&pos);
+        if !existing_state
+            .to_state()
+            .is_side_solid(BlockDirection::Up.into())
+        {
+            chunk.set_block_state(pos.x, pos.y, pos.z, planks);
+        }
+    }
+
+    fn place_double_lower_or_upper_support(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        let wood = self.shaft_type.wood();
+        let planks_id = self.shaft_type.planks().id.to_block_id();
+
+        let pos1 = self.piece.offset_pos(x, y, z);
+        if chunk_box.contains_pos(&pos1) && chunk.get_block_state(&pos1).to_block_id() == planks_id
+        {
+            self.fill_pillar_down_or_chain_up(chunk, wood, x, y, z, chunk_box);
+        }
+
+        let pos2 = self.piece.offset_pos(x + 2, y, z);
+        if chunk_box.contains_pos(&pos2) && chunk.get_block_state(&pos2).to_block_id() == planks_id
+        {
+            self.fill_pillar_down_or_chain_up(chunk, wood, x + 2, y, z, chunk_box);
+        }
+    }
+
     fn fill_pillar_down_or_chain_up(
         &self,
         chunk: &mut ProtoChunk,
+        pillar_state: &'static BlockState,
         x: i32,
         y: i32,
         z: i32,
@@ -913,39 +1228,58 @@ impl MineShaftCorridor {
         }
 
         let world_y = world_pos.y;
-        let mut dist = 1;
+        let mut distance_from_world_y = 1;
         let mut check_below = true;
         let mut check_above = true;
 
+        let min_y = chunk.bottom_y() as i32;
+        let max_y = chunk.bottom_y() as i32 + chunk.height() as i32 - 1;
+
         while check_below || check_above {
             if check_below {
-                let below_y = world_y - dist;
-                let state_below =
-                    chunk.get_block_state(&Vector3::new(world_pos.x, below_y, world_pos.z));
-                let empty_below =
-                    state_below.to_state().is_air() || state_below.to_block_id() == Block::WATER.id;
-                if !empty_below && state_below.to_block_id() != Block::LAVA.id {
-                    for py in (below_y + 1)..=world_y {
-                        chunk.set_block_state(world_pos.x, py, world_pos.z, self.shaft_type.wood());
+                let below_y = world_y - distance_from_world_y;
+                let below_pos = Vector3::new(world_pos.x, below_y, world_pos.z);
+                let below_state = chunk.get_block_state(&below_pos);
+                let empty_below = StructurePiece::is_replaceable_by_structures(
+                    below_state.to_state(),
+                    below_state.to_block(),
+                ) && below_state.to_block_id() != Block::LAVA.id;
+
+                if !empty_below
+                    && below_state
+                        .to_state()
+                        .is_side_solid(BlockDirection::Up.into())
+                {
+                    for py in (below_y + 1)..world_y {
+                        chunk.set_block_state(world_pos.x, py, world_pos.z, pillar_state);
                     }
                     return;
                 }
-                check_below = dist <= 20 && empty_below && below_y > chunk.bottom_y() as i32 + 1;
+                check_below = distance_from_world_y <= 20 && empty_below && below_y > min_y + 1;
             }
 
             if check_above {
-                let above_y = world_y + dist;
-                let state_above =
-                    chunk.get_block_state(&Vector3::new(world_pos.x, above_y, world_pos.z));
-                let empty_above = state_above.to_state().is_air();
-                if !empty_above {
+                let above_y = world_y + distance_from_world_y;
+                let above_pos = Vector3::new(world_pos.x, above_y, world_pos.z);
+                let above_state = chunk.get_block_state(&above_pos);
+                let empty_above = StructurePiece::is_replaceable_by_structures(
+                    above_state.to_state(),
+                    above_state.to_block(),
+                );
+
+                if !empty_above
+                    && above_state
+                        .to_state()
+                        .is_center_solid(BlockDirection::Down.into())
+                    && !is_falling_block(above_state.to_block())
+                {
                     chunk.set_block_state(
                         world_pos.x,
                         world_y + 1,
                         world_pos.z,
                         self.shaft_type.fence(),
                     );
-                    for py in (world_y + 2)..=above_y {
+                    for py in (world_y + 2)..above_y {
                         chunk.set_block_state(
                             world_pos.x,
                             py,
@@ -955,10 +1289,10 @@ impl MineShaftCorridor {
                     }
                     return;
                 }
-                check_above = dist <= 50 && empty_above && above_y < 319;
+                check_above = distance_from_world_y <= 50 && empty_above && above_y < max_y;
             }
 
-            dist += 1;
+            distance_from_world_y += 1;
         }
     }
 }
@@ -985,6 +1319,10 @@ impl StructurePieceBase for MineShaftCorridor {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_location(&self.piece.bounding_box, chunk, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let length = self.num_sections * 5 - 1;
         let planks = self.shaft_type.planks();
@@ -992,14 +1330,31 @@ impl StructurePieceBase for MineShaftCorridor {
         self.piece
             .fill(chunk, chunk_box, 0, 0, 0, 2, 1, length, air);
 
-        for z in 0..=length {
+        for y in 2..=2 {
             for x in 0..=2 {
-                if random.next_f32() < 0.8 {
-                    self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+                for z in 0..=length {
+                    if random.next_f32() <= 0.8 {
+                        self.piece.add_block(chunk, air, x, y, z, chunk_box);
+                    }
                 }
-                if self.spider_corridor && random.next_f32() < 0.6 {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, x, 0, z, chunk_box);
+            }
+        }
+
+        if self.spider_corridor {
+            for y in 0..=1 {
+                for x in 0..=2 {
+                    for z in 0..=length {
+                        if random.next_f32() <= 0.6 && self.is_interior(chunk, x, y, z, chunk_box) {
+                            self.piece.add_block(
+                                chunk,
+                                Block::COBWEB.default_state,
+                                x,
+                                y,
+                                z,
+                                chunk_box,
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1007,25 +1362,17 @@ impl StructurePieceBase for MineShaftCorridor {
         for section in 0..self.num_sections {
             let z = 2 + section * 5;
             self.place_support(chunk, chunk_box, 0, 0, z, 2, 2, random);
-
-            for (cx, cy, cz, prob) in [
-                (0, 2, z - 1, 0.1f32),
-                (2, 2, z - 1, 0.1),
-                (0, 2, z + 1, 0.1),
-                (2, 2, z + 1, 0.1),
-                (0, 2, z - 2, 0.05),
-                (2, 2, z - 2, 0.05),
-                (0, 2, z + 2, 0.05),
-                (2, 2, z + 2, 0.05),
-            ] {
-                if random.next_f32() < prob {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, cx, cy, cz, chunk_box);
-                }
-            }
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.1, 0, 2, z - 1);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.1, 2, 2, z - 1);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.1, 0, 2, z + 1);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.1, 2, 2, z + 1);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.05, 0, 2, z - 2);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.05, 2, 2, z - 2);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.05, 0, 2, z + 2);
+            self.maybe_place_cobweb(chunk, chunk_box, random, 0.05, 2, 2, z + 2);
 
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
+                self.create_chest(
                     chunk,
                     chunk_box,
                     random,
@@ -1036,7 +1383,7 @@ impl StructurePieceBase for MineShaftCorridor {
                 );
             }
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
+                self.create_chest(
                     chunk,
                     chunk_box,
                     random,
@@ -1050,7 +1397,9 @@ impl StructurePieceBase for MineShaftCorridor {
             if self.spider_corridor && !self.has_placed_spider {
                 let spawner_z = z - 1 + random.next_bounded_i32(3);
                 let spawner_pos = self.piece.offset_pos(1, 0, spawner_z);
-                if chunk_box.contains_pos(&spawner_pos) {
+                if chunk_box.contains_pos(&spawner_pos)
+                    && self.is_interior(chunk, 1, 0, spawner_z, chunk_box)
+                {
                     self.has_placed_spider = true;
                     chunk.set_block_state(
                         spawner_pos.x,
@@ -1075,33 +1424,36 @@ impl StructurePieceBase for MineShaftCorridor {
         }
 
         for x in 0..=2 {
-            for z in 0..=length {
-                let world_pos = self.piece.offset_pos(x, -1, z);
-                if chunk_box.contains_pos(&world_pos) {
-                    let below = chunk.get_block_state(&world_pos);
-                    if below.to_state().is_air() {
-                        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, planks);
-                    }
-                }
+            for z2 in 0..=length {
+                self.set_planks_block(chunk, chunk_box, planks, x, -1, z2);
             }
         }
 
-        self.fill_pillar_down_or_chain_up(chunk, 0, -1, 2, chunk_box);
-        self.fill_pillar_down_or_chain_up(chunk, 2, -1, 2, chunk_box);
+        self.place_double_lower_or_upper_support(chunk, chunk_box, 0, -1, 2);
         if self.num_sections > 1 {
             let last_support = length - 2;
-            self.fill_pillar_down_or_chain_up(chunk, 0, -1, last_support, chunk_box);
-            self.fill_pillar_down_or_chain_up(chunk, 2, -1, last_support, chunk_box);
+            self.place_double_lower_or_upper_support(chunk, chunk_box, 0, -1, last_support);
         }
 
         if self.has_rails {
-            let rail = Block::RAIL.default_state;
-            for z in 0..=length {
-                let floor_pos = self.piece.offset_pos(1, -1, z);
-                if chunk_box.contains_pos(&floor_pos) {
-                    let floor_state = chunk.get_block_state(&floor_pos);
-                    if !floor_state.to_state().is_air() && random.next_f32() < 0.7 {
-                        self.piece.add_block(chunk, rail, 1, 0, z, chunk_box);
+            let mut rail_props = RailLikeProperties::default(&Block::RAIL);
+            rail_props.shape = RailShape::NorthSouth;
+            let rail_state = BlockState::from_id(rail_props.to_state_id(&Block::RAIL));
+            for z3 in 0..=length {
+                let floor_pos = self.piece.offset_pos(1, -1, z3);
+                let floor = if chunk_box.contains_pos(&floor_pos) {
+                    chunk.get_block_state(&floor_pos)
+                } else {
+                    Block::AIR.default_state.id
+                };
+                if !floor.to_state().is_air() && floor.to_state().is_full_cube() {
+                    let prob = if self.is_interior(chunk, 1, 0, z3, chunk_box) {
+                        0.7
+                    } else {
+                        0.9
+                    };
+                    if random.next_f32() < prob {
+                        self.piece.add_block(chunk, rail_state, 1, 0, z3, chunk_box);
                     }
                 }
             }
@@ -1402,6 +1754,10 @@ impl StructurePieceBase for MineShaftCrossing {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_location(&self.piece.bounding_box, chunk, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let planks = self.shaft_type.planks();
         let bb = self.piece.bounding_box;
@@ -1472,8 +1828,10 @@ impl StructurePieceBase for MineShaftCrossing {
             (bb.max.x - 1, bb.min.z + 1),
             (bb.max.x - 1, bb.max.z - 1),
         ] {
-            let above = chunk.get_block_state(&Vector3::new(cx, bb.max.y + 1, cz));
-            if !above.to_state().is_air() {
+            let above_pos = Vector3::new(cx, bb.max.y + 1, cz);
+            if chunk_box.contains_pos(&above_pos)
+                && !chunk.get_block_state(&above_pos).to_state().is_air()
+            {
                 for py in bb.min.y..=bb.max.y {
                     if chunk_box.contains(cx, py, cz) {
                         chunk.set_block_state(cx, py, cz, planks);
@@ -1485,9 +1843,14 @@ impl StructurePieceBase for MineShaftCrossing {
         let floor_y = bb.min.y - 1;
         for x in bb.min.x..=bb.max.x {
             for z in bb.min.z..=bb.max.z {
-                if chunk_box.contains(x, floor_y, z) {
-                    let state = chunk.get_block_state(&Vector3::new(x, floor_y, z));
-                    if state.to_state().is_air() {
+                let inside_pos = Vector3::new(x, bb.min.y, z);
+                if chunk_box.contains_pos(&inside_pos)
+                    && inside_pos.y
+                        < chunk.ocean_floor_wg_height_exclusive(inside_pos.x, inside_pos.z)
+                {
+                    let floor_pos = Vector3::new(x, floor_y, z);
+                    let state = chunk.get_block_state(&floor_pos);
+                    if !state.to_state().is_side_solid(BlockDirection::Up.into()) {
                         chunk.set_block_state(x, floor_y, z, planks);
                     }
                 }
@@ -1627,6 +1990,10 @@ impl StructurePieceBase for MineShaftStairs {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_location(&self.piece.bounding_box, chunk, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         self.piece.fill(chunk, chunk_box, 0, 5, 0, 2, 7, 1, air);
         self.piece.fill(chunk, chunk_box, 0, 0, 7, 2, 2, 8, air);
@@ -1638,5 +2005,68 @@ impl StructurePieceBase for MineShaftStairs {
             self.piece
                 .fill(chunk, chunk_box, 0, y_min, z, 2, y_max, z, air);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::get_world_gen;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::random::legacy_rand::LegacyRand;
+    use pumpkin_util::world_seed::Seed;
+
+    #[test]
+    fn mineshaft_corridor_chest_minecart_spawns_with_loot_table() {
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let chunk_box = BlockBox::new(0, -64, 0, 15, 319, 15);
+
+        // Place floor block under position (2, 63, 2)
+        chunk.set_block_state(2, 63, 2, Block::STONE.default_state);
+        // Ensure air at (2, 64, 2)
+        chunk.set_block_state(2, 64, 2, Block::AIR.default_state);
+
+        let corridor_box = BlockBox::new(0, 64, 0, 2, 67, 10);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(42));
+        let corridor = MineShaftCorridor::new(
+            0,
+            &mut random,
+            corridor_box,
+            BlockDirection::South,
+            MineshaftType::Normal,
+        );
+
+        let created = corridor.create_chest(
+            &mut chunk,
+            &chunk_box,
+            &mut random,
+            2,
+            0,
+            2,
+            "minecraft:chests/abandoned_mineshaft",
+        );
+
+        assert!(created);
+        let entities = chunk.take_pending_structure_entities();
+        assert_eq!(entities.len(), 1);
+        let entity = &entities[0];
+        assert_eq!(entity.get_string("id"), Some("minecraft:chest_minecart"));
+        assert_eq!(
+            entity.get_string("LootTable"),
+            Some("minecraft:chests/abandoned_mineshaft")
+        );
+        assert!(entity.get_long("LootTableSeed").is_some());
+        let pos_list = entity.get_list("Pos").expect("Pos list must exist");
+        assert_eq!(pos_list.len(), 3);
+        assert_eq!(pos_list[0].extract_double(), Some(2.5));
+        assert_eq!(pos_list[1].extract_double(), Some(64.5));
+        assert_eq!(pos_list[2].extract_double(), Some(2.5));
     }
 }
