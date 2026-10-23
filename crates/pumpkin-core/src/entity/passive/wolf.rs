@@ -200,9 +200,10 @@ impl Mob for WolfEntity {
         if self.is_angry() {
             meta = meta.angry(true);
         }
-        meta = meta.collar_color(pumpkin_data::dye_color::DyeColor::from(
-            self.collar_color.load(Ordering::Relaxed),
-        ));
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
         Some(meta)
     }
 
