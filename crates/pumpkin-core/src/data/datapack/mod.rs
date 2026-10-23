@@ -1,3 +1,4 @@
+pub mod advancement;
 pub mod context_provider_loader;
 pub mod damage_type_loader;
 pub mod dynamic_registry_loader;
@@ -82,6 +83,7 @@ pub struct DatapackManager {
     loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
     dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
     trade_registry: RwLock<TradeRegistry>,
+    pub advancements: advancement::DatapackAdvancements,
 }
 
 fn share_function_bodies(
@@ -113,6 +115,7 @@ impl DatapackManager {
             loot_tables: RwLock::new(HashMap::new()),
             dynamic_registries: RwLock::new(HashMap::new()),
             trade_registry: RwLock::new(TradeRegistry::new()),
+            advancements: advancement::DatapackAdvancements::default(),
         }
     }
 
@@ -175,6 +178,15 @@ impl DatapackManager {
         );
 
         let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
+
+        let mut all_advancements = HashMap::new();
+        for pack in &loaded_packs_vec {
+            advancement::load_advancements_from_pack(&pack.root_path, &mut all_advancements);
+        }
+        if !all_advancements.is_empty() {
+            info!("Loaded {} datapack advancement(s)", all_advancements.len());
+        }
+        self.advancements.set(all_advancements);
 
         recipe_manager.set_recipes(all_recipes);
         *self

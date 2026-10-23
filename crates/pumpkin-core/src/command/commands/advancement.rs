@@ -17,6 +17,7 @@ use pumpkin_data::advancement_data::AdvancementNode;
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::resource::ResourceKey;
 use pumpkin_util::text::TextComponent;
 use std::sync::Arc;
 
@@ -521,14 +522,92 @@ struct OnlyAdvancementCriterionExecutor {
 impl CommandExecutor for OnlyAdvancementCriterionExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let action = self.action;
+        let criterion = StringArgumentType::get(context, ARG_CRITERION)?;
+        if let Some(result) = perform_datapack(context, action, Some(criterion)) {
+            return result;
+        }
         perform_criterion(
             &context.source,
             &EntityArgumentType::get_players(context, ARG_TARGETS)?,
             action,
             ResourceKeyArgument::get_advancement(context, ARG_ADVANCEMENT)?,
-            StringArgumentType::get(context, ARG_CRITERION)?,
+            criterion,
         )
     }
+}
+
+/// Datapack advancements live outside the generated tree, so `from`/`through`/`until`
+/// act on the single advancement. Returns `None` when the id isn't a datapack advancement.
+fn perform_datapack(
+    context: &CommandContext,
+    action: Action,
+    criterion: Option<&str>,
+) -> Option<CommandExecutorResult> {
+    let key = context.get_argument::<ResourceKey>(ARG_ADVANCEMENT).ok()?;
+    let key = key.cast(ADVANCEMENT_REGISTRY)?;
+    if Advancement::from_name(key.identifier.path()).is_some() {
+        return None;
+    }
+    let source = &context.source;
+    let server = source.server().clone();
+    let advancements = &server.datapack_manager.advancements;
+    let advancement = advancements.get(&key.identifier.to_string())?;
+    let name = TextComponent::text(advancement.id.clone());
+    if let Some(criterion) = criterion
+        && !advancement.criteria.iter().any(|c| c.name == criterion)
+    {
+        return Some(Err(ERROR_CRITERION_NOT_FOUND
+            .create_without_context_args_slice(&[
+                name,
+                TextComponent::text(criterion.to_owned()),
+            ])));
+    }
+    let targets = match EntityArgumentType::get_players(context, ARG_TARGETS) {
+        Ok(targets) => targets,
+        Err(error) => return Some(Err(error)),
+    };
+    let mut changed = 0;
+    for player in &targets {
+        let did_change = match action {
+            Action::Grant => advancements.grant(&server, player, &advancement, criterion),
+            Action::Revoke => advancements.revoke(player, &advancement, criterion),
+        };
+        if did_change {
+            changed += 1;
+        }
+    }
+    if changed == 0 {
+        let error = if let [player] = &targets[..] {
+            match action {
+                Action::Grant => &ERROR_GRANT_ONE_TO_ONE,
+                Action::Revoke => &ERROR_REVOKE_ONE_TO_ONE,
+            }
+            .create_without_context_args_slice(&[name, player.get_display_name()])
+        } else {
+            match action {
+                Action::Grant => &ERROR_GRANT_ONE_TO_MANY,
+                Action::Revoke => &ERROR_REVOKE_ONE_TO_MANY,
+            }
+            .create_without_context_args_slice(&[
+                name,
+                TextComponent::text(targets.len().to_string()),
+            ])
+        };
+        return Some(Err(error));
+    }
+    let message = if let [player] = &targets[..] {
+        TextComponent::translate(
+            format!("{}.one.to.one.success", action.get_key()),
+            [name, player.get_display_name()],
+        )
+    } else {
+        TextComponent::translate(
+            format!("{}.one.to.many.success", action.get_key()),
+            [name, TextComponent::text(changed.to_string())],
+        )
+    };
+    source.send_feedback(message, true);
+    Some(Ok(changed))
 }
 
 /// use to grant/revoke advancement depending on the selected `mode`
@@ -541,6 +620,9 @@ impl CommandExecutor for AdvancementExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let action = self.action;
         let mode = self.mode;
+        if let Some(result) = perform_datapack(context, action, None) {
+            return result;
+        }
         perform_and_show(
             &context.source,
             &EntityArgumentType::get_players(context, ARG_TARGETS)?,

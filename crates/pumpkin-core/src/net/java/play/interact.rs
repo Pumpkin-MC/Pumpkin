@@ -116,7 +116,14 @@ impl JavaClient {
                                 event.target.interact(player, &mut stack)
                             };
                             let item_id = before.item.id;
-                            if !interacted {
+                            if interacted {
+                                player.trigger_datapack_advancements(
+                                    &crate::data::datapack::advancement::TriggerEvent::InteractedWithEntity {
+                                        item: &before,
+                                        target: event.target.as_ref(),
+                                    },
+                                );
+                            } else {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target);
