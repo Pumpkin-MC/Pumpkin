@@ -388,6 +388,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         caller.damage_with_context(caller, amount, damage_type, None, None, None)
     }
 
+    fn is_alive(&self) -> bool {
+        self.get_living_entity()
+            .map_or_else(|| self.get_entity().is_alive(), LivingEntity::is_alive)
+    }
+
     fn on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
