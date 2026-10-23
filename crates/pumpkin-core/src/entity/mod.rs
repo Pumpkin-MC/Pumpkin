@@ -1534,6 +1534,14 @@ impl Entity {
         );
     }
 
+    /// Vanilla `sendChanges`: motion moved by more than 1e-7 since the last send, or just stopped.
+    #[must_use]
+    pub fn velocity_changed_since_sent(&self) -> bool {
+        let velocity = self.velocity.load();
+        let diff = (velocity - self.last_sent_velocity.load()).length_squared();
+        diff > 1.0e-7 || (diff > 0.0 && velocity.length_squared() == 0.0)
+    }
+
     /// next fuse velocity send includes self
     pub fn mark_hurt(&self) {
         self.sync_velocity.store(true, Ordering::SeqCst);
@@ -4785,6 +4793,51 @@ mod dimension_tests {
         // Wind charge box starts 0.15 below its position
         let charge = at(&EntityType::WIND_CHARGE);
         assert!(close(charge.bounding_box.load().min.y, 63.85));
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod velocity_sync_tests {
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::Entity;
+    use crate::entity::ai::test_support::world;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn player_motion_cutoff_and_send_filter_match_vanilla() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let player = Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PLAYER,
+        );
+
+        // Horizontal speed squared under 9e-6 stops, 0.002 + 0.002 stays
+        player.velocity.store(Vector3::new(0.002, 0.0, 0.002));
+        player.check_zero_velo();
+        assert_eq!(player.velocity.load(), Vector3::default());
+        player.velocity.store(Vector3::new(0.0025, 0.0, 0.0025));
+        player.check_zero_velo();
+        assert_eq!(player.velocity.load().x, 0.0025);
+
+        // Changes up to 1e-7 squared are not sent, stopping always is
+        player.last_sent_velocity.store(Vector3::new(0.1, 0.0, 0.0));
+        player.velocity.store(Vector3::new(0.1003, 0.0, 0.0));
+        assert!(!player.velocity_changed_since_sent());
+        player.velocity.store(Vector3::new(0.1004, 0.0, 0.0));
+        assert!(player.velocity_changed_since_sent());
+        player
+            .last_sent_velocity
+            .store(Vector3::new(0.0001, 0.0, 0.0));
+        player.velocity.store(Vector3::default());
+        assert!(player.velocity_changed_since_sent());
 
         world.level.shutdown().await;
         Ok(())

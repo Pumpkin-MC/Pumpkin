@@ -2683,7 +2683,9 @@ impl Player {
             self.send_own_velocity(entity.velocity.load());
             return;
         }
-        if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+        if entity.velocity_dirty.swap(false, Ordering::SeqCst)
+            && entity.velocity_changed_since_sent()
+        {
             // Vanilla `needsSync`: watchers only, Java clients predict their own pushes
             entity.send_velocity_to_watchers();
         }

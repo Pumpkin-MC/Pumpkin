@@ -3593,6 +3593,8 @@ impl EntityBase for LivingEntity {
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
+            // Vanilla `aiStep`: tiny leftovers stop before travel
+            self.entity.check_zero_velo();
             // Vanilla server `travel` for a player, which has no input. Unsent knockback
             // goes out undecayed.
             if !self.entity.sync_velocity.load(Ordering::SeqCst) {
@@ -3627,8 +3629,10 @@ impl EntityBase for LivingEntity {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
-            // Players push other entities like any living entity.
-            self.push_entities(caller);
+            // Vanilla `ServerPlayer.pushEntities`: not while the game is frozen
+            if server.tick_rate_manager.runs_normally() {
+                self.push_entities(caller);
+            }
 
             self.entity.tick_frozen(caller);
         }

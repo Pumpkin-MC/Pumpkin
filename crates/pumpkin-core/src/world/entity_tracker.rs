@@ -264,8 +264,7 @@ impl TrackedEntity {
 
     fn send_motion(&self, entity: &Entity, world: &World) {
         let velocity = entity.velocity.load();
-        let diff = (velocity - entity.last_sent_velocity.load()).length_squared();
-        if diff > 1.0e-7 || (diff > 0.0 && velocity.length_squared() == 0.0) {
+        if entity.velocity_changed_since_sent() {
             entity.last_sent_velocity.store(velocity);
             self.send_to_tracking_players_editioned(
                 &CEntityVelocity::new(VarInt(self.entity_id), velocity),
