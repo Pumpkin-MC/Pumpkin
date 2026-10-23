@@ -1715,6 +1715,12 @@ impl World {
             }
             order::set_entity_order(None);
         }
+        // Vanilla `rideTick` moves each passenger onto its vehicle after the vehicle ticks.
+        for (entity, _) in &tickable {
+            if !entity.get_entity().has_vehicle() {
+                entity.get_entity().position_riders();
+            }
+        }
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 

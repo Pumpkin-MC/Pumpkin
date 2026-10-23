@@ -812,10 +812,27 @@ impl EntityBase for ItemDisplayEntity {
             _ => "none",
         };
         nbt.put_string("item_display", display_mode_str.to_string());
+        let item = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !item.is_empty() {
+            let mut item_compound = NbtCompound::new();
+            item.write_item_stack(&mut item_compound);
+            nbt.put_compound("item", item_compound);
+        }
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.display.read_display_nbt(nbt);
+        if let Some(item_compound) = nbt.get_compound("item")
+            && let Some(stack) = ItemStack::read_item_stack(item_compound)
+        {
+            *self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        }
         if let Some(mode_str) = nbt.get_string("item_display") {
             let mode = match mode_str {
                 "thirdperson_lefthand" => 1,

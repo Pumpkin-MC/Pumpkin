@@ -3491,6 +3491,8 @@ impl Entity {
         }
         // Update cache so we don't send rubberbanding deltas
         self.last_sent_pos.store(position);
+        // Vanilla `teleportTo` carries the passengers along (`teleportPassengers`).
+        self.position_riders();
         // TODO: use `pumpkin_util::math::pack_degrees`.
         if let Some(yaw) = yaw {
             self.last_sent_yaw
@@ -3755,6 +3757,30 @@ impl Entity {
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
+    }
+
+    /// Mirrors vanilla `Entity.positionRider` with the default attachments: each non-player
+    /// passenger sits at the vehicle's position raised by the vehicle's height. Players stay
+    /// client authoritative.
+    pub fn position_riders(&self) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if passengers.is_empty() {
+            return;
+        }
+        let pos = self.pos.load();
+        let height = f64::from(self.entity_dimension.load().height);
+        let riding_pos = Vector3::new(pos.x, pos.y + height, pos.z);
+        for passenger in passengers {
+            let passenger_entity = passenger.get_entity();
+            if passenger.get_player().is_none() {
+                passenger_entity.set_pos(riding_pos);
+            }
+            passenger_entity.position_riders();
+        }
     }
 
     pub fn has_passengers(&self) -> bool {

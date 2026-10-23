@@ -765,6 +765,8 @@ impl DatapackManager {
     ) -> Result<FunctionResult, String> {
         let functions = self.resolve_functions(name)?;
         let dispatcher = server.command_dispatcher.load();
+        // Vanilla runs function bodies with suppressed output (`withSuppressedOutput`).
+        let source = &source.clone().with_silent();
         let mut result = FunctionResult::default();
         for lines in functions {
             if lines.iter().any(|line| line.starts_with('$')) && arguments.is_none() {

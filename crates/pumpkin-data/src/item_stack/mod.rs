@@ -842,7 +842,8 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // Vanilla's ItemStack codec defaults a missing count to 1.
+        let count = compound.get_int("count").unwrap_or(1) as u8;
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);

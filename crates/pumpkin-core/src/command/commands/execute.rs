@@ -83,6 +83,11 @@ const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
 );
 
+const ERROR_CONDITIONAL_FAILED_COUNT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+);
+
 static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 
 fn execute_as_modifier(context: &CommandContext) -> crate::command::node::RedirectModifierResult {
@@ -831,16 +836,47 @@ impl CommandExecutor for ConditionalExecutor {
     }
 }
 
-fn add_conditional(
-    builder: RequiredArgumentBuilder,
-    modifier: fn(&CommandContext) -> RedirectModifierResult,
-) -> RequiredArgumentBuilder {
-    builder
-        .fork(
+/// Terminal `execute if entity` returns the number of matches, like vanilla's numeric conditional.
+struct IfEntityCountExecutor;
+
+impl CommandExecutor for IfEntityCountExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let count = EntityArgumentType::get_optional_entities(context, "targets")?.len();
+        if count == 0 {
+            return Err(
+                ERROR_CONDITIONAL_FAILED_COUNT.create_without_context(TextComponent::text("0"))
+            );
+        }
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                [TextComponent::text(count.to_string())],
+            ),
+            false,
+        );
+        Ok(i32::try_from(count).unwrap_or(i32::MAX))
+    }
+}
+
+/// Mirrors vanilla `ExecuteCommand.addConditional`: the condition can continue the chain or end it.
+trait Conditional: ArgumentBuilder {
+    fn conditional(self, modifier: fn(&CommandContext) -> RedirectModifierResult) -> Self {
+        self.fork(
             Redirection::Root,
             RedirectModifier::Custom(Arc::new(modifier)),
         )
         .executes(ConditionalExecutor(modifier))
+    }
+}
+
+impl<B: ArgumentBuilder> Conditional for B {}
+
+fn add_conditional(
+    builder: RequiredArgumentBuilder,
+    modifier: fn(&CommandContext) -> RedirectModifierResult,
+) -> RequiredArgumentBuilder {
+    builder.conditional(modifier)
 }
 
 fn execute_if_score_matches_modifier(
@@ -1578,49 +1614,41 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("if")
-                .then(literal("predicate").then(
-                    argument("predicate", LootPredicateArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_predicate_modifier)),
+                .then(
+                    literal("predicate").then(
+                        argument("predicate", LootPredicateArgumentType)
+                            .conditional(execute_if_predicate_modifier),
                     ),
-                ))
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
+                )
+                .then(
+                    literal("entity").then(
+                        argument("targets", EntityArgumentType::Entities)
+                            .fork(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
+                            )
+                            .executes(IfEntityCountExecutor),
                     ),
-                ))
+                )
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_if_block_modifier)),
-                        ),
+                        argument("block", BlockArgumentType).conditional(execute_if_block_modifier),
                     )),
                 )
                 .then(literal("loaded").then(
-                    argument("pos", BlockPosArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_loaded_modifier)),
-                    ),
+                    argument("pos", BlockPosArgumentType).conditional(execute_if_loaded_modifier),
                 ))
                 .then(
                     literal("dimension").then(
                         argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
-                            .redirect_with_modifier(
-                                Redirection::Root,
-                                RedirectModifier::Custom(Arc::new(execute_if_dimension_modifier)),
-                            ),
+                            .conditional(execute_if_dimension_modifier),
                     ),
                 )
                 .then(
                     literal("biome").then(
                         argument("pos", BlockPosArgumentType).then(
                             argument("biome", ResourceOrTagArgument(BIOME_REGISTRY.clone()))
-                                .redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(execute_if_biome_modifier)),
-                                ),
+                                .conditional(execute_if_biome_modifier),
                         ),
                     ),
                 )
@@ -1629,18 +1657,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         argument("start", BlockPosArgumentType).then(
                             argument("end", BlockPosArgumentType).then(
                                 argument("destination", BlockPosArgumentType)
-                                    .then(literal("all").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_if_blocks_all_modifier,
-                                        )),
-                                    ))
-                                    .then(literal("masked").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_if_blocks_masked_modifier,
-                                        )),
-                                    )),
+                                    .then(
+                                        literal("all").conditional(execute_if_blocks_all_modifier),
+                                    )
+                                    .then(
+                                        literal("masked")
+                                            .conditional(execute_if_blocks_masked_modifier),
+                                    ),
                             ),
                         ),
                     ),
@@ -1699,94 +1722,78 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("data")
                         .then(
-                            literal("block").then(argument("pos", BlockPosArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_block_modifier,
-                                    )),
+                            literal("block").then(
+                                argument("pos", BlockPosArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_if_data_block_modifier),
                                 ),
-                            )),
+                            ),
                         )
-                        .then(literal("entity").then(
-                            argument("target", EntityArgumentType::Entity).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_entity_modifier,
-                                    )),
+                        .then(
+                            literal("entity").then(
+                                argument("target", EntityArgumentType::Entity).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_if_data_entity_modifier),
                                 ),
                             ),
-                        ))
-                        .then(literal("storage").then(
-                            argument("id", IdentifierArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_storage_modifier,
-                                    )),
+                        )
+                        .then(
+                            literal("storage").then(
+                                argument("id", IdentifierArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_if_data_storage_modifier),
                                 ),
                             ),
-                        )),
+                        ),
                 )
                 .then(
-                    literal("stopwatch").then(argument("id", IdentifierArgumentType).then(
-                        argument("range", FloatRangeArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_if_stopwatch_modifier)),
+                    literal("stopwatch").then(
+                        argument("id", IdentifierArgumentType).then(
+                            argument("range", FloatRangeArgumentType)
+                                .conditional(execute_if_stopwatch_modifier),
                         ),
-                    )),
+                    ),
                 ),
         )
         .then(
             literal("unless")
-                .then(literal("predicate").then(
-                    argument("predicate", LootPredicateArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_predicate_modifier)),
-                    ),
-                ))
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
-                    ),
-                ))
                 .then(
-                    literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_unless_block_modifier)),
-                        ),
-                    )),
-                )
-                .then(literal("loaded").then(
-                    argument("pos", BlockPosArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_loaded_modifier)),
+                    literal("predicate").then(
+                        argument("predicate", LootPredicateArgumentType)
+                            .conditional(execute_unless_predicate_modifier),
                     ),
-                ))
+                )
+                .then(
+                    literal("entity").then(
+                        argument("targets", EntityArgumentType::Entities)
+                            .conditional(execute_unless_entity_modifier),
+                    ),
+                )
+                .then(
+                    literal("block").then(
+                        argument("pos", BlockPosArgumentType).then(
+                            argument("block", BlockArgumentType)
+                                .conditional(execute_unless_block_modifier),
+                        ),
+                    ),
+                )
+                .then(
+                    literal("loaded").then(
+                        argument("pos", BlockPosArgumentType)
+                            .conditional(execute_unless_loaded_modifier),
+                    ),
+                )
                 .then(
                     literal("dimension").then(
                         argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
-                            .redirect_with_modifier(
-                                Redirection::Root,
-                                RedirectModifier::Custom(Arc::new(
-                                    execute_unless_dimension_modifier,
-                                )),
-                            ),
+                            .conditional(execute_unless_dimension_modifier),
                     ),
                 )
                 .then(
                     literal("biome").then(
                         argument("pos", BlockPosArgumentType).then(
                             argument("biome", ResourceOrTagArgument(BIOME_REGISTRY.clone()))
-                                .redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_biome_modifier,
-                                    )),
-                                ),
+                                .conditional(execute_unless_biome_modifier),
                         ),
                     ),
                 )
@@ -1795,18 +1802,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         argument("start", BlockPosArgumentType).then(
                             argument("end", BlockPosArgumentType).then(
                                 argument("destination", BlockPosArgumentType)
-                                    .then(literal("all").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_unless_blocks_all_modifier,
-                                        )),
-                                    ))
-                                    .then(literal("masked").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_unless_blocks_masked_modifier,
-                                        )),
-                                    )),
+                                    .then(
+                                        literal("all")
+                                            .conditional(execute_unless_blocks_all_modifier),
+                                    )
+                                    .then(
+                                        literal("masked")
+                                            .conditional(execute_unless_blocks_masked_modifier),
+                                    ),
                             ),
                         ),
                     ),
@@ -1865,43 +1868,37 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("data")
                         .then(
-                            literal("block").then(argument("pos", BlockPosArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_block_modifier,
-                                    )),
+                            literal("block").then(
+                                argument("pos", BlockPosArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_unless_data_block_modifier),
                                 ),
-                            )),
+                            ),
                         )
-                        .then(literal("entity").then(
-                            argument("target", EntityArgumentType::Entity).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_entity_modifier,
-                                    )),
+                        .then(
+                            literal("entity").then(
+                                argument("target", EntityArgumentType::Entity).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_unless_data_entity_modifier),
                                 ),
                             ),
-                        ))
-                        .then(literal("storage").then(
-                            argument("id", IdentifierArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_storage_modifier,
-                                    )),
+                        )
+                        .then(
+                            literal("storage").then(
+                                argument("id", IdentifierArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .conditional(execute_unless_data_storage_modifier),
                                 ),
                             ),
-                        )),
+                        ),
                 )
                 .then(
-                    literal("stopwatch").then(argument("id", IdentifierArgumentType).then(
-                        argument("range", FloatRangeArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_unless_stopwatch_modifier)),
+                    literal("stopwatch").then(
+                        argument("id", IdentifierArgumentType).then(
+                            argument("range", FloatRangeArgumentType)
+                                .conditional(execute_unless_stopwatch_modifier),
                         ),
-                    )),
+                    ),
                 ),
         )
         .then(

@@ -1,7 +1,10 @@
 use pumpkin_data::translation;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
@@ -14,9 +17,12 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::EntityBase;
 use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::r#type::from_type;
 use crate::world::World;
+use pumpkin_data::entity::EntityType;
+use std::sync::Arc;
 
 const DESCRIPTION: &str = "Spawns an entity at position.";
 const PERMISSION: &str = "minecraft:command.summon";
@@ -89,7 +95,12 @@ impl CommandExecutor for SummonExecutor {
         if !self.has_nbt {
             finalize_spawn(&entity, world, None);
         }
-        world.spawn_entity(entity);
+        let passengers = nbt
+            .map(|nbt| load_passengers(nbt, pos, world))
+            .unwrap_or_default();
+        if world.spawn_entity(entity.clone()) {
+            spawn_passengers(world, &entity, passengers);
+        }
 
         context.source.send_feedback(
             TextComponent::translate_cross(
@@ -101,6 +112,56 @@ impl CommandExecutor for SummonExecutor {
         );
 
         Ok(1)
+    }
+}
+
+/// A passenger loaded from a `Passengers` NBT entry, with its own passengers.
+struct LoadedPassenger {
+    entity: Arc<dyn EntityBase>,
+    passengers: Vec<Self>,
+}
+
+/// Mirrors the passenger half of vanilla's `EntityType.loadEntityRecursive`: entries
+/// with a missing or unknown `id` are skipped.
+fn load_passengers(
+    nbt: &NbtCompound,
+    pos: Vector3<f64>,
+    world: &Arc<World>,
+) -> Vec<LoadedPassenger> {
+    let Some(list) = nbt.get_list("Passengers") else {
+        return Vec::new();
+    };
+    list.iter()
+        .filter_map(|tag| {
+            let NbtTag::Compound(child) = tag else {
+                return None;
+            };
+            let entity_type = EntityType::from_name(child.get_string("id")?)?;
+            let uuid = child.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
+            let entity = from_type(entity_type, pos, world, uuid);
+            entity.read_nbt_non_mut(child);
+            entity.get_entity().set_pos(pos);
+            Some(LoadedPassenger {
+                passengers: load_passengers(child, pos, world),
+                entity,
+            })
+        })
+        .collect()
+}
+
+fn spawn_passengers(
+    world: &Arc<World>,
+    vehicle: &Arc<dyn EntityBase>,
+    passengers: Vec<LoadedPassenger>,
+) {
+    for passenger in passengers {
+        if !world.spawn_entity(passenger.entity.clone()) {
+            continue;
+        }
+        vehicle
+            .get_entity()
+            .add_passenger(vehicle.clone(), passenger.entity.clone());
+        spawn_passengers(world, &passenger.entity, passenger.passengers);
     }
 }
 
