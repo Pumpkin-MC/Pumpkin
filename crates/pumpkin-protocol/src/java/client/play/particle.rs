@@ -57,6 +57,13 @@ pub enum ParticleOptions {
         /// Life time in ticks.
         duration: i32,
     },
+    /// `minecraft:effect`, vanilla's `SpellParticleOption`.
+    Effect {
+        /// The particle color, encoded as `0xRRGGBB`. The top bits are ignored.
+        color: i32,
+        /// Vanilla's `power`, 1.0 unless a caller sets it.
+        power: f32,
+    },
 }
 
 impl ParticleOptions {
@@ -65,6 +72,7 @@ impl ParticleOptions {
     pub const fn particle(&self) -> pumpkin_data::particle::Particle {
         match self {
             Self::Trail { .. } => pumpkin_data::particle::Particle::Trail,
+            Self::Effect { .. } => pumpkin_data::particle::Particle::Effect,
         }
     }
 
@@ -78,6 +86,8 @@ impl ParticleOptions {
     pub fn is_supported_by(&self, version: JavaMinecraftVersion) -> bool {
         match self {
             Self::Trail { .. } => version >= JavaMinecraftVersion::V_1_21_2,
+            // Before 1.21.9 `effect` took no options.
+            Self::Effect { .. } => version >= JavaMinecraftVersion::V_1_21_9,
         }
     }
 
@@ -95,6 +105,10 @@ impl ParticleOptions {
                 write.write_f64_be(target.z)?;
                 write.write_i32_be(color)?;
                 write.write_var_int(&VarInt(duration))
+            }
+            Self::Effect { color, power } => {
+                write.write_i32_be(color)?;
+                write.write_f32_be(power)
             }
         }
     }
@@ -490,6 +504,19 @@ mod tests {
 
         assert_eq!(payload, expected);
         assert_eq!(payload.len(), 29);
+    }
+
+    #[test]
+    fn effect_options_match_vanilla_stream_codec() {
+        let options = ParticleOptions::Effect {
+            color: -1,
+            power: 1.0,
+        };
+        let mut payload = Vec::new();
+        options.write(&mut payload).unwrap();
+
+        // Vanilla `SpellParticleOption.STREAM_CODEC`: INT, then FLOAT.
+        assert_eq!(payload, [0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x80, 0x00, 0x00]);
     }
 
     /// Decodes the packet the way `ClientboundLevelParticlesPacket` does and

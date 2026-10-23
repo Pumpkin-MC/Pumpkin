@@ -230,7 +230,10 @@ mod tests {
                 target,
                 color,
                 duration,
-            } = transform_particle(&Block::OPEN_EYEBLOSSOM, &pos, &mut rng);
+            } = transform_particle(&Block::OPEN_EYEBLOSSOM, &pos, &mut rng)
+            else {
+                panic!("eyeblossoms spawn trail particles");
+            };
 
             assert_eq!(color, OPEN_PARTICLE_COLOR);
             // duration is `(20.0 * lifetime) as i32` over `[0.5, 1.5)`.
@@ -254,7 +257,9 @@ mod tests {
         let pos = BlockPos::new(0, 64, 0);
 
         let closed = transform_particle(&Block::CLOSED_EYEBLOSSOM, &pos, &mut rng);
-        let ParticleOptions::Trail { color, .. } = closed;
+        let ParticleOptions::Trail { color, .. } = closed else {
+            panic!("eyeblossoms spawn trail particles");
+        };
         assert_eq!(color, CLOSED_PARTICLE_COLOR);
         assert_ne!(CLOSED_PARTICLE_COLOR, OPEN_PARTICLE_COLOR);
     }
