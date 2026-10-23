@@ -1510,7 +1510,7 @@ impl LivingEntity {
         }
     }
 
-    fn push_entities(&self, dyn_self: &dyn EntityBase) {
+    pub(crate) fn push_entities(&self, dyn_self: &dyn EntityBase) {
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
         let own_team = dyn_self.get_team();
@@ -1797,12 +1797,32 @@ impl LivingEntity {
     pub(crate) fn make_move(&self, caller: &dyn EntityBase) {
         if self.entity.entity_type == &EntityType::PLAYER {
             // The client owns the position, only the landing of `move` applies
-            let velo = self.entity.velocity.load();
+            let mut velo = self.entity.velocity.load();
             if self.entity.on_ground.load(Relaxed) && velo.y < 0.0 {
-                self.entity
-                    .velocity
-                    .store(Vector3::new(velo.x, 0.0, velo.z));
+                velo.y = 0.0;
             }
+            // Vanilla `restituteMovementAfterCollisions`: a wall stops or bounces that axis
+            let (moved, _, _) = if velo.horizontal_length_squared() > 0.0 {
+                self.entity.collide(velo, caller)
+            } else {
+                (velo, None, false)
+            };
+            let x_hit = (velo.x - moved.x).abs() >= 1.0e-5;
+            let z_hit = (velo.z - moved.z).abs() >= 1.0e-5;
+            if x_hit || z_hit {
+                let bounce = if self.entity.is_sneaking() {
+                    0.0
+                } else {
+                    -self.get_attribute_value(&Attributes::BOUNCINESS)
+                };
+                if x_hit {
+                    velo.x *= bounce;
+                }
+                if z_hit {
+                    velo.z *= bounce;
+                }
+            }
+            self.entity.velocity.store(velo);
         } else {
             self.entity.move_entity(caller, self.entity.velocity.load());
         }
@@ -3629,11 +3649,7 @@ impl EntityBase for LivingEntity {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
-            // Vanilla `ServerPlayer.pushEntities`: not while the game is frozen
-            if server.tick_rate_manager.runs_normally() {
-                self.push_entities(caller);
-            }
-
+            // Players push from `World::tick` once all players ticked
             self.entity.tick_frozen(caller);
         }
 
@@ -5083,6 +5099,64 @@ mod ai_step_tests {
         world.level.shutdown().await;
         assert_eq!(age, -19);
         assert_eq!(tick_count, 7);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod player_wall_tests {
+    use pumpkin_data::attributes::Attributes;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::world::BlockFlags;
+
+    use super::LivingEntity;
+    use crate::entity::Entity;
+    use crate::entity::ai::test_support::world;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn pushed_player_stops_at_a_wall() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        world.set_block_state(
+            &BlockPos::new(1, 64, 0),
+            pumpkin_data::Block::STONE.default_state.id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        let living = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::PLAYER,
+        ));
+        let position = living.entity.pos.load();
+
+        // Into the wall on x: that axis stops, z keeps going, the position stays the client's
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.1));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load(), Vector3::new(0.0, 0.0, 0.1));
+        assert_eq!(living.entity.pos.load(), position);
+
+        // Bounciness 0.5 sends half of it back, sneaking suppresses that
+        living.set_attribute_base(&Attributes::BOUNCINESS, 0.5);
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.0));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load().x, -0.25);
+        living
+            .entity
+            .sneaking
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.0));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load().x, 0.0);
+
+        world.level.shutdown().await;
         Ok(())
     }
 }

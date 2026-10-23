@@ -2766,6 +2766,14 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
+    /// Vanilla `LivingEntity.pushEntities` for a player, run after all player ticks.
+    pub fn push_entities(&self) {
+        let living = &self.living_entity;
+        if !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0 {
+            living.push_entities(self);
+        }
+    }
+
     pub fn process_inbound_packets(&self) {
         const MAX_PACKETS_PER_TICK: usize = 64;
 
@@ -2840,10 +2848,9 @@ impl Player {
         }
     }
 
+    /// Inbound packets go first, for all players, so every tick sees this tick's moves.
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
-        self.process_inbound_packets();
-
         if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
             client.tick_network_latency(self);
         }

@@ -1559,10 +1559,22 @@ impl World {
 
         let t_players = std::time::Instant::now();
         let player_handle = handle.clone();
+        // Vanilla handles all packets before any player ticks
+        players.par_iter().for_each(|player| {
+            let _guard = player_handle.enter();
+            player.process_inbound_packets();
+        });
         players.par_iter().for_each(|player| {
             let _guard = player_handle.enter();
             player.tick(server);
         });
+        // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
+        if server.tick_rate_manager.runs_normally() {
+            let _guard = player_handle.enter();
+            for player in players.iter() {
+                player.push_entities();
+            }
+        }
         let player_elapsed = t_players.elapsed();
         // After movement so pickup uses this-tick player boxes
         let player_touches: Vec<_> = players.par_iter().filter_map(PlayerTouch::new).collect();

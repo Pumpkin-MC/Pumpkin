@@ -1664,7 +1664,6 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
-    #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
         &self,
         movement: Vector3<f64>,
@@ -1673,11 +1672,22 @@ impl Entity {
         if movement.length_squared() == 0.0 {
             return movement;
         }
+        let (adjusted, supporting, horizontal_collision) = self.collide(movement, caller);
+        self.on_ground.store(supporting.is_some(), Ordering::SeqCst);
+        self.supporting_block_pos.store(supporting);
+        self.horizontal_collision
+            .store(horizontal_collision, Ordering::SeqCst);
+        adjusted
+    }
 
-        self.on_ground.store(false, Ordering::SeqCst);
-        self.supporting_block_pos.store(None);
-        self.horizontal_collision.store(false, Ordering::SeqCst);
-
+    /// Vanilla `collide` without writing state: the movement left, the block landed on,
+    /// and whether a wall stopped it.
+    #[expect(clippy::float_cmp)]
+    pub(crate) fn collide(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> (Vector3<f64>, Option<BlockPos>, bool) {
         let bounding_box = self.bounding_box.load();
 
         let (collisions, block_positions) = self
@@ -1686,10 +1696,11 @@ impl Entity {
             .get_block_collisions(bounding_box.stretch(movement), caller);
 
         if collisions.is_empty() {
-            return movement;
+            return (movement, None, false);
         }
 
         let mut adjusted_movement = movement;
+        let mut supporting = None;
 
         // Y-Axis adjustment
         if movement.get_axis(Axis::Y) != 0.0 {
@@ -1727,9 +1738,7 @@ impl Entity {
                     adjusted_movement.set_axis(Axis::Y, changed_component);
                 }
 
-                self.on_ground
-                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-                self.supporting_block_pos.store(supporting_block_pos);
+                supporting = supporting_block_pos;
             }
         }
 
@@ -1760,10 +1769,7 @@ impl Entity {
             }
         }
 
-        self.horizontal_collision
-            .store(horizontal_collision, Ordering::SeqCst);
-
-        adjusted_movement
+        (adjusted_movement, supporting, horizontal_collision)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
