@@ -38,7 +38,7 @@ const ERROR_INVALID_STYLE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENT_ENUM_INVALID,
 );
 
-const ERROR_UNKNOWN_BOSSBAR: CommandErrorType<1> = CommandErrorType::new(
+pub const ERROR_UNKNOWN_BOSSBAR: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_BOSSBAR_UNKNOWN,
     translation::bedrock::COMMANDS_BOSSBAR_NOTFOUND,
 );
