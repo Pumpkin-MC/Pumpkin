@@ -1203,8 +1203,11 @@ impl Mob for PiglinEntity {
         source: Option<&dyn EntityBase>,
     ) {
         self.reset_ambient_sound_time();
-        if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
-            self.drop_inventory();
+        let living = &self.mob_entity.living_entity;
+        if living.dead.load(Ordering::Relaxed) {
+            if living.should_drop_loot(self) {
+                self.drop_inventory();
+            }
         } else if let Some(attacker) = source {
             self.was_hurt_by(attacker);
         }
