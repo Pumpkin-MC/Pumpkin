@@ -5,7 +5,9 @@ use pumpkin_util::text::{
     color::{Color, NamedColor},
 };
 
-use crate::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest};
+use crate::pumpkin::plugin::command::{
+    CommandError as CommandErrorWit, CommandSender, CommandSuggestions, SuggestionRequest,
+};
 use pumpkin_core::{
     command::{
         context::command_context::CommandContext,
@@ -21,6 +23,7 @@ use pumpkin_core::{
 use pumpkin_wasm_host_common::{
     args::build_consumed_args_from_context, plugin::WasmPlugin, state::PluginHostState,
 };
+use wasmtime::component::Resource;
 
 fn map_command_result(
     state: &mut PluginHostState,
@@ -139,7 +142,7 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
         let handler_id = self.handler_id;
         let function = {
             let plugin = self.plugin.instance::<crate::Plugin>();
-            plugin.func_handle_command_suggestion()
+            *plugin.func_handle_command_suggestion().func()
         };
 
         tokio::task::block_in_place(|| {
@@ -161,7 +164,12 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                                 Ok::<_, wasmtime::Error>((sender_resource, server_resource))
                             })?;
                             let response = guest
-                                .call(
+                                .call_func::<(
+                                    u32,
+                                    Resource<CommandSender>,
+                                    Resource<crate::pumpkin::plugin::server::Server>,
+                                    SuggestionRequest,
+                                ), (CommandSuggestions,)>(
                                     function,
                                     (handler_id, sender_resource, server_resource, request),
                                 )

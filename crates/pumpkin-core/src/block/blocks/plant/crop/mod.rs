@@ -16,6 +16,9 @@ use crate::{block::blocks::plant::PlantBlockBase, world::World};
 type CropProperties = WheatLikeProperties;
 type FarmlandProperties = FarmlandLikeProperties;
 
+/// Raw brightness `CropBlock` and `StemBlock` need at the plant to grow on a random tick.
+const MIN_GROWTH_LIGHT: u8 = 9;
+
 pub mod beetroot;
 pub mod carrot;
 pub mod gourds;
@@ -74,6 +77,10 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+        if world.get_raw_brightness(pos, 0) < MIN_GROWTH_LIGHT {
+            return;
+        }
+
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
