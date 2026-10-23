@@ -894,7 +894,7 @@ impl PathNavigation {
                     f64::from(pos.0.z) + 0.5,
                 );
                 let dist_to_node = (mob_pos - node_center).length();
-                let speed = f64::from(entity.get_speed());
+                let speed = entity.get_speed();
                 self.timeout_limit = if speed > 0.0 {
                     dist_to_node / f64::from(speed) * 20.0
                 } else {
