@@ -2037,56 +2037,123 @@ pub trait RangedAttackMob: Mob + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::DEFAULT_ATTACK_REACH;
+    use std::sync::Arc;
+
+    use pumpkin_data::data_component_impl::EquipmentSlot;
     use pumpkin_data::entity::EntityType;
-    use pumpkin_util::math::boundingbox::BoundingBox;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_util::math::vector3::Vector3;
 
-    use crate::entity::Entity;
+    use super::Mob;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::mob::zombie::zombie::ZombieEntity;
+    use crate::entity::{Entity, EntityBase};
+    use crate::world::World;
 
-    /// A zombie's attack box against a standing player, the way `is_in_attack_range` builds it
-    fn zombie_reaches(dx: f64, dy: f64) -> bool {
-        let zombie = BoundingBox::new_from_pos(
-            0.0,
-            64.0,
-            0.0,
-            &Entity::type_dimensions(&EntityType::ZOMBIE),
-        );
-        let player = BoundingBox::new_from_pos(
-            dx,
-            64.0 + dy,
-            0.0,
-            &Entity::type_dimensions(&pumpkin_data::entity::EntityType::PLAYER),
-        );
-        zombie
-            .expand(DEFAULT_ATTACK_REACH, 0.0, DEFAULT_ATTACK_REACH)
-            .intersects(&player)
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn zombie(world: &Arc<World>, y: f64) -> Arc<ZombieEntity> {
+        ZombieEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, y, 0.0),
+            &EntityType::ZOMBIE,
+        ))
     }
 
-    #[test]
-    fn zombie_reach_matches_vanilla() {
+    fn player_at(world: &Arc<World>, x: f64, y: f64) -> Entity {
+        Entity::new(world.clone(), Vector3::new(x, y, 0.0), &EntityType::PLAYER)
+    }
+
+    fn reaches(world: &Arc<World>, zombie: &ZombieEntity, dx: f64, dy: f64) -> bool {
+        let y = zombie.get_entity().pos.load().y + dy;
+        zombie.is_in_attack_range(&player_at(world, dx, y))
+    }
+
+    #[tokio::test]
+    async fn zombie_reach_matches_vanilla() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let zombie = zombie(&world, 64.0);
         // Half widths 0.3 + 0.3 plus the reach: sqrt(2.04) between the centres
-        assert!(zombie_reaches(1.428, 0.0));
-        assert!(!zombie_reaches(1.429, 0.0));
+        assert!(reaches(&world, &zombie, 1.428, 0.0));
+        assert!(!reaches(&world, &zombie, 1.429, 0.0));
         // No vertical reach: only the zombie's own 1.95 height and the player's 1.8
-        assert!(zombie_reaches(1.0, 1.94));
-        assert!(!zombie_reaches(1.0, 1.951));
-        assert!(zombie_reaches(1.0, -1.79));
-        assert!(!zombie_reaches(1.0, -1.801));
+        assert!(reaches(&world, &zombie, 1.0, 1.94));
+        assert!(!reaches(&world, &zombie, 1.0, 1.951));
+        assert!(reaches(&world, &zombie, 1.0, -1.79));
+        assert!(!reaches(&world, &zombie, 1.0, -1.801));
+        world.level.shutdown().await;
+        Ok(())
     }
 
-    #[test]
-    fn riding_hitbox_clips_below_the_seat() {
-        let player = BoundingBox::new_from_pos(
-            0.0,
-            64.0,
-            0.0,
-            &Entity::type_dimensions(&pumpkin_data::entity::EntityType::PLAYER),
-        );
-        let seat_y = 64.5f64;
-        let hitbox = player.with_min_y(seat_y.max(player.min.y));
-        assert_eq!(hitbox.min.y, 64.5);
-        assert_eq!(hitbox.max.y, player.max.y);
-        assert_eq!(hitbox.min.x, player.min.x);
+    #[tokio::test]
+    async fn spear_reach_uses_mob_factor_and_min_range() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let zombie = zombie(&world, 64.0);
+        zombie
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(
+                &EquipmentSlot::MAIN_HAND,
+                ItemStack::new(1, &Item::IRON_SPEAR),
+            );
+        // Spear 2.0..4.5 at mob factor 0.5: 1.0..2.25 past the 0.6 of half widths
+        assert!(!reaches(&world, &zombie, 1.59, 0.0));
+        assert!(reaches(&world, &zombie, 1.61, 0.0));
+        assert!(reaches(&world, &zombie, 2.84, 0.0));
+        assert!(!reaches(&world, &zombie, 2.86, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn mounted_reach_spans_the_vehicle_width() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let horse: Arc<dyn EntityBase> = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::HORSE,
+        ));
+        let zombie = zombie(&world, 64.0);
+        horse
+            .get_entity()
+            .add_passenger(horse.clone(), zombie.clone());
+        horse.position_rider(zombie.as_ref());
+        // Horse half width 0.6982422 + player 0.3 + reach
+        assert!(reaches(&world, &zombie, 1.826, 0.0));
+        assert!(!reaches(&world, &zombie, 1.827, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn riding_hitbox_clips_below_the_seat() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pig: Arc<dyn EntityBase> = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let rider: Arc<dyn EntityBase> = Arc::new(player_at(&world, 0.0, 64.0));
+        pig.get_entity().add_passenger(pig.clone(), rider.clone());
+        pig.position_rider(rider.as_ref());
+        let entity = rider.get_entity();
+        let hitbox = entity.get_hitbox();
+        let bounding_box = entity.bounding_box.load();
+        // Pig seat 0.86875 up, the player held 0.6 above its feet
+        assert!((hitbox.min.y - 64.868_75).abs() < 1e-6);
+        assert!((bounding_box.min.y - 64.268_75).abs() < 1e-6);
+        assert_eq!(hitbox.max, bounding_box.max);
+        assert_eq!(hitbox.min.x, bounding_box.min.x);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]
