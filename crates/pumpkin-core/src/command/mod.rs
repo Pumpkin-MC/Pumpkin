@@ -353,7 +353,10 @@ impl CommandSender {
                 player.world(),
                 Some(player.clone()),
                 player.position(),
-                player.rotation().into(),
+                {
+                    let (yaw, pitch) = player.rotation();
+                    Vector2::new(pitch, yaw)
+                },
                 player.get_display_name().get_text(),
                 player.get_display_name(),
                 server.clone(),

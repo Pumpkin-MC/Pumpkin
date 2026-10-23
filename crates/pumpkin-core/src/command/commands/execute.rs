@@ -112,7 +112,7 @@ fn execute_at_modifier(context: &CommandContext) -> crate::command::node::Redire
         let entity = target.get_entity();
         let mut source = context.source.as_ref().clone();
         source.position = entity.pos.load();
-        source.rotation = Vector2::new(entity.yaw.load(), entity.pitch.load());
+        source.rotation = Vector2::new(entity.pitch.load(), entity.yaw.load());
         source.world = Some(entity.world.load().clone());
         sources.push(Arc::new(source));
     }
@@ -198,7 +198,7 @@ fn execute_rotated_as_modifier(
     for target in targets {
         let entity = target.get_entity();
         let mut source = context.source.as_ref().clone();
-        source.rotation = Vector2::new(entity.yaw.load(), entity.pitch.load());
+        source.rotation = Vector2::new(entity.pitch.load(), entity.yaw.load());
         sources.push(Arc::new(source));
     }
     Ok(sources)
@@ -301,7 +301,7 @@ fn execute_facing_modifier(
     let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
     let pitch = -(dy.atan2(xz_dist).to_degrees() as f32);
 
-    source.rotation = Vector2::new(yaw, pitch);
+    source.rotation = Vector2::new(pitch, yaw);
     Ok(vec![Arc::new(source)])
 }
 
@@ -324,7 +324,7 @@ fn execute_facing_entity_modifier(
         let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
         let pitch = -(dy.atan2(xz_dist).to_degrees() as f32);
 
-        source.rotation = Vector2::new(yaw, pitch);
+        source.rotation = Vector2::new(pitch, yaw);
         sources.push(Arc::new(source));
     }
     Ok(sources)
@@ -1176,25 +1176,26 @@ fn check_data_matches(
     is_entity: bool,
 ) -> Result<bool, CommandSyntaxError> {
     let path = context.get_argument::<NbtPath>("path")?;
-    let tags = if is_block {
+    let count = if is_block {
         let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
         let world = context.source.world().clone();
         let accessor = BlockDataAccessor::new(pos, world)?;
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     } else if is_entity {
         let entity = EntityArgumentType::get_entity(context, "target")?;
         let accessor = EntityDataAccessor::new(entity);
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     } else {
         let id = context.get_argument::<Identifier>("id")?;
         let server = context.server().clone();
         let accessor = StorageDataAccessor::new(id.to_string(), server);
         let data = accessor.get_data()?;
-        path.get(&NbtTag::Compound(data))?
+        path.count_matching(&NbtTag::Compound(data))
     };
-    Ok(!tags.is_empty())
+    // Mirrors vanilla `checkMatchingData`: a missing path counts as zero matches, not an error.
+    Ok(count > 0)
 }
 
 fn execute_if_data_block_modifier(

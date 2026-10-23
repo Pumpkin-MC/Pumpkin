@@ -540,11 +540,10 @@ impl EntitySelectorPredicate {
                     .scoreboard
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let entity_scores = scoreboard.get_scores().get(&actual_name);
                 // Vanilla fails the selector when the holder has no score in the objective.
                 scores_map.iter().all(|(objective, bounds)| {
-                    entity_scores
-                        .and_then(|obj_map| obj_map.get(objective))
+                    scoreboard
+                        .get_score(&actual_name, objective)
                         .is_some_and(|score| bounds.matches(score.value.0))
                 })
             }
