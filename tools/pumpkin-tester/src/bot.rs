@@ -23,7 +23,7 @@ use pumpkin_protocol::{
             },
         },
     },
-    packet::MultiVersionJavaPacket,
+    packet::JavaPacket,
     ser::NetworkWriteExt,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -49,7 +49,7 @@ pub struct HeadlessBot {
 }
 
 impl HeadlessBot {
-    pub async fn send_packet<P: ClientPacket + MultiVersionJavaPacket>(
+    pub async fn send_packet<P: ClientPacket + JavaPacket>(
         &mut self,
         packet: &P,
     ) -> Result<(), String> {
@@ -97,7 +97,7 @@ impl HeadlessBot {
         })
         .await?;
 
-        let login_success_id = CLoginSuccess::to_id(CURRENT_MC_VERSION);
+        let login_success_id = CLoginSuccess::PACKET_ID;
         loop {
             let pkt = bot.next_packet().await?;
             if pkt.id == login_success_id {
@@ -120,8 +120,8 @@ impl HeadlessBot {
         })
         .await?;
 
-        let known_packs_id = CKnownPacks::to_id(CURRENT_MC_VERSION);
-        let finish_config_id = CFinishConfig::to_id(CURRENT_MC_VERSION);
+        let known_packs_id = CKnownPacks::PACKET_ID;
+        let finish_config_id = CFinishConfig::PACKET_ID;
         loop {
             let pkt = bot.next_packet().await?;
             if pkt.id == known_packs_id {
@@ -136,8 +136,8 @@ impl HeadlessBot {
         }
 
         // 3. Play state: wait for CLogin and initial CPlayerPosition synchronize packet
-        let play_login_id = CLogin::to_id(CURRENT_MC_VERSION);
-        let player_pos_id = CPlayerPosition::to_id(CURRENT_MC_VERSION);
+        let play_login_id = CLogin::PACKET_ID;
+        let player_pos_id = CPlayerPosition::PACKET_ID;
         let mut saw_play_login = false;
         let mut saw_initial_pos = false;
 
@@ -147,7 +147,7 @@ impl HeadlessBot {
                 saw_play_login = true;
             } else if pkt.id == player_pos_id {
                 let mut slice = &pkt.payload[..];
-                let pos_pkt = CPlayerPosition::read(&mut slice, &CURRENT_MC_VERSION)
+                let pos_pkt = CPlayerPosition::read(&mut slice)
                     .map_err(|err| format!("Failed to read CPlayerPosition: {err}"))?;
                 bot.position = pos_pkt.position;
                 bot.yaw = pos_pkt.yaw;
@@ -222,16 +222,16 @@ impl HeadlessBot {
     }
 }
 
-pub async fn send_framed_packet<P: ClientPacket + MultiVersionJavaPacket>(
+pub async fn send_framed_packet<P: ClientPacket + JavaPacket>(
     writer: &mut TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
     packet: &P,
 ) -> Result<(), String> {
-    let packet_id = P::to_id(CURRENT_MC_VERSION);
+    let packet_id = P::PACKET_ID;
     let mut buf = Vec::new();
     buf.write_var_int(&VarInt(packet_id))
         .map_err(|err| format!("Failed to write packet id {packet_id}: {err:?}"))?;
     packet
-        .write_packet_data(&mut buf, &CURRENT_MC_VERSION)
+        .write_packet_data(&mut buf)
         .map_err(|err| format!("Failed to serialize packet {packet_id}: {err:?}"))?;
     writer
         .write_packet(Bytes::from(buf))

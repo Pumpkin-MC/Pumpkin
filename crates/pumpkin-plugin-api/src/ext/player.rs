@@ -6,12 +6,13 @@ use crate::wit::pumpkin::plugin::player::{
 use crate::wit::pumpkin::plugin::text::TextComponent;
 
 /// Extension trait providing batch access and helper utilities for player ender chest inventories.
+#[allow(async_fn_in_trait)]
 pub trait PlayerEnderChestExt {
     /// Returns all 27 slots of the player's ender chest.
     fn get_all_ender_chest_items(&self) -> Vec<Option<ItemStack>>;
 
     /// Sets all 27 slots of the player's ender chest from an iterator.
-    fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>);
+    async fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>);
 }
 
 impl PlayerEnderChestExt for Player {
@@ -21,9 +22,9 @@ impl PlayerEnderChestExt for Player {
             .collect()
     }
 
-    fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>) {
+    async fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>) {
         for (slot, item) in items.into_iter().take(27).enumerate() {
-            self.set_ender_chest_item(slot as u8, item);
+            self.set_ender_chest_item(slot as u8, item).await;
         }
     }
 }

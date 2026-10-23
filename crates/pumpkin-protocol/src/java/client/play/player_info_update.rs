@@ -3,7 +3,8 @@ use std::io::Write;
 use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::play::PLAYER_INFO_UPDATE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
+
+use pumpkin_util::text::TextComponent;
 
 use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
 
@@ -44,8 +45,8 @@ bitflags! {
 pub struct CPlayerInfoUpdate<'a> {
     /// The bitmask (`PlayerInfoFlags`) determining which data follows.
     pub actions: u8,
-    /// The list of players being updated. Each player entry contains
-    /// data fields in the order they appear in the bitmask.
+    /// The list of players being updated. Their actions are written in bitmask order, whatever
+    /// order they are listed in.
     pub players: &'a [Player<'a>],
 }
 
@@ -61,82 +62,82 @@ impl<'a> CPlayerInfoUpdate<'a> {
     }
 }
 
-// TODO: Check if we need this custom impl
-impl ClientPacket for CPlayerInfoUpdate<'_> {
-    fn write_packet_data(
+impl CPlayerInfoUpdate<'_> {
+    /// Writes `flags`, then each player's matching actions in flag order, the order the client
+    /// reads them. Actions without their flag are skipped; a flag without its action is an error.
+    pub(crate) fn write_flagged<W: Write>(
         &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
+        mut write: W,
+        flags: PlayerInfoFlags,
+        display_name: impl Fn(&mut W, &TextComponent) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-
-        // UPDATE_LIST_PRIORITY was added in 1.21.2 and UPDATE_HAT in 1.21.4.
-        // Mask unsupported bits and omit their data so older clients can parse the packet.
-        let mut effective_actions = self.actions;
-        if *version < JavaMinecraftVersion::V_1_21_2 {
-            effective_actions &= !PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits();
-        }
-        if *version < JavaMinecraftVersion::V_1_21_4 {
-            effective_actions &= !PlayerInfoFlags::UPDATE_HAT.bits();
-        }
-
-        write.write_u8(effective_actions)?;
-        write.write_list::<Player>(self.players, |p, v| {
-            p.write_uuid(&v.uuid)?;
-            for action in v.actions {
-                match action {
-                    PlayerAction::AddPlayer { name, properties } => {
-                        p.write_string(name)?;
-                        p.write_list::<Property>(properties, |p, v| {
-                            p.write_string(&v.name)?;
-                            p.write_string(&v.value)?;
-                            p.write_option(&v.signature, |p, v| p.write_string(v))
-                        })?;
-                    }
-                    PlayerAction::InitializeChat(init_chat) => {
-                        p.write_option(init_chat, |p, v| {
-                            p.write_uuid(&v.session_id)?;
-                            p.write_i64_be(v.expires_at)?;
-                            p.write_var_int(&v.public_key.len().try_into().map_err(|_| {
-                                WritingError::Message(format!(
-                                    "{} isn't representable as a VarInt",
-                                    v.public_key.len()
-                                ))
-                            })?)?;
-                            p.write_slice(&v.public_key)?;
-                            p.write_var_int(&v.signature.len().try_into().map_err(|_| {
-                                WritingError::Message(format!(
-                                    "{} isn't representable as a VarInt",
-                                    v.signature.len()
-                                ))
-                            })?)?;
-                            p.write_slice(&v.signature)
-                        })?;
-                    }
-                    PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode)?,
-                    PlayerAction::UpdateListed(listed) => p.write_bool(*listed)?,
-                    PlayerAction::UpdateLatency(latency) => p.write_var_int(latency)?,
-                    PlayerAction::UpdateDisplayName(display_name) => {
-                        p.write_option(display_name, |w, text_component| {
-                            w.write_component(text_component, version)
-                        })?;
-                    }
-                    PlayerAction::UpdateListOrder(order) => {
-                        // Added in 1.21.2
-                        if effective_actions & PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits() != 0 {
-                            p.write_var_int(order)?;
-                        }
-                    }
-                    PlayerAction::UpdateHat(show_hat) => {
-                        // Added in 1.21.4
-                        if effective_actions & PlayerInfoFlags::UPDATE_HAT.bits() != 0 {
-                            p.write_bool(*show_hat)?;
-                        }
-                    }
-                }
+        write.write_u8(flags.bits())?;
+        write.write_list::<Player>(self.players, |p, player| {
+            p.write_uuid(&player.uuid)?;
+            for flag in flags.iter() {
+                let action = player
+                    .actions
+                    .iter()
+                    .find(|action| action.flag() == flag)
+                    .ok_or_else(|| {
+                        WritingError::Message(format!("player info {flag:?} has no action"))
+                    })?;
+                write_action(p, action, &display_name)?;
             }
-
             Ok(())
         })
+    }
+}
+
+fn write_action<W: Write>(
+    p: &mut W,
+    action: &PlayerAction<'_>,
+    display_name: &impl Fn(&mut W, &TextComponent) -> Result<(), WritingError>,
+) -> Result<(), WritingError> {
+    match action {
+        PlayerAction::AddPlayer { name, properties } => {
+            p.write_string(name)?;
+            p.write_list::<Property>(properties, |p, v| {
+                p.write_string(&v.name)?;
+                p.write_string(&v.value)?;
+                p.write_option(&v.signature, |p, v| p.write_string(v))
+            })
+        }
+        PlayerAction::InitializeChat(init_chat) => p.write_option(init_chat, |p, v| {
+            p.write_uuid(&v.session_id)?;
+            p.write_i64_be(v.expires_at)?;
+            p.write_var_int(&v.public_key.len().try_into().map_err(|_| {
+                WritingError::Message(format!(
+                    "{} isn't representable as a VarInt",
+                    v.public_key.len()
+                ))
+            })?)?;
+            p.write_slice(&v.public_key)?;
+            p.write_var_int(&v.signature.len().try_into().map_err(|_| {
+                WritingError::Message(format!(
+                    "{} isn't representable as a VarInt",
+                    v.signature.len()
+                ))
+            })?)?;
+            p.write_slice(&v.signature)
+        }),
+        PlayerAction::UpdateGameMode(gamemode) => p.write_var_int(gamemode),
+        PlayerAction::UpdateListed(listed) => p.write_bool(*listed),
+        PlayerAction::UpdateLatency(latency) => p.write_var_int(latency),
+        PlayerAction::UpdateDisplayName(name) => {
+            p.write_option(name, |p, name| display_name(p, name))
+        }
+        PlayerAction::UpdateListOrder(order) => p.write_var_int(order),
+        PlayerAction::UpdateHat(show_hat) => p.write_bool(*show_hat),
+    }
+}
+
+impl ClientPacket for CPlayerInfoUpdate<'_> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        self.write_flagged(
+            write,
+            PlayerInfoFlags::from_bits_truncate(self.actions),
+            NetworkWriteExt::write_component,
+        )
     }
 }

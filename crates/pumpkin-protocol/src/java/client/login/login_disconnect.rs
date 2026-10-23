@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to reject a login attempt or kick a player during the login phase
 ///
@@ -26,7 +25,6 @@ impl ClientPacket for CLoginDisconnect {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.json_reason)?;
         Ok(())
@@ -34,10 +32,7 @@ impl ClientPacket for CLoginDisconnect {
 }
 
 impl<'a> crate::ServerPacket<'a> for CLoginDisconnect {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         Ok(Self {
             json_reason: bytebuf.get_str()?.into_string(),

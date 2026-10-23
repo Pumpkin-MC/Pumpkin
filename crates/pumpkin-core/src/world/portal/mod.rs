@@ -182,6 +182,7 @@ impl PortalType {
             Self::Nether => {
                 let pos = caller.get_entity().pos.load();
                 let current_yaw = caller.get_entity().yaw.load();
+                let current_pitch = caller.get_entity().pitch.load();
                 let dimensions = caller.get_entity().entity_dimension.load();
                 let scale_factor_new = dest_world.dimension.coordinate_scale;
                 let scale_factor_current = current_level.dimension.coordinate_scale;
@@ -262,10 +263,16 @@ impl PortalType {
                         );
                         let target_pos =
                             exit_portal.calculate_exit_position(relative_offset, &dimensions);
-                        let collision_free_pos =
-                            exit_portal.find_open_position(&dest_world, target_pos, &dimensions);
-                        let yaw = exit_portal
-                            .calculate_teleport_yaw(current_yaw, source_portal.map(|p| p.axis));
+                        let collision_free_pos = PortalSearchResult::find_collision_free_position(
+                            &dest_world,
+                            target_pos,
+                            &dimensions,
+                        );
+                        // Entered without a portal block: vanilla assumes the X axis
+                        let yaw = exit_portal.calculate_teleport_yaw(
+                            current_yaw,
+                            source_portal.map_or(HorizontalAxis::X, |p| p.axis),
+                        );
                         (collision_free_pos, Some(yaw))
                     },
                 );
@@ -274,7 +281,8 @@ impl PortalType {
                     new_world: dest_world,
                     position: final_pos,
                     yaw,
-                    pitch: None,
+                    // Vanilla's rotation is relative, so the pitch is kept
+                    pitch: Some(current_pitch),
                 })
             }
         }

@@ -6,7 +6,6 @@ use pumpkin_data::recipes::{
     RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::borrow::Cow;
 use std::{collections::HashMap, io::Write};
 
@@ -61,11 +60,7 @@ impl<'a> CRecipeBookAdd<'a> {
     }
 }
 
-fn write_item_slot_display(
-    write: &mut impl Write,
-    item: &Item,
-    _version: JavaMinecraftVersion,
-) -> Result<(), WritingError> {
+fn write_item_slot_display(write: &mut impl Write, item: &Item) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM as i32))?;
     write.write_var_int(&VarInt(item.id as i32))?;
     Ok(())
@@ -75,36 +70,29 @@ fn write_item_stack_slot_display(
     write: &mut impl Write,
     item: &Item,
     count: u8,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     let static_item = Item::from_id(item.id)
         .ok_or_else(|| WritingError::Message(format!("item id {} must exist", item.id)))?;
     let stack = ItemStack::new(count, static_item);
     // A result without an `id` lowers to air, which vanilla rejects as an item stack
     if stack.is_empty() {
-        return write_empty_slot_display(write, version);
+        return write_empty_slot_display(write);
     }
     write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM_STACK as i32))?;
-    ItemStackTemplateSerializer::from(stack).write_with_version(write, &version)
+    ItemStackTemplateSerializer::from(stack).write(write)
 }
 
-fn write_empty_slot_display(
-    write: &mut impl Write,
-    _version: JavaMinecraftVersion,
-) -> Result<(), WritingError> {
+fn write_empty_slot_display(write: &mut impl Write) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(SLOT_DISPLAY_EMPTY as i32))?;
     Ok(())
 }
 
-fn write_any_fuel_slot_display(
-    write: &mut impl Write,
-    _version: JavaMinecraftVersion,
-) -> Result<(), WritingError> {
+fn write_any_fuel_slot_display(write: &mut impl Write) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(SLOT_DISPLAY_ANY_FUEL as i32))?;
     Ok(())
 }
 
-fn resolve_item_tag(tag: &str, version: JavaMinecraftVersion) -> Option<Vec<&'static Item>> {
+fn resolve_item_tag(tag: &str) -> Option<Vec<&'static Item>> {
     let tag = tag.strip_prefix('#').unwrap_or(tag);
     let full_tag = if tag.contains(':') {
         Cow::Borrowed(tag)
@@ -112,16 +100,15 @@ fn resolve_item_tag(tag: &str, version: JavaMinecraftVersion) -> Option<Vec<&'st
         Cow::Owned(format!("minecraft:{tag}"))
     };
 
-    let item_names =
-        pumpkin_data::tag::get_registry_key_tags(version, pumpkin_data::tag::RegistryKey::Item)
-            .and_then(|map| map.get(full_tag.as_ref()))
-            .map(|t| t.0)
-            .or_else(|| {
-                pumpkin_data::tag::get_tag_values(
-                    pumpkin_data::tag::RegistryKey::Item,
-                    full_tag.as_ref(),
-                )
-            })?;
+    let item_names = pumpkin_data::tag::get_registry_key_tags(pumpkin_data::tag::RegistryKey::Item)
+        .and_then(|map| map.get(full_tag.as_ref()))
+        .map(|t| t.0)
+        .or_else(|| {
+            pumpkin_data::tag::get_tag_values(
+                pumpkin_data::tag::RegistryKey::Item,
+                full_tag.as_ref(),
+            )
+        })?;
 
     let mut items = Vec::new();
     for name in item_names {
@@ -136,30 +123,29 @@ fn resolve_item_tag(tag: &str, version: JavaMinecraftVersion) -> Option<Vec<&'st
 fn write_ingredient_slot_display(
     write: &mut impl Write,
     ingredient: &RecipeIngredientTypes,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         RecipeIngredientTypes::Simple(id) => {
             let key = id.strip_prefix("minecraft:").unwrap_or(id);
             if let Some(item) = Item::from_registry_key(key) {
-                write_item_slot_display(write, item, version)?;
+                write_item_slot_display(write, item)?;
             } else {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             }
         }
         RecipeIngredientTypes::Tagged(tag) => {
-            if let Some(items) = resolve_item_tag(tag, version) {
+            if let Some(items) = resolve_item_tag(tag) {
                 if items.len() == 1 {
-                    write_item_slot_display(write, items[0], version)?;
+                    write_item_slot_display(write, items[0])?;
                 } else {
                     write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
-                        write_item_slot_display(write, item, version)?;
+                        write_item_slot_display(write, item)?;
                     }
                 }
             } else {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             }
         }
         RecipeIngredientTypes::OneOf(ids) => {
@@ -171,14 +157,14 @@ fn write_ingredient_slot_display(
                 }
             }
             if items.is_empty() {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             } else if items.len() == 1 {
-                write_item_slot_display(write, items[0], version)?;
+                write_item_slot_display(write, items[0])?;
             } else {
                 write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
-                    write_item_slot_display(write, item, version)?;
+                    write_item_slot_display(write, item)?;
                 }
             }
         }
@@ -194,7 +180,6 @@ fn write_ingredient_slot_display(
 fn write_ingredient_holderset(
     write: &mut impl Write,
     ingredient: &RecipeIngredientTypes,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         RecipeIngredientTypes::Simple(id) => {
@@ -209,7 +194,7 @@ fn write_ingredient_holderset(
             }
         }
         RecipeIngredientTypes::Tagged(tag) => {
-            if let Some(items) = resolve_item_tag(tag, version) {
+            if let Some(items) = resolve_item_tag(tag) {
                 write.write_var_int(&VarInt(items.len() as i32 + 1))?;
                 for item in &items {
                     write.write_var_int(&VarInt(item.id as i32))?;
@@ -251,12 +236,11 @@ fn write_ingredient_holderset(
 fn write_crafting_requirements(
     write: &mut impl Write,
     slots: &[&RecipeIngredientTypes],
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_bool(true)?; // present
     write.write_var_int(&VarInt(slots.len() as i32))?;
     for slot in slots {
-        write_ingredient_holderset(write, slot, version)?;
+        write_ingredient_holderset(write, slot)?;
     }
     Ok(())
 }
@@ -264,13 +248,12 @@ fn write_crafting_requirements(
 fn write_result_slot_display(
     write: &mut impl Write,
     result: &RecipeResultStruct,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     let key = result.id.strip_prefix("minecraft:").unwrap_or(result.id);
     if let Some(item) = Item::from_registry_key(key) {
-        write_item_stack_slot_display(write, item, result.count, version)?;
+        write_item_stack_slot_display(write, item, result.count)?;
     } else {
-        write_empty_slot_display(write, version)?;
+        write_empty_slot_display(write)?;
     }
     Ok(())
 }
@@ -310,7 +293,6 @@ const fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
 fn write_entry(
     write: &mut impl Write,
     display_id: i32,
-    version: JavaMinecraftVersion,
     group_id: Option<i32>,
     flags: u8,
     crafting_table: &Item,
@@ -346,18 +328,18 @@ fn write_entry(
                 for row in *pattern {
                     for ch in row.chars() {
                         if ch == ' ' {
-                            write_empty_slot_display(write, version)?;
+                            write_empty_slot_display(write)?;
                         } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
-                            write_ingredient_slot_display(write, ingredient, version)?;
+                            write_ingredient_slot_display(write, ingredient)?;
                         } else {
-                            write_empty_slot_display(write, version)?;
+                            write_empty_slot_display(write)?;
                         }
                     }
                 }
                 // result
-                write_result_slot_display(write, result, version)?;
+                write_result_slot_display(write, result)?;
                 // craftingStation
-                write_item_slot_display(write, crafting_table, version)?;
+                write_item_slot_display(write, crafting_table)?;
                 // group: OptionalVarInt
                 write_optional_var_int(write, group_id)?;
                 // category
@@ -375,7 +357,7 @@ fn write_entry(
                             }
                         }
                     }
-                    write_crafting_requirements(write, &slots, version)?;
+                    write_crafting_requirements(write, &slots)?;
                 };
                 write.write_u8(flags)?;
             }
@@ -392,12 +374,12 @@ fn write_entry(
                 // ingredients list
                 write.write_var_int(&VarInt(ingredients.len() as i32))?;
                 for ing in *ingredients {
-                    write_ingredient_slot_display(write, ing, version)?;
+                    write_ingredient_slot_display(write, ing)?;
                 }
                 // result
-                write_result_slot_display(write, result, version)?;
+                write_result_slot_display(write, result)?;
                 // craftingStation
-                write_item_slot_display(write, crafting_table, version)?;
+                write_item_slot_display(write, crafting_table)?;
                 // group: OptionalVarInt
                 write_optional_var_int(write, group_id)?;
                 // category
@@ -405,7 +387,7 @@ fn write_entry(
                 // craftingRequirements: one HolderSet per ingredient
                 {
                     let slots: Vec<&RecipeIngredientTypes> = ingredients.iter().collect();
-                    write_crafting_requirements(write, &slots, version)?;
+                    write_crafting_requirements(write, &slots)?;
                 };
                 write.write_u8(flags)?;
             }
@@ -421,14 +403,14 @@ fn write_entry(
                 write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
                 // 2 ingredients
                 write.write_var_int(&VarInt(2))?;
-                write_ingredient_slot_display(write, input, version)?;
-                write_ingredient_slot_display(write, material, version)?;
-                write_result_slot_display(write, result, version)?;
-                write_item_slot_display(write, crafting_table, version)?;
+                write_ingredient_slot_display(write, input)?;
+                write_ingredient_slot_display(write, material)?;
+                write_result_slot_display(write, result)?;
+                write_item_slot_display(write, crafting_table)?;
                 write_optional_var_int(write, group_id)?;
                 write.write_var_int(&VarInt(crafting_category(category)))?;
                 // craftingRequirements: input + material
-                write_crafting_requirements(write, &[input, material], version)?;
+                write_crafting_requirements(write, &[input, material])?;
                 write.write_u8(flags)?;
             }
             // Skip special/decorated_pot recipes as they have no useful display
@@ -452,13 +434,13 @@ fn write_entry(
         // RecipeDisplay type = furnace (2)
         write.write_var_int(&VarInt(RECIPE_DISPLAY_FURNACE))?;
         // ingredient
-        write_ingredient_slot_display(write, &cooking.ingredient, version)?;
+        write_ingredient_slot_display(write, &cooking.ingredient)?;
         // fuel: AnyFuel
-        write_any_fuel_slot_display(write, version)?;
+        write_any_fuel_slot_display(write)?;
         // result
-        write_result_slot_display(write, &cooking.result, version)?;
+        write_result_slot_display(write, &cooking.result)?;
         // craftingStation
-        write_item_slot_display(write, station, version)?;
+        write_item_slot_display(write, station)?;
         // duration
         write.write_var_int(&VarInt(cooking.cookingtime))?;
         // experience
@@ -468,7 +450,7 @@ fn write_entry(
         // category
         write.write_var_int(&VarInt(book_category))?;
         // craftingRequirements: the single ingredient
-        write_crafting_requirements(write, &[&cooking.ingredient], version)?;
+        write_crafting_requirements(write, &[&cooking.ingredient])?;
         write.write_u8(flags)?;
         return Ok(true);
     }
@@ -478,11 +460,7 @@ fn write_entry(
 
 #[allow(clippy::too_many_lines)]
 impl ClientPacket for CRecipeBookAdd<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         // Station items (these IDs are stable across all versions we support)
@@ -539,7 +517,6 @@ impl ClientPacket for CRecipeBookAdd<'_> {
             let written = write_entry(
                 &mut write,
                 display_id,
-                *version,
                 group_id,
                 flags,
                 crafting_table,
@@ -585,7 +562,6 @@ impl ClientPacket for CRecipeBookAdd<'_> {
             write_entry(
                 &mut write,
                 display_id,
-                *version,
                 group_id,
                 flags,
                 crafting_table,
@@ -622,7 +598,6 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                     write_dynamic_crafting_entry(
                         &mut write,
                         display_id,
-                        *version,
                         group_id,
                         flags,
                         crafting_table,
@@ -672,7 +647,6 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                     write_dynamic_cooking_entry(
                         &mut write,
                         display_id,
-                        *version,
                         group_id,
                         flags,
                         station,
@@ -710,30 +684,29 @@ fn resolve_group_id_owned<'a>(
 fn write_dynamic_ingredient_slot_display(
     write: &mut impl Write,
     ingredient: &crate::codec::recipe::OwnedRecipeIngredient,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         crate::codec::recipe::OwnedRecipeIngredient::Simple(id) => {
             let key = id.strip_prefix("minecraft:").unwrap_or(id);
             if let Some(item) = Item::from_registry_key(key) {
-                write_item_slot_display(write, item, version)?;
+                write_item_slot_display(write, item)?;
             } else {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             }
         }
         crate::codec::recipe::OwnedRecipeIngredient::Tagged(tag) => {
-            if let Some(items) = resolve_item_tag(tag, version) {
+            if let Some(items) = resolve_item_tag(tag) {
                 if items.len() == 1 {
-                    write_item_slot_display(write, items[0], version)?;
+                    write_item_slot_display(write, items[0])?;
                 } else {
                     write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
-                        write_item_slot_display(write, item, version)?;
+                        write_item_slot_display(write, item)?;
                     }
                 }
             } else {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             }
         }
         crate::codec::recipe::OwnedRecipeIngredient::OneOf(ids) => {
@@ -746,14 +719,14 @@ fn write_dynamic_ingredient_slot_display(
                 .collect();
 
             if items.is_empty() {
-                write_empty_slot_display(write, version)?;
+                write_empty_slot_display(write)?;
             } else if items.len() == 1 {
-                write_item_slot_display(write, items[0], version)?;
+                write_item_slot_display(write, items[0])?;
             } else {
                 write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
-                    write_item_slot_display(write, item, version)?;
+                    write_item_slot_display(write, item)?;
                 }
             }
         }
@@ -764,7 +737,6 @@ fn write_dynamic_ingredient_slot_display(
 fn write_dynamic_ingredient_holderset(
     write: &mut impl Write,
     ingredient: &crate::codec::recipe::OwnedRecipeIngredient,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         crate::codec::recipe::OwnedRecipeIngredient::Simple(id) => {
@@ -777,7 +749,7 @@ fn write_dynamic_ingredient_holderset(
             }
         }
         crate::codec::recipe::OwnedRecipeIngredient::Tagged(tag) => {
-            if let Some(items) = resolve_item_tag(tag, version) {
+            if let Some(items) = resolve_item_tag(tag) {
                 write.write_var_int(&VarInt(items.len() as i32 + 1))?;
                 for item in &items {
                     write.write_var_int(&VarInt(item.id as i32))?;
@@ -818,16 +790,15 @@ fn write_dynamic_ingredient_holderset(
 fn write_dynamic_result_slot_display(
     write: &mut impl Write,
     result: &crate::codec::recipe::OwnedRecipeResult,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     let key = result
         .item_id
         .strip_prefix("minecraft:")
         .unwrap_or(&result.item_id);
     if let Some(item) = Item::from_registry_key(key) {
-        write_item_stack_slot_display(write, item, result.count, version)?;
+        write_item_stack_slot_display(write, item, result.count)?;
     } else {
-        write_empty_slot_display(write, version)?;
+        write_empty_slot_display(write)?;
     }
     Ok(())
 }
@@ -835,7 +806,6 @@ fn write_dynamic_result_slot_display(
 fn write_dynamic_crafting_entry(
     write: &mut impl Write,
     display_id: i32,
-    version: JavaMinecraftVersion,
     group_id: Option<i32>,
     flags: u8,
     crafting_table: &Item,
@@ -860,16 +830,16 @@ fn write_dynamic_crafting_entry(
             for row in pattern {
                 for ch in row.chars() {
                     if ch == ' ' {
-                        write_empty_slot_display(write, version)?;
+                        write_empty_slot_display(write)?;
                     } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
-                        write_dynamic_ingredient_slot_display(write, ingredient, version)?;
+                        write_dynamic_ingredient_slot_display(write, ingredient)?;
                     } else {
-                        write_empty_slot_display(write, version)?;
+                        write_empty_slot_display(write)?;
                     }
                 }
             }
-            write_dynamic_result_slot_display(write, result, version)?;
-            write_item_slot_display(write, crafting_table, version)?;
+            write_dynamic_result_slot_display(write, result)?;
+            write_item_slot_display(write, crafting_table)?;
             write_optional_var_int(write, group_id)?;
             write.write_var_int(&VarInt(crafting_category(category)))?;
 
@@ -886,7 +856,7 @@ fn write_dynamic_crafting_entry(
             write.write_bool(true)?; // present
             write.write_var_int(&VarInt(slots.len() as i32))?;
             for ing in slots {
-                write_dynamic_ingredient_holderset(write, ing, version)?;
+                write_dynamic_ingredient_holderset(write, ing)?;
             }
             write.write_u8(flags)?;
         }
@@ -900,17 +870,17 @@ fn write_dynamic_crafting_entry(
             write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
             write.write_var_int(&VarInt(ingredients.len() as i32))?;
             for ing in ingredients {
-                write_dynamic_ingredient_slot_display(write, ing, version)?;
+                write_dynamic_ingredient_slot_display(write, ing)?;
             }
-            write_dynamic_result_slot_display(write, result, version)?;
-            write_item_slot_display(write, crafting_table, version)?;
+            write_dynamic_result_slot_display(write, result)?;
+            write_item_slot_display(write, crafting_table)?;
             write_optional_var_int(write, group_id)?;
             write.write_var_int(&VarInt(crafting_category(category)))?;
 
             write.write_bool(true)?;
             write.write_var_int(&VarInt(ingredients.len() as i32))?;
             for ing in ingredients {
-                write_dynamic_ingredient_holderset(write, ing, version)?;
+                write_dynamic_ingredient_holderset(write, ing)?;
             }
             write.write_u8(flags)?;
         }
@@ -922,7 +892,6 @@ fn write_dynamic_crafting_entry(
 fn write_dynamic_cooking_entry(
     write: &mut impl Write,
     display_id: i32,
-    version: JavaMinecraftVersion,
     group_id: Option<i32>,
     flags: u8,
     station: &Item,
@@ -931,17 +900,17 @@ fn write_dynamic_cooking_entry(
 ) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(display_id))?;
     write.write_var_int(&VarInt(RECIPE_DISPLAY_FURNACE))?;
-    write_dynamic_ingredient_slot_display(write, &cooking.ingredient, version)?;
-    write_any_fuel_slot_display(write, version)?;
-    write_dynamic_result_slot_display(write, &cooking.result, version)?;
-    write_item_slot_display(write, station, version)?;
+    write_dynamic_ingredient_slot_display(write, &cooking.ingredient)?;
+    write_any_fuel_slot_display(write)?;
+    write_dynamic_result_slot_display(write, &cooking.result)?;
+    write_item_slot_display(write, station)?;
     write.write_var_int(&VarInt(cooking.cooking_time))?;
     write.write_f32_be(cooking.experience)?;
     write_optional_var_int(write, group_id)?;
     write.write_var_int(&VarInt(book_category))?;
     write.write_bool(true)?;
     write.write_var_int(&VarInt(1))?;
-    write_dynamic_ingredient_holderset(write, &cooking.ingredient, version)?;
+    write_dynamic_ingredient_holderset(write, &cooking.ingredient)?;
     write.write_u8(flags)?;
     Ok(())
 }
@@ -956,9 +925,9 @@ mod tests {
             id: "minecraft:air",
             count: 1,
         };
-        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+        {
             let mut bytes = Vec::new();
-            write_result_slot_display(&mut bytes, &result, version).unwrap();
+            write_result_slot_display(&mut bytes, &result).unwrap();
             assert_eq!(bytes, [SLOT_DISPLAY_EMPTY as u8]);
         }
     }
@@ -966,8 +935,8 @@ mod tests {
     #[test]
     fn vanilla_recipes_serialize_for_every_recipe_book_version() {
         let packet = CRecipeBookAdd::new(true, &[]);
-        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
-            packet.write_packet_data(Vec::new(), &version).unwrap();
+        {
+            packet.write_packet_data(Vec::new()).unwrap();
         }
     }
 }

@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(PING)]
 pub struct CConfigPing {
@@ -21,7 +20,6 @@ impl ClientPacket for CConfigPing {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_i32_be(self.id)?;
         Ok(())
@@ -29,10 +27,7 @@ impl ClientPacket for CConfigPing {
 }
 
 impl<'a> crate::ServerPacket<'a> for CConfigPing {
-    fn read(
-        read: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         Ok(Self {
             id: read.get_i32_be()?,

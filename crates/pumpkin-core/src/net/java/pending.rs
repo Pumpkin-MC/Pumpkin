@@ -22,7 +22,7 @@ use pumpkin_protocol::{
             SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKnownPacks, SPluginMessage,
         },
     },
-    packet::MultiVersionJavaPacket,
+    packet::JavaPacket,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
@@ -46,7 +46,7 @@ use crate::{
     server::Server,
 };
 
-use super::JavaClient;
+use super::{JavaClient, features::JavaConnectionFeatures};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -65,6 +65,8 @@ pub struct PendingConnection {
     pub address: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
+    /// Set by the multiversion plugin for older clients.
+    pub features: AtomicCell<JavaConnectionFeatures>,
     pub connection_state: AtomicCell<ConnectionState>,
     pub close_token: CancellationToken,
     pub network_writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
@@ -81,7 +83,7 @@ pub struct PendingConnection {
     /// Whether `CLoginSuccess` has been sent, mirroring vanilla's
     /// `State::PROTOCOL_SWITCHING`. Login acknowledgement is only valid after it.
     pub login_success_sent: bool,
-    /// For the connection packet events.
+    /// For the multiversion plugin's connection packet events.
     server: Weak<Server>,
 }
 
@@ -100,6 +102,7 @@ impl PendingConnection {
             address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),
+            features: AtomicCell::new(JavaConnectionFeatures::CURRENT),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
             network_writer: TCPNetworkEncoder::new(BufWriter::new(write)),
@@ -184,8 +187,8 @@ impl PendingConnection {
         }
     }
 
-    /// Server for the connection packet events, only for clients below 26.3 after handshake.
-    fn translating_server(&self) -> Option<Arc<Server>> {
+    /// Connection packet events for clients below 26.3, after handshake.
+    fn multiversion_server(&self) -> Option<Arc<Server>> {
         if self.version.load() == CURRENT_MC_VERSION
             || self.connection_state.load() == ConnectionState::HandShake
         {
@@ -195,26 +198,26 @@ impl PendingConnection {
     }
 
     /// Encoded as 26.3. `ConnectionPacketSentEvent` can rewrite it.
-    pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
+    /// `false` when a handler cancelled the packet.
+    pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) -> bool {
         let mut packet_buf = Vec::new();
-        if let Err(err) =
-            JavaClient::write_packet_for_version(packet, CURRENT_MC_VERSION, &mut packet_buf)
-        {
+        if let Err(err) = JavaClient::encode_packet(packet, &mut packet_buf) {
             error!("Failed to write packet: {err:?}");
-            return;
+            return false;
         }
         let Some(payload) = self.translate_outgoing(Bytes::from(packet_buf)).await else {
-            return;
+            return false;
         };
         if let Err(err) = self.network_writer.write_packet(payload).await {
             warn!("Failed to send packet to client {}: {}", self.id, err);
         }
         let _ = self.network_writer.flush().await;
+        true
     }
 
-    /// `ConnectionPacketSentEvent` with the 26.3 packet. `None` when cancelled.
+    /// `ConnectionPacketSentEvent` in the server's 26.3 format. `None` when cancelled.
     async fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
-        let Some(server) = self.translating_server() else {
+        let Some(server) = self.multiversion_server() else {
             return Some(packet_data);
         };
         if !server
@@ -247,21 +250,23 @@ impl PendingConnection {
         Some(framed.into())
     }
 
-    /// `ConnectionPacketReceivedEvent` with the client's packet; handlers rewrite it to 26.3.
+    /// `ConnectionPacketReceivedEvent` in the client's format; handlers rewrite to 26.3.
     /// `None` when cancelled.
     async fn translate_incoming(&self, packet: &RawPacket) -> Option<RawPacket> {
-        let unchanged = || RawPacket {
-            id: packet.id,
-            payload: packet.payload.clone(),
-        };
-        let Some(server) = self.translating_server() else {
-            return Some(unchanged());
+        let Some(server) = self.multiversion_server() else {
+            return Some(RawPacket {
+                id: packet.id,
+                payload: packet.payload.clone(),
+            });
         };
         if !server
             .plugin_manager
             .has_handlers::<ConnectionPacketReceivedEvent>()
         {
-            return Some(unchanged());
+            return Some(RawPacket {
+                id: packet.id,
+                payload: packet.payload.clone(),
+            });
         }
 
         let mut event = ConnectionPacketReceivedEvent::new(
@@ -270,8 +275,10 @@ impl PendingConnection {
             self.connection_state.load(),
             packet.id,
             packet.payload.clone(),
+            self.features.load(),
         );
         server.plugin_manager.fire(&server, &mut event).await;
+        self.features.store(event.features);
         (!event.cancelled).then(|| RawPacket {
             id: event.packet_id,
             payload: event.payload,
@@ -370,10 +377,7 @@ impl PendingConnection {
             0 => {
                 self.handle_handshake(
                     server,
-                    pumpkin_protocol::java::server::handshake::SHandShake::read(
-                        &mut payload,
-                        &CURRENT_MC_VERSION,
-                    )?,
+                    pumpkin_protocol::java::server::handshake::SHandShake::read(&mut payload)?,
                 )
                 .await;
                 Ok(None)
@@ -392,21 +396,15 @@ impl PendingConnection {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling status group");
         let mut payload = &packet.payload[..];
-        let version = CURRENT_MC_VERSION;
 
         match packet.id {
-            id if id == pumpkin_protocol::java::server::status::SStatusRequest::to_id(version) => {
+            id if id == pumpkin_protocol::java::server::status::SStatusRequest::PACKET_ID => {
                 self.handle_status_request(server).await;
                 Ok(None)
             }
-            id if id
-                == pumpkin_protocol::java::server::status::SStatusPingRequest::to_id(version) =>
-            {
+            id if id == pumpkin_protocol::java::server::status::SStatusPingRequest::PACKET_ID => {
                 self.handle_ping_request(
-                    pumpkin_protocol::java::server::status::SStatusPingRequest::read(
-                        &mut payload,
-                        &version,
-                    )?,
+                    pumpkin_protocol::java::server::status::SStatusPingRequest::read(&mut payload)?,
                 )
                 .await;
                 Ok(None)
@@ -425,60 +423,43 @@ impl PendingConnection {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group");
         let mut payload = &packet.payload[..];
-        let version = CURRENT_MC_VERSION;
 
         match packet.id {
-            id if id == pumpkin_protocol::java::server::login::SLoginStart::to_id(version) => {
-                Ok(self
-                    .handle_login_start(
-                        server,
-                        pumpkin_protocol::java::server::login::SLoginStart::read(
-                            &mut payload,
-                            &version,
-                        )?,
-                    )
-                    .await)
-            }
-            id if id
-                == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
-            {
+            id if id == pumpkin_protocol::java::server::login::SLoginStart::PACKET_ID => Ok(self
+                .handle_login_start(
+                    server,
+                    pumpkin_protocol::java::server::login::SLoginStart::read(&mut payload)?,
+                )
+                .await),
+            id if id == pumpkin_protocol::java::server::login::SEncryptionResponse::PACKET_ID => {
                 Ok(self
                     .handle_encryption_response(
                         server,
                         pumpkin_protocol::java::server::login::SEncryptionResponse::read(
                             &mut payload,
-                            &version,
                         )?,
                     )
                     .await)
             }
-            id if id
-                == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
-            {
+            id if id == pumpkin_protocol::java::server::login::SLoginPluginResponse::PACKET_ID => {
                 Ok(self
                     .handle_plugin_response(
                         server,
                         pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
                             &mut payload,
-                            &version,
                         )?,
                     )
                     .await)
             }
-            id if id
-                == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
-            {
+            id if id == pumpkin_protocol::java::server::login::SLoginCookieResponse::PACKET_ID => {
                 self.handle_login_cookie_response(
                     &pumpkin_protocol::java::server::login::SLoginCookieResponse::read(
                         &mut payload,
-                        &version,
                     )?,
                 );
                 Ok(None)
             }
-            id if id
-                == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
-            {
+            id if id == pumpkin_protocol::java::server::login::SLoginAcknowledged::PACKET_ID => {
                 Ok(self.handle_login_acknowledged(server).await)
             }
             _ => Err(ReadingError::Message(format!(
@@ -495,23 +476,21 @@ impl PendingConnection {
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling config group");
         let mut payload = &packet.payload[..];
-        let version = CURRENT_MC_VERSION;
 
         match packet.id {
-            id if id == SClientInformationConfig::to_id(version) => {
+            id if id == SClientInformationConfig::PACKET_ID => {
                 self.handle_client_information_config(SClientInformationConfig::read(
                     &mut payload,
-                    &version,
                 )?)
                 .await;
                 Ok(None)
             }
-            id if id == SPluginMessage::to_id(version) => {
-                self.handle_plugin_message(SPluginMessage::read(&mut payload, &version)?)
+            id if id == SPluginMessage::PACKET_ID => {
+                self.handle_plugin_message(SPluginMessage::read(&mut payload)?)
                     .await;
                 Ok(None)
             }
-            id if id == SAcknowledgeFinishConfig::to_id(version) => {
+            id if id == SAcknowledgeFinishConfig::PACKET_ID => {
                 let Some(profile) = self.gameprofile.clone() else {
                     return Ok(Some(PacketHandlerResult::Stop));
                 };
@@ -524,31 +503,28 @@ impl PendingConnection {
                     Ok(Some(PacketHandlerResult::ReadyToPlay(profile, config)))
                 }
             }
-            id if id == SKnownPacks::to_id(version) => {
+            id if id == SKnownPacks::PACKET_ID => {
                 self.handle_known_packs(server).await;
                 Ok(None)
             }
-            id if id == SConfigResourcePack::to_id(version) => {
+            id if id == SConfigResourcePack::PACKET_ID => {
                 self.handle_resource_pack_response(
                     server,
-                    SConfigResourcePack::read(&mut payload, &version)?,
+                    SConfigResourcePack::read(&mut payload)?,
                 )
                 .await;
                 Ok(None)
             }
-            id if id == SConfigCookieResponse::to_id(version) => {
-                self.handle_config_cookie_response(&SConfigCookieResponse::read(
-                    &mut payload,
-                    &version,
-                )?);
+            id if id == SConfigCookieResponse::PACKET_ID => {
+                self.handle_config_cookie_response(&SConfigCookieResponse::read(&mut payload)?);
                 Ok(None)
             }
-            id if id == SConfigPong::to_id(version) => {
-                let _pong = SConfigPong::read(&mut payload, &version)?;
+            id if id == SConfigPong::PACKET_ID => {
+                let _pong = SConfigPong::read(&mut payload)?;
                 Ok(None)
             }
-            id if id == SAcceptCodeOfConduct::to_id(version) => {
-                let _accept = SAcceptCodeOfConduct::read(&mut payload, &version)?;
+            id if id == SAcceptCodeOfConduct::PACKET_ID => {
+                let _accept = SAcceptCodeOfConduct::read(&mut payload)?;
                 Ok(None)
             }
             _ => Err(ReadingError::Message(format!(

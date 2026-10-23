@@ -19,6 +19,7 @@ use pumpkin_core::plugin::server::{
     server_tick_end::ServerTickEndEvent,
     server_tick_start::ServerTickStartEvent,
 };
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
@@ -28,14 +29,17 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Typed view is 26.3
-            // for older clients only valid after the multiversion plugin ran.
-            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
-                self.packet_id,
-                &self.payload,
-                pumpkin_data::packet::CURRENT_MC_VERSION,
-            )
-            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
+            ClientPlatform::Java(client) => {
+                if client.version.load() == CURRENT_MC_VERSION {
+                    generated_packets::deserialize_java_serverbound_packet(
+                        self.packet_id,
+                        &self.payload,
+                    )
+                    .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
+                } else {
+                    ServerboundPacket::Unknown
+                }
+            }
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,

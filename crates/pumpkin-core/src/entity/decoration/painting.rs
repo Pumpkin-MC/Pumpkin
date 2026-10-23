@@ -14,7 +14,6 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// The world stores a painting facing as a horizontal value: 0 south, 1 west,
 /// 2 north, 3 east (`Direction.get2DDataValue`). The entity data, and the spawn
@@ -244,13 +243,13 @@ impl EntityBase for PaintingEntity {
         self.sync_variant();
     }
 
-    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+    fn java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
             VarInt(self.variant().id() as i32),
         )
-        .write(&mut metadata, &version)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())

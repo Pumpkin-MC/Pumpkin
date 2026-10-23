@@ -198,51 +198,54 @@ impl EnchantmentBuilder {
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    pub fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
-        manager.register(self)
+    pub async fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
+        manager.register(self).await
     }
 
     /// Registers this custom enchantment with the server.
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    pub fn register_to_server(self, server: &Server) -> Result<(), EnchantmentError> {
+    pub async fn register_to_server(self, server: &Server) -> Result<(), EnchantmentError> {
         let manager = server.get_enchantment_manager();
-        manager.register(self)
+        manager.register(self).await
     }
 
     /// Registers this custom enchantment with the plugin context.
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    pub fn register_to_context(self, context: &Context) -> Result<(), EnchantmentError> {
+    pub async fn register_to_context(self, context: &Context) -> Result<(), EnchantmentError> {
         let manager = context.get_enchantment_manager();
-        manager.register(self)
+        manager.register(self).await
     }
 }
 
 /// Trait for enchantment types that can be registered with an [`EnchantmentManager`].
+#[allow(async_fn_in_trait)]
 pub trait RegistrableEnchantment {
     /// Registers this enchantment with the provided enchantment manager.
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError>;
+    async fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError>;
 }
 
 impl RegistrableEnchantment for EnchantmentBuilder {
-    fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
+    async fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
         let enchantment = self.build()?;
         manager
             .register_enchantment(enchantment)
+            .await
             .map_err(EnchantmentError::RegistrationFailed)
     }
 }
 
 impl RegistrableEnchantment for CustomEnchantment {
-    fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
+    async fn register(self, manager: &EnchantmentManager) -> Result<(), EnchantmentError> {
         manager
             .register_enchantment(self)
+            .await
             .map_err(EnchantmentError::RegistrationFailed)
     }
 }
@@ -254,29 +257,29 @@ impl EnchantmentManager {
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if registration or validation fails.
-    pub fn register(
+    pub async fn register(
         &self,
         enchantment: impl RegistrableEnchantment,
     ) -> Result<(), EnchantmentError> {
-        enchantment.register(self)
+        enchantment.register(self).await
     }
 
     /// Gets an enchantment definition by its ID (custom or vanilla).
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<CustomEnchantment> {
-        self.get_enchantment(id)
+    pub async fn get(&self, id: &str) -> Option<CustomEnchantment> {
+        self.get_enchantment(id.to_owned()).await
     }
 
     /// Checks if an enchantment ID is registered on the server.
     #[must_use]
-    pub fn has(&self, id: &str) -> bool {
-        self.has_enchantment(id)
+    pub async fn has(&self, id: &str) -> bool {
+        self.has_enchantment(id.to_owned()).await
     }
 
     /// Returns all registered enchantment IDs (custom and vanilla).
     #[must_use]
-    pub fn get_all_ids(&self) -> Vec<String> {
-        self.get_all_enchantment_ids()
+    pub async fn get_all_ids(&self) -> Vec<String> {
+        self.get_all_enchantment_ids().await
     }
 }
 
@@ -291,17 +294,17 @@ impl Context {
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    pub fn register_enchantment(
+    pub async fn register_enchantment(
         &self,
         enchantment: impl RegistrableEnchantment,
     ) -> Result<(), EnchantmentError> {
-        self.get_enchantment_manager().register(enchantment)
+        self.get_enchantment_manager().register(enchantment).await
     }
 
     /// Gets an enchantment definition by its ID.
     #[must_use]
-    pub fn get_enchantment(&self, id: &str) -> Option<CustomEnchantment> {
-        self.get_server().get_enchantment(id)
+    pub async fn get_enchantment(&self, id: &str) -> Option<CustomEnchantment> {
+        self.get_server().get_enchantment(id.to_owned()).await
     }
 }
 
@@ -310,11 +313,11 @@ impl Server {
     ///
     /// # Errors
     /// Returns [`EnchantmentError`] if validation or registration fails.
-    pub fn register_enchantment(
+    pub async fn register_enchantment(
         &self,
         enchantment: impl RegistrableEnchantment,
     ) -> Result<(), EnchantmentError> {
-        self.get_enchantment_manager().register(enchantment)
+        self.get_enchantment_manager().register(enchantment).await
     }
 }
 

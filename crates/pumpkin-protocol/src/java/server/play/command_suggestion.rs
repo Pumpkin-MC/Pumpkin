@@ -7,7 +7,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(COMMAND_SUGGESTION)]
 pub struct SCommandSuggestion<'a> {
@@ -16,28 +15,11 @@ pub struct SCommandSuggestion<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SCommandSuggestion<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        if *version >= JavaMinecraftVersion::V_1_13 {
-            Ok(Self {
-                id: bytebuf.get_var_int()?,
-                command: bytebuf.get_str_borrowed()?,
-            })
-        } else {
-            let command = bytebuf.get_str_borrowed()?;
-            if *version >= JavaMinecraftVersion::V_1_9 {
-                let _assume_command = bytebuf.get_bool()?;
-            }
-            if *version >= JavaMinecraftVersion::V_1_8 {
-                let has_pos = bytebuf.get_bool()?;
-                if has_pos {
-                    let _ = bytebuf.get_block_pos(version)?;
-                }
-            }
-            Ok(Self {
-                id: VarInt(0),
-                command,
-            })
-        }
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        Ok(Self {
+            id: bytebuf.get_var_int()?,
+            command: bytebuf.get_str_borrowed()?,
+        })
     }
 }
 
@@ -45,7 +27,6 @@ impl crate::ClientPacket for SCommandSuggestion<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.id)?;

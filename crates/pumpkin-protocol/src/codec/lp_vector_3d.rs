@@ -59,14 +59,19 @@ impl LpVector3d {
     }
 
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
-        let mut low_16 = [0u8; 2];
+        let mut first = [0u8; 1];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut first)
             .map_err(|e| ReadingError::Message(e.to_string()))?;
-
-        if low_16[0] == 0 && low_16[1] == 0 {
+        if first[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+
+        let mut second = [0u8; 1];
+        reader
+            .read_exact(&mut second)
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
+        let low_16 = [first[0], second[0]];
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -103,27 +108,11 @@ impl LpVector3d {
             from_long(q_z, scale),
         )))
     }
-
-    pub fn write_legacy<W: std::io::Write>(&self, writer: &mut W) -> Result<(), WritingError> {
-        writer.write_i16_be(encode_legacy_velocity_component(self.0.x))?;
-        writer.write_i16_be(encode_legacy_velocity_component(self.0.y))?;
-        writer.write_i16_be(encode_legacy_velocity_component(self.0.z))?;
-        Ok(())
-    }
 }
 
 const MAX_VELOCITY_CLAMP: f64 = 1.717_986_918_3E10;
-const LEGACY_COMPONENT_CLAMP: f64 = 3.9;
-const LEGACY_COMPONENT_SCALE: f64 = 8000.0;
 const MIN_VELOCITY_MAGNITUDE: f64 = 3.051_944_088_384_301E-5;
 const MAX_15_BIT_VALUE: f64 = 32766.0;
-
-#[must_use]
-pub fn encode_legacy_velocity_component(component: f64) -> i16 {
-    // Legacy clients (<= 1.21.8 / protocol 772) encode velocity as clamped component * 8000.
-    (component.clamp(-LEGACY_COMPONENT_CLAMP, LEGACY_COMPONENT_CLAMP) * LEGACY_COMPONENT_SCALE)
-        as i16
-}
 
 fn clamp_value(value: f64) -> f64 {
     if value.is_nan() {
@@ -148,23 +137,16 @@ fn from_long(quantized: i64, scale: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{LpVector3d, encode_legacy_velocity_component};
+    use super::LpVector3d;
     use pumpkin_util::math::vector3::Vector3;
 
     #[test]
-    fn legacy_component_is_clamped_and_scaled() {
-        assert_eq!(encode_legacy_velocity_component(0.5), 4000);
-        assert_eq!(encode_legacy_velocity_component(-0.5), -4000);
-        assert_eq!(encode_legacy_velocity_component(4.0), 31200);
-        assert_eq!(encode_legacy_velocity_component(-4.0), -31200);
-    }
-
-    #[test]
-    fn write_legacy_writes_three_i16_be_components() -> Result<(), Box<dyn std::error::Error>> {
-        let velocity = LpVector3d(Vector3::new(0.5, -0.5, 0.0));
+    fn zero_velocity_is_a_single_zero_byte() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
-        velocity.write_legacy(&mut buf)?;
-        assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
+        LpVector3d(Vector3::new(0.0, 0.0, 0.0)).write(&mut buf)?;
+        assert_eq!(buf, vec![0]);
+        let decoded = LpVector3d::read(&mut buf.as_slice())?;
+        assert_eq!(decoded, LpVector3d(Vector3::new(0.0, 0.0, 0.0)));
         Ok(())
     }
 }

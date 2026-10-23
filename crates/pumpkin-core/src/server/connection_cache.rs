@@ -1,13 +1,14 @@
 use crate::entity::player::Player;
+use crate::net::java::versions::JavaVersions;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use std::{fs, path::Path};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -91,24 +92,34 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status_response(&self, client_protocol: i32) -> StatusResponse {
+    /// Shows the admitted range, and the client's own protocol when it is admitted so the
+    /// entry is not marked incompatible.
+    pub fn get_status_response(
+        &self,
+        client_version: JavaMinecraftVersion,
+        java_versions: &JavaVersions,
+    ) -> StatusResponse {
         let mut response = self.status_response.clone();
 
-        let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
-        let supported_max = CURRENT_MC_VERSION.protocol_version();
-
-        if client_protocol >= supported_min
-            && client_protocol <= supported_max
-            && let Some(version) = &mut response.version
-        {
-            version.protocol = client_protocol as u32;
+        if let Some(version) = &mut response.version {
+            let oldest = java_versions.oldest();
+            if oldest != CURRENT_MC_VERSION {
+                version.name = format!("{oldest}-{CURRENT_MC_VERSION}");
+            }
+            if java_versions.admits(client_version) {
+                version.protocol = client_version.protocol_version() as u32;
+            }
         }
 
         response
     }
 
-    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
-        let response = self.get_status_response(client_protocol);
+    pub fn get_status_packet(
+        &self,
+        client_version: JavaMinecraftVersion,
+        java_versions: &JavaVersions,
+    ) -> CStatusResponse {
+        let response = self.get_status_response(client_version, java_versions);
         let json = serde_json::to_string(&response).unwrap_or_default();
         CStatusResponse::new(json)
     }
@@ -203,11 +214,7 @@ impl CachedStatus {
 
         StatusResponse {
             version: Some(Version {
-                name: if LOWEST_SUPPORTED_MC_VERSION == CURRENT_MC_VERSION {
-                    CURRENT_MC_VERSION.to_string()
-                } else {
-                    format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}")
-                },
+                name: CURRENT_MC_VERSION.to_string(),
                 protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {

@@ -6,7 +6,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[derive(Debug)]
@@ -32,16 +31,9 @@ impl SClickSlot {
 }
 
 impl<'a> ServerPacket<'a> for SClickSlot {
-    fn read(
-        mut bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
-        let sync_id = bytebuf.get_container_id(version)?;
-        let revision = if version >= &JavaMinecraftVersion::V_1_17_1 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(i32::from(bytebuf.get_i16_be()?))
-        };
+    fn read(mut bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let sync_id = bytebuf.get_container_id()?;
+        let revision = bytebuf.get_var_int()?;
         let slot = bytebuf.get_i16_be()?;
         let button = bytebuf.get_i8()?;
         let mode = SlotActionType::read(&mut bytebuf)?;
@@ -79,15 +71,10 @@ impl crate::ClientPacket for SClickSlot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_container_id(&self.sync_id, version)?;
-        if version >= &JavaMinecraftVersion::V_1_17_1 {
-            write.write_var_int(&self.revision)?;
-        } else {
-            write.write_i16_be(self.revision.0 as i16)?;
-        }
+        write.write_container_id(&self.sync_id)?;
+        write.write_var_int(&self.revision)?;
         write.write_i16_be(self.slot)?;
         write.write_i8(self.button)?;
         self.mode.write(&mut write)?;

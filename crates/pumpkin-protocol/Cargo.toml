@@ -10,6 +10,7 @@ default = ["query"]
 serverbound = []
 clientbound = []
 query = []
+java-legacy = []
 
 [dependencies]
 pumpkin-nbt.workspace = true

@@ -96,11 +96,6 @@ impl ToTokens for EnumCreator {
                 }
 
                 #[must_use]
-                pub const fn is_valid_for_version(&self, _version: JavaMinecraftVersion) -> bool {
-                    self.is_network_synced()
-                }
-
-                #[must_use]
                 pub fn from_string(s: &str) -> Option<Self> {
                     match s {
                         #(#from_string_arms,)*
@@ -290,10 +285,6 @@ fn load_datapack_tags(
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, tag
 /// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
-    let versions = [("26_3", "V_26_3")];
-
-    let version_mapping = [("V_26_3", "V_26_3")];
-
     // --- Load Global Assets ---
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
@@ -386,121 +377,62 @@ pub(crate) fn build() -> TokenStream {
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();
     let mut all_registry_keys = HashSet::new();
 
-    let mut latest_tag_modules = Vec::new();
-    let mut latest_match_arms = Vec::new();
-    let mut all_version_code = Vec::new();
-    let mut version_fn_match_arms = Vec::new();
+    let mut tag_modules = Vec::new();
+    let mut match_arms = Vec::new();
 
-    for (ver_folder, ver_ident_str) in versions {
-        let datapack_data_dir = std::path::Path::new("../../assets/datapack/data");
-        let datapack_base = datapack_data_dir.join("minecraft");
+    let datapack_data_dir = std::path::Path::new("../../assets/datapack/data");
+    for (key, tag_map) in load_datapack_tags(datapack_data_dir) {
+        all_registry_keys.insert(key.clone());
+        let key_pascal = format_ident!("{}", key.to_pascal_case());
+        let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
-        let tags = load_datapack_tags(&datapack_data_dir);
-        let is_latest = ver_folder == "26_3";
+        let mut tag_entries = Vec::new();
+        let mut tag_map_entries = Vec::new();
 
-        let mut ver_cat_match_arms = Vec::new();
-        let fn_name = format_ident!("get_tags_{}", ver_ident_str);
+        if !datapack_id_maps.contains_key(&key) {
+            let dir = datapack_data_dir.join("minecraft").join(&key);
+            if dir.is_dir() {
+                datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
+            }
+        }
 
-        for (key, tag_map) in tags {
-            all_registry_keys.insert(key.clone());
-            let key_pascal = format_ident!("{}", key.to_pascal_case());
-            let dict_name = if is_latest {
-                format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase())
-            } else {
-                format_ident!(
-                    "TAGS_{}_{}",
-                    ver_ident_str,
-                    key.replace(['/', '.', '-'], "_").to_uppercase()
-                )
+        for (tag_name, values) in tag_map {
+            let ids: Vec<u16> = values
+                .iter()
+                .filter_map(|v| match key.as_str() {
+                    "block" => block_id_map.get(v).copied(),
+                    "item" => item_id_map.get(v).copied(),
+                    "fluid" => fluid_id_map.get(v).copied(),
+                    "entity_type" => entity_id_map.get(v).copied(),
+                    "game_event" => game_event_id_map.get(v).copied(),
+                    "potion" => potion_id_map.get(v).copied(),
+                    "point_of_interest_type" => poi_id_map.get(v).copied(),
+                    _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
+                })
+                .collect();
+
+            let tag_const_name = format_ident!(
+                "{}",
+                tag_name.replace([':', '/', '.', '-'], "_").to_uppercase()
+            );
+
+            tag_entries.push(quote! {
+                pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
+            });
+            tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
+        }
+
+        tag_modules.push(quote! {
+            #[allow(non_snake_case)]
+            pub mod #key_pascal {
+                use super::Tag;
+                #(#tag_entries)*
+            }
+            static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
+                #(#tag_map_entries),*
             };
-
-            let mut tag_entries = Vec::new();
-            let mut tag_map_entries = Vec::new();
-
-            if !datapack_id_maps.contains_key(&key) {
-                let dir = std::path::Path::new("../../assets/datapack/data/minecraft").join(&key);
-                if dir.is_dir() {
-                    datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
-                }
-            }
-
-            for (tag_name, values) in tag_map {
-                let ids: Vec<u16> = values
-                    .iter()
-                    .filter_map(|v| match key.as_str() {
-                        "block" => block_id_map.get(v).copied(),
-                        "item" => item_id_map.get(v).copied(),
-                        "fluid" => fluid_id_map.get(v).copied(),
-                        "entity_type" => entity_id_map.get(v).copied(),
-                        "game_event" => game_event_id_map.get(v).copied(),
-                        "potion" => potion_id_map.get(v).copied(),
-                        "point_of_interest_type" => poi_id_map.get(v).copied(),
-                        _ => datapack_id_maps.get(&key).and_then(|m| m.get(v).copied()),
-                    })
-                    .collect();
-
-                let tag_const_name = format_ident!(
-                    "{}",
-                    tag_name.replace([':', '/', '.', '-'], "_").to_uppercase()
-                );
-
-                if is_latest {
-                    tag_entries.push(quote! {
-                        pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
-                    });
-                    tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
-                } else {
-                    tag_map_entries.push(quote! { #tag_name => &(&[#(#values),*], &[#(#ids),*]) });
-                }
-            }
-
-            if is_latest {
-                latest_tag_modules.push(quote! {
-                    #[allow(non_snake_case)]
-                    pub mod #key_pascal {
-                        use super::Tag;
-                        #(#tag_entries)*
-                    }
-                    static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
-                        #(#tag_map_entries),*
-                    };
-                });
-                latest_match_arms.push(quote! { RegistryKey::#key_pascal => &#dict_name });
-            } else {
-                all_version_code.push(quote! {
-                    static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
-                        #(#tag_map_entries),*
-                    };
-                });
-                ver_cat_match_arms.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
-            }
-        }
-
-        if !is_latest {
-            all_version_code.push(quote! {
-                #[allow(non_snake_case, unreachable_patterns)]
-                const fn #fn_name(key: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-                    match key {
-                        #(#ver_cat_match_arms,)*
-                        _ => None,
-                    }
-                }
-            });
-        }
-    }
-
-    for (ver_variant, ver_ident_str) in version_mapping {
-        let ver_ident = format_ident!("{ver_variant}");
-        if ver_ident_str == "V_26_3" {
-            version_fn_match_arms.push(quote! {
-                JavaMinecraftVersion::#ver_ident => get_latest_map(tag_category)
-            });
-        } else {
-            let fn_name = format_ident!("get_tags_{}", ver_ident_str);
-            version_fn_match_arms.push(quote! {
-                JavaMinecraftVersion::#ver_ident => #fn_name(tag_category)
-            });
-        }
+        });
+        match_arms.push(quote! { RegistryKey::#key_pascal => &#dict_name });
     }
 
     // --- Generate RegistryKey Enum ---
@@ -511,20 +443,16 @@ pub(crate) fn build() -> TokenStream {
     .to_token_stream();
 
     quote! {
-        use pumpkin_util::version::JavaMinecraftVersion;
-
         pub type Tag = (&'static [&'static str], &'static [u16]);
 
         #registry_key_enum
 
-        #(#latest_tag_modules)*
-
-        #(#all_version_code)*
+        #(#tag_modules)*
 
         #[must_use]
         pub const fn get_latest_map(key: RegistryKey) -> &'static phf::Map<&'static str, &'static Tag> {
             match key {
-                #(#latest_match_arms,)*
+                #(#match_arms,)*
             }
         }
 
@@ -539,8 +467,8 @@ pub(crate) fn build() -> TokenStream {
         }
 
         #[must_use]
-        pub const fn get_registry_key_tags(version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-            if !tag_category.is_valid_for_version(version) {
+        pub const fn get_registry_key_tags(tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+            if !tag_category.is_network_synced() {
                 return None;
             }
             Some(get_latest_map(tag_category))

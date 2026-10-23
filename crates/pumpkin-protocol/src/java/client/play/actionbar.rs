@@ -4,7 +4,6 @@ use pumpkin_util::text::TextComponent;
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 /// Updates the text displayed above the player's hotbar (the Action Bar).
 ///
 /// Unlike chat messages, Action Bar text is transient and generally used for
@@ -27,8 +26,7 @@ impl ClientPacket for CActionBar<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.action_bar, version)
+        write.write_component(self.action_bar)
     }
 }

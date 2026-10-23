@@ -132,4 +132,8 @@ impl PluginLoader for WasmPluginLoader {
     fn on_tick(&self, server: &Arc<Server>) {
         scheduler::tick(&self.task_scheduler, server);
     }
+
+    fn in_plugin_call(&self) -> bool {
+        pumpkin_plugin_runtime::in_plugin_call()
+    }
 }

@@ -8,7 +8,6 @@ use pumpkin_util::identifier::Identifier;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(UPDATE_ADVANCEMENTS)]
 #[allow(unused)]
@@ -44,7 +43,6 @@ impl ClientPacket for CUpdateAdvancements {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_bool(self.reset)?;
 
@@ -61,12 +59,11 @@ impl ClientPacket for CUpdateAdvancements {
             let has_display = adv.display.is_some();
             write.write_bool(has_display)?;
             if let Some(display) = adv.display {
-                write.write_component(&display.get_title(), version)?;
-                write.write_component(&display.get_description(), version)?;
+                write.write_component(&display.get_title())?;
+                write.write_component(&display.get_description())?;
 
                 // Item icon
-                ItemStackTemplateSerializer::from(display.item_icon.clone())
-                    .write_with_version(&mut write, version)?;
+                ItemStackTemplateSerializer::from(display.item_icon.clone()).write(&mut write)?;
 
                 write.write_var_int(&VarInt(display.frame_type as i32))?;
                 let flags = (display.has_background() as i32)
@@ -75,17 +72,6 @@ impl ClientPacket for CUpdateAdvancements {
                 write.write_i32_be(flags)?;
                 if let Some(bg) = display.background_texture {
                     write.write_string(bg)?;
-                }
-                if *version < JavaMinecraftVersion::V_26_3 {
-                    write.write_f32_be(display.x)?;
-                    write.write_f32_be(display.y)?;
-                }
-            }
-
-            if *version < JavaMinecraftVersion::V_1_20_2 {
-                write.write_var_int(&VarInt(adv.criteria.len() as i32))?;
-                for crit in adv.criteria {
-                    write.write_string(crit)?;
                 }
             }
 
@@ -97,13 +83,11 @@ impl ClientPacket for CUpdateAdvancements {
                 }
             }
 
-            if *version >= JavaMinecraftVersion::V_1_20 {
-                write.write_bool(adv.send_telemetry)?;
-            }
+            write.write_bool(adv.send_telemetry)?;
 
             // Since 26.3 the position in the advancement tree is sent per advancement instead of
             // being part of its display.
-            if *version >= JavaMinecraftVersion::V_26_3 {
+            {
                 let (x, y) = adv.display.map_or((0.0, 0.0), |d| (d.x, d.y));
                 write.write_f32_be(x)?;
                 write.write_f32_be(y)?;
@@ -129,9 +113,7 @@ impl ClientPacket for CUpdateAdvancements {
             }
         }
 
-        if *version >= JavaMinecraftVersion::V_1_21_5 {
-            write.write_bool(self.show_advancements)?;
-        }
+        write.write_bool(self.show_advancements)?;
 
         Ok(())
     }

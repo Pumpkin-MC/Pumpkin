@@ -29,7 +29,6 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::player::Player;
 use crate::entity::{
@@ -2185,10 +2184,7 @@ impl Mob for VillagerEntity {
         Some("minecraft:villager_v2")
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
-        }
+    fn mob_java_spawn_metadata(&self) -> Option<Box<[u8]>> {
         let mut metadata = Vec::new();
         Metadata::new(
             tracked_data::villager::VILLAGER_DATA,
@@ -2197,7 +2193,7 @@ impl Mob for VillagerEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         )
-        .write(&mut metadata, &version)
+        .write(&mut metadata)
         .ok()?;
         metadata.push(255);
         Some(metadata.into_boxed_slice())
@@ -2378,7 +2374,6 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;
 
@@ -2388,9 +2383,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::VILLAGER_DATA, data);
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
     }
@@ -2429,9 +2422,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);
     }

@@ -3,7 +3,6 @@ use std::io::Write;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
@@ -74,68 +73,6 @@ impl AttributeModifier {
     pub fn uuid(&self) -> uuid::Uuid {
         uuid::Uuid::parse_str(&self.id)
             .unwrap_or_else(|_| uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_OID, self.id.as_bytes()))
-    }
-}
-
-#[must_use]
-pub fn attribute_id_to_legacy_name(id: u8) -> &'static str {
-    match id {
-        23 => "generic.maxHealth",
-        32 => "zombie.spawnReinforcements",
-        19 => "horse.jumpStrength",
-        16 => "generic.followRange",
-        20 => "generic.knockbackResistance",
-        26 => "generic.movementSpeed",
-        15 => "generic.flyingSpeed",
-        3 => "generic.attackDamage",
-        4 => "generic.attackKnockback",
-        5 => "generic.attackSpeed",
-        2 => "generic.armorToughness",
-        1 => "generic.armor",
-        21 => "generic.luck",
-        _ => Attributes::ALL
-            .get(id as usize)
-            .map_or("generic.maxHealth", |attr| attr.name),
-    }
-}
-
-#[must_use]
-pub fn attribute_id_to_1_16_name(id: u8) -> &'static str {
-    match id {
-        1 => "minecraft:generic.armor",
-        2 => "minecraft:generic.armor_toughness",
-        3 => "minecraft:generic.attack_damage",
-        4 => "minecraft:generic.attack_knockback",
-        5 => "minecraft:generic.attack_speed",
-        7 => "minecraft:player.block_break_speed",
-        8 => "minecraft:player.block_interaction_range",
-        10 => "minecraft:generic.burning_time",
-        12 => "minecraft:generic.explosion_knockback_resistance",
-        13 => "minecraft:player.entity_interaction_range",
-        14 => "minecraft:generic.fall_damage_multiplier",
-        15 => "minecraft:generic.flying_speed",
-        16 => "minecraft:generic.follow_range",
-        18 => "minecraft:generic.gravity",
-        19 => "minecraft:horse.jump_strength",
-        20 => "minecraft:generic.knockback_resistance",
-        21 => "minecraft:generic.luck",
-        22 => "minecraft:generic.max_absorption",
-        23 => "minecraft:generic.max_health",
-        24 => "minecraft:player.mining_efficiency",
-        25 => "minecraft:generic.movement_efficiency",
-        26 => "minecraft:generic.movement_speed",
-        28 => "minecraft:generic.oxygen_bonus",
-        29 => "minecraft:generic.safe_fall_distance",
-        30 => "minecraft:generic.scale",
-        31 => "minecraft:player.sneaking_speed",
-        32 => "minecraft:zombie.spawn_reinforcements",
-        33 => "minecraft:generic.step_height",
-        34 => "minecraft:player.submerged_mining_speed",
-        35 => "minecraft:player.sweeping_damage_ratio",
-        37 => "minecraft:generic.water_movement_efficiency",
-        _ => Attributes::ALL
-            .get(id as usize)
-            .map_or("minecraft:generic.max_health", |attr| attr.name),
     }
 }
 
@@ -298,49 +235,20 @@ pub fn attribute_name_to_id(name: &str) -> Option<u8> {
 }
 
 impl ClientPacket for CUpdateAttributes {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.entity_id.0)?;
-        } else {
-            write.write_var_int(&self.entity_id)?;
-        }
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        write.write_var_int(&self.entity_id)?;
 
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_var_int(&VarInt(self.properties.len() as i32))?;
-        } else {
-            write.write_i32_be(self.properties.len() as i32)?;
-        }
+        write.write_var_int(&VarInt(self.properties.len() as i32))?;
 
         for prop in &self.properties {
-            if *version >= JavaMinecraftVersion::V_1_20_5 {
-                write.write_var_int(&prop.id)?;
-            } else if *version >= JavaMinecraftVersion::V_1_16 {
-                let name = attribute_id_to_1_16_name(prop.id.0 as u8);
-                write.write_string(name)?;
-            } else {
-                let name = attribute_id_to_legacy_name(prop.id.0 as u8);
-                write.write_string(name)?;
-            }
+            write.write_var_int(&prop.id)?;
 
             write.write_f64_be(prop.value)?;
 
-            if *version <= JavaMinecraftVersion::V_1_7_6 {
-                write.write_i16_be(prop.modifiers.len() as i16)?;
-            } else {
-                write.write_var_int(&VarInt(prop.modifiers.len() as i32))?;
-            }
+            write.write_var_int(&VarInt(prop.modifiers.len() as i32))?;
 
             for modifier in &prop.modifiers {
-                if *version >= JavaMinecraftVersion::V_1_21 {
-                    write.write_string(&modifier.id)?;
-                } else {
-                    let uuid = modifier.uuid();
-                    write.write_uuid(&uuid)?;
-                }
+                write.write_string(&modifier.id)?;
                 write.write_f64_be(modifier.amount)?;
                 write.write_u8(modifier.operation as u8)?;
             }
@@ -350,44 +258,22 @@ impl ClientPacket for CUpdateAttributes {
 }
 
 impl<'a> ServerPacket<'a> for CUpdateAttributes {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let entity_id = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            VarInt(bytebuf.get_i32_be()?)
-        } else {
-            bytebuf.get_var_int()?
-        };
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let entity_id = bytebuf.get_var_int()?;
 
-        let property_count = if *version >= JavaMinecraftVersion::V_1_17 {
-            bytebuf.get_var_int()?.0 as usize
-        } else {
-            bytebuf.get_i32_be()? as usize
-        };
+        let property_count = bytebuf.get_var_int()?.0 as usize;
 
         let mut properties = Vec::with_capacity(property_count);
         for _ in 0..property_count {
-            let id = if *version >= JavaMinecraftVersion::V_1_20_5 {
-                bytebuf.get_var_int()?
-            } else {
-                let name = bytebuf.get_str()?;
-                VarInt(i32::from(attribute_name_to_id(&name).unwrap_or(0)))
-            };
+            let id = bytebuf.get_var_int()?;
 
             let value = bytebuf.get_f64_be()?;
 
-            let modifiers_length = if *version <= JavaMinecraftVersion::V_1_7_6 {
-                bytebuf.get_i16_be()? as usize
-            } else {
-                bytebuf.get_var_int()?.0 as usize
-            };
+            let modifiers_length = bytebuf.get_var_int()?.0 as usize;
 
             let mut modifiers = Vec::with_capacity(modifiers_length);
             for _ in 0..modifiers_length {
-                let id = if *version >= JavaMinecraftVersion::V_1_21 {
-                    bytebuf.get_str()?.to_string()
-                } else {
-                    let uuid = bytebuf.get_uuid()?;
-                    uuid.to_string()
-                };
+                let id = bytebuf.get_str()?.to_string();
                 let amount = bytebuf.get_f64_be()?;
                 let operation = bytebuf.get_u8()? as i8;
                 modifiers.push(AttributeModifier::new(id, amount, operation));
@@ -409,11 +295,11 @@ mod tests {
     use pumpkin_data::packet::clientbound::play::UPDATE_ATTRIBUTES;
     use pumpkin_util::version::JavaMinecraftVersion;
 
-    use crate::{ClientPacket, VarInt, packet::MultiVersionJavaPacket, ser::NetworkReadExt};
+    use crate::{ClientPacket, VarInt, packet::JavaPacket, ser::NetworkReadExt};
 
     use super::{AttributeModifier, CUpdateAttributes, Property};
 
-    fn encoded_armor_attributes(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn encoded_armor_attributes(_version: JavaMinecraftVersion) -> Vec<u8> {
         let packet = CUpdateAttributes::new(
             VarInt(1),
             vec![Property::new(
@@ -427,11 +313,11 @@ mod tests {
             )],
         );
         let mut buf = Vec::new();
-        packet.write_packet_data(&mut buf, &version).unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
         buf
     }
 
-    fn assert_armor_attribute_payload(bytes: &[u8], version: JavaMinecraftVersion) {
+    fn assert_armor_attribute_payload(bytes: &[u8]) {
         let mut cursor = bytes;
         let entity_id = cursor.get_var_int().unwrap();
         assert_eq!(entity_id, VarInt(1));
@@ -449,12 +335,8 @@ mod tests {
         let modifier_count = cursor.get_var_int().unwrap();
         assert_eq!(modifier_count, VarInt(1));
 
-        if version >= JavaMinecraftVersion::V_1_21 {
-            let id = cursor.get_str().unwrap();
-            assert_eq!(&*id, "minecraft:armor.chestplate");
-        } else {
-            let _uuid = cursor.get_uuid().unwrap();
-        }
+        let id = cursor.get_str().unwrap();
+        assert_eq!(&*id, "minecraft:armor.chestplate");
         let amount = cursor.get_f64_be().unwrap();
         assert_eq!(amount, 8.0);
         let operation = cursor.get_u8().unwrap();
@@ -464,22 +346,13 @@ mod tests {
 
     #[test]
     fn update_attributes_packet_id_for_26_3() {
-        assert_eq!(
-            CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_3),
-            UPDATE_ATTRIBUTES.to_id(JavaMinecraftVersion::V_26_3)
-        );
-        assert_eq!(CUpdateAttributes::to_id(JavaMinecraftVersion::V_26_3), 134);
+        assert_eq!(CUpdateAttributes::PACKET_ID, UPDATE_ATTRIBUTES.to_id());
+        assert_eq!(CUpdateAttributes::PACKET_ID, 134);
     }
 
     #[test]
-    fn armor_attribute_encodes_for_1_21() {
-        let version = JavaMinecraftVersion::V_1_21;
-        assert_armor_attribute_payload(&encoded_armor_attributes(version), version);
-    }
-
-    #[test]
-    fn armor_attribute_encodes_for_26_2() {
-        let version = JavaMinecraftVersion::V_26_2;
-        assert_armor_attribute_payload(&encoded_armor_attributes(version), version);
+    fn armor_attribute_encodes() {
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
+        assert_armor_attribute_payload(&encoded_armor_attributes(version));
     }
 }

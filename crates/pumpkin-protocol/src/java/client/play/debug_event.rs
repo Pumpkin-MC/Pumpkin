@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::DEBUG_EVENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(DEBUG_EVENT)]
 pub struct CDebugEvent<'a> {
@@ -20,11 +19,7 @@ impl<'a> CDebugEvent<'a> {
 }
 
 impl ClientPacket for CDebugEvent<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_string(self.name)?;
         write.write_slice(self.data)?;
         Ok(())
@@ -32,7 +27,7 @@ impl ClientPacket for CDebugEvent<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CDebugEvent<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let name = bytebuf.get_str_borrowed()?;
         let data = bytebuf.read_remaining_slice_borrowed(usize::MAX)?;
         Ok(Self { name, data })

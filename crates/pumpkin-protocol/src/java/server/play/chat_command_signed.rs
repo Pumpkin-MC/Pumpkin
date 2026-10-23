@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::CHAT_COMMAND_SIGNED;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -25,7 +24,7 @@ pub struct SChatCommandSigned<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SChatCommandSigned<'a> {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let command = read.get_str_bounded_borrowed(256)?;
         let timestamp = read.get_i64_be()?;
         let salt = read.get_i64_be()?;
@@ -38,11 +37,7 @@ impl<'a> ServerPacket<'a> for SChatCommandSigned<'a> {
         }
         let message_count = read.get_var_int()?;
         let acknowledged = read.read_slice_borrowed(3)?;
-        let checksum = if *version >= JavaMinecraftVersion::V_1_21_5 {
-            read.get_u8()?
-        } else {
-            0
-        };
+        let checksum = read.get_u8()?;
 
         Ok(Self {
             command,
@@ -57,11 +52,7 @@ impl<'a> ServerPacket<'a> for SChatCommandSigned<'a> {
 }
 
 impl ClientPacket for SChatCommandSigned<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_string(self.command)?;
         write.write_i64_be(self.timestamp)?;
         write.write_i64_be(self.salt)?;
@@ -72,9 +63,7 @@ impl ClientPacket for SChatCommandSigned<'_> {
         }
         write.write_var_int(&self.message_count)?;
         write.write_slice(self.acknowledged)?;
-        if *version >= JavaMinecraftVersion::V_1_21_5 {
-            write.write_u8(self.checksum)?;
-        }
+        write.write_u8(self.checksum)?;
         Ok(())
     }
 }

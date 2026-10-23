@@ -13,19 +13,21 @@ pub fn build_java_mapping() -> String {
         "use crate::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};\n",
     );
     output.push_str("use pumpkin_protocol::codec::var_int::VarInt;\n");
-    output.push_str("use pumpkin_util::version::JavaMinecraftVersion;\n");
     output.push_str("use bytes::Bytes;\n");
     output.push_str("use std::io::Cursor;\n");
     output.push_str("use std::any::Any;\n");
-    output.push_str("use pumpkin_protocol::packet::MultiVersionJavaPacket;\n");
+    output.push_str("use pumpkin_protocol::packet::JavaPacket;\n");
     output.push_str("use pumpkin_protocol::packet::Packet;\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
+    output
+        .push_str("pub fn serialize_java_packet(packet: &ClientboundPacket) -> Option<Bytes> {\n");
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
-    let server_states = &["config", "handshake", "login", "play", "status"];
+    // Play first: packet ids are per state, and `PacketReceivedEvent` is play-only.
+    // Config `client_information` and play `accept_teleportation` both use id 0.
+    let server_states = &["play", "config", "handshake", "login", "status"];
 
     for state in client_states {
         process_packets(
@@ -45,7 +47,7 @@ pub fn build_java_mapping() -> String {
     output.push_str("}\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
+    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8]) -> Option<ServerboundPacket> {\n");
     output.push_str("    match id {\n");
 
     for state in server_states {
@@ -519,7 +521,20 @@ fn convert_value(
                     }
                 }
             }
-            MappingMode::Deserialize | MappingMode::ToWit => {
+            MappingMode::Deserialize => {
+                if is_slice {
+                    if type_ident == "VarInt" {
+                        format!("{}.iter().map(|v| v.0 as _).collect()", src)
+                    } else {
+                        format!("{}.iter().map(|v| *v as _).collect()", src)
+                    }
+                } else if type_ident == "VarInt" {
+                    format!("{}.0.try_into().ok()?", src)
+                } else {
+                    format!("{}.try_into().ok()?", src)
+                }
+            }
+            MappingMode::ToWit => {
                 if is_slice {
                     if type_ident == "VarInt" {
                         format!("{}.iter().map(|v| v.0 as _).collect()", src)
@@ -770,7 +785,8 @@ fn emit_struct_output(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            pumpkin_core::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::java::JavaClient::encode_packet(&p, &mut buf).unwrap();
+");
             } else {
                 output.push_str("            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
             }
@@ -783,12 +799,12 @@ fn emit_struct_output(
             }
             if rust_path_prefix.contains("java") {
                 output.push_str(&format!(
-                    "        id if id == {}::{}::to_id(version) => {{\n",
+                    "        id if id == {}::{}::PACKET_ID => {{\n",
                     rust_path_prefix, struct_name
                 ));
                 output.push_str("            use pumpkin_protocol::ServerPacket;\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;\n",
                     rust_path_prefix, struct_name
                 ));
             } else {
@@ -897,7 +913,8 @@ fn process_enum(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            pumpkin_core::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_core::net::java::JavaClient::encode_packet(&p, &mut buf).unwrap();
+");
             } else {
                 output.push_str("            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
             }
@@ -911,12 +928,12 @@ fn process_enum(
             }
             if rust_path_prefix.contains("java") {
                 output.push_str(&format!(
-                    "        id if id == {}::{}::to_id(version) => {{\n",
+                    "        id if id == {}::{}::PACKET_ID => {{\n",
                     rust_path_prefix, enum_name
                 ));
                 output.push_str("            use pumpkin_protocol::ServerPacket;\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;\n",
                     rust_path_prefix, enum_name
                 ));
             } else {

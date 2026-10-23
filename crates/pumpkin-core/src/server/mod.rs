@@ -551,17 +551,10 @@ impl Server {
             .execute_function(server, &source, "#minecraft:load");
 
         let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
-        for player in self.get_all_players() {
-            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
-                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
-                    true,
-                    &dynamic_recipes,
-                );
-                if let Ok(data) = java_client.serialize_packet(&add_packet) {
-                    java_client.try_enqueue_packet(data);
-                }
-            }
-        }
+        World::broadcast_java_players(
+            &pumpkin_protocol::java::client::play::CRecipeBookAdd::new(true, &dynamic_recipes),
+            self.get_all_players().iter(),
+        );
     }
 
     #[must_use]
@@ -689,6 +682,10 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Joining already sends play packets (entity spawns), which must reach `PacketSentEvent`
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
+            client.set_player(player.clone());
+        }
         {
             let mut advancements = player
                 .advancements
@@ -704,8 +701,8 @@ impl Server {
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                player.screen_handler_sync_handler.store_player(player.clone());
-                world.add_player(&player).is_ok().then(|| {
+                if world.add_player(&player).is_ok() {
+                    player.screen_handler_sync_handler.store_player(player.clone());
                     {
                         let mut user_cache = self
                             .data
@@ -732,12 +729,20 @@ impl Server {
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
 
-                    (player, world)
-                })
+                    Some((player, world))
+                } else {
+                    if let ClientPlatform::Java(client) = player.client.as_ref() {
+                        client.clear_player();
+                    }
+                    None
+                }
             }
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.clear_player();
+                }
                 None
             }
         }}

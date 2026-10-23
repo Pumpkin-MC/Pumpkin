@@ -5,6 +5,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
+use crate::net::java::features::JavaConnectionFeatures;
 
 #[cancellable]
 #[derive(Event, Clone)]
@@ -32,6 +33,8 @@ pub struct PacketSentEvent {
     pub packet_id: i32,
     pub payload: Bytes,
     pub packet: Arc<dyn std::any::Any + Send + Sync>,
+    /// Java only: id + payload in the client's format, sent right after this packet.
+    pub extra_packets: Vec<(i32, Bytes)>,
 }
 
 impl PacketSentEvent {
@@ -46,6 +49,7 @@ impl PacketSentEvent {
             packet_id,
             payload,
             packet,
+            extra_packets: Vec::new(),
             cancelled: false,
         }
     }
@@ -66,6 +70,8 @@ pub struct ConnectionPacketReceivedEvent {
     pub state: ConnectionState,
     pub packet_id: i32,
     pub payload: Bytes,
+    /// Kept for the connection.
+    pub features: JavaConnectionFeatures,
 }
 
 impl ConnectionPacketReceivedEvent {
@@ -75,6 +81,7 @@ impl ConnectionPacketReceivedEvent {
         state: ConnectionState,
         packet_id: i32,
         payload: Bytes,
+        features: JavaConnectionFeatures,
     ) -> Self {
         Self {
             connection_id,
@@ -82,6 +89,7 @@ impl ConnectionPacketReceivedEvent {
             state,
             packet_id,
             payload,
+            features,
             cancelled: false,
         }
     }

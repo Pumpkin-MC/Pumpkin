@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(TICKING_STATE)]
 pub struct CTickingState {
@@ -25,7 +24,6 @@ impl ClientPacket for CTickingState {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f32_be(self.tick_rate)?;
         write.write_bool(self.is_frozen)?;

@@ -1,19 +1,12 @@
 use indexmap::IndexMap;
 use proc_macro2::{Literal, TokenStream};
-use quote::{format_ident, quote};
+use quote::quote;
 use serde_json::Value;
 use std::fs;
 
-use crate::version::JavaMinecraftVersion;
-
-/// The newest protocol version whose registry data is used as the fallback for unknown versions.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
-
-/// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
-/// static registry data, and the `Registry::get_synced` method.
+/// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, the static
+/// registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
-    let versions = [("26_3", "V_26_3")];
-
     const SYNCED_REGISTRIES: &[&str] = &[
         "worldgen/biome",
         "chat_type",
@@ -49,7 +42,7 @@ pub(crate) fn build() -> TokenStream {
         "worldgen/block_state_provider",
     ];
 
-    let process_version = |ver_folder: &str| -> TokenStream {
+    let registries = {
         let base_path = std::path::Path::new("../../assets/datapack/data/minecraft");
 
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
@@ -168,19 +161,8 @@ pub(crate) fn build() -> TokenStream {
         quote! { &[#(#reg_tokens),*] }
     };
 
-    let mut static_values = TokenStream::new();
-    for (ver_folder, ident_str) in versions {
-        let registries = process_version(ver_folder);
-        let ident = format_ident!("REGISTRY_{ident_str}");
-
-        static_values.extend(quote! {
-            pub static #ident: &[StaticRegistry] = #registries;
-        });
-    }
-
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;
-        use pumpkin_util::version::JavaMinecraftVersion;
 
         pub struct StaticRegistryEntry {
             pub name: &'static str,
@@ -202,14 +184,12 @@ pub(crate) fn build() -> TokenStream {
             pub registry_entries: Vec<RegistryEntryData>,
         }
 
-        #static_values
+        pub static STATIC_REGISTRIES: &[StaticRegistry] = #registries;
 
         impl Registry {
             #[must_use]
-            pub fn get_synced(_version: JavaMinecraftVersion) -> Vec<Self> {
-                let static_regs = REGISTRY_V_26_3;
-
-                static_regs.iter().map(|static_reg| {
+            pub fn get_synced() -> Vec<Self> {
+                STATIC_REGISTRIES.iter().map(|static_reg| {
                     let registry_id = if static_reg.registry_id.contains(':') {
                         static_reg.registry_id.to_string()
                     } else {

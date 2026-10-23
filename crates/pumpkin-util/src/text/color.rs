@@ -199,7 +199,8 @@ impl RGBColor {
         Self { red, green, blue }
     }
 
-    /// Finds the closest standard 16 Minecraft named color using Euclidean RGB distance.
+    /// Finds the closest standard 16 Minecraft named color, with `ViaBackwards`' weighted
+    /// distance (`TranslatableRewriter1_16.getClosestChatColor`).
     #[must_use]
     pub fn to_nearest_named(&self) -> NamedColor {
         const ALL_NAMED: [NamedColor; 16] = [
@@ -220,20 +221,17 @@ impl RGBColor {
             NamedColor::Yellow,
             NamedColor::White,
         ];
-        let mut closest = NamedColor::White;
-        let mut min_dist = u32::MAX;
-        for named in ALL_NAMED {
-            let rgb = named.to_rgb();
-            let dr = i32::from(self.red) - i32::from(rgb.red);
-            let dg = i32::from(self.green) - i32::from(rgb.green);
-            let db = i32::from(self.blue) - i32::from(rgb.blue);
-            let dist = (dr * dr + dg * dg + db * db) as u32;
-            if dist < min_dist {
-                min_dist = dist;
-                closest = named;
-            }
-        }
-        closest
+        ALL_NAMED
+            .into_iter()
+            .min_by_key(|named| {
+                let rgb = named.to_rgb();
+                let r_mean = i32::midpoint(i32::from(rgb.red), i32::from(self.red));
+                let dr = i32::from(rgb.red) - i32::from(self.red);
+                let dg = i32::from(rgb.green) - i32::from(self.green);
+                let db = i32::from(rgb.blue) - i32::from(self.blue);
+                (2 + (r_mean >> 8)) * dr * dr + 4 * dg * dg + (2 + ((255 - r_mean) >> 8)) * db * db
+            })
+            .unwrap_or(NamedColor::White)
     }
 }
 

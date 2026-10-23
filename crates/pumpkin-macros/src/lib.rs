@@ -287,7 +287,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Attaches a multi-version packet ID to a struct implementing `MultiVersionJavaPacket`.
+/// Implements `JavaPacket` for a struct with the given current packet id.
 ///
 /// # Arguments
 /// - `args` – The `TokenStream` representing the packet ID expression.
@@ -302,12 +302,8 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
     quote! {
         #ast
-        impl #impl_generics crate::packet::MultiVersionJavaPacket for #name #ty_generics #where_clause {
-            #[must_use]
-            #[inline]
-            fn to_id(version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
-                #packet_id_expr.to_id(version)
-            }
+        impl #impl_generics crate::packet::JavaPacket for #name #ty_generics #where_clause {
+            const PACKET_ID: i32 = #packet_id_expr.to_id();
         }
     }
     .into()

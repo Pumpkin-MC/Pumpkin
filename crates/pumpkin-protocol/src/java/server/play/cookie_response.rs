@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -18,7 +17,7 @@ pub struct SCookieResponse<'a> {
 const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl<'a> ServerPacket<'a> for SCookieResponse<'a> {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let key = read.get_str_borrowed()?;
         let has_payload = read.get_bool()?;
 
@@ -44,7 +43,6 @@ impl crate::ClientPacket for SCookieResponse<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::{VarInt, ser::NetworkWriteExt};
         write.write_string(self.key)?;

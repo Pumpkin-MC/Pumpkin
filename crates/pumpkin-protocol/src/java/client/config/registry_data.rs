@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_data::{packet::clientbound::config::REGISTRY_DATA, registry::RegistryEntryData};
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
+use pumpkin_util::resource_location::ResourceLocation;
 
 /// Added in 1.20.2
 #[java_packet(REGISTRY_DATA)]
@@ -27,11 +27,7 @@ impl<'a> CRegistryData<'a> {
 }
 
 impl ClientPacket for CRegistryData<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_string(&self.registry_id.clone())?;

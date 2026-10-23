@@ -3,7 +3,6 @@ use pumpkin_data::packet::clientbound::play::SECTION_BLOCKS_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section};
 use pumpkin_util::math::vector3::{self, Vector3};
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Write;
 
 use crate::{
@@ -57,18 +56,10 @@ impl CMultiBlockUpdate {
 }
 
 impl ClientPacket for CMultiBlockUpdate {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_16 {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        {
             let chunk_section = vector3::packed_chunk_pos(&self.chunk_section);
             write.write_i64_be(chunk_section)?;
-
-            if *version <= JavaMinecraftVersion::V_1_19_4 {
-                write.write_bool(self.suppress_light_updates)?;
-            }
 
             write.write_var_int(&VarInt(self.updates.len() as i32))?;
 
@@ -78,37 +69,6 @@ impl ClientPacket for CMultiBlockUpdate {
                 let packed = (u64::from(raw_state_id) << 12) | (local_pos & 0xFFF);
                 write.write_var_long(&VarLong(packed as i64))?;
             }
-        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.chunk_section.x)?;
-            write.write_i32_be(self.chunk_section.z)?;
-            write.write_i16_be(self.updates.len() as i16)?;
-            write.write_i32_be((self.updates.len() * 4) as i32)?;
-
-            for (pos, state_id) in &self.updates {
-                let rel_x = (pos.0.x & 0xF) as u16;
-                let rel_z = (pos.0.z & 0xF) as u16;
-                let rel_y = (pos.0.y & 0xFF) as u16;
-                let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
-                write.write_i16_be(packed_pos as i16)?;
-
-                let raw_state_id = state_id.as_u16();
-                write.write_i16_be(raw_state_id as i16)?;
-            }
-        } else {
-            write.write_i32_be(self.chunk_section.x)?;
-            write.write_i32_be(self.chunk_section.z)?;
-            write.write_var_int(&VarInt(self.updates.len() as i32))?;
-
-            for (pos, state_id) in &self.updates {
-                let rel_x = (pos.0.x & 0xF) as u16;
-                let rel_z = (pos.0.z & 0xF) as u16;
-                let rel_y = (pos.0.y & 0xFF) as u16;
-                let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
-                write.write_i16_be(packed_pos as i16)?;
-
-                let raw_state_id = state_id.as_u16();
-                write.write_var_int(&VarInt(i32::from(raw_state_id)))?;
-            }
         }
 
         Ok(())
@@ -116,16 +76,12 @@ impl ClientPacket for CMultiBlockUpdate {
 }
 
 impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        if *version >= JavaMinecraftVersion::V_1_16 {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        {
             let encoded_pos = bytebuf.get_i64_be()?;
             let chunk_section = vector3::unpacked_chunk_pos(encoded_pos);
 
-            let suppress_light_updates = if *version <= JavaMinecraftVersion::V_1_19_4 {
-                bytebuf.get_bool()?
-            } else {
-                false
-            };
+            let suppress_light_updates = false;
 
             let count = bytebuf.get_var_int()?.0 as usize;
             let mut updates = Vec::with_capacity(count);
@@ -149,69 +105,6 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
             Ok(Self {
                 chunk_section,
                 suppress_light_updates,
-                updates,
-            })
-        } else if *version <= JavaMinecraftVersion::V_1_7_6 {
-            let chunk_x = bytebuf.get_i32_be()?;
-            let chunk_z = bytebuf.get_i32_be()?;
-            let count = bytebuf.get_i16_be()? as usize;
-            let _data_size = bytebuf.get_i32_be()?;
-
-            let mut updates = Vec::with_capacity(count);
-            for _ in 0..count {
-                let pos = bytebuf.get_i16_be()? as u16;
-                let rel_x = ((pos >> 12) & 0xF) as i32;
-                let rel_z = ((pos >> 8) & 0xF) as i32;
-                let y = (pos & 0xFF) as i32;
-                let x = (chunk_x << 4) + rel_x;
-                let z = (chunk_z << 4) + rel_z;
-
-                let block_state_id = bytebuf.get_i16_be()? as u16;
-                updates.push((
-                    BlockPos::new(x, y, z),
-                    BlockStateId::new_or_air(block_state_id),
-                ));
-            }
-
-            let chunk_section = updates.first().map_or_else(
-                || Vector3::new(chunk_x, 0, chunk_z),
-                |(pos, _)| chunk_section_from_pos(pos),
-            );
-
-            Ok(Self {
-                chunk_section,
-                suppress_light_updates: false,
-                updates,
-            })
-        } else {
-            let chunk_x = bytebuf.get_i32_be()?;
-            let chunk_z = bytebuf.get_i32_be()?;
-            let count = bytebuf.get_var_int()?.0 as usize;
-
-            let mut updates = Vec::with_capacity(count);
-            for _ in 0..count {
-                let pos = bytebuf.get_i16_be()? as u16;
-                let rel_x = ((pos >> 12) & 0xF) as i32;
-                let rel_z = ((pos >> 8) & 0xF) as i32;
-                let y = (pos & 0xFF) as i32;
-                let x = (chunk_x << 4) + rel_x;
-                let z = (chunk_z << 4) + rel_z;
-
-                let block_state_id = bytebuf.get_var_int()?.0 as u16;
-                updates.push((
-                    BlockPos::new(x, y, z),
-                    BlockStateId::new_or_air(block_state_id),
-                ));
-            }
-
-            let chunk_section = updates.first().map_or_else(
-                || Vector3::new(chunk_x, 0, chunk_z),
-                |(pos, _)| chunk_section_from_pos(pos),
-            );
-
-            Ok(Self {
-                chunk_section,
-                suppress_light_updates: false,
                 updates,
             })
         }
