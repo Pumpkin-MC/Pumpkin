@@ -1289,6 +1289,7 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.on_landed_upon(OnLandedUponArgs {
                 world,
+                block,
                 fall_distance,
                 entity,
             });
