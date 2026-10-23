@@ -1239,6 +1239,8 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn before_mob_ai_step(&self) {}
+
     fn mob_ai_step(&self) {}
 
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {

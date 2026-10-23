@@ -24,7 +24,8 @@ pub struct CodEntity {
 
 impl CodEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        super::abstract_fish::initialize_fish_movement(&mut mob_entity);
         let cod = Self {
             mob_entity,
             fish_data: FishData::default(),
@@ -52,6 +53,13 @@ impl CodEntity {
 }
 
 impl Mob for CodEntity {
+    fn before_mob_ai_step(&self) {
+        self.fish_ai_step();
+    }
+    fn travel_in_water(&self, caller: &dyn EntityBase, _gravity: f64, _falling: bool) {
+        self.fish_travel_in_water(caller);
+    }
+
     fn as_fish(&self) -> Option<&dyn AbstractFish> {
         Some(self)
     }
@@ -108,6 +116,9 @@ impl Mob for CodEntity {
 impl WaterAnimal for CodEntity {}
 
 impl AbstractFish for CodEntity {
+    fn flop_sound(&self) -> Sound {
+        Sound::EntityCodFlop
+    }
     fn fish_data(&self) -> &FishData {
         &self.fish_data
     }
