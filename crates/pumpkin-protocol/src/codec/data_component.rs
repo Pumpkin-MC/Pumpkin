@@ -1501,8 +1501,9 @@ impl DataComponentCodec<Self> for PaintingVariantImpl {
     }
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let id = seq.get_var_int()?.0;
-        let variant = usize::try_from(id - 1)
-            .ok()
+        let variant = id
+            .checked_sub(1)
+            .and_then(|id| usize::try_from(id).ok())
             .and_then(|id| pumpkin_data::painting_variant::PaintingVariant::all().get(id))
             .ok_or_else(|| {
                 ReadingError::Message(format!("unsupported PaintingVariantImpl holder {id}"))
@@ -3510,6 +3511,9 @@ mod tests {
 
         let clamped = SalmonSizeImpl::deserialize(&mut [9u8].as_slice()).unwrap();
         assert_eq!(clamped.value, "large");
+
+        let min_holder = [0x80, 0x80, 0x80, 0x80, 0x08];
+        assert!(PaintingVariantImpl::deserialize(&mut min_holder.as_slice()).is_err());
     }
 
     #[test]
