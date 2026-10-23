@@ -86,7 +86,7 @@ pub(crate) trait PressurePlate {
 
     fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
         let floor = world.get_block_state(&block_pos.down());
-        floor.is_side_solid(BlockDirection::Up) || floor.is_center_solid(BlockDirection::Up)
+        floor.is_center_solid(BlockDirection::Up)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
