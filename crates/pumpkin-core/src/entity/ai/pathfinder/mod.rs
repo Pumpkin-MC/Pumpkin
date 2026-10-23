@@ -790,32 +790,18 @@ impl PathNavigation {
             stop_pos.y + f64::from(mob_height) * 0.5,
             stop_pos.z,
         );
-        let diff = to - start_pos;
-        let dist = diff.length();
-        if dist < 1e-5 {
-            return true;
-        }
-        let steps = (dist * 2.0).ceil() as usize;
-        let step_vec = diff / (steps as f64);
-        let mut current = start_pos;
-        for _ in 0..steps {
-            current += step_vec;
-            let bp = BlockPos::new(
-                current.x.floor() as i32,
-                current.y.floor() as i32,
-                current.z.floor() as i32,
-            );
-            let block_state = world.get_block_state(&bp);
-            if !block_state.is_air() {
-                if blocked_by_fluids && block_state.is_liquid() {
-                    return false;
-                }
-                if block_state.is_solid() {
-                    return false;
-                }
-            }
-        }
-        true
+        world
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                start_pos,
+                to,
+                pumpkin_world::clip::ClipBlock::Collider,
+                if blocked_by_fluids {
+                    pumpkin_world::clip::ClipFluid::Any
+                } else {
+                    pumpkin_world::clip::ClipFluid::None
+                },
+            ))
+            .is_miss
     }
 
     pub fn find_surface_position(world: &World, mut pos: BlockPos) -> BlockPos {
@@ -940,7 +926,11 @@ impl PathNavigation {
     }
 
     #[must_use]
-    pub fn should_target_next_node_in_direction(mob_pos: Vector3<f64>, path: &Path) -> bool {
+    pub fn should_target_next_node_in_direction(
+        mob_pos: Vector3<f64>,
+        path: &Path,
+        can_move_directly: impl FnOnce() -> bool,
+    ) -> bool {
         if path.get_next_node_index() + 1 >= path.get_node_count() {
             return false;
         }
@@ -957,6 +947,9 @@ impl PathNavigation {
         let dz = mob_pos.z - current_node.z;
         if dx * dx + dy * dy + dz * dz > 4.0 {
             return false;
+        }
+        if can_move_directly() {
+            return true;
         }
 
         let next_idx = path.get_next_node_index() + 1;
@@ -1075,11 +1068,12 @@ impl PathNavigation {
                 let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
                     && dy.abs() < NODE_REACH_Y;
 
-                let corner_cut = path.get_next_node().is_some_and(|n| {
-                    n.path_type != PathType::DangerFire
-                        && n.path_type != PathType::DamageFire
-                        && n.path_type != PathType::WalkableDoor
-                }) && Self::should_target_next_node_in_direction(mob_pos, path);
+                let corner_cut =
+                    path.get_next_node().is_some_and(|n| {
+                        n.path_type != PathType::DangerFire
+                            && n.path_type != PathType::DamageFire
+                            && n.path_type != PathType::WalkableDoor
+                    }) && Self::should_target_next_node_in_direction(mob_pos, path, || false);
 
                 if close_enough || corner_cut {
                     path.advance();
@@ -1414,11 +1408,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
         let mob_pos = entity.entity.pos.load();
         let can_update = self.inner.can_update_path(entity);
-        self.inner.max_distance_to_waypoint =
-            PathNavigation::waypoint_margin(entity.entity.width());
-        if self.is_done() {
-            self.inner.stop();
-        } else if let Some(path) = &mut self.inner.path
+        let width = entity.entity.width();
+        self.inner.max_distance_to_waypoint = PathNavigation::waypoint_margin(width);
+        if !self.is_done()
+            && let Some(path) = &mut self.inner.path
             && let Some(pos) = path.get_next_node_pos()
         {
             let reached = if can_update {
@@ -1429,12 +1422,25 @@ impl PathNavigationTrait for FlyingPathNavigation {
                     || (path
                         .get_next_node()
                         .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
-                        && PathNavigation::should_target_next_node_in_direction(mob_pos, path))
+                        && PathNavigation::should_target_next_node_in_direction(
+                            mob_pos,
+                            path,
+                            || {
+                                path.get_next_entity_pos(width).is_some_and(|target| {
+                                    PathNavigation::can_move_directly(
+                                        &entity.entity.world.load(),
+                                        mob_pos,
+                                        target,
+                                        entity.entity.height(),
+                                        true,
+                                    )
+                                })
+                            },
+                        ))
             } else {
-                path.get_next_entity_pos(entity.entity.width())
-                    .is_some_and(|target| {
-                        entity.entity.block_pos.load() == BlockPos::floored_v(target)
-                    })
+                path.get_next_entity_pos(width).is_some_and(|target| {
+                    entity.entity.block_pos.load() == BlockPos::floored_v(target)
+                })
             };
             if reached {
                 path.advance();
@@ -1443,6 +1449,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
                 self.inner.do_stuck_detection(mob_pos, entity);
             }
         }
+        self.inner.is_idle.store(self.is_done(), Ordering::Relaxed);
         self.inner.target(entity)
     }
 
@@ -2613,6 +2620,40 @@ mod tests {
             pos.x > 1.0,
             "Allay stayed around its starting node: {pos:?}"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_navigation_cuts_a_corner_when_the_flight_line_is_clear() -> TestResult {
+        use crate::entity::passive::allay::AllayEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let allay = AllayEntity::new(crate::entity::Entity::new(
+            world.clone(),
+            Vector3::new(1.0, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        let living = &allay.mob_entity.living_entity;
+        let mut navigation = FlyingPathNavigation::new();
+        let target = BlockPos::new(4, 64, 0);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(2, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(target),
+                ],
+                target,
+                true,
+            )),
+            1.0,
+            living,
+        );
+        navigation.tick(living);
+        let next_index = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+        assert_eq!(next_index, Some(1));
         Ok(())
     }
 
