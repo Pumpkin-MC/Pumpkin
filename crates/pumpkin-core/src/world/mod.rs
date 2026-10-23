@@ -183,7 +183,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
-use crate::world::player_touch::{PlayerTouch, pickup_body, touch_players};
+use crate::world::player_touch::{pickup_body, touch_entities};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
@@ -1576,9 +1576,15 @@ impl World {
                 player.push_entities();
             }
         }
+        // One player after another, before entities move, like vanilla `doTick` after the
+        // level tick
+        {
+            let _guard = player_handle.enter();
+            for player in players.iter() {
+                touch_entities(self, player);
+            }
+        }
         let player_elapsed = t_players.elapsed();
-        // After movement so pickup uses this-tick player boxes
-        let player_touches: Vec<_> = players.par_iter().filter_map(PlayerTouch::new).collect();
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
@@ -1673,8 +1679,6 @@ impl World {
 
             entity.get_entity().tick_count.fetch_add(1, Relaxed);
             entity.tick(entity.as_ref(), server_ref);
-
-            touch_players(entity, &player_touches);
         };
         if let Some(islands) = islands {
             islands
@@ -1705,10 +1709,6 @@ impl World {
                 entity.as_ref().position_passengers();
             }
         });
-        // Sequential so two players can't take the same orb
-        for touch in &player_touches {
-            touch.touch_random_orb();
-        }
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 
