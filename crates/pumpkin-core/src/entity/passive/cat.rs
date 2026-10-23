@@ -364,7 +364,9 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
+                let parent_interaction =
+                    self.mob_entity
+                        .mob_interact(player, item_stack, self.can_be_leashed());
                 if !parent_interaction {
                     self.order_to_sit(!self.is_ordered_to_sit());
                     return true;
@@ -395,7 +397,8 @@ impl Mob for CatEntity {
             return true;
         }
 
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

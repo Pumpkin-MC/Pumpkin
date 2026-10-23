@@ -626,7 +626,7 @@ impl SpearItem {
                 return false;
             }
         }
-        !player.get_entity().is_passenger_of_same_vehicle(entity)
+        player.get_entity().root_vehicle_id() != entity.root_vehicle_id()
     }
 }
 

@@ -1,4 +1,3 @@
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
@@ -209,9 +208,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
         match computation_type {
             PathComputationType::Water => {
-                state.is_waterlogged()
-                    || Fluid::from_state_id(state.id)
-                        .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
             }
             PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
         }

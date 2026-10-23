@@ -74,6 +74,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
+pub mod bucketable;
 pub mod custom_sound;
 pub mod decoration;
 pub mod effect;
@@ -978,6 +979,7 @@ pub struct Entity {
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Tracks a horizontal collision
     pub horizontal_collision: AtomicBool,
+    pub vertical_collision: AtomicBool,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
@@ -1041,7 +1043,9 @@ pub struct Entity {
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: AtomicBool,
+    pub blocks_building: bool,
     pub silent: AtomicBool,
+    pub air_supply: AtomicI32,
     pub has_no_gravity: AtomicBool,
     /// Scoreboard tags attached to this entity, managed with `/tag`.
     /// Vanilla allows at most [`MAX_SCOREBOARD_TAGS`] tags per entity.
@@ -1195,6 +1199,7 @@ impl Entity {
             touching_lava: AtomicBool::new(false),
             lava_height: AtomicCell::new(0.0),
             horizontal_collision: AtomicBool::new(false),
+            vertical_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
             movement: AtomicCell::new(Vector3::default()),
@@ -1245,7 +1250,9 @@ impl Entity {
             portal_manager: std::sync::Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
             custom_name_visible: AtomicBool::new(false),
+            blocks_building: false,
             silent: AtomicBool::new(false),
+            air_supply: AtomicI32::new(breath::MAX_AIR),
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
@@ -1419,6 +1426,26 @@ impl Entity {
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
+    pub fn set_air_supply(&self, mut air: i32) {
+        if air == self.air_supply.load(Relaxed) {
+            return;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                    self.entity_id,
+                    air,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            air = event.amount;
+        }
+        self.air_supply.store(air, Relaxed);
+        self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
+    }
+
     pub fn is_silent(&self) -> bool {
         self.silent.load(Ordering::Relaxed)
     }
@@ -1554,6 +1581,17 @@ impl Entity {
         }
     }
 
+    #[must_use]
+    pub fn root_vehicle_id(&self) -> i32 {
+        let mut id = self.entity_id;
+        let mut vehicle = self.get_vehicle();
+        while let Some(current) = vehicle {
+            id = current.get_entity().entity_id;
+            vehicle = current.get_entity().get_vehicle();
+        }
+        id
+    }
+
     /// Returns the block position of the block the (non-player) entity is standing on, if any.
     pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         // Check if the entity is on the ground
@@ -1570,6 +1608,7 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
+        self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
@@ -1623,6 +1662,7 @@ impl Entity {
                 }
 
                 if max_time != 1.0 {
+                    self.vertical_collision.store(true, Ordering::SeqCst);
                     let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
                     adjusted_movement.set_axis(Axis::Y, changed_component);
                 }
@@ -2182,6 +2222,7 @@ impl Entity {
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
+            self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
             return;
@@ -3657,12 +3698,6 @@ impl Entity {
         Some(root)
     }
 
-    #[must_use]
-    pub fn root_vehicle_id(&self) -> i32 {
-        self.get_root_vehicle()
-            .map_or(self.entity_id, |root| root.get_entity().entity_id)
-    }
-
     /// Vanilla `isPassengerOfSameVehicle`: same root vehicle, or the same entity.
     #[must_use]
     pub fn is_passenger_of_same_vehicle(&self, other: &Self) -> bool {
@@ -4209,6 +4244,9 @@ impl Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
+        if self.entity_type != &EntityType::PLAYER {
+            nbt.put_short("Air", self.air_supply.load(Relaxed) as i16);
+        }
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
@@ -4297,6 +4335,13 @@ impl Entity {
         }
         if let Some(on_ground) = nbt.get_bool("OnGround") {
             self.on_ground.store(on_ground, Relaxed);
+        }
+        if self.entity_type != &EntityType::PLAYER
+            && let Some(air) = nbt.get_short("Air")
+        {
+            let air = i32::from(air);
+            self.air_supply.store(air, Relaxed);
+            self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
         if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
             self.invulnerable.store(invulnerable, Relaxed);

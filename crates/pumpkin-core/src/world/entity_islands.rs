@@ -358,6 +358,11 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     if let Some(owner) = entity.get_owner_entity() {
         links.push(owner.get_entity().entity_id);
     }
+    if let Some(fish) = entity.get_mob().and_then(|mob| mob.as_schooling_fish())
+        && let Some(leader) = fish.leader()
+    {
+        links.push(leader.get_entity().entity_id);
+    }
     if let Some(mob) = entity.get_mob()
         && let Some(target) = mob.get_mob_entity().get_target()
     {

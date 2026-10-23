@@ -147,6 +147,7 @@ pub struct LivingEntity {
 
     /// The ID of the player that last hurt this entity.
     pub last_hurt_by_player_id: AtomicI32,
+    pub no_action_time: AtomicI32,
     /// The tick at which this entity was last hurt by a player.
     pub last_hurt_by_player_time: AtomicI64,
     /// The ID of the mob/entity that last hurt this entity.
@@ -298,7 +299,8 @@ impl LivingEntity {
         }
     }
 
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
         } else if entity.entity_type == &EntityType::SKELETON_HORSE {
@@ -350,6 +352,7 @@ impl LivingEntity {
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
             last_hurt_by_player_id: AtomicI32::new(0),
+            no_action_time: AtomicI32::new(0),
             last_hurt_by_player_time: AtomicI64::new(0),
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
@@ -1478,6 +1481,9 @@ impl LivingEntity {
     }
 
     fn tick_movement(&self, caller: &dyn EntityBase) {
+        if let Some(mob) = caller.get_mob() {
+            mob.before_mob_ai_step();
+        }
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -3537,6 +3543,7 @@ impl LivingEntity {
             position,
         );
 
+        self.no_action_time.store(0, Relaxed);
         if play_sound {
             if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
                 sound.on_hurt_sound();
