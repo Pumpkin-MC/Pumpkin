@@ -8,7 +8,9 @@ use rand::RngExt;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
+
+const MATE_SEARCH_RADIUS: f64 = 8.0;
 
 pub struct BreedGoal {
     speed: f64,
@@ -38,7 +40,7 @@ impl BreedGoal {
         let my_type = entity.entity_type;
         let my_uuid = entity.entity_uuid;
 
-        let nearby = world.get_nearby_entities(pos, 8.0);
+        let nearby = world.get_nearby_entities(pos, MATE_SEARCH_RADIUS);
         let mut closest: Option<(f64, Arc<dyn EntityBase>)> = None;
 
         for candidate in nearby.values() {
@@ -100,7 +102,10 @@ impl BreedGoal {
         mate.set_breeding_cooldown(6000);
 
         let parent_pos = entity.pos.load();
-        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
+        let baby = mob.as_animal().map_or_else(
+            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
+            |animal| animal.get_breed_offspring(mate),
+        );
         baby.get_entity().set_age(-24000);
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
@@ -112,6 +117,32 @@ impl BreedGoal {
 }
 
 impl Goal for BreedGoal {
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        let mob_entity = mob.get_mob_entity();
+        let mut links: Vec<i32> = self
+            .mate
+            .iter()
+            .map(|mate| mate.get_entity().entity_id)
+            .collect();
+        if running
+            && let Some(breeder) = mob_entity.breeder.load()
+            && let Some(player) = mob.get_entity().world.load().get_player_by_uuid(breeder)
+        {
+            links.push(player.entity_id());
+        }
+        let searching = !running && mob_entity.is_breeding_ready() && mob_entity.is_in_love();
+        Some(GoalReach {
+            entities: if searching { MATE_SEARCH_RADIUS } else { 0.0 },
+            speed: if running || searching {
+                self.speed
+            } else {
+                0.0
+            },
+            links,
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         if !mob_entity.is_breeding_ready() || !mob_entity.is_in_love() {
@@ -141,11 +172,8 @@ impl Goal for BreedGoal {
     fn stop(&mut self, mob: &dyn Mob) {
         self.mate = None;
         self.timer = 0;
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 
@@ -169,10 +197,8 @@ impl Goal for BreedGoal {
         let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
         {
-            let mut navigator = mob_entity
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob_entity.steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
         };
 

@@ -365,16 +365,21 @@ impl BlockBehaviour for SignBlock {
         if let Some(block_entity) = args.world.get_block_entity(args.position)
             && let Some(sign) = SignEntityRef::from_block_entity(&*block_entity)
         {
-            open_text_edit(
-                args.player,
-                sign.currently_editing_player(),
-                args.position,
-                true,
-            );
+            args.world.update_block_entity(&block_entity);
+            if !sign.is_waxed() && has_editable_text(sign.front_text()) {
+                open_text_edit(
+                    args.player,
+                    sign.currently_editing_player(),
+                    args.position,
+                    true,
+                );
+            }
             return;
         }
-        args.player
-            .try_send_client_packet(&COpenSignEditor::new(*args.position, true));
+        args.player.try_enqueue_packet_editioned(
+            &COpenSignEditor::new(*args.position, true),
+            &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*args.position, true),
+        );
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -590,27 +595,17 @@ impl BlockBehaviour for SignBlock {
                 is_facing_front_text(args.world, args.position, args.block, args.player);
             let text = sign_entity.get_text(is_front_text);
 
-            let result = if let Some(honeycomb_item) =
-                pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
-            {
-                honeycomb_item.apply_to_sign(&args, &block_entity, &sign_entity)
-            } else if let Some(g_ink_sac_item) =
-                pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
-            {
-                g_ink_sac_item.apply_to_sign(&args, &block_entity, text)
-            } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
-                ink_sac_item.apply_to_sign(&args, &block_entity, text)
-            } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
-                let color_name = args
-                    .item_stack
-                    .item
-                    .registry_key
-                    .strip_suffix("_dye")
-                    .unwrap_or(args.item_stack.item.registry_key);
-                dye.apply_to_sign(&args, &block_entity, text, color_name)
-            } else {
-                BlockActionResult::PassToDefaultBlockAction
-            };
+            let any_item = pumpkin_item.as_any();
+            let mut result = BlockActionResult::PassToDefaultBlockAction;
+            if let Some(honeycomb_item) = any_item.downcast_ref::<HoneyCombItem>() {
+                result = honeycomb_item.apply_to_sign(&args, &block_entity, &sign_entity);
+            } else if let Some(g_ink_sac_item) = any_item.downcast_ref::<GlowingInkSacItem>() {
+                result = g_ink_sac_item.apply_to_sign(&args, &block_entity, text);
+            } else if let Some(ink_sac_item) = any_item.downcast_ref::<InkSacItem>() {
+                result = ink_sac_item.apply_to_sign(&args, &block_entity, text);
+            } else if let Some(dye) = any_item.downcast_ref::<DyeItem>() {
+                result = dye.apply_to_sign(&args, &block_entity, text);
+            }
 
             if result == BlockActionResult::Success {
                 execute_click_commands_if_present(args.world, args.player, args.position, text);
@@ -640,7 +635,10 @@ fn open_text_edit(
     *currently_editing_player
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(player.gameprofile.id);
-    player.try_send_client_packet(&COpenSignEditor::new(*position, is_front_text));
+    player.try_enqueue_packet_editioned(
+        &COpenSignEditor::new(*position, is_front_text),
+        &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*position, is_front_text),
+    );
 }
 
 /// Checks if another player is actively editing the sign within reach.
