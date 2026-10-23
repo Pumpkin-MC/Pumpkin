@@ -138,6 +138,11 @@ impl SlimeEntity {
         let pos = entity.pos.load();
         let new_bb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &scaled_dimensions);
         entity.bounding_box.store(new_bb);
+
+        entity.set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, actual_size);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn get_size(&self) -> i32 {
@@ -280,6 +285,10 @@ impl Mob for SlimeEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        Some(crate::entity::mob::MobMetadata::new().slime_size(self.get_size()))
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

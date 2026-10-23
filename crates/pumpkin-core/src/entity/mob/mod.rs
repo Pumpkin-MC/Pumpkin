@@ -58,6 +58,7 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod metadata;
 pub mod neutral;
 pub mod patrol;
 pub mod phantom;
@@ -82,6 +83,8 @@ pub mod witch;
 pub mod zoglin;
 pub mod zombie;
 pub mod zombified_piglin;
+
+pub use metadata::MobMetadata;
 
 /// The mob whose navigation and movement control a mob drives: its own, or the mob it steers.
 pub struct SteeredMob<'a> {
@@ -1147,16 +1150,35 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Unified mob metadata abstraction. When implemented, both Java and Bedrock
+    /// spawn metadata are generated automatically.
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        let is_saddled = self.is_saddled();
+        let is_no_ai = self.get_mob_entity().is_no_ai();
+        if !is_saddled && !is_no_ai {
+            return None;
+        }
+        let mut meta = MobMetadata::new();
+        if is_saddled {
+            meta = meta.saddled(true);
+        }
+        if is_no_ai {
+            meta = meta.no_ai(true);
+        }
+        Some(meta)
+    }
+
     /// Metadata which must accompany this mob whenever it is spawned for a Java client.
-    fn mob_java_spawn_metadata(&self, _version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        None
+    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        self.mob_metadata()
+            .and_then(|m| m.to_java_spawn_metadata(version))
     }
 
     /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.
     fn mob_bedrock_spawn_metadata(
         &self,
     ) -> Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList> {
-        None
+        self.mob_metadata().map(|m| m.to_bedrock_actor_data())
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -1205,6 +1227,8 @@ pub trait Mob: EntityBase + Send + Sync {
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
+
+    fn mob_ai_step(&self) {}
 
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
         self.get_mob_entity()
