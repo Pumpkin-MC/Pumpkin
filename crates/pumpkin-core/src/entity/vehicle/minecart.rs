@@ -72,7 +72,8 @@ enum MinecartKind {
 }
 
 impl MinecartEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let kind = match entity.entity_type.id {
             id if id == EntityType::MINECART.id => MinecartKind::Rideable(RideableMinecart),
             id if id == EntityType::CHEST_MINECART.id => MinecartKind::Chest(ChestMinecart::new()),

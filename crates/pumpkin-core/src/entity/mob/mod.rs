@@ -365,6 +365,7 @@ impl MobEntity {
 
     /// Vanilla `Mob.serverAiStep`: sensing, goals, navigation and controls.
     pub fn server_ai_step(&self, mob: &dyn Mob, caller: &dyn EntityBase) {
+        self.living_entity.no_action_time.fetch_add(1, Relaxed);
         let tick_count = self.living_entity.entity.tick_count.load(Relaxed);
         let entity_id = self.living_entity.entity.entity_id;
 
@@ -776,10 +777,7 @@ impl MobEntity {
             && world
                 .get_fluid(&pos.down())
                 .has_tag(&tag::Fluid::MINECRAFT_WATER)
-            && (world.get_block(&pos.up()) == &Block::WATER
-                || world
-                    .get_fluid(&pos.up())
-                    .has_tag(&tag::Fluid::MINECRAFT_WATER))
+            && world.get_block(&pos.up()) == &Block::WATER
     }
 
     pub fn check_surface_ageable_water_creature_spawn_rules(world: &World, pos: &BlockPos) -> bool {
@@ -845,7 +843,12 @@ impl MobEntity {
             >= DAYLIGHT_BRIGHTNESS
     }
 
-    pub fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+    pub fn mob_interact(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        can_be_leashed: bool,
+    ) -> bool {
         let entity = &self.living_entity.entity;
 
         // If already leashed to player, right-clicking unleashes the mob
@@ -867,8 +870,9 @@ impl MobEntity {
         }
 
         // If holding a lead, leash the mob to the player
-        if item_stack.item.registry_key == "lead"
-            || item_stack.item.registry_key == "minecraft:lead"
+        if (item_stack.item.registry_key == "lead"
+            || item_stack.item.registry_key == "minecraft:lead")
+            && can_be_leashed
         {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             let dist_sq = diff.length_squared();
@@ -887,14 +891,6 @@ impl MobEntity {
     pub fn check_despawn(&self, mob: &dyn Mob) {
         let entity = &self.living_entity.entity;
 
-        if self.persistence_required.load(Relaxed) || mob.requires_custom_persistence() {
-            return;
-        }
-
-        if (**entity.custom_name.load()).is_some() {
-            return;
-        }
-
         let world = entity.world.load();
         let pos = entity.pos.load();
         let players = world.players.load();
@@ -912,6 +908,19 @@ impl MobEntity {
             .fold(f64::MAX, f64::min);
 
         if nearest_dist_sq == f64::MAX {
+            return;
+        }
+
+        let no_despawn_distance = f64::from(pumpkin_data::entity::MobCategory::NO_DESPAWN_DISTANCE);
+        if nearest_dist_sq < no_despawn_distance * no_despawn_distance {
+            self.living_entity.no_action_time.store(0, Relaxed);
+        }
+
+        if self.persistence_required.load(Relaxed) || mob.requires_custom_persistence() {
+            return;
+        }
+
+        if (**entity.custom_name.load()).is_some() {
             return;
         }
 
@@ -1155,6 +1164,10 @@ pub trait Mob: EntityBase + Send + Sync {
         EquipmentSlot::HEAD
     }
 
+    fn can_be_leashed(&self) -> bool {
+        true
+    }
+
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         self.as_animal().is_none()
     }
@@ -1285,6 +1298,12 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
+    fn mob_is_pushed_by_fluids(&self) -> bool {
+        true
+    }
+
+    fn before_mob_ai_step(&self) {}
+
     fn mob_ai_step(&self) {}
 
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
@@ -1413,6 +1432,20 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        None
+    }
+
+    fn as_schooling_fish(
+        &self,
+    ) -> Option<&dyn crate::entity::passive::abstract_schooling_fish::AbstractSchoolingFish> {
+        None
+    }
+
+    fn as_bucketable(&self) -> Option<&dyn crate::entity::bucketable::Bucketable> {
+        None
+    }
+
+    fn as_fish(&self) -> Option<&dyn crate::entity::passive::abstract_fish::AbstractFish> {
         None
     }
 
@@ -1601,7 +1634,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.get_mob_entity().mob_interact(player, item_stack)
+        self.get_mob_entity()
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn mob_interact_with_hand(
@@ -1784,6 +1818,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn is_pushed_by_fluids(&self) -> bool {
+        self.mob_is_pushed_by_fluids()
+    }
+
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
     }

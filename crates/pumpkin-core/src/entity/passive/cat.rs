@@ -403,7 +403,9 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.animal_interact(player, item_stack, self.eat_sound());
+                let parent_interaction =
+                    self.mob_entity
+                        .mob_interact(player, item_stack, self.can_be_leashed());
                 if !parent_interaction {
                     self.set_sitting(!self.is_sitting());
                     return true;
@@ -434,7 +436,8 @@ impl Mob for CatEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, self.eat_sound())
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

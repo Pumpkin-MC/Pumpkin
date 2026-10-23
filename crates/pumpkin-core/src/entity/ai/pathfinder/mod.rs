@@ -436,6 +436,10 @@ pub trait PathNavigationTrait: Send + Sync {
     fn get_target_pos(&self) -> Option<BlockPos>;
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
+
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        world.get_block_state(&pos.down()).is_solid_render()
+    }
 }
 
 pub struct PathNavigation {
@@ -1597,6 +1601,8 @@ impl Default for WaterBoundPathNavigation {
 }
 
 impl WaterBoundPathNavigation {
+    const MAX_VERTICAL_DISTANCE_TO_WAYPOINT: f64 = 0.5;
+
     #[must_use]
     pub fn new(allow_breaching: bool) -> Self {
         Self {
@@ -1611,6 +1617,10 @@ impl WaterBoundPathNavigation {
 impl PathNavigationTrait for WaterBoundPathNavigation {
     fn set_progress(&mut self, goal: NavigatorGoal) {
         self.inner.set_progress(goal);
+    }
+
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        !world.get_block_state(pos).is_solid_render()
     }
 
     fn set_speed(&mut self, speed: f64) {
@@ -1674,33 +1684,56 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
         self.inner.update_path(entity);
-
-        let mob_pos = Vector3::new(
-            entity.entity.pos.load().x,
-            entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
-            entity.entity.pos.load().z,
-        );
-        self.inner.do_stuck_detection(mob_pos, entity);
-
         if self.is_done() {
             self.inner.stop();
-        } else if let Some(path) = &mut self.inner.path
+            return None;
+        }
+        let current_pos = entity.entity.pos.load();
+        let mob_pos = current_pos.add_raw(0.0, f64::from(entity.entity.height()) * 0.5, 0.0);
+        let can_update = self.inner.can_update_path(entity);
+        let width = entity.entity.width();
+        self.inner.max_distance_to_waypoint = PathNavigation::waypoint_margin(width);
+        if let Some(path) = &mut self.inner.path
             && let Some(pos) = path.get_next_node_pos()
         {
-            let target_pos = Vector3::new(
-                f64::from(pos.0.x) + 0.5,
-                f64::from(pos.0.y) + 0.5,
-                f64::from(pos.0.z) + 0.5,
-            );
-            let current_pos = entity.entity.pos.load();
-            let dx = target_pos.x - current_pos.x;
-            let dy = target_pos.y - current_pos.y;
-            let dz = target_pos.z - current_pos.z;
-            let dist_sq = dx * dx + dy * dy + dz * dz;
-
-            if dist_sq < 0.5 * 0.5 {
+            let reached = if can_update {
+                let margin = f64::from(self.inner.max_distance_to_waypoint);
+                ((current_pos.x - (f64::from(pos.0.x) + 0.5)).abs() < margin
+                    && (current_pos.z - (f64::from(pos.0.z) + 0.5)).abs() < margin
+                    && (current_pos.y - f64::from(pos.0.y)).abs()
+                        < Self::MAX_VERTICAL_DISTANCE_TO_WAYPOINT)
+                    || (path
+                        .get_next_node()
+                        .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
+                        && PathNavigation::should_target_next_node_in_direction(
+                            mob_pos,
+                            path,
+                            || {
+                                path.get_next_entity_pos(width).is_some_and(|target| {
+                                    PathNavigation::can_move_directly(
+                                        &entity.entity.world.load(),
+                                        mob_pos,
+                                        target,
+                                        entity.entity.height(),
+                                        false,
+                                    )
+                                })
+                            },
+                        ))
+            } else {
+                path.get_next_entity_pos(width).is_some_and(|target| {
+                    mob_pos.y > target.y
+                        && !entity.entity.on_ground.load(Ordering::Relaxed)
+                        && mob_pos.x.floor() == target.x.floor()
+                        && mob_pos.z.floor() == target.z.floor()
+                })
+            };
+            if reached {
                 path.advance();
             }
+        }
+        if can_update {
+            self.inner.do_stuck_detection(mob_pos, entity);
         }
         self.inner.target(entity)
     }
@@ -2415,6 +2448,56 @@ mod tests {
             Vector3::new(0.5, 64.0, 0.5),
             entity_type,
         ))
+    }
+
+    #[tokio::test]
+    async fn water_navigation_finishes_at_the_position_it_steers_toward() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COD);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        let target = BlockPos::new(0, 64, 0);
+        let path = Path::new(vec![Node::new(target)], target, true);
+        let mut navigation = WaterBoundPathNavigation::new(false);
+        navigation.move_to_path(Some(path), 1.0, &living);
+        let steering_target = navigation.tick(&living);
+        world.level.shutdown().await;
+        assert!(steering_target.is_none());
+        assert!(navigation.is_done());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fish_paths_cross_water_plants() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        for z in 0..=4 {
+            chunk.set_block_absolute_y(0, 64, z, pumpkin_data::Block::WATER.default_state.id);
+        }
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            chunk.clone(),
+        );
+        let living = living(world.clone(), &EntityType::COD);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        for plant in [
+            &pumpkin_data::Block::SEAGRASS,
+            &pumpkin_data::Block::TALL_SEAGRASS,
+            &pumpkin_data::Block::KELP,
+            &pumpkin_data::Block::KELP_PLANT,
+        ] {
+            chunk.set_block_absolute_y(0, 64, 2, plant.default_state.id);
+            let mut navigation = WaterBoundPathNavigation::new(false);
+            let path = navigation.create_path(&living, Vector3::new(0.5, 64.0, 4.5), 0);
+            assert!(
+                path.is_some_and(|path| path.can_reach()),
+                "{} blocked the water corridor",
+                plant.name
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]

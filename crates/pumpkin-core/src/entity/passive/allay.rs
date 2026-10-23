@@ -336,7 +336,10 @@ impl AllayEntity {
         {
             return false;
         }
-        if self.mob_entity.mob_interact(player, stack) {
+        if self
+            .mob_entity
+            .mob_interact(player, stack, self.can_be_leashed())
+        {
             return true;
         }
         let entity = self.get_entity();

@@ -34,6 +34,7 @@ pub enum CreatureSpawnReason {
     SpawnerEgg,
     /// A dispenser dispensed a spawn egg.
     DispenseEgg,
+    Bucket,
 }
 
 impl CreatureSpawnReason {
@@ -42,6 +43,7 @@ impl CreatureSpawnReason {
         match self {
             Self::SpawnerEgg => "spawner_egg",
             Self::DispenseEgg => "dispense_egg",
+            Self::Bucket => "bucket",
         }
     }
 }
