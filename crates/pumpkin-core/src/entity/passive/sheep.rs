@@ -212,7 +212,7 @@ impl SheepEntity {
         !self.is_sheared() && !self.is_baby()
     }
 
-    pub fn shear(&self, category: SoundCategory) {
+    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -224,6 +224,7 @@ impl SheepEntity {
             let params = LootContextParameters {
                 position: Some(pos),
                 this_entity: Some(&EntityType::SHEEP),
+                tool: Some(tool.clone()),
                 ..Default::default()
             };
             let mut rng = self.get_random();
@@ -372,11 +373,9 @@ impl Mob for SheepEntity {
                     return false;
                 }
             }
-            self.shear(SoundCategory::Players);
+            self.shear(SoundCategory::Players, item_stack);
             world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                let _ = item_stack.damage_item(1);
-            }
+            let _ = player.damage_item_stack(item_stack, 1);
             return true;
         }
 

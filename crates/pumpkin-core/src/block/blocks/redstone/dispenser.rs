@@ -925,7 +925,7 @@ impl DispenserBlock {
     }
 
     fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx) {
+        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx, item) {
             // `damage_item` already consumes the tool from the stack when it breaks.
             let _ = item.damage_item(1);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
@@ -964,7 +964,7 @@ impl DispenserBlock {
         true
     }
 
-    fn shear_entity_in_front(ctx: &DispenseContext<'_>) -> bool {
+    fn shear_entity_in_front(ctx: &DispenseContext<'_>, tool: &ItemStack) -> bool {
         let target = Self::target_position(ctx);
         let target_box = BoundingBox::from_block(&target);
 
@@ -976,7 +976,7 @@ impl DispenserBlock {
                 continue;
             }
 
-            sheep.shear(SoundCategory::Blocks);
+            sheep.shear(SoundCategory::Blocks, tool);
             ctx.world
                 .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
 
