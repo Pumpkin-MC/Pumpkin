@@ -80,6 +80,10 @@ fn is_valid_player_target(target: &dyn EntityBase) -> bool {
 pub trait NeutralMob: Mob {
     fn get_neutral_data(&self) -> &NeutralData;
 
+    fn updates_anger_in_ai_step(&self) -> bool {
+        false
+    }
+
     /// Rolled fresh every time the anger restarts.
     fn anger_duration(&self) -> RangeInclusive<i32> {
         DEFAULT_ANGER_DURATION

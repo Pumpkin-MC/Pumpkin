@@ -96,6 +96,7 @@ impl BowAttackGoal {
         // Vanilla scales base damage with power and world difficulty
         let difficulty = world.level_info.load().difficulty as i32;
         arrow.set_base_damage_from_mob(Self::ARROW_SPEED, difficulty);
+        let arrow = mob.get_arrow(arrow);
 
         arrow.set_base_damage(crate::enchantment::EnchantmentHelper::modify_damage(
             &bow_item,
@@ -193,11 +194,8 @@ impl Goal for BowAttackGoal {
         }
 
         {
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             if distance_sq <= self.squared_range && self.see_time >= 20 {
                 navigator.stop();
                 self.strafing_time += 1;
@@ -227,14 +225,10 @@ impl Goal for BowAttackGoal {
             } else if distance_sq < self.squared_range * 0.25 {
                 self.strafing_backwards = true;
             }
-            mob.get_mob_entity()
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .strafe(
-                    if self.strafing_backwards { -0.5 } else { 0.5 },
-                    if self.strafing_clockwise { 0.5 } else { -0.5 },
-                );
+            mob.get_mob_entity().steered().move_control().strafe(
+                if self.strafing_backwards { -0.5 } else { 0.5 },
+                if self.strafing_clockwise { 0.5 } else { -0.5 },
+            );
         }
 
         // Always through the look control, which smooths towards the same angle.

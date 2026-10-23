@@ -37,7 +37,7 @@ pub enum StaticRuleTest {
     BlockMatch(crate::BlockId),
     BlockStateMatch {
         block_id: crate::BlockId,
-        properties: &'static [(&'static str, &'static str)],
+        properties: &'static [crate::block_properties::Property],
     },
     RandomBlockMatch {
         block: crate::BlockId,
@@ -45,19 +45,19 @@ pub enum StaticRuleTest {
     },
     RandomBlockStateMatch {
         block_id: crate::BlockId,
-        properties: &'static [(&'static str, &'static str)],
+        properties: &'static [crate::block_properties::Property],
         probability: f32,
     },
-    TagMatch(&'static str),
+    TagMatch(&'static crate::tag::Tag),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaticIgnoredBlock {
     pub block_id: crate::BlockId,
-    pub properties: Option<&'static [(&'static str, &'static str)]>,
+    pub properties: Option<&'static [crate::block_properties::Property]>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum StaticRottableBlocks {
-    Tag(&'static str),
+    Tag(&'static crate::tag::Tag),
     Block(crate::BlockId),
     List(&'static [crate::BlockId]),
 }
@@ -70,7 +70,7 @@ pub enum StaticBlockEntityModifier {
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaticOutputState {
     pub default_state: &'static crate::BlockState,
-    pub properties: &'static [(&'static str, &'static str)],
+    pub properties: &'static [crate::block_properties::Property],
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaticProcessorRule {
@@ -95,7 +95,7 @@ pub enum StaticProcessor {
         heightmap: StaticHeightmapType,
         offset: i32,
     },
-    ProtectedBlocks(&'static str),
+    ProtectedBlocks(&'static crate::tag::Tag),
     BlackstoneReplace,
     JigsawReplacement,
     LavaSubmergedBlock,
@@ -110,7 +110,9 @@ impl StaticProcessorList {
     pub const ANCIENT_CITY_GENERIC_DEGRADATION: &'static [StaticProcessor] = &[
         StaticProcessor::BlockRot {
             integrity: 0.95f32,
-            rottable_blocks: Some(StaticRottableBlocks::Tag("ancient_city_replaceable")),
+            rottable_blocks: Some(StaticRottableBlocks::Tag(
+                &crate::tag::Block::MINECRAFT_ANCIENT_CITY_REPLACEABLE,
+            )),
         },
         StaticProcessor::Rule(&[
             StaticProcessorRule {
@@ -153,7 +155,7 @@ impl StaticProcessorList {
                 block_entity_modifier: None,
             },
         ]),
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const ANCIENT_CITY_START_DEGRADATION: &'static [StaticProcessor] = &[
         StaticProcessor::Rule(&[
@@ -197,12 +199,14 @@ impl StaticProcessorList {
                 block_entity_modifier: None,
             },
         ]),
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const ANCIENT_CITY_WALLS_DEGRADATION: &'static [StaticProcessor] = &[
         StaticProcessor::BlockRot {
             integrity: 0.95f32,
-            rottable_blocks: Some(StaticRottableBlocks::Tag("ancient_city_replaceable")),
+            rottable_blocks: Some(StaticRottableBlocks::Tag(
+                &crate::tag::Block::MINECRAFT_ANCIENT_CITY_REPLACEABLE,
+            )),
         },
         StaticProcessor::Rule(&[
             StaticProcessorRule {
@@ -258,7 +262,7 @@ impl StaticProcessorList {
                 block_entity_modifier: None,
             },
         ]),
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const BASTION_GENERIC_DEGRADATION: &'static [StaticProcessor] =
         &[StaticProcessor::Rule(&[
@@ -609,7 +613,7 @@ impl StaticProcessorList {
             integrity: 0.1f32,
             rottable_blocks: None,
         },
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const FOSSIL_DIAMONDS: &'static [StaticProcessor] = &[
         StaticProcessor::BlockRot {
@@ -626,14 +630,14 @@ impl StaticProcessorList {
             },
             block_entity_modifier: None,
         }]),
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const FOSSIL_ROT: &'static [StaticProcessor] = &[
         StaticProcessor::BlockRot {
             integrity: 0.9f32,
             rottable_blocks: None,
         },
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const HIGH_RAMPART: &'static [StaticProcessor] = &[StaticProcessor::Rule(&[
         StaticProcessorRule {
@@ -1266,7 +1270,9 @@ impl StaticProcessorList {
             limit: 6i32,
             delegate: &StaticProcessor::Rule(&[StaticProcessorRule {
                 position_predicate: StaticPosRuleTest::AlwaysTrue,
-                input_predicate: StaticRuleTest::TagMatch("trail_ruins_replaceable"),
+                input_predicate: StaticRuleTest::TagMatch(
+                    &crate::tag::Block::MINECRAFT_TRAIL_RUINS_REPLACEABLE,
+                ),
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::SUSPICIOUS_GRAVEL.default_state,
@@ -1281,7 +1287,9 @@ impl StaticProcessorList {
             limit: 3i32,
             delegate: &StaticProcessor::Rule(&[StaticProcessorRule {
                 position_predicate: StaticPosRuleTest::AlwaysTrue,
-                input_predicate: StaticRuleTest::TagMatch("trail_ruins_replaceable"),
+                input_predicate: StaticRuleTest::TagMatch(
+                    &crate::tag::Block::MINECRAFT_TRAIL_RUINS_REPLACEABLE,
+                ),
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::SUSPICIOUS_GRAVEL.default_state,
@@ -1339,7 +1347,9 @@ impl StaticProcessorList {
             limit: 2i32,
             delegate: &StaticProcessor::Rule(&[StaticProcessorRule {
                 position_predicate: StaticPosRuleTest::AlwaysTrue,
-                input_predicate: StaticRuleTest::TagMatch("trail_ruins_replaceable"),
+                input_predicate: StaticRuleTest::TagMatch(
+                    &crate::tag::Block::MINECRAFT_TRAIL_RUINS_REPLACEABLE,
+                ),
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::SUSPICIOUS_GRAVEL.default_state,
@@ -1356,7 +1366,9 @@ impl StaticProcessorList {
             limit: 2i32,
             delegate: &StaticProcessor::Rule(&[StaticProcessorRule {
                 position_predicate: StaticPosRuleTest::AlwaysTrue,
-                input_predicate: StaticRuleTest::TagMatch("trail_ruins_replaceable"),
+                input_predicate: StaticRuleTest::TagMatch(
+                    &crate::tag::Block::MINECRAFT_TRAIL_RUINS_REPLACEABLE,
+                ),
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::SUSPICIOUS_GRAVEL.default_state,
@@ -1432,7 +1444,10 @@ impl StaticProcessorList {
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::WAXED_OXIDIZED_COPPER_BULB.default_state,
-                    properties: &[],
+                    properties: &[
+                        crate::block_properties::Property::Lit(true),
+                        crate::block_properties::Property::Powered(false),
+                    ],
                 },
                 block_entity_modifier: None,
             },
@@ -1445,7 +1460,10 @@ impl StaticProcessorList {
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::WAXED_WEATHERED_COPPER_BULB.default_state,
-                    properties: &[],
+                    properties: &[
+                        crate::block_properties::Property::Lit(true),
+                        crate::block_properties::Property::Powered(false),
+                    ],
                 },
                 block_entity_modifier: None,
             },
@@ -1458,17 +1476,20 @@ impl StaticProcessorList {
                 location_predicate: StaticRuleTest::AlwaysTrue,
                 output_state: StaticOutputState {
                     default_state: crate::Block::WAXED_EXPOSED_COPPER_BULB.default_state,
-                    properties: &[],
+                    properties: &[
+                        crate::block_properties::Property::Lit(true),
+                        crate::block_properties::Property::Powered(false),
+                    ],
                 },
                 block_entity_modifier: None,
             },
         ]),
-        StaticProcessor::ProtectedBlocks("features_cannot_replace"),
+        StaticProcessor::ProtectedBlocks(&crate::tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE),
     ];
     pub const ZOMBIE_DESERT: &'static [StaticProcessor] = &[StaticProcessor::Rule(&[
         StaticProcessorRule {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
-            input_predicate: StaticRuleTest::TagMatch("doors"),
+            input_predicate: StaticRuleTest::TagMatch(&crate::tag::Block::MINECRAFT_DOORS),
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::AIR.default_state,
@@ -1604,7 +1625,7 @@ impl StaticProcessorList {
         },
         StaticProcessorRule {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
-            input_predicate: StaticRuleTest::TagMatch("doors"),
+            input_predicate: StaticRuleTest::TagMatch(&crate::tag::Block::MINECRAFT_DOORS),
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::AIR.default_state,
@@ -1740,12 +1761,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -1753,12 +1786,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -1805,7 +1850,7 @@ impl StaticProcessorList {
     pub const ZOMBIE_SAVANNA: &'static [StaticProcessor] = &[StaticProcessor::Rule(&[
         StaticProcessorRule {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
-            input_predicate: StaticRuleTest::TagMatch("doors"),
+            input_predicate: StaticRuleTest::TagMatch(&crate::tag::Block::MINECRAFT_DOORS),
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::AIR.default_state,
@@ -1941,12 +1986,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -1954,12 +2011,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -1980,7 +2049,7 @@ impl StaticProcessorList {
     pub const ZOMBIE_SNOWY: &'static [StaticProcessor] = &[StaticProcessor::Rule(&[
         StaticProcessorRule {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
-            input_predicate: StaticRuleTest::TagMatch("doors"),
+            input_predicate: StaticRuleTest::TagMatch(&crate::tag::Block::MINECRAFT_DOORS),
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::AIR.default_state,
@@ -2087,12 +2156,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -2100,12 +2181,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -2152,7 +2245,7 @@ impl StaticProcessorList {
         },
         StaticProcessorRule {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
-            input_predicate: StaticRuleTest::TagMatch("doors"),
+            input_predicate: StaticRuleTest::TagMatch(&crate::tag::Block::MINECRAFT_DOORS),
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::AIR.default_state,
@@ -2186,7 +2279,14 @@ impl StaticProcessorList {
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::CAMPFIRE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::Facing(
+                        crate::block_properties::Facing::North,
+                    ),
+                    crate::block_properties::Property::Lit(false),
+                    crate::block_properties::Property::SignalFire(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -2233,12 +2333,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(false),
+                    crate::block_properties::Property::North(true),
+                    crate::block_properties::Property::South(true),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(false),
+                ],
             },
             block_entity_modifier: None,
         },
@@ -2246,12 +2358,24 @@ impl StaticProcessorList {
             position_predicate: StaticPosRuleTest::AlwaysTrue,
             input_predicate: StaticRuleTest::BlockStateMatch {
                 block_id: crate::Block::GLASS_PANE.id,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             location_predicate: StaticRuleTest::AlwaysTrue,
             output_state: StaticOutputState {
                 default_state: crate::Block::BROWN_STAINED_GLASS_PANE.default_state,
-                properties: &[],
+                properties: &[
+                    crate::block_properties::Property::East(true),
+                    crate::block_properties::Property::North(false),
+                    crate::block_properties::Property::South(false),
+                    crate::block_properties::Property::Waterlogged(false),
+                    crate::block_properties::Property::West(true),
+                ],
             },
             block_entity_modifier: None,
         },

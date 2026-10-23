@@ -300,14 +300,14 @@ impl WalkNodeEvaluator {
         let mut node = self.base.get_node(BlockPos::new(x, y, z));
         node.path_type = path_type;
         node.cost_malus = node.cost_malus.max(cost);
-        node
+        self.base.update_node(node)
     }
 
     fn get_blocked_node(&mut self, x: i32, y: i32, z: i32) -> Node {
         let mut node = self.base.get_node(BlockPos::new(x, y, z));
         node.path_type = PathType::Blocked;
         node.cost_malus = -1.0;
-        node
+        self.base.update_node(node)
     }
 
     fn get_closed_node(&mut self, x: i32, y: i32, z: i32, path_type: PathType) -> Node {
@@ -315,7 +315,7 @@ impl WalkNodeEvaluator {
         node.closed = true;
         node.path_type = path_type;
         node.cost_malus = path_type.get_malus();
-        node
+        self.base.update_node(node)
     }
 
     #[must_use]
@@ -364,7 +364,7 @@ impl WalkNodeEvaluator {
         let mut node = self.base.get_node(pos.as_blockpos());
         node.path_type = path_type;
         node.cost_malus = self.get_mob_penalty(path_type);
-        node
+        self.base.update_node(node)
     }
 
     pub fn get_path_type_within_mob_bb(
@@ -420,6 +420,7 @@ impl WalkNodeEvaluator {
 
 impl NodeEvaluator for WalkNodeEvaluator {
     fn prepare(&mut self, context: PathfindingContext, mob_data: MobData) {
+        self.base.nodes.clear();
         self.base.entity_width = mob_data.get_bb_width();
         self.base.entity_height = mob_data.get_bb_height();
         self.base.entity_depth = mob_data.get_bb_width();
@@ -433,6 +434,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
     fn done(&mut self) {
         self.base.context = None;
         self.base.mob_data = None;
+        self.base.nodes.clear();
         self.path_types_cache.clear();
         self.reusable_neighbors = [None, None, None, None];
     }
