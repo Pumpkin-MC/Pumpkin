@@ -31,10 +31,11 @@ pub struct Style {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub insertion: Option<String>,
     /// Allows for events to occur when the player clicks on text. Only works in chat.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    // Pre-1.21.5 datapacks still write `clickEvent`.
+    #[serde(default, alias = "clickEvent", skip_serializing_if = "Option::is_none")]
     pub click_event: Option<ClickEvent>,
     /// Allows for a tooltip to be displayed when the player hovers their mouse over text.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, alias = "hoverEvent", skip_serializing_if = "Option::is_none")]
     pub hover_event: Option<HoverEvent>,
     /// Allows you to change the font of the text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
