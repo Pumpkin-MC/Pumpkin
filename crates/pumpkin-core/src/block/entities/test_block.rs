@@ -49,12 +49,14 @@ impl TestBlockMode {
             .properties(state_id)?
             .to_props()
             .into_iter()
-            .find_map(|(name, value)| {
-                if name == "mode" {
-                    Self::from_serialized_name(value)
-                } else {
-                    None
-                }
+            .find_map(|p| match p {
+                pumpkin_data::Property::TestBlockMode(mode) => Some(match mode {
+                    pumpkin_data::block_properties::TestBlockMode::Start => Self::Start,
+                    pumpkin_data::block_properties::TestBlockMode::Log => Self::Log,
+                    pumpkin_data::block_properties::TestBlockMode::Fail => Self::Fail,
+                    pumpkin_data::block_properties::TestBlockMode::Accept => Self::Accept,
+                }),
+                _ => None,
             })
     }
 }

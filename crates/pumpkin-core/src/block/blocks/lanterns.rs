@@ -1,8 +1,11 @@
+use crate::block::blocks::weathering_copper::change_over_time;
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PathComputationType,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
 use crate::world::World;
+use pumpkin_data::block_properties::LanternLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -15,7 +18,7 @@ pub struct LanternBlock;
 
 impl BlockBehaviour for LanternBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = pumpkin_data::block_properties::LanternLikeProperties::default(args.block);
+        let mut props = LanternLikeProperties::default(args.block);
         props.r#waterlogged = args.replacing.water_source();
 
         let block_up_state = args.world.get_block_state(&args.position.up());
@@ -35,6 +38,15 @@ impl BlockBehaviour for LanternBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let props = LanternLikeProperties::from_state_id(args.state_id);
+        if props.r#waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
         if !can_place_at(args.world, args.position) {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
@@ -49,13 +61,16 @@ impl BlockBehaviour for LanternBlock {
         }
     }
 
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
+    }
+
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
     }
 }
 
 fn can_place_at(world: &World, position: &BlockPos) -> bool {
-    //idk why this don't update with .is_center_solid so this is a 'temporary patch'
     if world
         .get_block(&position.down())
         .has_tag(&tag::Block::C_FENCE_GATES)

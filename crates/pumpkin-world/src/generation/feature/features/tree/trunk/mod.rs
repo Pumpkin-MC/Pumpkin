@@ -48,11 +48,13 @@ impl TrunkPlacer {
         random: &mut RandomGenerator,
         pos: &BlockPos,
         below_trunk_provider: &BlockStateProvider,
-    ) {
-        if let Some(state) = below_trunk_provider.get_optional(block_registry, chunk, random, *pos)
-        {
-            chunk.set_block_state(&pos.0, state);
-        }
+    ) -> bool {
+        below_trunk_provider
+            .get_optional(block_registry, chunk, random, *pos)
+            .is_some_and(|state| {
+                chunk.set_block_state(&pos.0, state);
+                true
+            })
     }
 
     pub fn place<T: GenerationCache>(
