@@ -9,6 +9,7 @@ use crate::world::World;
 pub(super) struct NoteBlockChunk {
     level: Arc<Level>,
     position: Vector2<i32>,
+    requested: bool,
 }
 
 impl NoteBlockChunk {
@@ -21,7 +22,11 @@ impl NoteBlockChunk {
             loading.add_ticket(position, ChunkLoading::FULL_CHUNK_LEVEL);
             loading.send_change();
         };
-        Self { level, position }
+        Self {
+            level,
+            position,
+            requested: true,
+        }
     }
 }
 
@@ -44,9 +49,11 @@ impl AllayEntity {
             .noteblock_chunk
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if chunk.as_ref().is_some_and(|chunk| {
-            chunk.position == position && Arc::ptr_eq(&chunk.level, &world.level)
-        }) {
+        if let Some(chunk) = chunk
+            .as_mut()
+            .filter(|chunk| chunk.position == position && Arc::ptr_eq(&chunk.level, &world.level))
+        {
+            chunk.requested = true;
             return;
         }
         *chunk = Some(NoteBlockChunk::new(world.level.clone(), position));
@@ -58,8 +65,8 @@ impl AllayEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if chunk
-            .as_ref()
-            .is_some_and(|chunk| chunk.level.is_chunk_loaded(&chunk.position))
+            .as_mut()
+            .is_some_and(|chunk| !std::mem::take(&mut chunk.requested))
             || self.mob_entity.is_no_ai()
             || self.mob_entity.living_entity.is_dead_or_dying()
         {

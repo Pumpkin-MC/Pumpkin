@@ -177,12 +177,13 @@ fn get_item_deposit_position(tick: &mut BrainTick<'_>) -> Option<Arc<dyn Positio
             tick.mob.get_entity().block_pos.load(),
             MAX_NOTEBLOCK_DISTANCE,
         ) && tick.world.is_in_build_limit(liked.pos)
-            && !tick.world.is_loaded(&liked.pos)
         {
             if let Some(allay) = tick.mob.cast_any().downcast_ref::<AllayEntity>() {
                 allay.request_noteblock_chunk(tick.world, liked.pos);
             }
-            return None;
+            if !tick.world.is_loaded(&liked.pos) {
+                return None;
+            }
         }
         if should_deposit_items_at_liked_noteblock(tick, &liked) {
             return Some(Arc::new(BlockPosTracker::new(liked.pos.up())));
@@ -300,24 +301,16 @@ mod tests {
             }
         })
         .await?;
-        assert_eq!(deposit(), Some(pos.up()));
-        allay.finish_noteblock_chunk();
-        assert!(
-            allay
-                .noteblock_chunk
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_none()
-        );
-        assert!(
-            !world
+        let has_ticket = || {
+            world
                 .level
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .ticket
                 .contains_key(&chunk_pos)
-        );
+        };
+        assert_eq!(deposit(), Some(pos.up()));
 
         world
             .level
@@ -326,6 +319,17 @@ mod tests {
         assert!(!allay.mob_entity.with_brain(allay.as_ref(), |brain| {
             brain.has_memory_value(types::LIKED_NOTEBLOCK_POSITION.id())
         }));
+        allay.finish_noteblock_chunk();
+        assert!(has_ticket());
+        allay.finish_noteblock_chunk();
+        assert!(
+            allay
+                .noteblock_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_none()
+        );
+        assert!(!has_ticket());
         world.level.shutdown().await;
         Ok(())
     }
