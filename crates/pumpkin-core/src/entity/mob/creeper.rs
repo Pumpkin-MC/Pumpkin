@@ -152,6 +152,21 @@ impl Mob for CreeperEntity {
         &self.mob_entity
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_charged() {
+            meta = meta.charged(true);
+        }
+        if self.is_ignited() {
+            meta = meta.ignited(true);
+        }
+        let fuse = self.fuse_speed.load(Ordering::Relaxed);
+        if fuse != -1 {
+            meta = meta.fuse_speed(fuse);
+        }
+        Some(meta)
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -243,6 +258,9 @@ impl CreeperEntity {
         self.charged.store(charged, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.set_synced_data(pumpkin_data::tracked_data::creeper::CHARGED, charged);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn is_ignited(&self) -> bool {
@@ -253,6 +271,9 @@ impl CreeperEntity {
         self.ignited.store(ignited, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, ignited);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn get_fuse(&self) -> i32 {

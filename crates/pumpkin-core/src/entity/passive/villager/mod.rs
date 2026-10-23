@@ -26,10 +26,9 @@ use pumpkin_protocol::bedrock::{
     server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
+use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::player::Player;
@@ -2160,32 +2159,17 @@ impl Mob for VillagerEntity {
         Some("minecraft:villager_v2")
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let xp = self.xp.load(Ordering::Relaxed);
+        let mut meta = crate::entity::mob::MobMetadata::new().villager_data(data, xp);
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
         }
-        let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::villager::VILLAGER_DATA,
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
-        .write(&mut metadata, &version)
-        .ok()?;
-        metadata.push(255);
-        Some(metadata.into_boxed_slice())
-    }
-
-    fn mob_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
-        Some(Self::bedrock_metadata(
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            self.xp.load(Ordering::Relaxed),
-        ))
+        Some(meta)
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -2353,6 +2337,7 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
+    use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;

@@ -61,6 +61,9 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_in_sitting_pose(&self) -> bool {
@@ -81,6 +84,9 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_ordered_to_sit(&self) -> bool {

@@ -94,10 +94,11 @@ impl SpiderEntity {
     pub fn set_climbing(&self, climbing: bool) {
         if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
             let flags = i8::from(climbing);
-            self.mob_entity
-                .living_entity
-                .entity
-                .set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
+            let entity = &self.mob_entity.living_entity.entity;
+            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
+            if let Some(meta) = self.mob_metadata() {
+                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+            }
         }
     }
 }
@@ -159,6 +160,14 @@ impl Mob for SpiderEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_climbing() {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

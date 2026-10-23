@@ -1,4 +1,4 @@
-use super::{Mob, MobEntity};
+use super::{Mob, MobEntity, MobMetadata};
 use crate::entity::ai::goal::break_door::BreakDoorGoal;
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
@@ -144,6 +144,10 @@ impl ZombieEntityBase {
 }
 
 impl Mob for ZombieEntityBase {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

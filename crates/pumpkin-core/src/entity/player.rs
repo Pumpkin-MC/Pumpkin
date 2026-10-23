@@ -2612,8 +2612,10 @@ impl Player {
                 return;
             }
         }
-        let packet = COpenSignEditor::new(location, is_front_text);
-        self.try_send_client_packet(&packet);
+        self.try_enqueue_packet_editioned(
+            &COpenSignEditor::new(location, is_front_text),
+            &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(location, is_front_text),
+        );
     }
 
     pub fn set_velocity(&self, mut velocity: Vector3<f64>) {

@@ -155,10 +155,11 @@ impl SheepEntity {
 
     fn set_packed_and_sync(&self, byte: u8) {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
-        self.mob_entity
-            .living_entity
-            .entity
-            .set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn set_color(&self, color: u8) {
@@ -302,6 +303,15 @@ impl Mob for SheepEntity {
 
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new()
+            .sheep_wool(DyeColor::from(self.get_color()), self.is_sheared());
+        if self.is_baby() {
+            meta = meta.baby(true);
+        }
+        Some(meta)
     }
 
     fn mob_init_data_tracker(&self) {

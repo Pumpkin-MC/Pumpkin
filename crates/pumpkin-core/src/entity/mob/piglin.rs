@@ -23,7 +23,7 @@ use pumpkin_util::math::position::BlockPos;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::equipment as mob_equipment;
+use crate::entity::mob::{MobMetadata, equipment as mob_equipment};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
@@ -977,6 +977,10 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn spawn_as_baby(&self) -> bool {
         self.set_baby(true);
         true

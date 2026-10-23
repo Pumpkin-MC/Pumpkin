@@ -224,6 +224,14 @@ impl Mob for BatEntity {
         self.set_roosting(roosting);
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_roosting() {
+            meta = meta.bat_roosting(true);
+        }
+        Some(meta)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
