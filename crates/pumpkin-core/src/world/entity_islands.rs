@@ -767,6 +767,13 @@ pub fn leave() {
 }
 
 /// Warns in debug builds when the ticking entity reaches `entity_id` in another island.
+#[cfg_attr(
+    not(debug_assertions),
+    expect(
+        clippy::missing_const_for_fn,
+        reason = "The debug implementation accesses thread-local state"
+    )
+)]
 pub fn check_reached(entity_id: i32) {
     #[cfg(debug_assertions)]
     {

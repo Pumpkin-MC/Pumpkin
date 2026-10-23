@@ -1213,6 +1213,8 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
+    fn mob_ai_step(&self) {}
+
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
         self.get_mob_entity()
             .living_entity

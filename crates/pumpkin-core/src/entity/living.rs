@@ -1583,6 +1583,7 @@ impl LivingEntity {
         }
 
         if let Some(mob) = caller.get_mob() {
+            mob.mob_ai_step();
             mob.get_mob_entity()
                 .body_rotation_control
                 .lock()
