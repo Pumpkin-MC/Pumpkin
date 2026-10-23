@@ -111,11 +111,7 @@ impl CreakingEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -126,11 +122,7 @@ impl CreakingEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
@@ -209,9 +201,7 @@ impl CreakingEntity {
     pub fn stop_in_place(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         entity.velocity.store(Vector3::default());
-        if let Ok(mut navigator) = self.mob_entity.navigator.lock() {
-            navigator.stop();
-        }
+        self.mob_entity.steered().navigator().stop();
     }
 
     pub fn activate(&self, player: &Arc<Player>) {

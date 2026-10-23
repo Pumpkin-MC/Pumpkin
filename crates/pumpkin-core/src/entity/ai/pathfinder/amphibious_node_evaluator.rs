@@ -124,6 +124,7 @@ impl NodeEvaluator for AmphibiousNodeEvaluator {
                 && neighbor.pos.0.y < sea_level - 10
             {
                 neighbor.cost_malus += 1.0;
+                self.walk.base.update_node(*neighbor);
             }
         }
     }
