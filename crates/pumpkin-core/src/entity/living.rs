@@ -272,7 +272,8 @@ impl LivingEntity {
         }
     }
 
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
         } else if entity.entity_type == &EntityType::SKELETON_HORSE {
