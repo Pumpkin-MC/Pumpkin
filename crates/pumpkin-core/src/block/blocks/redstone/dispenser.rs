@@ -1171,6 +1171,9 @@ impl DispenserBlock {
             };
             if !living.is_part_of_game()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.can_dispenser_equip_into_slot(slot))
             {
                 continue;
             }

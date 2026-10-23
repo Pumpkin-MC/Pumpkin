@@ -7,7 +7,7 @@ use pumpkin_core::{server::Server, world::BlockFlags};
 use pumpkin_data::{Block, block_properties::OakTrapdoorLikeProperties, dimension::Dimension};
 use pumpkin_util::math::position::BlockPos;
 
-use crate::bot::HeadlessBot;
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
 pub async fn run_world_interaction_tests(
     server: &Arc<Server>,
@@ -43,7 +43,7 @@ pub async fn run_world_interaction_tests(
 
     let mut trapdoor_opened = false;
     let mut block_broken = false;
-    for _ in 0..25 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
 

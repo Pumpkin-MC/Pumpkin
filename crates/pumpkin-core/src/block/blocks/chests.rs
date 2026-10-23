@@ -31,7 +31,7 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::fill_chest_inventory;
+use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
 use pumpkin_data::BlockState;
 
 struct ChestScreenFactory {
@@ -199,7 +199,22 @@ fn get_chest_screen_handler_factory(
             && let Some(table) = get_loot_table(&loot_key)
             && let Some(inv) = entity.clone().get_inventory()
         {
-            fill_chest_inventory(&inv, table, seed);
+            fill_chest_inventory_handle(
+                &inv,
+                &crate::world::loot::LootTableHandle::Static(table),
+                seed,
+                &LootContextParameters {
+                    world: Some(args.world),
+                    position: Some(args.position.to_f64()),
+                    this_entity: Some(args.player.as_ref()),
+                    luck: args
+                        .player
+                        .living_entity
+                        .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
+                        as f32,
+                    ..Default::default()
+                },
+            );
             inv.mark_dirty();
         }
     };
