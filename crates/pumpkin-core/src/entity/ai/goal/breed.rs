@@ -102,7 +102,10 @@ impl BreedGoal {
         mate.set_breeding_cooldown(6000);
 
         let parent_pos = entity.pos.load();
-        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
+        let baby = mob.as_animal().map_or_else(
+            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
+            |animal| animal.get_breed_offspring(mate),
+        );
         baby.get_entity().set_age(-24000);
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);

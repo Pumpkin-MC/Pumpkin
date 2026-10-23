@@ -458,10 +458,6 @@ pub struct PathNavigation {
     pub max_visited_nodes_multiplier: f32,
     pub is_stuck: bool,
     pub required_path_length: f32,
-    pub ticks_on_current_node: u32,
-    pub last_node_index: usize,
-    pub total_ticks: u32,
-    pub path_start_pos: Option<Vector3<f64>>,
     pub path_type_overrides: FxHashMap<PathType, f32>,
     has_pending_path: bool,
     pub can_float: bool,
@@ -504,10 +500,6 @@ impl PathNavigation {
             max_visited_nodes_multiplier: 1.0,
             is_stuck: false,
             required_path_length: 16.0,
-            ticks_on_current_node: 0,
-            last_node_index: 0,
-            total_ticks: 0,
-            path_start_pos: None,
             path_type_overrides: FxHashMap::default(),
             has_pending_path: false,
             can_float: false,
@@ -544,9 +536,6 @@ impl PathNavigation {
         self.current_goal = None;
         self.has_pending_path = false;
         self.path = None;
-        self.ticks_on_current_node = 0;
-        self.total_ticks = 0;
-        self.path_start_pos = None;
     }
 
     fn install_path(&mut self, mut path: Path, entity: &LivingEntity) {
@@ -772,12 +761,7 @@ impl PathNavigation {
                 // Vanilla moveTo(Path): an equivalent route keeps the installed path and its progress.
                 match self.create_path(entity, goal.destination, 1) {
                     Some(path) if path.same_as(self.path.as_ref()) => {}
-                    path => {
-                        self.ticks_on_current_node = 0;
-                        self.last_node_index = 0;
-                        self.path_start_pos = Some(entity.entity.pos.load());
-                        self.path = path;
-                    }
+                    path => self.path = path,
                 }
                 if self.path.as_ref().is_some_and(|path| !path.is_done()) {
                     self.trim_path(entity);
@@ -912,7 +896,7 @@ impl PathNavigation {
                 let dist_to_node = (mob_pos - node_center).length();
                 let speed = f64::from(entity.get_speed());
                 self.timeout_limit = if speed > 0.0 {
-                    dist_to_node / speed * 20.0
+                    dist_to_node / f64::from(speed) * 20.0
                 } else {
                     0.0
                 };
@@ -1011,8 +995,6 @@ impl PathNavigation {
         self.tick_count += 1;
         self.update_path(entity);
 
-        self.total_ticks += 1;
-
         if self.path.is_none() {
             self.stop();
             return None;
@@ -1031,34 +1013,6 @@ impl PathNavigation {
             if path.is_done() {
                 self.stop();
                 return None;
-            }
-
-            let current_node_index = path.get_next_node_index();
-            if current_node_index == self.last_node_index {
-                self.ticks_on_current_node += 1;
-            } else {
-                self.ticks_on_current_node = 0;
-                self.last_node_index = current_node_index;
-            }
-
-            if self.ticks_on_current_node > 100 {
-                self.stop();
-                return None;
-            }
-
-            if self.total_ticks.is_multiple_of(100) {
-                if let Some(start_pos) = self.path_start_pos {
-                    let current_pos = entity.entity.pos.load();
-                    let dx = current_pos.x - start_pos.x;
-                    let dy = current_pos.y - start_pos.y;
-                    let dz = current_pos.z - start_pos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
-                    if dist_sq < 4.0 {
-                        self.stop();
-                        return None;
-                    }
-                }
-                self.path_start_pos = Some(entity.entity.pos.load());
             }
 
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
