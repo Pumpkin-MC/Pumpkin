@@ -4,12 +4,22 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::{mob::Mob, player::Player};
+use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
+
+    fn get_breed_offspring(&self, _partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        from_type(
+            entity.entity_type,
+            entity.pos.load(),
+            &entity.world.load(),
+            uuid::Uuid::new_v4(),
+        )
+    }
 
     /// Animals prefer grass, then bright spots.
     fn animal_walk_target_value(&self, pos: &pumpkin_util::math::position::BlockPos) -> f32 {
@@ -124,28 +134,6 @@ pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
         }
     }
     None
-}
-
-#[must_use]
-pub const fn get_wool_item_for_color(color: u8) -> &'static pumpkin_data::item::Item {
-    match color {
-        0 => &pumpkin_data::item::Item::WHITE_WOOL,
-        1 => &pumpkin_data::item::Item::ORANGE_WOOL,
-        2 => &pumpkin_data::item::Item::MAGENTA_WOOL,
-        3 => &pumpkin_data::item::Item::LIGHT_BLUE_WOOL,
-        4 => &pumpkin_data::item::Item::YELLOW_WOOL,
-        5 => &pumpkin_data::item::Item::LIME_WOOL,
-        6 => &pumpkin_data::item::Item::PINK_WOOL,
-        7 => &pumpkin_data::item::Item::GRAY_WOOL,
-        8 => &pumpkin_data::item::Item::LIGHT_GRAY_WOOL,
-        9 => &pumpkin_data::item::Item::CYAN_WOOL,
-        10 => &pumpkin_data::item::Item::PURPLE_WOOL,
-        11 => &pumpkin_data::item::Item::BLUE_WOOL,
-        12 => &pumpkin_data::item::Item::BROWN_WOOL,
-        13 => &pumpkin_data::item::Item::GREEN_WOOL,
-        14 => &pumpkin_data::item::Item::RED_WOOL,
-        _ => &pumpkin_data::item::Item::BLACK_WOOL,
-    }
 }
 
 #[must_use]

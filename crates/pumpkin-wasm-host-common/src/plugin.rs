@@ -13,6 +13,8 @@ pub enum PluginInitError {
     UnknownApiVersion(),
     #[error("Plugin is built against an unsupported version of the API: {0}")]
     UnsupportedApiVersion(String),
+    #[error("Plugin API 0.1 supports WASI 0.2 only, but the plugin imports `{0}`")]
+    UnsupportedWasi(String),
     #[error("Plugin was built against a different iteration of the API: {0}")]
     ApiMismatch(wasmtime::Error),
     #[error("Failed to read plugin file: {0}")]
@@ -33,6 +35,63 @@ pub enum PluginInitError {
     PathResolutionFailed(std::io::Error),
     #[error("Failed to create cache: {0}")]
     CacheCreationFailed(wasmtime::Error),
+}
+
+/// What a plugin component declares at its top level, read without compiling it.
+///
+/// A compiled `Component` belongs to one `Engine`, and the engine depends on the plugin's API
+/// version, so this has to be known first.
+#[derive(Debug, Default, Eq, PartialEq)]
+pub struct ComponentNames {
+    /// The version of the exported `pumpkin:plugin/metadata` interface, such as `0.1.0`.
+    pub metadata_version: Option<String>,
+    /// The first imported WASI 0.3 interface, if any.
+    pub wasi_p3_import: Option<String>,
+}
+
+/// Scans the top-level imports and exports of a component binary.
+///
+/// # Errors
+/// Returns [`PluginInitError::ComponentNewFailed`] when the bytes are not a valid component.
+pub fn scan_component_names(wasm_bytes: &[u8]) -> Result<ComponentNames, PluginInitError> {
+    let malformed = |error: wasmparser::BinaryReaderError| {
+        PluginInitError::ComponentNewFailed(wasmtime::Error::msg(error.to_string()))
+    };
+    let mut names = ComponentNames::default();
+    // Nested components and modules repeat the same section kinds; only depth 0 is the plugin.
+    let mut depth = 0usize;
+    for payload in wasmparser::Parser::new(0).parse_all(wasm_bytes) {
+        match payload.map_err(malformed)? {
+            wasmparser::Payload::ModuleSection { .. }
+            | wasmparser::Payload::ComponentSection { .. } => depth += 1,
+            wasmparser::Payload::End(_) => depth = depth.saturating_sub(1),
+            wasmparser::Payload::ComponentImportSection(imports) if depth == 0 => {
+                for import in imports {
+                    let name = import.map_err(malformed)?.name.full_name();
+                    if names.wasi_p3_import.is_none() && is_wasi_p3_import(&name) {
+                        names.wasi_p3_import = Some(name.into_owned());
+                    }
+                }
+            }
+            wasmparser::Payload::ComponentExportSection(exports) if depth == 0 => {
+                for export in exports {
+                    let name = export.map_err(malformed)?.name.full_name();
+                    if let Some(version) = name.strip_prefix("pumpkin:plugin/metadata@") {
+                        names.metadata_version = Some(version.to_owned());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(names)
+}
+
+fn is_wasi_p3_import(name: &str) -> bool {
+    name.starts_with("wasi:")
+        && name
+            .rsplit_once('@')
+            .is_some_and(|(_, version)| version.starts_with("0.3."))
 }
 
 #[derive(Copy, Clone)]
@@ -65,5 +124,46 @@ impl WasmPlugin {
 impl Drop for WasmPlugin {
     fn drop(&mut self) {
         self.store.discard();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wasm_encoder::{ComponentBuilder, ComponentTypeRef, InstanceType};
+
+    use super::{is_wasi_p3_import, scan_component_names};
+
+    fn component_importing(names: &[&str]) -> Vec<u8> {
+        let mut component = ComponentBuilder::default();
+        for name in names {
+            let ty = component.type_instance(None, &InstanceType::new());
+            component.import(*name, ComponentTypeRef::Instance(ty));
+        }
+        component.finish()
+    }
+
+    #[test]
+    fn wasi_p3_imports_are_recognised_by_version() {
+        assert!(is_wasi_p3_import("wasi:random/random@0.3.0"));
+        assert!(is_wasi_p3_import("wasi:cli/stdout@0.3.0-rc-2026-03-15"));
+        assert!(!is_wasi_p3_import("wasi:random/random@0.2.6"));
+        assert!(!is_wasi_p3_import("wasi:random/random"));
+        assert!(!is_wasi_p3_import("pumpkin:plugin/context@0.3.0"));
+    }
+
+    #[test]
+    fn scan_reports_the_first_wasi_p3_import() {
+        let bytes = component_importing(&["wasi:random/random@0.2.6", "wasi:random/random@0.3.0"]);
+        let names = scan_component_names(&bytes).expect("scan component");
+        assert_eq!(
+            names.wasi_p3_import.as_deref(),
+            Some("wasi:random/random@0.3.0")
+        );
+        assert_eq!(names.metadata_version, None);
+    }
+
+    #[test]
+    fn scan_rejects_bytes_that_are_not_a_component() {
+        assert!(scan_component_names(b"not wasm").is_err());
     }
 }
