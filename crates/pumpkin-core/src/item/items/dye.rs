@@ -30,17 +30,18 @@ impl ItemBehaviour for DyeItem {
         if let Some(sheep) = entity
             .cast_any()
             .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
+            && entity.get_entity().is_alive()
             && !sheep.is_sheared()
             && color != sheep.get_color()
         {
-            sheep.set_color(color);
             let ent = entity.get_entity();
-            let world = ent.world.load();
-            world.play_sound(
+            ent.world.load().play_sound_expect(
+                player,
                 pumpkin_data::sound::Sound::ItemDyeUse,
                 pumpkin_data::sound::SoundCategory::Players,
                 &ent.pos.load(),
             );
+            sheep.set_color(color);
             item.decrement_unless_creative(player.gamemode.load(), 1);
         } else if let Some(cushion) = entity
             .cast_any()

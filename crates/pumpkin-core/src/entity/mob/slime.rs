@@ -134,6 +134,11 @@ impl SlimeEntity {
             eye_height: entity.entity_type.eye_height * actual_size as f32,
         };
         entity.set_default_dimensions(scaled_dimensions);
+
+        entity.set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, actual_size);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
@@ -298,6 +303,10 @@ impl Mob for SlimeEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        Some(crate::entity::mob::MobMetadata::new().slime_size(self.get_size()))
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

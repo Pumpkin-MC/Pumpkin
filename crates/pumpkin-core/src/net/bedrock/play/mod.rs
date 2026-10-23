@@ -202,6 +202,7 @@ pub(crate) fn send_bedrock_inventory_slot(
 
 pub mod actor_event;
 pub mod animate;
+pub mod block_actor_data;
 pub mod block_pick_request;
 pub mod chat_command;
 pub mod chat_message;

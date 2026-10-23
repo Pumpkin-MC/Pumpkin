@@ -94,9 +94,17 @@ impl Mob for CaveSpiderEntity {
         self.is_climbing.load(Ordering::Relaxed)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new().no_ai(self.mob_entity.is_no_ai());
+        if self.is_climbing.load(Ordering::Relaxed) {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         super::spider::tick_wall_climbing(
-            &self.mob_entity.living_entity.entity,
+            self,
             &self.is_climbing,
             pumpkin_data::tracked_data::cave_spider::DATA_FLAGS_ID,
         );

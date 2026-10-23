@@ -82,7 +82,7 @@ impl SpiderEntity {
 
     pub fn set_climbing(&self, climbing: bool) {
         set_wall_climbing(
-            &self.mob_entity.living_entity.entity,
+            self,
             &self.is_climbing,
             pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
             climbing,
@@ -92,25 +92,30 @@ impl SpiderEntity {
 
 /// Vanilla `Spider.setClimbing`.
 pub fn set_wall_climbing(
-    entity: &Entity,
+    mob: &dyn Mob,
     climbing: &AtomicBool,
     flags: pumpkin_data::tracked_data::TrackedData,
     next: bool,
 ) {
     if climbing.swap(next, Ordering::Relaxed) != next {
+        let entity = &mob.get_mob_entity().living_entity.entity;
         entity.set_synced_data(flags, i8::from(next));
+        if let Some(meta) = mob.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 }
 
 /// Vanilla `Spider.tick`: the climb flag follows `horizontalCollision`.
 pub fn tick_wall_climbing(
-    entity: &Entity,
+    mob: &dyn Mob,
     climbing: &AtomicBool,
     flags: pumpkin_data::tracked_data::TrackedData,
 ) {
+    let entity = &mob.get_mob_entity().living_entity.entity;
     if entity.is_alive() {
         set_wall_climbing(
-            entity,
+            mob,
             climbing,
             flags,
             entity.horizontal_collision.load(Ordering::Relaxed),
@@ -192,9 +197,17 @@ impl Mob for SpiderEntity {
         self.is_climbing()
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_climbing() {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         tick_wall_climbing(
-            &self.mob_entity.living_entity.entity,
+            self,
             &self.is_climbing,
             pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
         );

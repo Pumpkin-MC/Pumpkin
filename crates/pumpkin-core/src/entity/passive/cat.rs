@@ -271,6 +271,23 @@ impl Mob for CatEntity {
         Some(self)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        meta = meta.collar_color(pumpkin_data::dye_color::DyeColor::from(
+            self.collar_color.load(Ordering::Relaxed),
+        ));
+        Some(meta)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         let variant_id = self.variant.load(Ordering::Relaxed);
         let variant_str = CatVariant::all()

@@ -300,6 +300,19 @@ impl BlockEntity for SignBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_sign_actor(
+            self.position,
+            false,
+            &self.front_text,
+            &self.back_text,
+            self.is_waxed.load(Ordering::Relaxed),
+        ))
+    }
+
     fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
         collect_sign_item_components(&self.front_text, &self.back_text, &self.is_waxed, stack);
     }

@@ -85,12 +85,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{
-    BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{ChestLikeProperties, ChestType},
-    tag::Taggable,
-    translation,
-};
+use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::{Clearable, Inventory};
@@ -197,38 +192,7 @@ use weather::Weather;
 const MAX_LIGHT_LEVEL: u8 = 15;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
-    let (block, _) = BlockState::from_id_with_block(state_id);
-    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
-        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
-    {
-        return None;
-    }
-
-    // Block actor tags describe the chest itself. Container contents are synchronized
-    // through inventory packets and must not be exposed in chunk data.
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("id", "Chest".to_string());
-    nbt.put_int("x", position.0.x);
-    nbt.put_int("y", position.0.y);
-    nbt.put_int("z", position.0.z);
-    nbt.put_bool("isMovable", true);
-
-    let properties = ChestLikeProperties::from_state_id(state_id);
-    if properties.r#type != ChestType::Single {
-        let direction = if properties.r#type == ChestType::Left {
-            properties.facing.rotate_clockwise()
-        } else {
-            properties.facing.rotate_counter_clockwise()
-        };
-        let pair = position.offset(direction.to_offset());
-        nbt.put_int("pairx", pair.0.x);
-        nbt.put_int("pairz", pair.0.z);
-        if properties.r#type == ChestType::Right {
-            nbt.put_bool("pairlead", true);
-        }
-    }
-
-    Some(nbt)
+    crate::block::entities::bedrock::build_chest_actor(position, state_id, None)
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -6542,6 +6506,13 @@ impl World {
             );
         }
 
+        let state = self.get_block_state(&block_pos);
+        if let Some(data) = bedrock_chest_block_actor(state.id, block_pos)
+            .or_else(|| block_entity.bedrock_block_actor_data(state.id))
+        {
+            self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
+        }
+
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -6661,6 +6632,14 @@ impl World {
             full_nbt.put_int("z", pos.0.z);
             self.add_block_entity_nbt(block_pos, &full_nbt);
         }
+
+        let state = self.get_block_state(&block_pos);
+        if let Some(data) = bedrock_chest_block_actor(state.id, block_pos)
+            .or_else(|| block_entity.bedrock_block_actor_data(state.id))
+        {
+            self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
+        }
+
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });

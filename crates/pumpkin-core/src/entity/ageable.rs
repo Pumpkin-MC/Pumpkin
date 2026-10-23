@@ -66,6 +66,9 @@ pub trait AgeableMob: Mob {
                 Entity::type_dimensions(entity.entity_type)
             });
             self.age_boundary_reached();
+            if let Some(meta) = self.mob_metadata() {
+                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+            }
         }
     }
 

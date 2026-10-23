@@ -186,6 +186,26 @@ impl Mob for WolfEntity {
         Some(self)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_baby() {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        if self.is_angry() {
+            meta = meta.angry(true);
+        }
+        meta = meta.collar_color(pumpkin_data::dye_color::DyeColor::from(
+            self.collar_color.load(Ordering::Relaxed),
+        ));
+        Some(meta)
+    }
+
     fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
         let target_entity = target.get_entity();
         let target_type = target_entity.entity_type;

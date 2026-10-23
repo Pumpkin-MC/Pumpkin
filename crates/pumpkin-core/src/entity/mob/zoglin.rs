@@ -14,7 +14,7 @@ use crate::entity::{
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     living::LivingEntity,
-    mob::{Mob, MobEntity, hoglin::throw_target},
+    mob::{Mob, MobEntity, MobMetadata, hoglin::throw_target},
 };
 use crate::world::World;
 
@@ -118,6 +118,10 @@ impl ZoglinEntity {
 }
 
 impl Mob for ZoglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
