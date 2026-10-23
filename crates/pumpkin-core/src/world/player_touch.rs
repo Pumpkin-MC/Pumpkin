@@ -6,6 +6,19 @@ use rand::RngExt;
 
 use crate::entity::{EntityBase, player::Player};
 
+/// Player box, joined with a live vehicle's box; `true` when mounted.
+pub(super) fn pickup_body(player: &Player) -> (BoundingBox, bool) {
+    let entity = player.get_entity();
+    let hitbox = entity.bounding_box.load();
+    match entity.get_vehicle() {
+        Some(vehicle) if !vehicle.get_entity().is_removed() => (
+            hitbox.minmax(&vehicle.get_entity().bounding_box.load()),
+            true,
+        ),
+        _ => (hitbox, false),
+    }
+}
+
 /// One player's touch state, taken once per tick after players move.
 pub(super) struct PlayerTouch<'a> {
     player: &'a Arc<Player>,
@@ -21,19 +34,17 @@ impl<'a> PlayerTouch<'a> {
         if player.living_entity.health.load() <= 0.0 || player.is_spectator() {
             return None;
         }
-        let entity = player.get_entity();
-        let hitbox = entity.bounding_box.load();
+        let (body, mounted) = pickup_body(player);
         // Vanilla `Player.aiStep` pickup volume. Push uses stored hitboxes elsewhere.
-        let area = match entity.get_vehicle() {
-            Some(vehicle) if !vehicle.get_entity().is_removed() => hitbox
-                .minmax(&vehicle.get_entity().bounding_box.load())
-                .expand(1.0, 0.0, 1.0),
-            _ => hitbox.expand(1.0, 0.5, 1.0),
+        let area = if mounted {
+            body.expand(1.0, 0.0, 1.0)
+        } else {
+            body.expand(1.0, 0.5, 1.0)
         };
         Some(Self {
             player,
             area,
-            chunk: entity.chunk_pos.load(),
+            chunk: player.get_entity().chunk_pos.load(),
             orbs: Mutex::new(Vec::new()),
         })
     }

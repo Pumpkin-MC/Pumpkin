@@ -183,7 +183,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
-use crate::world::player_touch::{PlayerTouch, touch_players};
+use crate::world::player_touch::{PlayerTouch, pickup_body, touch_players};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
@@ -1640,12 +1640,10 @@ impl World {
                     .filter(|entity| !ticking.contains(&entity.entity_id))
                     .map(|entity| (entity.entity_id, entity.bounding_box.load()))
                     .collect();
+                // Includes the vehicle, like the pickup area.
                 let player_bodies: Vec<_> = players
                     .iter()
-                    .map(|player| {
-                        let entity = player.get_entity();
-                        (entity.entity_id, entity.bounding_box.load())
-                    })
+                    .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
                     .collect();
                 let mut islands =
                     entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
