@@ -436,6 +436,10 @@ pub trait PathNavigationTrait: Send + Sync {
     fn get_target_pos(&self) -> Option<BlockPos>;
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
+
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        world.get_block_state(&pos.down()).is_solid_render()
+    }
 }
 
 pub struct PathNavigation {
@@ -1613,6 +1617,10 @@ impl WaterBoundPathNavigation {
 impl PathNavigationTrait for WaterBoundPathNavigation {
     fn set_progress(&mut self, goal: NavigatorGoal) {
         self.inner.set_progress(goal);
+    }
+
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        !world.get_block_state(pos).is_solid_render()
     }
 
     fn set_speed(&mut self, speed: f64) {

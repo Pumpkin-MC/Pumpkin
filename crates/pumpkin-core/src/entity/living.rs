@@ -128,6 +128,7 @@ pub struct LivingEntity {
 
     /// The ID of the player that last hurt this entity.
     pub last_hurt_by_player_id: AtomicI32,
+    pub no_action_time: AtomicI32,
     /// The tick at which this entity was last hurt by a player.
     pub last_hurt_by_player_time: AtomicI64,
     /// The ID of the mob/entity that last hurt this entity.
@@ -325,6 +326,7 @@ impl LivingEntity {
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
             last_hurt_by_player_id: AtomicI32::new(0),
+            no_action_time: AtomicI32::new(0),
             last_hurt_by_player_time: AtomicI64::new(0),
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
@@ -3416,6 +3418,7 @@ impl LivingEntity {
             position,
         );
 
+        self.no_action_time.store(0, Relaxed);
         if play_sound {
             if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
                 sound.on_hurt_sound();

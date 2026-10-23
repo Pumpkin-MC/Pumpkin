@@ -4,9 +4,10 @@ use crate::entity::{
     EntityBase,
     ai::{
         control::fish_move_control::FishMoveControl,
+        goal::{Controls, Goal, random_swimming::RandomSwimmingGoal},
         pathfinder::{Navigator, node::PathType},
     },
-    mob::MobEntity,
+    mob::{Mob, MobEntity},
 };
 use pumpkin_data::{sound::Sound, tracked_data};
 use pumpkin_nbt::compound::NbtCompound;
@@ -39,8 +40,70 @@ pub fn initialize_fish_movement(mob: &mut MobEntity) {
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(FishMoveControl::default());
 }
 
+const PANIC_SPEED: f64 = 1.25;
+const AVOID_PLAYER_RANGE: f64 = 8.0;
+const AVOID_PLAYER_WALK_SPEED: f64 = 1.6;
+const AVOID_PLAYER_SPRINT_SPEED: f64 = 1.4;
+const RANDOM_SWIM_SPEED: f64 = 1.0;
+const RANDOM_SWIM_INTERVAL: i32 = 40;
+
+pub fn register_fish_goals(mob: &MobEntity) {
+    use crate::entity::ai::goal::{avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal};
+    let goals = &mob.goals_selector;
+    goals.add_goal(0, EscapeDangerGoal::new(PANIC_SPEED));
+    goals.add_goal(
+        2,
+        Box::new(AvoidEntityGoal::new(
+            &pumpkin_data::entity::EntityType::PLAYER,
+            AVOID_PLAYER_RANGE,
+            AVOID_PLAYER_WALK_SPEED,
+            AVOID_PLAYER_SPRINT_SPEED,
+        )),
+    );
+    goals.add_goal(4, Box::new(FishSwimGoal::default()));
+}
+
+struct FishSwimGoal {
+    inner: RandomSwimmingGoal,
+}
+
+impl Default for FishSwimGoal {
+    fn default() -> Self {
+        Self {
+            inner: RandomSwimmingGoal::new(RANDOM_SWIM_SPEED, RANDOM_SWIM_INTERVAL),
+        }
+    }
+}
+
+impl Goal for FishSwimGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        mob.as_fish().is_some_and(AbstractFish::can_random_swim) && self.inner.can_start(mob)
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.inner.should_continue(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.inner.start(mob);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.inner.stop(mob);
+    }
+
+    fn controls(&self) -> Controls {
+        self.inner.controls()
+    }
+}
+
 pub trait AbstractFish: WaterAnimal {
     fn flop_sound(&self) -> Sound;
+
+    fn can_random_swim(&self) -> bool {
+        self.as_schooling_fish()
+            .is_none_or(|fish| !fish.is_follower())
+    }
 
     fn fish_travel_in_water(&self, caller: &dyn EntityBase) {
         let mob = self.get_mob_entity();

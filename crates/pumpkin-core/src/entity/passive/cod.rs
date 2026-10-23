@@ -1,58 +1,60 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use super::{
     abstract_fish::{AbstractFish, FishData},
+    abstract_schooling_fish::{AbstractSchoolingFish, SchoolingFishData},
     water_animal::WaterAnimal,
 };
 use crate::entity::EntityBase;
-use pumpkin_data::{entity::EntityType, sound::Sound};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-    },
+    ai::goal::follow_flock_leader::FollowFlockLeaderGoal,
     mob::{Mob, MobEntity},
 };
 
 pub struct CodEntity {
     pub mob_entity: MobEntity,
     fish_data: FishData,
+    schooling_data: SchoolingFishData,
 }
 
 impl CodEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
         super::abstract_fish::initialize_fish_movement(&mut mob_entity);
-        let cod = Self {
+        let mob_arc = Arc::new_cyclic(|weak: &std::sync::Weak<Self>| Self {
             mob_entity,
             fish_data: FishData::default(),
-        };
-        let mob_arc = Arc::new(cod);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
-        };
+            schooling_data: SchoolingFishData::new(weak.clone()),
+        });
+        super::abstract_fish::register_fish_goals(&mob_arc.mob_entity);
+        mob_arc
+            .mob_entity
+            .goals_selector
+            .add_goal(5, Box::new(FollowFlockLeaderGoal::default()));
 
         mob_arc
     }
 }
 
 impl Mob for CodEntity {
+    fn as_schooling_fish(&self) -> Option<&dyn AbstractSchoolingFish> {
+        Some(self)
+    }
+    fn post_tick(&self) {
+        self.schooling_tick();
+    }
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<crate::world::World>,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        self.finalize_school_spawn(group_data)
+    }
+
     fn before_mob_ai_step(&self) {
         self.fish_ai_step();
     }
@@ -146,5 +148,11 @@ impl crate::entity::custom_sound::CustomSound for CodEntity {
     }
     fn on_hurt_sound(&self) {
         self.reset_ambient_sound_time();
+    }
+}
+
+impl AbstractSchoolingFish for CodEntity {
+    fn schooling_data(&self) -> &SchoolingFishData {
+        &self.schooling_data
     }
 }
