@@ -37,7 +37,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub const PACKET_TIMEOUT: Duration = Duration::from_secs(10);
+pub const PACKET_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct HeadlessBot {
     pub name: String,

@@ -28,7 +28,8 @@ use pumpkin_protocol::{
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
-            actor_event::SActorEvent, animate::SAnimate, block_pick_request::SBlockPickRequest,
+            actor_event::SActorEvent, animate::SAnimate, block_actor_data::SBlockActorData,
+            block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
@@ -39,6 +40,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
+            resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
@@ -94,6 +96,16 @@ impl OutgoingPacket {
     }
 }
 
+/// Active resource pack staged for chunk streaming to this client.
+#[derive(Clone)]
+pub struct BedrockStreamingPack {
+    pub pack_id: String,
+    pub chunk_size: u32,
+    pub chunk_count: u32,
+    pub total_size: u64,
+    pub data: Arc<Vec<u8>>,
+}
+
 pub struct BedrockClient {
     session: Arc<NetherNetSession>,
     /// The client's IP address.
@@ -126,6 +138,7 @@ pub struct BedrockClient {
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
     pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
+    pub streaming_packs: std::sync::Mutex<HashMap<String, BedrockStreamingPack>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -165,6 +178,7 @@ impl BedrockClient {
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
+            streaming_packs: std::sync::Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
@@ -735,6 +749,16 @@ impl BedrockClient {
                         .await;
                 });
             }
+            SResourcePackChunkRequest::PACKET_ID => {
+                let packet = SResourcePackChunkRequest::read(reader)?;
+                let client = self.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    client
+                        .handle_resource_pack_chunk_request(packet, &server_c)
+                        .await;
+                });
+            }
             SPlayerAuthInput::PACKET_ID => {
                 let packet = SPlayerAuthInput::read(reader)?;
                 self.handle_player_auth_input(player, packet, server);
@@ -817,6 +841,10 @@ impl BedrockClient {
             SBlockPickRequest::PACKET_ID => {
                 let packet = SBlockPickRequest::read(reader)?;
                 self.handle_block_pick_request(player, &packet);
+            }
+            SBlockActorData::PACKET_ID => {
+                let packet = SBlockActorData::read(reader)?;
+                self.handle_block_actor_data(player, &packet);
             }
             SRequestAbility::PACKET_ID => {
                 self.handle_request_ability(player, &SRequestAbility::read(reader)?);
