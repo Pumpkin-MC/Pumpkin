@@ -498,6 +498,11 @@ pub mod map_decoration;
 #[path = "generated/dye_color.rs"]
 pub mod dye_color;
 
+#[cfg(feature = "entity_variant")]
+#[rustfmt::skip]
+#[path = "generated/entity_variant.rs"]
+pub mod entity_variant;
+
 #[cfg(feature = "block_transformer")]
 #[rustfmt::skip]
 #[path = "generated/block_transformer.rs"]
