@@ -841,6 +841,8 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// Jump velocity multiplier applied when jumping from this block.
     pub jump_velocity_multiplier: f32,
+    /// Fraction of vertical velocity kept when an entity bounces off this block.
+    pub bounce_restitution: f32,
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
@@ -872,6 +874,7 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
+        let bounce_restitution = &self.bounce_restitution;
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
@@ -911,6 +914,7 @@ impl ToTokens for Block {
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
+                bounce_restitution: #bounce_restitution,
                 item_id: #item_id,
                 default_state: &#default_state,
                 states: &[#(#states),*],

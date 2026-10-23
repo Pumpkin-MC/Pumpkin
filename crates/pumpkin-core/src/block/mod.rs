@@ -144,7 +144,12 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        stop_vertical_movement_after_fall(args.entity);
+        let restitution = args.block.get_bounce_restitution();
+        if restitution > 0.0 {
+            bounce_entity_after_fall(args.entity, f64::from(restitution));
+        } else {
+            stop_vertical_movement_after_fall(args.entity);
+        }
     }
 
     /// Called when a player starts digging this block, except in creative.
@@ -366,6 +371,7 @@ pub struct OnLandedUponArgs<'a> {
 }
 
 pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
+    pub block: &'a Block,
     pub entity: &'a dyn EntityBase,
 }
 
