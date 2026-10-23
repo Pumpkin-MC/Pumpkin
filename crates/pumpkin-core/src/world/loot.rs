@@ -291,7 +291,14 @@ fn apply_bonus_formula(
             }
         }
         LootBonusFormula::UniformBonusCount(bonus_multiplier) => {
-            base_count + rng.next_bounded_i32(fortune_level * bonus_multiplier + 1)
+            let bound = fortune_level
+                .saturating_mul(bonus_multiplier)
+                .saturating_add(1);
+            if bound > 0 {
+                base_count.saturating_add(rng.next_bounded_i32(bound))
+            } else {
+                base_count
+            }
         }
         LootBonusFormula::BinomialWithBonusCount { extra, probability } => {
             let n = fortune_level + extra;
