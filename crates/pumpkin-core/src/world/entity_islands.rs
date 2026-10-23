@@ -309,9 +309,12 @@ impl EntityReach {
             TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity
-            .cast_any()
-            .downcast_ref::<TNTEntity>()
-            .is_some_and(TNTEntity::is_about_to_explode);
+            .get_mob()
+            .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+            || entity
+                .cast_any()
+                .downcast_ref::<TNTEntity>()
+                .is_some_and(TNTEntity::is_about_to_explode);
         Self::Conservative(reach)
     }
 }

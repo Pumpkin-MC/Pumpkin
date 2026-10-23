@@ -1295,6 +1295,48 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn post_tick(&self) {}
 
+    fn base_tick(&self) {}
+
+    fn travel(&self, _caller: &dyn EntityBase) -> bool {
+        false
+    }
+
+    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
+    fn can_pick_up_loot(&self, _brain: Option<&crate::entity::ai::brain::BrainState>) -> bool {
+        self.get_mob_entity().can_pick_up_loot()
+    }
+
+    fn for_each_game_event_listener(
+        &self,
+        _visit: &mut dyn FnMut(&dyn crate::world::game_event::GameEventListener),
+    ) {
+    }
+
+    fn has_global_tick_reach(&self) -> bool {
+        false
+    }
+
+    fn mob_considers_entity_as_ally(
+        &self,
+        _other: &dyn EntityBase,
+        _brain: Option<&crate::entity::ai::brain::BrainState>,
+    ) -> Option<bool> {
+        None
+    }
+
+    fn drop_inventory(&self) {}
+
+    fn can_dispenser_equip_into_slot(&self, _slot: &EquipmentSlot) -> bool {
+        true
+    }
+
+    fn should_check_fall_damage(&self) -> bool {
+        true
+    }
+
     fn on_removed(&self) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
@@ -1320,6 +1362,15 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Used by endermen to dodge projectiles via teleportation.
     fn pre_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         true
+    }
+
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.pre_damage(damage_type, source)
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
@@ -1553,6 +1604,15 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().mob_interact(player, item_stack)
     }
 
+    fn mob_interact_with_hand(
+        &self,
+        _player: &Arc<Player>,
+        _item_stack: &mut ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        None
+    }
+
     fn tame(&self, player: &Arc<Player>) {
         let mob = self.get_mob_entity();
         let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
@@ -1695,6 +1755,13 @@ pub trait Mob: EntityBase + Send + Sync {
             .is_some_and(crate::entity::ageable::AgeableMob::is_baby)
     }
 
+    fn mob_get_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        None
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
@@ -1748,6 +1815,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn vehicle_attachment_point(&self, vehicle: &Entity) -> Vector3<f64> {
         self.mob_vehicle_attachment_point(vehicle)
+    }
+
+    fn get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        self.mob_get_component(component)
     }
 
     fn init_data_tracker(&self) {
@@ -1844,7 +1918,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         cause: Option<&dyn EntityBase>,
     ) -> bool {
         // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
-        if !self.pre_damage(damage_type, source) {
+        if !self.pre_damage_with_context(damage_type, source, cause) {
             return false;
         }
         // Mob-specific damage modifier (e.g. shulker armor when closed).
@@ -1865,6 +1939,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.mob_interact(player, item_stack)
+    }
+
+    fn interact_with_hand(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        self.mob_interact_with_hand(player, item_stack, hand)
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {

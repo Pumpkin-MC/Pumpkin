@@ -38,6 +38,7 @@ use tokio::{
 use uuid::Uuid;
 
 pub const PACKET_TIMEOUT: Duration = Duration::from_secs(60);
+pub const MAX_POLL_TICKS: usize = 500;
 
 pub struct HeadlessBot {
     pub name: String,

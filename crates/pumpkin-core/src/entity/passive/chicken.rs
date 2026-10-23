@@ -196,6 +196,25 @@ impl Animal for ChickenEntity {
 }
 
 impl Mob for ChickenEntity {
+    fn mob_get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        use pumpkin_data::{
+            data_component::DataComponent, data_component_impl::ChickenVariantImpl,
+        };
+        match component {
+            DataComponent::ChickenVariant => Some(Box::new(ChickenVariantImpl {
+                value: format!(
+                    "minecraft:{}",
+                    ChickenVariant::from_id(self.variant.load(Ordering::Relaxed))?.to_name()
+                )
+                .into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,

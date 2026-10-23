@@ -98,17 +98,30 @@ impl JavaClient {
                                     return;
                                 }
                             }
-                            let mut stack = player.inventory().held_item();
-
-                            let item_id = stack.item.id;
-                            let before = stack.clone();
-                            let interacted = event.target.interact(player, &mut stack);
+                            let packet_hand = interact.hand.map_or(0, |hand| hand.0);
+                            let Ok(mut hand) = pumpkin_util::Hand::from_packet_id(packet_hand)
+                            else {
+                                return;
+                            };
+                            let mut stack = player.inventory().get_stack_in_hand(hand);
+                            let mut before = stack.clone();
+                            let native_interaction =
+                                event.target.interact_with_hand(player, &mut stack, hand);
+                            let interacted = if let Some(handled) = native_interaction {
+                                handled
+                            } else {
+                                hand = pumpkin_util::Hand::Right;
+                                stack = player.inventory().held_item();
+                                before = stack.clone();
+                                event.target.interact(player, &mut stack)
+                            };
+                            let item_id = before.item.id;
                             if !interacted {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target);
                             }
-                            if !stack.are_equal(&before) {
+                            if native_interaction.is_none() && !stack.are_equal(&before) {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                                 if before.is_damageable() && stack.is_empty() {
                                     player.increment_stat(
@@ -123,7 +136,7 @@ impl JavaClient {
                                     );
                                 }
                             }
-                            player.inventory().set_held_item(stack);
+                            player.inventory().set_stack_in_hand(hand, stack);
                         }
                     }
                 }

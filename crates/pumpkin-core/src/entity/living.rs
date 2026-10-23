@@ -259,7 +259,7 @@ impl LivingEntity {
         entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
     }
 
-    fn get_pitch(&self) -> f32 {
+    pub(crate) fn get_pitch(&self) -> f32 {
         let is_baby = self
             .get_mob()
             .and_then(|x| x.as_ageable())
@@ -1481,7 +1481,8 @@ impl LivingEntity {
             .get_mob()
             .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
 
-        if effective_ai {
+        // A mob with its own travel, e.g. the allay, replaces the default one
+        if effective_ai && !caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
             self.travel(caller);
         }
 
@@ -1666,6 +1667,22 @@ impl LivingEntity {
 
         self.entity.velocity.store(velo);
         friction
+    }
+
+    pub(crate) fn travel_flying(&self, caller: &dyn EntityBase) {
+        let (speed, drag) = if self.entity.is_in_water() {
+            (f64::from(0.02f32), f64::from(0.8f32))
+        } else if self.entity.touching_lava.load(Relaxed) {
+            (f64::from(0.02f32), 0.5)
+        } else {
+            (f64::from(self.get_speed()), f64::from(0.91f32))
+        };
+        self.entity
+            .update_velocity_from_input(self.movement_input.load(), speed);
+        self.make_move(caller);
+        self.entity
+            .velocity
+            .store(self.entity.velocity.load() * drag);
     }
 
     /// Vanilla `LivingEntity.travelInWater`. Returns the horizontal friction.
@@ -1980,6 +1997,12 @@ impl LivingEntity {
         ground: bool,
         dont_damage: bool,
     ) {
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.should_check_fall_damage())
+        {
+            return;
+        }
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
@@ -2160,9 +2183,18 @@ impl LivingEntity {
             // Plays the death sound
             world.play_sound_fine(
                 self.death_sound(&*dyn_self),
-                SoundCategory::Players,
+                dyn_self
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(
+                        SoundCategory::Players,
+                        super::custom_sound::CustomSound::sound_category,
+                    ),
                 &self.entity.pos.load(),
-                1.0,
+                dyn_self
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
                 self.get_pitch(),
             );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -2202,9 +2234,10 @@ impl LivingEntity {
 
             let params = LootContextParameters {
                 killed_by_player: Some(has_player_kill),
-                this_entity: Some(self.entity.entity_type),
-                killer_entity: killer.map(|c| c.get_entity().entity_type),
-                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+                world: Some(&world),
+                this_entity: Some(dyn_self.as_ref()),
+                killer_entity: killer,
+                direct_killer_entity: source,
                 position: Some(self.entity.pos.load()),
                 world_time: world.level_info.load().day_time as u64,
                 damage_type: Some(damage_type),
@@ -2240,6 +2273,9 @@ impl LivingEntity {
             self.entity.pose.store(EntityPose::Dying);
 
             self.drop_equipment(looting_level);
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.drop_inventory();
+            }
 
             // Broadcast death message if it's a player and the gamerule is enabled
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause);
@@ -2302,6 +2338,9 @@ impl LivingEntity {
                 .remove(slot)
                 .unwrap_or_else(|| ItemStack::EMPTY.clone());
             if item.is_empty() {
+                continue;
+            }
+            if prevents_equipment_drop(&item) {
                 continue;
             }
             // Vanilla approximation: Mob.dropCustomDeathLoot applies random
@@ -3396,11 +3435,23 @@ impl LivingEntity {
         }
 
         if play_sound {
+            if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
+                sound.on_hurt_sound();
+            }
             world.play_sound_fine(
                 self.hurt_sound(caller),
-                SoundCategory::Players,
+                caller
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(
+                        SoundCategory::Players,
+                        super::custom_sound::CustomSound::sound_category,
+                    ),
                 &self.entity.pos.load(),
-                1.0,
+                caller
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
                 self.get_pitch(),
             );
         }
@@ -3602,6 +3653,9 @@ impl EntityBase for LivingEntity {
         }
 
         self.entity.tick(caller, server);
+        if let Some(mob) = caller.get_mob() {
+            mob.base_tick();
+        }
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).
@@ -4172,7 +4226,7 @@ fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
     }
 }
 
-const fn attribute_modifier_slot_matches(
+pub(crate) const fn attribute_modifier_slot_matches(
     modifier_slot: &AttributeModifierSlot,
     equipment_slot: &EquipmentSlot,
 ) -> bool {
@@ -4275,6 +4329,16 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
         | (1u64 << DamageType::SONIC_BOOM.id)
         | (1u64 << DamageType::OUTSIDE_BORDER.id);
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments.enchantment.iter().any(|(enchantment, level)| {
+                *level > 0 && enchantment.effects.prevent_equipment_drop
+            })
+        })
 }
 
 #[cfg(test)]

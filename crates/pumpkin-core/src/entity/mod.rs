@@ -270,6 +270,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())
     }
 
+    fn get_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        None
+    }
+
     fn init_data_tracker(&self) {
         let entity = self.get_entity();
 
@@ -382,11 +389,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
+        if let Some(considered) = self
+            .get_mob()
+            .and_then(|mob| mob.mob_considers_entity_as_ally(other, None))
+        {
+            return considered;
+        }
         if let Some(tamable) = self.get_mob().and_then(mob::Mob::as_tamable)
             && let Some(considered) = tamable.tamable_considers_entity_as_ally(other)
         {
             return considered;
         }
+        self.is_on_same_team(other)
+    }
+
+    fn is_on_same_team(&self, other: &dyn EntityBase) -> bool {
         let Some(team) = self.get_team_name() else {
             return false;
         };
@@ -421,6 +438,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn is_spectator(&self) -> bool {
+        false
+    }
+
+    fn dampens_vibrations(&self) -> bool {
         false
     }
 
@@ -581,6 +602,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// Returns true if the interaction was handled.
     fn interact(&self, _player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
         false
+    }
+
+    fn interact_with_hand(
+        &self,
+        _player: &Arc<Player>,
+        _item_stack: &mut ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        None
     }
 
     fn set_on_fire_for(&self, seconds: f32) {
