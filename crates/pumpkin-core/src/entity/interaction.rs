@@ -6,10 +6,7 @@ use uuid::Uuid;
 
 use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_util::math::{
-    boundingbox::{BoundingBox, EntityDimensions},
-    vector3::Vector3,
-};
+use pumpkin_util::math::{boundingbox::EntityDimensions, vector3::Vector3};
 
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
@@ -53,10 +50,8 @@ impl InteractionEntity {
         entity.no_physics.store(true, Ordering::Relaxed);
         let width = 1.0;
         let height = 1.0;
-        let dimensions = EntityDimensions::new(width, height, height * 0.85);
-        let pos = entity.pos.load();
-        let aabb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions);
-        entity.bounding_box.store(aabb);
+        // Vanilla `Interaction.getDimensions`: the size moves and teleports with it
+        entity.set_default_dimensions(EntityDimensions::new(width, height, height * 0.85));
 
         Arc::new(Self {
             entity,
@@ -121,10 +116,8 @@ impl InteractionEntity {
             .height
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let dimensions = EntityDimensions::new(width, height, height * 0.85);
-        let pos = self.entity.pos.load();
-        let aabb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions);
-        self.entity.bounding_box.store(aabb);
+        self.entity
+            .set_default_dimensions(EntityDimensions::new(width, height, height * 0.85));
     }
 
     pub fn get_last_attacker(&self) -> Option<PlayerAction> {

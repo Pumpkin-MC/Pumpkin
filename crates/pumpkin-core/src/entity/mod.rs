@@ -1213,7 +1213,7 @@ impl Entity {
             &world,
             entity_id,
             entity_type,
-            BoundingBox::new_from_pos(position.x, position.y, position.z, &bounding_box_size),
+            Self::make_bounding_box(entity_type, position, &bounding_box_size),
         );
 
         Self {
@@ -1383,6 +1383,23 @@ impl Entity {
         }
     }
 
+    /// Vanilla `makeBoundingBox`: wind charges sit 0.15 below their position.
+    #[must_use]
+    pub fn make_bounding_box(
+        entity_type: &EntityType,
+        position: Vector3<f64>,
+        dimensions: &EntityDimensions,
+    ) -> BoundingBox {
+        let offset = if entity_type == &EntityType::WIND_CHARGE
+            || entity_type == &EntityType::BREEZE_WIND_CHARGE
+        {
+            f64::from(0.15f32)
+        } else {
+            0.0
+        };
+        BoundingBox::new_from_pos(position.x, position.y - offset, position.z, dimensions)
+    }
+
     /// Vanilla `getDefaultDimensions` of the type as a baby, the adult size if it has none.
     #[must_use]
     pub const fn baby_dimensions(entity_type: &EntityType) -> EntityDimensions {
@@ -1528,6 +1545,13 @@ impl Entity {
         if pose == EntityPose::Sleeping {
             return EntityDimensions::new(0.2, 0.2, 0.2);
         }
+        // Vanilla `Warden.getDefaultDimensions`: fixed 1 high while in the ground, unscaled
+        if self.entity_type == &EntityType::WARDEN
+            && matches!(pose, EntityPose::Digging | EntityPose::Emerging)
+        {
+            let width = self.default_dimension.load().width;
+            return EntityDimensions::new(width, 1.0, 0.85);
+        }
         let base = match pose {
             _ if self.entity_type != &EntityType::PLAYER => self.default_dimension.load(),
             EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
@@ -1552,10 +1576,9 @@ impl Entity {
         let pos = self.pos.load();
         if pos != new_position {
             self.pos.store(new_position);
-            self.bounding_box.store(BoundingBox::new_from_pos(
-                new_position.x,
-                new_position.y,
-                new_position.z,
+            self.bounding_box.store(Self::make_bounding_box(
+                self.entity_type,
+                new_position,
                 &self.entity_dimension.load(),
             ));
 
@@ -3368,8 +3391,10 @@ impl Entity {
         let old = self.entity_dimension.swap(dimension);
         // Vanilla `reapplyPosition`: the box is rebuilt even at the same size
         let position = self.pos.load();
-        self.bounding_box.store(BoundingBox::new_from_pos(
-            position.x, position.y, position.z, &dimension,
+        self.bounding_box.store(Self::make_bounding_box(
+            self.entity_type,
+            position,
+            &dimension,
         ));
         if old == dimension {
             return;
@@ -4690,5 +4715,78 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod dimension_tests {
+    use pumpkin_data::entity::{EntityPose, EntityType};
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::{Entity, EntityBase};
+    use crate::entity::ai::test_support::world;
+    use crate::entity::decoration::armor_stand::ArmorStandEntity;
+    use crate::entity::interaction::InteractionEntity;
+    use crate::entity::mob::warden::WardenEntity;
+    use crate::entity::passive::sniffer::{SnifferEntity, SnifferState};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-6
+    }
+
+    #[tokio::test]
+    async fn special_sizes_match_vanilla() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let at =
+            |entity_type| Entity::new(world.clone(), Vector3::new(0.0, 64.0, 0.0), entity_type);
+
+        // Interaction keeps its own size when moved
+        let interaction = InteractionEntity::new(at(&EntityType::INTERACTION));
+        interaction.set_width(2.0);
+        interaction.set_height(3.0);
+        interaction.entity.set_pos(Vector3::new(10.0, 70.0, 0.0));
+        let aabb = interaction.entity.bounding_box.load();
+        assert!(close(aabb.min.x, 9.0) && close(aabb.max.y, 73.0));
+
+        // Small stand 0.25 x 0.9875, marker 0 x 0
+        let stand = ArmorStandEntity::new(at(&EntityType::ARMOR_STAND));
+        stand.set_small(true);
+        let size = stand.get_entity().entity_dimension.load();
+        assert!(close(f64::from(size.width), 0.25) && close(f64::from(size.height), 0.9875));
+        stand.set_marker(true);
+        let aabb = stand.get_entity().bounding_box.load();
+        assert!(close(aabb.max.y, aabb.min.y) && close(aabb.max.x, aabb.min.x));
+
+        // Warden 1 high while emerging, 2.9 again after
+        let warden = WardenEntity::new(at(&EntityType::WARDEN));
+        let entity = &warden.mob_entity.living_entity.entity;
+        entity.set_pose(EntityPose::Emerging);
+        assert!(close(f64::from(entity.entity_dimension.load().height), 1.0));
+        entity.set_pose(EntityPose::Standing);
+        assert!(close(f64::from(entity.entity_dimension.load().height), 2.9));
+
+        // Sniffer 1.35 high while digging
+        let sniffer = SnifferEntity::new(at(&EntityType::SNIFFER));
+        sniffer.set_state(SnifferState::Digging);
+        let entity = &sniffer.mob_entity.living_entity.entity;
+        assert!(close(
+            f64::from(entity.entity_dimension.load().height),
+            1.35
+        ));
+        sniffer.set_state(SnifferState::Idling);
+        assert!(close(
+            f64::from(entity.entity_dimension.load().height),
+            1.75
+        ));
+
+        // Wind charge box starts 0.15 below its position
+        let charge = at(&EntityType::WIND_CHARGE);
+        assert!(close(charge.bounding_box.load().min.y, 63.85));
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }
