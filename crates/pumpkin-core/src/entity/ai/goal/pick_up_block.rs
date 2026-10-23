@@ -67,11 +67,13 @@ impl Goal for PickUpBlockGoal {
             enderman_block.0.z as f64 + 0.5,
         );
         let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
-        if let Some((hit_pos, _)) = world.raycast(enderman_center, block_center, |block_pos, w| {
-            let state = w.get_block_state(block_pos);
-            state.is_solid()
-        }) && hit_pos != target_pos
-        {
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            enderman_center,
+            block_center,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        if !hit.is_miss && hit.block_pos != target_pos {
             return;
         }
 

@@ -113,11 +113,8 @@ impl Goal for MeleeAttackGoal {
 
         let target = mob.get_mob_entity().get_target().clone();
         if let Some(target) = target {
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             let target_pos = target.get_entity().pos.load();
             navigator.set_progress(NavigatorGoal {
                 current_progress: mob.get_entity().pos.load(),
@@ -146,11 +143,7 @@ impl Goal for MeleeAttackGoal {
         mob.get_mob_entity().set_attacking(false);
 
         // Vanilla: this.mob.getNavigation().stop()
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
         self.last_target_position = None;
     }
 
@@ -180,11 +173,8 @@ impl Goal for MeleeAttackGoal {
         if should_update_nav {
             let mob_pos = mob.get_entity().pos.load();
             let dist_sq = mob_pos.squared_distance_to_vec(&current_target_pos);
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal {
                 current_progress: mob_pos,
                 destination: current_target_pos,
@@ -208,9 +198,19 @@ impl Goal for MeleeAttackGoal {
             && mob.has_line_of_sight(target.get_entity())
         {
             self.cooldown = self.get_max_cooldown();
+
+            // Iron golem animation plays on every swing, even when blocked
+            if let Some(golem) = mob.as_iron_golem() {
+                golem.trigger_attack_animation();
+            }
+
             mob.get_mob_entity().living_entity.swing_hand();
-            mob.get_mob_entity()
+            let damaged = mob
+                .get_mob_entity()
                 .try_attack(mob.get_entity(), target.as_ref());
+            if damaged {
+                mob.on_attack(target.as_ref());
+            }
         }
     }
 

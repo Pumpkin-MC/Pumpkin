@@ -20,6 +20,7 @@ impl AttachedToLogsTreeDecorator {
         block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         log_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         if self.directions.is_empty() || log_positions.is_empty() {
             return;
@@ -42,6 +43,7 @@ impl AttachedToLogsTreeDecorator {
                     self.block_provider
                         .get(random, placement_pos, chunk, block_registry),
                 );
+                decorations.push(placement_pos);
             }
         }
     }

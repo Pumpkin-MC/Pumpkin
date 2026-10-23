@@ -59,6 +59,15 @@ impl ItemBehaviour for FlintAndSteelItem {
 
         let ignited = Ignition::ignite_block(
             |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| {
+                let pitch = rand::RngExt::random::<f32>(&mut rand::rng()).mul_add(0.4, 0.8);
+                world.play_sound_raw_expect(
+                    player,
+                    pumpkin_data::sound::Sound::ItemFlintandsteelUse as u16,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    1.0,
+                    pitch,
+                );
                 world.set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL);
             },
             &world,
