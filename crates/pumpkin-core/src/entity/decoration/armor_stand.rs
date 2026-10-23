@@ -1,6 +1,10 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
-use crate::entity::{Entity, EntityBase, living::LivingEntity};
+use crate::entity::{
+    Entity, EntityBase, living::LivingEntity, mob::equipment::get_equipment_slot_for_item,
+    player::Player,
+};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
@@ -155,14 +159,14 @@ impl ArmorStandEntity {
 
     pub fn is_slot_disabled(&self, slot: &EquipmentSlot) -> bool {
         let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
-        let slot_bit = 1 << slot.get_offset_entity_slot_id(0);
+        let slot_bit = Self::slot_bit(slot, 0);
 
         (disabled_slots & slot_bit) != 0
             || (slot.slot_type() == EquipmentType::Hand && !self.should_show_arms())
     }
 
     pub fn set_slot_disabled(&self, slot: &EquipmentSlot, disabled: bool) {
-        let slot_bit = 1 << slot.get_offset_entity_slot_id(0);
+        let slot_bit = Self::slot_bit(slot, 0);
         let current = self.disabled_slots.load(Ordering::Relaxed);
 
         let new_val = if disabled {
@@ -186,12 +190,31 @@ impl ArmorStandEntity {
         self.rotation.store(packed.to_owned());
     }
 
+    fn drop_equipment(&self) {
+        let entity = self.get_entity();
+        let stacks = {
+            let mut equipment = self
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            take_non_empty_equipment(&mut equipment)
+        };
+        let world = entity.world.load();
+        let drop_pos = entity.block_pos.load().up();
+
+        for stack in stacks {
+            world.drop_stack(&drop_pos, stack);
+        }
+    }
+
     fn break_and_drop_items(&self) {
         let entity = self.get_entity();
         //let name = entity.custom_name.unwrap_or(entity.get_name());
 
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
+        self.drop_equipment();
         entity
             .world
             .load()
@@ -207,8 +230,6 @@ impl ArmorStandEntity {
             SoundCategory::Neutral,
             &entity.pos.load(),
         );
-
-        // TODO: Implement equipment slots and make them drop all of their stored items.
     }
 
     /// Spawns break particles at the armor stand's position.
@@ -228,6 +249,172 @@ impl ArmorStandEntity {
             Particle::Poof,
         );
     }
+
+    fn item_in_slot(&self, slot: &EquipmentSlot) -> ItemStack {
+        self.living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+    }
+
+    fn set_item_slot(&self, slot: &EquipmentSlot, stack: &ItemStack) {
+        let previous = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(slot, stack.clone());
+
+        self.living_entity.on_equip_item(slot, &previous, stack);
+        self.living_entity
+            .send_equipment_changes(&[(slot.clone(), stack.clone())]);
+    }
+
+    fn get_clicked_slot(&self, position: Vector3<f64>) -> EquipmentSlot {
+        let scale = if self.is_small() { 0.5 } else { 1.0 };
+        clicked_slot(position.y / scale, self.is_small(), |slot| {
+            !self.item_in_slot(slot).is_empty()
+        })
+        .clone()
+    }
+
+    fn swap_item(
+        &self,
+        player: &Arc<Player>,
+        slot: &EquipmentSlot,
+        item_stack: &mut ItemStack,
+    ) -> bool {
+        let stand_stack = self.item_in_slot(slot);
+        let Some(new_stand_stack) = swap_item_stacks(
+            &stand_stack,
+            item_stack,
+            player.is_creative(),
+            self.is_slot_insertion_disabled(slot),
+            self.is_slot_removal_disabled(slot),
+        ) else {
+            return false;
+        };
+
+        self.set_item_slot(slot, &new_stand_stack);
+        true
+    }
+
+    fn interact_at_position(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        position: Option<Vector3<f64>>,
+    ) -> bool {
+        if self.is_marker() || item_stack.item.id == Item::NAME_TAG.id {
+            return false;
+        }
+
+        let mut item_slot = get_equipment_slot_for_item(item_stack);
+        if !item_stack.is_empty() && !self.can_use_slot(&item_slot) {
+            item_slot = EquipmentSlot::MAIN_HAND;
+        }
+
+        let clicked_slot = position.map_or(EquipmentSlot::MAIN_HAND, |position| {
+            self.get_clicked_slot(position)
+        });
+        let slot = if item_stack.is_empty() {
+            &clicked_slot
+        } else {
+            &item_slot
+        };
+
+        if !self.can_use_slot(slot) {
+            return false;
+        }
+
+        self.swap_item(player, slot, item_stack)
+    }
+
+    const fn slot_bit(slot: &EquipmentSlot, offset: i32) -> i32 {
+        1 << (slot.get_slot_index() + offset)
+    }
+
+    fn is_slot_removal_disabled(&self, slot: &EquipmentSlot) -> bool {
+        self.disabled_slots.load(Ordering::Relaxed) & Self::slot_bit(slot, 8) != 0
+    }
+
+    fn is_slot_insertion_disabled(&self, slot: &EquipmentSlot) -> bool {
+        self.disabled_slots.load(Ordering::Relaxed) & Self::slot_bit(slot, 16) != 0
+    }
+}
+
+fn take_non_empty_equipment(
+    equipment: &mut pumpkin_inventory::entity_equipment::EntityEquipment,
+) -> Vec<ItemStack> {
+    equipment
+        .equipment
+        .drain()
+        .filter_map(|(_, stack)| (!stack.is_empty()).then_some(stack))
+        .collect()
+}
+
+fn swap_item_stacks(
+    stand_stack: &ItemStack,
+    item_stack: &mut ItemStack,
+    creative: bool,
+    insertion_disabled: bool,
+    removal_disabled: bool,
+) -> Option<ItemStack> {
+    let stand_empty = stand_stack.is_empty();
+    if stand_empty {
+        if insertion_disabled || item_stack.is_empty() {
+            return None;
+        }
+    } else if removal_disabled {
+        return None;
+    }
+
+    if creative && stand_empty {
+        return Some(item_stack.copy_with_count(1));
+    }
+
+    if item_stack.item_count > 1 {
+        if stand_empty {
+            let new_stand_stack = item_stack.copy_with_count(1);
+            item_stack.decrement(1);
+            if item_stack.is_empty() {
+                item_stack.clear();
+            }
+            return Some(new_stand_stack);
+        }
+        return None;
+    }
+
+    let new_stand_stack = item_stack.clone();
+    *item_stack = stand_stack.clone();
+    Some(new_stand_stack)
+}
+
+fn clicked_slot(
+    y: f64,
+    small: bool,
+    has_item: impl Fn(&EquipmentSlot) -> bool,
+) -> &'static EquipmentSlot {
+    let mut slot = &EquipmentSlot::MAIN_HAND;
+    let feet_top = 0.1 + if small { 0.8 } else { 0.45 };
+    let chest_bottom = 0.9 + if small { 0.3 } else { 0.0 };
+    let chest_top = 0.9 + if small { 1.0 } else { 0.7 };
+    let legs_top = 0.4 + if small { 1.0 } else { 0.8 };
+
+    if y >= 0.1 && y < feet_top && has_item(&EquipmentSlot::FEET) {
+        slot = &EquipmentSlot::FEET;
+    } else if y >= chest_bottom && y < chest_top && has_item(&EquipmentSlot::CHEST) {
+        slot = &EquipmentSlot::CHEST;
+    } else if y >= 0.4 && y < legs_top && has_item(&EquipmentSlot::LEGS) {
+        slot = &EquipmentSlot::LEGS;
+    } else if y >= 1.6 && has_item(&EquipmentSlot::HEAD) {
+        slot = &EquipmentSlot::HEAD;
+    } else if !has_item(&EquipmentSlot::MAIN_HAND) && has_item(&EquipmentSlot::OFF_HAND) {
+        slot = &EquipmentSlot::OFF_HAND;
+    }
+
+    slot
 }
 
 impl EntityBase for ArmorStandEntity {
@@ -345,6 +532,7 @@ impl EntityBase for ArmorStandEntity {
         }
 
         if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
+            self.drop_equipment();
             Self::on_break(entity);
             entity.remove();
             return false;
@@ -410,6 +598,19 @@ impl EntityBase for ArmorStandEntity {
         0.08
     }
 
+    fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.interact_at_position(player, item_stack, None)
+    }
+
+    fn interact_at(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        position: Vector3<f64>,
+    ) -> bool {
+        self.interact_at_position(player, item_stack, Some(position))
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -424,4 +625,105 @@ pub enum ArmorStandFlags {
     HideBasePlate = 8,
     /// Marker Flag
     Marker = 16,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clicked_slot_uses_vanilla_hit_area_and_existing_items() {
+        let has_item = |slot: &EquipmentSlot| *slot == EquipmentSlot::FEET;
+        assert!(*clicked_slot(0.2, false, has_item) == EquipmentSlot::FEET);
+
+        let has_item = |slot: &EquipmentSlot| *slot == EquipmentSlot::CHEST;
+        assert!(*clicked_slot(1.0, false, has_item) == EquipmentSlot::CHEST);
+
+        let has_item = |slot: &EquipmentSlot| *slot == EquipmentSlot::LEGS;
+        assert!(*clicked_slot(0.6, false, has_item) == EquipmentSlot::LEGS);
+
+        let has_item = |slot: &EquipmentSlot| *slot == EquipmentSlot::HEAD;
+        assert!(*clicked_slot(1.6, false, has_item) == EquipmentSlot::HEAD);
+    }
+
+    #[test]
+    fn clicked_slot_falls_back_to_the_offhand_when_mainhand_is_empty() {
+        assert!(
+            *clicked_slot(0.0, false, |slot| *slot == EquipmentSlot::OFF_HAND)
+                == EquipmentSlot::OFF_HAND
+        );
+    }
+
+    #[test]
+    fn equippable_items_select_their_vanilla_slot() {
+        let helmet = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        assert!(get_equipment_slot_for_item(&helmet) == EquipmentSlot::HEAD);
+    }
+
+    #[test]
+    fn stack_swap_inserts_one_from_a_stack() {
+        let mut held = ItemStack::new(3, &Item::DIAMOND_HELMET);
+        let new_stand_stack = swap_item_stacks(ItemStack::EMPTY, &mut held, false, false, false)
+            .expect("an empty stand accepts an item");
+
+        assert_eq!(new_stand_stack.item.id, Item::DIAMOND_HELMET.id);
+        assert_eq!(new_stand_stack.item_count, 1);
+        assert_eq!(held.item_count, 2);
+    }
+
+    #[test]
+    fn stack_swap_removes_or_swaps_single_items() {
+        let stand_stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        let mut empty_hand = ItemStack::EMPTY.clone();
+        let removed = swap_item_stacks(&stand_stack, &mut empty_hand, false, false, false)
+            .expect("an occupied stand allows removal");
+
+        assert!(removed.is_empty());
+        assert_eq!(empty_hand.item.id, Item::DIAMOND_HELMET.id);
+
+        let mut replacement = ItemStack::new(1, &Item::DIAMOND_CHESTPLATE);
+        let swapped = swap_item_stacks(&stand_stack, &mut replacement, false, false, false)
+            .expect("a single item swaps with the stand item");
+
+        assert_eq!(swapped.item.id, Item::DIAMOND_CHESTPLATE.id);
+        assert_eq!(replacement.item.id, Item::DIAMOND_HELMET.id);
+    }
+
+    #[test]
+    fn stack_swap_honors_insertion_and_removal_locks() {
+        let mut held = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        assert!(swap_item_stacks(ItemStack::EMPTY, &mut held, false, true, false).is_none());
+        assert_eq!(held.item_count, 1);
+
+        let stand_stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        let mut empty_hand = ItemStack::EMPTY.clone();
+        assert!(swap_item_stacks(&stand_stack, &mut empty_hand, false, false, true).is_none());
+        assert!(empty_hand.is_empty());
+    }
+
+    #[test]
+    fn creative_stack_swap_keeps_the_held_stack() {
+        let mut held = ItemStack::new(4, &Item::DIAMOND_HELMET);
+        let new_stand_stack = swap_item_stacks(ItemStack::EMPTY, &mut held, true, false, false)
+            .expect("creative players can insert into an empty stand slot");
+
+        assert_eq!(new_stand_stack.item_count, 1);
+        assert_eq!(held.item_count, 4);
+    }
+
+    #[test]
+    fn taking_equipment_drains_non_empty_stacks() {
+        let mut equipment = pumpkin_inventory::entity_equipment::EntityEquipment::new();
+        equipment.put(
+            &EquipmentSlot::HEAD,
+            ItemStack::new(1, &Item::DIAMOND_HELMET),
+        );
+        equipment.put(&EquipmentSlot::FEET, ItemStack::EMPTY.clone());
+
+        let stacks = take_non_empty_equipment(&mut equipment);
+
+        assert_eq!(stacks.len(), 1);
+        assert_eq!(stacks[0].item.id, Item::DIAMOND_HELMET.id);
+        assert!(equipment.equipment.is_empty());
+    }
 }
