@@ -379,7 +379,10 @@ pub(crate) fn try_place_filled_bucket(
         return true;
     }
 
-    if state.id == Block::AIR.default_state.id || state.is_liquid() {
+    if state.id == Block::AIR.default_state.id
+        || state.is_liquid()
+        || block == &Block::NETHER_PORTAL
+    {
         world.set_block_state(
             &target_pos,
             if item.id == Item::LAVA_BUCKET.id {
