@@ -41,6 +41,30 @@ trait CropBlockBase: PlantBlockBase {
             .has_tag(&tag::Block::MINECRAFT_SUPPORTS_CROPS)
     }
 
+    /// Mirrors vanilla `CropBlock.canSurvive`.
+    fn can_crop_survive(
+        &self,
+        world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        world.is_none_or(|world| has_sufficient_light(world, pos))
+            && <Self as PlantBlockBase>::can_place_at(self, block_accessor, pos)
+    }
+
+    fn crop_state_for_neighbor_update(
+        &self,
+        world: &World,
+        pos: &BlockPos,
+        state: BlockStateId,
+    ) -> BlockStateId {
+        if self.can_crop_survive(Some(world), world, pos) {
+            state
+        } else {
+            Block::AIR.default_state.id
+        }
+    }
+
     fn max_age(&self) -> i32 {
         7
     }
@@ -108,6 +132,11 @@ trait CropBlockBase: PlantBlockBase {
             }
         }
     }
+}
+
+/// Mirrors vanilla `CropBlock.hasSufficientLight`.
+fn has_sufficient_light(world: &World, pos: &BlockPos) -> bool {
+    world.get_raw_brightness(pos, 0) >= 8
 }
 
 pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f32 {
