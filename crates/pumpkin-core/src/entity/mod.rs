@@ -616,8 +616,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn is_ignoring_block_triggers(&self) -> bool {
-        self.get_mob()
-            .is_some_and(|mob| mob.ignores_block_triggers())
+        self.get_mob().is_some_and(mob::Mob::ignores_block_triggers)
     }
 
     fn push(&self, entity: &dyn EntityBase) {
@@ -2057,8 +2056,12 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_on_pos_legacy(&self) -> BlockPos {
+        self.get_pos_with_y_offset(f64::from(0.2f32)).0
+    }
+
     pub(crate) fn get_on_pos(&self) -> BlockPos {
-        self.get_pos_with_y_offset(f64::from(1.0e-5_f32)).0
+        self.get_pos_with_y_offset(f64::from(1.0e-5f32)).0
     }
 
     fn get_pos_with_y_offset(

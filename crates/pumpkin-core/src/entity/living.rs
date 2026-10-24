@@ -2172,28 +2172,30 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
-            world.play_sound_fine(
-                self.death_sound(&*dyn_self),
-                dyn_self
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(
-                        SoundCategory::Players,
-                        super::custom_sound::CustomSound::sound_category,
-                    ),
-                &self.entity.pos.load(),
-                dyn_self
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                dyn_self
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or_else(
-                        || self.get_pitch(),
-                        super::custom_sound::CustomSound::voice_pitch,
-                    ),
-            );
+            if !self.entity.is_silent() {
+                world.play_sound_fine(
+                    self.death_sound(&*dyn_self),
+                    dyn_self
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or(
+                            SoundCategory::Players,
+                            super::custom_sound::CustomSound::sound_category,
+                        ),
+                    &self.entity.pos.load(),
+                    dyn_self
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+                    dyn_self
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or_else(
+                            || self.get_pitch(),
+                            super::custom_sound::CustomSound::voice_pitch,
+                        ),
+                );
+            }
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -3433,28 +3435,30 @@ impl LivingEntity {
             if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
                 sound.on_hurt_sound();
             }
-            world.play_sound_fine(
-                self.hurt_sound(caller),
-                caller
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(
-                        SoundCategory::Players,
-                        super::custom_sound::CustomSound::sound_category,
-                    ),
-                &self.entity.pos.load(),
-                caller
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                caller
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or_else(
-                        || self.get_pitch(),
-                        super::custom_sound::CustomSound::voice_pitch,
-                    ),
-            );
+            if !self.entity.is_silent() {
+                world.play_sound_fine(
+                    self.hurt_sound(caller),
+                    caller
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or(
+                            SoundCategory::Players,
+                            super::custom_sound::CustomSound::sound_category,
+                        ),
+                    &self.entity.pos.load(),
+                    caller
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+                    caller
+                        .get_mob()
+                        .and_then(|mob| mob.as_custom_sound())
+                        .map_or_else(
+                            || self.get_pitch(),
+                            super::custom_sound::CustomSound::voice_pitch,
+                        ),
+                );
+            }
 
             if let Some(source) = source {
                 let source_pos = source.get_entity().pos.load();
@@ -4441,7 +4445,6 @@ mod ai_step_tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use crate::entity::Entity;
     use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
     use crate::entity::ai::goal::Goal;
@@ -4450,6 +4453,7 @@ mod ai_step_tests {
     use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
+    use crate::entity::{Entity, EntityBase};
     use crate::world::World;
     use pumpkin_data::{attributes::Attributes, entity::EntityType};
     use pumpkin_util::math::position::BlockPos;

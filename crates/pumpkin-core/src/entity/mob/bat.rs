@@ -155,10 +155,10 @@ impl BatEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // Vanilla check previous target before randomly generating a new one
-        if let Some(target) = *hanging_pos {
-            if !world.get_block_state(&target).is_air() || target.0.y <= world.dimension.min_y {
-                *hanging_pos = None;
-            }
+        if let Some(target) = *hanging_pos
+            && (!world.get_block_state(&target).is_air() || target.0.y <= world.dimension.min_y)
+        {
+            *hanging_pos = None;
         }
 
         let mut rng = rand::rng();
@@ -199,8 +199,8 @@ impl BatEntity {
         };
 
         let velocity = entity.velocity.load();
-        let acceleration = f64::from(0.1_f32);
-        let vertical_speed = f64::from(0.7_f32);
+        let acceleration = f64::from(0.1f32);
+        let vertical_speed = f64::from(0.7f32);
 
         let new_velocity = Vector3::new(
             velocity.x + (signum(dx) * 0.5 - velocity.x) * acceleration,
@@ -251,7 +251,7 @@ impl Mob for BatEntity {
         let distance = if climbing {
             movement.length()
         } else {
-            (movement.x * movement.x + movement.z * movement.z).sqrt()
+            movement.horizontal_length()
         };
         let move_dist =
             self.move_dist.load() + (distance * f64::from(MOVEMENT_DISTANCE_SCALE)) as f32;
@@ -260,7 +260,7 @@ impl Mob for BatEntity {
             source_entity: Some(self),
         };
         if move_dist > self.next_step.load() && !supporting_state.is_air() {
-            let effect_pos = entity.get_block_pos_below_that_affects_my_movement();
+            let effect_pos = entity.get_on_pos_legacy();
             let vibrate_from_block = |pos: &BlockPos, emit: bool| {
                 let (block, state) = world.get_block_and_state(pos);
                 let climbable = is_climbable(block);
@@ -497,6 +497,49 @@ mod tests {
             .clone();
         world.level.shutdown().await;
         assert_eq!(events, vec![pumpkin_data::game_event::GameEvent::Flap]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn swimming_above_a_ladder_emits_swim() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::Block;
+        use pumpkin_world::world::BlockFlags;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(
+            &BlockPos::new(0, 63, 0),
+            Block::LADDER.default_state.id,
+            flags,
+        );
+        world.set_block_state(
+            &BlockPos::new(0, 64, 0),
+            Block::WATER.default_state.id,
+            flags,
+        );
+        let pos = Vector3::new(0.5, 64.3, 0.5);
+        let listener = Arc::new(EventListener {
+            mob: MobEntity::new(Entity::new(world.clone(), pos, &EntityType::COW)),
+            events: Mutex::new(Vec::new()),
+        });
+        world.add_entity_silent(listener.clone());
+        let bat = BatEntity::new(Entity::new(world.clone(), pos, &EntityType::BAT));
+        bat.set_roosting(false);
+        bat.get_entity().touching_water.store(true, Relaxed);
+        bat.move_dist.store(2.0);
+        bat.movement_emission(Vector3::new(0.1, 0.0, 0.0));
+        let events = listener
+            .events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        world.level.shutdown().await;
+        assert_eq!(events, vec![pumpkin_data::game_event::GameEvent::Swim]);
         Ok(())
     }
 
