@@ -18,6 +18,23 @@ impl BedrockClient {
         {
             return;
         }
+
+        // These go straight into the entity position and are broadcast to every
+        // other player, so a non finite one would reach their clients and the
+        // save file. The Java movement handlers reject the same values.
+        if !packet.position.x.is_finite()
+            || !packet.position.y.is_finite()
+            || !packet.position.z.is_finite()
+            || !packet.pitch.is_finite()
+            || !packet.yaw.is_finite()
+        {
+            self.try_kick(
+                DisconnectReason::Kicked,
+                "Invalid player movement!".to_string(),
+            );
+            return;
+        }
+
         let entity = player.get_entity();
         let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
             && packet.delta.y < 0.0
@@ -28,6 +45,11 @@ impl BedrockClient {
             .position
             .add_raw(0.0, -entity.entity_type.eye_height, 0.0)
             .to_f64();
+        let new_pos = pumpkin_util::math::vector3::Vector3::new(
+            crate::net::clamp_horizontal_position(new_pos.x),
+            crate::net::clamp_vertical_position(new_pos.y),
+            crate::net::clamp_horizontal_position(new_pos.z),
+        );
         let old_pos = player.position();
 
         let new_pitch = packet.pitch;
