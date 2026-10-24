@@ -317,12 +317,11 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let mut bytes = Vec::new();
-        NbtTag::String(self.name.clone().get_text().into_boxed_str())
-            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
-            .map_err(|e| WritingError::Message(e.to_string()))?;
-        seq.write_slice(&bytes)?;
-        Ok(())
+        seq.write_slice(
+            &self
+                .name
+                .encode_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2),
+        )
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
@@ -373,6 +372,11 @@ impl DataComponentCodec<Self> for LoreImpl {
 
 impl DataComponentCodec<Self> for ItemNameImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        if let Some(component) = self.styled_component() {
+            return seq.write_slice(
+                &component.encode_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2),
+            );
+        }
         let mut name = pumpkin_nbt::compound::NbtCompound::new();
         name.put_string("translate", self.name.to_string());
         let mut bytes = Vec::new();
@@ -384,19 +388,12 @@ impl DataComponentCodec<Self> for ItemNameImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
-        let name = match tag {
-            Some(NbtTag::Compound(c)) => c
-                .get_string("translate")
-                .or_else(|| c.get_string("text"))
-                .unwrap_or("")
-                .to_string(),
-            Some(NbtTag::String(s)) => s.to_string(),
-            Some(t) => pumpkin_util::text::TextComponent::from_nbt(&t).get_text(),
-            None => String::new(),
-        };
-        Ok(Self {
-            name: Cow::Owned(name),
-        })
+        Ok(tag.as_ref().map_or_else(
+            || Self {
+                name: Cow::Borrowed(""),
+            },
+            Self::from_component_tag,
+        ))
     }
 }
 
