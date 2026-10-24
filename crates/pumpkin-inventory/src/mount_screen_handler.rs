@@ -153,6 +153,12 @@ impl ScreenHandler for MountScreenHandler {
                     return ItemStack::EMPTY.clone();
                 }
 
+                // Vanilla moved its live stack already; ours is a copy, so write it back.
+                if stack.is_empty() {
+                    slot.set_stack(ItemStack::EMPTY.clone());
+                } else {
+                    slot.set_stack(stack);
+                }
                 return ItemStack::EMPTY.clone();
             }
 
