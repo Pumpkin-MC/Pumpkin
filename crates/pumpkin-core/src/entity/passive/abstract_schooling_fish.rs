@@ -156,7 +156,9 @@ pub trait AbstractSchoolingFish: AbstractFish {
 
     fn finalize_school_spawn(&self, group: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
         self.get_mob_entity().finalize_spawn_base();
-        if let Some(SpawnGroupData::School(leader)) = &group {
+        if let Some(SpawnGroupData::School(leader) | SpawnGroupData::TropicalFish { leader, .. }) =
+            &group
+        {
             if let Some(leader) = leader.upgrade() {
                 self.start_following(&leader);
             }
@@ -167,6 +169,20 @@ pub trait AbstractSchoolingFish: AbstractFish {
             ))
         }
     }
+}
+
+/// Generates the `AbstractSchoolingFish` impl. The type needs a `schooling_data` field.
+#[macro_export]
+macro_rules! impl_schooling_fish {
+    ($fish:ty) => {
+        impl $crate::entity::passive::abstract_schooling_fish::AbstractSchoolingFish for $fish {
+            fn schooling_data(
+                &self,
+            ) -> &$crate::entity::passive::abstract_schooling_fish::SchoolingFishData {
+                &self.schooling_data
+            }
+        }
+    };
 }
 
 #[cfg(test)]
