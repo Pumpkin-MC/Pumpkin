@@ -100,7 +100,7 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
 };
-use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
+use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata, ParticleOptions};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
@@ -1295,6 +1295,27 @@ impl World {
     ) {
         for player in self.players.load().iter() {
             player.spawn_particle(position, offset, max_speed, particle_count, particle);
+        }
+    }
+
+    /// Spawns a particle that carries a [`ParticleOptions`] payload for every
+    /// player in this world.
+    pub fn spawn_particle_with_options(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        options: &ParticleOptions,
+    ) {
+        for player in self.players.load().iter() {
+            player.spawn_particle_with_options(
+                position,
+                offset,
+                max_speed,
+                particle_count,
+                options,
+            );
         }
     }
 
