@@ -259,6 +259,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
     fn set_variant_name(&self, _name: &str) {}
+    fn apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn set_sound_variant_name(&self, _name: &str) {}
 
     fn teleport(
