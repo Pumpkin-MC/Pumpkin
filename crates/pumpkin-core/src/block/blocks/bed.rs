@@ -10,7 +10,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::OnLandedUponArgs;
 use crate::block::UpdateEntityMovementAfterFallOnArgs;
 use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
@@ -78,12 +77,6 @@ impl BlockBehaviour for BedBlock {
                     .replaceable();
         }
         false
-    }
-
-    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0);
-        }
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
