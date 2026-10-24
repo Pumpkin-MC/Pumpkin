@@ -125,7 +125,7 @@ fn toward_direction(
         random_pos::generate_random_pos_toward_direction(mob, horizontal_dist, rng, direction);
     (!goal_utils::is_outside_limits(&pos, world)
         && !goal_utils::is_restricted(restrict, mob, &pos)
-        && !goal_utils::is_not_stable(world, &pos)
+        && !goal_utils::is_not_stable(mob, world, &pos)
         && !goal_utils::has_malus(mob, context, &pos))
     .then_some(pos)
 }

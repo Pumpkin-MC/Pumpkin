@@ -683,39 +683,38 @@ impl JigsawBlock {
         block: &crate::generation::structure::template::TemplateBlock,
         palette: &PaletteEntry,
     ) -> Option<Self> {
+        use pumpkin_data::block_properties::{Orientation, Property};
+        use pumpkin_util::BlockDirection;
+
         if palette.name != "minecraft:jigsaw" {
             return None;
         }
 
         let nbt = block.nbt.as_ref()?;
 
-        // Resolve facing from properties
-        let facing_str = palette
+        // Resolve facing and up from orientation property
+        let orientation = palette
             .properties
             .iter()
-            .find(|(k, _)| *k == "orientation")
-            .map_or_else(|| "north_up".to_string(), |(_, v)| v.clone());
+            .find_map(|p| match p {
+                Property::Orientation(o) => Some(*o),
+                _ => None,
+            })
+            .unwrap_or(Orientation::NorthUp);
 
-        let mut parts = facing_str.split('_');
-        let facing_part = parts.next().unwrap_or("north");
-        let up_part = parts.next().unwrap_or("up");
-
-        let facing = match facing_part {
-            "south" => pumpkin_util::BlockDirection::South,
-            "east" => pumpkin_util::BlockDirection::East,
-            "west" => pumpkin_util::BlockDirection::West,
-            "up" => pumpkin_util::BlockDirection::Up,
-            "down" => pumpkin_util::BlockDirection::Down,
-            _ => pumpkin_util::BlockDirection::North,
-        };
-
-        let up = match up_part {
-            "north" => pumpkin_util::BlockDirection::North,
-            "south" => pumpkin_util::BlockDirection::South,
-            "east" => pumpkin_util::BlockDirection::East,
-            "west" => pumpkin_util::BlockDirection::West,
-            "down" => pumpkin_util::BlockDirection::Down,
-            _ => pumpkin_util::BlockDirection::Up,
+        let (facing, up) = match orientation {
+            Orientation::DownEast => (BlockDirection::Down, BlockDirection::East),
+            Orientation::DownNorth => (BlockDirection::Down, BlockDirection::North),
+            Orientation::DownSouth => (BlockDirection::Down, BlockDirection::South),
+            Orientation::DownWest => (BlockDirection::Down, BlockDirection::West),
+            Orientation::UpEast => (BlockDirection::Up, BlockDirection::East),
+            Orientation::UpNorth => (BlockDirection::Up, BlockDirection::North),
+            Orientation::UpSouth => (BlockDirection::Up, BlockDirection::South),
+            Orientation::UpWest => (BlockDirection::Up, BlockDirection::West),
+            Orientation::WestUp => (BlockDirection::West, BlockDirection::Up),
+            Orientation::EastUp => (BlockDirection::East, BlockDirection::Up),
+            Orientation::NorthUp => (BlockDirection::North, BlockDirection::Up),
+            Orientation::SouthUp => (BlockDirection::South, BlockDirection::Up),
         };
 
         Some(Self {

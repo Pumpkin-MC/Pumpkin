@@ -10,12 +10,17 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, CatVariantImpl, ChickenVariantImpl, CowVariantImpl, EntityDataImpl,
-    FoxVariantImpl, FrogVariantImpl, HorseVariantImpl, LlamaVariantImpl, MooshroomVariantImpl,
-    PigVariantImpl, RabbitVariantImpl, SheepColorImpl, ShulkerColorImpl, VillagerVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl,
+    AxolotlVariantImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
+    ChickenSoundVariantImpl, ChickenVariantImpl, CowSoundVariantImpl, CowVariantImpl,
+    CustomNameImpl, EntityDataImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
+    LlamaVariantImpl, MooshroomVariantImpl, ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl,
+    RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, TropicalFishBaseColorImpl,
+    TropicalFishPatternColorImpl, TropicalFishPatternImpl, VillagerVariantImpl, WolfCollarImpl,
+    WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl,
 };
+use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity::entity_from_egg;
 use pumpkin_data::item::Item;
@@ -114,12 +119,14 @@ pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase, user:
 }
 
 fn apply_variant(item: &ItemStack, mob: &dyn EntityBase) {
+    if let Some(custom_name) = item.get_data_component::<CustomNameImpl>() {
+        mob.get_entity().set_custom_name(custom_name.name.clone());
+    }
     macro_rules! apply_variant {
         ($($ty:ty),+ $(,)?) => {
             $(
                 if let Some(comp) = item.get_data_component::<$ty>() {
                     mob.set_variant_name(&comp.value);
-                    return;
                 }
             )+
         };
@@ -141,7 +148,60 @@ fn apply_variant(item: &ItemStack, mob: &dyn EntityBase) {
         SheepColorImpl,
         ShulkerColorImpl,
         ZombieNautilusVariantImpl,
+        SalmonSizeImpl,
+        ParrotVariantImpl,
     );
+
+    macro_rules! apply_component {
+        ($($ty:ty => $component:ident),+ $(,)?) => {
+            $(
+                if let Some(comp) = item.get_data_component::<$ty>() {
+                    mob.apply_implicit_component(DataComponent::$component, &comp.value);
+                }
+            )+
+        };
+    }
+    apply_component!(
+        TropicalFishPatternImpl => TropicalFishPattern,
+        TropicalFishBaseColorImpl => TropicalFishBaseColor,
+        TropicalFishPatternColorImpl => TropicalFishPatternColor,
+    );
+
+    macro_rules! apply_sound_variant {
+        ($($ty:ty),+ $(,)?) => {
+            $(
+                if let Some(comp) = item.get_data_component::<$ty>() {
+                    mob.set_sound_variant_name(&comp.value);
+                }
+            )+
+        };
+    }
+    apply_sound_variant!(
+        WolfSoundVariantImpl,
+        CatSoundVariantImpl,
+        PigSoundVariantImpl,
+        CowSoundVariantImpl,
+        ChickenSoundVariantImpl,
+    );
+
+    if let Some(comp) = item.get_data_component::<WolfCollarImpl>()
+        && let Some(color) =
+            DyeColor::by_name(comp.value.strip_prefix("minecraft:").unwrap_or(&comp.value))
+        && let Some(wolf) = mob
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::wolf::WolfEntity>()
+    {
+        wolf.set_collar_color(color.id());
+    }
+    if let Some(comp) = item.get_data_component::<CatCollarImpl>()
+        && let Some(color) =
+            DyeColor::by_name(comp.value.strip_prefix("minecraft:").unwrap_or(&comp.value))
+        && let Some(cat) = mob
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::cat::CatEntity>()
+    {
+        cat.set_collar_color(color.id());
+    }
 }
 
 /// Finalizes a mob spawned by a spawn egg, then applies the egg's components (vanilla order).

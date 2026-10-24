@@ -237,9 +237,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
         match computation_type {
             PathComputationType::Water => {
-                state.is_waterlogged()
-                    || Fluid::from_state_id(state.id)
-                        .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
             }
             PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
         }
@@ -522,10 +520,19 @@ pub fn drop_loot(
     experience: bool,
     params: &LootContextParameters,
 ) {
-    let key = format!("minecraft:blocks/{}", block.name);
-    if let Some(loot_table) = world.get_loot_table(&key) {
+    if let Some(loot_table) = block.loot_table.and_then(|key| world.get_loot_table(key)) {
         let seed: i64 = rand::random();
-        let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, params);
+        let params = LootContextParameters {
+            world: Some(world),
+            tool: Some(
+                params
+                    .tool
+                    .clone()
+                    .unwrap_or_else(|| ItemStack::EMPTY.clone()),
+            ),
+            ..params.clone()
+        };
+        let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
         if !items.is_empty() {
             let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
                 block_pos: *pos,
