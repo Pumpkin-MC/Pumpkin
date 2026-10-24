@@ -267,7 +267,14 @@ impl FlowingFluid for FlowingLava {
         world.level_info.load().game_rules.lava_source_conversion
     }
 
-    fn spread_to(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos, state_id: BlockStateId) {
+    fn spread_to(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
+        from_pos: &BlockPos,
+        pos: &BlockPos,
+        state_id: BlockStateId,
+    ) {
         let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
         let current_state_id = world.get_block_state_id(pos);
         let block = Block::from_state_id(current_state_id);
@@ -287,6 +294,6 @@ impl FlowingFluid for FlowingLava {
         }
 
         // Delegate quiescence, replacement and scheduling to the shared helper
-        self.apply_spread(world, fluid, pos, state_id, new_props);
+        self.apply_spread(world, fluid, from_pos, pos, state_id, new_props);
     }
 }
