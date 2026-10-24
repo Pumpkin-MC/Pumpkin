@@ -172,6 +172,14 @@ where
 /// and the value is a vector of dynamic event handlers.
 pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
 
+/// Inserts `handler` so the list stays in call order: from `Lowest` to `Highest`
+/// priority, and in registration order within one priority.
+fn insert_handler(handlers: &mut Vec<Arc<dyn DynEventHandler>>, handler: Arc<dyn DynEventHandler>) {
+    // `EventPriority` derives `Highest < Lowest`, so the list is sorted descending.
+    let index = handlers.partition_point(|h| h.get_priority() >= handler.get_priority());
+    handlers.insert(index, handler);
+}
+
 /// Plugin loading state
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginState {
@@ -1181,10 +1189,10 @@ impl PluginManager {
 
         self.handlers.rcu(|handlers| {
             let mut new_handlers = (**handlers).clone();
-            new_handlers
-                .entry(E::get_name_static())
-                .or_default()
-                .push(typed_handler.clone());
+            insert_handler(
+                new_handlers.entry(E::get_name_static()).or_default(),
+                typed_handler.clone(),
+            );
             Arc::new(new_handlers)
         });
     }
@@ -1315,6 +1323,38 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin::server::server_tick_start::ServerTickStartEvent;
+
+    struct NoopHandler;
+
+    impl EventHandler<ServerTickStartEvent> for NoopHandler {}
+
+    #[test]
+    fn handlers_run_by_priority_then_registration_order() {
+        let mut handlers = Vec::new();
+        for (source, priority) in [
+            ("normal-1", EventPriority::Normal),
+            ("highest", EventPriority::Highest),
+            ("lowest", EventPriority::Lowest),
+            ("normal-2", EventPriority::Normal),
+            ("low", EventPriority::Low),
+            ("high", EventPriority::High),
+        ] {
+            let handler = TypedEventHandler::<ServerTickStartEvent, _> {
+                handler: Arc::new(NoopHandler),
+                priority,
+                blocking: true,
+                source: Some(source.to_string()),
+                _phantom: std::marker::PhantomData,
+            };
+            insert_handler(&mut handlers, Arc::new(handler));
+        }
+        let order: Vec<_> = handlers.iter().filter_map(|h| h.source()).collect();
+        assert_eq!(
+            order,
+            ["lowest", "low", "normal-1", "normal-2", "high", "highest"]
+        );
+    }
 
     #[tokio::test]
     async fn topological_sort() {
