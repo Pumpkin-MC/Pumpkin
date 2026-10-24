@@ -1,8 +1,18 @@
-use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
+use pumpkin_data::{BlockId, item_stack::ItemStack, recipes::CookingRecipe};
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
 pub use pumpkin_inventory::ExperienceContainer;
 use pumpkin_inventory::{Clearable, Inventory};
+
+/// `FurnaceLikeProperties::handles_block_id` also matches `REDSTONE_WALL_TORCH`, which shares the
+/// same `lit`+`facing` property layout as the cooking blocks - so it can't be used to guard
+/// against a furnace/blast furnace/smoker entity outliving its block.
+pub(crate) const fn is_cooking_block(id: BlockId) -> bool {
+    matches!(
+        id,
+        BlockId::FURNACE | BlockId::BLAST_FURNACE | BlockId::SMOKER
+    )
+}
 
 /// Trait for extracting smelting experience from cooking block entities.
 pub trait CookingBlockEntityBase:
@@ -516,15 +526,21 @@ macro_rules! impl_block_entity_for_cooking {
                     is_dirty = true;
                     let (furnace_block, furnace_block_state) =
                         world.get_block_and_state(&self.position);
-                    let mut props =
-                        pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(furnace_block_state.id);
+                    if $crate::block::entities::furnace_like_block_entity::is_cooking_block(
+                        furnace_block.id,
+                    ) {
+                        let mut props =
+                            pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(
+                                furnace_block_state.id,
+                            );
 
-                    props.lit = self.is_burning();
-                    world.set_block_state(
-                        &self.position,
-                        props.to_state_id(furnace_block),
-                        $crate::world::BlockFlags::NOTIFY_ALL,
-                    );
+                        props.lit = self.is_burning();
+                        world.set_block_state(
+                            &self.position,
+                            props.to_state_id(furnace_block),
+                            $crate::world::BlockFlags::NOTIFY_ALL,
+                        );
+                    }
                 }
 
                 if is_dirty {
