@@ -116,8 +116,13 @@ const fn get_fill_sound(item: &Item) -> Sound {
     }
 }
 
-fn give_filled_bucket_stack(stack: &mut ItemStack, player: &Player, mut filled: ItemStack) {
-    if player.gamemode.load() == GameMode::Creative {
+fn give_filled_bucket_stack(
+    stack: &mut ItemStack,
+    player: &Player,
+    mut filled: ItemStack,
+    limit_creative_stack_size: bool,
+) {
+    if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
                 .inventory
@@ -130,10 +135,10 @@ fn give_filled_bucket_stack(stack: &mut ItemStack, player: &Player, mut filled: 
             return;
         }
         player.inventory.insert_stack_anywhere(&mut filled);
-    } else if stack.item_count == 1 {
+    } else if stack.item_count == 1 && player.gamemode.load() != GameMode::Creative {
         *stack = filled;
     } else {
-        stack.decrement(1);
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
         let was_added = player.inventory.insert_stack_anywhere(&mut filled);
         if !was_added && !filled.is_empty() {
             player
@@ -143,8 +148,12 @@ fn give_filled_bucket_stack(stack: &mut ItemStack, player: &Player, mut filled: 
     }
 }
 
+pub(crate) fn give_filled_mob_bucket(stack: &mut ItemStack, player: &Player, bucket: ItemStack) {
+    give_filled_bucket_stack(stack, player, bucket, false);
+}
+
 pub(crate) fn fill_bucket_stack(stack: &mut ItemStack, player: &Player, item: &'static Item) {
-    give_filled_bucket_stack(stack, player, ItemStack::new(1, item));
+    give_filled_bucket_stack(stack, player, ItemStack::new(1, item), true);
 }
 
 fn fill_mob_bucket_stack(
@@ -186,11 +195,20 @@ fn fill_mob_bucket_stack(
         nbt.child_tags.remove(key);
     }
     bucket_stack.set_data_component(BucketEntityDataImpl { nbt: Some(nbt) });
-    give_filled_bucket_stack(stack, player, bucket_stack);
+    give_filled_bucket_stack(stack, player, bucket_stack, true);
 }
 
 fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, player: &Player) {
     crate::item::items::spawn_egg::apply_entity_variant(bucket_stack, mob, Some(player));
+    if let Some(bucketable) = mob.get_mob().and_then(|mob| mob.as_bucketable()) {
+        if let Some(data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
+            && let Some(nbt) = &data.nbt
+        {
+            bucketable.load_from_bucket_tag(nbt);
+        }
+        bucketable.set_from_bucket(true);
+        return;
+    }
     if let Some(bucket_data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
         && let Some(ref raw_nbt) = bucket_data.nbt
         && !raw_nbt.is_empty()
@@ -541,8 +559,21 @@ impl ItemBehaviour for FilledBucketItem {
                 f64::from(place_pos.0.z) + 0.5,
             );
             let mob = from_type(entity_type, spawn_coord, &world, Uuid::new_v4());
-            apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
-            world.spawn_entity(mob);
+            if mob.get_mob().and_then(|mob| mob.as_bucketable()).is_some() {
+                crate::entity::mob::spawn::finalize_spawn(&mob, &world, None);
+                apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
+                if world.spawn_creature(
+                    mob.clone(),
+                    crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason::Bucket,
+                    world.get_player_by_uuid(player.gameprofile.id),
+                ) && let Some(fish) = mob.get_mob().and_then(|mob| mob.as_fish())
+                {
+                    fish.play_ambient_sound();
+                }
+            } else {
+                apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
+                world.spawn_entity(mob);
+            }
         }
 
         if player.gamemode.load() != GameMode::Creative {
@@ -554,6 +585,13 @@ impl ItemBehaviour for FilledBucketItem {
     }
 
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if entity
+            .get_mob()
+            .and_then(|mob| mob.as_bucketable())
+            .is_some()
+        {
+            return;
+        }
         if item.item.id == Item::WATER_BUCKET.id {
             let entity_type = entity.get_entity().entity_type;
             let result_item = if entity_type == &EntityType::AXOLOTL {

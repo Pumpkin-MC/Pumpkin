@@ -2,7 +2,7 @@
 name = "pumpkin-codegen"
 version = "0.1.0-dev+26.1"
 edition = "2024"
-rust-version = "1.89"
+rust-version.workspace = true
 
 [dependencies]
 indexmap = { version = "2.14", features = ["serde"] }

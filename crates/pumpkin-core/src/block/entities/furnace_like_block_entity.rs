@@ -664,6 +664,24 @@ macro_rules! impl_block_entity_for_cooking {
                 Some(nbt)
             }
 
+            fn bedrock_block_actor_data(&self, _state_id: pumpkin_data::BlockStateId) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                let bedrock_id = match $recipe_kind {
+                    pumpkin_data::recipes::CookingRecipeKind::Smelting => "Furnace",
+                    pumpkin_data::recipes::CookingRecipeKind::Blasting => "BlastFurnace",
+                    pumpkin_data::recipes::CookingRecipeKind::Smoking => "Smoker",
+                    _ => "Furnace",
+                };
+                Some($crate::block::entities::bedrock::build_furnace_actor(
+                    bedrock_id,
+                    self.position,
+                    self.get_cooking_time_spent(),
+                    self.get_lit_time_remaining(),
+                    self.get_lit_total_time(),
+                    0,
+                    None,
+                ))
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }

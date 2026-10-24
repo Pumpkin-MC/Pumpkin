@@ -27,6 +27,7 @@ mod entity_index;
 pub(crate) use entity_index::EntityIndex;
 pub mod entity_islands;
 pub mod explosion;
+pub mod game_event;
 pub mod generation_cache;
 pub mod loot;
 pub mod map;
@@ -85,12 +86,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{
-    BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{ChestLikeProperties, ChestType},
-    tag::Taggable,
-    translation,
-};
+use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::{Clearable, Inventory};
@@ -195,38 +191,7 @@ use weather::Weather;
 const MAX_LIGHT_LEVEL: u8 = 15;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
-    let (block, _) = BlockState::from_id_with_block(state_id);
-    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
-        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
-    {
-        return None;
-    }
-
-    // Block actor tags describe the chest itself. Container contents are synchronized
-    // through inventory packets and must not be exposed in chunk data.
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("id", "Chest".to_string());
-    nbt.put_int("x", position.0.x);
-    nbt.put_int("y", position.0.y);
-    nbt.put_int("z", position.0.z);
-    nbt.put_bool("isMovable", true);
-
-    let properties = ChestLikeProperties::from_state_id(state_id);
-    if properties.r#type != ChestType::Single {
-        let direction = if properties.r#type == ChestType::Left {
-            properties.facing.rotate_clockwise()
-        } else {
-            properties.facing.rotate_counter_clockwise()
-        };
-        let pair = position.offset(direction.to_offset());
-        nbt.put_int("pairx", pair.0.x);
-        nbt.put_int("pairz", pair.0.z);
-        if properties.r#type == ChestType::Right {
-            nbt.put_bool("pairlead", true);
-        }
-    }
-
-    Some(nbt)
+    crate::block::entities::bedrock::build_chest_actor(position, state_id, None)
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -5476,6 +5441,7 @@ impl World {
                 if item.is_empty() { None } else { Some(item) }
             });
             let params = crate::world::loot::LootContextParameters {
+                world: Some(self),
                 tool,
                 block_state: Some(broken_block_state),
                 position: Some(position.to_f64()),
@@ -6034,7 +6000,7 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
@@ -6445,6 +6411,13 @@ impl World {
             );
         }
 
+        let state = self.get_block_state(&block_pos);
+        if let Some(data) = bedrock_chest_block_actor(state.id, block_pos)
+            .or_else(|| block_entity.bedrock_block_actor_data(state.id))
+        {
+            self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
+        }
+
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -6564,6 +6537,14 @@ impl World {
             full_nbt.put_int("z", pos.0.z);
             self.add_block_entity_nbt(block_pos, &full_nbt);
         }
+
+        let state = self.get_block_state(&block_pos);
+        if let Some(data) = bedrock_chest_block_actor(state.id, block_pos)
+            .or_else(|| block_entity.bedrock_block_actor_data(state.id))
+        {
+            self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
+        }
+
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
@@ -7031,12 +7012,33 @@ impl World {
     }
 
     pub fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+        self.emit_game_event_with_context(
+            event_key,
+            position,
+            &game_event::GameEventContext {
+                source_entity: None,
+            },
+        );
+    }
+
+    pub fn emit_game_event_with_context(
+        &self,
+        event_key: impl Into<String>,
+        position: Vector3<f64>,
+        context: &game_event::GameEventContext<'_>,
+    ) {
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
             event_key.into(),
             position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return;
+        }
+        if let Some(kind) = pumpkin_data::game_event::GameEvent::from_name(&event.event_key) {
+            self.post_game_event(kind, event.position, context);
         }
     }
 
