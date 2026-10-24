@@ -303,18 +303,57 @@ impl Mob for BatEntity {
     }
 
 
-    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.get_entity().is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
         if self.is_roosting() {
             self.set_roosting(false);
-            let entity = &self.mob_entity.living_entity.entity;
-            let pos = entity.pos.load();
-            entity.world.load().play_sound_fine(
-                Sound::EntityBatTakeoff,
-                SoundCategory::Ambient,
-                &pos,
-                0.1,
-                0.95,
-            );
         }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use pumpkin_data::entity::EntityType;
+
+    #[tokio::test]
+    async fn damage_wakes_bat_before_hurt_cooldown_but_not_when_invulnerable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let entity = bat.get_entity();
+        entity.set_invulnerable(true);
+        let invulnerable_damage = bat.damage(bat.as_ref(), 1.0, DamageType::GENERIC);
+        let stayed_roosting = bat.is_roosting();
+
+        entity.set_invulnerable(false);
+        bat.mob_entity
+            .living_entity
+            .hurt_cooldown
+            .store(20, Relaxed);
+        bat.mob_entity.living_entity.last_damage_taken.store(2.0);
+        let cooldown_damage = bat.damage(bat.as_ref(), 1.0, DamageType::GENERIC);
+        let woke_up = !bat.is_roosting();
+        world.level.shutdown().await;
+
+        assert!(!invulnerable_damage);
+        assert!(stayed_roosting);
+        assert!(!cooldown_damage);
+        assert!(woke_up);
+        Ok(())
     }
 }
