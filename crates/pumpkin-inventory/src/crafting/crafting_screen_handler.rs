@@ -485,6 +485,9 @@ impl Slot for ResultSlot {
         for i in 0..self.inventory.size() {
             self.inventory.remove_stack_specific(i, 1);
         }
+        // Throw-all keeps taking until the slot's stack changes, so the result must
+        // follow the inputs now rather than on the next content update.
+        self.refill_output();
         self.mark_dirty();
     }
     fn can_insert(&self, _stack: &ItemStack) -> bool {
@@ -673,3 +676,124 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+
+    use pumpkin_data::data_component_impl::EquipmentSlot;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::sound::Sound;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory, CSetSelectedSlot,
+    };
+    use pumpkin_protocol::java::server::play::SlotActionType;
+
+    use crate::entity_equipment::EntityEquipment;
+
+    use super::*;
+
+    /// Counts dropped items and refuses an absurd amount, so a runaway throw-all fails.
+    struct TestPlayer {
+        inventory: Arc<PlayerInventory>,
+        dropped: AtomicUsize,
+    }
+
+    impl InventoryPlayer for TestPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
+            let dropped = self
+                .dropped
+                .fetch_add(usize::from(item.item_count), Ordering::Relaxed);
+            assert!(dropped < 1_000, "throw-all did not stop");
+        }
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+
+        fn is_creative(&self) -> bool {
+            false
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) {}
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) {}
+
+        fn enqueue_inventory_packet(
+            &self,
+            _packet: &CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_packet(
+            &self,
+            _packet: &CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) {
+        }
+
+        fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
+
+        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+
+        fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
+
+        fn enqueue_set_held_item_packet(&self, _packet: &CSetSelectedSlot) {}
+
+        fn enqueue_equipment_change(&self, _slot: &EquipmentSlot, _stack: &ItemStack) {}
+
+        fn award_experience(&self, _amount: i32) {}
+
+        fn increment_stat(&self, _category: StatisticCategory, _stat_id: i32, _amount: i32) {}
+
+        fn play_block_sound(&self, _sound: Sound, _pitch: f32) {}
+    }
+
+    #[test]
+    fn throwing_all_from_the_result_slot_stops_when_the_inputs_run_out() {
+        let player_inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(rustc_hash::FxHashMap::default()),
+        ));
+        let player = TestPlayer {
+            inventory: player_inventory.clone(),
+            dropped: AtomicUsize::new(0),
+        };
+        let mut handler = CraftingTableScreenHandler::new(1, &player_inventory, None);
+
+        // Two oak logs craft four planks twice; the result slot learns about the logs
+        // through the tracked slot update, as in game.
+        handler
+            .crafting_inventory
+            .set_stack(0, ItemStack::new(2, &Item::OAK_LOG));
+        handler.send_content_updates();
+        let result = handler.get_behaviour().slots[0].get_cloned_stack();
+        assert_eq!(result.item.id, Item::OAK_PLANKS.id);
+        assert_eq!(result.item_count, 4);
+
+        handler.on_slot_click(0, 1, SlotActionType::Throw, &player);
+
+        assert_eq!(player.dropped.load(Ordering::Relaxed), 8);
+        assert!(handler.crafting_inventory.is_empty());
+        assert!(!handler.get_behaviour().slots[0].has_stack());
+    }
+}
