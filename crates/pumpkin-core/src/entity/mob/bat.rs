@@ -6,6 +6,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -96,6 +97,7 @@ impl BatEntity {
 
     fn tick_roosting(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
         let entity = &self.mob_entity.living_entity.entity;
+        let is_silent = entity.is_silent();
         let above_state = world.get_block_state(above_pos);
         if above_state.is_solid_block() {
             let rotate_head = {
@@ -115,27 +117,19 @@ impl BatEntity {
                 .is_some()
             {
                 self.set_roosting(false);
-                world.play_sound_fine(
-                    Sound::EntityBatTakeoff,
-                    SoundCategory::Ambient,
-                    pos,
-                    0.1,
-                    0.95,
-                );
+                if !is_silent {
+                    world.sync_world_event(WorldEvent::SoundBatLiftoff, entity.block_pos.load(), 0);
+                }
             }
         } else {
             self.set_roosting(false);
-            world.play_sound_fine(
-                Sound::EntityBatTakeoff,
-                SoundCategory::Ambient,
-                pos,
-                0.1,
-                0.95,
-            );
+            if !is_silent {
+                world.sync_world_event(WorldEvent::SoundBatLiftoff, entity.block_pos.load(), 0);
             }
         }
+    }
 
-        fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
+    fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
         let entity = &self.mob_entity.living_entity.entity;
         let mut hanging_pos = self
             .hanging_position
