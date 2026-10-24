@@ -1,10 +1,13 @@
-use pumpkin_data::{BlockState, BlockStateId};
+use std::sync::Arc;
+
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::generation::structure::template::BlockPlacer;
 use pumpkin_world::level::Level;
 
+use crate::block::entities::block_entity_name;
 use crate::world::World;
 
 impl World {
@@ -26,14 +29,14 @@ impl World {
 }
 
 pub struct WorldBlockPlacer<'a> {
-    world: &'a World,
+    world: &'a Arc<World>,
     pub block_entity_nbts: Vec<NbtCompound>,
     pub changed_positions: Vec<(BlockPos, BlockStateId)>,
 }
 
 impl<'a> WorldBlockPlacer<'a> {
     #[must_use]
-    pub const fn new(world: &'a World) -> Self {
+    pub const fn new(world: &'a Arc<World>) -> Self {
         Self {
             world,
             block_entity_nbts: Vec::new(),
@@ -59,7 +62,19 @@ impl BlockPlacer for WorldBlockPlacer<'_> {
 
     fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState) {
         let block_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        Level::set_block_state(&self.world.level, &block_pos, state.id);
+        let replaced = Level::set_block_state(&self.world.level, &block_pos, state.id);
+        if replaced.to_block() != state.id.to_block()
+            && block_entity_name(Block::from_state_id(replaced)).is_some()
+        {
+            // Like vanilla `StructureTemplate::placeInWorld`: the old contents drop, unless the
+            // new block brings its own block entity, which clears the old one silently.
+            if block_entity_name(Block::from_state_id(state.id)).is_none()
+                && let Some(entity) = self.world.get_block_entity(&block_pos)
+            {
+                entity.on_block_replaced(self.world, &block_pos);
+            }
+            self.world.remove_block_entity(&block_pos);
+        }
         self.changed_positions.push((block_pos, state.id));
     }
 
