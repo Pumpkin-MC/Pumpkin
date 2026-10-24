@@ -12,6 +12,7 @@ use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
         active_target::{ActiveTargetGoal, TargetCondition},
+        leap_at_target::LeapAtTargetGoal,
         look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal,
         revenge::RevengeGoal,
@@ -46,31 +47,7 @@ impl SpiderEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-        };
+        register_spider_goals(&mob_arc.mob_entity, mob_weak);
 
         mob_arc
     }
@@ -89,6 +66,34 @@ impl SpiderEntity {
             }
         }
     }
+}
+
+pub fn register_spider_goals(mob_entity: &MobEntity, mob_weak: Weak<dyn Mob>) {
+    let goal_selector = &mob_entity.goals_selector;
+    let target_selector = &mob_entity.target_selector;
+
+    goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+    // TODO: 2: avoid armadillos that aren't scared
+    goal_selector.add_goal(3, Box::new(LeapAtTargetGoal::new(0.4)));
+    goal_selector.add_goal(4, SpiderAttackGoal::new(1.0, true));
+    goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(0.8)));
+    goal_selector.add_goal(
+        6,
+        LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+    );
+    goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+
+    target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+    target_selector.add_goal(
+        2,
+        ActiveTargetGoal::with_default(mob_entity, &EntityType::PLAYER, true)
+            .when(TargetCondition::NoDaylight),
+    );
+    target_selector.add_goal(
+        3,
+        ActiveTargetGoal::with_default(mob_entity, &EntityType::IRON_GOLEM, true)
+            .when(TargetCondition::NoDaylight),
+    );
 }
 
 /// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,

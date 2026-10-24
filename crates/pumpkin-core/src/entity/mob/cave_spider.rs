@@ -1,21 +1,11 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        revenge::RevengeGoal,
-        spider_attack::SpiderAttackGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-    },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spider::register_spider_goals},
 };
 
 pub struct CaveSpiderEntity {
@@ -32,31 +22,7 @@ impl CaveSpiderEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-        };
+        register_spider_goals(&mob_arc.mob_entity, mob_weak);
 
         mob_arc
     }
