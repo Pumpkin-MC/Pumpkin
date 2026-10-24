@@ -2186,7 +2186,13 @@ impl LivingEntity {
                     .get_mob()
                     .and_then(|mob| mob.as_custom_sound())
                     .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                self.get_pitch(),
+                dyn_self
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or_else(
+                        || self.get_pitch(),
+                        super::custom_sound::CustomSound::voice_pitch,
+                    ),
             );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
@@ -3441,7 +3447,13 @@ impl LivingEntity {
                     .get_mob()
                     .and_then(|mob| mob.as_custom_sound())
                     .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                self.get_pitch(),
+                caller
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or_else(
+                        || self.get_pitch(),
+                        super::custom_sound::CustomSound::voice_pitch,
+                    ),
             );
 
             if let Some(source) = source {

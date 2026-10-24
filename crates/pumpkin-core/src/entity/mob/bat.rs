@@ -14,20 +14,20 @@ use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 
 use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
-/// Vanilla: `getMinAmbientSoundDelay()` returns 80 for most mobs
-const MIN_AMBIENT_SOUND_DELAY: i32 = 80;
+const AMBIENT_SOUND_INTERVAL: i32 = 80;
 
 pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
     roosting: AtomicBool,
-    ambient_sound_chance: AtomicI32,
+    ambient_sound_time: AtomicI32,
 }
 
 impl BatEntity {
@@ -37,7 +37,7 @@ impl BatEntity {
             mob_entity,
             hanging_position: Mutex::new(None),
             roosting: AtomicBool::new(true),
-            ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
+            ambient_sound_time: AtomicI32::new(0),
         };
         Arc::new(bat)
     }
@@ -79,17 +79,22 @@ impl BatEntity {
     }
 
     fn tick_ambient_sound(&self, world: &World, pos: &Vector3<f64>) {
-        let chance = self.ambient_sound_chance.fetch_sub(1, Relaxed);
-        if chance <= 0 {
-            self.ambient_sound_chance
-                .store(MIN_AMBIENT_SOUND_DELAY, Relaxed);
-            if !self.is_roosting() || rand::random_range(0..4) == 0 {
+        let entity = self.get_entity();
+        if !entity.is_alive() || self.mob_entity.living_entity.is_dead_or_dying() {
+            return;
+        }
+        let roll = rand::random_range(0..1000);
+        let time = self.ambient_sound_time.fetch_add(1, Relaxed);
+        if roll < time {
+            self.ambient_sound_time
+                .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
+            if (!self.is_roosting() || rand::random_range(0..4) == 0) && !entity.is_silent() {
                 world.play_sound_fine(
                     Sound::EntityBatAmbient,
                     SoundCategory::Ambient,
                     pos,
-                    0.1,
-                    0.95,
+                    self.sound_volume(),
+                    self.voice_pitch(),
                 );
             }
         }
@@ -223,6 +228,14 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn can_be_leashed(&self) -> bool {
+        false
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
     fn mob_is_pushable(&self) -> bool {
         false
     }
@@ -260,7 +273,7 @@ impl Mob for BatEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn base_tick(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         self.tick_ambient_sound(&entity.world.load(), &entity.pos.load());
     }
@@ -313,11 +326,70 @@ impl Mob for BatEntity {
     }
 }
 
+impl CustomSound for BatEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatHurt)
+    }
+
+    fn sound_volume(&self) -> f32 {
+        0.1
+    }
+
+    fn sound_category(&self) -> SoundCategory {
+        SoundCategory::Ambient
+    }
+
+    fn voice_pitch(&self) -> f32 {
+        self.mob_entity.living_entity.get_pitch() * 0.95
+    }
+
+    fn on_hurt_sound(&self) {
+        self.ambient_sound_time
+            .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::entity::ai::test_support::world;
     use pumpkin_data::entity::EntityType;
+
+    #[tokio::test]
+    async fn ambient_sound_timer_resets_and_waits_after_hurt()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = Vector3::new(0.0, 64.0, 0.0);
+        let bat = BatEntity::new(Entity::new(world.clone(), pos, &EntityType::BAT));
+        bat.get_entity().set_silent(true);
+        bat.ambient_sound_time.store(1000, Relaxed);
+        bat.tick_ambient_sound(&world, &pos);
+        let reset_time = bat.ambient_sound_time.load(Relaxed);
+
+        bat.ambient_sound_time.store(10, Relaxed);
+        bat.on_hurt_sound();
+        for _ in 0..80 {
+            bat.tick_ambient_sound(&world, &pos);
+        }
+        let after_delay = bat.ambient_sound_time.load(Relaxed);
+        bat.tick_ambient_sound(&world, &pos);
+        let after_zero = bat.ambient_sound_time.load(Relaxed);
+        bat.mob_entity.living_entity.set_health(0.0);
+        bat.tick_ambient_sound(&world, &pos);
+        let after_death = bat.ambient_sound_time.load(Relaxed);
+        world.level.shutdown().await;
+
+        assert_eq!(reset_time, -80);
+        assert_eq!(after_delay, 0);
+        assert_eq!(after_zero, 1);
+        assert_eq!(after_death, 1);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn damage_wakes_bat_before_hurt_cooldown_but_not_when_invulnerable()
