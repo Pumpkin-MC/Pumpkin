@@ -271,7 +271,11 @@ impl<'a, S: CommandSource> ContextChain<'a, S> {
         );
 
         if let Ok(result) = result {
-            result_consumer.on_command_completion(&context_to_use, ReturnValue::Success(result))?;
+            // Vanilla's `function` only reports a result when the function used `return`.
+            if !SKIP_RESULT.with(|skip| skip.replace(false)) {
+                result_consumer
+                    .on_command_completion(&context_to_use, ReturnValue::Success(result))?;
+            }
             Ok(if forked_mode { 1 } else { result })
         } else {
             result_consumer.on_command_completion(&context_to_use, ReturnValue::Failure)?;
@@ -866,4 +870,14 @@ mod test {
         let res = chain.execute_all(&source, dispatcher.consumer.as_ref());
         assert!(res.is_ok_and(|val| val == 1));
     }
+}
+
+thread_local! {
+    static SKIP_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Makes the command that is currently executing report no result to its callbacks,
+/// like a vanilla function that finished without `return`.
+pub fn skip_result_callbacks() {
+    SKIP_RESULT.with(|skip| skip.set(true));
 }

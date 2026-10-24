@@ -144,6 +144,7 @@ impl CommandExecutor for FunctionExecutor {
             return Ok(value);
         }
         let executed_count = result.executed;
+        pumpkin_command::context::command_context::skip_result_callbacks();
 
         if name_str.starts_with('#') {
             context.source.send_feedback(
