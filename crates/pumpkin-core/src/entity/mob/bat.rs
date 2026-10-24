@@ -127,81 +127,98 @@ impl BatEntity {
                 0.1,
                 0.95,
             );
+            }
         }
-    }
 
-    fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
+        fn tick_flying(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
         let entity = &self.mob_entity.living_entity.entity;
         let mut hanging_pos = self
             .hanging_position
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        if let Some(hp) = *hanging_pos {
-            let hp_state = world.get_block_state(&hp);
-            if !hp_state.is_air() || hp.0.y <= world.dimension.min_y {
+        // Vanilla check previous target before randomly generating a new one
+        if let Some(target) = *hanging_pos {
+            if !world.get_block_state(&target).is_air()
+                || target.0.y <= world.dimension.min_y
+            {
                 *hanging_pos = None;
             }
         }
 
-        let (should_pick_new, new_target, try_roost) = {
-            let mut rng = rand::rng();
-            let should_pick = hanging_pos.is_none()
-                || rng.random_range(0u32..30) == 0
-                || hanging_pos.is_some_and(|hp| {
-                    let dx = f64::from(hp.0.x) + 0.5 - pos.x;
-                    let dy = f64::from(hp.0.y) + 0.1 - pos.y;
-                    let dz = f64::from(hp.0.z) + 0.5 - pos.z;
-                    dx * dx + dy * dy + dz * dz < 4.0
-                });
-            let new_target = should_pick.then(|| {
-                BlockPos::new(
-                    pos.x as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                    (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0) as i32,
-                    pos.z as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                )
+        let mut rng = rand::rng();
+
+        let should_pick_new = hanging_pos.is_none()
+            || rng.random_range(0u32..30) == 0
+            || hanging_pos.is_some_and(|target| {
+                let dx = f64::from(target.0.x) + 0.5 - pos.x;
+                let dy = f64::from(target.0.y) + 0.5 - pos.y;
+                let dz = f64::from(target.0.z) + 0.5 - pos.z;
+                dx * dx + dy * dy + dz * dz < 4.0
             });
-            let try_roost = rng.random_range(0u32..100) == 0;
-            (should_pick, new_target, try_roost)
-        };
 
         if should_pick_new {
-            if let Some(target) = new_target {
-                let target_state = world.get_block_state(&target);
-                if target_state.is_air() && target.0.y > world.dimension.min_y {
-                    *hanging_pos = Some(target);
-                } else {
-                    *hanging_pos = None;
-                }
-            } else {
-                *hanging_pos = None;
-            }
+            *hanging_pos = Some(BlockPos::new(
+                (pos.x
+                    + f64::from(rng.random_range(0i32..7))
+                    - f64::from(rng.random_range(0i32..7)))
+                .floor() as i32,
+                (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0)
+                    .floor() as i32,
+                (pos.z
+                    + f64::from(rng.random_range(0i32..7))
+                    - f64::from(rng.random_range(0i32..7)))
+                .floor() as i32,
+            ));
         }
 
-        if let Some(target) = *hanging_pos {
-            let d = f64::from(target.0.x) + 0.5 - pos.x;
-            let e = f64::from(target.0.y) + 0.1 - pos.y;
-            let f = f64::from(target.0.z) + 0.5 - pos.z;
-
-            let velo = entity.velocity.load();
-            let new_velo = Vector3::new(
-                velo.x + (d.signum() * 0.5 - velo.x) * 0.1,
-                velo.y + (e.signum() * 0.7 - velo.y) * 0.1,
-                velo.z + (f.signum() * 0.5 - velo.z) * 0.1,
-            );
-            entity.velocity.store(new_velo);
-
-            let yaw = (new_velo.z.atan2(new_velo.x) as f32).to_degrees() - 90.0;
-            let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - entity.yaw.load());
-            entity.yaw.store(entity.yaw.load() + yaw_diff);
-        }
+        let Some(target) = *hanging_pos else {
+            return;
+        };
         drop(hanging_pos);
 
-        if try_roost {
-            let above_state = world.get_block_state(above_pos);
-            if above_state.is_solid_block() {
-                self.set_roosting(true);
+        let dx = f64::from(target.0.x) + 0.5 - pos.x;
+        let dy = f64::from(target.0.y) + 0.1 - pos.y;
+        let dz = f64::from(target.0.z) + 0.5 - pos.z;
+
+        // Java Math.signum(0.0) returns 0.0.
+        let signum = |value: f64| {
+            if value == 0.0 {
+                value
+            } else {
+                value.signum()
             }
+        };
+
+        let velocity = entity.velocity.load();
+        let acceleration = f64::from(0.1_f32);
+        let vertical_speed = f64::from(0.7_f32);
+
+        let new_velocity = Vector3::new(
+            velocity.x + (signum(dx) * 0.5 - velocity.x) * acceleration,
+            velocity.y + (signum(dy) * vertical_speed - velocity.y) * acceleration,
+            velocity.z + (signum(dz) * 0.5 - velocity.z) * acceleration,
+        );
+        entity.velocity.store(new_velocity);
+
+        let yaw = (pumpkin_util::math::atan2(new_velocity.z, new_velocity.x)
+            * 57.2957763671875) as f32
+            - 90.0;
+        let old_yaw = entity.yaw.load();
+        let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - old_yaw);
+
+        let input = self.mob_entity.living_entity.movement_input.load();
+        self.mob_entity
+            .living_entity
+            .movement_input
+            .store(Vector3::new(input.x, input.y, 0.5));
+
+        entity.yaw.store(old_yaw + yaw_diff);
+
+        if rng.random_range(0u32..100) == 0
+            && world.get_block_state(above_pos).is_solid_block()
+        {
+            self.set_roosting(true);
         }
     }
 }
@@ -256,22 +273,22 @@ impl Mob for BatEntity {
     }
 
     fn post_tick(&self) {
+    		  let entity = &self.mob_entity.living_entity.entity;
         if self.is_roosting() {
-            let entity = &self.mob_entity.living_entity.entity;
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
             let pos = entity.pos.load();
             let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
             entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
+        } else {
++            let velocity = entity.velocity.load();
++            entity.velocity.store(Vector3::new(
++                velocity.x,
++                velocity.y * 0.6,
++                velocity.z,
++            ));
         }
     }
 
-    fn get_mob_gravity(&self) -> f64 {
-        0.0
-    }
-
-    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
-        Some(0.6)
-    }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
         if self.is_roosting() {
