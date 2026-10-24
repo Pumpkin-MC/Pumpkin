@@ -59,21 +59,23 @@ impl ResourceOrTag {
 /// Registry-aware suggestions shared by both argument types: the known entry
 /// ids plus, when tag data exists for the registry, its `#`-prefixed tags.
 fn suggest_for_registry(registry: &Identifier, builder: SuggestionsBuilder) -> Suggestions {
-    let tag_names = |key: RegistryKey| tag::get_latest_map(key).keys().map(|tag| format!("#{tag}"));
+    let tags = |key: RegistryKey| tag::get_latest_map(key).keys().copied();
 
     if *registry == STRUCTURE_REGISTRY {
         let structures = StructureKeys::all_names()
             .iter()
             .map(|&name| name.to_string());
         builder
-            .filter_and_suggest_iter(structures.chain(tag_names(RegistryKey::WorldgenStructure)))
+            .filter_and_suggest_tags(tags(RegistryKey::WorldgenStructure))
+            .filter_and_suggest_iter(structures)
             .build()
     } else if *registry == BIOME_REGISTRY {
         let biomes = pumpkin_data::biome::Biome::ALL
             .iter()
             .map(|biome| format!("minecraft:{}", biome.registry_id));
         builder
-            .filter_and_suggest_iter(biomes.chain(tag_names(RegistryKey::WorldgenBiome)))
+            .filter_and_suggest_tags(tags(RegistryKey::WorldgenBiome))
+            .filter_and_suggest_iter(biomes)
             .build()
     } else if *registry == POI_REGISTRY {
         // There is no generated POI type registry (yet), so offer the types
@@ -101,12 +103,8 @@ fn suggest_for_registry(registry: &Identifier, builder: SuggestionsBuilder) -> S
             "minecraft:lightning_rod",
         ];
         builder
-            .filter_and_suggest_iter(
-                poi_types
-                    .iter()
-                    .map(|&s| s.to_string())
-                    .chain(tag_names(RegistryKey::PointOfInterestType)),
-            )
+            .filter_and_suggest_tags(tags(RegistryKey::PointOfInterestType))
+            .filter_and_suggest_iter(poi_types.iter().map(|&s| s.to_string()))
             .build()
     } else {
         builder.build()
@@ -212,5 +210,32 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ResourceOrTagArgument 
 
     fn examples(&self) -> Vec<String> {
         examples!("foo", "foo:bar", "#foo")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::suggestion::Suggestion;
+
+    fn suggest(input: &str) -> Vec<String> {
+        suggest_for_registry(&BIOME_REGISTRY, SuggestionsBuilder::new(input, 0))
+            .suggestions
+            .iter()
+            .map(Suggestion::text_as_string)
+            .collect()
+    }
+
+    /// Vanilla only offers tags once the input starts with `#`, and matches
+    /// the rest against the tag id without it.
+    #[test]
+    fn tags_need_hash_and_match_after_it() {
+        let tagged = suggest("#is_oc");
+        assert!(tagged.contains(&"#minecraft:is_ocean".to_string()));
+        assert!(tagged.iter().all(|text| text.starts_with('#')));
+
+        let plain = suggest("ocean");
+        assert!(plain.contains(&"minecraft:ocean".to_string()));
+        assert!(plain.iter().all(|text| !text.starts_with('#')));
     }
 }
