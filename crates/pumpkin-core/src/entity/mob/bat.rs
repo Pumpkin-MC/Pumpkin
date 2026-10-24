@@ -59,7 +59,7 @@ impl BatEntity {
         {
             return false;
         }
-        true
+        MobEntity::check_mob_spawn_rules(world, pos)
     }
 
     #[must_use]
