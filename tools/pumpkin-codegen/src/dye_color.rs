@@ -22,6 +22,7 @@ pub fn build() -> TokenStream {
             .expect("Failed to parse dye_colors.json");
 
     let mut variants = TokenStream::new();
+    let mut all_variants = TokenStream::new();
     let mut id_match_arms = TokenStream::new();
     let mut name_match_arms = TokenStream::new();
     let mut to_id_arms = TokenStream::new();
@@ -51,6 +52,10 @@ pub fn build() -> TokenStream {
         variants.extend(quote! {
             #is_default
             #variant_ident,
+        });
+
+        all_variants.extend(quote! {
+            Self::#variant_ident,
         });
 
         id_match_arms.extend(quote! {
@@ -97,6 +102,8 @@ pub fn build() -> TokenStream {
         }
 
         impl DyeColor {
+            pub const ALL: &'static [Self] = &[#all_variants];
+
             #[must_use]
             pub const fn id(&self) -> u8 {
                 match self {
