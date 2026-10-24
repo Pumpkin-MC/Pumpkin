@@ -213,6 +213,24 @@ pub trait DataAccessor: Send + Sync {
     fn get_print_scaled_success(&self, path: &NbtPath, scale: f64, value: i32) -> TextComponent;
 }
 
+/// Saves an entity's NBT, adding a player's held item as `SelectedItem`, matching
+/// vanilla's `NbtPredicate.getEntityTagWithSelectedItem` used by `data get entity`
+/// and the `nbt=` selector option.
+#[must_use]
+pub fn entity_nbt_with_selected_item(entity: &dyn EntityBase) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    entity.write_nbt(&mut nbt);
+    if let Some(player) = entity.get_player() {
+        let held = player.inventory().held_item();
+        if !held.is_empty() {
+            let mut item = NbtCompound::new();
+            held.write_item_stack(&mut item);
+            nbt.put_compound("SelectedItem", item);
+        }
+    }
+    nbt
+}
+
 pub struct EntityDataAccessor {
     entity: Arc<dyn EntityBase>,
 }
@@ -234,9 +252,7 @@ impl DataAccessor for EntityDataAccessor {
     }
 
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError> {
-        let mut nbt = NbtCompound::new();
-        self.entity.write_nbt(&mut nbt);
-        Ok(nbt)
+        Ok(entity_nbt_with_selected_item(self.entity.as_ref()))
     }
 
     fn get_modified_success(&self) -> TextComponent {
