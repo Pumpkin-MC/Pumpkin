@@ -1,15 +1,16 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tracked_data::spider::DATA_FLAGS_ID;
 use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase,
+    Entity,
     ai::goal::{
         active_target::{ActiveTargetGoal, TargetCondition},
         leap_at_target::LeapAtTargetGoal,
@@ -21,7 +22,7 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     mob::{
-        Mob, MobEntity,
+        Mob, MobEntity, MobMetadata,
         equipment::RegionalDifficulty,
         spawn::{SpawnGroupData, finalize_spawn},
     },
@@ -31,16 +32,12 @@ use crate::world::World;
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
-    pub is_climbing: AtomicBool,
 }
 
 impl SpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let spider = Self {
-            mob_entity,
-            is_climbing: AtomicBool::new(false),
-        };
+        let spider = Self { mob_entity };
         let mob_arc = Arc::new(spider);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -51,20 +48,27 @@ impl SpiderEntity {
 
         mob_arc
     }
+}
 
-    pub fn is_climbing(&self) -> bool {
-        self.is_climbing.load(Ordering::Relaxed)
+pub fn is_climbing(mob: &MobEntity) -> bool {
+    mob.living_entity.climbing.load(Ordering::Relaxed)
+}
+
+pub fn set_climbing(mob: &MobEntity, climbing: bool) {
+    if mob.living_entity.climbing.swap(climbing, Ordering::Relaxed) != climbing {
+        let entity = &mob.living_entity.entity;
+        entity.set_synced_data(DATA_FLAGS_ID, i8::from(climbing));
+        let meta = MobMetadata::new().spider_climbing(climbing);
+        entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
     }
+}
 
-    pub fn set_climbing(&self, climbing: bool) {
-        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
-            let flags = i8::from(climbing);
-            let entity = &self.mob_entity.living_entity.entity;
-            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
-            if let Some(meta) = self.mob_metadata() {
-                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
-            }
-        }
+pub fn spider_metadata(mob: &MobEntity) -> MobMetadata {
+    let meta = MobMetadata::new();
+    if is_climbing(mob) {
+        meta.spider_climbing(true)
+    } else {
+        meta
     }
 }
 
@@ -155,22 +159,15 @@ impl Mob for SpiderEntity {
         &self.mob_entity
     }
 
-    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
-        let mut meta = crate::entity::mob::MobMetadata::new();
-        if self.is_climbing() {
-            meta = meta.spider_climbing(true);
-        }
-        Some(meta)
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        Some(spider_metadata(&self.mob_entity))
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn post_tick(&self) {
         let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let vel = entity.velocity.load();
-        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
-        self.set_climbing(is_colliding_horizontally);
+        set_climbing(
+            &self.mob_entity,
+            entity.horizontal_collision.load(Ordering::SeqCst),
+        );
     }
 }

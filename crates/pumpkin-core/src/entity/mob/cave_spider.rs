@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::effect::StatusEffect;
@@ -5,7 +6,10 @@ use pumpkin_data::potion::Effect;
 
 use crate::entity::{
     Entity, EntityBase,
-    mob::{Mob, MobEntity, spider::register_spider_goals},
+    mob::{
+        Mob, MobEntity, MobMetadata,
+        spider::{register_spider_goals, set_climbing, spider_metadata},
+    },
 };
 
 pub struct CaveSpiderEntity {
@@ -39,6 +43,18 @@ impl Mob for CaveSpiderEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        Some(spider_metadata(&self.mob_entity))
+    }
+
+    fn post_tick(&self) {
+        let entity = &self.mob_entity.living_entity.entity;
+        set_climbing(
+            &self.mob_entity,
+            entity.horizontal_collision.load(Ordering::SeqCst),
+        );
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
