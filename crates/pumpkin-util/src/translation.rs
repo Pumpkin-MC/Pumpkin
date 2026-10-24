@@ -794,6 +794,7 @@ mod tests {
             translate: "commands.scoreboard.players.get.success".into(),
             bedrock_translate: Some("commands.scoreboard.players.get.success".into()),
             with: vec![arg("7")],
+            fallback: None,
         });
         assert_eq!(message.0.to_bedrock_legacy(Locale::EnUs), "7");
     }

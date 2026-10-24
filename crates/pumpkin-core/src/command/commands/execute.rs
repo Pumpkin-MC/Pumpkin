@@ -27,6 +27,7 @@ use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::{EntityAnchorArgumentType, EntityAnchorExt};
 use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::item_predicate::ItemPredicateArgumentType;
 use crate::command::argument_types::loot_predicate::{LootPredicate, LootPredicateArgumentType};
 use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
 use crate::command::argument_types::objective::{ObjectiveArgumentType, criterion_is_read_only};
@@ -35,6 +36,7 @@ use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArg
 use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
 use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
 use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
+use crate::command::argument_types::slot::SlotsArgumentType;
 use crate::command::commands::bossbar::{BossbarIdArgumentType, ERROR_UNKNOWN_BOSSBAR};
 use crate::command::commands::data::{
     BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor, TargetKind,
@@ -328,6 +330,94 @@ fn execute_facing_entity_modifier(
         sources.push(Arc::new(source));
     }
     Ok(sources)
+}
+
+/// Counts the stacks in the `slots` of the `execute if items` source that match `item_predicate`.
+fn count_matching_items(context: &CommandContext, block: bool) -> Result<i32, CommandSyntaxError> {
+    let slots = SlotsArgumentType::get(context, "slots")?;
+    let predicate = ItemPredicateArgumentType::get(context, "item_predicate")?;
+    let mut count = 0;
+    let mut check = |stack: Option<pumpkin_data::item_stack::ItemStack>| {
+        if let Some(stack) = stack
+            && !stack.is_empty()
+            && predicate.test(&stack)
+        {
+            count += i32::from(stack.item_count);
+        }
+    };
+    if block {
+        let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
+        for &slot in slots {
+            check(super::item::read_block_slot(
+                context.source.world(),
+                &pos,
+                slot,
+            ));
+        }
+    } else {
+        for entity in EntityArgumentType::get_entities(context, "source")? {
+            for &slot in slots {
+                check(super::item::read_entity_slot(&entity, slot));
+            }
+        }
+    }
+    Ok(count)
+}
+
+fn execute_if_items_entity_modifier(context: &CommandContext) -> RedirectModifierResult {
+    Ok(if count_matching_items(context, false)? > 0 {
+        vec![context.source.clone()]
+    } else {
+        vec![]
+    })
+}
+
+fn execute_unless_items_entity_modifier(context: &CommandContext) -> RedirectModifierResult {
+    Ok(if count_matching_items(context, false)? > 0 {
+        vec![]
+    } else {
+        vec![context.source.clone()]
+    })
+}
+
+fn execute_if_items_block_modifier(context: &CommandContext) -> RedirectModifierResult {
+    Ok(if count_matching_items(context, true)? > 0 {
+        vec![context.source.clone()]
+    } else {
+        vec![]
+    })
+}
+
+fn execute_unless_items_block_modifier(context: &CommandContext) -> RedirectModifierResult {
+    Ok(if count_matching_items(context, true)? > 0 {
+        vec![]
+    } else {
+        vec![context.source.clone()]
+    })
+}
+
+/// `items entity <source> <slots> <item_predicate>` / `items block <pos> <slots> <item_predicate>`.
+fn items_node(
+    entity: fn(&CommandContext) -> RedirectModifierResult,
+    block: fn(&CommandContext) -> RedirectModifierResult,
+) -> LiteralArgumentBuilder {
+    literal("items")
+        .then(literal("entity").then(
+            argument("source", EntityArgumentType::Entities).then(
+                argument("slots", SlotsArgumentType).then(
+                    argument("item_predicate", ItemPredicateArgumentType).conditional(entity),
+                ),
+            ),
+        ))
+        .then(
+            literal("block").then(
+                argument("pos", BlockPosArgumentType).then(
+                    argument("slots", SlotsArgumentType).then(
+                        argument("item_predicate", ItemPredicateArgumentType).conditional(block),
+                    ),
+                ),
+            ),
+        )
 }
 
 fn execute_if_block_modifier(
@@ -1631,6 +1721,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                             .executes(IfEntityCountExecutor),
                     ),
                 )
+                .then(items_node(
+                    execute_if_items_entity_modifier,
+                    execute_if_items_block_modifier,
+                ))
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
                         argument("block", BlockArgumentType).conditional(execute_if_block_modifier),
@@ -1770,6 +1864,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                             .conditional(execute_unless_entity_modifier),
                     ),
                 )
+                .then(items_node(
+                    execute_unless_items_entity_modifier,
+                    execute_unless_items_block_modifier,
+                ))
                 .then(
                     literal("block").then(
                         argument("pos", BlockPosArgumentType).then(

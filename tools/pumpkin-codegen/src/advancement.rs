@@ -43,7 +43,7 @@ fn as_translate(text: &TextComponent) -> TokenStream {
     let Translate {
         translate,
         bedrock_translate: _,
-        with: _,
+        ..
     } = text.0.content.as_ref()
     else {
         panic!("expected a translatable text component for advancement display")

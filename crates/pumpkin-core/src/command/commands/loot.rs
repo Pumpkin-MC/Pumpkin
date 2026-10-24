@@ -18,8 +18,8 @@ use crate::command::argument_builder::{
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
-use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::argument_types::item::ItemStackArgumentType;
 use crate::command::argument_types::slot::SlotArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -349,9 +349,10 @@ impl CommandExecutor for LootExecutor {
 
         match self.source {
             Source::Fish { tool } => {
-                let loot_table_str = StringArgumentType::get(context, "loot_table")?;
+                let loot_table_str =
+                    IdentifierArgumentType::get(context, "loot_table")?.to_string();
                 let key = if loot_table_str.contains(':') {
-                    loot_table_str.to_string()
+                    loot_table_str.clone()
                 } else {
                     format!("minecraft:{loot_table_str}")
                 };
@@ -370,7 +371,7 @@ impl CommandExecutor for LootExecutor {
                     .get_loot_table(&key)
                     .ok_or_else(|| {
                         ERROR_INVALID_LOOT_TABLE
-                            .create_without_context(TextComponent::text(loot_table_str.to_string()))
+                            .create_without_context(TextComponent::text(loot_table_str.clone()))
                     })?;
 
                 let params = LootContextParameters {
@@ -387,9 +388,10 @@ impl CommandExecutor for LootExecutor {
                 drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
             }
             Source::Loot => {
-                let loot_table_str = StringArgumentType::get(context, "loot_table")?;
+                let loot_table_str =
+                    IdentifierArgumentType::get(context, "loot_table")?.to_string();
                 let key = if loot_table_str.contains(':') {
-                    loot_table_str.to_string()
+                    loot_table_str.clone()
                 } else {
                     format!("minecraft:{loot_table_str}")
                 };
@@ -400,7 +402,7 @@ impl CommandExecutor for LootExecutor {
                     .get_loot_table(&key)
                     .ok_or_else(|| {
                         ERROR_INVALID_LOOT_TABLE
-                            .create_without_context(TextComponent::text(loot_table_str.to_string()))
+                            .create_without_context(TextComponent::text(loot_table_str.clone()))
                     })?;
 
                 let params = LootContextParameters {
@@ -645,7 +647,7 @@ impl CommandExecutor for LootExecutor {
 fn add_sources(target: Target) -> Vec<LiteralArgumentBuilder> {
     vec![
         literal("fish").then(
-            argument("loot_table", StringArgumentType::SingleWord)
+            argument("loot_table", IdentifierArgumentType)
                 .suggests(LootTableSuggestionProvider)
                 .then(
                     argument("fish_pos", BlockPosArgumentType)
@@ -678,7 +680,7 @@ fn add_sources(target: Target) -> Vec<LiteralArgumentBuilder> {
                 ),
         ),
         literal("loot").then(
-            argument("loot_table", StringArgumentType::SingleWord)
+            argument("loot_table", IdentifierArgumentType)
                 .suggests(LootTableSuggestionProvider)
                 .executes(LootExecutor {
                     target,

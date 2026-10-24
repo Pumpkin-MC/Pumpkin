@@ -16,7 +16,7 @@ mod clear;
 mod clone;
 mod compute;
 mod damage;
-mod data;
+pub(crate) mod data;
 mod datapack;
 mod debug;
 pub mod defaultgamemode;
