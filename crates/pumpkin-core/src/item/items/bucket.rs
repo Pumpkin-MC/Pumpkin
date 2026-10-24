@@ -16,9 +16,10 @@ use pumpkin_data::{
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
-    GameMode,
+    GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -242,6 +243,15 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
             .get_mob_entity()
             .persistence_required
             .store(true, Ordering::Relaxed);
+    }
+}
+
+/// Mirrors vanilla's `BucketItem.getEmptySuccessItem`.
+pub(crate) fn get_empty_success_item(item: ItemStack, player: &Player) -> ItemStack {
+    if player.has_infinite_materials() {
+        item
+    } else {
+        ItemStack::new(1, &Item::BUCKET)
     }
 }
 
@@ -488,10 +498,10 @@ impl ItemBehaviour for EmptyBucketItem {
 impl ItemBehaviour for FilledBucketItem {
     fn normal_use(&self, item: &Item, player: &Player) {
         let (yaw, pitch) = player.rotation();
-        self.normal_use_with_rotation(item, player, yaw, pitch);
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
     }
 
-    fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
@@ -576,12 +586,9 @@ impl ItemBehaviour for FilledBucketItem {
             }
         }
 
-        if player.gamemode.load() != GameMode::Creative {
-            let item_stack = ItemStack::new(1, &Item::BUCKET);
-            player
-                .inventory
-                .set_slot(player.inventory.get_selected_slot() as usize, item_stack);
-        }
+        let inventory = &player.inventory;
+        let stack = get_empty_success_item(inventory.get_stack_in_hand(hand), player);
+        inventory.set_stack_in_hand(hand, stack);
     }
 
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
@@ -617,6 +624,15 @@ impl ItemBehaviour for FilledBucketItem {
                 fill_mob_bucket_stack(item, player, mob_bucket, entity.as_ref());
                 ent.remove();
             }
+        }
+    }
+
+    // Powder snow is vanilla's only `SolidBucketItem`; mirrors its `useOn` override.
+    fn on_placed_as_block(&self, stack: &mut ItemStack, player: &Player) {
+        if stack.item.id == Item::POWDER_SNOW_BUCKET.id {
+            *stack = get_empty_success_item(stack.clone(), player);
+        } else {
+            stack.decrement_unless_creative(player.gamemode.load(), 1);
         }
     }
 

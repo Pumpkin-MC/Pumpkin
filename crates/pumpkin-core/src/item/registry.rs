@@ -159,6 +159,14 @@ impl ItemRegistry {
         true
     }
 
+    pub fn on_placed_as_block(&self, stack: &mut ItemStack, player: &Player) {
+        if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
+            behaviour.on_placed_as_block(stack, player);
+        } else {
+            stack.decrement_unless_creative(player.gamemode.load(), 1);
+        }
+    }
+
     #[must_use]
     pub fn get_pumpkin_item(&self, item: u16) -> Option<&Arc<dyn ItemBehaviour>> {
         self.items.get(&item)
