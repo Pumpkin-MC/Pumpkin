@@ -615,6 +615,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn is_ignoring_block_triggers(&self) -> bool {
+        self.get_mob()
+            .is_some_and(|mob| mob.ignores_block_triggers())
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
@@ -2052,6 +2057,10 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_on_pos(&self) -> BlockPos {
+        self.get_pos_with_y_offset(f64::from(1.0e-5_f32)).0
+    }
+
     fn get_pos_with_y_offset(
         &self,
         offset: f64,
@@ -2236,6 +2245,11 @@ impl Entity {
             world
                 .block_registry
                 .update_entity_movement_after_fall_on(block, caller);
+        }
+        if !caller.is_passenger()
+            && let Some(mob) = caller.get_mob()
+        {
+            mob.movement_emission(final_move);
         }
     }
 

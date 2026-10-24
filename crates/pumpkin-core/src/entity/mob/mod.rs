@@ -1307,6 +1307,12 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn ignores_block_triggers(&self) -> bool {
+        false
+    }
+
+    fn movement_emission(&self, _movement: Vector3<f64>) {}
+
     fn on_removed(&self) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
