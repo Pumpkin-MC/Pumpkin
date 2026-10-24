@@ -1,0 +1,9 @@
+{
+  "values": [
+    "minecraft:potion",
+    {
+      "id": "#c:drinks/ominous",
+      "required": false
+    }
+  ]
+}

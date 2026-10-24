@@ -92,12 +92,12 @@ pub struct InventoryAction {
 impl PacketRead for InventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let source_type = VarUInt::read(buf)?.0;
-        let window_id = if bool::read(buf)? && bool::read(buf)? {
+        let window_id = if bool::read(buf)? {
             Some(i32::from(i8::read(buf)?))
         } else {
             None
         };
-        let source_flags = if bool::read(buf)? && bool::read(buf)? {
+        let source_flags = if bool::read(buf)? {
             Some(VarUInt::read(buf)?.0)
         } else {
             None
@@ -125,6 +125,13 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead)]
+#[repr(u8)]
+pub enum HandSlot {
+    Mainhand,
+    Offhand,
+}
+
 #[derive(Debug, PacketRead)]
 pub struct UseItemTransactionData {
     pub action_type: VarInt,
@@ -132,6 +139,7 @@ pub struct UseItemTransactionData {
     pub block_position: BlockPos,
     pub block_face: u8,
     pub hot_bar_slot: VarInt,
+    pub hand: HandSlot,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
@@ -159,13 +167,20 @@ pub struct ReleaseItemTransactionData {
 }
 
 #[derive(Debug)]
+/// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
 #[packet(30)]
 pub struct SInventoryTransaction {
+    /// Legacy transaction request ID used for rollback tracking.
     pub legacy_request_id: VarInt,
+    /// Legacy slot modification entries.
     pub legacy_set_item_slots: Vec<LegacySetItemSlot>,
+    /// Whether action elements are present in the transaction.
     pub has_value: bool,
+    /// List of slot modification actions composing this transaction.
     pub actions: Vec<InventoryAction>,
+    /// Transaction category type (`Normal`, `Mismatch`, `ItemUse`, `ItemUseOnEntity`, `ItemRelease`).
     pub transaction_type: VarUInt,
+    /// Specialized transaction payload corresponding to the transaction type.
     pub transaction_data: TransactionData,
 }
 
@@ -183,20 +198,8 @@ impl PacketRead for SInventoryTransaction {
             }
         }
 
-        if !bool::read(buf)? {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "missing inventory transaction type",
-            ));
-        }
         let transaction_type = VarUInt::read(buf)?;
 
-        if !bool::read(buf)? {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "missing inventory action data",
-            ));
-        }
         let actions_len = collection_length(buf, "inventory actions")?;
         let mut actions = Vec::with_capacity(actions_len);
         for _ in 0..actions_len {
@@ -236,10 +239,10 @@ mod tests {
     #[test]
     fn decodes_use_item_transaction_with_empty_hand() {
         let payload = [
-            0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x00, 0x01, 0xec, 0x04, 0x80, 0x01, 0xcb, 0x06,
-            0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8c, 0xf6, 0x9b, 0x43,
-            0x72, 0x3d, 0x83, 0x42, 0xf3, 0xe1, 0xd1, 0xc3, 0x00, 0x90, 0x61, 0x3f, 0x00, 0x8d,
-            0x26, 0x3f, 0x00, 0x00, 0x80, 0x3f, 0xfd, 0x59, 0x01, 0x00,
+            0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0xec, 0x04, 0x80, 0x01, 0xcb, 0x06, 0x03, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8c, 0xf6, 0x9b, 0x43, 0x72,
+            0x3d, 0x83, 0x42, 0xf3, 0xe1, 0xd1, 0xc3, 0x00, 0x90, 0x61, 0x3f, 0x00, 0x8d, 0x26,
+            0x3f, 0x00, 0x00, 0x80, 0x3f, 0xfd, 0x59, 0x01, 0x00,
         ];
         let mut reader = payload.as_slice();
 
@@ -249,6 +252,7 @@ mod tests {
         };
 
         assert_eq!(data.action_type.0, 0);
+        assert_eq!(data.hand, HandSlot::Offhand);
         assert_eq!(data.item_in_hand.id.0, 0);
         assert_eq!(data.block_face, 3);
         assert!(reader.is_empty());
@@ -257,13 +261,13 @@ mod tests {
     #[test]
     fn decodes_use_item_transaction_with_crafting_table() {
         let payload = [
-            0x00, 0x00, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x01, 0x00, 0x02, 0x3a,
-            0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-            0xa6, 0x05, 0x7e, 0xd9, 0x06, 0x01, 0x04, 0x3a, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd,
-            0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x0f,
-            0xaa, 0x43, 0x72, 0x3d, 0x83, 0x42, 0xb8, 0x39, 0xd5, 0xc3, 0x00, 0x16, 0x15, 0x3f,
-            0x00, 0x00, 0x80, 0x3f, 0x00, 0xc8, 0x81, 0x3e, 0xb6, 0x5e, 0x01, 0x00,
+            0x00, 0x00, 0x02, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x3a, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0xfd, 0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xa6, 0x05, 0x7e, 0xd9,
+            0x06, 0x01, 0x04, 0x00, 0x3a, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x59, 0x0a, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x0f, 0xaa, 0x43, 0x72,
+            0x3d, 0x83, 0x42, 0xb8, 0x39, 0xd5, 0xc3, 0x00, 0x16, 0x15, 0x3f, 0x00, 0x00, 0x80,
+            0x3f, 0x00, 0xc8, 0x81, 0x3e, 0xb6, 0x5e, 0x01, 0x00,
         ];
         let mut reader = payload.as_slice();
         let packet = SInventoryTransaction::read(&mut reader).unwrap();
@@ -277,6 +281,7 @@ mod tests {
         assert_eq!(data.action_type.0, 0);
         assert_eq!(data.block_face, 1);
         assert_eq!(data.hot_bar_slot.0, 2);
+        assert_eq!(data.hand, HandSlot::Mainhand);
         assert_eq!(data.item_in_hand.id.0, 58);
         assert_eq!(data.item_in_hand.stack_size, 1);
         assert_eq!(data.item_in_hand.block_runtime_id.0, 11_517);

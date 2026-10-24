@@ -12,7 +12,7 @@ use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::trunk::{
     bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
     forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
-    upwards_branching::UpwardsBranchingTrunkPlacer,
+    poplar::PoplarTrunkPlacer, upwards_branching::UpwardsBranchingTrunkPlacer,
 };
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
@@ -24,6 +24,7 @@ pub mod fancy;
 pub mod forking;
 pub mod giant;
 pub mod mega_jungle;
+pub mod poplar;
 pub mod straight;
 pub mod upwards_branching;
 
@@ -47,11 +48,13 @@ impl TrunkPlacer {
         random: &mut RandomGenerator,
         pos: &BlockPos,
         below_trunk_provider: &BlockStateProvider,
-    ) {
-        if let Some(state) = below_trunk_provider.get_optional(block_registry, chunk, random, *pos)
-        {
-            chunk.set_block_state(&pos.0, state);
-        }
+    ) -> bool {
+        below_trunk_provider
+            .get_optional(block_registry, chunk, random, *pos)
+            .is_some_and(|state| {
+                chunk.set_block_state(&pos.0, state);
+                true
+            })
     }
 
     pub fn place<T: GenerationCache>(
@@ -113,10 +116,12 @@ pub enum TrunkType {
     Bending(BendingTrunkPlacer),
     UpwardsBranching(UpwardsBranchingTrunkPlacer),
     Cherry(CherryTrunkPlacer),
+    Poplar(PoplarTrunkPlacer),
 }
 
 impl TrunkType {
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn WorldPortalExt,
@@ -210,6 +215,16 @@ impl TrunkType {
                 trunk_state,
             ),
             Self::Cherry(cherry) => cherry.generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
+            Self::Poplar(poplar) => poplar.generate(
                 block_registry,
                 placer,
                 height,

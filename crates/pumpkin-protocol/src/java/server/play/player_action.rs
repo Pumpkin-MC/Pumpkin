@@ -24,6 +24,7 @@ impl<'a> ServerPacket<'a> for SPlayerAction {
         } else {
             VarInt(i32::from(bytebuf.get_u8()?))
         };
+        let status = status_from_version(status, *version);
         let position = bytebuf.get_block_pos(version)?;
         let face = bytebuf.get_u8()?;
         let sequence = if version >= &JavaMinecraftVersion::V_1_19 {
@@ -48,10 +49,11 @@ impl crate::ClientPacket for SPlayerAction {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
+        let status = status_to_version(self.status, *version);
         if version >= &JavaMinecraftVersion::V_1_9 {
-            write.write_var_int(&self.status)?;
+            write.write_var_int(&status)?;
         } else {
-            write.write_u8(self.status.0 as u8)?;
+            write.write_u8(status.0 as u8)?;
         }
         write.write_block_pos(&self.position, version)?;
         write.write_u8(self.face)?;
@@ -59,6 +61,30 @@ impl crate::ClientPacket for SPlayerAction {
             write.write_var_int(&self.sequence)?;
         }
         Ok(())
+    }
+}
+
+/// 26.3 added change destroy direction as action 1, shifting every later action by one. We keep
+/// the older numbering internally and give the new action the id after the last one.
+fn status_from_version(status: VarInt, version: JavaMinecraftVersion) -> VarInt {
+    if version < JavaMinecraftVersion::V_26_3 || status.0 < 1 {
+        return status;
+    }
+    if status.0 == 1 {
+        VarInt(Status::ChangeDestroyDirection as i32)
+    } else {
+        VarInt(status.0 - 1)
+    }
+}
+
+fn status_to_version(status: VarInt, version: JavaMinecraftVersion) -> VarInt {
+    if version < JavaMinecraftVersion::V_26_3 || status.0 < 1 {
+        return status;
+    }
+    if status.0 == Status::ChangeDestroyDirection as i32 {
+        VarInt(1)
+    } else {
+        VarInt(status.0 + 1)
     }
 }
 
@@ -81,6 +107,8 @@ pub enum Status {
     SwapItem,
     /// Sent when a player is holding a spear and performs a jab attack.
     SpearJab,
+    /// Sent since 26.3 when the player keeps mining but looks at another face of the block.
+    ChangeDestroyDirection,
 }
 
 pub struct InvalidStatus;
@@ -98,6 +126,7 @@ impl TryFrom<i32> for Status {
             5 => Ok(Self::ReleaseItemInUse),
             6 => Ok(Self::SwapItem),
             7 => Ok(Self::SpearJab),
+            8 => Ok(Self::ChangeDestroyDirection),
             _ => Err(InvalidStatus),
         }
     }

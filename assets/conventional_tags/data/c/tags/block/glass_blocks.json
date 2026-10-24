@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "#c:glass_blocks/colorless",
+      "required": false
+    },
+    {
+      "id": "#c:glass_blocks/cheap",
+      "required": false
+    },
+    {
+      "id": "#c:glass_blocks/tinted",
+      "required": false
+    }
+  ]
+}

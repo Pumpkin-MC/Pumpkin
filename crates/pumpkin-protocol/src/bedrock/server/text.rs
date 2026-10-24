@@ -4,18 +4,27 @@ use crate::{
 };
 use pumpkin_macros::packet;
 use std::borrow::Cow;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, Read, Write};
 
+/// Transmits in-game chat messages, system alerts, popups, and raw JSON text between client and server.
 #[derive(Debug)]
 #[packet(9)]
 pub struct SText<'a> {
+    /// Whether translation is requested for localization strings in the message.
     pub needs_translation: bool,
+    /// Formatting category and presentation target of the text.
     pub r#type: TextPacketType,
+    /// Sender username (included in chat, whisper, and announcement packets).
     pub source_name: Cow<'a, str>,
+    /// Primary text content or translation key.
     pub message: Cow<'a, str>,
+    /// Localization substitution arguments for translation or popup texts.
     pub parameters: Vec<Cow<'a, str>>,
+    /// Sender Xbox Live User ID (XUID).
     pub xuid: Cow<'a, str>,
+    /// Platform-specific chat identifier (e.g. Nintendo Switch chat isolation).
     pub platform_chat_id: Cow<'a, str>,
+    /// Optional profanity-filtered message for clients with filtering enabled.
     pub filtered_message: Option<Cow<'a, str>>,
 }
 
@@ -262,65 +271,32 @@ impl PacketWrite for SText<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Formatting type and destination UI layer for Bedrock text packets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead, PacketReadSlice, PacketWrite)]
 #[repr(u8)]
 pub enum TextPacketType {
+    /// Unformatted raw text message.
     Raw = 0,
+    /// Standard player chat message.
     Chat = 1,
+    /// Translatable localization key with arguments.
     Translation = 2,
+    /// Brief popup message displayed above the action bar.
     Popup = 3,
+    /// Jukebox disc track notification popup.
     JukeboxPopup = 4,
+    /// Small tip text displayed above the hotbar.
     Tip = 5,
+    /// Server system notification message.
     System = 6,
+    /// Private whisper message directed to a specific player.
     Whisper = 7,
+    /// Global server announcement message.
     Announcement = 8,
+    /// Formatted JSON whisper message.
     JsonWhisper = 9,
+    /// Formatted raw JSON message.
     Json = 10,
+    /// Formatted JSON announcement.
     JsonAnnouncement = 11,
-}
-
-impl PacketWrite for TextPacketType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
-}
-
-impl PacketRead for TextPacketType {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::Raw),
-            1 => Ok(Self::Chat),
-            2 => Ok(Self::Translation),
-            3 => Ok(Self::Popup),
-            4 => Ok(Self::JukeboxPopup),
-            5 => Ok(Self::Tip),
-            6 => Ok(Self::System),
-            7 => Ok(Self::Whisper),
-            8 => Ok(Self::Announcement),
-            9 => Ok(Self::JsonWhisper),
-            10 => Ok(Self::Json),
-            11 => Ok(Self::JsonAnnouncement),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Unknown Text Type")),
-        }
-    }
-}
-
-impl<'a> PacketReadSlice<'a> for TextPacketType {
-    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
-        match u8::read_slice(buf)? {
-            0 => Ok(Self::Raw),
-            1 => Ok(Self::Chat),
-            2 => Ok(Self::Translation),
-            3 => Ok(Self::Popup),
-            4 => Ok(Self::JukeboxPopup),
-            5 => Ok(Self::Tip),
-            6 => Ok(Self::System),
-            7 => Ok(Self::Whisper),
-            8 => Ok(Self::Announcement),
-            9 => Ok(Self::JsonWhisper),
-            10 => Ok(Self::Json),
-            11 => Ok(Self::JsonAnnouncement),
-            _ => Err(Error::new(ErrorKind::InvalidData, "Unknown Text Type")),
-        }
-    }
 }

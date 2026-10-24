@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockState, BlockStateId, Property};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -53,8 +53,8 @@ impl BlockStateCodec {
 
         let props_iter = properties_map
             .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
-            .collect::<Vec<(&str, &str)>>();
+            .filter_map(|(k, v)| Property::from_str_pair(k, v))
+            .collect::<Vec<Property>>();
 
         let block_properties = block.from_properties(&props_iter);
         block_properties.to_state_id(block)
@@ -69,10 +69,11 @@ mod test {
 
     #[test]
     fn proper_network_bits_per_entry() {
-        let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
+        let addressable = 1u32 << BLOCK_NETWORK_MAX_BITS;
         assert!(
-            BlockStateId::new_or_air(id_to_test) == BlockStateId::AIR,
-            "We need to update our constants!"
+            u32::from(BlockStateId::COUNT) <= addressable,
+            "We need to update our constants! {} states do not fit in {BLOCK_NETWORK_MAX_BITS} bits",
+            BlockStateId::COUNT
         );
     }
 }

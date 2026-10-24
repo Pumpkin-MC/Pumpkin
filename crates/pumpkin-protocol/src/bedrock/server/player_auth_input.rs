@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind, Read};
 use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 
+use super::player_action::PlayerActionType;
 use crate::{
     codec::{
         bitset::Bitset, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -10,29 +11,51 @@ use crate::{
     serial::PacketRead,
 };
 
+/// Sent by the client every tick to transmit player movement, view orientation, and input state under server authoritative movement.
 #[derive(Debug)]
 #[packet(144)]
 pub struct SPlayerAuthInput {
+    /// Pitch rotation angle in degrees.
     pub pitch: f32,
+    /// Yaw rotation angle in degrees.
     pub yaw: f32,
+    /// Absolute player position in world space.
     pub position: Vector3<f32>,
+    /// Movement vector created from directional input controls (WASD / analog stick).
     pub move_vec: Vector2<f32>,
+    /// Horizontal head yaw rotation angle in degrees.
     pub head_yaw: f32,
+    /// Bitset of active input flags for the current tick.
     pub input_data: Bitset<66>,
+    /// Input device mode used by the client (mouse, touch, gamepad).
     pub input_mode: VarUInt,
+    /// Client play mode (screen, VR, etc.).
     pub play_mode: VarUInt,
+    /// Touch or crosshair interaction model.
     pub interaction_model: VarInt,
+    /// Pitch angle when an interaction occurred.
     pub interact_pitch: f32,
+    /// Yaw angle when an interaction occurred.
     pub interact_yaw: f32,
+    /// Client world simulation tick number.
     pub tick: VarULong,
+    /// Positional delta since the previous input tick.
     pub delta: Vector3<f32>,
+    /// Optional block destruction or interaction actions executed during this tick.
     pub block_actions: Option<Vec<PlayerBlockAction>>,
+    /// Optional item use action performed during this tick.
     pub item_interaction: Option<PlayerInventoryAction>,
+    /// Optional item stack request embedded into the movement tick.
     pub item_stack_request: Option<crate::bedrock::server::item_stack_request::ItemStackRequest>,
+    /// Predicted vehicle rotation if riding an entity.
     pub vehicle_rotation: Option<Vector2<f32>>,
+    /// Unique entity ID of the ridden vehicle.
     pub vehicle_unique_id: Option<VarLong>,
+    /// Analog movement stick input values.
     pub analog_move: Vector2<f32>,
+    /// Camera orientation vector for camera-relative movement.
     pub camera_orientation: Vector3<f32>,
+    /// Unclamped raw movement input vector.
     pub raw_move: Vector2<f32>,
 }
 
@@ -44,30 +67,28 @@ impl PacketRead for SPlayerAuthInput {
         let move_vec = Vector2::<f32>::read(reader)?;
         let head_yaw = f32::read(reader)?;
         let mut input_data = Bitset::<66>::default();
-        if bool::read(reader)? {
-            let count = VarUInt::read(reader)?.0;
-            if count > 66 {
+        let count = VarUInt::read(reader)?.0;
+        if count > 66 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("too many player input flags: {count}"),
+            ));
+        }
+        for _ in 0..count {
+            let flag = VarInt::read(reader)?.0;
+            if !(0..66).contains(&flag) {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    format!("too many player input flags: {count}"),
+                    format!("invalid player input flag {flag}"),
                 ));
             }
-            for _ in 0..count {
-                let flag = VarInt::read(reader)?.0;
-                if !(0..66).contains(&flag) {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("invalid player input flag {flag}"),
-                    ));
-                }
-                if input_data.get(flag as usize) {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("duplicate player input flag {flag}"),
-                    ));
-                }
-                input_data.set(flag as usize, true);
+            if input_data.get(flag as usize) {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("duplicate player input flag {flag}"),
+                ));
             }
+            input_data.set(flag as usize, true);
         }
         let input_mode = VarUInt::read(reader)?;
         let play_mode = VarUInt::read(reader)?;
@@ -78,21 +99,21 @@ impl PacketRead for SPlayerAuthInput {
         let delta = Vector3::<f32>::read(reader)?;
 
         // 1. Perform Item Interaction
-        let item_interaction = if bool::read(reader)? && bool::read(reader)? {
+        let item_interaction = if bool::read(reader)? {
             Some(PlayerInventoryAction::read(reader)?)
         } else {
             None
         };
 
         // 2. Item Stack Request
-        let item_stack_request = if bool::read(reader)? && bool::read(reader)? {
+        let item_stack_request = if bool::read(reader)? {
             Some(crate::bedrock::server::item_stack_request::ItemStackRequest::read(reader)?)
         } else {
             None
         };
 
         // 3. Block Actions
-        let block_actions = if bool::read(reader)? && bool::read(reader)? {
+        let block_actions = if bool::read(reader)? {
             let count = VarUInt::read(reader)?.0 as usize;
             if count > 1024 {
                 return Err(Error::new(
@@ -110,10 +131,10 @@ impl PacketRead for SPlayerAuthInput {
         };
 
         // 4. Vehicle Info (Matches Go logic)
-        let vehicle_rotation = (bool::read(reader)? && bool::read(reader)?)
+        let vehicle_rotation = bool::read(reader)?
             .then(|| Vector2::<f32>::read(reader))
             .transpose()?;
-        let vehicle_unique_id = (bool::read(reader)? && bool::read(reader)?)
+        let vehicle_unique_id = bool::read(reader)?
             .then(|| VarLong::read(reader))
             .transpose()?;
 
@@ -176,20 +197,17 @@ impl PacketRead for PlayerInventoryAction {
             }
         }
         let mut actions = Vec::new();
-        if bool::read(buf)? && bool::read(buf)? {
-            let actions_len = VarUInt::read(buf)?.0 as usize;
-            if actions_len > 1024 {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "actions_len exceeds limit",
-                ));
-            }
-            actions.reserve(actions_len.min(64));
-            for _ in 0..actions_len {
-                actions.push(
-                    crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?,
-                );
-            }
+        let actions_len = VarUInt::read(buf)?.0 as usize;
+        if actions_len > 1024 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "actions_len exceeds limit",
+            ));
+        }
+        actions.reserve(actions_len.min(64));
+        for _ in 0..actions_len {
+            actions
+                .push(crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?);
         }
         let transaction = PlayerUseItemTransactionData::read(buf)?;
         Ok(Self {
@@ -234,25 +252,36 @@ impl PacketRead for PlayerUseItemTransactionData {
     }
 }
 
+/// A block action (e.g. start/stop breaking) executed within a player input tick.
 #[derive(Debug, PacketRead)]
 pub struct PlayerBlockAction {
-    pub action: VarInt,
+    /// Action category performed on the block.
+    pub action: PlayerActionType,
+    /// Targeted block coordinates.
     pub block_pos: BlockPos,
+    /// Face of the block targeted.
     pub face: VarInt,
 }
 
+/// Primary physical input peripheral used by the client.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMode {
+    /// Standard desktop mouse and keyboard.
     Mouse = 1,
+    /// Mobile touchscreen controls.
     Touch = 2,
+    /// Console gamepad or controller.
     GamePad = 3,
+    /// Motion controller (VR / AR).
     MotionController = 4,
 }
 
+/// Client rendering / gameplay mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PlayMode {
+    /// Standard full-screen desktop or mobile play.
     Normal = 0,
     Teaser = 1,
     Screen = 2,
@@ -260,11 +289,15 @@ pub enum PlayMode {
     NumModes = 9,
 }
 
+/// Client control interaction model style.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InteractionModel {
+    /// Touch drag and tap interaction.
     Touch = 0,
+    /// Centered crosshair interaction.
     Crosshair = 1,
+    /// Classic D-pad and tap controls.
     Classic = 2,
 }
 
@@ -352,11 +385,10 @@ mod tests {
     }
 
     #[test]
-    fn auth_input_reads_v2168_flag_list_and_signed_interaction_model() {
+    fn auth_input_reads_flag_list_and_signed_interaction_model() {
         let mut bytes = auth_input_prefix();
-        true.write(&mut bytes).unwrap();
         VarUInt(2).write(&mut bytes).unwrap();
-        VarInt(0).write(&mut bytes).unwrap();
+        VarInt(48).write(&mut bytes).unwrap();
         VarInt(65).write(&mut bytes).unwrap();
         VarUInt(0).write(&mut bytes).unwrap();
         VarUInt(0).write(&mut bytes).unwrap();
@@ -368,15 +400,16 @@ mod tests {
             0.0f32.write(&mut bytes).unwrap();
         }
         for _ in 0..5 {
-            true.write(&mut bytes).unwrap();
             false.write(&mut bytes).unwrap();
         }
         for _ in 0..7 {
             0.0f32.write(&mut bytes).unwrap();
         }
 
-        let packet = SPlayerAuthInput::read(&mut bytes.as_slice()).unwrap();
-        assert!(packet.input_data.get(0usize));
+        let mut reader = bytes.as_slice();
+        let packet = SPlayerAuthInput::read(&mut reader).unwrap();
+        assert!(reader.is_empty());
+        assert!(packet.input_data.get(48usize));
         assert!(packet.input_data.get(65usize));
         assert_eq!(packet.interaction_model, VarInt(-1));
     }
@@ -384,7 +417,6 @@ mod tests {
     #[test]
     fn auth_input_rejects_duplicate_flags() {
         let mut bytes = auth_input_prefix();
-        true.write(&mut bytes).unwrap();
         VarUInt(2).write(&mut bytes).unwrap();
         VarInt(1).write(&mut bytes).unwrap();
         VarInt(1).write(&mut bytes).unwrap();
