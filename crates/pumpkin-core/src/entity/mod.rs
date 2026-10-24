@@ -362,6 +362,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         other.get_team_name().is_some_and(|other| other == team)
     }
 
+    fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team_name) = self.get_team_name() else {
+            return true;
+        };
+        if other.get_team_name().as_deref() != Some(team_name.as_str()) {
+            return true;
+        }
+        self.get_team()
+            .is_none_or(|team| team.allow_friendly_fire())
+    }
+
     fn tick_in_void(&self, _dyn_self: &dyn EntityBase) {
         self.get_entity().remove();
     }
@@ -1248,6 +1259,16 @@ impl Entity {
 
     pub fn add_velocity(&self, velocity: Vector3<f64>) {
         self.set_velocity(self.velocity.load() + velocity);
+    }
+
+    /// Vanilla `Entity.push(x, y, z)`: adds an impulse to the velocity. The sync goes out on the next tick.
+    pub fn push(&self, xa: f64, ya: f64, za: f64) {
+        if !(xa.is_finite() && ya.is_finite() && za.is_finite()) {
+            return;
+        }
+        self.velocity
+            .store(self.velocity.load() + Vector3::new(xa, ya, za));
+        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     pub fn set_velocity(&self, velocity: Vector3<f64>) {

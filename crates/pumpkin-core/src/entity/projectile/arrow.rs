@@ -749,9 +749,16 @@ impl EntityBase for ArrowEntity {
         }
 
         // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        let candidates = world.get_all_at_box(&search_box);
         for cand in candidates {
             if self.should_skip_collision(entity, &cand) {
+                continue;
+            }
+            // Vanilla `AbstractArrow.canHitEntity`: the arrow passes through a player its owner can't harm.
+            if let Some(target) = cand.get_player()
+                && let Some(owner) = self.owner_id.and_then(|id| world.get_player_by_id(id))
+                && !owner.can_harm_player(target)
+            {
                 continue;
             }
 
