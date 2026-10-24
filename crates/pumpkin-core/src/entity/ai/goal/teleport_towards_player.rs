@@ -82,7 +82,8 @@ impl Goal for TeleportTowardsPlayerGoal {
             && let Some(player) = target.get_player()
         {
             let world = self.enderman.mob_entity.living_entity.entity.world.load();
-            if !self.is_anger_inducing(player, &world) {
+
+            if !player.living_entity.is_alive() || !self.is_anger_inducing(player, &world) {
                 return false;
             }
             let player_pos = player.get_entity().pos.load();
@@ -102,7 +103,10 @@ impl Goal for TeleportTowardsPlayerGoal {
         } else if self.target_player.is_some() {
             false
         } else if let Some(target) = &self.committed_target {
-            if !target.get_entity().is_alive() {
+            if target
+                .get_living_entity()
+                .is_none_or(|living| !living.is_alive())
+            {
                 return false;
             }
             let mob_entity = mob.get_mob_entity();
