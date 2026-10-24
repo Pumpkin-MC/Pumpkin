@@ -1100,7 +1100,10 @@ pub fn is_valid_empty_spawn_block(
 }
 
 #[must_use]
-fn is_valid_spawn_floor(state: &'static BlockState, entity_type: &'static EntityType) -> bool {
+pub(crate) fn is_valid_spawn_floor(
+    state: &'static BlockState,
+    entity_type: &'static EntityType,
+) -> bool {
     match Block::from_state_id(state.id).spawn_floor_predicate() {
         SpawnFloorPredicate::Default => {
             state.is_side_solid(BlockDirection::Up) && state.luminance < 14

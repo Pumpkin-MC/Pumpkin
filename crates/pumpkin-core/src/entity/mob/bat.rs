@@ -68,7 +68,10 @@ impl BatEntity {
         {
             return false;
         }
-        MobEntity::check_mob_spawn_rules(world, pos)
+        crate::world::natural_spawner::is_valid_spawn_floor(
+            world.get_block_state(&below_pos),
+            &pumpkin_data::entity::EntityType::BAT,
+        )
     }
 
     #[must_use]
@@ -206,8 +209,8 @@ impl BatEntity {
         );
         entity.velocity.store(new_velocity);
 
-        let yaw = (pumpkin_util::math::atan2(new_velocity.z, new_velocity.x) * 57.2957763671875)
-            as f32
+        let yaw = (pumpkin_util::math::atan2(new_velocity.z, new_velocity.x) * 180.0
+            / f64::from(std::f32::consts::PI)) as f32
             - 90.0;
         let old_yaw = entity.yaw.load();
         let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - old_yaw);
