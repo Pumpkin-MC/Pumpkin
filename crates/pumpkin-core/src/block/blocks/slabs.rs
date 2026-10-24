@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::SlabType;
+use pumpkin_data::block_properties::{SlabProperties, SlabType};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -7,8 +7,6 @@ use crate::block::{
     BlockBehaviour, BlockIsReplacing, CanPlaceLiquidArgs, CanUpdateAtArgs, OnPlaceArgs,
     PathComputationType, PlaceLiquidArgs,
 };
-
-type SlabProperties = pumpkin_data::block_properties::WhiteWoolSlabLikeProperties;
 
 #[pumpkin_block_from_tag("minecraft:slabs")]
 pub struct SlabBlock;
