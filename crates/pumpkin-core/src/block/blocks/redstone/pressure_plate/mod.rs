@@ -5,7 +5,7 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::{OnEntityCollisionArgs, OnStateReplacedArgs},
+    block::{OnEntityCollisionArgs, OnNeighborUpdateArgs, OnStateReplacedArgs},
     world::World,
 };
 
@@ -26,6 +26,13 @@ fn detection_box_at(pos: &BlockPos) -> BoundingBox {
 }
 
 pub(crate) trait PressurePlate {
+    fn on_neighbor_update_pp(&self, args: OnNeighborUpdateArgs<'_>) {
+        if !Self::can_pressure_plate_place_at(args.world, args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
+    }
+
     fn on_entity_collision_pp(&self, args: OnEntityCollisionArgs<'_>) {
         let output = self.get_redstone_output(args.block, args.state.id);
         if output == 0 {
@@ -79,7 +86,7 @@ pub(crate) trait PressurePlate {
 
     fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
         let floor = world.get_block_state(&block_pos.down());
-        floor.is_side_solid(BlockDirection::Up)
+        floor.is_center_solid(BlockDirection::Up)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
