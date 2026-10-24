@@ -89,6 +89,8 @@ pub struct Server {
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     /// Manages server status information.
     listing: std::sync::Mutex<CachedStatus>,
+    /// Makes the join checks and the insertion into a world atomic.
+    player_join_lock: std::sync::Mutex<()>,
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
@@ -298,6 +300,7 @@ impl Server {
             key_store: OnceCell::new(),
             bedrock_oidc_keys: Arc::new(OnceCell::new()),
             listing,
+            player_join_lock: std::sync::Mutex::new(()),
             branding: CachedBranding::new(),
             bossbars: std::sync::Mutex::new(CustomBossbars::new()),
             map_manager: MapManager::new(),
@@ -646,6 +649,17 @@ impl Server {
         profile: GameProfile,
         config: Option<PlayerConfig>,
     ) -> Option<(Arc<Player>, Arc<World>)> {
+        // The login handlers check this too, but long before the insertion
+        // and not on every path (proxies, no encryption, Bedrock).
+        let _join_guard = self
+            .player_join_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(reason) = self.join_rejection(&client, &profile) {
+            client.try_kick(DisconnectReason::Kicked, &reason);
+            return None;
+        }
+
         let gamemode = self
             .defaultgamemode
             .lock()
@@ -741,6 +755,35 @@ impl Server {
                 None
             }
         }}
+    }
+
+    /// Why `profile` can't join right now, if anything. Call with the join lock held.
+    fn join_rejection(
+        &self,
+        client: &ClientPlatform,
+        profile: &GameProfile,
+    ) -> Option<TextComponent> {
+        let max_players = match client {
+            ClientPlatform::Java(_) => self.advanced_config.networking.java.max_players,
+            ClientPlatform::Bedrock(_) => self.advanced_config.networking.bedrock.max_players,
+        };
+        if max_players > 0 && self.get_player_count() >= max_players as usize {
+            return Some(TextComponent::translate_cross(
+                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+                pumpkin_data::translation::bedrock::DISCONNECTIONSCREEN_SERVERFULL,
+                [],
+            ));
+        }
+        if self.get_player_by_uuid(profile.id).is_some()
+            || self.get_player_by_name(&profile.name).is_some()
+        {
+            return Some(TextComponent::translate_cross(
+                pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                pumpkin_data::translation::bedrock::DISCONNECTIONSCREEN_LOGGEDINOTHERLOCATION,
+                [],
+            ));
+        }
+        None
     }
 
     pub fn remove_player(&self, player: &Player) {
