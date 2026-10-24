@@ -11,6 +11,8 @@ use pumpkin_data::data_component_impl::*;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::trim_material::TrimMaterial;
+use pumpkin_data::trim_pattern::TrimPattern;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -2482,19 +2484,42 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
     }
 }
 
+fn read_holder_reference<T: Copy>(
+    seq: &mut impl NetworkReadExt,
+    entries: &[T],
+    kind: &str,
+) -> Result<T, ReadingError> {
+    // Not IdOr::read: it truncates to u16, so out-of-range ids would alias valid entries.
+    let id = seq.get_var_int()?.0;
+    if id == 0 {
+        return Err(ReadingError::Message(format!(
+            "Inline {kind} is not supported"
+        )));
+    }
+    usize::try_from(id)
+        .ok()
+        .and_then(|id| entries.get(id - 1))
+        .copied()
+        .ok_or_else(|| ReadingError::Message(format!("Unknown {kind} reference {id}")))
+}
+
 impl DataComponentCodec<Self> for TrimImpl {
+    // ArmorTrim.STREAM_CODEC: two ByteBufCodecs.holder values, written as registry id + 1.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))
+        let material = self.material_enum().ok_or_else(|| {
+            WritingError::Message(format!("Unknown trim material {:?}", self.material))
+        })?;
+        let pattern = self.pattern_enum().ok_or_else(|| {
+            WritingError::Message(format!("Unknown trim pattern {:?}", self.pattern))
+        })?;
+        seq.write_var_int(&VarInt(material.id() as i32 + 1))?;
+        seq.write_var_int(&VarInt(pattern.id() as i32 + 1))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _material = seq.get_var_int()?;
-        let _pattern = seq.get_var_int()?;
-        Ok(Self {
-            material: NbtTag::String("minecraft:quartz".into()),
-            pattern: NbtTag::String("minecraft:coast".into()),
-        })
+        let material = read_holder_reference(seq, TrimMaterial::all(), "trim material")?;
+        let pattern = read_holder_reference(seq, TrimPattern::all(), "trim pattern")?;
+        Ok(Self::new(material, pattern))
     }
 }
 
@@ -3545,6 +3570,20 @@ mod tests {
                     slice.len()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn trim_rejects_out_of_range_material_references() {
+        let past_end = TrimMaterial::all().len() as i32 + 1;
+        for material in [0, past_end, 65537, -65535, i32::MIN] {
+            let mut encoded = Vec::new();
+            encoded.write_var_int(&VarInt(material)).unwrap();
+            encoded.write_var_int(&VarInt(1)).unwrap();
+            assert!(
+                TrimImpl::deserialize(&mut encoded.as_slice()).is_err(),
+                "material reference {material} was accepted"
+            );
         }
     }
 }
