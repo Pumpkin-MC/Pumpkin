@@ -90,7 +90,7 @@ pub trait Animal: Mob {
                     7,
                     Particle::Heart,
                 );
-                world.play_sound(ambient_sound, SoundCategory::Neutral, &entity.pos.load());
+                self.play_eating_sound(ambient_sound);
                 return true;
             }
 

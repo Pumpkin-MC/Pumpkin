@@ -106,7 +106,12 @@ impl BreedGoal {
             || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
             |animal| animal.get_breed_offspring(mate),
         );
-        baby.get_entity().set_age(-24000);
+        // Vanilla `Animal.spawnChildFromBreeding` calls `setBaby(true)`, which runs the
+        // offspring's `ageBoundaryReached`.
+        match baby.get_mob().and_then(Mob::as_ageable) {
+            Some(ageable) => ageable.set_baby(true),
+            None => baby.get_entity().set_age(-24000),
+        }
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 

@@ -54,8 +54,13 @@ pub trait AgeableMob: Mob {
             if let Some(meta) = self.mob_metadata() {
                 entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
             }
+            self.age_boundary_reached();
         }
     }
+
+    /// Vanilla `AgeableMob.ageBoundaryReached`: called when the mob turns from a baby into an
+    /// adult or back.
+    fn age_boundary_reached(&self) {}
 
     fn is_age_locked(&self) -> bool {
         self.get_ageable_data().age_locked.load(Relaxed)
