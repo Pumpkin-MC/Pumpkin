@@ -14,7 +14,7 @@ use std::sync::{LazyLock, OnceLock, PoisonError, RwLock, RwLockReadGuard, RwLock
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::block_properties::{BlockProperties, COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::{BlockProperties, COLLISION_SHAPES, NoteblockInstrument, Property};
 use crate::block_state::{self as flags, PistonBehavior};
 use crate::tag::{RegistryKey, Taggable};
 use crate::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
@@ -1069,16 +1069,30 @@ impl BlockProperties for DynamicBlockProperties {
         Self::new(info, info.default_index)
     }
 
-    fn to_props(&self) -> Vec<(&'static str, &'static str)> {
-        self.info.to_props(self.index)
+    fn to_props(&self) -> Vec<Property> {
+        // `Property` only models the vanilla properties; a custom property a plugin registered
+        // under another name cannot round-trip through it and is skipped.
+        self.info
+            .to_props(self.index)
+            .into_iter()
+            .filter_map(|(name, value)| Property::from_str_pair(name, value))
+            .collect()
     }
 
-    fn from_props(props: &[(&str, &str)], block: &Block) -> Self
+    fn from_props(props: &[Property], block: &Block) -> Self
     where
         Self: Sized,
     {
         let info = info_of(block);
-        Self::new(info, info.index_from_props(props))
+        Self::new(
+            info,
+            info.index_from_props(
+                &props
+                    .iter()
+                    .map(|prop| (prop.key_str(), prop.value_str()))
+                    .collect::<Vec<_>>(),
+            ),
+        )
     }
 }
 
@@ -1711,14 +1725,16 @@ impl Block {
 
     /// `from_properties` for a dynamic block.
     #[must_use]
-    pub fn dynamic_from_properties(
-        &self,
-        props: &[(&str, &str)],
-    ) -> Option<Box<dyn BlockProperties>> {
+    pub fn dynamic_from_properties(&self, props: &[Property]) -> Option<Box<dyn BlockProperties>> {
         let info = self.dynamic_info()?;
         Some(Box::new(DynamicBlockProperties::new(
             info,
-            info.index_from_props(props),
+            info.index_from_props(
+                &props
+                    .iter()
+                    .map(|prop| (prop.key_str(), prop.value_str()))
+                    .collect::<Vec<_>>(),
+            ),
         )))
     }
 }
@@ -2239,21 +2255,21 @@ mod tests {
         let state = &block.states[0];
         let props = block.properties(state.id).unwrap().to_props();
         assert_eq!(props.len(), 6);
-        assert!(props.iter().all(|(_, value)| *value == "true"));
-        let from_props = block.from_properties(&[("north", "true")]);
+        assert!(props.iter().all(|prop| prop.value_str() == "true"));
+        let from_props = block.from_properties(&[Property::North(true)]);
         let id = from_props.to_state_id(block);
         let reread = block.properties(id).unwrap().to_props();
-        assert!(reread.contains(&("north", "true")));
-        assert!(reread.contains(&("down", "false")));
+        assert!(reread.contains(&Property::North(true)));
+        assert!(reread.contains(&Property::Down(false)));
         assert_eq!(
             block
                 .state_from_properties(&[
-                    ("down", "true"),
-                    ("east", "true"),
-                    ("north", "true"),
-                    ("south", "true"),
-                    ("up", "true"),
-                    ("west", "true"),
+                    Property::Down(true),
+                    Property::East(true),
+                    Property::North(true),
+                    Property::South(true),
+                    Property::Up(true),
+                    Property::West(true),
                 ])
                 .map(|state| state.id),
             Some(block.states[0].id)
@@ -2519,7 +2535,8 @@ mod tests {
                 .properties(state.id)
                 .expect("the vanilla block has properties")
                 .to_props();
-            for (name, value) in props {
+            for prop in props {
+                let (name, value) = (prop.key_str(), prop.value_str());
                 let position = match names.iter().position(|known| *known == name) {
                     Some(position) => position,
                     None => {
@@ -2565,7 +2582,13 @@ mod tests {
         assert_eq!(block.states.len(), vanilla.states.len(), "{key}");
         for (index, state) in vanilla.states.iter().enumerate() {
             let index = u16::try_from(index).unwrap();
-            let mut expected = vanilla.properties(state.id).unwrap().to_props();
+            let mut expected: Vec<(&str, &str)> = vanilla
+                .properties(state.id)
+                .unwrap()
+                .to_props()
+                .iter()
+                .map(|prop| (prop.key_str(), prop.value_str()))
+                .collect();
             expected.sort_unstable();
             let mut actual = info.to_props(index);
             actual.sort_unstable();

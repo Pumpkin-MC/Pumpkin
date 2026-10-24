@@ -1,5 +1,4 @@
 use pumpkin_data::block_registry::BlockDrops;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
@@ -211,9 +210,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
         match computation_type {
             PathComputationType::Water => {
-                state.is_waterlogged()
-                    || Fluid::from_state_id(state.id)
-                        .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
             }
             PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
         }
@@ -467,15 +464,27 @@ pub struct BlockEvent {
 
 /// The items a block drops: its loot table, or what the registration of a custom block says.
 fn block_loot(world: &Arc<World>, block: &Block, params: &LootContextParameters) -> Vec<ItemStack> {
+    // The loot conditions and nested table lookups below read the world and the held tool, which
+    // callers may not have filled in.
+    let params = LootContextParameters {
+        world: Some(world),
+        tool: Some(
+            params
+                .tool
+                .clone()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone()),
+        ),
+        ..params.clone()
+    };
     let Some(info) = block.dynamic_info() else {
         return block
             .loot_table
-            .map(|key| loot_table_items(world, key, params))
+            .map(|key| loot_table_items(world, key, &params))
             .unwrap_or_default();
     };
     match &info.registration.drops {
         BlockDrops::Nothing => Vec::new(),
-        BlockDrops::LootTable(key) => loot_table_items(world, key, params),
+        BlockDrops::LootTable(key) => loot_table_items(world, key, &params),
         BlockDrops::SelfItem => {
             // The `survives_explosion` condition of the vanilla block loot tables.
             if params

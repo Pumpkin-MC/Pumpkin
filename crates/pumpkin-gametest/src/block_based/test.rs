@@ -1,9 +1,24 @@
-use crate::model::{GameTestDefinition, GameTestRotation};
+use std::fmt;
+use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+use crate::helper::GameTestFunction;
+use crate::model::{GameTestDefinition, GameTestRotation, TestType};
+
+#[derive(Clone)]
 pub struct BlockBasedTest {
     id: String,
     definition: GameTestDefinition,
+    function: Option<Arc<dyn GameTestFunction>>,
+}
+
+impl fmt::Debug for BlockBasedTest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BlockBasedTest")
+            .field("id", &self.id)
+            .field("definition", &self.definition)
+            .field("has_function", &self.function.is_some())
+            .finish()
+    }
 }
 
 impl BlockBasedTest {
@@ -12,7 +27,14 @@ impl BlockBasedTest {
         Self {
             id: id.into(),
             definition,
+            function: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_function(mut self, function: Arc<dyn GameTestFunction>) -> Self {
+        self.function = Some(function);
+        self
     }
 
     #[must_use]
@@ -23,6 +45,16 @@ impl BlockBasedTest {
     #[must_use]
     pub const fn definition(&self) -> &GameTestDefinition {
         &self.definition
+    }
+
+    #[must_use]
+    pub const fn instance_type(&self) -> TestType {
+        self.definition.instance_type
+    }
+
+    #[must_use]
+    pub fn function(&self) -> Option<&Arc<dyn GameTestFunction>> {
+        self.function.as_ref()
     }
 
     #[must_use]
