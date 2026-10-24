@@ -1439,6 +1439,10 @@ pub trait Mob: EntityBase + Send + Sync {
         group_data
     }
 
+    fn is_max_group_size_reached(&self, _group_size: i32) -> bool {
+        false
+    }
+
     fn populate_default_equipment_slots(
         &self,
         _world: &Arc<World>,
@@ -1735,6 +1739,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+    fn mob_apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn mob_set_sound_variant_name(&self, _name: &str) {}
 
     fn mob_on_lightning_strike(
@@ -1800,6 +1810,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn set_variant_name(&self, name: &str) {
         self.mob_set_variant_name(name);
+    }
+
+    fn apply_implicit_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+        value: &str,
+    ) {
+        self.mob_apply_implicit_component(component, value);
     }
 
     fn set_sound_variant_name(&self, name: &str) {

@@ -158,6 +158,17 @@ impl dyn EntityBase + '_ {
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
     }
+
+    #[must_use]
+    pub fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team) = self.get_team_name() else {
+            return true;
+        };
+        other.get_team_name().as_ref() != Some(&team)
+            || self
+                .get_team()
+                .is_some_and(|team| team.is_allow_friendly_fire())
+    }
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -248,6 +259,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
     fn set_variant_name(&self, _name: &str) {}
+    fn apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn set_sound_variant_name(&self, _name: &str) {}
 
     fn teleport(
