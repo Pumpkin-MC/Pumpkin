@@ -549,6 +549,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `LivingEntity.hurtArmor`; a no-op unless the entity type overrides it.
+    fn hurt_armor(&self, _damage_type: DamageType, _damage: f32) {}
+
+    /// Vanilla `LivingEntity.hurtHelmet`; a no-op unless the entity type overrides it.
+    fn hurt_helmet(&self, _damage_type: DamageType, _damage: f32) {}
+
     /// Called when a player right-clicks this entity with an item.
     /// Called when a player right-clicks this entity with an item.
     /// Returns true if the interaction was handled.

@@ -4,7 +4,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -41,7 +40,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
+    EquipmentSlot, FoodImpl, UseRemainderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -55,9 +54,7 @@ use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{
-    CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
-};
+use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity, CUpdateMobEffect};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CSetEquipment, MetadataSerializer},
@@ -2604,77 +2601,6 @@ impl LivingEntity {
         false
     }
 
-    #[allow(dead_code)]
-    fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
-        // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
-        let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
-        let mut equipment_updates = Vec::new();
-
-        // TODO: Falling anvil/stalactite should only damage the helmet slot.
-        // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
-
-        let armor_slots: Vec<(usize, ItemStack, EquipmentSlot)> = {
-            let equipment_lock = self
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.equipment_slots
-                .iter()
-                .filter(|(_, slot)| slot.is_armor_slot())
-                .filter_map(|(index, slot)| {
-                    equipment_lock
-                        .equipment
-                        .get(slot)
-                        .cloned()
-                        .map(|stack| (*index, stack, slot.clone()))
-                })
-                .collect()
-        };
-
-        for (slot_index, mut stack, slot) in armor_slots {
-            if stack.is_empty() {
-                continue;
-            }
-
-            let takes_damage = stack
-                .get_data_component::<EquippableImpl>()
-                .is_none_or(|equippable| equippable.damage_on_hurt);
-
-            if takes_damage {
-                let item_id = stack.item.id;
-                let slot_result = stack.damage_item(armor_damage);
-                if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
-                    if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
-                        if let Some(player) = caller.get_player() {
-                            player.increment_stat(
-                                pumpkin_data::statistic::StatisticCategory::Broken,
-                                item_id as i32,
-                                1,
-                            );
-                        }
-                        let world = self.entity.world.load();
-                        world.send_entity_status(
-                            &self.entity,
-                            super::equipment_break_status(&slot),
-                            None,
-                        );
-                    }
-                    equipment_updates.push((slot.clone(), stack.clone()));
-                    if let Some(player) = caller.get_player() {
-                        player.enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                            (slot_index as i32).into(),
-                            &ItemStackSerializer::from(stack),
-                        ));
-                    }
-                }
-            }
-        }
-
-        if !equipment_updates.is_empty() {
-            self.send_equipment_changes(&equipment_updates);
-        }
-    }
-
     pub fn held_item(&self, caller: &dyn EntityBase) -> ItemStack {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
@@ -3339,6 +3265,18 @@ impl LivingEntity {
             }
         }
 
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_DAMAGES_HELMET)
+            && !self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::HEAD)
+                .is_empty()
+        {
+            caller.hurt_helmet(damage_type, amount);
+            amount *= 0.75;
+        }
+
         // Vanilla parity: 1. Armor absorb
         let damage_after_armor =
             self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
@@ -3356,16 +3294,26 @@ impl LivingEntity {
 
         // Apply hurt cooldown logic
         let last_damage = self.last_damage_taken.load();
-        let (damage_amount, play_sound) =
+        let (damage_amount, play_sound, armor_damage) =
             if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
                 if effective_amount <= last_damage {
                     return false;
                 }
-                (effective_amount - last_damage, false)
+                (effective_amount - last_damage, false, amount - last_damage)
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, self.health.load() > effective_amount)
+                (
+                    effective_amount,
+                    self.health.load() > effective_amount,
+                    amount,
+                )
             };
+
+        // Vanilla wears armor in getDamageAfterArmorAbsorb, which only runs for hits that get past
+        // the cooldown, with the pre-armor amount that reaches actuallyHurt.
+        if !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ARMOR) {
+            caller.hurt_armor(damage_type, armor_damage);
+        }
 
         // Finalize state
         self.last_damage_taken.store(amount);
