@@ -17,6 +17,10 @@ pub trait Bucketable: Mob {
     fn pickup_sound(&self) -> Sound;
 
     fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
+        self.save_default_data_to_bucket_tag(bucket);
+    }
+
+    fn save_default_data_to_bucket_tag(&self, bucket: &mut ItemStack) {
         let entity = self.get_entity();
         let mob = self.get_mob_entity();
         if let Some(name) = entity.custom_name.load().as_ref() {
