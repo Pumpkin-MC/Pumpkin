@@ -3,7 +3,9 @@ use std::sync::Arc;
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
+use pumpkin_data::block_properties::{
+    BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
+};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::sound::Sound;
@@ -134,7 +136,6 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
 fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
@@ -154,25 +155,22 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
         return Some(0);
     }
 
-    if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        let double_inventory = if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
-        } else {
-            DoubleInventory::new(second_inventory, first_inventory)
-        };
-        Some(crate::block::calculate_comparator_output(
-            double_inventory.as_ref(),
-        ))
-    } else {
-        Some(crate::block::calculate_comparator_output(
-            first_inventory.as_ref(),
-        ))
-    }
+    first_chest.map_or(Some(0), |entity| {
+        get_container(args.world, args.position, &entity, true).map_or_else(
+            || {
+                entity.clone().get_inventory().map_or(Some(0), |inventory| {
+                    Some(crate::block::calculate_comparator_output(
+                        inventory.as_ref(),
+                    ))
+                })
+            },
+            |inventory| {
+                Some(crate::block::calculate_comparator_output(
+                    inventory.as_ref(),
+                ))
+            },
+        )
+    })
 }
 
 /// Returns a screen handler factory for opening a chest or double chest inventory.
@@ -227,7 +225,6 @@ fn get_chest_screen_handler_factory(
     let first_loot_pending = first_chest
         .as_ref()
         .is_some_and(|entity| entity.has_loot_table());
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
     if is_chest_blocked(args.world, args.position) {
         return None;
@@ -250,28 +247,20 @@ fn get_chest_screen_handler_factory(
         unpack(&second);
     }
 
+    let entity = first_chest?;
+    let inventory =
+        if let Some(container) = get_container(args.world, args.position, &entity, false) {
+            container
+        } else {
+            entity.clone().get_inventory()?
+        };
+
     let loot_pending = first_loot_pending
         || connected_towards.is_some_and(|direction| {
             args.world
                 .get_block_entity(&args.position.offset(direction.to_offset()))
                 .is_some_and(|second| second.has_loot_table())
         });
-
-    let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
-        if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
-        } else {
-            DoubleInventory::new(second_inventory, first_inventory)
-        }
-    } else {
-        first_inventory
-    };
 
     Some(Box::new(ChestScreenFactory {
         inventory,
@@ -303,6 +292,64 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
     }
 
     BlockActionResult::Success
+}
+
+pub fn get_container(
+    world: &World,
+    target_pos: &BlockPos,
+    entity: &Arc<dyn BlockEntity>,
+    ignore_blocked: bool,
+) -> Option<Arc<dyn Inventory + 'static>> {
+    let target_block = world.get_block(target_pos);
+    if !ChestLikeProperties::handles_block_id(target_block.id) {
+        return None;
+    }
+    if !ignore_blocked && is_chest_blocked(world, target_pos) {
+        return None;
+    }
+
+    let chest_props = ChestLikeProperties::from_state_id(world.get_block_state_id(target_pos));
+    let offset_dir = match chest_props.r#type {
+        ChestType::Single => return entity.clone().get_inventory(),
+        ChestType::Left => chest_props.facing.rotate_clockwise(),
+        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+    };
+
+    let neighbor_pos = target_pos.offset(offset_dir.to_offset());
+    if !ignore_blocked && is_chest_blocked(world, &neighbor_pos) {
+        return None;
+    }
+    let (neighbor_block, neighbor_state_id) = world.get_block_and_state_id(&neighbor_pos);
+    let expected_type = match chest_props.r#type {
+        ChestType::Left => ChestType::Right,
+        ChestType::Right => ChestType::Left,
+        ChestType::Single => return entity.clone().get_inventory(),
+    };
+    if neighbor_block != target_block {
+        return entity.clone().get_inventory();
+    }
+    let neighbor_props = ChestLikeProperties::from_state_id(neighbor_state_id);
+    if neighbor_props.facing != chest_props.facing || neighbor_props.r#type != expected_type {
+        return entity.clone().get_inventory();
+    }
+    world.get_block_entity(&neighbor_pos).map_or_else(
+        || entity.clone().get_inventory(),
+        |second_entity| {
+            if let Some(first_inventory) = entity.clone().get_inventory()
+                && let Some(second_inventory) = second_entity.clone().get_inventory()
+            {
+                // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+                let (left, right) = if matches!(chest_props.r#type, ChestType::Right) {
+                    (first_inventory, second_inventory)
+                } else {
+                    (second_inventory, first_inventory)
+                };
+                Some(DoubleInventory::new(left, right))
+            } else {
+                entity.clone().get_inventory()
+            }
+        },
+    )
 }
 
 fn broken_chest_impl(args: &BrokenArgs<'_>) {
