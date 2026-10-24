@@ -50,12 +50,11 @@ impl OreFeature {
         let q = 2 * (g.ceil() as i32 + i);
         let r = 2 * (2 + i);
 
-        for _ in n..=(n + q) {
-            for _ in p..=(p + q) {
-                if o > chunk.ocean_floor_height_exclusive(pos.0.x, pos.0.z) {
-                    continue;
+        for xprobe in n..=(n + q) {
+            for zprobe in p..=(p + q) {
+                if o <= chunk.ocean_floor_height_exclusive(xprobe, zprobe) {
+                    return self.generate_vein_part(chunk, random, d, e, h, j, l, m, n, o, p, q, r);
                 }
-                return self.generate_vein_part(chunk, random, d, e, h, j, l, m, n, o, p, q, r);
             }
         }
         false
@@ -177,9 +176,6 @@ impl OreFeature {
 
                         // let ad = t_val;
                         // let ae = v_val;
-                        // let af = aa_val;
-                        // TODO: using a section would be faster
-
                         let pos_vec = Vector3::new(t_val, v_val, aa_val);
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 
@@ -212,7 +208,7 @@ impl OreFeature {
         target: &OreTarget,
         pos: &BlockPos,
     ) -> bool {
-        if !target.target.test(state, random) {
+        if !target.target.test(state, pos.0.y, random) {
             return false;
         }
         if Self::should_not_discard(random, discard_chance) {

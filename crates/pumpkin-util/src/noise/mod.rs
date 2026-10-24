@@ -1,5 +1,6 @@
 pub mod perlin;
 pub mod simplex;
+pub mod volume;
 
 /// A 3D gradient vector used for noise calculations.
 pub struct Gradient {

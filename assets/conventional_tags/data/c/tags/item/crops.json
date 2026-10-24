@@ -1,0 +1,44 @@
+{
+  "values": [
+    {
+      "id": "#c:crops/beetroot",
+      "required": false
+    },
+    {
+      "id": "#c:crops/cactus",
+      "required": false
+    },
+    {
+      "id": "#c:crops/carrot",
+      "required": false
+    },
+    {
+      "id": "#c:crops/cocoa_bean",
+      "required": false
+    },
+    {
+      "id": "#c:crops/melon",
+      "required": false
+    },
+    {
+      "id": "#c:crops/nether_wart",
+      "required": false
+    },
+    {
+      "id": "#c:crops/potato",
+      "required": false
+    },
+    {
+      "id": "#c:crops/pumpkin",
+      "required": false
+    },
+    {
+      "id": "#c:crops/sugar_cane",
+      "required": false
+    },
+    {
+      "id": "#c:crops/wheat",
+      "required": false
+    }
+  ]
+}

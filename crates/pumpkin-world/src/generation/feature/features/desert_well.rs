@@ -1,7 +1,8 @@
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
-    random::RandomGenerator,
+    random::{RandomGenerator, RandomImpl},
 };
 
 use crate::generation::{noise::WATER_BLOCK, proto_chunk::GenerationCache};
@@ -19,8 +20,8 @@ impl DesertWellFeature {
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
-        _feature: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
-        _random: &mut RandomGenerator,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
+        random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
         const CAN_GENERATE: Block = Block::SAND;
@@ -29,7 +30,7 @@ impl DesertWellFeature {
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();
         }
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
+        let block = GenerationCache::get_block_state(chunk, &block_pos.0).to_block_id();
         if CAN_GENERATE.id != block {
             return false;
         }
@@ -139,6 +140,33 @@ impl DesertWellFeature {
             );
         }
 
+        let water_center = block_pos.0;
+        let water_positions = [
+            water_center,
+            water_center.add(&Vector3::new(1, 0, 0)),
+            water_center.add(&Vector3::new(0, 0, 1)),
+            water_center.add(&Vector3::new(-1, 0, 0)),
+            water_center.add(&Vector3::new(0, 0, -1)),
+        ];
+        let pos1 =
+            water_positions[random.next_bounded_i32(5) as usize].add(&Vector3::new(0, -1, 0));
+        let pos2 =
+            water_positions[random.next_bounded_i32(5) as usize].add(&Vector3::new(0, -2, 0));
+        Self::place_sus_sand(chunk, &pos1);
+        Self::place_sus_sand(chunk, &pos2);
+
         true
+    }
+
+    fn place_sus_sand<T: GenerationCache>(chunk: &mut T, pos: &Vector3<i32>) {
+        chunk.set_block_state(pos, Block::SUSPICIOUS_SAND.default_state);
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:brushable_block".to_string());
+        nbt.put_int("x", pos.x);
+        nbt.put_int("y", pos.y);
+        nbt.put_int("z", pos.z);
+        nbt.put_string("LootTable", "minecraft:archaeology/desert_well".to_string());
+        nbt.put_long("LootTableSeed", BlockPos(*pos).as_long());
+        chunk.add_block_entity(pos, nbt);
     }
 }

@@ -1,369 +1,392 @@
-#[cfg(feature = "codegen")]
-use proc_macro2::TokenStream;
-#[cfg(feature = "codegen")]
-use quote::{ToTokens, quote};
-use serde::Deserialize;
+pub mod parser;
+pub use serde_json::Value as LootPredicateValue;
 
-use crate::random::RandomImpl;
-
-/// Represents a loot table used to generate items or rewards.
-#[derive(Clone, Copy, Debug)]
-pub struct LootTable {
-    /// The type of loot table (e.g., `Entity`, `Block`, `Chest`).
-    pub r#type: LootTableType,
-    /// Optional random sequence identifier for deterministic rolls.
-    pub random_sequence: Option<&'static str>,
-    /// Optional array of loot pools that define item generation.
-    pub pools: Option<&'static [LootPool]>,
-}
-
-/// Defines a loot pool containing entries, rolls, and conditions.
-#[derive(Clone, Debug)]
-pub struct LootPool {
-    /// Entries contained in this loot pool.
-    pub entries: &'static [LootPoolEntry],
-    /// Number of rolls, specified using a number provider.
-    pub rolls: LootNumberProviderTypes,
-    /// Additional bonus rolls to apply.
-    pub bonus_rolls: LootNumberProviderTypes,
-    /// Optional conditions that must be met for this pool to be applied.
-    pub conditions: Option<&'static [LootCondition]>,
-    /// Optional functions applied to each entry in the pool.
-    pub functions: Option<&'static [LootFunction]>,
-}
-
-/// Represents an individual item entry in a loot pool.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ItemEntry {
-    /// Name of the item.
-    pub name: &'static str,
-}
-
-/// Represents an alternative loot entry, which chooses one of its children.
-#[derive(Clone, Debug)]
-pub struct AlternativeEntry {
-    /// Child entries for this alternative.
-    pub children: &'static [LootPoolEntry],
-}
-
-#[derive(Clone, Debug)]
-pub struct TagEntry {
-    pub name: &'static str,
-    pub expand: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct SequenceEntry {
-    pub children: &'static [LootPoolEntry],
-}
-
-#[derive(Clone, Debug)]
-pub struct GroupEntry {
-    pub children: &'static [LootPoolEntry],
-}
-
-#[derive(Clone, Debug)]
-pub struct LootTableEntry {
-    pub value: &'static str,
-}
-
-#[derive(Clone, Debug)]
-pub struct DynamicEntry {
-    pub name: &'static str,
-}
-
-#[derive(Clone, Debug)]
-pub enum LootPoolEntryTypes {
-    Empty,
-    Item(ItemEntry),
-    LootTable(LootTableEntry),
-    Dynamic(DynamicEntry),
-    Tag(TagEntry),
-    Alternatives(AlternativeEntry),
-    Sequence(SequenceEntry),
-    Group(GroupEntry),
-}
-
-/// Conditions that can modify whether loot entries are applied.
-#[derive(Clone, PartialEq, Debug)]
+/// Conditions required for an entry or pool to be eligible for loot generation.
+#[derive(Clone, Copy, Debug, Default)]
 pub enum LootCondition {
-    /// Inverts the result of another condition.
-    Inverted(&'static Self),
-    /// Passes if any of the given conditions are met.
-    AnyOf(&'static [Self]),
-    /// Passes only if all the given conditions are met.
-    AllOf(&'static [Self]),
-    /// Passes based on a random chance.
-    RandomChance { chance: f32 },
-    /// Passes based on a random chance modified by item enchantments.
+    #[default]
+    None,
+    Never,
+    SilkTouch,
+    NoSilkTouch,
+    Shears,
+    SilkTouchOrShears,
+    NoSilkTouchOrShears,
+    SurvivesExplosion,
+    KilledByPlayer,
+    RandomChance {
+        chance: f32,
+    },
     RandomChanceWithEnchantedBonus {
         enchantment: &'static str,
-        chances: Option<&'static [f32]>,
+        unenchanted_chance: f32,
+        enchanted_chance_base: f32,
+        enchanted_chance_per_level_above_first: f32,
     },
-    /// Checks properties of the entity (e.g. type, flags, equipment).
-    /// Mirrors vanilla `LootItemEntityPropertyCondition`.
-    EntityProperties {
-        /// The entity target to check: "this", "attacker", or "`direct_attacker`".
-        entity: &'static str,
-        /// Expected entity type (e.g. "minecraft:cow").
-        expected_type: Option<&'static str>,
-        /// When `Some`, the entity must be on fire for the condition to pass.
-        /// Mirrors vanilla `EntityFlagsPredicate.isOnFire`.
-        is_on_fire: Option<bool>,
-        /// When `Some`, the entity's mainhand item must have an enchantment in this tag.
-        /// Mirrors vanilla `EntityEquipmentPredicate.mainhand` with enchantment tag lookup.
-        mainhand_enchantment_tag: Option<&'static str>,
-    },
-    /// Requires the entity to have been killed by a player.
-    KilledByPlayer,
-    /// Checks entity scores against specified criteria.
-    EntityScores { entity: &'static str },
-    /// Checks block state properties.
-    BlockStateProperty {
-        /// The block to check.
-        block: &'static str,
-        /// Key-value pairs of properties and their expected values.
-        properties: &'static [(&'static str, &'static str)],
-    },
-    /// Requires a specific tool to match certain criteria.
-    MatchTool {
-        items: Option<&'static [&'static str]>,
-    },
-    /// Applies a bonus based on a table.
     TableBonus {
         enchantment: &'static str,
         chances: &'static [f32],
     },
-    /// Survives explosion damage.
-    SurvivesExplosion,
-    /// Checks properties of the damage source.
-    DamageSourceProperties {
-        expected_source_type: Option<&'static str>,
-        expected_direct_type: Option<&'static str>,
+    AllOf(&'static [Self]),
+    AnyOf(&'static [Self]),
+    Inverted(&'static Self),
+    EntityOnFire,
+    DirectAttackerWeaponEnchantment(&'static str),
+    EntityProperties {
+        target: LootEntityTarget,
+        predicate: &'static std::sync::LazyLock<serde_json::Value>,
     },
-    /// Checks the location of the entity.
+    MatchBlock(&'static std::sync::LazyLock<serde_json::Value>),
     LocationCheck {
-        offset_x: i32,
-        offset_y: i32,
-        offset_z: i32,
-        expected_biome: Option<&'static str>,
+        offset: [i32; 3],
+        predicate: &'static std::sync::LazyLock<serde_json::Value>,
     },
-    /// Checks weather conditions.
+    MatchTool(&'static std::sync::LazyLock<serde_json::Value>),
     WeatherCheck {
         raining: Option<bool>,
         thundering: Option<bool>,
     },
-    /// References to another condition or table.
-    Reference { name: &'static str },
-    /// Checks the in-game time.
-    TimeCheck {
-        range: (Option<f32>, Option<f32>),
-        period: Option<u64>,
+    DamageSourceTag {
+        tag: &'static str,
+        expected: bool,
     },
-    /// Checks against a specific value or range.
-    ValueCheck {
-        value: LootNumberProviderTypes,
-        range: (Option<f32>, Option<f32>),
-    },
-    /// Checks if a specific enchantment is active.
-    EnchantmentActiveCheck { active: bool },
 }
 
-/// Functions applied to loot entries.
-#[derive(Clone, PartialEq, Debug)]
-pub struct LootFunction {
-    /// The type of function to apply.
-    pub content: LootFunctionTypes,
-    /// Optional conditions for the function.
-    pub conditions: Option<&'static [LootCondition]>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LootEntityTarget {
+    This,
+    Attacker,
+    DirectAttacker,
 }
 
-/// Specific types of loot functions.
-#[derive(Clone, PartialEq, Debug)]
-pub enum LootFunctionTypes {
-    /// Sets the number of items in the stack, optionally adding to an existing count.
+/// Bonus count formulas when tools have fortune or looting enchantments.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LootBonusFormula {
+    OreDrops,
+    UniformBonusCount(i32),
+    BinomialWithBonusCount { extra: i32, probability: f32 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LootNumberProvider {
+    Constant(f64),
+    Uniform { min: f64, max: f64 },
+    Binomial { n: i32, probability: f32 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LootFunctionKind {
     SetCount {
-        count: LootFunctionNumberProvider,
+        count: LootNumberProvider,
         add: bool,
     },
-    /// Increases the count of items based on the item's enchantments.
     EnchantedCountIncrease {
-        enchantment: &'static str,
-        count: LootFunctionNumberProvider,
-        limit: Option<f32>,
+        count: LootNumberProvider,
+        limit: i32,
     },
-    /// Smelts the item as if it passed through a furnace.
-    FurnaceSmelt,
-    /// Sets the potion type for potion items.
-    SetPotion { id: &'static str },
-    /// Sets the amplifier for ominous bottles.
-    SetOminousBottleAmplifier,
-    /// Limits the count of items to a minimum and/or maximum value.
-    LimitCount { min: Option<f32>, max: Option<f32> },
-    /// Applies a bonus based on an enchantment and a formula, optionally with extra parameters.
-    ApplyBonus {
-        enchantment: &'static str,
-        formula: &'static str,
-        parameters: Option<LootFunctionBonusParameter>,
+    LimitCount {
+        min: Option<LootNumberProvider>,
+        max: Option<LootNumberProvider>,
     },
-    /// Copies specified components from a source entity or item.
-    CopyComponents {
-        source: &'static str,
-        include: &'static [&'static str],
-    },
-    /// Copies state or properties from a block.
-    CopyState {
-        block: &'static str,
-        properties: &'static [&'static str],
-    },
-    /// Applies decay to items in case of an explosion.
     ExplosionDecay,
+    ApplyBonus(LootBonusFormula),
+    FurnaceSmelt,
 }
 
-/// Numeric providers for loot function counts.
-#[derive(Clone, PartialEq, Debug)]
-pub enum LootFunctionNumberProvider {
-    /// Constant value.
-    Constant { value: f32 },
-    /// Uniform random value between min and max.
-    Uniform { min: f32, max: f32 },
-    /// Binomial distribution.
-    Binomial { n: f32, p: f32 },
+#[derive(Clone, Copy, Debug)]
+pub struct LootFunction {
+    pub kind: LootFunctionKind,
+    pub enchantment: Option<&'static str>,
+    pub condition: LootCondition,
 }
 
-/// Parameters for loot bonus functions.
-#[derive(Clone, PartialEq, Debug)]
-pub enum LootFunctionBonusParameter {
-    /// Multiplier applied to bonus rolls.
-    Multiplier { bonus_multiplier: i32 },
-    /// Probability-based bonus application.
-    Probability { extra: i32, probability: f32 },
-}
-
-/// Single entry in a loot pool with optional conditions and functions.
-#[derive(Clone, Debug)]
-pub struct LootPoolEntry {
-    /// The type of entry.
-    pub content: LootPoolEntryTypes,
-    /// Relative probability weight; higher values are more likely.
-    pub weight: i32,
-    /// Quality of the entry, used to modify weight based on luck.
-    pub quality: i32,
-    /// Optional conditions for this entry.
-    pub conditions: Option<&'static [LootCondition]>,
-    /// Optional functions for this entry.
-    pub functions: Option<&'static [LootFunction]>,
-}
-
-/// Categories of loot tables.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum LootTableType {
-    /// Empty loot table.
+#[derive(Clone, Copy, Debug)]
+pub enum LootEntryKind {
+    Item(&'static str),
+    Dynamic(&'static str),
     Empty,
-    /// Entity loot table.
-    Entity,
-    /// Block loot table.
-    Block,
-    /// Chest loot table.
-    Chest,
+    Tag { name: &'static str, expand: bool },
+    Alternatives(&'static [LootEntry]),
+    Group(&'static [LootEntry]),
+    Sequence(&'static [LootEntry]),
+    Table(&'static str),
+    InlineTable(&'static LootTable),
 }
 
-/// Represents structured number providers used in loot rolls.
-#[derive(Deserialize, PartialEq, Clone, Copy, Debug)]
-#[serde(tag = "type")]
-pub enum LootNumberProviderTypesProvider {
-    /// Uniformly distributes a random number between `min` and `max` (inclusive).
-    #[serde(rename = "minecraft:uniform")]
-    Uniform(UniformLootNumberProvider),
+/// A weighted leaf or an ordered composite entry in a loot pool.
+#[derive(Clone, Copy, Debug)]
+pub struct LootEntry {
+    pub kind: LootEntryKind,
+    pub weight: i32,
+    pub quality: i32,
+    pub condition: LootCondition,
+    pub functions: &'static [LootFunction],
 }
 
-#[cfg(feature = "codegen")]
-impl ToTokens for LootNumberProviderTypesProvider {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Uniform(uniform) => {
-                tokens.extend(quote! {
-                    LootNumberProviderTypesProvider::Uniform(#uniform)
-                });
-            }
-        }
-    }
+#[derive(Clone, Copy, Debug)]
+pub struct LootPool {
+    pub entries: &'static [LootEntry],
+    pub rolls: LootNumberProvider,
+    pub bonus_rolls: LootNumberProvider,
+    pub condition: LootCondition,
+    pub functions: &'static [LootFunction],
 }
 
-/// Uniform numeric provider for loot rolls.
-#[derive(Deserialize, PartialEq, Clone, Copy, Debug)]
-pub struct UniformLootNumberProvider {
-    /// Minimum value (inclusive).
-    pub min: f32,
-    /// Maximum value (inclusive).
-    pub max: f32,
+#[derive(Clone, Copy, Debug)]
+pub struct LootTable {
+    pub pools: &'static [LootPool],
+    pub functions: &'static [LootFunction],
 }
 
-#[cfg(feature = "codegen")]
-impl ToTokens for UniformLootNumberProvider {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_inclusive = self.min;
-        let max_inclusive = self.max;
+pub type ChestLootEntry = LootEntry;
+pub type ChestLootPool = LootPool;
+pub type ChestLootTable = LootTable;
 
-        tokens.extend(quote! {
-            UniformLootNumberProvider { min: #min_inclusive, max: #max_inclusive }
-        });
-    }
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum DynamicLootCondition {
+    #[default]
+    None,
+    Never,
+    SilkTouch,
+    NoSilkTouch,
+    Shears,
+    SilkTouchOrShears,
+    NoSilkTouchOrShears,
+    SurvivesExplosion,
+    KilledByPlayer,
+    RandomChance {
+        chance: f32,
+    },
+    RandomChanceWithEnchantedBonus {
+        enchantment: String,
+        unenchanted_chance: f32,
+        enchanted_chance_base: f32,
+        enchanted_chance_per_level_above_first: f32,
+    },
+    TableBonus {
+        enchantment: String,
+        chances: Box<[f32]>,
+    },
+    AllOf(Vec<Self>),
+    AnyOf(Vec<Self>),
+    Inverted(Box<Self>),
+    EntityOnFire,
+    DirectAttackerWeaponEnchantment(String),
+    EntityProperties {
+        target: LootEntityTarget,
+        predicate: serde_json::Value,
+    },
+    MatchBlock(serde_json::Value),
+    LocationCheck {
+        offset: [i32; 3],
+        predicate: serde_json::Value,
+    },
+    MatchTool(serde_json::Value),
+    WeatherCheck {
+        raining: Option<bool>,
+        thundering: Option<bool>,
+    },
+    DamageSourceTag {
+        tag: String,
+        expected: bool,
+    },
 }
 
-impl UniformLootNumberProvider {
-    /// Generates a random number within the uniform range.
-    ///
-    /// # Parameters
-    /// - `random`: A random number generator implementing `RandomImpl`.
-    ///
-    /// # Returns
-    /// A `f32` between `min` and `max`.
-    pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        random.next_f32().mul_add(self.max - self.min, self.min)
-    }
-}
-
-/// Numeric providers for loot table rolls (either object or constant).
-#[derive(Deserialize, PartialEq, Clone, Copy, Debug)]
-#[serde(untagged)]
-pub enum LootNumberProviderTypes {
-    /// A structured provider object (e.g., uniform).
-    Object(LootNumberProviderTypesProvider),
-    /// Constant numeric value.
-    Constant(f32),
-}
-
-#[cfg(feature = "codegen")]
-impl ToTokens for LootNumberProviderTypes {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Object(provider) => {
-                tokens.extend(quote! {
-                    LootNumberProviderTypes::Object(#provider)
-                });
-            }
-            Self::Constant(i) => tokens.extend(quote! {
-                LootNumberProviderTypes::Constant(#i)
-            }),
-        }
-    }
-}
-
-impl LootNumberProviderTypes {
-    /// Computes a numeric value from this provider.
-    ///
-    /// # Parameters
-    /// - `random`: A random number generator implementing `RandomImpl`.
-    ///
-    /// # Returns
-    /// A `f32` value as determined by the provider (constant or computed).
-    pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        match self {
-            Self::Object(int_provider) => match int_provider {
-                LootNumberProviderTypesProvider::Uniform(uniform) => uniform.get(random),
+impl From<LootCondition> for DynamicLootCondition {
+    fn from(condition: LootCondition) -> Self {
+        match condition {
+            LootCondition::None => Self::None,
+            LootCondition::Never => Self::Never,
+            LootCondition::SilkTouch => Self::SilkTouch,
+            LootCondition::NoSilkTouch => Self::NoSilkTouch,
+            LootCondition::Shears => Self::Shears,
+            LootCondition::SilkTouchOrShears => Self::SilkTouchOrShears,
+            LootCondition::NoSilkTouchOrShears => Self::NoSilkTouchOrShears,
+            LootCondition::SurvivesExplosion => Self::SurvivesExplosion,
+            LootCondition::KilledByPlayer => Self::KilledByPlayer,
+            LootCondition::RandomChance { chance } => Self::RandomChance { chance },
+            LootCondition::RandomChanceWithEnchantedBonus {
+                enchantment,
+                unenchanted_chance,
+                enchanted_chance_base,
+                enchanted_chance_per_level_above_first,
+            } => Self::RandomChanceWithEnchantedBonus {
+                enchantment: enchantment.into(),
+                unenchanted_chance,
+                enchanted_chance_base,
+                enchanted_chance_per_level_above_first,
             },
-            Self::Constant(i) => *i,
+            LootCondition::TableBonus {
+                enchantment,
+                chances,
+            } => Self::TableBonus {
+                enchantment: enchantment.into(),
+                chances: chances.into(),
+            },
+            LootCondition::AllOf(conditions) => {
+                Self::AllOf(conditions.iter().copied().map(Self::from).collect())
+            }
+            LootCondition::AnyOf(conditions) => {
+                Self::AnyOf(conditions.iter().copied().map(Self::from).collect())
+            }
+            LootCondition::Inverted(condition) => Self::Inverted(Box::new(Self::from(*condition))),
+            LootCondition::EntityOnFire => Self::EntityOnFire,
+            LootCondition::DirectAttackerWeaponEnchantment(tag) => {
+                Self::DirectAttackerWeaponEnchantment(tag.into())
+            }
+            LootCondition::EntityProperties { target, predicate } => Self::EntityProperties {
+                target,
+                predicate: (**predicate).clone(),
+            },
+            LootCondition::LocationCheck { offset, predicate } => Self::LocationCheck {
+                offset,
+                predicate: (**predicate).clone(),
+            },
+            LootCondition::MatchBlock(predicate) => Self::MatchBlock((**predicate).clone()),
+            LootCondition::MatchTool(predicate) => Self::MatchTool((**predicate).clone()),
+            LootCondition::WeatherCheck {
+                raining,
+                thundering,
+            } => Self::WeatherCheck {
+                raining,
+                thundering,
+            },
+            LootCondition::DamageSourceTag { tag, expected } => Self::DamageSourceTag {
+                tag: tag.into(),
+                expected,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DynamicLootFunction {
+    pub kind: LootFunctionKind,
+    pub enchantment: Option<String>,
+    pub condition: DynamicLootCondition,
+}
+
+impl From<LootFunction> for DynamicLootFunction {
+    fn from(function: LootFunction) -> Self {
+        Self {
+            kind: function.kind,
+            enchantment: function.enchantment.map(str::to_owned),
+            condition: function.condition.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DynamicLootEntryKind {
+    Item(String),
+    Dynamic(String),
+    Empty,
+    Tag { name: String, expand: bool },
+    Alternatives(Vec<DynamicLootEntry>),
+    Group(Vec<DynamicLootEntry>),
+    Sequence(Vec<DynamicLootEntry>),
+    Table(String),
+    InlineTable(Box<DynamicLootTable>),
+}
+
+#[derive(Clone, Debug)]
+pub struct DynamicLootEntry {
+    pub kind: DynamicLootEntryKind,
+    pub weight: i32,
+    pub quality: i32,
+    pub condition: DynamicLootCondition,
+    pub functions: Vec<DynamicLootFunction>,
+}
+
+impl From<LootEntry> for DynamicLootEntry {
+    fn from(entry: LootEntry) -> Self {
+        let children = |entries: &[LootEntry]| entries.iter().copied().map(Self::from).collect();
+        Self {
+            kind: match entry.kind {
+                LootEntryKind::Item(item) => DynamicLootEntryKind::Item(item.into()),
+                LootEntryKind::Dynamic(name) => DynamicLootEntryKind::Dynamic(name.into()),
+                LootEntryKind::Empty => DynamicLootEntryKind::Empty,
+                LootEntryKind::Tag { name, expand } => DynamicLootEntryKind::Tag {
+                    name: name.into(),
+                    expand,
+                },
+                LootEntryKind::Alternatives(entries) => {
+                    DynamicLootEntryKind::Alternatives(children(entries))
+                }
+                LootEntryKind::Group(entries) => DynamicLootEntryKind::Group(children(entries)),
+                LootEntryKind::Sequence(entries) => {
+                    DynamicLootEntryKind::Sequence(children(entries))
+                }
+                LootEntryKind::Table(key) => DynamicLootEntryKind::Table(key.into()),
+                LootEntryKind::InlineTable(table) => {
+                    DynamicLootEntryKind::InlineTable(Box::new(table.into()))
+                }
+            },
+            weight: entry.weight,
+            quality: entry.quality,
+            condition: entry.condition.into(),
+            functions: entry
+                .functions
+                .iter()
+                .copied()
+                .map(DynamicLootFunction::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DynamicLootPool {
+    pub entries: Vec<DynamicLootEntry>,
+    pub rolls: LootNumberProvider,
+    pub bonus_rolls: LootNumberProvider,
+    pub condition: DynamicLootCondition,
+    pub functions: Vec<DynamicLootFunction>,
+}
+
+impl From<LootPool> for DynamicLootPool {
+    fn from(pool: LootPool) -> Self {
+        Self {
+            entries: pool
+                .entries
+                .iter()
+                .copied()
+                .map(DynamicLootEntry::from)
+                .collect(),
+            rolls: pool.rolls,
+            bonus_rolls: pool.bonus_rolls,
+            condition: pool.condition.into(),
+            functions: pool
+                .functions
+                .iter()
+                .copied()
+                .map(DynamicLootFunction::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DynamicLootTable {
+    pub pools: Vec<DynamicLootPool>,
+    pub functions: Vec<DynamicLootFunction>,
+}
+
+impl From<&LootTable> for DynamicLootTable {
+    fn from(table: &LootTable) -> Self {
+        Self {
+            pools: table
+                .pools
+                .iter()
+                .copied()
+                .map(DynamicLootPool::from)
+                .collect(),
+            functions: table
+                .functions
+                .iter()
+                .copied()
+                .map(DynamicLootFunction::from)
+                .collect(),
         }
     }
 }

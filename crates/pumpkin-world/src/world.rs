@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::generation::proto_chunk::GenerationCache;
 use bitflags::bitflags;
 use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
@@ -39,6 +37,10 @@ bitflags! {
         /// Prevents the `on_added` logic from firing for the new block state
         /// Use this to avoid recursive placement loops or unnecessary initialization
         const SKIP_BLOCK_ADDED_CALLBACK             = 0b000_1000_0000;
+        /// Vanilla `Block.UPDATE_KNOWN_SHAPE`: skips the neighbour shape updates for this
+        /// change. Used when a multi-block structure such as a nether portal is written in
+        /// one go, so the blocks are not removed again while the structure is incomplete.
+        const UPDATE_KNOWN_SHAPE                    = 0b001_0000_0000;
     }
 }
 
@@ -53,8 +55,6 @@ impl std::fmt::Display for GetBlockError {
         write!(f, "{self:?}")
     }
 }
-
-pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait WorldPortalExt: Send + Sync {
     fn can_place_at(
@@ -93,4 +93,9 @@ pub trait BlockAccessor: Send + Sync {
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId;
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState);
+
+    /// Clips a ray segment against the block and fluid shapes in this accessor.
+    fn clip(&self, context: &crate::clip::ClipContext) -> crate::clip::BlockHitResult {
+        crate::clip::clip(self, context)
+    }
 }

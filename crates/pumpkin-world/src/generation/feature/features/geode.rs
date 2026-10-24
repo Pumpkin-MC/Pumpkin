@@ -17,26 +17,20 @@ use std::cmp::Ordering;
 struct NormalNoise(crate::generation::noise::perlin::DoublePerlinNoiseSampler);
 
 impl NormalNoise {
-    fn create(
-        rand: &mut RandomGenerator,
-        first_octave: i32,
-        amplitudes: &[f64],
-        amplitude: f64,
-    ) -> Self {
+    fn create(rand: &mut RandomGenerator, first_octave: i32, amplitudes: &[f64]) -> Self {
         Self(
             crate::generation::noise::perlin::DoublePerlinNoiseSampler::new(
                 rand,
                 first_octave,
                 amplitudes,
-                amplitude,
-                true,
+                false,
             ),
         )
     }
 
     #[inline]
     fn get_value(&self, x: f64, y: f64, z: f64) -> f64 {
-        self.0.sample(x, y, z)
+        f64::from(self.0.sample(x, y, z))
     }
 }
 
@@ -85,13 +79,13 @@ impl GeodeFeature {
         }
     }
 
-    fn has_property(codec: &BlockStateCodec, property: &str) -> bool {
+    fn has_property(codec: &BlockStateCodec, property: pumpkin_data::PropertyKey) -> bool {
         let state = codec.get_state();
         // Obtain the block corresponding to this state id
         let block = Block::from_state_id(state.id);
         block
             .properties(state.id)
-            .is_some_and(|props| props.to_props().iter().any(|(k, _)| *k == property))
+            .is_some_and(|props| props.to_props().iter().any(|p| p.key() == property))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -108,7 +102,7 @@ impl GeodeFeature {
     ) -> bool {
         let origin = pos;
         let num_points = self.distribution_points.get(random);
-        let noise = NormalNoise::create(random, -4, &[1.0], 0.8333333333333333f64);
+        let noise = NormalNoise::create(random, -4, &[1.0]);
 
         // Precompute sets of raw block ids for fast lookups
         let mut invalid_raw_ids: HashSet<BlockId> = HashSet::new();
@@ -325,7 +319,7 @@ impl GeodeFeature {
 
                     // Only place if the target block is replaceable (air/water)
                     let is_air = place_state.is_air();
-                    let is_water = place_raw.to_block().name == "water";
+                    let is_water = place_raw.to_block_id() == BlockId::WATER;
 
                     if is_air || is_water {
                         let mut final_codec = base_codec.clone();
@@ -340,7 +334,7 @@ impl GeodeFeature {
                             pumpkin_data::BlockDirection::West => "west",
                         };
 
-                        if Self::has_property(&final_codec, "facing") {
+                        if Self::has_property(&final_codec, pumpkin_data::PropertyKey::Facing) {
                             final_codec
                                 .properties
                                 .get_or_insert_with(HashMap::new)
@@ -348,7 +342,8 @@ impl GeodeFeature {
                         }
 
                         // Handle waterlogging dynamically based on the block we are replacing
-                        if Self::has_property(&final_codec, "waterlogged") {
+                        if Self::has_property(&final_codec, pumpkin_data::PropertyKey::Waterlogged)
+                        {
                             final_codec
                                 .properties
                                 .get_or_insert_with(HashMap::new)

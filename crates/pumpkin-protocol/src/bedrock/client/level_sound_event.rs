@@ -1,22 +1,29 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
-/// Sent by the server to spawn a visual particle effect at a specific 3D location in the world.
-///
-/// Packet ID: `123`
-/// Ref: <https://mojang.github.io/bedrock-protocol-docs/html/LevelSoundEventPacket.html>
+/// Plays a sound effect at a designated world position or associated with an actor.
 #[derive(PacketWrite)]
 #[packet(123)]
 pub struct CLevelSoundEvent {
-    pub sound_id: String,
+    /// Canonical identifier string for the sound event.
+    pub sound_event: String,
+    /// World coordinates where the sound source is located.
     pub position: Vector3<f32>,
-    pub extra_data: VarInt,
-    pub entity_type: String,
-    pub is_baby_mob: bool,
+    /// Auxiliary integer parameter used by specific sound effects.
+    pub data: VarInt,
+    /// Identifier of the entity generating the sound (e.g. `minecraft:skeleton`).
+    pub actor_identifier: String,
+    /// Whether the sound pitch/variant should reflect a juvenile mob variant.
+    pub is_baby: bool,
+    /// Whether the sound plays globally at full volume without spatial falloff.
     pub is_global: bool,
+    /// Unique identifier of the entity emitting the sound.
     pub actor_unique_id: i64,
+    /// Optional explicit override position where the event should trigger.
     pub fire_at_position: Option<Vector3<f32>>,
 }
 
@@ -29,11 +36,11 @@ mod tests {
         assert_eq!(<CLevelSoundEvent as crate::Packet>::PACKET_ID, 123);
 
         let packet = CLevelSoundEvent {
-            sound_id: "test".into(),
+            sound_event: "test".into(),
             position: Vector3::new(1.0, 2.0, 3.0),
-            extra_data: VarInt(-1),
-            entity_type: "actor".into(),
-            is_baby_mob: true,
+            data: VarInt(-1),
+            actor_identifier: "actor".into(),
+            is_baby: true,
             is_global: false,
             actor_unique_id: 42,
             fire_at_position: Some(Vector3::new(4.0, 5.0, 6.0)),

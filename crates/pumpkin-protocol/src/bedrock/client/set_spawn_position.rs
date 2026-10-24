@@ -1,30 +1,31 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
+/// Updates the player or world spawn coordinates, affecting respawning and compass orientation.
 #[derive(Clone, Copy, PacketWrite)]
 #[packet(43)]
 pub struct CSetSpawnPosition {
-    pub spawn_type: VarInt,
-    pub position: BlockPos,
-    pub dimension: VarInt,
-    pub spawn_position: BlockPos,
+    /// Determines whether this update configures a player-specific or world spawn location.
+    pub spawn_position_type: SpawnPositionType,
+    /// Spawn coordinates being set.
+    pub block_position: BlockPos,
+    /// Dimension identifier associated with this spawn position.
+    pub dimension_type: VarInt,
+    /// World spawn coordinates.
+    pub spawn_block_pos: BlockPos,
 }
 
-impl CSetSpawnPosition {
-    #[must_use]
-    pub const fn new(
-        spawn_type: i32,
-        position: BlockPos,
-        dimension: i32,
-        spawn_position: BlockPos,
-    ) -> Self {
-        Self {
-            spawn_type: VarInt(spawn_type),
-            position,
-            dimension: VarInt(dimension),
-            spawn_position,
-        }
-    }
+/// Scope of the spawn position update.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
+#[repr(i32)]
+#[serial(varint)]
+pub enum SpawnPositionType {
+    /// Sets an individual player respawn point (e.g. bed or respawn anchor).
+    PlayerRespawn,
+    /// Sets the global world spawn point, also updating compass direction.
+    WorldRespawn,
 }

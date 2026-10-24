@@ -1,8 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties,
-        HorizontalFacing,
+        BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties, HorizontalFacing,
     },
     tag,
 };

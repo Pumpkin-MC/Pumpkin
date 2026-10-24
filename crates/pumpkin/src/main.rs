@@ -21,19 +21,22 @@ use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 
-use pumpkin::{
+use pumpkin_core::{
     CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
+use pumpkin_core::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
+use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_wasm_host::WasmPluginLoader;
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -49,6 +52,15 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
+    // wasmtime-wasi-http/rtc already force) before any client can be constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Initialize global Rayon thread pool with named worker threads
+    let _ = rayon::ThreadPoolBuilder::new()
+        .thread_name(|i| format!("Rayon-Worker-{i}"))
+        .build_global();
+
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
 
@@ -62,7 +74,46 @@ async fn main() {
 
     let vanilla_data = VanillaData::load();
 
-    pumpkin::init_logger(&config.advanced);
+    pumpkin_core::init_logger(&config.advanced);
+
+    if let Some(target_arg) = parse_convert_world_arg(std::env::args().skip(1)) {
+        let anvil_default = match &config.advanced.world.chunk {
+            pumpkin_config::chunk::ChunkConfig::Anvil(cfg) => cfg.clone(),
+            _ => pumpkin_config::chunk::AnvilChunkConfig::default(),
+        };
+        let Some(target_config) =
+            pumpkin_world::chunk::io::converter::parse_chunk_config(&target_arg, anvil_default)
+        else {
+            tracing::error!(
+                "Unknown chunk format '{target_arg}'. Expected 'pump', 'anvil', or 'linear'."
+            );
+            exit(1);
+        };
+        let target_format =
+            pumpkin_world::chunk::io::converter::RegionFormat::from_config(&target_config);
+        let world_dir = exec_dir.join(config.basic.get_world_path());
+        info!(
+            "Converting world at {} to {} format...",
+            world_dir.display(),
+            target_format.name()
+        );
+        match pumpkin_world::chunk::io::converter::convert_world(&world_dir, &target_config, true) {
+            Ok(stats) => {
+                info!(
+                    "Converted {} region(s) ({} chunk(s)) to {} format in {}ms",
+                    stats.regions_converted,
+                    stats.chunks_converted,
+                    target_format.name(),
+                    time.elapsed().as_millis()
+                );
+                exit(0);
+            }
+            Err(err) => {
+                tracing::error!("World conversion failed: {err}");
+                exit(1);
+            }
+        }
+    }
 
     info!(
         "{}",
@@ -111,7 +162,22 @@ async fn main() {
         }
     });
 
-    let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;
+    let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(WasmPluginLoader::new(
+        config.advanced.plugins.verify_signatures,
+    ))];
+
+    let pumpkin_server = PumpkinServer::new(
+        config.basic,
+        config.advanced,
+        config.telemetry,
+        vanilla_data,
+        plugin_loaders,
+    )
+    .await
+    .unwrap_or_else(|error| {
+        tracing::error!("Failed to initialize world storage: {error}");
+        exit(1);
+    });
     let plugin_wait_time = pumpkin_server.init_plugins().await;
 
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
@@ -318,17 +384,31 @@ async fn setup_sighandler() -> io::Result<()> {
 // Unix signal handling
 #[cfg(unix)]
 async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    let mut interrupt = signal(SignalKind::interrupt())?;
+    let mut hangup = signal(SignalKind::hangup())?;
+    let mut terminate = signal(SignalKind::terminate())?;
 
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    let received = tokio::select! {
+        received = interrupt.recv() => received,
+        received = hangup.recv() => received,
+        received = terminate.recv() => received,
+    };
 
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
+    if received.is_some() {
         handle_interrupt();
     }
 
     Ok(())
+}
+
+fn parse_convert_world_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
+    while let Some(arg) = args.next() {
+        if arg == "--convert-world" {
+            return Some(args.next().unwrap_or_default());
+        }
+        if let Some(value) = arg.strip_prefix("--convert-world=") {
+            return Some(value.to_string());
+        }
+    }
+    None
 }

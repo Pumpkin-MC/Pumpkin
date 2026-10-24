@@ -1,18 +1,12 @@
+// Last verified for v2169
+
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 use pumpkin_macros::packet;
 
+/// Updates player health (legacy packet; attribute updates are typically preferred).
 #[derive(PacketWrite)]
 #[packet(42)]
 pub struct CSetHealth {
-    // https://mojang.github.io/bedrock-protocol-docs/html/SetHealthPacket.html
+    /// New health value assigned to the player.
     pub health: VarInt,
-}
-
-impl CSetHealth {
-    #[must_use]
-    pub const fn new(health: i32) -> Self {
-        Self {
-            health: VarInt(health),
-        }
-    }
 }

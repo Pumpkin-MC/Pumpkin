@@ -28,12 +28,14 @@ impl ClientPacket for CProjectilePower {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_f64_be(self.x_power)?;
-        write.write_f64_be(self.y_power)?;
-        write.write_f64_be(self.z_power)?;
+        if *version < JavaMinecraftVersion::V_1_21 {
+            write.write_f64_be(self.y_power)?;
+            write.write_f64_be(self.z_power)?;
+        }
         Ok(())
     }
 }

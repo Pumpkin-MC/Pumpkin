@@ -3,8 +3,10 @@ use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::y_offset::YOffset;
 
 use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockAccessor;
 use crate::{block::BlockStateCodec, world::WorldPortalExt};
 
 pub enum BlockPredicate {
@@ -16,12 +18,12 @@ pub enum BlockPredicate {
     Replaceable(ReplaceableBlockPredicate),
     WouldSurvive(WouldSurviveBlockPredicate),
     InsideWorldBounds(InsideWorldBoundsBlockPredicate),
+    HeightRange(HeightRangeBlockPredicate),
     AnyOf(AnyOfBlockPredicate),
     AllOf(AllOfBlockPredicate),
     Not(NotBlockPredicate),
+    Unobstructed(UnobstructedBlockPredicate),
     AlwaysTrue,
-    // Not used
-    //     // Unobstructed(EmptyTODOStruct),
 }
 
 impl BlockPredicate {
@@ -40,9 +42,35 @@ impl BlockPredicate {
             Self::Replaceable(predicate) => predicate.test(chunk, pos),
             Self::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
             Self::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
+            Self::HeightRange(predicate) => predicate.test(chunk, pos),
             Self::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
             Self::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
             Self::Not(predicate) => predicate.test(block_registry, chunk, pos),
+            Self::Unobstructed(predicate) => predicate.test(chunk, pos),
+            Self::AlwaysTrue => true,
+        }
+    }
+
+    pub fn test_world(
+        &self,
+        world: &dyn BlockAccessor,
+        block_registry: Option<&dyn WorldPortalExt>,
+        pos: &BlockPos,
+    ) -> bool {
+        match self {
+            Self::MatchingBlocks(predicate) => predicate.test_world(world, pos),
+            Self::MatchingBlockTag(predicate) => predicate.test_world(world, pos),
+            Self::MatchingFluids(predicate) => predicate.test_world(world, pos),
+            Self::HasSturdyFace(predicate) => predicate.test_world(world, pos),
+            Self::Solid(predicate) => predicate.test_world(world, pos),
+            Self::Replaceable(predicate) => predicate.test_world(world, pos),
+            Self::WouldSurvive(predicate) => predicate.test_world(block_registry, world, pos),
+            Self::InsideWorldBounds(predicate) => predicate.test_world(world, pos),
+            Self::HeightRange(predicate) => predicate.test_world(world, pos),
+            Self::AnyOf(predicate) => predicate.test_world(block_registry, world, pos),
+            Self::AllOf(predicate) => predicate.test_world(block_registry, world, pos),
+            Self::Not(predicate) => predicate.test_world(block_registry, world, pos),
+            Self::Unobstructed(predicate) => predicate.test_world(world, pos),
             Self::AlwaysTrue => true,
         }
     }
@@ -69,6 +97,22 @@ impl MatchingBlocksBlockPredicate {
                 .contains(block.name),
         }
     }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = self.offset.get_block_world(world, pos);
+        match &self.blocks {
+            MatchingBlocksWrapper::Single(single_block) => {
+                single_block
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(single_block)
+                    == block.name
+            }
+            MatchingBlocksWrapper::Multiple(blocks) => blocks
+                .iter()
+                .map(|s| s.strip_prefix("minecraft:").unwrap_or(s))
+                .contains(block.name),
+        }
+    }
 }
 
 pub struct InsideWorldBoundsBlockPredicate {
@@ -79,6 +123,38 @@ impl InsideWorldBoundsBlockPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let pos = pos.offset(self.offset);
         !chunk.out_of_height(pos.0.y as i16)
+    }
+
+    pub fn test_world(&self, _world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let pos = pos.offset(self.offset);
+        pos.0.y >= -64 && pos.0.y < 320
+    }
+}
+
+pub struct HeightRangeBlockPredicate {
+    pub min_inclusive: YOffset,
+    pub max_inclusive: YOffset,
+}
+
+impl HeightRangeBlockPredicate {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
+        let min = self.min_inclusive.resolve_y(
+            chunk.bottom_y() as i16,
+            chunk.height(),
+            chunk.get_sea_level(),
+        );
+        let max = self.max_inclusive.resolve_y(
+            chunk.bottom_y() as i16,
+            chunk.height(),
+            chunk.get_sea_level(),
+        );
+        pos.0.y >= min && pos.0.y <= max
+    }
+
+    pub fn test_world(&self, _world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let min = self.min_inclusive.resolve_y(-64, 384, 63);
+        let max = self.max_inclusive.resolve_y(-64, 384, 63);
+        pos.0.y >= min && pos.0.y <= max
     }
 }
 
@@ -103,6 +179,27 @@ impl MatchingFluidsBlockPredicate {
                 .contains(fluid.name),
         }
     }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = self.offset.get_block_world(world, pos);
+        let fluid_name = match block.name {
+            "water" | "flowing_water" => "water",
+            "lava" | "flowing_lava" => "lava",
+            _ => "empty",
+        };
+        match &self.fluids {
+            MatchingBlocksWrapper::Single(single_block) => {
+                single_block
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(single_block)
+                    == fluid_name
+            }
+            MatchingBlocksWrapper::Multiple(blocks) => blocks
+                .iter()
+                .map(|s| s.strip_prefix("minecraft:").unwrap_or(s))
+                .contains(fluid_name),
+        }
+    }
 }
 
 pub struct MatchingBlockTagPredicate {
@@ -115,6 +212,11 @@ impl MatchingBlockTagPredicate {
         let state = self.offset.get_id(chunk, pos);
         state.to_block_id().has_tag(self.tag)
     }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let state = self.offset.get_id_world(world, pos);
+        state.to_block_id().has_tag(self.tag)
+    }
 }
 
 pub struct HasSturdyFacePredicate {
@@ -125,6 +227,11 @@ pub struct HasSturdyFacePredicate {
 impl HasSturdyFacePredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
+        state.is_side_solid(self.direction)
+    }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let state = self.offset.get_state_world(world, pos);
         state.is_side_solid(self.direction)
     }
 }
@@ -145,6 +252,20 @@ impl AnyOfBlockPredicate {
                 continue;
             }
             return true;
+        }
+        false
+    }
+
+    pub fn test_world(
+        &self,
+        block_registry: Option<&dyn WorldPortalExt>,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        for predicate in &self.predicates {
+            if predicate.test_world(world, block_registry, pos) {
+                return true;
+            }
         }
         false
     }
@@ -169,6 +290,20 @@ impl AllOfBlockPredicate {
         }
         true
     }
+
+    pub fn test_world(
+        &self,
+        block_registry: Option<&dyn WorldPortalExt>,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        for predicate in &self.predicates {
+            if !predicate.test_world(world, block_registry, pos) {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 pub struct NotBlockPredicate {
@@ -184,6 +319,15 @@ impl NotBlockPredicate {
     ) -> bool {
         !self.predicate.test(block_registry, chunk, pos)
     }
+
+    pub fn test_world(
+        &self,
+        block_registry: Option<&dyn WorldPortalExt>,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        !self.predicate.test_world(world, block_registry, pos)
+    }
 }
 
 pub struct SolidBlockPredicate {
@@ -193,6 +337,11 @@ pub struct SolidBlockPredicate {
 impl SolidBlockPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
+        state.is_solid()
+    }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let state = self.offset.get_state_world(world, pos);
         state.is_solid()
     }
 }
@@ -215,6 +364,18 @@ impl WouldSurviveBlockPredicate {
         let pos = self.offset.get(pos);
         block_registry.can_place_at(block, state, chunk, &pos)
     }
+
+    pub fn test_world(
+        &self,
+        block_registry: Option<&dyn WorldPortalExt>,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> bool {
+        let block = self.state.get_block();
+        let state = self.state.get_state();
+        let pos = self.offset.get(pos);
+        block_registry.is_none_or(|registry| registry.can_place_at(block, state, world, &pos))
+    }
 }
 
 pub struct ReplaceableBlockPredicate {
@@ -226,6 +387,25 @@ impl ReplaceableBlockPredicate {
         let state = self.offset.get_state(chunk, pos);
         state.replaceable()
     }
+
+    pub fn test_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let state = self.offset.get_state_world(world, pos);
+        state.replaceable()
+    }
+}
+
+pub struct UnobstructedBlockPredicate {
+    pub offset: Option<Vector3<i32>>,
+}
+
+impl UnobstructedBlockPredicate {
+    pub const fn test<T: GenerationCache>(&self, _chunk: &T, _pos: &BlockPos) -> bool {
+        true
+    }
+
+    pub const fn test_world(&self, _world: &dyn BlockAccessor, _pos: &BlockPos) -> bool {
+        true
+    }
 }
 
 pub struct OffsetBlocksBlockPredicate {
@@ -233,6 +413,7 @@ pub struct OffsetBlocksBlockPredicate {
 }
 
 impl OffsetBlocksBlockPredicate {
+    #[must_use]
     pub fn get(&self, pos: &BlockPos) -> BlockPos {
         if let Some(offset) = self.offset {
             return pos.offset(offset);
@@ -261,6 +442,25 @@ impl OffsetBlocksBlockPredicate {
     pub fn get_state<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static BlockState {
         let pos = self.get(pos);
         GenerationCache::get_block_state(chunk, &pos.0).to_state()
+    }
+
+    pub fn get_id_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> BlockStateId {
+        let pos = self.get(pos);
+        world.get_block_state_id(&pos)
+    }
+
+    pub fn get_block_world(&self, world: &dyn BlockAccessor, pos: &BlockPos) -> &'static Block {
+        let pos = self.get(pos);
+        world.get_block(&pos)
+    }
+
+    pub fn get_state_world(
+        &self,
+        world: &dyn BlockAccessor,
+        pos: &BlockPos,
+    ) -> &'static BlockState {
+        let pos = self.get(pos);
+        world.get_block_state(&pos)
     }
 }
 

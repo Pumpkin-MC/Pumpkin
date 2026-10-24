@@ -4,6 +4,7 @@
 //! into a runtime representation with palettes, entities, block info, and transformations.
 
 use std::io::Cursor;
+use std::sync::OnceLock;
 
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
@@ -11,7 +12,7 @@ use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
 use thiserror::Error;
 
 use super::processor::StructureProcessor;
-use crate::generation::structure::structures::jigsaw::JigsawJointType;
+use crate::generation::structure::structures::jigsaw::{JigsawBlock, JigsawJointType};
 
 /// Errors that can occur when loading or saving a structure template.
 #[derive(Debug, Error)]
@@ -187,6 +188,20 @@ impl StructurePlaceSettings {
     }
 }
 
+/// Lazily-parsed jigsaw blocks for a template.
+///
+/// Wrapped so the template's `Debug` derive does not require `JigsawBlock: Debug`.
+#[derive(Clone, Default)]
+struct JigsawBlockCache(Vec<JigsawBlock>);
+
+impl std::fmt::Debug for JigsawBlockCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("JigsawBlockCache")
+            .field(&self.0.len())
+            .finish()
+    }
+}
+
 /// A loaded structure template from an NBT file matching vanilla `StructureTemplate`.
 #[derive(Debug, Clone, Default)]
 pub struct StructureTemplate {
@@ -194,11 +209,19 @@ pub struct StructureTemplate {
     pub entity_info_list: Vec<StructureEntityInfo>,
     pub size: Vector3<i32>,
     pub author: String,
+    pub name: Option<String>,
 
     // Backward-compatible fields
+    // TODO: make these fields private with accessors. They are public now, so a
+    // caller can change them after the jigsaw cache is filled. The cache then
+    // goes stale. `load()` resets the cache, but a direct mutation does not.
     pub palette: Vec<PaletteEntry>,
     pub blocks: Vec<TemplateBlock>,
     pub entities: Vec<TemplateEntity>,
+
+    /// Jigsaw blocks parsed from the flat `blocks`/`palette` view, computed lazily
+    /// on first use so placement never rescans the template's block list.
+    jigsaw_blocks_cache: OnceLock<JigsawBlockCache>,
 }
 
 /// A single entry in the template's block palette.
@@ -207,8 +230,8 @@ pub struct PaletteEntry {
     /// The block name (e.g., "`minecraft:stone_bricks`").
     pub name: String,
 
-    /// Block state properties (e.g., [("facing", "north"), ("lit", "false")]).
-    pub properties: Vec<(String, String)>,
+    /// Block state properties.
+    pub properties: Vec<pumpkin_data::Property>,
 }
 
 impl PaletteEntry {
@@ -223,7 +246,7 @@ impl PaletteEntry {
 
     /// Creates a new palette entry with the given properties.
     #[must_use]
-    pub const fn with_properties(name: String, properties: Vec<(String, String)>) -> Self {
+    pub const fn with_properties(name: String, properties: Vec<pumpkin_data::Property>) -> Self {
         Self { name, properties }
     }
 
@@ -240,9 +263,9 @@ impl PaletteEntry {
                     .split(',')
                     .filter_map(|p| {
                         let mut parts = p.split('=');
-                        let key = parts.next()?.trim().to_string();
-                        let value = parts.next()?.trim().to_string();
-                        Some((key, value))
+                        let key = parts.next()?.trim();
+                        let value = parts.next()?.trim();
+                        pumpkin_data::Property::from_str_pair(key, value)
                     })
                     .collect();
                 Self { name, properties }
@@ -269,49 +292,12 @@ impl PaletteEntry {
             return self.clone();
         }
 
-        let properties: Vec<(String, String)> = self
-            .properties
-            .iter()
-            .map(|(key, value)| {
-                let transformed_key = match key.as_str() {
-                    "north" | "south" | "east" | "west" => rotation
-                        .rotate_facing(mirror.mirror_facing(key))
-                        .to_string(),
-                    _ => key.clone(),
-                };
-
-                let transformed_value = match key.as_str() {
-                    "facing" => {
-                        let mirrored = mirror.mirror_facing(value);
-                        rotation.rotate_facing(mirrored).to_string()
-                    }
-                    "orientation" => {
-                        let mut parts = value.split('_');
-                        if let (Some(front), Some(top)) = (parts.next(), parts.next()) {
-                            let mirrored_front = mirror.mirror_facing(front);
-                            let rotated_front = rotation.rotate_facing(mirrored_front);
-                            let mirrored_top = mirror.mirror_facing(top);
-                            let rotated_top = rotation.rotate_facing(mirrored_top);
-                            format!("{rotated_front}_{rotated_top}")
-                        } else {
-                            value.clone()
-                        }
-                    }
-                    "axis" => rotation.rotate_axis(value).to_string(),
-                    "rotation" => value.parse::<i32>().map_or_else(
-                        |_| value.clone(),
-                        |rot_value| {
-                            let mirrored = mirror.mirror_block_rotation(rot_value);
-                            let rotated = rotation.rotate_block_rotation(mirrored);
-                            rotated.to_string()
-                        },
-                    ),
-                    _ => value.clone(),
-                };
-
-                (transformed_key, transformed_value)
-            })
-            .collect();
+        let properties = pumpkin_data::transform_block_properties(
+            &self.name,
+            &self.properties,
+            rotation,
+            mirror,
+        );
 
         Self {
             name: self.name.clone(),
@@ -323,33 +309,37 @@ impl PaletteEntry {
     #[must_use]
     pub fn to_nbt_compound(&self) -> NbtCompound {
         let mut compound = NbtCompound::new();
-        compound.put_string("Name", self.name.clone());
+        compound.put_string("id", self.name.clone());
         if !self.properties.is_empty() {
             let mut props = NbtCompound::new();
-            for (k, v) in &self.properties {
-                props.put_string(k, v.clone());
+            for p in &self.properties {
+                props.put_string(p.key_str(), p.value_str().to_string());
             }
-            compound.put_compound("Properties", props);
+            compound.put_compound("properties", props);
         }
         compound
     }
 
     /// Deserializes a palette entry from an NBT compound tag.
     pub fn from_nbt_compound(entry_compound: &NbtCompound) -> Result<Self, TemplateError> {
+        // 26.3 renamed the palette keys from Name and Properties to id and properties
         let name = entry_compound
-            .get_string("Name")
-            .ok_or(TemplateError::MissingField("palette.Name"))?
+            .get_string("id")
+            .or_else(|| entry_compound.get_string("Name"))
+            .or_else(|| entry_compound.get_string(""))
+            .ok_or(TemplateError::MissingField("palette.id"))?
             .to_string();
 
-        let properties: Vec<(String, String)> = entry_compound
-            .get_compound("Properties")
+        let properties: Vec<pumpkin_data::Property> = entry_compound
+            .get_compound("properties")
+            .or_else(|| entry_compound.get_compound("Properties"))
             .map_or_else(Vec::new, |props_compound| {
                 props_compound
                     .child_tags
                     .iter()
                     .filter_map(|(key, value)| {
                         if let NbtTag::String(v) = value {
-                            Some((key.to_string(), v.to_string()))
+                            pumpkin_data::Property::from_str_pair(key, v)
                         } else {
                             None
                         }
@@ -593,6 +583,37 @@ impl StructureTemplate {
 
     pub const fn palettes_mut(&mut self) -> &mut Vec<Palette> {
         &mut self.palettes
+    }
+
+    /// Returns the template's jigsaw blocks in template-local coordinates.
+    ///
+    /// Parsed once from the flat `blocks`/`palette` view and cached, rather than
+    /// being re-scanned and re-parsed on every placement attempt.
+    #[must_use]
+    pub fn jigsaw_blocks(&self) -> &[JigsawBlock] {
+        &self
+            .jigsaw_blocks_cache
+            .get_or_init(|| {
+                if let Some(name) = &self.name
+                    && let Some(meta) =
+                        pumpkin_data::structure_metadata::StaticStructureMetadataList::get(name)
+                {
+                    return JigsawBlockCache(meta.jigsaws.iter().map(JigsawBlock::from).collect());
+                }
+
+                JigsawBlockCache(
+                    self.blocks
+                        .iter()
+                        .filter_map(|block| {
+                            JigsawBlock::from_template_block(
+                                block,
+                                &self.palette[block.state as usize],
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .0
     }
 
     #[must_use]
@@ -898,18 +919,21 @@ impl StructureTemplate {
 
     #[must_use]
     pub fn get_default_joint_type(state: &PaletteEntry) -> JigsawJointType {
-        if let Some((_, orientation)) = state.properties.iter().find(|(k, _)| k == "orientation") {
-            let front = orientation
-                .split('_')
-                .next()
-                .unwrap_or(orientation.as_str());
-            match front {
-                "north" | "south" | "east" | "west" => JigsawJointType::Aligned,
+        use pumpkin_data::block_properties::{Orientation, Property};
+        state
+            .properties
+            .iter()
+            .find_map(|p| match p {
+                Property::Orientation(o) => Some(*o),
+                _ => None,
+            })
+            .map_or(JigsawJointType::Rollable, |orientation| match orientation {
+                Orientation::NorthUp
+                | Orientation::SouthUp
+                | Orientation::EastUp
+                | Orientation::WestUp => JigsawJointType::Aligned,
                 _ => JigsawJointType::Rollable,
-            }
-        } else {
-            JigsawJointType::Rollable
-        }
+            })
     }
 
     /// Loads a structure template from gzipped NBT bytes.
@@ -925,10 +949,87 @@ impl StructureTemplate {
         Ok(template)
     }
 
+    /// Loads a structure template from a pre-parsed static template definition.
+    pub fn from_static(
+        static_template: &pumpkin_data::structure_template::StaticStructureTemplate,
+    ) -> Result<Self, TemplateError> {
+        let size = Vector3::new(
+            static_template.size[0],
+            static_template.size[1],
+            static_template.size[2],
+        );
+        let author = static_template.author.to_string();
+
+        let mut entity_info_list = Vec::with_capacity(static_template.entities.len());
+        for e in static_template.entities {
+            let mut cursor = Cursor::new(e.nbt);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map(|n| n.root_tag)
+                .unwrap_or_default();
+            entity_info_list.push(StructureEntityInfo::new(
+                Vector3::new(e.pos[0], e.pos[1], e.pos[2]),
+                Vector3::new(e.block_pos[0], e.block_pos[1], e.block_pos[2]),
+                nbt,
+            ));
+        }
+
+        let mut block_entities_map =
+            std::collections::HashMap::with_capacity(static_template.block_entities.len());
+        for be in static_template.block_entities {
+            let mut cursor = Cursor::new(be.nbt);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map(|n| n.root_tag)
+                .unwrap_or_default();
+            block_entities_map.insert(be.pos, nbt);
+        }
+
+        let block_count = static_template.packed_blocks.len() / 4;
+        let mut palettes = Vec::with_capacity(static_template.palettes.len());
+
+        for static_palette in static_template.palettes {
+            let palette_entries: Vec<PaletteEntry> = static_palette
+                .iter()
+                .map(|p| PaletteEntry::with_properties(p.name.to_string(), p.properties.to_vec()))
+                .collect();
+
+            let mut block_info_list = Vec::with_capacity(block_count);
+            for chunk in static_template.packed_blocks.as_chunks::<4>().0 {
+                let pos = Vector3::new(chunk[0] as i32, chunk[1] as i32, chunk[2] as i32);
+                let state_idx = chunk[3] as usize;
+                let state = if state_idx < palette_entries.len() {
+                    palette_entries[state_idx].clone()
+                } else {
+                    PaletteEntry::new("minecraft:air".to_string())
+                };
+                let nbt = block_entities_map.get(&[pos.x, pos.y, pos.z]).cloned();
+                block_info_list.push(StructureBlockInfo::new(pos, state, nbt));
+            }
+            palettes.push(Palette::new(block_info_list));
+        }
+
+        let mut template = Self {
+            palettes,
+            entity_info_list,
+            size,
+            author,
+            name: None,
+            palette: Vec::new(),
+            blocks: Vec::new(),
+            entities: Vec::new(),
+            jigsaw_blocks_cache: OnceLock::new(),
+        };
+
+        template.sync_legacy_fields();
+        Ok(template)
+    }
+
     /// Loads the structure template from an NBT compound matching vanilla 1:1.
     pub fn load(&mut self, compound: &NbtCompound) -> Result<(), TemplateError> {
         self.palettes.clear();
         self.entity_info_list.clear();
+        self.jigsaw_blocks_cache = OnceLock::new();
 
         // 1. size
         self.size = Self::parse_size(compound)?;
@@ -1317,6 +1418,8 @@ impl StructureTemplate {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_data::block_properties::{Facing, Half, Property};
+
     use super::*;
 
     #[test]
@@ -1328,10 +1431,33 @@ mod tests {
         let entry_with_props = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
-                ("facing".to_string(), "north".to_string()),
-                ("half".to_string(), "bottom".to_string()),
+                Property::Facing(Facing::North),
+                Property::Half(Half::Bottom),
             ],
         );
         assert_eq!(entry_with_props.properties.len(), 2);
+    }
+
+    /// Loads a real template from the shipped 26.3 datapack, which names the palette keys id and
+    /// properties instead of Name and Properties.
+    #[test]
+    fn load_26_3_template() {
+        let bytes = include_bytes!(
+            "../../../../../../assets/datapack/data/minecraft/structure/igloo/top.nbt"
+        );
+        let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
+
+        let palette = &template.palette;
+        assert!(!palette.is_empty(), "the palette must not be empty");
+        assert!(
+            palette.iter().any(|entry| entry.name == "minecraft:ice"),
+            "the palette must keep the block names"
+        );
+        assert!(
+            palette
+                .iter()
+                .any(|entry| !entry.properties.is_empty() && entry.name.contains("trapdoor")),
+            "the palette must keep the block properties"
+        );
     }
 }

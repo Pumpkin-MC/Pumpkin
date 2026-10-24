@@ -34,6 +34,7 @@ tracing.workspace = true
 crossbeam.workspace = true
 
 sha2.workspace = true
+md5.workspace = true
 bitflags.workspace = true
 arc-swap.workspace = true
 
@@ -55,7 +56,6 @@ tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
-crossfire.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -78,7 +78,15 @@ name = "chunk_gen_concurrent"
 harness = false
 
 [[bench]]
+name = "jigsaw"
+harness = false
+
+[[bench]]
 name = "noise_router"
+harness = false
+
+[[bench]]
+name = "template_pool"
 harness = false
 
 

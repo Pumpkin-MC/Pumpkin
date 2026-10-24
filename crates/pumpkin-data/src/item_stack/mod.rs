@@ -2,9 +2,10 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DataComponentImpl,
-    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl,
-    UseCooldownImpl, get, get_mut, read_data,
+    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl,
+    SwingAnimationImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut, read_data,
 };
+
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
@@ -187,6 +188,21 @@ impl ItemStack {
         None
     }
 
+    #[must_use]
+    pub fn has_data_component(&self, to_get_id: DataComponent) -> bool {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.is_some();
+            }
+        }
+        for (id, _) in self.item.components {
+            if *id == to_get_id {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn has_enchantments(&self) -> bool {
         self.get_data_component::<EnchantmentsImpl>()
             .is_some_and(|e| !e.enchantment.is_empty())
@@ -216,6 +232,24 @@ impl ItemStack {
             *component = lore;
         } else {
             self.patch.push((DataComponent::Lore, lore));
+        }
+    }
+
+    pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
+        let to_set_id = T::get_enum();
+        let boxed = Some(Box::new(component) as _);
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
+            *c = boxed;
+        } else {
+            self.patch.push((to_set_id, boxed));
+        }
+    }
+
+    pub fn remove_data_component(&mut self, to_remove_id: DataComponent) {
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_remove_id) {
+            *c = None;
+        } else {
+            self.patch.push((to_remove_id, None));
         }
     }
 
@@ -307,6 +341,13 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        self.is_damageable()
+            && !self.is_unbreakable()
+            && self.get_damage() >= self.get_max_damage().unwrap_or(0) - 1
+    }
+
     pub fn repair_item(&mut self, amount: i32) -> i32 {
         if amount <= 0 {
             return 0;
@@ -328,13 +369,9 @@ impl ItemStack {
             return true;
         }
 
-        // `#minecraft:enchantable/armor` uses the armor formula; all others use the tool formula.
-        if is_armor {
-            let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
-            rand::random::<f32>() < chance
-        } else {
-            rand::random::<u32>().is_multiple_of(unbreaking_level as u32 + 1)
-        }
+        let mut damage = 1.0f32;
+        Enchantment::UNBREAKING.modify_durability_damage(unbreaking_level, is_armor, &mut damage);
+        damage > 0.0
     }
 
     /// Apply durability damage to this item and return the outcome.
@@ -433,6 +470,81 @@ impl ItemStack {
             self.patch[pos].1 = component;
         } else {
             self.patch.push((DataComponent::CustomName, component));
+        }
+    }
+
+    #[must_use]
+    pub fn has_custom_name(&self) -> bool {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .is_some()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<&pumpkin_util::text::TextComponent> {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .map(|c| &c.name)
+    }
+
+    pub fn remove_custom_name(&mut self) {
+        self.patch
+            .retain(|(id, _)| *id != DataComponent::CustomName);
+    }
+
+    #[must_use]
+    pub fn get_hover_name(&self) -> String {
+        if let Some(custom_name) =
+            self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+        {
+            return custom_name.name.clone().get_text();
+        }
+        if let Some(item_name) =
+            self.get_data_component::<crate::data_component_impl::ItemNameImpl>()
+        {
+            return item_name.name.to_string();
+        }
+        self.item.registry_key.to_string()
+    }
+
+    #[must_use]
+    pub fn get_repair_cost(&self) -> i32 {
+        self.get_data_component::<crate::data_component_impl::RepairCostImpl>()
+            .map_or(0, |value| value.cost)
+    }
+
+    pub fn set_repair_cost(&mut self, cost: i32) {
+        if cost <= 0 {
+            self.patch
+                .retain(|(id, _)| *id != DataComponent::RepairCost);
+            return;
+        }
+        self.set_data_component(crate::data_component_impl::RepairCostImpl { cost });
+    }
+
+    #[must_use]
+    pub fn is_valid_repair_item(&self, repair_item: &ItemStack) -> bool {
+        let repairable = self.get_data_component::<crate::data_component_impl::RepairableImpl>();
+        repairable.is_some_and(|r| r.is_valid_repair_item(repair_item))
+    }
+
+    #[must_use]
+    pub fn get_swing_animation(&self) -> SwingAnimationImpl {
+        self.get_data_component::<SwingAnimationImpl>()
+            .copied()
+            .unwrap_or(SwingAnimationImpl::DEFAULT)
+    }
+
+    #[must_use]
+    pub fn get_rarity(&self) -> Rarity {
+        let base = self
+            .get_data_component::<RarityImpl>()
+            .map_or(Rarity::Common, |r| r.rarity);
+        if !self.has_enchantments() {
+            return base;
+        }
+        match base {
+            Rarity::Common | Rarity::Uncommon => Rarity::Rare,
+            Rarity::Rare => Rarity::Epic,
+            Rarity::Epic => Rarity::Epic,
         }
     }
 
@@ -704,6 +816,9 @@ impl ItemStack {
         let mut tag = NbtCompound::new();
 
         for (id, data) in &self.patch {
+            if !id.is_persistent() {
+                continue;
+            }
             if let Some(data) = data {
                 tag.put(id.to_name(), data.write_data());
             } else {
@@ -736,12 +851,15 @@ impl ItemStack {
         if let Some(tag) = compound.get_compound("components") {
             for (name, data) in &tag.child_tags {
                 if let Some(name) = name.strip_prefix("!") {
-                    item_stack
-                        .patch
-                        .push((DataComponent::try_from_name(name)?, None));
+                    let id = DataComponent::try_from_name(name)?;
+                    if id.is_persistent() {
+                        item_stack.patch.push((id, None));
+                    }
                 } else {
                     let id = DataComponent::try_from_name(name)?;
-                    item_stack.patch.push((id, Some(read_data(id, data)?)));
+                    if id.is_persistent() {
+                        item_stack.patch.push((id, Some(read_data(id, data)?)));
+                    }
                 }
             }
         }
@@ -766,8 +884,11 @@ mod tests {
     use crate::data_component::DataComponent;
     use crate::data_component_impl::{
         CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, ItemNameImpl,
-        LoreImpl, UnbreakableImpl,
+        LoreImpl, MapDecorationsImpl, UnbreakableImpl,
     };
+    use pumpkin_nbt::Nbt;
+    use pumpkin_nbt::deserializer::NbtReadHelperJava;
+    use std::io::Cursor;
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
@@ -991,6 +1112,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn map_decorations_survives_item_stack_nbt_roundtrip() {
+        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        stack.patch.push((
+            DataComponent::MapDecorations,
+            Some(MapDecorationsImpl.to_dyn()),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+        let bytes = Nbt::new(String::new(), compound).write();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(bytes.as_ref()));
+        let decoded = Nbt::read(&mut reader).expect("written item stack should re-read");
+        let components = decoded
+            .root_tag
+            .get_compound("components")
+            .expect("components compound should survive");
+
+        assert!(matches!(
+            components.get("minecraft:map_decorations"),
+            Some(NbtTag::Compound(_))
+        ));
+    }
+
     // ── damage_item ───────────────────────────────────────────────
 
     #[test]
@@ -1094,6 +1239,18 @@ mod tests {
                 "item should be destroyed for amount={amount}"
             );
         }
+    }
+
+    #[test]
+    fn damage_item_changes_component_equality() {
+        let mut stack = iron_sword();
+        let original = stack.clone();
+        assert_eq!(stack.damage_item(1), DamageResult::Damaged);
+        assert!(
+            !stack.are_equal(&original),
+            "durability patch must differ so inventory sync sends SET_SLOT"
+        );
+        assert_eq!(stack.get_damage(), 1);
     }
 
     #[test]
@@ -1409,5 +1566,64 @@ mod tests {
                 "damage should clamp to 0 for set_damage({amount})"
             );
         }
+    }
+
+    #[test]
+    fn data_component_metadata_matches_vanilla_26_3() {
+        // In vanilla 26.3, only minecraft:damage ignores swap animation
+        assert!(DataComponent::Damage.ignore_swap_animation());
+        assert!(!DataComponent::MaxDamage.ignore_swap_animation());
+        assert!(!DataComponent::CustomData.ignore_swap_animation());
+
+        // In vanilla 26.3, exactly 3 components are transient:
+        // creative_slot_lock, additional_trade_cost, and map_post_processing
+        assert!(DataComponent::CreativeSlotLock.is_transient());
+        assert!(!DataComponent::CreativeSlotLock.is_persistent());
+
+        assert!(DataComponent::AdditionalTradeCost.is_transient());
+        assert!(!DataComponent::AdditionalTradeCost.is_persistent());
+
+        assert!(DataComponent::MapPostProcessing.is_transient());
+        assert!(!DataComponent::MapPostProcessing.is_persistent());
+
+        // Other components must be persistent
+        assert!(DataComponent::Damage.is_persistent());
+        assert!(DataComponent::CustomName.is_persistent());
+        assert!(DataComponent::Enchantments.is_persistent());
+    }
+
+    #[test]
+    fn transient_components_are_omitted_from_nbt_saving() {
+        let mut stack = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        // Add a transient component and a persistent component
+        stack.patch.push((
+            DataComponent::AdditionalTradeCost,
+            Some(crate::data_component_impl::AdditionalTradeCostImpl { cost: 0 }.to_dyn()),
+        ));
+        stack.patch.push((
+            DataComponent::Damage,
+            Some(DamageImpl { damage: 10 }.to_dyn()),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+
+        let components = compound
+            .get_compound("components")
+            .expect("components compound missing");
+
+        assert!(
+            !components.has("minecraft:additional_trade_cost"),
+            "transient component must not be saved to NBT"
+        );
+        assert!(
+            components.has("minecraft:damage"),
+            "persistent component must be saved to NBT"
+        );
+
+        // Verify round-trip does not contain transient component
+        let loaded = ItemStack::read_item_stack(&compound).expect("failed to load item stack");
+        assert_eq!(loaded.patch.len(), 1);
+        assert_eq!(loaded.patch[0].0, DataComponent::Damage);
     }
 }

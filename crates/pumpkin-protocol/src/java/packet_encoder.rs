@@ -90,6 +90,7 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     compressor: Option<(CompressionLevel, Compress)>,
     // Reused compression buffer to avoid allocating a new Vec for each packet.
     compression_scratch: Vec<u8>,
+    frame_scratch: Vec<u8>,
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
@@ -99,6 +100,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
+            frame_scratch: Vec::new(),
         }
     }
 
@@ -204,8 +206,41 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// -   `Data`: The packet's data.
     ///
     /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
-    #[allow(clippy::too_many_lines)]
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
+        let mut frame = std::mem::take(&mut self.frame_scratch);
+        frame.clear();
+        let framed = self.frame_packet(&packet_data, &mut frame);
+        let result = match framed {
+            Ok(()) => self.write_frame(&frame).await,
+            Err(err) => Err(err),
+        };
+        self.frame_scratch = frame;
+        result
+    }
+
+    pub async fn write_frame(&mut self, frame: &[u8]) -> Result<(), PacketEncodeError> {
+        let writer = self
+            .writer
+            .as_mut()
+            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
+        writer
+            .write_all(frame)
+            .await
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))
+    }
+
+    #[must_use]
+    pub fn is_compressing_packet(&self, packet_data: &Bytes) -> bool {
+        self.compression
+            .is_some_and(|(threshold, _)| packet_data.len() >= threshold)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn frame_packet(
+        &mut self,
+        packet_data: &Bytes,
+        out: &mut Vec<u8>,
+    ) -> Result<(), PacketEncodeError> {
         let data_len = packet_data.len();
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
@@ -293,19 +328,10 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
         let header_len = header_cursor.position() as usize;
         let header_bytes = &header_buf[..header_len];
-        let writer = self
-            .writer
-            .as_mut()
-            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
 
-        writer
-            .write_all(header_bytes)
-            .await
-            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-        writer
-            .write_all(payload_to_write)
-            .await
-            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+        out.reserve(header_len + payload_to_write.len());
+        out.extend_from_slice(header_bytes);
+        out.extend_from_slice(payload_to_write);
 
         Ok(())
     }

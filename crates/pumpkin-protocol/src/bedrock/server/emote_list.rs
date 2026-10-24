@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use uuid::Uuid;
 
 use crate::{
@@ -6,11 +8,14 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
+/// Sent by the client to provide the server with a list of all emotes unlocked and equipped by the player.
 #[derive(Debug, PacketRead, PacketWrite)]
 #[packet(152)]
 pub struct SEmoteList {
-    pub runtime_entity_id: VarULong,
-    pub emote_pieces: Vec<Uuid>,
+    /// Runtime entity ID of the player sending their emote inventory.
+    pub runtime_id: VarULong,
+    /// List of emote piece UUIDs unlocked by the player.
+    pub emote_piece_ids: Vec<Uuid>,
 }
 
 #[cfg(test)]
@@ -21,8 +26,8 @@ mod tests {
     #[test]
     fn emote_list_serialization() {
         let packet = SEmoteList {
-            runtime_entity_id: VarULong(123),
-            emote_pieces: vec![Uuid::new_v4(), Uuid::new_v4()],
+            runtime_id: VarULong(123),
+            emote_piece_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
         };
 
         let mut buf = Vec::new();
@@ -31,7 +36,7 @@ mod tests {
         let mut reader = Cursor::new(buf);
         let decoded = SEmoteList::read(&mut reader).unwrap();
 
-        assert_eq!(packet.runtime_entity_id.0, decoded.runtime_entity_id.0);
-        assert_eq!(packet.emote_pieces, decoded.emote_pieces);
+        assert_eq!(packet.runtime_id.0, decoded.runtime_id.0);
+        assert_eq!(packet.emote_piece_ids, decoded.emote_piece_ids);
     }
 }

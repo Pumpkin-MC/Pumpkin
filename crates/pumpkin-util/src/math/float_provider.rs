@@ -8,7 +8,7 @@ use serde::Deserialize;
 use syn::LitFloat;
 
 /// Represents different types of number providers that generate floating-point values.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum NormalFloatProvider {
     /// Always returns the same constant value.
@@ -54,7 +54,7 @@ impl ToTokens for NormalFloatProvider {
 }
 
 /// A flexible float provider that can be either a constant value or a complex provider.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum FloatProvider {
     /// A complex provider with configurable distribution.
@@ -135,7 +135,7 @@ impl FloatProvider {
 }
 
 /// A float provider that always returns the same constant value.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ConstantFloatProvider {
     /// The constant value that will always be returned.
     value: f32,
@@ -195,7 +195,7 @@ impl ConstantFloatProvider {
 }
 
 /// A float provider that generates uniformly distributed random values.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct UniformFloatProvider {
     /// The minimum value (inclusive) that can be generated.
     min_inclusive: f32,
@@ -248,9 +248,8 @@ impl UniformFloatProvider {
     /// # Returns
     /// A random float in the range [`min_inclusive`, `max_exclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Use the random range in [min_inclusive, max_exclusive)
         let range = self.max_exclusive - self.min_inclusive;
-        random.next_f32().mul_add(range, self.min_inclusive)
+        random.next_f32() * range + self.min_inclusive
     }
 
     /// Returns the maximum exclusive value.
@@ -264,7 +263,7 @@ impl UniformFloatProvider {
 }
 
 /// A float provider that generates values from a normal (Gaussian) distribution.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ClampedNormalFloatProvider {
     /// The mean (centre) of the normal distribution.
     mean: f32,
@@ -351,7 +350,7 @@ impl ClampedNormalFloatProvider {
 }
 
 /// A float provider that generates values from a trapezoidal distribution.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct TrapezoidFloatProvider {
     /// The minimum value (inclusive) that can be generated.
     min: f32,
@@ -409,29 +408,10 @@ impl TrapezoidFloatProvider {
     /// # Returns
     /// A random float from the trapezoidal distribution in the range [min, max].
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Trapezoid distribution: flat plateau in the middle, linear ramps on the sides.
         let range = self.max - self.min;
-        let plateau_range = range * self.plateau;
-        let ramp_range = (range - plateau_range) * 0.5;
-
-        let random_value = random.next_f32();
-
-        if random_value < self.plateau.mul_add(-0.5, 0.5) {
-            // NOTE: Left ramp: quadratic distribution biased toward plateau
-            let scaled = random_value / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = scaled.sqrt();
-            self.min + ramp_range * sqrt_scaled
-        } else if random_value > self.plateau.mul_add(0.5, 0.5) {
-            // NOTE: Right ramp: quadratic distribution biased toward plateau
-            let scaled =
-                (random_value - self.plateau.mul_add(0.5, 0.5)) / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = (1.0 - scaled).sqrt();
-            self.max - ramp_range * sqrt_scaled
-        } else {
-            // NOTE: Plateau: uniform distribution
-            let plateau_pos = (random_value - self.plateau.mul_add(-0.5, 0.5)) / self.plateau;
-            self.min + ramp_range + plateau_pos * plateau_range
-        }
+        let plateau_start = (range - self.plateau) / 2.0;
+        let plateau_end = range - plateau_start;
+        self.min + random.next_f32() * plateau_end + random.next_f32() * plateau_start
     }
 
     /// Returns the maximum inclusive value.

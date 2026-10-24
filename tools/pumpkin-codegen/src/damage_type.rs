@@ -61,7 +61,7 @@ pub enum DeathMessageType {
 
 /// Generates the `TokenStream` for the `DamageType` struct, its associated enums, and constants.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/damage_type");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/damage_type");
     let mut damage_types: BTreeMap<String, DamageTypeData> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing damage_type directory")
@@ -134,7 +134,7 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::tag::{RegistryKey, Tag, Taggable};
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub struct DamageType {
             pub death_message_type: DeathMessageType,
             pub exhaustion: f32,
@@ -144,14 +144,14 @@ pub fn build() -> TokenStream {
             pub id: u8,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DeathMessageType {
             Default,
             FallVariants,
             IntentionalGameDesign,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DamageEffects {
             Hurt,
             Thorns,
@@ -161,7 +161,7 @@ pub fn build() -> TokenStream {
             Freezing,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DamageScaling {
             Never,
             WhenCausedByLivingNonPlayer,

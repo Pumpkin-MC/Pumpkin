@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use std::{collections::HashMap, io::Write};
 
 use crate::{
@@ -8,35 +10,38 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::io::Error;
 
+/// Sent by the server to update metadata and Molang properties of an entity (e.g. name tags, fire, scale).
 #[derive(PacketWrite)]
-#[packet(39)] // ProtocolInfo::SET_ACTOR_DATA_PACKET is 39
+#[packet(39)]
 pub struct CSetActorData {
     /// The unique runtime ID of the entity being updated
-    pub actor_runtime_id: VarULong,
+    pub target_runtime_id: VarULong,
     /// A map of entity metadata properties (e.g., flags, name tags, scale)
-    pub metadata: EntityMetadata,
+    pub actor_data: SyncedActorDataList,
     /// Dynamic properties synced between client and server
     pub synced_properties: PropertySyncData,
     /// The server tick at which this update occurred
     pub tick: VarULong,
 }
 
-pub struct EntityMetadata(pub HashMap<u32, MetadataValue>);
+/// A map of metadata property keys to their typed values.
+#[derive(Clone)]
+pub struct SyncedActorDataList(pub HashMap<u32, MetadataValue>);
 
-impl Default for EntityMetadata {
+impl Default for SyncedActorDataList {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl EntityMetadata {
+impl SyncedActorDataList {
     #[must_use]
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 }
 
-impl EntityMetadata {
+impl SyncedActorDataList {
     pub fn set(&mut self, key: u32, value: MetadataValue) {
         self.0.insert(key, value);
     }
@@ -55,7 +60,7 @@ impl EntityMetadata {
             self.0.insert(key, MetadataValue::Byte(new_value));
         } else {
             let current_value = match self.0.get(&key) {
-                Some(MetadataValue::Long(v)) => *v,
+                Some(MetadataValue::Int64(v)) => *v,
                 _ => 0,
             };
             let new_value = if value {
@@ -63,12 +68,22 @@ impl EntityMetadata {
             } else {
                 current_value & !(1i64 << index)
             };
-            self.0.insert(key, MetadataValue::Long(new_value));
+            self.0.insert(key, MetadataValue::Int64(new_value));
+        }
+    }
+
+    /// Sets an actor flag by index, automatically targeting [`entity_data_key::FLAGS`] for flags
+    /// 0..63 and [`entity_data_key::FLAGS_TWO`] for flags 64..127.
+    pub fn set_actor_flag(&mut self, flag_index: u32, value: bool) {
+        if flag_index < 64 {
+            self.set_flag(entity_data_key::FLAGS, flag_index as u8, value);
+        } else {
+            self.set_flag(entity_data_key::FLAGS_TWO, (flag_index - 64) as u8, value);
         }
     }
 }
 
-impl PacketWrite for EntityMetadata {
+impl PacketWrite for SyncedActorDataList {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarUInt(self.0.len() as u32).write(writer)?;
 
@@ -90,8 +105,8 @@ pub enum MetadataValue {
     Float(f32),
     String(String),
     CompoundTag,
-    BlockPos(BlockPos),
-    Long(i64),
+    ItemPos(BlockPos),
+    Int64(i64),
     Vec3(Vector3<f32>),
 }
 
@@ -105,8 +120,8 @@ impl MetadataValue {
             Self::Float(_) => 3,
             Self::String(_) => 4,
             Self::CompoundTag => 5,
-            Self::BlockPos(_) => 6,
-            Self::Long(_) => 7,
+            Self::ItemPos(_) => 6,
+            Self::Int64(_) => 7,
             Self::Vec3(_) => 8,
         }
     }
@@ -116,39 +131,34 @@ impl MetadataValue {
             Self::Byte(v) => v.write(writer),
             Self::Short(v) => v.write(writer),
             Self::Int(v) => VarInt(*v).write(writer),
-            Self::Float(v) => writer.write_all(&v.to_le_bytes()),
+            Self::Float(v) => v.write(writer),
             Self::String(v) => v.write(writer),
             Self::CompoundTag => Err(Error::other("CompoundTag not implemented")),
-            Self::BlockPos(v) => v.write(writer),
-            Self::Long(v) => VarLong(*v).write(writer),
-            Self::Vec3(v) => {
-                writer.write_all(&v.x.to_le_bytes())?;
-                writer.write_all(&v.y.to_le_bytes())?;
-                writer.write_all(&v.z.to_le_bytes())
-            }
+            Self::ItemPos(v) => v.write(writer),
+            Self::Int64(v) => VarLong(*v).write(writer),
+            Self::Vec3(v) => v.write(writer),
         }
     }
 }
 
+#[derive(Default)]
 pub struct PropertySyncData {
-    pub int_properties: std::collections::HashMap<u32, i32>,
-    pub float_properties: std::collections::HashMap<u32, f32>,
+    pub int_entries_list: std::collections::HashMap<u32, i32>,
+    pub float_entries_list: std::collections::HashMap<u32, f32>,
 }
 
 impl PacketWrite for PropertySyncData {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        // Int Properties
-        VarUInt(self.int_properties.len() as u32).write(writer)?;
-        for (key, value) in &self.int_properties {
+        VarUInt(self.int_entries_list.len() as u32).write(writer)?;
+        for (key, value) in &self.int_entries_list {
             VarUInt(*key).write(writer)?;
-            VarInt(*value).write(writer)?; // Signed VarInt
+            VarInt(*value).write(writer)?;
         }
 
-        // Float Properties
-        VarUInt(self.float_properties.len() as u32).write(writer)?;
-        for (key, value) in &self.float_properties {
+        VarUInt(self.float_entries_list.len() as u32).write(writer)?;
+        for (key, value) in &self.float_entries_list {
             VarUInt(*key).write(writer)?;
-            writer.write_all(&value.to_le_bytes())?; // LE Float
+            value.write(writer)?;
         }
         Ok(())
     }
@@ -431,14 +441,44 @@ pub mod entity_data_flag {
 
 #[cfg(test)]
 mod tests {
-    use super::{EntityMetadata, entity_data_key};
+    use super::{SyncedActorDataList, entity_data_key};
 
     #[test]
     fn partial_metadata_does_not_reset_flags() {
-        let metadata = EntityMetadata::new();
+        let metadata = SyncedActorDataList::new();
 
         assert!(!metadata.0.contains_key(&entity_data_key::FLAGS));
         assert!(!metadata.0.contains_key(&entity_data_key::FLAGS_TWO));
         assert!(!metadata.0.contains_key(&entity_data_key::PLAYER_FLAGS));
+    }
+
+    #[test]
+    fn actor_flag_sets_correct_flags_key() {
+        use super::{MetadataValue, entity_data_flag};
+        let mut metadata = SyncedActorDataList::new();
+
+        metadata.set_actor_flag(entity_data_flag::BABY, true);
+        metadata.set_actor_flag(entity_data_flag::SHAKING, true);
+
+        if let Some(MetadataValue::Int64(flags)) = metadata.0.get(&entity_data_key::FLAGS) {
+            assert_eq!(
+                *flags & (1i64 << entity_data_flag::BABY),
+                1i64 << entity_data_flag::BABY
+            );
+            assert_eq!(
+                *flags & (1i64 << entity_data_flag::SHAKING),
+                1i64 << entity_data_flag::SHAKING
+            );
+        } else {
+            panic!("FLAGS key missing");
+        }
+
+        // Flag 64 (LAYING_DOWN) belongs to FLAGS_TWO
+        metadata.set_actor_flag(entity_data_flag::LAYING_DOWN, true);
+        if let Some(MetadataValue::Int64(flags_two)) = metadata.0.get(&entity_data_key::FLAGS_TWO) {
+            assert_eq!(*flags_two & (1i64 << 0), 1i64 << 0);
+        } else {
+            panic!("FLAGS_TWO key missing");
+        }
     }
 }

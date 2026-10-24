@@ -4,10 +4,12 @@ use std::{
 };
 
 use legacy_rand::{LegacyRand, LegacySplitter};
+use worldgen_random::WorldgenRandom;
 use xoroshiro128::{Xoroshiro, XoroshiroSplitter};
 
 mod gaussian;
 pub mod legacy_rand;
+pub mod worldgen_random;
 pub mod xoroshiro128;
 
 /// Global seed uniquifier used to generate unique seeds based on time.
@@ -32,6 +34,8 @@ pub fn get_seed() -> u64 {
 pub enum RandomGenerator {
     /// Xoroshiro128+ random number generator (modern, fast implementation).
     Xoroshiro(Xoroshiro),
+    /// Xoroshiro wrapped with Java `WorldgenRandom` bit-source semantics.
+    Worldgen(WorldgenRandom),
     /// Legacy random number generator (compatible with older Minecraft versions).
     Legacy(LegacyRand),
 }
@@ -109,14 +113,20 @@ pub const fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> 
 /// A region seed for the given location.
 #[inline]
 #[must_use]
-pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
-    let x_part = i64::from(region_x).wrapping_mul(341873128712) as u64;
-    let z_part = i64::from(region_z).wrapping_mul(132897987541) as u64;
+pub const fn get_large_feature_with_salt(world_seed: i64, x: i32, z: i32, blend: i32) -> u64 {
+    let x_part = (x as i64).wrapping_mul(341873128712);
+    let z_part = (z as i64).wrapping_mul(132897987541);
 
-    world_seed
+    (world_seed
         .wrapping_add(x_part)
         .wrapping_add(z_part)
-        .wrapping_add(i64::from(salt) as u64)
+        .wrapping_add(blend as i64)) as u64
+}
+
+#[inline]
+#[must_use]
+pub const fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
+    get_large_feature_with_salt(world_seed as i64, region_x, region_z, salt as i32)
 }
 
 /// Generates a seed for slime chunk determination.
@@ -166,6 +176,28 @@ pub fn get_carver_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
         ^ world_seed
 }
 
+/// Generates a large feature seed for structure selection and placement.
+///
+/// Matches vanilla Minecraft's `WorldgenRandom.setLargeFeatureSeed`.
+///
+/// # Arguments
+/// - `world_seed` – The base world seed.
+/// - `chunk_x` – The X chunk coordinate.
+/// - `chunk_z` – The Z chunk coordinate.
+///
+/// # Returns
+/// A large feature seed for the given chunk.
+#[inline]
+#[must_use]
+pub fn get_large_feature_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
+    let mut random = LegacyRand::from_seed(world_seed);
+    let x_scale = random.next_i64();
+    let z_scale = random.next_i64();
+    ((chunk_x as i64).wrapping_mul(x_scale)
+        ^ (chunk_z as i64).wrapping_mul(z_scale)
+        ^ (world_seed as i64)) as u64
+}
+
 #[expect(clippy::return_self_not_must_use)]
 pub trait RandomImpl {
     fn split(&mut self) -> Self;
@@ -177,6 +209,9 @@ pub trait RandomImpl {
     fn next_bounded_i32(&mut self, bound: i32) -> i32;
 
     fn next_inbetween_i32(&mut self, min: i32, max: i32) -> i32 {
+        if min >= max {
+            return min;
+        }
         self.next_bounded_i32(max - min + 1) + min
     }
 
@@ -206,6 +241,9 @@ pub trait RandomImpl {
     }
 
     fn next_inbetween_i32_exclusive(&mut self, min: i32, max: i32) -> i32 {
+        if min >= max {
+            return min;
+        }
         min + self.next_bounded_i32(max - min)
     }
 }
@@ -215,6 +253,7 @@ impl RandomImpl for RandomGenerator {
     fn split(&mut self) -> Self {
         match self {
             Self::Xoroshiro(x) => Self::Xoroshiro(x.split()),
+            Self::Worldgen(x) => Self::Worldgen(x.split()),
             Self::Legacy(l) => Self::Legacy(l.split()),
         }
     }
@@ -223,6 +262,7 @@ impl RandomImpl for RandomGenerator {
     fn next_splitter(&mut self) -> RandomDeriver {
         match self {
             Self::Xoroshiro(x) => RandomDeriver::Xoroshiro(x.next_splitter()),
+            Self::Worldgen(x) => x.next_splitter(),
             Self::Legacy(l) => l.next_splitter(),
         }
     }
@@ -231,6 +271,7 @@ impl RandomImpl for RandomGenerator {
     fn next_i32(&mut self) -> i32 {
         match self {
             Self::Xoroshiro(x) => x.next_i32(),
+            Self::Worldgen(x) => x.next_i32(),
             Self::Legacy(l) => l.next_i32(),
         }
     }
@@ -239,6 +280,7 @@ impl RandomImpl for RandomGenerator {
     fn next_bounded_i32(&mut self, bound: i32) -> i32 {
         match self {
             Self::Xoroshiro(x) => x.next_bounded_i32(bound),
+            Self::Worldgen(x) => x.next_bounded_i32(bound),
             Self::Legacy(l) => l.next_bounded_i32(bound),
         }
     }
@@ -247,6 +289,7 @@ impl RandomImpl for RandomGenerator {
     fn next_i64(&mut self) -> i64 {
         match self {
             Self::Xoroshiro(x) => x.next_i64(),
+            Self::Worldgen(x) => x.next_i64(),
             Self::Legacy(l) => l.next_i64(),
         }
     }
@@ -255,6 +298,7 @@ impl RandomImpl for RandomGenerator {
     fn next_bool(&mut self) -> bool {
         match self {
             Self::Xoroshiro(x) => x.next_bool(),
+            Self::Worldgen(x) => x.next_bool(),
             Self::Legacy(l) => l.next_bool(),
         }
     }
@@ -263,6 +307,7 @@ impl RandomImpl for RandomGenerator {
     fn next_f32(&mut self) -> f32 {
         match self {
             Self::Xoroshiro(x) => x.next_f32(),
+            Self::Worldgen(x) => x.next_f32(),
             Self::Legacy(l) => l.next_f32(),
         }
     }
@@ -271,6 +316,7 @@ impl RandomImpl for RandomGenerator {
     fn next_f64(&mut self) -> f64 {
         match self {
             Self::Xoroshiro(x) => x.next_f64(),
+            Self::Worldgen(x) => x.next_f64(),
             Self::Legacy(l) => l.next_f64(),
         }
     }
@@ -279,6 +325,7 @@ impl RandomImpl for RandomGenerator {
     fn next_gaussian(&mut self) -> f64 {
         match self {
             Self::Xoroshiro(x) => x.next_gaussian(),
+            Self::Worldgen(x) => x.next_gaussian(),
             Self::Legacy(l) => l.next_gaussian(),
         }
     }
@@ -287,6 +334,7 @@ impl RandomImpl for RandomGenerator {
     fn skip(&mut self, count: i32) {
         match self {
             Self::Xoroshiro(x) => x.skip(count),
+            Self::Worldgen(x) => x.skip(count),
             Self::Legacy(l) => l.skip(count),
         }
     }

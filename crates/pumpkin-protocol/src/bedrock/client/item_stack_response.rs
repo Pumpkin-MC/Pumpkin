@@ -7,14 +7,22 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
+/// Slot update information resulting from an approved item stack request.
 #[derive(Debug, Clone)]
 pub struct ItemStackResponseSlotInfo {
+    /// Slot index requested by the client.
+    pub requested_slot: u8,
+    /// Destination slot index allocated by the server.
     pub slot: u8,
-    pub hotbar_slot: u8,
-    pub count: u8,
-    pub item_stack_id: VarInt,
+    /// Item count in the slot.
+    pub amount: u8,
+    /// Unique network stack ID assigned to the slot's item stack.
+    pub item_stack_net_id: VarInt,
+    /// Custom display name assigned to the item.
     pub custom_name: String,
+    /// Filtered custom display name.
     pub filtered_custom_name: String,
+    /// Durability correction delta.
     pub durability_correction: VarInt,
 }
 
@@ -26,13 +34,12 @@ impl PacketWrite for ItemStackResponseSlotInfo {
                 "durability correction must fit in an i16",
             ));
         }
+        self.requested_slot.write(writer)?;
         self.slot.write(writer)?;
-        self.hotbar_slot.write(writer)?;
-        self.count.write(writer)?;
-        true.write(writer)?;
-        (self.item_stack_id.0 > 0).write(writer)?;
-        if self.item_stack_id.0 > 0 {
-            self.item_stack_id.write(writer)?;
+        self.amount.write(writer)?;
+        (self.item_stack_net_id.0 > 0).write(writer)?;
+        if self.item_stack_net_id.0 > 0 {
+            self.item_stack_net_id.write(writer)?;
         }
         self.custom_name.write(writer)?;
         self.filtered_custom_name.write(writer)?;
@@ -42,26 +49,30 @@ impl PacketWrite for ItemStackResponseSlotInfo {
 
 #[derive(PacketWrite, Debug, Clone)]
 pub struct ItemStackResponseContainerInfo {
-    pub container_name: FullContainerName,
+    pub full_container_name: FullContainerName,
     pub slots: Vec<ItemStackResponseSlotInfo>,
 }
 
+/// Status result and slot updates for an individual item stack request.
 #[derive(Debug, Clone)]
-pub struct ItemStackResponse {
+pub struct ItemStackResponseInfo {
+    // TODO: proper enum
+    /// Status code of the response (`0` = Success, `1` = Error).
     pub result: u8, // 0 = SUCCESS, 1 = ERROR
-    pub request_id: VarInt,
-    pub container_infos: Vec<ItemStackResponseContainerInfo>,
+    /// Request ID matching the client's `ItemStackRequest`.
+    pub client_request_id: VarInt,
+    /// Container slot updates applied as a consequence of the request.
+    pub containers: Vec<ItemStackResponseContainerInfo>,
 }
 
-impl PacketWrite for ItemStackResponse {
+impl PacketWrite for ItemStackResponseInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.result.write(writer)?;
-        self.request_id.write(writer)?;
-        true.write(writer)?;
-        (!self.container_infos.is_empty()).write(writer)?;
-        if !self.container_infos.is_empty() {
-            VarUInt(self.container_infos.len() as u32).write(writer)?;
-            for info in &self.container_infos {
+        self.client_request_id.write(writer)?;
+        (!self.containers.is_empty()).write(writer)?;
+        if !self.containers.is_empty() {
+            VarUInt(self.containers.len() as u32).write(writer)?;
+            for info in &self.containers {
                 info.write(writer)?;
             }
         }
@@ -69,10 +80,12 @@ impl PacketWrite for ItemStackResponse {
     }
 }
 
+/// Sent by the server to approve or reject item stack requests and sync modified slots.
 #[derive(Debug, Clone)]
 #[packet(148)]
 pub struct CItemStackResponse {
-    pub responses: Vec<ItemStackResponse>,
+    /// List of response statuses corresponding to client requests.
+    pub responses: Vec<ItemStackResponseInfo>,
 }
 
 impl PacketWrite for CItemStackResponse {
@@ -98,10 +111,10 @@ mod tests {
     #[test]
     fn rejects_out_of_range_durability_correction() {
         let slot = ItemStackResponseSlotInfo {
+            requested_slot: 0,
             slot: 0,
-            hotbar_slot: 0,
-            count: 1,
-            item_stack_id: VarInt(1),
+            amount: 1,
+            item_stack_net_id: VarInt(1),
             custom_name: String::new(),
             filtered_custom_name: String::new(),
             durability_correction: VarInt(32768),

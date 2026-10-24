@@ -1,28 +1,22 @@
-use std::io::{Error, Write};
+// Last verified for v2169
 
 use pumpkin_macros::packet;
 
-use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
+use crate::serial::PacketWrite;
 
-#[derive(Clone, Debug)]
-pub struct CacheBlob {
-    pub hash: u64,
-    pub payload: Vec<u8>,
+/// Payload data for a requested chunk blob that was missing from the client cache.
+#[derive(PacketWrite, Clone, Debug)]
+pub struct MissingBlobData {
+    /// 64-bit hash identifier of the blob.
+    pub blob_id: u64,
+    /// Raw serialized byte payload of the chunk blob.
+    pub blob_data: Vec<u8>,
 }
 
+/// Sent by the server in response to [`SClientCacheBlobStatus`](crate::bedrock::server::client_cache_blob_status::SClientCacheBlobStatus) with requested chunk blobs.
+#[derive(PacketWrite)]
 #[packet(136)]
-pub struct CClientCacheMissResponse<'a> {
-    pub blobs: &'a [CacheBlob],
-}
-
-impl PacketWrite for CClientCacheMissResponse<'_> {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarUInt(self.blobs.len() as u32).write(writer)?;
-        for blob in self.blobs {
-            writer.write_all(&blob.hash.to_le_bytes())?;
-            VarUInt(blob.payload.len() as u32).write(writer)?;
-            writer.write_all(&blob.payload)?;
-        }
-        Ok(())
-    }
+pub struct CClientCacheMissResponse {
+    /// Array of blob byte payloads corresponding to missed blob hashes.
+    pub missing_blobs: Vec<MissingBlobData>,
 }

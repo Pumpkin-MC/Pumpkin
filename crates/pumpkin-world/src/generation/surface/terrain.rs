@@ -242,7 +242,7 @@ impl SurfaceTerrainBuilder {
             }
 
             let (top_block, bottom_block) = if block_threshold > 2.0 {
-                let value = sea_level as f64 - block_threshold - 7.0;
+                let value = sea_level as f32 - block_threshold - 7.0;
                 (block_threshold as i32 + sea_level, value as i32)
             } else {
                 (0, 0)
@@ -282,9 +282,7 @@ impl SurfaceTerrainBuilder {
             .sample(x as f64, 0.0, z as f64)
             * 4.0)
             .round() as i32;
-        let offset = y + offset;
-        self.terracotta_bands[((offset as u64 + self.terracotta_bands.len() as u64)
-            % self.terracotta_bands.len() as u64) as usize]
-            .to_state()
+        let band_index = (y + offset).rem_euclid(self.terracotta_bands.len() as i32) as usize;
+        self.terracotta_bands[band_index].to_state()
     }
 }

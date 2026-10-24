@@ -1,0 +1,41 @@
+name: Sync WIT to mirror repo
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/sync-wit.yml"
+      - "crates/pumpkin-plugin-wit/**"
+
+concurrency:
+  group: sync-wit-to-mirror
+  cancel-in-progress: false
+
+jobs:
+  sync-wit:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: master
+          persist-credentials: false
+
+      - name: Create bot app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+          owner: Pumpkin-MC
+          repositories: pumpkin-plugin-wit
+
+      - name: Push changes to mirror
+        run: |
+          git subtree push \
+            --prefix=crates/pumpkin-plugin-wit \
+            https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/Pumpkin-MC/pumpkin-plugin-wit.git \
+            master

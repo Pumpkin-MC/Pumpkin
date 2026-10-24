@@ -1,49 +1,64 @@
+// Last verified for v2169
+
 use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
-use std::io::{Error, Write};
 
+/// Information describing a resource pack available on the server.
 #[derive(PacketWrite)]
-pub struct ResourcePackEntry {
-    pub uuid: uuid::Uuid,
-    pub version: String,
-    pub size: u64,
+pub struct PackInfoData {
+    /// UUID and version string identifying the pack.
+    pub pack_id_version: PackIdVersion,
+    /// Size of the pack in bytes.
+    pub pack_size: u64,
+    /// Encryption key for marketplace or encrypted content.
     pub content_key: String,
-    pub sub_pack_name: String,
-    pub content_id: String,
+    /// Specific subpack folder name, if applicable.
+    pub subpack_name: String,
+    /// Content identity identifier.
+    pub content_identity: String,
+    /// True if the pack contains JavaScript or game test scripts.
     pub has_scripts: bool,
-    pub addon_pack: bool,
-    pub rtx_enabled: bool,
-    pub download_url: String,
+    /// True if the pack includes custom add-on behaviors.
+    pub is_addon_pack: bool,
+    /// True if the pack includes PBR textures for ray tracing (RTX).
+    pub is_ray_tracing_capable: bool,
+    /// Optional CDN URL where the client can download the pack.
+    pub cdn_url: String,
 }
 
+/// Sent by the server to list all resource and behavior packs required or available to download.
+#[derive(PacketWrite)]
 #[packet(6)]
 pub struct CResourcePacksInfo {
+    /// If true, the client must accept and download all packs to join.
     pub resource_pack_required: bool,
+    /// Whether any packs in the list are add-on packs.
     pub has_addon_packs: bool,
+    /// Whether any packs contain client-side scripting.
     pub has_scripts: bool,
-    pub is_vibrant_visuals_force_disabled: bool,
-    pub world_template_id: uuid::Uuid,
-    pub world_template_version: String,
-    pub resource_packs: Vec<ResourcePackEntry>,
+    /// Whether vibrant visual shader enhancements should be disabled.
+    pub force_disable_vibrant_visuals: bool,
+    /// World template UUID and version, if joining a world template.
+    pub world_template_id_and_version: PackIdVersion,
+    /// Array of resource packs available on the server.
+    pub resource_packs: Vec<PackInfoData>,
 }
 
-impl PacketWrite for CResourcePacksInfo {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.resource_pack_required.write(writer)?;
-        self.has_addon_packs.write(writer)?;
-        self.has_scripts.write(writer)?;
-        self.is_vibrant_visuals_force_disabled.write(writer)?;
+/// A resource pack UUID paired with its semantic version string.
+#[derive(PacketWrite)]
+pub struct PackIdVersion {
+    /// Unique identifier for the pack.
+    pub pack_uuid: uuid::Uuid,
+    /// Semantic version string (e.g. `1.0.0`).
+    pub pack_version: String,
+}
 
-        self.world_template_id.write(writer)?;
-
-        self.world_template_version.write(writer)?;
-
-        crate::codec::var_uint::VarUInt(self.resource_packs.len() as u32).write(writer)?;
-
-        for entry in &self.resource_packs {
-            entry.write(writer)?;
+impl PackIdVersion {
+    #[must_use]
+    pub const fn new(pack_uuid: uuid::Uuid, pack_version: String) -> Self {
+        Self {
+            pack_uuid,
+            pack_version,
         }
-
-        Ok(())
     }
 }

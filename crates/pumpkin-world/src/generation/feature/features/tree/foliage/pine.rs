@@ -55,7 +55,7 @@ impl PineFoliagePlacer {
         placer.radius.get(random) + random.next_bounded_i32((base_height + 1).max(1))
     }
 
-    pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
         self.height.get(random)
     }
 }

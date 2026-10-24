@@ -1,0 +1,78 @@
+package pumpkin:plugin@0.1.0;
+
+interface inventory {
+    use item-stack.{item-stack};
+    use common.{hand};
+
+    /// Common inventory resource used across GUIs, player inventories, and containers.
+    resource inventory {
+        /// Returns the number of slots in this inventory.
+        get-size: func() -> u32;
+
+        /// Returns true if all slots in this inventory are empty.
+        is-empty: func() -> bool;
+
+        /// Returns the item in the specified slot index, or none if empty.
+        get-item: func(slot: u32) -> option<item-stack>;
+
+        /// Sets the item in the specified slot index.
+        set-item: func(slot: u32, item: option<item-stack>);
+
+        /// Removes and returns the item in the specified slot index.
+        remove-item: func(slot: u32) -> option<item-stack>;
+
+        /// Clears all items from this inventory.
+        clear: func();
+
+        /// Returns all items in this inventory as a list of slots.
+        get-all-items: func() -> list<option<item-stack>>;
+
+        /// Sets all items in this inventory from a list.
+        set-all-items: func(items: list<option<item-stack>>);
+
+        /// Counts the total number of items with the given ID in this inventory.
+        count-item: func(item-id: string) -> u32;
+
+        /// Checks if the inventory contains at least one item with the given ID.
+        contains-item: func(item-id: string) -> bool;
+    }
+
+    /// Specialized player inventory handle providing access to main inventory, armor, offhand, and hotbar.
+    resource player-inventory {
+        /// Returns the generic 36-slot inventory handle (hotbar + main storage).
+        as-inventory: func() -> inventory;
+
+        /// Returns the item currently held in the specified hand.
+        get-item-in-hand: func(hand: hand) -> option<item-stack>;
+        /// Sets the item in the specified hand.
+        set-item-in-hand: func(hand: hand, item: option<item-stack>);
+
+        /// Returns the currently selected hotbar slot index (0-8).
+        get-selected-slot: func() -> u8;
+        /// Sets the currently selected hotbar slot index (0-8).
+        set-selected-slot: func(slot: u8);
+
+        /// Armor slot accessors
+        get-helmet: func() -> option<item-stack>;
+        set-helmet: func(item: option<item-stack>);
+
+        get-chestplate: func() -> option<item-stack>;
+        set-chestplate: func(item: option<item-stack>);
+
+        get-leggings: func() -> option<item-stack>;
+        set-leggings: func(item: option<item-stack>);
+
+        get-boots: func() -> option<item-stack>;
+        set-boots: func(item: option<item-stack>);
+
+        get-off-hand: func() -> option<item-stack>;
+        set-off-hand: func(item: option<item-stack>);
+
+        /// Clears all armor slots.
+        clear-armor: func();
+        /// Clears the 36 main inventory slots.
+        clear-main: func();
+        /// Clears all slots (main inventory, armor, offhand).
+        clear-all: func();
+    }
+}

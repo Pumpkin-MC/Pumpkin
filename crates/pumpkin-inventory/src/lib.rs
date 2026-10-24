@@ -27,7 +27,7 @@
 //! - [`sync_handler`] - Client-server inventory synchronization
 //! - [`window_property`] - Container UI properties (furnace progress, enchantment levels, etc.)
 //!
-//! [`Inventory`]: pumpkin_world::inventory::Inventory
+//! [`Inventory`]: inventory::Inventory
 //! [`ScreenHandler`]: screen_handler::ScreenHandler
 //! [`Slot`]: slot::Slot
 //! [`PlayerInventory`]: PlayerInventory
@@ -46,22 +46,32 @@ pub mod entity_equipment;
 mod error;
 pub mod furnace_like;
 pub mod generic_container_screen_handler;
+pub mod grindstone_screen_handler;
 pub mod gui_builder;
+pub mod inventory;
 pub mod lectern_screen_handler;
 pub mod loom_screen_handler;
 pub mod merchant;
+pub mod mount_screen_handler;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
 pub mod smithing_table_screen_handler;
 pub mod stonecutter_screen_handler;
 pub mod sync_handler;
+pub mod viewer;
 pub mod window_property;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 pub use error::InventoryError;
+pub use inventory::{
+    Clearable, ComparableInventory, Inventory, SimpleInventory, split_stack_slice,
+    sync_read_items_from_nbt, sync_write_items_to_nbt,
+};
 use pumpkin_data::data_component_impl::EquipmentSlot;
+pub use viewer::ViewerCountTracker;
+pub use window_property::{ExperienceContainer, PropertyDelegate};
 
 use crate::player::player_inventory::PlayerInventory;
 
@@ -71,10 +81,10 @@ use crate::player::player_inventory::PlayerInventory;
 /// (head, chest, legs, feet, off-hand) used by the player screen handler.
 ///
 /// # Returns
-/// A `HashMap` where keys are slot indices and values are the corresponding [`EquipmentSlot`]s.
+/// A `FxHashMap` where keys are slot indices and values are the corresponding [`EquipmentSlot`]s.
 #[must_use]
-pub fn build_equipment_slots() -> HashMap<usize, EquipmentSlot> {
-    let mut equipment_slots = HashMap::new();
+pub fn build_equipment_slots() -> FxHashMap<usize, EquipmentSlot> {
+    let mut equipment_slots = FxHashMap::default();
     equipment_slots.insert(
         EquipmentSlot::FEET.get_offset_entity_slot_id(PlayerInventory::MAIN_SIZE as i32) as usize,
         EquipmentSlot::FEET,
@@ -92,7 +102,6 @@ pub fn build_equipment_slots() -> HashMap<usize, EquipmentSlot> {
         EquipmentSlot::HEAD,
     );
 
-    equipment_slots.insert(PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND);
     equipment_slots.insert(PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND);
     equipment_slots
 }

@@ -49,11 +49,7 @@ impl ClientPacket for COpenScreen<'_> {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.sync_id)?;
-        let window_type = pumpkin_data::menu_id_remap::remap_menu_id_for_version(
-            self.window_type.0 as u8,
-            *version,
-        );
-        write.write_var_int(&VarInt(i32::from(window_type)))?;
+        write.write_var_int(&self.window_type)?;
         write.write_component(self.window_title, version)
     }
 }

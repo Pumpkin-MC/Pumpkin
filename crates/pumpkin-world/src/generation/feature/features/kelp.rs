@@ -1,9 +1,10 @@
-use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::KelpLikeProperties, tag};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
+
+use crate::generation::proto_chunk::GenerationCache;
 
 pub struct KelpFeature;
 
@@ -19,67 +20,66 @@ impl KelpFeature {
     ) -> bool {
         let mut placed = 0;
 
-        // Start on the ocean floor
         let y = chunk.ocean_floor_height_exclusive(pos.0.x, pos.0.z);
         let mut kelp_pos = BlockPos::new(pos.0.x, y, pos.0.z);
 
-        // Must be in water
         if GenerationCache::get_block_state(chunk, &kelp_pos.0).to_block_id() == Block::WATER {
-            let height_rand = 1 + random.next_bounded_i32(10);
+            let height = 1 + random.next_bounded_i32(10);
 
-            // Iterate from base up to height_rand
-            for h in 0..=height_rand {
-                // Check there is water at this position and one above
+            for h in 0..=height {
+                let above = kelp_pos.up();
+                let can_survive = Self::can_survive(chunk, kelp_pos);
+
                 if GenerationCache::get_block_state(chunk, &kelp_pos.0).to_block_id()
                     == Block::WATER
-                    && GenerationCache::get_block_state(
-                        chunk,
-                        &BlockPos::new(kelp_pos.0.x, kelp_pos.0.y + 1, kelp_pos.0.z).0,
-                    )
-                    .to_block_id()
+                    && GenerationCache::get_block_state(chunk, &above.0).to_block_id()
                         == Block::WATER
+                    && can_survive
                 {
-                    // If this is the last iteration place the kelp head with age
-                    if h == height_rand {
-                        let age = random.next_bounded_i32(4) + 20;
-                        // Clamp in case it goes past available states
-                        let age = age.min((Block::KELP.states.len() - 1) as i32) as usize;
-                        let state_id = Block::KELP.states[age].id;
-                        let state = BlockState::from_id(state_id);
-                        chunk.set_block_state(&kelp_pos.0, state);
+                    if h == height {
+                        let age = (random.next_bounded_i32(4) + 20) as u8;
+                        let mut props = KelpLikeProperties::default(&Block::KELP);
+                        props.age = age;
+                        let state_id = props.to_state_id(&Block::KELP);
+                        chunk.set_block_state(&kelp_pos.0, BlockState::from_id(state_id));
                         placed += 1;
                     } else {
-                        // Place kelp plant body
-                        let state_id = Block::KELP_PLANT.default_state.id;
-                        let state = BlockState::from_id(state_id);
-                        chunk.set_block_state(&kelp_pos.0, state);
+                        chunk.set_block_state(&kelp_pos.0, Block::KELP_PLANT.default_state);
                     }
                 } else if h > 0 {
-                    // Can't place further but we have already placed at least one segment, try to put head below
-                    let below = BlockPos::new(kelp_pos.0.x, kelp_pos.0.y - 1, kelp_pos.0.z);
-                    // Check head block can survive and that below-below is not a kelp head
-                    if GenerationCache::get_block_state(chunk, &below.0).to_block_id()
-                        == Block::WATER
-                        && GenerationCache::get_block_state(
-                            chunk,
-                            &BlockPos::new(below.0.x, below.0.y - 1, below.0.z).0,
-                        )
-                        .to_block_id()
-                            != Block::KELP
-                    {
-                        let age = random.next_bounded_i32(4) + 20;
-                        let age = age.min((Block::KELP.states.len() - 1) as i32) as usize;
-                        let state_id = Block::KELP.states[age].id;
-                        let state = BlockState::from_id(state_id);
-                        chunk.set_block_state(&below.0, state);
+                    let below = kelp_pos.down();
+                    let below_below = below.down();
+                    let below_below_id =
+                        GenerationCache::get_block_state(chunk, &below_below.0).to_block_id();
+                    if Self::can_survive(chunk, below) && below_below_id != Block::KELP.id {
+                        let age = (random.next_bounded_i32(4) + 20) as u8;
+                        let mut props = KelpLikeProperties::default(&Block::KELP);
+                        props.age = age;
+                        let state_id = props.to_state_id(&Block::KELP);
+                        chunk.set_block_state(&below.0, BlockState::from_id(state_id));
                         placed += 1;
                     }
                     break;
                 }
-                kelp_pos = BlockPos::new(kelp_pos.0.x, kelp_pos.0.y + 1, kelp_pos.0.z);
+
+                kelp_pos = kelp_pos.up();
             }
         }
 
         placed > 0
+    }
+
+    fn can_survive<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
+        let below = pos.down();
+        let below_state = GenerationCache::get_block_state(chunk, &below.0);
+        let below_id = below_state.to_block_id();
+
+        if below_id.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP) {
+            return false;
+        }
+
+        below_id == Block::KELP.id
+            || below_id == Block::KELP_PLANT.id
+            || below_state.to_state().is_side_solid(BlockDirection::Up)
     }
 }

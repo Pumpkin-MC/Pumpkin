@@ -1,36 +1,25 @@
+// Last verified for v2169
+
 use crate::{
     bedrock::network_item::NetworkItemStackDescriptor, codec::var_ulong::VarULong,
     serial::PacketRead,
 };
 use pumpkin_macros::packet;
-use std::io::{Error, Read};
 
-#[derive(Debug)]
+/// Sent by the client to update the item held or equipped in a mob or player slot.
+#[derive(Debug, PacketRead)]
 #[packet(31)]
 pub struct SMobEquipment {
+    /// Runtime entity ID of the mob or player changing equipment.
     pub entity_runtime_id: VarULong,
+    /// Item descriptor being equipped.
     pub item: NetworkItemStackDescriptor,
-    pub inventory_slot: u8,
-    pub hotbar_slot: u8,
-    pub window_id: u8,
-}
-
-impl PacketRead for SMobEquipment {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let entity_runtime_id = VarULong::read(reader)?;
-        let item = NetworkItemStackDescriptor::read(reader)?;
-        let inventory_slot = u8::read(reader)?;
-        let hotbar_slot = u8::read(reader)?;
-        let window_id = u8::read(reader)?;
-
-        Ok(Self {
-            entity_runtime_id,
-            item,
-            inventory_slot,
-            hotbar_slot,
-            window_id,
-        })
-    }
+    /// Slot index in the container.
+    pub slot: u8,
+    /// Currently selected hotbar slot.
+    pub selected_slot: u8,
+    /// Container identifier (e.g. inventory or armor).
+    pub container_id: u8,
 }
 
 #[cfg(test)]
@@ -54,9 +43,9 @@ mod tests {
 
         assert_eq!(packet.entity_runtime_id.0, 42);
         assert_eq!(packet.item.id, 0);
-        assert_eq!(packet.inventory_slot, 3);
-        assert_eq!(packet.hotbar_slot, 4);
-        assert_eq!(packet.window_id, 5);
+        assert_eq!(packet.slot, 3);
+        assert_eq!(packet.selected_slot, 4);
+        assert_eq!(packet.container_id, 5);
         assert_eq!(reader.position(), reader.get_ref().len() as u64);
     }
 }

@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, OakFenceLikeProperties},
-};
+use pumpkin_data::{Block, block_properties::OakFenceLikeProperties};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -14,7 +11,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector, WorldPortalExt,
-            nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
 };
@@ -60,30 +57,6 @@ impl StructurePieceBase for CorridorExitPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings_nether(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut last: Option<NetherFortressPieceType> = None;
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            5,
-            3,
-            true,
-            pieces_to_process,
-        );
     }
 
     #[allow(clippy::too_many_lines)]
@@ -226,11 +199,14 @@ impl StructurePieceBase for CorridorExitPiece {
         p.add_block(chunk, nb, 6, 0, 6, &bb);
         p.add_block(chunk, Block::LAVA.default_state, 6, 5, 6, &bb);
 
-        // Schedule lava fluid tick
-        // TODO
-        // let lava_pos = p.offset_pos(6, 5, 6);
-        // if bb.contains_pos(&lava_pos) {
-        //     chunk.schedule_fluid_tick(&lava_pos, 0);
-        // }
+        let lava_pos = p.offset_pos(6, 5, 6);
+        if bb.contains_pos(&lava_pos) {
+            chunk.schedule_fluid_tick(
+                lava_pos.x,
+                lava_pos.y,
+                lava_pos.z,
+                &pumpkin_data::fluid::Fluid::LAVA,
+            );
+        }
     }
 }

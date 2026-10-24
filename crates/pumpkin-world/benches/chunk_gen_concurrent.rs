@@ -96,8 +96,6 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
                             let br = br.clone();
                             s.spawn(move |_| {
                                 black_box(generate_single_chunk(
-                                    &Dimension::OVERWORLD,
-                                    0,
                                     &wg,
                                     br.as_ref(),
                                     cx,

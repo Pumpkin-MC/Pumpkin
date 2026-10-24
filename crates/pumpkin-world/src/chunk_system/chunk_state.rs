@@ -5,6 +5,7 @@ use crate::chunk::{
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -70,9 +71,7 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::StructureStarts => Self::StructureStart,
             ChunkStatus::StructureReferences => Self::StructureReferences,
             ChunkStatus::Biomes => Self::Biomes,
-            ChunkStatus::Noise => Self::Noise,
-            ChunkStatus::Surface => Self::Surface,
-            ChunkStatus::Carvers => Self::Carvers,
+            ChunkStatus::Terrain => Self::Noise,
             ChunkStatus::Features => Self::Features,
             ChunkStatus::InitializeLight | ChunkStatus::Light => Self::Lighting,
             ChunkStatus::Spawn => Self::Spawn,
@@ -89,9 +88,9 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::StructureStart => Self::StructureStarts,
             StagedChunkEnum::StructureReferences => Self::StructureReferences,
             StagedChunkEnum::Biomes => Self::Biomes,
-            StagedChunkEnum::Noise => Self::Noise,
-            StagedChunkEnum::Surface => Self::Surface,
-            StagedChunkEnum::Carvers => Self::Carvers,
+            StagedChunkEnum::Noise | StagedChunkEnum::Surface | StagedChunkEnum::Carvers => {
+                Self::Terrain
+            }
             StagedChunkEnum::Features => Self::Features,
             StagedChunkEnum::Lighting => Self::Light,
             StagedChunkEnum::Spawn => Self::Spawn,
@@ -129,15 +128,22 @@ impl StagedChunkEnum {
         Self::Lighting,
         Self::Features,
         Self::Carvers,
-        Self::Surface,
+        Self::Biomes,
     ];
-    pub const FULL_RADIUS: i32 = 4;
+    pub const FULL_RADIUS: i32 = 5;
     #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
+            Self::Surface | Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
             _ => 0,
+        }
+    }
+    #[must_use]
+    pub const fn get_read_radius(self) -> i32 {
+        match self {
+            Self::Surface => 1,
+            _ => self.get_write_radius(),
         }
     }
     #[must_use]
@@ -167,7 +173,7 @@ impl StagedChunkEnum {
                 Self::StructureStart,
             ],
             Self::Noise => &[Self::StructureReferences],
-            Self::Surface => &[Self::Noise],
+            Self::Surface => &[Self::Noise, Self::Biomes],
             Self::Carvers => &[Self::Surface],
             Self::Features => &[Self::Carvers, Self::Carvers],
             Self::Lighting => &[Self::Features, Self::Features],
@@ -210,6 +216,9 @@ impl Chunk {
         let biome_min_y = biome_coords::from_block(dimension.min_y);
         let block_sections = (0..total_sections)
             .map(|section_index| {
+                if section_index * BlockPalette::VOLUME >= proto_chunk.flat_block_map.len() {
+                    return BlockPalette::Homogeneous(BlockStateId::AIR);
+                }
                 BlockPalette::from_fn(|x, y, z| {
                     let y = section_index * BlockPalette::SIZE + y;
                     proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
@@ -330,5 +339,21 @@ impl Chunk {
         };
 
         *self = Self::Level(Arc::new(chunk));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StagedChunkEnum;
+
+    #[test]
+    fn surface_reads_neighbor_biomes_without_owning_neighbors() {
+        assert_eq!(StagedChunkEnum::Surface.get_direct_radius(), 1);
+        assert_eq!(StagedChunkEnum::Surface.get_read_radius(), 1);
+        assert_eq!(StagedChunkEnum::Surface.get_write_radius(), 0);
+        assert_eq!(
+            StagedChunkEnum::Surface.get_direct_dependencies(),
+            &[StagedChunkEnum::Noise, StagedChunkEnum::Biomes]
+        );
     }
 }

@@ -2,7 +2,7 @@ use core::f32;
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{Axis, EnumVariants},
+    block_properties::{Axis, PaleOakWoodLikeProperties},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -36,20 +36,21 @@ impl FancyTrunkPlacer {
         let j = height as i32 + 2;
         let k = ((j as f64) * 0.618).floor() as i32;
 
-        TrunkPlacer::set_dirt(
+        let mut logs = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &start_pos.down(),
             below_trunk_provider,
-        );
+        ) {
+            logs.push(start_pos.down());
+        }
 
         let l = ((1.382 + (1.0 * (j as f64) / 13.0).powf(2.0)).floor() as i32).min(1);
         let m = start_pos.0.y + k;
         let mut list: Vec<BranchPosition> = Vec::new();
-        let mut logs = Vec::new();
-
-        list.push(BranchPosition::new(start_pos.up_height(k), m));
+        list.push(BranchPosition::new(start_pos.up_height(j - 5), m));
 
         for n in (0..=(j - 5)).rev() {
             let f = Self::should_generate_branch(j, n);
@@ -102,14 +103,15 @@ impl FancyTrunkPlacer {
             }
         }
 
-        Self::make_or_check_branch(
+        let (_, new_logs) = Self::make_or_check_branch(
             chunk,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
         );
-        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
+        logs.extend_from_slice(&new_logs);
+        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list, &mut logs);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -143,49 +145,43 @@ impl FancyTrunkPlacer {
         let h = block_pos_offset.z as f32 / i as f32;
 
         let mut logs = Vec::new();
-        for j in 0..=i {
-            let block_pos_2 = BlockPos(start_pos.add_raw(
-                (0.5f32 + j as f32 * f).floor() as i32,
-                (0.5f32 + j as f32 * g).floor() as i32,
-                (0.5f32 + j as f32 * h).floor() as i32,
-            ));
+        if make {
+            for j in 0..=i {
+                let block_pos_2 = BlockPos(start_pos.add_raw(
+                    (0.5f32 + j as f32 * f).floor() as i32,
+                    (0.5f32 + j as f32 * g).floor() as i32,
+                    (0.5f32 + j as f32 * h).floor() as i32,
+                ));
 
-            let block = GenerationCache::get_block_state(chunk, &block_pos_2.0);
-
-            if make {
-                let axis = Self::get_log_axis(start_pos, block_pos_2.0);
+                let block = GenerationCache::get_block_state(chunk, &block_pos_2.0);
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
+                    let axis = Self::get_log_axis(start_pos, block_pos_2.0);
                     let block = Block::from_state_id(trunk_provider.id);
-                    let Some(properties) = block.properties(trunk_provider.id) else {
-                        continue;
-                    };
-                    let original_props = &properties.to_props();
-                    let axis = axis.to_value();
-                    // Set the right Axis
-                    let props: Vec<(&'static str, &'static str)> = original_props
-                        .iter()
-                        .map(|(key, value)| {
-                            if *key == "axis" {
-                                (*key, axis)
-                            } else {
-                                (*key, *value)
-                            }
-                        })
-                        .collect();
-                    let state = block.from_properties(&props).to_state_id(block);
-                    chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
+                    let mut props = PaleOakWoodLikeProperties::from_state_id(trunk_provider.id);
+                    props.axis = axis;
+                    let state = props.to_state_id(block).to_state();
+                    chunk.set_block_state(&block_pos_2.0, state);
                     logs.push(block_pos_2);
-                    continue;
                 }
             }
+            (true, logs)
+        } else {
+            for j in 0..=i {
+                let block_pos_2 = BlockPos(start_pos.add_raw(
+                    (0.5f32 + j as f32 * f).floor() as i32,
+                    (0.5f32 + j as f32 * g).floor() as i32,
+                    (0.5f32 + j as f32 * h).floor() as i32,
+                ));
 
-            if TreeFeature::can_replace_or_log(block.to_state(), block.to_block_id()) {
-                continue;
+                let block = GenerationCache::get_block_state(chunk, &block_pos_2.0);
+
+                if !TreeFeature::can_replace_or_log(block.to_state(), block.to_block_id()) {
+                    return (false, vec![]);
+                }
             }
-            return (false, logs);
+            (true, vec![])
         }
-        (true, logs)
     }
 
     fn make_branches<T: GenerationCache>(
@@ -194,6 +190,7 @@ impl FancyTrunkPlacer {
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
         branch_positions: &[BranchPosition],
+        logs: &mut Vec<BlockPos>,
     ) {
         for branch_position in branch_positions {
             let i = branch_position.get_end_y();
@@ -203,13 +200,14 @@ impl FancyTrunkPlacer {
             {
                 continue;
             }
-            Self::make_or_check_branch(
+            let (_, new_logs) = Self::make_or_check_branch(
                 chunk,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
             );
+            logs.extend_from_slice(&new_logs);
         }
     }
 
@@ -258,6 +256,7 @@ pub struct BranchPosition {
 }
 
 impl BranchPosition {
+    #[must_use]
     pub const fn new(pos: BlockPos, end_y: i32) -> Self {
         Self {
             node: TreeNode {
@@ -269,6 +268,7 @@ impl BranchPosition {
         }
     }
 
+    #[must_use]
     pub const fn get_end_y(&self) -> i32 {
         self.end_y
     }
