@@ -93,6 +93,11 @@ pub struct LevelData {
     #[serde(skip_serializing, default)]
     pub day_time: i64,
 
+    /// Total ticks the world has run (vanilla `Time` in `level.dat`).
+    /// Scheduled functions are keyed to it, so it must survive restarts.
+    #[serde(skip_serializing, default)]
+    pub game_time: i64,
+
     /// Remaining ticks of forced-clear weather.
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(rename = "clearWeatherTime", skip_serializing, default)]
@@ -555,6 +560,7 @@ impl LevelData {
             game_rules: GameRuleRegistry::default(),
             world_gen_settings: WorldGenSettings::new(seed),
             day_time: 0,
+            game_time: 0,
             clear_weather_time: -1,
         }
     }
