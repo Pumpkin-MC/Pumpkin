@@ -1,5 +1,5 @@
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, PoisonError, Weak};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -21,6 +21,7 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{
         Mob, MobEntity, MobMetadata,
         equipment::RegionalDifficulty,
@@ -36,7 +37,8 @@ pub struct SpiderEntity {
 
 impl SpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        initialize_spider_navigation(&mut mob_entity);
         let spider = Self { mob_entity };
         let mob_arc = Arc::new(spider);
         let mob_weak: Weak<dyn Mob> = {
@@ -48,6 +50,12 @@ impl SpiderEntity {
 
         mob_arc
     }
+}
+
+pub fn initialize_spider_navigation(mob: &mut MobEntity) {
+    *mob.navigator
+        .get_mut()
+        .unwrap_or_else(PoisonError::into_inner) = Navigator::wall_climber();
 }
 
 pub fn is_climbing(mob: &MobEntity) -> bool {

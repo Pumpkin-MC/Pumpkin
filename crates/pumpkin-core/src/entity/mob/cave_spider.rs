@@ -8,7 +8,9 @@ use crate::entity::{
     Entity, EntityBase,
     mob::{
         Mob, MobEntity, MobMetadata,
-        spider::{register_spider_goals, set_climbing, spider_metadata},
+        spider::{
+            initialize_spider_navigation, register_spider_goals, set_climbing, spider_metadata,
+        },
     },
 };
 
@@ -18,7 +20,8 @@ pub struct CaveSpiderEntity {
 
 impl CaveSpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        initialize_spider_navigation(&mut mob_entity);
         let cave_spider = Self { mob_entity };
         let mob_arc = Arc::new(cave_spider);
         let mob_weak: Weak<dyn Mob> = {
