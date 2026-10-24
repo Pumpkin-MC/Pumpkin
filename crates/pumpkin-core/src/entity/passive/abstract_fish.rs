@@ -188,4 +188,198 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
             .ambient_sound_time
             .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
     }
+
+    fn fish_remove_when_far_away(&self) -> bool {
+        !self.is_from_bucket() && self.get_entity().custom_name.load().is_none()
+    }
+
+    fn fish_requires_custom_persistence(&self) -> bool {
+        let entity = self.get_entity();
+        self.is_from_bucket()
+            || entity
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+            || entity
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+    }
+}
+
+/// Generates the trait impls every fish repeats. The type needs `mob_entity` and `fish_data` fields.
+#[macro_export]
+macro_rules! impl_abstract_fish {
+    ($fish:ty, bucket: $bucket:expr, flop: $flop:expr, ambient: $ambient:expr) => {
+        $crate::impl_abstract_fish!($fish, bucket: $bucket, flop: $flop, ambient: $ambient, bucket_extra: {});
+    };
+    ($fish:ty, bucket: $bucket:expr, flop: $flop:expr, ambient: $ambient:expr, bucket_extra: { $($extra:tt)* }) => {
+        impl $crate::entity::passive::water_animal::WaterAnimal for $fish {}
+
+        impl $crate::entity::passive::abstract_fish::AbstractFish for $fish {
+            fn flop_sound(&self) -> pumpkin_data::sound::Sound {
+                $flop
+            }
+
+            fn fish_data(&self) -> &$crate::entity::passive::abstract_fish::FishData {
+                &self.fish_data
+            }
+
+            fn ambient_sound(&self) -> pumpkin_data::sound::Sound {
+                $ambient
+            }
+        }
+
+        impl $crate::entity::custom_sound::CustomSound for $fish {
+            fn death_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+                $crate::entity::EntityBase::get_entity(self).entity_type.death_sound
+            }
+
+            fn hurt_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+                $crate::entity::EntityBase::get_entity(self).entity_type.hurt_sound
+            }
+
+            fn sound_volume(&self) -> f32 {
+                if $crate::entity::EntityBase::get_entity(self).is_silent() {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
+
+            fn sound_category(&self) -> pumpkin_data::sound::SoundCategory {
+                pumpkin_data::sound::SoundCategory::Neutral
+            }
+
+            fn on_hurt_sound(&self) {
+                $crate::entity::passive::abstract_fish::AbstractFish::reset_ambient_sound_time(self);
+            }
+        }
+
+        impl $crate::entity::bucketable::Bucketable for $fish {
+            fn is_from_bucket(&self) -> bool {
+                self.fish_data
+                    .from_bucket
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            }
+
+            fn set_from_bucket(&self, from_bucket: bool) {
+                self.fish_data
+                    .from_bucket
+                    .store(from_bucket, std::sync::atomic::Ordering::Relaxed);
+                $crate::entity::EntityBase::get_entity(self).set_synced_data(
+                    pumpkin_data::tracked_data::abstract_fish::FROM_BUCKET,
+                    from_bucket,
+                );
+            }
+
+            fn bucket_item(&self) -> &'static pumpkin_data::item::Item {
+                $bucket
+            }
+
+            fn pickup_sound(&self) -> pumpkin_data::sound::Sound {
+                pumpkin_data::sound::Sound::ItemBucketFillFish
+            }
+
+            $($extra)*
+        }
+    };
+}
+
+/// Generates the `Mob` methods every fish shares. Use inside `impl Mob for ...`.
+#[macro_export]
+macro_rules! fish_mob_hooks {
+    () => {
+        fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
+            &self.mob_entity
+        }
+
+        fn as_fish(&self) -> Option<&dyn $crate::entity::passive::abstract_fish::AbstractFish> {
+            Some(self)
+        }
+
+        fn as_bucketable(&self) -> Option<&dyn $crate::entity::bucketable::Bucketable> {
+            Some(self)
+        }
+
+        fn as_custom_sound(&self) -> Option<&dyn $crate::entity::custom_sound::CustomSound> {
+            Some(self)
+        }
+
+        fn mob_interact_with_hand(
+            &self,
+            player: &std::sync::Arc<$crate::entity::player::Player>,
+            stack: &mut pumpkin_data::item_stack::ItemStack,
+            _hand: pumpkin_util::Hand,
+        ) -> Option<bool> {
+            $crate::entity::bucketable::bucket_mob_pickup(player, stack, self)
+        }
+
+        fn before_mob_ai_step(&self) {
+            $crate::entity::passive::abstract_fish::AbstractFish::fish_ai_step(self);
+        }
+
+        fn travel_in_water(
+            &self,
+            caller: &dyn $crate::entity::EntityBase,
+            _gravity: f64,
+            _falling: bool,
+        ) {
+            $crate::entity::passive::abstract_fish::AbstractFish::fish_travel_in_water(
+                self, caller,
+            );
+        }
+
+        fn base_tick(&self) {
+            $crate::entity::passive::abstract_fish::AbstractFish::fish_base_tick(self, self);
+        }
+
+        fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+            $crate::entity::passive::abstract_fish::AbstractFish::fish_remove_when_far_away(self)
+        }
+
+        fn requires_custom_persistence(&self) -> bool {
+            $crate::entity::passive::abstract_fish::AbstractFish::fish_requires_custom_persistence(
+                self,
+            )
+        }
+
+        fn check_spawn_obstruction(&self, world: &$crate::world::World) -> bool {
+            $crate::entity::passive::water_animal::WaterAnimal::water_animal_spawn_obstruction(
+                self, world,
+            )
+        }
+
+        fn get_base_experience_reward(&self) -> u32 {
+            $crate::entity::passive::water_animal::WaterAnimal::water_animal_experience_reward(self)
+        }
+
+        fn mob_is_pushed_by_fluids(&self) -> bool {
+            false
+        }
+
+        fn can_be_leashed(&self) -> bool {
+            false
+        }
+    };
+}
+
+/// Generates the `Mob` methods schooling fish add on top of `fish_mob_hooks!`.
+#[macro_export]
+macro_rules! schooling_fish_mob_hooks {
+    () => {
+        fn as_schooling_fish(
+            &self,
+        ) -> Option<&dyn $crate::entity::passive::abstract_schooling_fish::AbstractSchoolingFish> {
+            Some(self)
+        }
+
+        fn post_tick(&self) {
+            $crate::entity::passive::abstract_schooling_fish::AbstractSchoolingFish::schooling_tick(
+                self,
+            );
+        }
+    };
 }

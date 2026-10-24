@@ -169,6 +169,20 @@ pub trait AbstractSchoolingFish: AbstractFish {
     }
 }
 
+/// Generates the `AbstractSchoolingFish` impl. The type needs a `schooling_data` field.
+#[macro_export]
+macro_rules! impl_schooling_fish {
+    ($fish:ty) => {
+        impl $crate::entity::passive::abstract_schooling_fish::AbstractSchoolingFish for $fish {
+            fn schooling_data(
+                &self,
+            ) -> &$crate::entity::passive::abstract_schooling_fish::SchoolingFishData {
+                &self.schooling_data
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
