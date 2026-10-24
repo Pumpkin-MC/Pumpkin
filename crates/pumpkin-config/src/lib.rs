@@ -96,6 +96,22 @@ impl LoadConfiguration for PumpkinConfig {
         self.advanced.validate();
         self.telemetry.validate();
 
+        // The login response handler checks this switch independently of proxy.enabled.
+        let velocity = &self.advanced.networking.proxy.velocity;
+        if velocity.enabled {
+            let secret = velocity.forwarding_secret();
+            if let Err(error) = &secret {
+                #[expect(
+                    clippy::print_stderr,
+                    reason = "Logging starts after configuration validation."
+                )]
+                {
+                    eprintln!("Invalid Velocity forwarding secret: {error}");
+                }
+            }
+            assert!(secret.is_ok(), "Invalid Velocity forwarding secret");
+        }
+
         let Some(min_vd) = NonZero::new(2) else {
             return;
         };
