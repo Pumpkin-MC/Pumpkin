@@ -3,7 +3,7 @@ use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
 use pumpkin_util::version::JavaMinecraftVersion;
 use thiserror::Error;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::{
     Aes128Cfb8Enc, ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE,
@@ -16,6 +16,7 @@ use crate::{
 pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
     Encrypt(Box<StreamEncryptor<W>>),
     None(W),
+    Buffered(BufWriter<W>),
 }
 
 impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
@@ -23,6 +24,9 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
     pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
         match self {
             Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
+            Self::Buffered(stream) => {
+                Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream.into_inner())))
+            }
             Self::Encrypt(_) => self,
         }
     }
@@ -43,6 +47,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
+            Self::Buffered(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_write(cx, buf)
+            }
         }
     }
 
@@ -59,6 +67,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_flush(cx)
             }
+            Self::Buffered(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_flush(cx)
+            }
         }
     }
 
@@ -72,6 +84,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
                 writer.poll_shutdown(cx)
             }
             Self::None(writer) => {
+                let writer = std::pin::Pin::new(writer);
+                writer.poll_shutdown(cx)
+            }
+            Self::Buffered(writer) => {
                 let writer = std::pin::Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
@@ -94,14 +110,25 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub const fn new(writer: W) -> Self {
+    const fn with_writer(writer: EncryptionWriter<W>) -> Self {
         Self {
-            writer: Some(EncryptionWriter::None(writer)),
+            writer: Some(writer),
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
             frame_scratch: Vec::new(),
         }
+    }
+
+    /// Wrap an already configured writer; does not add buffering.
+    pub const fn new(writer: W) -> Self {
+        Self::with_writer(EncryptionWriter::None(writer))
+    }
+
+    /// Buffer plaintext writes until encryption is activated. Once encrypted,
+    /// the 16 KiB ciphertext buffer takes over without retaining this layer.
+    pub fn new_buffered(writer: W) -> Self {
+        Self::with_writer(EncryptionWriter::Buffered(BufWriter::new(writer)))
     }
 
     pub const fn set_compression(
@@ -114,9 +141,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
         if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
-            return Err(PacketEncodeError::Message(
-                "Encryption already enabled".into(),
-            ));
+            return Err(PacketEncodeError::EncryptionAlreadyEnabled);
+        }
+        // The unencrypted buffer must be drained before changing the wire cipher.
+        // Otherwise its plaintext could be discarded or sent after encryption starts.
+        if let Some(EncryptionWriter::Buffered(writer)) = self.writer.as_ref()
+            && !writer.buffer().is_empty()
+        {
+            return Err(PacketEncodeError::UnflushedPlaintext);
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
@@ -465,6 +497,8 @@ mod tests {
             .write_packet(packet_buf.into())
             .await
             .map_err(|e| e.to_string())?;
+        // Ciphertext and unencrypted bytes may both be buffered until flush.
+        encoder.flush().await.map_err(|e| e.to_string())?;
 
         Ok(buf.into_boxed_slice())
     }
@@ -795,5 +829,25 @@ mod tests {
 
         assert_eq!(buffer, expected_payload);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn encryption_upgrade_rejects_pending_unencrypted_data() {
+        let mut data = Vec::new();
+        let mut encoder = TCPNetworkEncoder::new_buffered(&mut data);
+        encoder
+            .write_packet(Bytes::from_static(&[1, 2, 3]))
+            .await
+            .unwrap();
+        assert!(matches!(
+            encoder.set_encryption(&[0x12; 16]),
+            Err(PacketEncodeError::UnflushedPlaintext)
+        ));
+        encoder.flush().await.unwrap();
+        assert!(encoder.set_encryption(&[0x12; 16]).is_ok());
+        assert!(matches!(
+            encoder.set_encryption(&[0x12; 16]),
+            Err(PacketEncodeError::EncryptionAlreadyEnabled)
+        ));
     }
 }

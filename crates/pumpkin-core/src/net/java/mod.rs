@@ -39,7 +39,7 @@ use pumpkin_protocol::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
-    io::{BufReader, BufWriter},
+    io::BufReader,
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     sync::oneshot,
 };
@@ -109,7 +109,7 @@ pub struct JavaClient {
     /// Tracks total buffered payload bytes in the outgoing queue.
     pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
-    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
+    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<OwnedWriteHalf>>>,
     /// The packet decoder for incoming packets.
     network_reader: std::sync::Mutex<Option<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>>,
     /// Keep Alive:
