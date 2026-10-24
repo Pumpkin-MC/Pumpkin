@@ -116,8 +116,10 @@ impl BlockBehaviour for DriedGhastBlock {
                     args.world,
                     Uuid::new_v4(),
                 );
+                if let Some(ageable) = ghastling.get_mob().and_then(|mob| mob.as_ageable()) {
+                    ageable.set_age(-24000);
+                }
                 let entity = ghastling.get_entity();
-                entity.set_age(-24000);
                 entity.set_rotation(horizontal_facing_to_yaw(props.facing), 0.0);
                 args.world.play_sound(
                     Sound::EntityGhastlingSpawn,

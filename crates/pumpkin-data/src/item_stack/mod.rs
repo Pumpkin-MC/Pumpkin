@@ -341,6 +341,7 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    /// Vanilla `nextDamageWillBreak`
     #[must_use]
     pub fn next_damage_will_break(&self) -> bool {
         self.is_damageable()

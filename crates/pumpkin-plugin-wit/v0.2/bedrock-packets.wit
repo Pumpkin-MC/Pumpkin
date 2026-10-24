@@ -2434,6 +2434,9 @@ interface bedrock-packets {
     s-client-cache-blob-status(s-client-cache-blob-status),
     /// Sent by the client during login to inform the server whether client-side chunk blob caching is supported.
     s-client-cache-status(s-client-cache-status),
+    /// The client's movement prediction state (actor flags, bounding box, movement attributes,
+    /// flying). Only sent after server-authoritative movement corrections, so its body is not read.
+    s-client-movement-prediction-sync,
     /// Sent by the client to request server-side execution of a slash command.
     s-command-request(s-command-request),
     /// Sent by either client or server to close an open container inventory window.

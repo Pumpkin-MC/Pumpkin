@@ -71,6 +71,16 @@ impl BreedGoal {
         let entity = mob.get_entity();
         let world = entity.world.load();
 
+        // No baby form, no offspring.
+        let parent_pos = entity.pos.load();
+        let baby = mob.as_animal().map_or_else(
+            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
+            |animal| animal.get_breed_offspring(mate),
+        );
+        if !baby.get_mob().is_some_and(Mob::spawn_as_baby) {
+            return;
+        }
+
         let player_opt = mob_entity
             .breeder
             .load()
@@ -101,12 +111,6 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        let parent_pos = entity.pos.load();
-        let baby = mob.as_animal().map_or_else(
-            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
-            |animal| animal.get_breed_offspring(mate),
-        );
-        baby.get_entity().set_age(-24000);
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 

@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
@@ -41,6 +42,7 @@ pub struct CatEntity {
     pub sound_variant: AtomicU8,
     pub collar_color: AtomicU8,
     pub tamable_data: TamableData,
+    pub ageable_data: AgeableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
 }
@@ -54,6 +56,7 @@ impl CatEntity {
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
+            ageable_data: AgeableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
         };
@@ -198,15 +201,18 @@ impl CatEntity {
         );
     }
 
+    fn eat_sound(&self) -> pumpkin_data::sound::Sound {
+        let is_baby = self.get_entity().age.load(Ordering::Relaxed) < 0;
+        CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default()
+            .eat_sound(is_baby)
+    }
+
     pub fn play_eating_sound(&self) {
-        let mob_entity = self.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
+        let entity = self.get_entity();
         let world = entity.world.load();
         world.play_sound(
-            sound_variant.eat_sound(is_baby),
+            self.eat_sound(),
             pumpkin_data::sound::SoundCategory::Neutral,
             &entity.pos.load(),
         );
@@ -242,7 +248,17 @@ impl TamableAnimal for CatEntity {
     }
 }
 
+impl AgeableMob for CatEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for CatEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }
@@ -425,6 +441,6 @@ impl Mob for CatEntity {
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
-        !self.is_tame() && self.get_entity().age.load(Ordering::Relaxed) > 2400
+        !self.is_tame() && self.get_entity().tick_count.load(Ordering::Relaxed) > 2400
     }
 }

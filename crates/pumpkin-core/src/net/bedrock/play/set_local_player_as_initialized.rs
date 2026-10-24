@@ -16,5 +16,6 @@ impl BedrockClient {
         // Resend persisted vitals after the client is ready, even if an earlier
         // pre-spawn update already populated the server's change-tracking cache.
         player.send_health();
+        self.send_latency_probe();
     }
 }

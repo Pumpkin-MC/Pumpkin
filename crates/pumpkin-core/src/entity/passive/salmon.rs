@@ -12,7 +12,6 @@ use pumpkin_data::{
     sound::Sound,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use rand::RngExt;
 
 use super::{
@@ -62,24 +61,12 @@ impl SalmonEntity {
 
     pub fn set_variant(&self, variant: SalmonSize) {
         self.variant.store(variant.id(), Relaxed);
-        self.get_entity()
-            .set_synced_data(pumpkin_data::tracked_data::salmon::DATA_TYPE, variant.id());
-        self.refresh_dimensions();
-    }
-
-    fn refresh_dimensions(&self) {
         let entity = self.get_entity();
-        let scale = self.get_variant().bounding_box_scale();
-        let dimensions = EntityDimensions::new(
-            entity.entity_type.dimension[0] * scale,
-            entity.entity_type.dimension[1] * scale,
-            entity.entity_type.eye_height * scale,
+        entity.set_synced_data(pumpkin_data::tracked_data::salmon::DATA_TYPE, variant.id());
+        // Vanilla `getDefaultDimensions`: the type's size scaled by the variant.
+        entity.set_default_dimensions(
+            Entity::type_dimensions(entity.entity_type).scale(variant.bounding_box_scale()),
         );
-        entity.entity_dimension.store(dimensions);
-        let pos = entity.pos.load();
-        entity
-            .bounding_box
-            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
     }
 
     fn random_spawn_variant(&self) -> SalmonSize {

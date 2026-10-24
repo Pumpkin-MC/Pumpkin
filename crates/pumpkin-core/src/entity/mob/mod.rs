@@ -20,7 +20,7 @@ use crate::world::entity_islands::{self, AuditedReach};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{AttackRangeImpl, EquipmentSlot};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -141,6 +141,9 @@ pub struct MobEntity {
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
+/// Vanilla `Mob.DEFAULT_ATTACK_REACH`: `Math.sqrt(2.04F) - 0.6F`, from floats
+const DEFAULT_ATTACK_REACH: f64 = 0.828_285_648_512_600_4;
+
 impl MobEntity {
     /// Vanilla `Mob.getNavigation`/`getMoveControl`: a rider steering a mob drives that mob.
     /// Only the mob's own AI step ticks its own navigator and move control directly.
@@ -692,19 +695,7 @@ impl MobEntity {
     }
 
     pub fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
-        const DEFAULT_ATTACK_RANGE: f64 = 0.828_427_12; // sqrt(2.04) - 0.6
-
-        // TODO: Implement DataComponent lookup for ATTACK_RANGE when components are ready
-        let max_range = DEFAULT_ATTACK_RANGE;
-        let min_range = 0.0;
-
-        let target_hitbox = target.get_entity().bounding_box.load();
-
-        if !self.get_attack_box(max_range).intersects(&target_hitbox) {
-            return false;
-        }
-
-        min_range <= 0.0 || !self.get_attack_box(min_range).intersects(&target_hitbox)
+        is_within_melee_attack_range(self, target, |range| self.get_attack_box(range))
     }
 
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -812,6 +803,21 @@ impl MobEntity {
         );
 
         if damaged {
+            // Vanilla `Mob.doHurtTarget` then `LivingEntity.causeExtraKnockback`.
+            let weapon = self.living_entity.held_item(caller);
+            let knockback = crate::enchantment::EnchantmentHelper::modify_knockback(
+                &weapon,
+                self.living_entity
+                    .get_attribute_value(&Attributes::ATTACK_KNOCKBACK) as f32,
+            );
+            if knockback > 0.0 && target.get_living_entity().is_some() {
+                crate::entity::combat::handle_knockback(
+                    caller.get_entity(),
+                    target,
+                    f64::from(knockback),
+                );
+            }
+
             self.living_entity
                 .last_attacking_id
                 .store(target.get_entity().entity_id, Relaxed);
@@ -824,30 +830,7 @@ impl MobEntity {
     }
 
     fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
-        let vehicle_opt = self.living_entity.entity.get_vehicle();
-
-        let base_box = vehicle_opt.as_ref().map_or_else(
-            || self.living_entity.entity.bounding_box.load(),
-            |vehicle| {
-                let vehicle_box = vehicle.get_entity().bounding_box.load();
-                let my_box = self.living_entity.entity.bounding_box.load();
-
-                BoundingBox {
-                    min: Vector3::new(
-                        my_box.min.x.min(vehicle_box.min.x),
-                        my_box.min.y,
-                        my_box.min.z.min(vehicle_box.min.z),
-                    ),
-                    max: Vector3::new(
-                        my_box.max.x.max(vehicle_box.max.x),
-                        my_box.max.y,
-                        my_box.max.z.max(vehicle_box.max.z),
-                    ),
-                }
-            },
-        );
-
-        base_box.expand(attack_range, 0.0, attack_range)
+        attack_bounding_box(&self.living_entity.entity, attack_range)
     }
 
     /// Brightness at the mob's eye (sky and block light) reaches daylight.
@@ -957,6 +940,54 @@ impl MobEntity {
     }
 }
 
+/// Vanilla `Mob.getAttackBoundingBox` without the ravager shrink.
+pub(super) fn attack_bounding_box(entity: &Entity, horizontal_expansion: f64) -> BoundingBox {
+    let vehicle_opt = entity.get_vehicle();
+    let base_box = vehicle_opt.as_ref().map_or_else(
+        || entity.bounding_box.load(),
+        |vehicle| {
+            let vehicle_box = vehicle.get_entity().bounding_box.load();
+            let my_box = entity.bounding_box.load();
+            BoundingBox {
+                min: Vector3::new(
+                    my_box.min.x.min(vehicle_box.min.x),
+                    my_box.min.y,
+                    my_box.min.z.min(vehicle_box.min.z),
+                ),
+                max: Vector3::new(
+                    my_box.max.x.max(vehicle_box.max.x),
+                    my_box.max.y,
+                    my_box.max.z.max(vehicle_box.max.z),
+                ),
+            }
+        },
+    );
+    base_box.expand(horizontal_expansion, 0.0, horizontal_expansion)
+}
+
+fn melee_attack_range(mob: &MobEntity) -> (f64, f64) {
+    let weapon = mob.living_entity.held_item_from_equipment();
+    weapon
+        .get_data_component::<AttackRangeImpl>()
+        .map_or((DEFAULT_ATTACK_REACH, 0.0), |range| {
+            (
+                f64::from(range.max_reach * range.mob_factor),
+                f64::from(range.min_reach * range.mob_factor),
+            )
+        })
+}
+
+fn is_within_melee_attack_range(
+    mob: &MobEntity,
+    target: &dyn EntityBase,
+    attack_box: impl Fn(f64) -> BoundingBox,
+) -> bool {
+    let (max_range, min_range) = melee_attack_range(mob);
+    let target_hitbox = target.get_entity().get_hitbox();
+    attack_box(max_range).intersects(&target_hitbox)
+        && (min_range <= 0.0 || !attack_box(min_range).intersects(&target_hitbox))
+}
+
 /// Least slippery block in the game data, which lets walking speed up the most.
 static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
     (0..BlockId::COUNT)
@@ -1060,6 +1091,24 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    /// Vanilla `LivingEntity.onClimbable`. Override for spiders (always their climb
+    /// flag) and for ghasts / horses / phantoms (never).
+    fn on_climbable(&self) -> bool {
+        self.get_mob_entity().living_entity.on_climbable()
+    }
+
+    /// Vanilla `Mob.getAttackBoundingBox`.
+    fn get_attack_bounding_box(&self, horizontal_expansion: f64) -> BoundingBox {
+        attack_bounding_box(self.get_entity(), horizontal_expansion)
+    }
+
+    /// Vanilla `Mob.isWithinMeleeAttackRange`, using `LivingEntity.getHitbox`.
+    fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
+        is_within_melee_attack_range(self.get_mob_entity(), target, |range| {
+            self.get_attack_bounding_box(range)
+        })
     }
 
     /// Whether the species' own tick code stays within the reach `MobEntity` computes.
@@ -1220,6 +1269,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         None
+    }
+
+    fn mob_passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        crate::entity::attachment::default_passenger_attachment(self.get_entity(), passenger)
+    }
+
+    fn mob_vehicle_attachment_point(&self, _vehicle: &Entity) -> Vector3<f64> {
+        crate::entity::attachment::default_vehicle_attachment(self.get_entity())
     }
 
     fn is_saddled(&self) -> bool {
@@ -1435,6 +1492,8 @@ pub trait Mob: EntityBase + Send + Sync {
         _world: &Arc<World>,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
+        // TODO: vanilla `AgeableMob.finalizeSpawn` makes every ageable mob after the first of a
+        // spawn group a baby with 5% chance (`AgeableMobGroupData`).
         self.get_mob_entity().finalize_spawn_base();
         group_data
     }
@@ -1700,6 +1759,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_player_collision(&self, _player: &Arc<Player>) {}
 
+    fn mob_receives_player_touch(&self) -> bool {
+        false
+    }
+
     fn get_owner_uuid(&self) -> Option<Uuid> {
         self.as_tamable()
             .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
@@ -1717,6 +1780,13 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_base_experience_reward(&self) -> u32 {
         self.get_entity().entity_type.experience_reward
+    }
+
+    /// Ageable babies drop no experience.
+    fn should_drop_experience(&self) -> bool {
+        !self
+            .as_ageable()
+            .is_some_and(crate::entity::ageable::AgeableMob::is_baby)
     }
 
     fn mob_get_component(
@@ -1757,7 +1827,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        let living = &self.get_mob_entity().living_entity;
+        living.health.load() > 0.0 && !living.dead.load(Relaxed) && !Mob::on_climbable(self)
+    }
+
+    fn on_climbable(&self) -> bool {
+        Mob::on_climbable(self)
     }
 
     fn on_lightning_strike(
@@ -1770,6 +1845,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
         Mob::get_item_steerable(self)
+    }
+
+    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
+        self.mob_passenger_attachment_point(passenger)
+    }
+
+    fn vehicle_attachment_point(&self, vehicle: &Entity) -> Vector3<f64> {
+        self.mob_vehicle_attachment_point(vehicle)
     }
 
     fn get_component(
@@ -1859,10 +1942,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
     }
 
-    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
-        true
-    }
-
     fn can_hit(&self) -> bool {
         true
     }
@@ -1911,6 +1990,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn on_player_collision(&self, player: &Arc<Player>) {
         self.mob_player_collision(player);
+    }
+
+    fn receives_player_touch(&self) -> bool {
+        self.mob_receives_player_touch()
     }
 
     fn get_entity(&self) -> &Entity {
@@ -2015,12 +2098,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
-        if self
-            .get_entity()
-            .age
-            .load(std::sync::atomic::Ordering::Relaxed)
-            < 0
-        {
+        if !self.should_drop_experience() {
             return 0;
         }
         // TODO: apply enchantment processing like in vanilla
@@ -2076,6 +2154,140 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pumpkin_data::data_component_impl::EquipmentSlot;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::Mob;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::mob::zombie::zombie::ZombieEntity;
+    use crate::entity::{Entity, EntityBase};
+    use crate::world::World;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn zombie(world: &Arc<World>, y: f64) -> Arc<ZombieEntity> {
+        ZombieEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, y, 0.0),
+            &EntityType::ZOMBIE,
+        ))
+    }
+
+    fn player_at(world: &Arc<World>, x: f64, y: f64) -> Entity {
+        Entity::new(world.clone(), Vector3::new(x, y, 0.0), &EntityType::PLAYER)
+    }
+
+    fn reaches(world: &Arc<World>, zombie: &ZombieEntity, dx: f64, dy: f64) -> bool {
+        let y = zombie.get_entity().pos.load().y + dy;
+        zombie.is_in_attack_range(&player_at(world, dx, y))
+    }
+
+    #[tokio::test]
+    async fn zombie_reach_matches_vanilla() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let zombie = zombie(&world, 64.0);
+        // Half widths 0.3 + 0.3 plus the reach: sqrt(2.04) between the centres
+        assert!(reaches(&world, &zombie, 1.428, 0.0));
+        assert!(!reaches(&world, &zombie, 1.429, 0.0));
+        // No vertical reach: only the zombie's own 1.95 height and the player's 1.8
+        assert!(reaches(&world, &zombie, 1.0, 1.94));
+        assert!(!reaches(&world, &zombie, 1.0, 1.951));
+        assert!(reaches(&world, &zombie, 1.0, -1.79));
+        assert!(!reaches(&world, &zombie, 1.0, -1.801));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn spear_reach_uses_mob_factor_and_min_range() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let zombie = zombie(&world, 64.0);
+        zombie
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(
+                &EquipmentSlot::MAIN_HAND,
+                ItemStack::new(1, &Item::IRON_SPEAR),
+            );
+        // Spear 2.0..4.5 at mob factor 0.5: 1.0..2.25 past the 0.6 of half widths
+        assert!(!reaches(&world, &zombie, 1.59, 0.0));
+        assert!(reaches(&world, &zombie, 1.61, 0.0));
+        assert!(reaches(&world, &zombie, 2.84, 0.0));
+        assert!(!reaches(&world, &zombie, 2.86, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn mounted_reach_spans_the_vehicle_width() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let horse: Arc<dyn EntityBase> = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::HORSE,
+        ));
+        let zombie = zombie(&world, 64.0);
+        horse
+            .get_entity()
+            .add_passenger(horse.clone(), zombie.clone());
+        horse.position_rider(zombie.as_ref());
+        // Horse half width 0.6982422 + player 0.3 + reach
+        assert!(reaches(&world, &zombie, 1.826, 0.0));
+        assert!(!reaches(&world, &zombie, 1.827, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn riding_hitbox_clips_below_the_seat() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pig: Arc<dyn EntityBase> = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let rider: Arc<dyn EntityBase> = Arc::new(player_at(&world, 0.0, 64.0));
+        pig.get_entity().add_passenger(pig.clone(), rider.clone());
+        pig.position_rider(rider.as_ref());
+        let entity = rider.get_entity();
+        let hitbox = entity.get_hitbox();
+        let bounding_box = entity.bounding_box.load();
+        // Pig seat 0.86875 up, the player held 0.6 above its feet
+        assert!((hitbox.min.y - 64.868_75).abs() < 1e-6);
+        assert!((bounding_box.min.y - 64.268_75).abs() < 1e-6);
+        assert_eq!(hitbox.max, bounding_box.max);
+        assert_eq!(hitbox.min.x, bounding_box.min.x);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[test]
+    fn zombie_hitbox_matches_vanilla_type_size() {
+        let size = Entity::type_dimensions(&EntityType::ZOMBIE);
+        assert_eq!(size.width, 0.6);
+        assert_eq!(size.height, 1.95);
+        assert_eq!(size.eye_height, 1.74);
+        let scaled = size.scale(2.0);
+        assert_eq!(scaled.width, 1.2);
+        assert_eq!(scaled.height, 3.9);
+        assert_eq!(scaled.eye_height, 3.48);
+    }
 }
 
 #[cfg(test)]

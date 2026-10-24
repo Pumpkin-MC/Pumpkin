@@ -6,13 +6,13 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob, speed_up_seconds_when_feeding},
     ai::control::{
         smooth_swimming_look_control::SmoothSwimmingLookControl,
         smooth_swimming_move_control::SmoothSwimmingMoveControl,
@@ -34,6 +34,7 @@ pub struct DolphinEntity {
     pub mob_entity: MobEntity,
     pub got_fish: AtomicBool,
     pub moistness_level: AtomicI32,
+    pub ageable_data: AgeableData,
 }
 
 impl DolphinEntity {
@@ -57,6 +58,7 @@ impl DolphinEntity {
             mob_entity,
             got_fish: AtomicBool::new(false),
             moistness_level: AtomicI32::new(2400),
+            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(dolphin);
         let mob_weak: Weak<dyn Mob> = {
@@ -99,7 +101,24 @@ impl DolphinEntity {
     }
 }
 
+impl AgeableMob for DolphinEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for DolphinEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        // Babies never fight back.
+        !self.is_baby()
+            && target.get_entity().entity_type != &EntityType::GHAST
+            && self.get_mob_entity().living_entity.can_attack(target)
+    }
+
     fn travel_in_water(&self, caller: &dyn EntityBase, _gravity: f64, _falling: bool) {
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
@@ -140,26 +159,24 @@ impl Mob for DolphinEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-        if TEMPT_ITEMS.iter().any(|i| i.id == item.id) {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            self.set_got_fish(true);
-            self.mob_entity.living_entity.heal(2.0);
-
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.spawn_particle(
-                pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                Vector3::new(0.5, 0.5, 0.5),
-                1.0,
-                7,
-                Particle::HappyVillager,
-            );
-            world.play_sound(Sound::EntityDolphinEat, SoundCategory::Neutral, &pos);
-            return true;
+        if !item_stack.get_item().has_tag(&tag::Item::MINECRAFT_FISHES) {
+            return false;
         }
 
-        false
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        world.play_sound(
+            Sound::EntityDolphinEat,
+            SoundCategory::Neutral,
+            &entity.pos.load(),
+        );
+
+        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        if self.can_age_up() {
+            self.age_up(speed_up_seconds_when_feeding(-self.get_age()), true);
+        } else {
+            self.set_got_fish(true);
+        }
+        true
     }
 }
