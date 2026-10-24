@@ -73,6 +73,7 @@ reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
 
 sha1.workspace = true
+md5.workspace = true
 
 # velocity en
 hmac.workspace = true

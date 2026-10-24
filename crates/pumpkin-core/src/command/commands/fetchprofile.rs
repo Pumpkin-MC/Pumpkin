@@ -195,9 +195,8 @@ async fn fetch_profile_by_name_helper(server: &Server, name: &str) -> Option<Gam
         });
     }
 
-    if !server.advanced_config.networking.java.online_mode
-        && let Ok(uuid) = offline_uuid(name)
-    {
+    if !server.advanced_config.networking.java.online_mode {
+        let uuid = offline_uuid(name);
         let profile = GameProfile {
             id: uuid,
             name: name.to_string(),
