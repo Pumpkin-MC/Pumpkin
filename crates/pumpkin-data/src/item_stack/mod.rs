@@ -849,17 +849,21 @@ impl ItemStack {
 
         // Process any additional data in the components compound
         if let Some(tag) = compound.get_compound("components") {
+            // Components that were removed from the game (datapacks written for older
+            // versions, e.g. `hide_additional_tooltip`) or that Pumpkin can't decode yet are
+            // skipped, so the rest of the stack still loads instead of turning into air.
             for (name, data) in &tag.child_tags {
                 if let Some(name) = name.strip_prefix("!") {
-                    let id = DataComponent::try_from_name(name)?;
-                    if id.is_persistent() {
+                    if let Some(id) = DataComponent::try_from_name(name)
+                        && id.is_persistent()
+                    {
                         item_stack.patch.push((id, None));
                     }
-                } else {
-                    let id = DataComponent::try_from_name(name)?;
-                    if id.is_persistent() {
-                        item_stack.patch.push((id, Some(read_data(id, data)?)));
-                    }
+                } else if let Some(id) = DataComponent::try_from_name(name)
+                    && id.is_persistent()
+                    && let Some(value) = read_data(id, data)
+                {
+                    item_stack.patch.push((id, Some(value)));
                 }
             }
         }
@@ -889,6 +893,19 @@ mod tests {
     use pumpkin_nbt::Nbt;
     use pumpkin_nbt::deserializer::NbtReadHelperJava;
     use std::io::Cursor;
+
+    #[test]
+    fn unknown_components_do_not_drop_the_stack() {
+        let mut components = NbtCompound::new();
+        components.put_compound("hide_additional_tooltip", NbtCompound::new());
+        components.put_int("minecraft:max_stack_size", 1);
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", "minecraft:firework_star".to_string());
+        compound.put_int("count", 1);
+        compound.put_compound("components", components);
+        let stack = ItemStack::read_item_stack(&compound);
+        assert!(stack.is_some_and(|stack| stack.item == &Item::FIREWORK_STAR));
+    }
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
