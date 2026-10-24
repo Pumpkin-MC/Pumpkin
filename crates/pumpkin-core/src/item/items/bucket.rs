@@ -6,7 +6,7 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockState,
     data_component_impl::{
         BucketEntityDataImpl, CustomNameImpl, EquipmentSlot, SulfurCubeContentImpl,
     },
@@ -326,6 +326,13 @@ pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64
     );
 }
 
+/// `BlockState.canBeReplaced(Fluid)` in vanilla. End portals and end gateways override it to false.
+fn can_be_replaced_by_fluid(block: &Block, state: &BlockState) -> bool {
+    block.id != Block::END_PORTAL.id
+        && block.id != Block::END_GATEWAY.id
+        && (state.replaceable() || !state.is_solid())
+}
+
 fn try_place_powder_snow(world: &Arc<World>, pos: BlockPos, direction: BlockDirection) -> bool {
     let state = world.get_block_state(&pos);
     let target_pos = if state.replaceable() {
@@ -350,6 +357,7 @@ pub(crate) fn try_place_filled_bucket(
     item: &Item,
     pos: BlockPos,
     direction: BlockDirection,
+    cause: Option<&Arc<Player>>,
 ) -> bool {
     if item.id == Item::SULFUR_CUBE_BUCKET.id {
         return true;
@@ -379,7 +387,15 @@ pub(crate) fn try_place_filled_bucket(
         return true;
     }
 
-    if state.id == Block::AIR.default_state.id || state.is_liquid() {
+    if can_be_replaced_by_fluid(block, state) {
+        if !state.is_liquid()
+            && !state.is_air()
+            && world
+                .break_block(&target_pos, cause, BlockFlags::NOTIFY_ALL)
+                .is_none()
+        {
+            return false;
+        }
         world.set_block_state(
             &target_pos,
             if item.id == Item::LAVA_BUCKET.id {
@@ -493,6 +509,7 @@ impl ItemBehaviour for FilledBucketItem {
 
     fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
         let world = player.world();
+        let player_arc = world.get_player_by_uuid(player.gameprofile.id);
         let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
             start_pos,
@@ -511,12 +528,12 @@ impl ItemBehaviour for FilledBucketItem {
             play_bucket_evaporation(&world, &player.position());
             return;
         }
-        if !try_place_filled_bucket(&world, item, pos, direction) {
+        if !try_place_filled_bucket(&world, item, pos, direction, player_arc.as_ref()) {
             return;
         }
 
         if let Some(server) = world.server.upgrade()
-            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            && let Some(player_arc) = player_arc
         {
             let mut event =
                 crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
