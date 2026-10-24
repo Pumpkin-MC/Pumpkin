@@ -65,7 +65,7 @@ fn tall_plant_states(
         return None;
     }
 
-    let mut properties = TallSeagrassLikeProperties::from_state_id(state.id, block);
+    let mut properties = TallSeagrassLikeProperties::from_state_id(state.id);
     properties.r#half = DoubleBlockHalf::Lower;
     let lower_state = BlockState::from_id(properties.to_state_id(block));
     properties.r#half = DoubleBlockHalf::Upper;
@@ -79,7 +79,7 @@ mod tests {
     use super::tall_plant_states;
     use pumpkin_data::{
         Block,
-        block_properties::{BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties},
+        block_properties::{DoubleBlockHalf, TallSeagrassLikeProperties},
     };
 
     #[test]
@@ -87,10 +87,8 @@ mod tests {
         let (lower, upper) = tall_plant_states(Block::SUNFLOWER.default_state)
             .expect("sunflowers use the tall-plant property group");
 
-        let lower_properties =
-            TallSeagrassLikeProperties::from_state_id(lower.id, &Block::SUNFLOWER);
-        let upper_properties =
-            TallSeagrassLikeProperties::from_state_id(upper.id, &Block::SUNFLOWER);
+        let lower_properties = TallSeagrassLikeProperties::from_state_id(lower.id);
+        let upper_properties = TallSeagrassLikeProperties::from_state_id(upper.id);
 
         assert_eq!(lower_properties.r#half, DoubleBlockHalf::Lower);
         assert_eq!(upper_properties.r#half, DoubleBlockHalf::Upper);
