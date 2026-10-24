@@ -45,7 +45,14 @@ impl PendingConnection {
         };
 
         if let Err(error) = self.set_encryption(&shared_secret) {
-            self.kick(TextComponent::text(error.to_string())).await;
+            debug!(
+                "Rejecting encryption response from '{}': {error}",
+                self.address
+            );
+            // Same message as a decrypt failure. Telling the two apart turns the
+            // reply into a padding oracle for the server's RSA key.
+            self.kick(TextComponent::text("Failed to decrypt shared secret"))
+                .await;
             return Some(PacketHandlerResult::Stop);
         }
 
