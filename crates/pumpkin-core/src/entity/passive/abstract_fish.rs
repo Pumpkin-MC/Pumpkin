@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use crate::entity::{
-    Entity, EntityBase,
+    EntityBase,
     ai::{
         control::fish_move_control::FishMoveControl,
         goal::{Controls, Goal, random_swimming::RandomSwimmingGoal},
@@ -11,7 +11,10 @@ use crate::entity::{
 };
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{
+    boundingbox::{BoundingBox, EntityDimensions},
+    vector3::Vector3,
+};
 use rand::RngExt;
 
 use super::water_animal::{AMBIENT_SOUND_INTERVAL, WaterAnimal};
@@ -180,7 +183,16 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
 
     fn set_dimension_scale(&self, scale: f32) {
         let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::type_dimensions(entity.entity_type).scale(scale));
+        let dimensions = EntityDimensions::new(
+            entity.entity_type.dimension[0] * scale,
+            entity.entity_type.dimension[1] * scale,
+            entity.entity_type.eye_height * scale,
+        );
+        entity.entity_dimension.store(dimensions);
+        let pos = entity.pos.load();
+        entity
+            .bounding_box
+            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
     }
 
     fn fish_base_tick(&self, caller: &dyn crate::entity::EntityBase) {
