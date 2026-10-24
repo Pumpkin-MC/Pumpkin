@@ -14,6 +14,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
@@ -215,21 +216,78 @@ impl Mob for HoglinEntity {
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
-        throw_target(&self.mob_entity.living_entity.entity, target);
+        // Vanilla HoglinBase.hurtAndThrowTarget: babies don't throw.
+        if self.is_baby.load(Ordering::Relaxed) {
+            return;
+        }
+        throw_target(&self.mob_entity.living_entity, target);
     }
 }
 
+/// Throw impulse of vanilla `HoglinBase.throwTarget`, or `None` if the target resists it fully.
+fn throw_impulse(
+    attack_knockback: f64,
+    knockback_resistance: f64,
+    dx: f64,
+    dz: f64,
+    random_offset: f32,
+    horizontal_roll: f32,
+    vertical_roll: f32,
+) -> Option<Vector3<f64>> {
+    let strength = attack_knockback - knockback_resistance;
+    if strength <= 0.0 {
+        return None;
+    }
+    let horizontal = strength * f64::from(horizontal_roll * 0.5 + 0.2);
+    let dir = Vector3::new(dx, 0.0, dz).normalize() * horizontal;
+    // Vanilla passes the offset to Vec3.yRot as radians.
+    let (sin, cos) = f64::from(random_offset).sin_cos();
+    Some(Vector3::new(
+        dir.x * cos + dir.z * sin,
+        strength * f64::from(vertical_roll) * 0.5,
+        dir.z * cos - dir.x * sin,
+    ))
+}
+
 /// Vanilla `HoglinBase.throwTarget`, shared with zoglins.
-pub fn throw_target(attacker: &Entity, target: &dyn EntityBase) {
-    let my_pos = attacker.pos.load();
-    let target_pos = target.get_entity().pos.load();
-    let dx = target_pos.x - my_pos.x;
-    let dz = target_pos.z - my_pos.z;
-    let dist = dx.hypot(dz).max(0.001);
-    let vel = target.get_entity().velocity.load();
-    target.get_entity().velocity.store(Vector3::new(
-        vel.x + (dx / dist) * 0.5,
-        0.5,
-        vel.z + (dz / dist) * 0.5,
-    ));
+pub fn throw_target(attacker: &LivingEntity, target: &dyn EntityBase) {
+    let Some(target_living) = target.get_living_entity() else {
+        return;
+    };
+    let my_pos = attacker.entity.pos.load();
+    let target_pos = target_living.entity.pos.load();
+    let Some(impulse) = throw_impulse(
+        attacker.get_attribute_value(&Attributes::ATTACK_KNOCKBACK),
+        target_living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE),
+        target_pos.x - my_pos.x,
+        target_pos.z - my_pos.z,
+        f32::from(rand::random_range(-10_i8..=10)),
+        rand::random::<f32>(),
+        rand::random::<f32>(),
+    ) else {
+        return;
+    };
+    target_living.entity.add_velocity(impulse);
+    target_living
+        .entity
+        .velocity_dirty
+        .store(true, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::throw_impulse;
+
+    #[test]
+    fn fully_resistant_target_gets_no_throw() {
+        assert!(throw_impulse(1.0, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5).is_none());
+    }
+
+    #[test]
+    fn throw_scales_with_resistance() {
+        let impulse = throw_impulse(1.0, 0.5, 1.0, 0.0, 0.0, 1.0, 1.0).unwrap();
+        assert!((impulse.x - 0.5 * 0.7).abs() < 1e-6);
+        assert!((impulse.y - 0.25).abs() < 1e-9);
+        assert!(impulse.z.abs() < 1e-9);
+    }
 }

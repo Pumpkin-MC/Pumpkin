@@ -168,6 +168,6 @@ impl Mob for ZoglinEntity {
         if self.is_baby() {
             return;
         }
-        throw_target(&self.mob_entity.living_entity.entity, target);
+        throw_target(&self.mob_entity.living_entity, target);
     }
 }
