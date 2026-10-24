@@ -6,7 +6,7 @@
 use std::io::Cursor;
 use std::sync::OnceLock;
 
-use pumpkin_data::{Mirror, Rotation};
+use pumpkin_data::{Block, BlockStateId, Mirror, Rotation};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
 use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
 use thiserror::Error;
@@ -250,6 +250,23 @@ impl PaletteEntry {
         Self { name, properties }
     }
 
+    /// Creates a palette entry describing the given block state.
+    #[must_use]
+    pub fn from_state_id(state_id: BlockStateId) -> Self {
+        let block = Block::from_state_id(state_id);
+        let properties = block.properties(state_id).map_or_else(Vec::new, |props| {
+            props
+                .to_props()
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect()
+        });
+        Self {
+            name: format!("minecraft:{}", block.name),
+            properties,
+        }
+    }
+
     /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
     #[must_use]
     pub fn from_string(s: &str) -> Self {
@@ -302,6 +319,28 @@ impl PaletteEntry {
         Self {
             name: self.name.clone(),
             properties,
+        }
+    }
+
+    /// Reads a block state stored as a bare block id (its default state) or as an `id`/`properties` compound.
+    #[must_use]
+    pub fn from_nbt_tag(tag: &NbtTag) -> Option<Self> {
+        match tag {
+            NbtTag::String(name) => Some(Self::new(name.to_string())),
+            NbtTag::Compound(compound) => Self::from_nbt_compound(compound).ok(),
+            _ => None,
+        }
+    }
+
+    /// Writes a block state as a bare block id when it is the block's default state, otherwise as an
+    /// `id`/`properties` compound.
+    #[must_use]
+    pub fn state_to_nbt_tag(state_id: BlockStateId) -> NbtTag {
+        let block = Block::from_state_id(state_id);
+        if block.default_state.id == state_id {
+            NbtTag::String(format!("minecraft:{}", block.name).into())
+        } else {
+            NbtTag::Compound(Self::from_state_id(state_id).to_nbt_compound())
         }
     }
 
@@ -1421,6 +1460,7 @@ mod tests {
     use pumpkin_data::block_properties::{Facing, Half, Property};
 
     use super::*;
+    use crate::generation::structure::template::BlockStateResolver;
 
     #[test]
     fn palette_entry_creation() {
@@ -1459,5 +1499,50 @@ mod tests {
                 .any(|entry| !entry.properties.is_empty() && entry.name.contains("trapdoor")),
             "the palette must keep the block properties"
         );
+    }
+
+    #[test]
+    fn palette_entry_from_state_id_matches_vanilla_template() {
+        let bytes = include_bytes!(
+            "../../../../../../assets/datapack/data/minecraft/structure/igloo/top.nbt"
+        );
+        let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
+
+        for entry in &template.palette {
+            let state = BlockStateResolver::resolve_simple(entry)
+                .expect("vanilla palette entries must resolve");
+            let mut expected = entry.clone();
+            let mut written = PaletteEntry::from_state_id(state.id);
+            expected.properties.sort();
+            written.properties.sort();
+            assert_eq!(written, expected);
+        }
+    }
+
+    #[test]
+    fn block_state_tag_uses_the_bare_id_only_for_default_states() {
+        let stone = Block::STONE.default_state.id;
+        assert_eq!(
+            PaletteEntry::state_to_nbt_tag(stone),
+            NbtTag::String("minecraft:stone".into())
+        );
+        for name in ["minecraft:stone", "stone"] {
+            let entry = PaletteEntry::from_nbt_tag(&NbtTag::String(name.into()))
+                .expect("a bare block id is a valid block state");
+            assert_eq!(
+                BlockStateResolver::resolve_simple(&entry).map(|state| state.id),
+                Some(stone)
+            );
+        }
+
+        let piston = Block::STICKY_PISTON.from_properties(&[("facing", "east")]);
+        let piston = piston.to_state_id(&Block::STICKY_PISTON);
+        let NbtTag::Compound(compound) = PaletteEntry::state_to_nbt_tag(piston) else {
+            panic!("a non default state must be written as a compound");
+        };
+        assert_eq!(compound.get_string("id"), Some("minecraft:sticky_piston"));
+        let properties = compound.get_compound("properties").expect("properties");
+        assert_eq!(properties.get_string("facing"), Some("east"));
+        assert_eq!(properties.get_string("extended"), Some("false"));
     }
 }
