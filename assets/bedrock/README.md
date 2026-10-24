@@ -6,18 +6,18 @@ This directory contains a number of different data files used to help support co
     - converted from [CloudburstMC/Data's 26.50 dump](https://github.com/CloudburstMC/Data/tree/a8a4341d7763d6eb8547cff3ca46b4153d60163d) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, and `creative_items.json`.
     - Provides a listing of all blocks and block states that exist in Bedrock. Used to build a mapping from Java block states to Bedrock ones by matching (string) identifiers and data components.
 - `blocks.nbt`
-    - downloaded from [GeyserMC/mappings for Java 26.2 and Bedrock 26.50](https://github.com/GeyserMC/mappings/blob/6f6abba4dd3133b493b2229b59f7087f87b95d89/blocks.nbt)
+    - downloaded from [GeyserMC/mappings for Java 26.3 and Bedrock 26.50](https://github.com/GeyserMC/mappings/blob/ba81ded46ea9920a206847e51e0a939fb3dbbdda/blocks.nbt)
     - Defines the exact Bedrock block identifier and property mappings for every Java Edition block state ID. Used in code generation to translate Java block states to Bedrock counterparts.
 - `item_components.nbt`
     - mined from BDS (file hosted at [CloudburstMC/Data](https://github.com/CloudburstMC/Data))
 - `runtime_item_states.json`
     - mined from BDS (file hosted at [CloudburstMC/Data](https://github.com/CloudburstMC/Data))
 - `item_data_overrides.json`
-    - adapted from `GeyserMC/mappings` `items.json`.
+    - adapted from [GeyserMC/mappings](https://github.com/GeyserMC/mappings/blob/ba81ded46ea9920a206847e51e0a939fb3dbbdda/items.json) `items.json`.
     - Strips everything except the `bedrock_data` field (making it the value of each corresponding top-level key), omitting any `0` values.
     - Most of `items.json` is automatically generated, but that value appears to be manually maintained by the Geyser team. We separate that out for our own use, while keeping the rest generated.
 - `biomes.json`
-    - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings)
+    - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings/blob/ba81ded46ea9920a206847e51e0a939fb3dbbdda/biomes.json)
     - Maps Java Edition biome identifiers to their corresponding Bedrock Edition biome ID. Used in code generation to translate Java biomes to Bedrock counterparts.
 - `biome_definitions.nbt`
     - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/master/release/1.26.40/biome_definitions.nbt)

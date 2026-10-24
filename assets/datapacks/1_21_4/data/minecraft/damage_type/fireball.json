@@ -1,6 +1,0 @@
-{
-  "exhaustion": 0.1,
-  "effects": "burning",
-  "message_id": "fireball",
-  "scaling": "when_caused_by_living_non_player"
-}

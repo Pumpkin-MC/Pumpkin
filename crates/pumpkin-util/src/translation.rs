@@ -352,7 +352,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         let pumpkin_pl_pl = parse_json(PUMPKIN_PL_PL_JSON);
 
         for (key, value) in vanilla_en_us {
-            array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
+            array[Locale::EnUs as usize].insert(format!("minecraft:{key}").to_lowercase(), value);
         }
         for (key, value) in pumpkin_en_us {
             array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
@@ -439,7 +439,10 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
                 let key = key.trim().to_lowercase();
                 let value = value.trim().to_string();
                 array[Locale::EnUs as usize].insert(key.clone(), value.clone());
-                array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value.clone());
+                // Preserve Java's minecraft: entries; Bedrock still has its bare keys.
+                array[Locale::EnUs as usize]
+                    .entry(format!("minecraft:{key}"))
+                    .or_insert_with(|| value.clone());
                 array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
             }
         }
@@ -724,8 +727,100 @@ impl FromStr for Locale {
 
 #[cfg(test)]
 mod tests {
-    use super::{Locale, TRANSLATIONS, get_translation_text, reorder_substitutions};
-    use crate::text::{TextComponentBase, TextContent, style::Style};
+    use super::{
+        Locale, TRANSLATIONS, add_translation, add_translation_file, get_translation,
+        get_translation_text, reorder_substitutions,
+    };
+    use crate::text::{TextComponent, TextComponentBase, TextContent, style::Style};
+
+    #[test]
+    #[expect(
+        deprecated,
+        reason = "Exercise the runtime constructor used by command errors"
+    )]
+    fn console_feedback_uses_java_translations_without_bedrock_collisions() {
+        let message = TextComponent::translate_cross(
+            "commands.scoreboard.players.get.success",
+            "commands.scoreboard.players.get.success",
+            [
+                TextComponent::text("#temp"),
+                TextComponent::text("7"),
+                TextComponent::text("test"),
+            ],
+        );
+        assert_eq!(message.to_pretty_console(), "#temp has 7 test");
+    }
+
+    #[test]
+    #[expect(
+        deprecated,
+        reason = "Exercise the runtime constructor used by command errors"
+    )]
+    fn console_feedback_resolves_mixed_case_java_translation_keys() {
+        let message = TextComponent::translate_cross(
+            "arguments.objective.notFound",
+            "arguments.objective.notFound",
+            [TextComponent::text("missing")],
+        );
+        assert_eq!(
+            message.to_pretty_console(),
+            "Unknown scoreboard objective 'missing'"
+        );
+        let message = TextComponent::translate_cross(
+            "argument.scoreHolder.empty",
+            "argument.scoreHolder.empty",
+            [],
+        );
+        assert_eq!(
+            message.to_pretty_console(),
+            "No relevant score holders could be found"
+        );
+    }
+
+    #[test]
+    fn java_and_bedrock_keep_their_own_translation_values() {
+        assert_eq!(
+            get_translation(
+                "minecraft:commands.scoreboard.players.get.success",
+                Locale::EnUs
+            ),
+            "%s has %s %s"
+        );
+        assert_eq!(
+            get_translation("commands.scoreboard.players.get.success", Locale::EnUs),
+            "%1$d"
+        );
+        let message = TextComponent::from_content(TextContent::Translate {
+            translate: "commands.scoreboard.players.get.success".into(),
+            bedrock_translate: Some("commands.scoreboard.players.get.success".into()),
+            with: vec![arg("7")],
+        });
+        assert_eq!(message.0.to_bedrock_legacy(Locale::EnUs), "7");
+    }
+
+    #[test]
+    #[expect(
+        deprecated,
+        reason = "Exercise the runtime constructor used by command errors"
+    )]
+    fn console_feedback_honors_registered_overrides() {
+        let key = "commands.seed.success";
+        let original = get_translation("minecraft:commands.seed.success", Locale::EnUs);
+        let message = || TextComponent::translate_cross(key, key, [TextComponent::text("42")]);
+
+        add_translation("minecraft", key, "Custom seed: %s", Locale::EnUs);
+        let single_override = message().to_pretty_console();
+        add_translation_file(
+            "minecraft",
+            r#"{"commands.seed.success":"Loaded seed: %s"}"#,
+            Locale::EnUs,
+        );
+        let file_override = message().to_pretty_console();
+        add_translation("minecraft", key, original.as_str(), Locale::EnUs);
+
+        assert_eq!(single_override, "Custom seed: 42");
+        assert_eq!(file_override, "Loaded seed: 42");
+    }
 
     fn arg(text: &str) -> TextComponentBase {
         TextComponentBase {

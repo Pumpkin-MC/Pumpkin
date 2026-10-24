@@ -1,9 +1,6 @@
 // Last verified for v2169
 
-use std::{
-    io::{Error, Read, Write},
-    str::FromStr,
-};
+use std::{io::Error, str::FromStr};
 
 use pumpkin_macros::packet;
 
@@ -13,36 +10,22 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Animation action performed on an actor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead, PacketWrite)]
 #[repr(u8)]
 pub enum AnimateAction {
     NoAction = 0,
+    /// Arm swinging animation.
     SwingArm = 1,
+    /// Waking up from bed animation.
     WakeUp = 3,
+    /// Critical hit particle burst.
     CriticalHit = 4,
+    /// Magic critical hit sparkle burst.
     MagicCriticalHit = 5,
 }
 
-impl PacketRead for AnimateAction {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let action = u8::read(reader)?;
-        match action {
-            0 => Ok(Self::NoAction),
-            1 => Ok(Self::SwingArm),
-            3 => Ok(Self::WakeUp),
-            4 => Ok(Self::CriticalHit),
-            5 => Ok(Self::MagicCriticalHit),
-            _ => Err(Error::other(format!("Invalid animate action ID: {action}"))),
-        }
-    }
-}
-
-impl PacketWrite for AnimateAction {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
-}
-
+/// Cause or trigger for an arm swing action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ActorSwingSource {
@@ -93,12 +76,17 @@ impl ToString for ActorSwingSource {
     }
 }
 
+/// Plays animations (arm swing, critical strike particles, waking up) on an actor.
 #[derive(Debug, PacketRead, PacketWrite)]
 #[packet(44)]
 pub struct SAnimate {
+    /// Type of animation to display.
     pub action: AnimateAction,
+    /// Runtime entity ID of the target actor.
     pub target_actor_runtime_id: VarULong,
+    /// Floating point payload (used for rowing animation angles).
     pub data: f32,
+    /// Source context that triggered an arm swing.
     pub swing_source: Option<EnumAsStr<ActorSwingSource>>,
 }
 

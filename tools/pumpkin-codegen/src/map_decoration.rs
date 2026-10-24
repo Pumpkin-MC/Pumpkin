@@ -10,9 +10,15 @@ struct MapDecorationEntry {
     name: String,
     asset_name: String,
     show_on_item_frame: bool,
+    #[serde(default = "default_map_color")]
     map_color: i32,
+    #[serde(default)]
     exploration_map_element: bool,
     track_count: bool,
+}
+
+fn default_map_color() -> i32 {
+    -1
 }
 
 pub fn build() -> TokenStream {

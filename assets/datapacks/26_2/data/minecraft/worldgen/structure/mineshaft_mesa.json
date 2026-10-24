@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:mineshaft",
-  "biomes": "#minecraft:has_structure/mineshaft_mesa",
-  "mineshaft_type": "mesa",
-  "spawn_overrides": {},
-  "step": "underground_structures"
-}
