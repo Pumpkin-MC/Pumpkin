@@ -91,6 +91,7 @@ use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
@@ -620,17 +621,22 @@ impl World {
         snapshot_chunks: impl IntoIterator<Item = Vector2<i32>>,
     ) {
         let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
+        // Like vanilla, a passenger is written inside its root vehicle's `Passengers`
+        // list rather than on its own, so the riding tree survives a reload.
+        let mut saved_roots: FxHashSet<i32> = FxHashSet::default();
         for entity in entities {
-            let base_entity = entity.get_entity();
-            if base_entity.is_removed() {
+            if entity.get_entity().is_removed() {
                 continue;
             }
-            let mut nbt = NbtCompound::new();
-            entity.write_nbt(&mut nbt);
+            let root = root_saved_vehicle(entity);
+            let base_root = root.get_entity();
+            if !saved_roots.insert(base_root.entity_id) {
+                continue;
+            }
             groups
-                .entry(base_entity.chunk_pos.load())
+                .entry(base_root.chunk_pos.load())
                 .or_default()
-                .push(nbt);
+                .push(write_entity_with_passengers(&root));
         }
         for pos in snapshot_chunks {
             groups.entry(pos).or_default();
@@ -4343,6 +4349,114 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
+    /// Spawns a saved entity and, recursively, the passengers in its `Passengers` list,
+    /// mounting each on its vehicle (vanilla's `EntityType.loadEntityRecursive`).
+    fn load_entity_recursive(
+        self: &Arc<Self>,
+        entity_nbt: &NbtCompound,
+        vehicle: Option<&Arc<dyn EntityBase>>,
+        loaded: &mut Vec<Arc<dyn EntityBase>>,
+    ) {
+        let Some(id) = entity_nbt.get_string("id") else {
+            debug!("Entity has no ID");
+            return;
+        };
+        let Some(entity_type) = EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+        else {
+            warn!("Entity has no valid Entity Type {id}");
+            return;
+        };
+
+        // Keep the persisted UUID so the entity keeps its identity across reloads
+        // (matching vanilla); only fall back to a fresh one if it is missing/corrupt.
+        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
+        if self
+            .entities
+            .load()
+            .iter()
+            .any(|e| e.get_entity().entity_uuid == uuid)
+        {
+            // Already live (another loader got here first); don't duplicate it.
+            return;
+        }
+        // Pos is zero since it will be read from nbt.
+        let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), self, uuid);
+        entity.read_nbt_non_mut(entity_nbt);
+        entity.init_data_tracker();
+
+        // Clear velocity so the client does not replay the drop animation; residual
+        // velocity from the original drop is stale data.
+        entity.get_entity().velocity.store(Vector3::default());
+
+        // Tracker owns pairing (spawn packets + vehicle restore).
+        self.add_entity_silent(entity.clone());
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .get_entity()
+                .add_passenger(vehicle.clone(), entity.clone());
+        }
+        loaded.push(entity.clone());
+
+        if let Some(passengers) = entity_nbt.get_list("Passengers") {
+            for passenger in passengers {
+                if let NbtTag::Compound(passenger) = passenger {
+                    self.load_entity_recursive(passenger, Some(&entity), loaded);
+                }
+            }
+        }
+    }
+
+    /// Makes the serialized entities of an entity chunk live, consuming its NBT. The live
+    /// entity list becomes the single source of truth, so the chunk's NBT is taken (cleared)
+    /// to avoid keeping a duplicate copy that would be re-appended on the next unload.
+    /// Returns `None` if another loader already made the chunk live.
+    fn instantiate_chunk_entities(
+        self: &Arc<Self>,
+        chunk: &pumpkin_world::chunk::ChunkEntityData,
+    ) -> Option<Vec<Arc<dyn EntityBase>>> {
+        if chunk.live.swap(true, Relaxed) {
+            return None;
+        }
+        let entity_nbts = std::mem::take(
+            &mut *chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        let mut entities = Vec::with_capacity(entity_nbts.len());
+        for entity_nbt in &entity_nbts {
+            self.load_entity_recursive(entity_nbt, None, &mut entities);
+        }
+        Some(entities)
+    }
+
+    /// Keeps the entities of force-loaded chunks live without any player nearby, like
+    /// vanilla's entity tickets. Each forced chunk counts as one chunk watcher; call this
+    /// once per chunk that just became forced.
+    pub fn load_forced_entity_chunks(self: &Arc<Self>, chunks: Vec<Vector2<i32>>) {
+        if chunks.is_empty() {
+            return;
+        }
+        self.level.mark_chunks_as_newly_watched(&chunks);
+        let world = self.clone();
+        self.level.spawn_task(async move {
+            for pos in chunks {
+                let chunk = world.level.get_entity_chunk(pos).await;
+                world.instantiate_chunk_entities(&chunk);
+            }
+        });
+    }
+
+    /// Releases the watcher held by chunks that are no longer forced, unloading their
+    /// entities if no player is watching them either.
+    pub async fn unload_forced_entity_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+        let chunks_to_clean = self.level.mark_chunks_as_not_watched(chunks);
+        if !chunks_to_clean.is_empty() {
+            self.remove_entities_in_chunks(&chunks_to_clean).await;
+            self.level.clean_entity_chunks(&chunks_to_clean);
+        }
+    }
+
     fn spawn_world_entity_chunks(self: &Arc<Self>, player: Arc<Player>, chunks: Vec<Vector2<i32>>) {
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
@@ -4388,51 +4502,11 @@ impl World {
                     continue 'main;
                 }
 
-                if first_load {
-                    // First watcher: consume the serialized entities and make them
-                    // live. The live entity list becomes the single source of
-                    // truth, so the chunk's NBT is taken (cleared) to avoid keeping
-                    // a duplicate copy that would be re-appended on the next unload
-                    // and doubled on every reload.
-                    let entity_nbts = std::mem::take(
-                        &mut *chunk
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    chunk.live.store(true, Relaxed);
-                    for entity_nbt in &entity_nbts {
-                        let Some(id) = entity_nbt.get_string("id") else {
-                            debug!("Entity has no ID");
-                            continue;
-                        };
-                        let Some(entity_type) =
-                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-                        else {
-                            warn!("Entity has no valid Entity Type {id}");
-                            continue;
-                        };
-
-                        // Keep the persisted UUID so the entity keeps its identity
-                        // across reloads (matching vanilla); only fall back to a
-                        // fresh one if it is missing/corrupt.
-                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
-                        // Pos is zero since it will be read from nbt.
-                        let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
-                        entity.read_nbt_non_mut(entity_nbt);
-                        entity.init_data_tracker();
-
-                        let base_entity = entity.get_entity();
-                        // Clear velocity so the client does not replay the drop
-                        // animation; residual velocity from the original drop is
-                        // stale data.
-                        base_entity.velocity.store(Vector3::default());
-
-                        // UUID-dedupes if another watcher already loaded this entity.
-                        // Tracker owns pairing (spawn packets + vehicle restore).
-                        world.add_entity_silent(entity.clone());
-                        player.try_restore_vehicle(&entity);
+                if first_load
+                    && let Some(entities) = world.instantiate_chunk_entities(&chunk)
+                {
+                    for entity in &entities {
+                        player.try_restore_vehicle(entity);
                     }
                 } else {
                     // Already live for other watchers: pair this player now so
@@ -7616,6 +7690,61 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
 
 /// A live chunk's records were already spawned, so `fresh` replaces them. Otherwise the
 /// records are the only copy of unspawned entities, so they stay and are only replaced by UUID.
+/// Walks up the vehicle chain to the outermost vehicle that is saved with the chunk.
+/// Players are saved with their own data, so the chain stops below a player vehicle.
+fn root_saved_vehicle(entity: &Arc<dyn EntityBase>) -> Arc<dyn EntityBase> {
+    let mut current = entity.clone();
+    loop {
+        let vehicle = current
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        match vehicle {
+            Some(vehicle)
+                if vehicle.get_player().is_none()
+                    && !vehicle
+                        .get_entity()
+                        .removal_reason
+                        .load()
+                        .is_some_and(|reason| reason.should_destroy()) =>
+            {
+                current = vehicle;
+            }
+            _ => return current,
+        }
+    }
+}
+
+/// Serializes an entity and, recursively, its non-player passengers into vanilla's
+/// `Passengers` list.
+fn write_entity_with_passengers(entity: &Arc<dyn EntityBase>) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    entity.write_nbt(&mut nbt);
+    let passengers: Vec<NbtTag> = entity
+        .get_entity()
+        .passengers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+        .iter()
+        .filter(|passenger| {
+            passenger.get_player().is_none()
+                && !passenger
+                    .get_entity()
+                    .removal_reason
+                    .load()
+                    .is_some_and(|reason| reason.should_destroy())
+        })
+        .map(|passenger| NbtTag::Compound(write_entity_with_passengers(passenger)))
+        .collect();
+    if !passengers.is_empty() {
+        nbt.put("Passengers", NbtTag::List(passengers));
+    }
+    nbt
+}
+
 fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtCompound>) {
     if live {
         *data = fresh;

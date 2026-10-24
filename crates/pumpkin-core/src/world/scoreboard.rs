@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, NumberFormat,
     bedrock::client::{
@@ -14,7 +15,10 @@ use pumpkin_protocol::{
         RenderType, TeamMethod, TeamParameters,
     },
 };
-use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::{
+    text::{TextComponent, color::NamedColor},
+    version::JavaMinecraftVersion,
+};
 use tracing::warn;
 
 use super::World;
@@ -711,6 +715,172 @@ impl Scoreboard {
                 players: team.players.clone().into(),
             };
             player.try_send_client_packet(&je_packet);
+        }
+    }
+}
+
+/// Display slots with their vanilla serialized names, as used in `scoreboard.dat`.
+const DISPLAY_SLOT_NAMES: [(ScoreboardDisplaySlot, &str); 19] = [
+    (ScoreboardDisplaySlot::List, "list"),
+    (ScoreboardDisplaySlot::Sidebar, "sidebar"),
+    (ScoreboardDisplaySlot::BelowName, "below_name"),
+    (ScoreboardDisplaySlot::TeamBlack, "sidebar.team.black"),
+    (
+        ScoreboardDisplaySlot::TeamDarkBlue,
+        "sidebar.team.dark_blue",
+    ),
+    (
+        ScoreboardDisplaySlot::TeamDarkGreen,
+        "sidebar.team.dark_green",
+    ),
+    (
+        ScoreboardDisplaySlot::TeamDarkAqua,
+        "sidebar.team.dark_aqua",
+    ),
+    (ScoreboardDisplaySlot::TeamDarkRed, "sidebar.team.dark_red"),
+    (
+        ScoreboardDisplaySlot::TeamDarkPurple,
+        "sidebar.team.dark_purple",
+    ),
+    (ScoreboardDisplaySlot::TeamGold, "sidebar.team.gold"),
+    (ScoreboardDisplaySlot::TeamGray, "sidebar.team.gray"),
+    (
+        ScoreboardDisplaySlot::TeamDarkGray,
+        "sidebar.team.dark_gray",
+    ),
+    (ScoreboardDisplaySlot::TeamBlue, "sidebar.team.blue"),
+    (ScoreboardDisplaySlot::TeamGreen, "sidebar.team.green"),
+    (ScoreboardDisplaySlot::TeamAqua, "sidebar.team.aqua"),
+    (ScoreboardDisplaySlot::TeamRed, "sidebar.team.red"),
+    (
+        ScoreboardDisplaySlot::TeamLightPurple,
+        "sidebar.team.light_purple",
+    ),
+    (ScoreboardDisplaySlot::TeamYellow, "sidebar.team.yellow"),
+    (ScoreboardDisplaySlot::TeamWhite, "sidebar.team.white"),
+];
+
+impl Scoreboard {
+    /// Serializes objectives, scores and display slots into the `data` compound of
+    /// vanilla's `scoreboard.dat`. Teams are not persisted yet.
+    #[must_use]
+    pub fn to_saved_nbt(&self) -> NbtCompound {
+        let objectives = self
+            .objectives
+            .values()
+            .map(|objective| {
+                let mut nbt = NbtCompound::new();
+                nbt.put_string("Name", objective.name.clone());
+                nbt.put_string("CriteriaName", objective.criterion.clone());
+                nbt.put(
+                    "DisplayName",
+                    objective
+                        .display_name
+                        .to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
+                );
+                let render_type = match objective.render_type {
+                    RenderType::Integer => "integer",
+                    RenderType::Hearts => "hearts",
+                };
+                nbt.put_string("RenderType", render_type.to_string());
+                NbtTag::Compound(nbt)
+            })
+            .collect();
+
+        let scores = self
+            .scores
+            .values()
+            .flat_map(FxHashMap::values)
+            .map(|score| {
+                let mut nbt = NbtCompound::new();
+                nbt.put_string("Name", score.entity_name.clone());
+                nbt.put_string("Objective", score.objective_name.clone());
+                nbt.put_int("Score", score.value.0);
+                nbt.put_bool("Locked", score.locked);
+                if let Some(display_name) = &score.display_name {
+                    nbt.put(
+                        "display",
+                        display_name.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
+                    );
+                }
+                NbtTag::Compound(nbt)
+            })
+            .collect();
+
+        let mut display_slots = NbtCompound::new();
+        for (slot, name) in DISPLAY_SLOT_NAMES {
+            if let Some(objective) = self.display_slots.get(&slot) {
+                display_slots.put_string(name, objective.clone());
+            }
+        }
+
+        let mut data = NbtCompound::new();
+        data.put_list("Objectives", objectives);
+        data.put_list("PlayerScores", scores);
+        data.put_compound("DisplaySlots", display_slots);
+        data
+    }
+
+    /// Replaces the contents of this scoreboard with a `data` compound read from
+    /// `scoreboard.dat`. Nothing is sent to clients, so call it before players join.
+    pub fn load_saved_nbt(&mut self, data: &NbtCompound) {
+        self.objectives.clear();
+        self.scores.clear();
+        self.display_slots.clear();
+
+        for tag in data.get_list("Objectives").unwrap_or_default() {
+            let NbtTag::Compound(nbt) = tag else { continue };
+            let Some(name) = nbt.get_string("Name") else {
+                continue;
+            };
+            let display_name = nbt.get("DisplayName").map_or_else(
+                || TextComponent::text(name.to_string()),
+                TextComponent::from_nbt,
+            );
+            let render_type = if nbt.get_string("RenderType") == Some("hearts") {
+                RenderType::Hearts
+            } else {
+                RenderType::Integer
+            };
+            let criterion = nbt.get_string("CriteriaName").unwrap_or("dummy");
+            self.objectives.insert(
+                name.to_string(),
+                ScoreboardObjective::new(name, display_name, render_type, None, criterion),
+            );
+        }
+
+        for tag in data.get_list("PlayerScores").unwrap_or_default() {
+            let NbtTag::Compound(nbt) = tag else { continue };
+            let (Some(entity_name), Some(objective_name)) =
+                (nbt.get_string("Name"), nbt.get_string("Objective"))
+            else {
+                continue;
+            };
+            if !self.objectives.contains_key(objective_name) {
+                continue;
+            }
+            let mut score = ScoreboardScore::new(
+                entity_name,
+                objective_name,
+                VarInt(nbt.get_int("Score").unwrap_or(0)),
+                nbt.get("display").map(TextComponent::from_nbt),
+                None,
+            );
+            score.locked = nbt.get_bool("Locked").unwrap_or(true);
+            self.scores
+                .entry(objective_name.to_string())
+                .or_default()
+                .insert(entity_name.to_string(), score);
+        }
+
+        if let Some(slots) = data.get_compound("DisplaySlots") {
+            for (slot, name) in DISPLAY_SLOT_NAMES {
+                if let Some(objective) = slots.get_string(name)
+                    && self.objectives.contains_key(objective)
+                {
+                    self.display_slots.insert(slot, objective.to_string());
+                }
+            }
         }
     }
 }

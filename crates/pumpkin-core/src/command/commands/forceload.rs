@@ -5,11 +5,13 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::world::World;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 const DESCRIPTION: &str = "Constantly load chunks in the world.";
 const PERMISSION: &str = "minecraft:command.forceload";
@@ -30,6 +32,17 @@ static ERROR_TOO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_FORCELOAD_TOOBIG,
     "Too many chunks",
 );
+
+/// Drops the entity watcher held by chunks that stopped being forced.
+fn release_forced_entity_chunks(world: &Arc<World>, chunks: Vec<Vector2<i32>>) {
+    if chunks.is_empty() {
+        return;
+    }
+    let world_clone = world.clone();
+    world.level.spawn_task(async move {
+        world_clone.unload_forced_entity_chunks(&chunks).await;
+    });
+}
 
 struct ForceloadAddExecutor;
 
@@ -71,7 +84,7 @@ impl CommandExecutor for ForceloadAddExecutor {
             ));
         }
 
-        {
+        let newly_forced = {
             let mut forced = world
                 .forced_chunks
                 .lock()
@@ -81,18 +94,22 @@ impl CommandExecutor for ForceloadAddExecutor {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut newly_forced = Vec::new();
             for x in min_x..=max_x {
                 for z in min_z..=max_z {
                     let pos = Vector2::new(x, z);
                     if forced.insert(pos) {
                         chunk_loading.add_force_ticket(pos);
+                        newly_forced.push(pos);
                     }
                 }
             }
             chunk_loading.send_change();
             drop(chunk_loading);
             drop(forced);
+            newly_forced
         };
+        world.load_forced_entity_chunks(newly_forced);
 
         world.update_active_chunks();
 
@@ -165,7 +182,7 @@ impl CommandExecutor for ForceloadRemoveExecutor {
             ));
         }
 
-        {
+        let unforced = {
             let mut forced = world
                 .forced_chunks
                 .lock()
@@ -175,18 +192,22 @@ impl CommandExecutor for ForceloadRemoveExecutor {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut unforced = Vec::new();
             for x in min_x..=max_x {
                 for z in min_z..=max_z {
                     let pos = Vector2::new(x, z);
                     if forced.remove(&pos) {
                         chunk_loading.remove_force_ticket(pos);
+                        unforced.push(pos);
                     }
                 }
             }
             chunk_loading.send_change();
             drop(chunk_loading);
             drop(forced);
+            unforced
         };
+        release_forced_entity_chunks(world, unforced);
 
         world.update_active_chunks();
 
@@ -229,23 +250,25 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
             .as_ref()
             .ok_or_else(|| ERROR_FAILED_REMOVE.create_without_context())?;
 
-        let removed_count = {
+        let unforced = {
             let mut forced = world
                 .forced_chunks
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let count = forced.len();
             let mut chunk_loading = world
                 .level
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for pos in forced.drain() {
-                chunk_loading.remove_force_ticket(pos);
+            let unforced: Vec<_> = forced.drain().collect();
+            for pos in &unforced {
+                chunk_loading.remove_force_ticket(*pos);
             }
             chunk_loading.send_change();
-            count
+            unforced
         };
+        let removed_count = unforced.len();
+        release_forced_entity_chunks(world, unforced);
 
         world.update_active_chunks();
 
