@@ -1,0 +1,207 @@
+use std::any::Any;
+use std::sync::Arc;
+
+use crate::block::registry::BlockActionResult;
+use crate::entity::Entity;
+use crate::entity::item::ItemEntity;
+use crate::entity::player::Player;
+use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::server::Server;
+use pumpkin_data::BlockId;
+use pumpkin_data::block_properties::BeeNestLikeProperties;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CaveVinesLikeProperties;
+use pumpkin_data::block_properties::KelpLikeProperties;
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::world::BlockFlags;
+
+pub struct ShearsItem;
+
+impl ItemMetadata for ShearsItem {
+    fn ids() -> Box<[u16]> {
+        Box::new([Item::SHEARS.id])
+    }
+}
+
+impl ItemBehaviour for ShearsItem {
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
+        location: BlockPos,
+        face: BlockDirection,
+        _cursor_pos: Vector3<f32>,
+        block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        let world = player.world();
+        let state_id = world.get_block_state_id(&location);
+
+        if handle_growing_plant(item, player, &location, block, state_id) {
+            return BlockActionResult::Success;
+        }
+
+        if handle_beehive(item, player, &location, block, state_id) {
+            return BlockActionResult::Success;
+        }
+
+        if handle_pumpkin(item, player, &location, face, block) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+fn handle_growing_plant(
+    item: &mut ItemStack,
+    player: &Player,
+    location: &BlockPos,
+    block: &Block,
+    state_id: BlockStateId,
+) -> bool {
+    let new_state_id = if KelpLikeProperties::handles_block_id(block.id) {
+        let mut props = KelpLikeProperties::from_state_id(state_id);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else if CaveVinesLikeProperties::handles_block_id(block.id) {
+        let mut props = CaveVinesLikeProperties::from_state_id(state_id);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else {
+        return false;
+    };
+
+    let world = player.world();
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockGrowingPlantCrop,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+    if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+        let _ = item.damage_item(1);
+    }
+    true
+}
+
+fn handle_beehive(
+    item: &mut ItemStack,
+    player: &Player,
+    location: &BlockPos,
+    block: &Block,
+    state_id: BlockStateId,
+) -> bool {
+    if !BeeNestLikeProperties::handles_block_id(block.id) {
+        return false;
+    }
+
+    let mut props = BeeNestLikeProperties::from_state_id(state_id);
+
+    if props.honey_level != 5 {
+        return false;
+    }
+
+    let mut drops = vec![ItemStack::new(3, &Item::HONEYCOMB)];
+    if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+        && let Some(server) = player.world().server.upgrade()
+    {
+        let mut event =
+            crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+                player: player_arc,
+                block_pos: *location,
+                harvested_items: drops.clone(),
+                cancelled: false,
+            };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return false;
+        }
+        drops = event.harvested_items;
+    }
+
+    props.honey_level = 0;
+    let new_state_id = props.to_state_id(block);
+
+    let world = player.world();
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockBeehiveShear,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+
+    let drop_pos = location.to_centered_f64();
+    for drop_item in drops {
+        let item_entity = Arc::new(ItemEntity::new(
+            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+            drop_item,
+        ));
+        world.spawn_entity(item_entity);
+    }
+    if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+        let _ = item.damage_item(1);
+    }
+    true
+}
+
+fn handle_pumpkin(
+    item: &mut ItemStack,
+    player: &Player,
+    location: &BlockPos,
+    face: BlockDirection,
+    block: &Block,
+) -> bool {
+    if block.id == BlockId::PUMPKIN {
+        let world = player.world();
+        let mut props = pumpkin_data::block_properties::WallTorchLikeProperties::default(
+            &Block::CARVED_PUMPKIN,
+        );
+        props.facing = face.to_horizontal_facing().unwrap_or_else(|| {
+            player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite()
+        });
+        world.set_block_state(
+            location,
+            props.to_state_id(&Block::CARVED_PUMPKIN),
+            BlockFlags::NOTIFY_ALL,
+        );
+        world.play_sound(
+            Sound::BlockPumpkinCarve,
+            SoundCategory::Blocks,
+            &location.to_f64(),
+        );
+
+        let drop_pos = location.to_centered_f64();
+        let item_entity = Arc::new(ItemEntity::new(
+            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+            ItemStack::new(4, &Item::PUMPKIN_SEEDS),
+        ));
+        world.spawn_entity(item_entity);
+        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+            let _ = item.damage_item(1);
+        }
+        true
+    } else {
+        false
+    }
+}

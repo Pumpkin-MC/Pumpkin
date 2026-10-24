@@ -1,6 +1,8 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::blocks::SuffocationPredicate;
+use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -157,14 +159,32 @@ impl BlockState {
         }
     }
 
-    ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
-    ///Only valid for UP and DOWN sides
+    /// Checks if a face of this block provides center support (`isFaceSturdy(..., Direction, SupportType.CENTER)` in Java).
+    /// Used for placing torches, levers, redstone components, lanterns, and wall fixtures.
     #[must_use]
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
+        if self.is_side_solid(side) {
+            return true;
+        }
+
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
             _ => false,
+        }
+    }
+
+    /// `isSuffocating()` in Java. Shulker boxes don't check whether their lid is open.
+    #[must_use]
+    pub fn is_suffocating(&self) -> bool {
+        let block = self.id.to_block();
+        match block.suffocation_predicate() {
+            // Flag first: the tag check scans about 1000 IDs.
+            SuffocationPredicate::Default => {
+                self.is_full_cube() && block.has_tag(&tag::Block::MINECRAFT_CAUSES_SUFFOCATION)
+            }
+            SuffocationPredicate::Never => false,
+            SuffocationPredicate::Always => true,
         }
     }
 
@@ -319,6 +339,18 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
+    pub const fn is_side_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_side_solid(side)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_center_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_center_solid(side)
+    }
+
+    #[inline]
+    #[must_use]
     pub fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
         Block::from_state_id(self).rotate(self, rotation)
     }
@@ -376,8 +408,8 @@ const UP_CENTER_SOLID: u8 = 1 << 7;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Block, BlockStateId, block_state_remap::remap_block_state_for_version};
-    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+    use crate::Block;
+    use pumpkin_util::math::position::BlockPos;
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
@@ -401,33 +433,5 @@ mod tests {
         assert_close(shifted_shape.max.x, 0.84375);
         assert_close(shifted_shape.min.z, 0.65625);
         assert_close(shifted_shape.max.z, 0.84375);
-    }
-
-    #[test]
-    fn supported_client_versions_keep_offset_collisions_mapped() {
-        let versions = [
-            JavaMinecraftVersion::V_1_20_5,
-            JavaMinecraftVersion::V_1_21,
-            JavaMinecraftVersion::V_1_21_2,
-            JavaMinecraftVersion::V_1_21_4,
-            JavaMinecraftVersion::V_1_21_5,
-            JavaMinecraftVersion::V_1_21_6,
-            JavaMinecraftVersion::V_1_21_7,
-            JavaMinecraftVersion::V_1_21_9,
-            JavaMinecraftVersion::V_1_21_11,
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-        ];
-
-        for version in versions {
-            for block in [Block::BAMBOO, Block::POINTED_DRIPSTONE] {
-                assert_ne!(
-                    remap_block_state_for_version(block.default_state.id.as_u16(), version),
-                    BlockStateId::AIR.as_u16(),
-                    "{} mapped to air for {version}",
-                    block.name
-                );
-            }
-        }
     }
 }

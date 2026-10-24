@@ -1,3 +1,4 @@
+use super::Digest;
 use crate::Block;
 use crate::Enchantment;
 use crate::attributes::Attributes;
@@ -12,8 +13,6 @@ use crate::item::Item;
 use crate::item_stack::ItemStack;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
@@ -91,7 +90,7 @@ impl DataComponentImpl for EnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());
@@ -101,6 +100,26 @@ impl DataComponentImpl for EnchantmentsImpl {
         digest.finalize() as i32
     }
     default_impl!(Enchantments);
+}
+
+fn block_predicate_matches(predicate: &NbtTag, block: &Block) -> bool {
+    match predicate {
+        NbtTag::Compound(c) => {
+            if let Some(list) = c.get_list("predicates") {
+                return list.iter().any(|p| block_predicate_matches(p, block));
+            }
+            if let Some(blocks_tag) = c.get("blocks") {
+                IDSet::<Block>::read(blocks_tag).is_some_and(|idset| match &idset {
+                    IDSet::Tag(tag) => block.is_tagged_with(tag).unwrap_or(false),
+                    IDSet::IDs(blocks) => blocks.iter().any(|b| b.id == block.id),
+                })
+            } else {
+                true
+            }
+        }
+        NbtTag::List(list) => list.iter().any(|p| block_predicate_matches(p, block)),
+        _ => false,
+    }
 }
 
 /// An adventure-mode block predicate, kept as its raw NBT (a compound or list)
@@ -115,6 +134,11 @@ impl CanPlaceOnImpl {
         Some(Self {
             predicate: data.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn matches_block(&self, block: &Block) -> bool {
+        block_predicate_matches(&self.predicate, block)
     }
 }
 impl DataComponentImpl for CanPlaceOnImpl {
@@ -136,6 +160,11 @@ impl CanBreakImpl {
         Some(Self {
             predicate: data.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn matches_block(&self, block: &Block) -> bool {
+        block_predicate_matches(&self.predicate, block)
     }
 }
 impl DataComponentImpl for CanBreakImpl {
@@ -478,9 +507,16 @@ impl Hash for ToolImpl {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeaponImpl {
     pub item_damage_per_attack: u32,
+    pub disable_blocking_for_seconds: f32,
+}
+impl Hash for WeaponImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item_damage_per_attack.hash(state);
+        self.disable_blocking_for_seconds.to_bits().hash(state);
+    }
 }
 impl WeaponImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
@@ -489,8 +525,12 @@ impl WeaponImpl {
             .get_int("item_damage_per_attack")
             .unwrap_or(1)
             .max(0) as u32;
+        let disable_blocking_for_seconds = compound
+            .get_float("disable_blocking_for_seconds")
+            .unwrap_or(0.0);
         Some(Self {
             item_damage_per_attack,
+            disable_blocking_for_seconds,
         })
     }
 }
@@ -498,10 +538,17 @@ impl DataComponentImpl for WeaponImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        compound.put_float(
+            "disable_blocking_for_seconds",
+            self.disable_blocking_for_seconds,
+        );
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        self.item_damage_per_attack as i32
+        let mut digest = Digest::new();
+        digest.update(&get_i32_hash(self.item_damage_per_attack as i32).to_le_bytes());
+        digest.update(&get_f32_hash(self.disable_blocking_for_seconds).to_le_bytes());
+        digest.finalize() as i32
     }
     default_impl!(Weapon);
 }
@@ -550,7 +597,7 @@ impl DataComponentImpl for AttackRangeImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         for value in self.values() {
             digest.update(&get_f32_hash(value).to_le_bytes());
         }
@@ -639,7 +686,7 @@ impl EquippableImpl {
 }
 impl DataComponentImpl for EquippableImpl {
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[16u8]);
         digest.update(&get_i32_hash(self.slot.get_slot_index()).to_le_bytes());
         digest.update(&get_idor_hash(&self.equip_sound).to_le_bytes());
@@ -818,7 +865,7 @@ impl DataComponentImpl for PiercingWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[self.deals_knockback as u8, self.dismounts as u8]);
         update_optional_idor(&mut digest, self.sound.as_ref());
         update_optional_idor(&mut digest, self.hit_sound.as_ref());
@@ -920,7 +967,7 @@ impl DataComponentImpl for KineticWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&get_i32_hash(self.contact_cooldown_ticks).to_le_bytes());
         digest.update(&get_i32_hash(self.delay_ticks).to_le_bytes());
         for (_, condition) in self.conditions() {
@@ -1049,18 +1096,106 @@ impl DataComponentImpl for SwingAnimationImpl {
         NbtTag::Compound(compound)
     }
 
-    default_impl!(SwingAnimation);
+    default_impl!(AttackAnimation);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct AdditionalTradeCostImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct InteractAnimationImpl {
+    pub animation_type: SwingAnimationType,
+    pub duration: i32,
+}
+
+impl Default for InteractAnimationImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl InteractAnimationImpl {
+    pub const DEFAULT: Self = Self {
+        animation_type: SwingAnimationType::Whack,
+        duration: 6,
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let swing = SwingAnimationImpl::read_data(data)?;
+        Some(Self {
+            animation_type: swing.animation_type,
+            duration: swing.duration,
+        })
+    }
+}
+
+impl DataComponentImpl for InteractAnimationImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("type", self.animation_type.to_name().to_string());
+        compound.put_int("duration", self.duration);
+        NbtTag::Compound(compound)
+    }
+
+    default_impl!(InteractAnimation);
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct AdditionalTradeCostImpl {
+    pub cost: i32,
+}
 impl AdditionalTradeCostImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            cost: data.extract_int().unwrap_or(0),
+        })
     }
 }
 impl DataComponentImpl for AdditionalTradeCostImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.cost)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.cost) as i32
+    }
     default_impl!(AdditionalTradeCost);
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MobVisibilityImpl {
+    pub targeting_entity_types: IDSet<EntityType>,
+    pub visibility: f32,
+}
+impl Hash for MobVisibilityImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        get_idset_hash(&self.targeting_entity_types).hash(state);
+        self.visibility.to_bits().hash(state);
+    }
+}
+impl MobVisibilityImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let targeting_entity_types =
+            IDSet::<EntityType>::read(compound.get("targeting_entity_types")?)?;
+        let visibility = compound.get_float("visibility")?;
+        Some(Self {
+            targeting_entity_types,
+            visibility,
+        })
+    }
+}
+impl DataComponentImpl for MobVisibilityImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        self.targeting_entity_types
+            .write(&mut compound, "targeting_entity_types");
+        compound.put_float("visibility", self.visibility);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        digest.update(&get_idset_hash(&self.targeting_entity_types).to_le_bytes());
+        digest.update(&get_f32_hash(self.visibility).to_le_bytes());
+        digest.finalize() as i32
+    }
+    default_impl!(MobVisibility);
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -1095,7 +1230,7 @@ impl DataComponentImpl for StoredEnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());
@@ -1141,6 +1276,31 @@ impl TrimImpl {
             material: compound.get("material")?.clone(),
             pattern: compound.get("pattern")?.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn new(
+        material: crate::trim_material::TrimMaterial,
+        pattern: crate::trim_pattern::TrimPattern,
+    ) -> Self {
+        Self {
+            material: NbtTag::String(material.asset_id().into()),
+            pattern: NbtTag::String(pattern.asset_id().into()),
+        }
+    }
+
+    #[must_use]
+    pub fn material_enum(&self) -> Option<crate::trim_material::TrimMaterial> {
+        self.material
+            .extract_string()
+            .and_then(crate::trim_material::TrimMaterial::from_name)
+    }
+
+    #[must_use]
+    pub fn pattern_enum(&self) -> Option<crate::trim_pattern::TrimPattern> {
+        self.pattern
+            .extract_string()
+            .and_then(crate::trim_pattern::TrimPattern::from_name)
     }
 }
 impl DataComponentImpl for TrimImpl {

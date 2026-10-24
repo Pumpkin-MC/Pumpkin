@@ -82,8 +82,12 @@ pub struct ItemComponents {
     pub bees: Option<serde_json::Value>,
     #[serde(rename = "minecraft:block_state")]
     pub block_state: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:block_transformer")]
+    pub block_transformer: Option<String>,
     #[serde(rename = "minecraft:break_sound")]
-    pub break_sound: Option<serde_json::Value>,
+    pub break_sound: Option<String>,
+    #[serde(rename = "minecraft:brewing_fuel")]
+    pub brewing_fuel: Option<serde_json::Value>,
     #[serde(rename = "minecraft:bucket_entity_data")]
     pub bucket_entity_data: Option<serde_json::Value>,
     #[serde(rename = "minecraft:bundle_contents")]
@@ -94,14 +98,20 @@ pub struct ItemComponents {
     pub chicken_variant: Option<serde_json::Value>,
     #[serde(rename = "minecraft:container")]
     pub container: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:compostable")]
+    pub compostable: Option<CompostableComponent>,
+    #[serde(rename = "minecraft:cooking_fuel")]
+    pub cooking_fuel: Option<CookingFuelComponent>,
+    #[serde(rename = "minecraft:cushion_color")]
+    pub cushion_color: Option<String>,
     #[serde(rename = "minecraft:damage_type")]
     pub damage_type: Option<String>,
     #[serde(rename = "minecraft:debug_stick_state")]
     pub debug_stick_state: Option<serde_json::Value>,
     #[serde(rename = "minecraft:dye")]
-    pub dye: Option<serde_json::Value>,
+    pub dye: Option<String>,
     #[serde(rename = "minecraft:enchantment_glint_override")]
-    pub enchantment_glint_override: Option<serde_json::Value>,
+    pub enchantment_glint_override: Option<bool>,
     #[serde(rename = "minecraft:enchantments")]
     pub enchantments: Option<serde_json::Value>,
     #[serde(rename = "minecraft:entity_data")]
@@ -111,7 +121,9 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:glider")]
     pub glider: Option<serde_json::Value>,
     #[serde(rename = "minecraft:instrument")]
-    pub instrument: Option<serde_json::Value>,
+    pub instrument: Option<String>,
+    #[serde(rename = "minecraft:interact_animation")]
+    pub interact_animation: Option<SwingAnimationComponent>,
     #[serde(rename = "minecraft:item_model")]
     pub item_model: Option<String>,
     #[serde(rename = "minecraft:kinetic_weapon")]
@@ -124,6 +136,8 @@ pub struct ItemComponents {
     pub map_decorations: Option<serde_json::Value>,
     #[serde(rename = "minecraft:minimum_attack_charge")]
     pub minimum_attack_charge: Option<f32>,
+    #[serde(rename = "minecraft:mob_visibility")]
+    pub mob_visibility: Option<MobVisibilityComponent>,
     #[serde(rename = "minecraft:ominous_bottle_amplifier")]
     pub ominous_bottle_amplifier: Option<i32>,
     #[serde(rename = "minecraft:piercing_weapon")]
@@ -135,9 +149,11 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:potion_duration_scale")]
     pub potion_duration_scale: Option<f32>,
     #[serde(rename = "minecraft:provides_banner_patterns")]
-    pub provides_banner_patterns: Option<serde_json::Value>,
+    pub provides_banner_patterns: Option<String>,
+    #[serde(rename = "minecraft:provides_pottery_pattern")]
+    pub provides_pottery_pattern: Option<String>,
     #[serde(rename = "minecraft:provides_trim_material")]
-    pub provides_trim_material: Option<serde_json::Value>,
+    pub provides_trim_material: Option<String>,
     #[serde(rename = "minecraft:rarity")]
     pub rarity: Option<String>,
     #[serde(rename = "minecraft:recipes")]
@@ -146,18 +162,29 @@ pub struct ItemComponents {
     pub repair_cost: Option<i32>,
     #[serde(rename = "minecraft:repairable")]
     pub repairable: Option<RepairableComponent>,
+    #[serde(rename = "minecraft:sign_text_back")]
+    pub sign_text_back: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:sign_text_front")]
+    pub sign_text_front: Option<serde_json::Value>,
     #[serde(rename = "minecraft:stored_enchantments")]
     pub stored_enchantments: Option<serde_json::Value>,
     #[serde(rename = "minecraft:suspicious_stew_effects")]
     pub suspicious_stew_effects: Option<serde_json::Value>,
-    #[serde(rename = "minecraft:swing_animation")]
+    #[serde(
+        rename = "minecraft:attack_animation",
+        alias = "minecraft:swing_animation"
+    )]
     pub swing_animation: Option<SwingAnimationComponent>,
     #[serde(rename = "minecraft:tooltip_display")]
     pub tooltip_display: Option<serde_json::Value>,
     #[serde(rename = "minecraft:use_effects")]
-    pub use_effects: Option<serde_json::Value>,
+    pub use_effects: Option<UseEffectsComponent>,
     #[serde(rename = "minecraft:use_remainder")]
-    pub use_remainder: Option<serde_json::Value>,
+    pub use_remainder: Option<UseRemainderComponent>,
+    #[serde(rename = "minecraft:villager_food")]
+    pub villager_food: Option<VillagerFoodComponent>,
+    #[serde(rename = "minecraft:waxed")]
+    pub waxed: Option<serde_json::Value>,
     #[serde(rename = "minecraft:writable_book_content")]
     pub writable_book_content: Option<serde_json::Value>,
 }
@@ -181,6 +208,41 @@ pub struct SwingAnimationComponent {
 #[derive(Deserialize)]
 pub struct EnchantableComponent {
     pub value: i32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CompostableComponent {
+    pub layers: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct UseRemainderComponent {
+    pub id: String,
+}
+
+const fn default_use_effects_speed() -> f32 {
+    0.2
+}
+
+#[derive(Deserialize, Clone)]
+pub struct UseEffectsComponent {
+    #[serde(default)]
+    pub can_sprint: bool,
+    #[serde(default = "_true")]
+    pub interact_vibrations: bool,
+    #[serde(default = "default_use_effects_speed")]
+    pub speed_multiplier: f32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct VillagerFoodComponent {
+    pub nutrition: i32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct MobVisibilityComponent {
+    pub targeting_entity_types: StringOrList,
+    pub visibility: f32,
 }
 
 impl ToTokens for ItemComponents {
@@ -499,7 +561,13 @@ impl ToTokens for ItemComponents {
                 &weapon.item_damage_per_attack.to_string(),
                 Span::call_site(),
             );
-            tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
+            let disable_blocking_for_seconds = float_literal(weapon.disable_blocking_for_seconds);
+            tokens.extend(quote! {
+                (Weapon, &WeaponImpl {
+                    item_damage_per_attack: #damage,
+                    disable_blocking_for_seconds: #disable_blocking_for_seconds,
+                }),
+            });
         }
 
         if let Some(damage_resistant) = &self.damage_resistant {
@@ -760,8 +828,27 @@ impl ToTokens for ItemComponents {
                 }),
             });
         }
-        if self.break_sound.is_some() {
-            tokens.extend(quote! { (BreakSound, &BreakSoundImpl), });
+        if let Some(transformer) = &self.block_transformer {
+            let tr_lit = LitStr::new(transformer, Span::call_site());
+            tokens.extend(quote! {
+                (BlockTransformer, &BlockTransformerImpl {
+                    transformer: Cow::Borrowed(#tr_lit),
+                }),
+            });
+        }
+        if let Some(break_sound) = &self.break_sound {
+            let variant = format_ident!(
+                "{}",
+                break_sound
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(break_sound)
+                    .to_pascal_case()
+            );
+            tokens.extend(quote! {
+                (BreakSound, &BreakSoundImpl {
+                    sound: IdOr::Id(Sound::#variant),
+                }),
+            });
         }
         if self.bucket_entity_data.is_some() {
             tokens.extend(quote! { (BucketEntityData, &BucketEntityDataImpl), });
@@ -783,6 +870,14 @@ impl ToTokens for ItemComponents {
         if self.container.is_some() {
             tokens.extend(quote! { (Container, &ContainerImpl { items: Vec::new() }), });
         }
+        if let Some(color) = &self.cushion_color {
+            let color_ident = format_ident!("{}", color.to_pascal_case());
+            tokens.extend(quote! {
+                (CushionColor, &CushionColorImpl {
+                    color: crate::dye_color::DyeColor::#color_ident,
+                }),
+            });
+        }
         if let Some(damage_type) = &self.damage_type {
             let damage_type = format_ident!(
                 "{}",
@@ -800,11 +895,79 @@ impl ToTokens for ItemComponents {
         if self.debug_stick_state.is_some() {
             tokens.extend(quote! { (DebugStickState, &DebugStickStateImpl), });
         }
-        if self.dye.is_some() {
-            tokens.extend(quote! { (Dye, &DyeImpl), });
+        if let Some(dye) = &self.dye {
+            let color_ident = format_ident!("{}", dye.to_pascal_case());
+            tokens.extend(quote! {
+                (Dye, &DyeImpl {
+                    color: crate::dye_color::DyeColor::#color_ident,
+                }),
+            });
         }
-        if self.enchantment_glint_override.is_some() {
-            tokens.extend(quote! { (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl), });
+        if self.brewing_fuel.is_some() {
+            tokens.extend(quote! { (BrewingFuel, &BrewingFuelImpl), });
+        }
+        if let Some(compostable) = &self.compostable {
+            let layers = compostable
+                .layers
+                .strip_prefix("minecraft:")
+                .unwrap_or(&compostable.layers);
+            let chance = match layers {
+                "compostable/low" => 0.3,
+                "compostable/low_medium" => 0.5,
+                "compostable/medium" => 0.65,
+                "compostable/medium_high" => 0.85,
+                "compostable/always_add_one" => 1.0,
+                _ => panic!("Unknown compostable layers: {}", compostable.layers),
+            };
+            let chance_lit = LitFloat::new(&format!("{chance:?}f32"), Span::call_site());
+            tokens.extend(quote! {
+                (Compostable, &CompostableImpl { chance: #chance_lit }),
+            });
+        }
+        if let Some(fuel) = &self.cooking_fuel {
+            let burn_time_tokens = match &fuel.burn_time {
+                serde_json::Value::Number(n) => {
+                    let val = n.as_i64().unwrap_or(0) as i32;
+                    let val_lit = LitInt::new(&val.to_string(), Span::call_site());
+                    quote! { crate::data_component_impl::IntProvider::Inline(#val_lit) }
+                }
+                serde_json::Value::String(s) => {
+                    let s_lit = LitStr::new(s, Span::call_site());
+                    quote! { crate::data_component_impl::IntProvider::Id(std::borrow::Cow::Borrowed(#s_lit)) }
+                }
+                _ => quote! { crate::data_component_impl::IntProvider::Inline(0) },
+            };
+
+            let speed_multiplier_tokens = match &fuel.speed_multiplier {
+                Some(serde_json::Value::Number(n)) => {
+                    let val = n.as_f64().unwrap_or(1.0) as f32;
+                    let val_lit = LitFloat::new(&format!("{val:?}f32"), Span::call_site());
+                    quote! { crate::data_component_impl::FloatProvider::Inline(#val_lit) }
+                }
+                Some(serde_json::Value::String(s)) => {
+                    let s_lit = LitStr::new(s, Span::call_site());
+                    quote! { crate::data_component_impl::FloatProvider::Id(std::borrow::Cow::Borrowed(#s_lit)) }
+                }
+                _ => {
+                    quote! { crate::data_component_impl::FloatProvider::Id(std::borrow::Cow::Borrowed("minecraft:cooking/speed_default")) }
+                }
+            };
+
+            tokens.extend(quote! {
+                (CookingFuel, &CookingFuelImpl {
+                    burn_time: #burn_time_tokens,
+                    speed_multiplier: #speed_multiplier_tokens,
+                }),
+            });
+        }
+        if self.waxed.is_some() {
+            tokens.extend(quote! { (Waxed, &WaxedImpl), });
+        }
+        if let Some(glint) = self.enchantment_glint_override {
+            let glint_lit = LitBool::new(glint, Span::call_site());
+            tokens.extend(quote! {
+                (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl { glint: #glint_lit }),
+            });
         }
         if self.enchantments.is_some() {
             tokens.extend(
@@ -812,7 +975,7 @@ impl ToTokens for ItemComponents {
             );
         }
         if self.entity_data.is_some() {
-            tokens.extend(quote! { (EntityData, &EntityDataImpl), });
+            tokens.extend(quote! { (EntityData, &EntityDataImpl { nbt: None }), });
         }
         if let Some(fireworks) = &self.fireworks {
             let flight_duration = if let serde_json::Value::Object(map) = fireworks
@@ -832,8 +995,31 @@ impl ToTokens for ItemComponents {
         if self.glider.is_some() {
             tokens.extend(quote! { (Glider, &GliderImpl), });
         }
-        if self.instrument.is_some() {
-            tokens.extend(quote! { (Instrument, &InstrumentImpl), });
+        if let Some(instrument) = &self.instrument {
+            let inst_lit = LitStr::new(instrument, Span::call_site());
+            tokens.extend(quote! {
+                (Instrument, &InstrumentImpl {
+                    instrument: Cow::Borrowed(#inst_lit),
+                }),
+            });
+        }
+        if let Some(interact) = &self.interact_animation {
+            let anim_type = match interact.r#type.as_str() {
+                "whack" => quote! { SwingAnimationType::Whack },
+                "stab" => quote! { SwingAnimationType::Stab },
+                "none" => quote! { SwingAnimationType::None },
+                _ => quote! { SwingAnimationType::Whack },
+            };
+            let duration = interact.duration;
+            tokens.extend(quote! {
+                (
+                    InteractAnimation,
+                    &InteractAnimationImpl {
+                        animation_type: #anim_type,
+                        duration: #duration,
+                    },
+                ),
+            });
         }
         if let Some(model) = &self.item_model {
             let model_lit = LitStr::new(model, Span::call_site());
@@ -874,9 +1060,6 @@ impl ToTokens for ItemComponents {
         if self.lore.is_some() {
             tokens.extend(quote! { (Lore, &LoreImpl { lines: Vec::new() }), });
         }
-        if self.map_color.is_some() {
-            tokens.extend(quote! { (MapColor, &MapColorImpl), });
-        }
         if self.map_decorations.is_some() {
             tokens.extend(quote! { (MapDecorations, &MapDecorationsImpl), });
         }
@@ -885,6 +1068,50 @@ impl ToTokens for ItemComponents {
             tokens.extend(
                 quote! { (MinimumAttackCharge, &MinimumAttackChargeImpl { charge: #charge }), },
             );
+        }
+        if let Some(mob_vis) = &self.mob_visibility {
+            let mut targeting_tokens = TokenStream::new();
+            match &mob_vis.targeting_entity_types {
+                StringOrList::String(str) => {
+                    if let Some(formatted) = str.strip_prefix("#minecraft:") {
+                        targeting_tokens.extend(quote! {
+                            IDSet::Tag(Cow::Borrowed(#formatted))
+                        });
+                    } else if let Some(formatted) = str.strip_prefix('#') {
+                        targeting_tokens.extend(quote! {
+                            IDSet::Tag(Cow::Borrowed(#formatted))
+                        });
+                    } else {
+                        let ident = format_ident!(
+                            "{}",
+                            str.strip_prefix("minecraft:").unwrap_or(str).to_uppercase()
+                        );
+                        targeting_tokens.extend(quote! {
+                            IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
+                        });
+                    }
+                }
+                StringOrList::List(items) => {
+                    let mut ids = TokenStream::new();
+                    for x in items {
+                        let entity = format_ident!(
+                            "{}",
+                            x.strip_prefix("minecraft:").unwrap_or(x).to_uppercase()
+                        );
+                        ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
+                    }
+                    targeting_tokens.extend(quote! {
+                        IDSet::IDs(Cow::Borrowed(&[#ids]))
+                    });
+                }
+            }
+            let visibility = float_literal(mob_vis.visibility);
+            tokens.extend(quote! {
+                (MobVisibility, &MobVisibilityImpl {
+                    targeting_entity_types: #targeting_tokens,
+                    visibility: #visibility,
+                }),
+            });
         }
         if let Some(amp) = self.ominous_bottle_amplifier {
             let amp_lit = LitInt::new(&amp.to_string(), Span::call_site());
@@ -923,11 +1150,29 @@ impl ToTokens for ItemComponents {
                 quote! { (PotionDurationScale, &PotionDurationScaleImpl { scale: #scale_lit }), },
             );
         }
-        if self.provides_banner_patterns.is_some() {
-            tokens.extend(quote! { (ProvidesBannerPatterns, &ProvidesBannerPatternsImpl), });
+        if let Some(key) = &self.provides_banner_patterns {
+            let key_lit = LitStr::new(key, Span::call_site());
+            tokens.extend(quote! {
+                (ProvidesBannerPatterns, &ProvidesBannerPatternsImpl {
+                    key: Cow::Borrowed(#key_lit),
+                }),
+            });
         }
-        if self.provides_trim_material.is_some() {
-            tokens.extend(quote! { (ProvidesTrimMaterial, &ProvidesTrimMaterialImpl), });
+        if let Some(pattern) = &self.provides_pottery_pattern {
+            let pat_lit = LitStr::new(pattern, Span::call_site());
+            tokens.extend(quote! {
+                (ProvidesPotteryPattern, &ProvidesPotteryPatternImpl {
+                    pattern: Cow::Borrowed(#pat_lit),
+                }),
+            });
+        }
+        if let Some(material) = &self.provides_trim_material {
+            let mat_lit = LitStr::new(material, Span::call_site());
+            tokens.extend(quote! {
+                (ProvidesTrimMaterial, &ProvidesTrimMaterialImpl {
+                    material: Cow::Borrowed(#mat_lit),
+                }),
+            });
         }
         if let Some(rarity_str) = &self.rarity {
             let rarity_variant = match rarity_str.as_str() {
@@ -974,6 +1219,12 @@ impl ToTokens for ItemComponents {
             }
             tokens.extend(quote! { (Repairable, &RepairableImpl { items: #items_tokens }), });
         }
+        if self.sign_text_back.is_some() {
+            tokens.extend(quote! { (SignTextBack, &SignTextBackImpl::DEFAULT), });
+        }
+        if self.sign_text_front.is_some() {
+            tokens.extend(quote! { (SignTextFront, &SignTextFrontImpl::DEFAULT), });
+        }
         if self.stored_enchantments.is_some() {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
         }
@@ -990,7 +1241,7 @@ impl ToTokens for ItemComponents {
             let duration = swing.duration;
             tokens.extend(quote! {
                 (
-                    SwingAnimation,
+                    AttackAnimation,
                     &SwingAnimationImpl {
                         animation_type: #anim_type,
                         duration: #duration,
@@ -1001,12 +1252,37 @@ impl ToTokens for ItemComponents {
         if self.tooltip_display.is_some() {
             tokens.extend(quote! { (TooltipDisplay, &TooltipDisplayImpl), });
         }
-        if self.use_effects.is_some() {
-            tokens.extend(quote! { (UseEffects, &UseEffectsImpl), });
+        if let Some(use_effects) = &self.use_effects {
+            let can_sprint = LitBool::new(use_effects.can_sprint, Span::call_site());
+            let interact_vibrations =
+                LitBool::new(use_effects.interact_vibrations, Span::call_site());
+            let speed_multiplier = float_literal(use_effects.speed_multiplier);
+            tokens.extend(quote! {
+                (UseEffects, &UseEffectsImpl {
+                    can_sprint: #can_sprint,
+                    interact_vibrations: #interact_vibrations,
+                    speed_multiplier: #speed_multiplier,
+                }),
+            });
         }
         if self.use_remainder.is_some() {
-            tokens.extend(quote! { (UseRemainder, &UseRemainderImpl), });
+            let remainder = self.use_remainder.as_ref().unwrap();
+            let id = LitStr::new(&remainder.id, Span::call_site());
+            tokens.extend(quote! {
+                (UseRemainder, &UseRemainderImpl {
+                    remainder: Some(Cow::Borrowed(#id)),
+                }),
+            });
         }
+        if let Some(villager_food) = &self.villager_food {
+            let nutrition = LitInt::new(&villager_food.nutrition.to_string(), Span::call_site());
+            tokens.extend(quote! {
+                (VillagerFood, &VillagerFoodImpl {
+                    nutrition: #nutrition,
+                }),
+            });
+        }
+
         if self.writable_book_content.is_some() {
             tokens.extend(
                 quote! { (WritableBookContent, &WritableBookContentImpl { pages: Vec::new() }), },
@@ -1144,8 +1420,8 @@ pub struct DeathProtection {
 pub struct WeaponComponent {
     #[serde(default = "default_item_damage")]
     pub item_damage_per_attack: u32,
-    // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
-    // This preserves round-trip fidelity for vanilla items and datapacks.
+    #[serde(default)]
+    pub disable_blocking_for_seconds: f32,
 }
 
 #[derive(Deserialize, Clone)]
@@ -1271,6 +1547,13 @@ pub struct DamageResistantComponent {
 pub enum StringOrList {
     String(String),
     List(Vec<String>),
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CookingFuelComponent {
+    pub burn_time: serde_json::Value,
+    #[serde(default)]
+    pub speed_multiplier: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -1429,7 +1712,10 @@ pub fn build() -> TokenStream {
     }
 
     for (name, item) in &items {
-        let be_identifier = "minecraft:".to_owned()
+        // THIS COERCES CODEGEN FOR JAVA 26.3
+        // This is for coercing the codegen into working for java 26.3 temporarily.
+        /// Remove `let mut be_identifier =` and replace with `let be_identifier =` to undo this.
+        let mut be_identifier = "minecraft:".to_owned()
             + &match &**name {
                 "bricks" => "brick_block".into(),
                 "cobblestone_stairs" => "stone_stairs".into(),
@@ -1491,16 +1777,30 @@ pub fn build() -> TokenStream {
                         n.replace("stone_slab", "stone_block_slab")
                     } else if n.starts_with("double_stone_slab") {
                         n.replace("double_stone_slab", "stone_block_slab")
+                    } else if n.ends_with("_map") {
+                        let candidate = format!("minecraft:{n}");
+                        if be_valid_item_identifiers.contains(&candidate) {
+                            n.into()
+                        } else {
+                            "filled_map".into()
+                        }
                     } else {
                         n.into()
                     }
                 }
             };
 
-        assert!(
-            be_valid_item_identifiers.contains(&be_identifier),
-            "Invalid Bedrock identifier `{be_identifier}`. From Java name `{name}`"
-        );
+        // THIS COERCES CODEGEN FOR JAVA 26.3
+        // This is for coercing the codegen into working for java 26.3 temporarily.
+        /// Remove the if statement and replace with the assert statement below.
+        /// replace with:
+        /// assert!(
+        ///     be_valid_item_identifiers.contains(&be_identifier),
+        ///     "Invalid Bedrock identifier `{be_identifier}`. From Java name `{name}`"
+        /// );
+        if !be_valid_item_identifiers.contains(&be_identifier) {
+            be_identifier = "minecraft:unknown".into();
+        }
 
         let block = item_to_block.get(&item.id);
 

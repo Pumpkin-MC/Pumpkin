@@ -1,7 +1,0 @@
-{
-  "assets": {
-    "wild": "minecraft:entity/wolf/wolf_spotted",
-    "tame": "minecraft:entity/wolf/wolf_spotted_tame",
-    "angry": "minecraft:entity/wolf/wolf_spotted_angry"
-  }
-}

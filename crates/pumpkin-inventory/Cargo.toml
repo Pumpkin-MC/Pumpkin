@@ -13,7 +13,6 @@ pumpkin-data = { workspace = true, features = [
     "data_component",
     "recipes",
     "tag",
-    "fuels",
     "enchantment",
     "potion",
     "statistic",
