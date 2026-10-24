@@ -156,7 +156,9 @@ pub trait AbstractSchoolingFish: AbstractFish {
 
     fn finalize_school_spawn(&self, group: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
         self.get_mob_entity().finalize_spawn_base();
-        if let Some(SpawnGroupData::School(leader)) = &group {
+        if let Some(SpawnGroupData::School(leader) | SpawnGroupData::TropicalFish { leader, .. }) =
+            &group
+        {
             if let Some(leader) = leader.upgrade() {
                 self.start_following(&leader);
             }

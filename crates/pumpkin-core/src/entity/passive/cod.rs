@@ -68,6 +68,6 @@ crate::impl_abstract_fish!(
     CodEntity,
     bucket: &Item::COD_BUCKET,
     flop: Sound::EntityCodFlop,
-    ambient: Sound::EntityCodAmbient
+    ambient: Some(Sound::EntityCodAmbient)
 );
 crate::impl_schooling_fish!(CodEntity);

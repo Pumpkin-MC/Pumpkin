@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use crate::entity::{
-    EntityBase,
+    Entity, EntityBase,
     ai::{
         control::fish_move_control::FishMoveControl,
         goal::{Controls, Goal, random_swimming::RandomSwimmingGoal},
@@ -143,21 +143,13 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
             );
             entity.on_ground.store(false, Relaxed);
             entity.velocity_dirty.store(true, Relaxed);
-            if !entity.is_silent() {
-                entity.world.load().play_sound_raw(
-                    self.flop_sound() as u16,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &entity.pos.load(),
-                    1.0,
-                    self.get_mob_entity().living_entity.get_pitch(),
-                );
-            }
+            self.make_sound(self.flop_sound());
         }
     }
 
     fn fish_data(&self) -> &FishData;
 
-    fn ambient_sound(&self) -> Sound;
+    fn ambient_sound(&self) -> Option<Sound>;
 
     fn fish_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("FromBucket", self.is_from_bucket());
@@ -168,16 +160,27 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
     }
 
     fn play_ambient_sound(&self) {
+        if let Some(sound) = self.ambient_sound() {
+            self.make_sound(sound);
+        }
+    }
+
+    fn make_sound(&self, sound: Sound) {
         let entity = self.get_entity();
         if !entity.is_silent() {
             entity.world.load().play_sound_raw(
-                self.ambient_sound() as u16,
+                sound as u16,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &entity.pos.load(),
                 1.0,
                 self.get_mob_entity().living_entity.get_pitch(),
             );
         }
+    }
+
+    fn set_dimension_scale(&self, scale: f32) {
+        let entity = self.get_entity();
+        entity.set_default_dimensions(Entity::type_dimensions(entity.entity_type).scale(scale));
     }
 
     fn fish_base_tick(&self, caller: &dyn crate::entity::EntityBase) {
@@ -235,7 +238,7 @@ macro_rules! impl_abstract_fish {
                 &self.fish_data
             }
 
-            fn ambient_sound(&self) -> pumpkin_data::sound::Sound {
+            fn ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> {
                 $ambient
             }
         }

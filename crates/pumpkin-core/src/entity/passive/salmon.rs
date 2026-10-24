@@ -61,12 +61,9 @@ impl SalmonEntity {
 
     pub fn set_variant(&self, variant: SalmonSize) {
         self.variant.store(variant.id(), Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(pumpkin_data::tracked_data::salmon::DATA_TYPE, variant.id());
-        // Vanilla `getDefaultDimensions`: the type's size scaled by the variant.
-        entity.set_default_dimensions(
-            Entity::type_dimensions(entity.entity_type).scale(variant.bounding_box_scale()),
-        );
+        self.get_entity()
+            .set_synced_data(pumpkin_data::tracked_data::salmon::DATA_TYPE, variant.id());
+        self.set_dimension_scale(variant.bounding_box_scale());
     }
 
     fn random_spawn_variant(&self) -> SalmonSize {
@@ -139,7 +136,7 @@ crate::impl_abstract_fish!(
     SalmonEntity,
     bucket: &Item::SALMON_BUCKET,
     flop: Sound::EntitySalmonFlop,
-    ambient: Sound::EntitySalmonAmbient,
+    ambient: Some(Sound::EntitySalmonAmbient),
     bucket_extra: {
         fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
             self.save_default_data_to_bucket_tag(bucket);
