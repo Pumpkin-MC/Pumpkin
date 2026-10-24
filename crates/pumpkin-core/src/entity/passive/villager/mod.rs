@@ -30,15 +30,15 @@ use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
-            trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
-            work_at_job_site::WorkAtJobSiteGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            open_door::OpenDoorGoal, swim::SwimGoal, trade_with_player::TradeWithPlayerGoal,
+            wander_around::WanderAroundGoal, work_at_job_site::WorkAtJobSiteGoal,
         },
         pathfinder::Navigator,
     },
@@ -329,6 +329,26 @@ fn explorer_map_target(
     })
 }
 
+/// Vanilla `VillagerHostilesSensor` distances; panic runs at 0.5 * 1.5.
+const VILLAGER_FLEES: &[Flee] = &[Flee::nearest_of(
+    1,
+    &[
+        (&EntityType::DROWNED, 8.0),
+        (&EntityType::EVOKER, 12.0),
+        (&EntityType::HUSK, 8.0),
+        (&EntityType::ILLUSIONER, 12.0),
+        (&EntityType::PILLAGER, 15.0),
+        (&EntityType::RAVAGER, 12.0),
+        (&EntityType::VEX, 8.0),
+        (&EntityType::VINDICATOR, 10.0),
+        (&EntityType::ZOGLIN, 10.0),
+        (&EntityType::ZOMBIE, 8.0),
+        (&EntityType::ZOMBIE_VILLAGER, 8.0),
+    ],
+    0.75,
+    0.75,
+)];
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -441,52 +461,7 @@ impl VillagerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIE_VILLAGER,
-                    8.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::HUSK, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::DROWNED, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::PILLAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::VINDICATOR,
-                    12.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::EVOKER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::RAVAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
-            );
+            fleeing::apply(goal_selector, VILLAGER_FLEES);
 
             goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)

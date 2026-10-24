@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
@@ -20,7 +21,7 @@ use rand::RngExt;
 
 pub struct FishingBobberEntity {
     pub entity: Entity,
-    pub owner_id: i32,
+    pub owner: ProjectileOwner,
     pub hooked_entity_id: AtomicI32,
     pub in_ground: AtomicBool,
     pub has_hit: AtomicBool,
@@ -46,7 +47,7 @@ impl FishingBobberEntity {
 
         Self {
             entity,
-            owner_id: owner.living_entity.entity.entity_id,
+            owner: ProjectileOwner::new(Some(&owner.living_entity.entity)),
             hooked_entity_id: AtomicI32::new(0),
             in_ground: AtomicBool::new(false),
             has_hit: AtomicBool::new(false),
@@ -149,6 +150,7 @@ impl FishingBobberEntity {
     pub fn process_tick(&self, caller: &dyn EntityBase) {
         let entity = self.get_entity();
         let world = entity.world.load();
+        self.owner.check_left_owner(entity);
 
         if self.in_ground.load(Ordering::Relaxed) {
             return;
@@ -245,7 +247,7 @@ impl FishingBobberEntity {
 
         let candidates = world.get_entities_at_box(&search_box);
         for cand in candidates {
-            if cand.get_entity().entity_id == self.owner_id
+            if !self.owner.can_hit(&world, cand.get_entity())
                 || cand.get_entity().entity_id == entity.entity_id
             {
                 continue;
@@ -270,8 +272,8 @@ impl FishingBobberEntity {
 }
 
 impl EntityBase for FishingBobberEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        Some(self.owner_id)
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.owner)
     }
 
     fn get_entity(&self) -> &Entity {

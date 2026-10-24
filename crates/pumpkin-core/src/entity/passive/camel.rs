@@ -122,6 +122,7 @@ impl Animal for CamelEntity {
     }
 }
 
+// TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)

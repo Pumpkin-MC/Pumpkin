@@ -1609,11 +1609,12 @@ impl World {
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
         let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = self
-            .island_schedule
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .should_plan(tickable.len());
+        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
+            && self
+                .island_schedule
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .should_plan(tickable.len());
         let islands = if plan_islands {
             let islands = (|| {
                 let reports: Vec<_> = tickable
@@ -4524,12 +4525,9 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
+        self.entity_index
+            .by_uuid(&self.entities.load_full(), id)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
-            .cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.

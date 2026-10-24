@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
@@ -127,7 +128,10 @@ impl RevengeGoal {
             {
                 continue;
             }
-            other_mob.set_mob_target(Some(attacker.clone()));
+            other_mob.set_mob_target(
+                Some(attacker.clone()),
+                TargetReason::TargetAttackedNearbyEntity,
+            );
         }
     }
 }
@@ -183,7 +187,7 @@ impl Goal for RevengeGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone());
+        mob.set_mob_target(self.target.clone(), TargetReason::TargetAttackedEntity);
 
         let mob_entity = mob.get_mob_entity();
         self.track_target_goal.set_target_mob(self.target.clone());

@@ -9,6 +9,7 @@ use rand::RngExt;
 use crate::entity::EntityBase;
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::mob::MobEntity;
+use crate::entity::passive::fox::FoxVariant;
 use crate::world::World;
 
 const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
@@ -18,6 +19,11 @@ pub enum SpawnGroupData {
     School(std::sync::Weak<dyn EntityBase>),
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
+    Fox {
+        variant: FoxVariant,
+        size: u32,
+    },
 }
 
 impl MobEntity {

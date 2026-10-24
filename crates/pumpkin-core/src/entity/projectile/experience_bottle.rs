@@ -2,6 +2,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::projectile::owner::ProjectileOwner;
 use crate::entity::projectile::{ProjectileHit, ThrownItemEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::server::Server;
@@ -26,7 +27,7 @@ impl ExperienceBottleEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -58,8 +59,8 @@ impl ExperienceBottleEntity {
 }
 
 impl EntityBase for ExperienceBottleEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {

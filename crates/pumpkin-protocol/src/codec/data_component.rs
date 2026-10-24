@@ -3152,6 +3152,13 @@ impl DataComponentCodec<Self> for MobVisibilityImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let targeting_entity_types = deserialize_idset(seq)?;
         let visibility = seq.get_f32()?;
+        // Like vanilla's validated item stacks, the persistent range applies here too.
+        if !Self::is_valid_visibility(visibility) {
+            return Err(ReadingError::Message(format!(
+                "Mob visibility {visibility} outside 0..={}",
+                Self::MAX_VISIBILITY
+            )));
+        }
         Ok(Self {
             targeting_entity_types,
             visibility,

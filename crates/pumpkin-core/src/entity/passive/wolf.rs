@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -17,25 +18,47 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::AgeableMob,
-    ai::behavior::neutral::apply_targets,
+    ai::behavior::{
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
+        neutral::apply_targets,
+    },
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        active_target::TargetCondition, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        revenge::RevengeGoal, sit_when_ordered_to::SitWhenOrderedToGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
     },
     passive::{
         animal::Animal,
-        tamable::{TamableAnimal, TamableData},
+        llama::scares_wolves,
+        tamable::{TamableAnimal, TamableData, is_untamed},
     },
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+
+const WOLF_PREY: TargetMatch =
+    TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);
+
+const WOLF_FLEES: &[Flee] = &[Flee::new(3, TargetMatch::LLAMA_LIKE, 24.0, 1.5, 1.5)
+    .when(is_untamed)
+    .confirmed_by(scares_wolves)
+    .dropping_target()];
+
+const WOLF_HUNTS: &[Hunt] = &[
+    Hunt::new(5, WOLF_PREY, false).when(TargetCondition::Untamed),
+    hunting::baby_turtles(6, false).when(TargetCondition::Untamed),
+    Hunt::new(7, TargetMatch::SKELETON_LIKE, false),
+];
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -73,20 +96,20 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // 1: EscapeDangerGoal (TamableAnimalPanicGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            // 3: Avoid Llama
-            goal_selector.add_goal(
-                3,
-                Box::new(AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5)),
-            );
+            // 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
+            // 3: WolfAvoidEntityGoal (Llama)
+            fleeing::apply(goal_selector, WOLF_FLEES);
+            // 4: LeapAtTargetGoal
+            goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             // 5: MeleeAttackGoal
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             // 6: FollowOwnerGoal
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             // 7: BreedGoal
             goal_selector.add_goal(7, BreedGoal::new(1.0));
-            // 8: FollowParentGoal & WanderAroundGoal
-            goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
-            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
+            // 8: WaterAvoidingRandomStrollGoal
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             // 9: BegGoal
             goal_selector.add_goal(9, BegGoal::new(8.0));
             // 10: LookAtPlayer & RandomLookAround
@@ -109,27 +132,20 @@ impl WolfEntity {
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
             apply_targets(target_selector, &mob_arc.mob_entity, 4, 8, true);
-            // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
-            );
-            // 7: NearestAttackableTarget (Skeleton)
-            target_selector.add_goal(
-                7,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false),
-            );
+            // 5, 6: NonTameRandomTarget (prey, baby turtle), 7: NearestAttackableTarget (AbstractSkeleton)
+            hunting::apply(target_selector, &mob_arc.mob_entity, WOLF_HUNTS);
         };
 
         mob_arc
+    }
+
+    fn stop_and_forget_target(&self) {
+        self.mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        self.set_mob_target(None, TargetReason::ForgotTarget);
     }
 
     pub fn get_tame_flags(&self) -> u8 {
@@ -170,6 +186,10 @@ impl NeutralMob for WolfEntity {
 }
 
 impl Mob for WolfEntity {
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        self.order_to_sit(false);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -244,14 +264,7 @@ impl Mob for WolfEntity {
             return true;
         }
 
-        if let Some(target_mob) = target.get_mob()
-            && let Some(tamable) = target_mob.as_tamable()
-            && tamable.is_tame()
-        {
-            return false;
-        }
-
-        true
+        !target.get_mob().is_some_and(Mob::is_tamed)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -366,7 +379,9 @@ impl Mob for WolfEntity {
 
                 let parent_interaction = self.animal_interact(player, item_stack, ambient);
                 if !parent_interaction {
-                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
+                    if self.order_to_sit(!self.is_ordered_to_sit()) {
+                        self.stop_and_forget_target();
+                    }
                     return true;
                 }
                 return parent_interaction;
@@ -374,8 +389,9 @@ impl Mob for WolfEntity {
         } else if item == &Item::BONE && !self.mob_entity.is_attacking() {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if rng.random_range(0..3) == 0 && self.approve_taming(player) {
                 TamableAnimal::tame(self, player.gameprofile.id);
+                self.stop_and_forget_target();
                 self.set_ordered_to_sit(true);
                 self.spawn_taming_particles(true);
             } else {

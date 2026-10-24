@@ -41,7 +41,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, MobVisibilityImpl, UseRemainderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -68,6 +68,25 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use rand::RngExt;
 use std::sync::RwLock;
+
+const ARMOR_SLOTS: [EquipmentSlot; 4] = [
+    EquipmentSlot::HEAD,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::FEET,
+];
+
+/// Vanilla `EquipmentSlot.VALUES`, in its order.
+const ALL_SLOTS: [EquipmentSlot; 8] = [
+    EquipmentSlot::MAIN_HAND,
+    EquipmentSlot::OFF_HAND,
+    EquipmentSlot::FEET,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::HEAD,
+    EquipmentSlot::BODY,
+    EquipmentSlot::SADDLE,
+];
 
 /// Represents a living entity within the game world.
 ///
@@ -225,6 +244,13 @@ fn is_allowed_by_team_rules(
         || same_team
 }
 
+/// Who an instant effect came from: the potion or cloud, and who threw or placed it.
+#[derive(Clone, Copy)]
+pub struct EffectSource<'a> {
+    pub direct: &'a dyn EntityBase,
+    pub owner: Option<&'a dyn EntityBase>,
+}
+
 impl LivingEntity {
     pub fn is_dead_or_dying(&self) -> bool {
         self.health.load() <= 0.0 || self.dead.load(Relaxed)
@@ -338,19 +364,28 @@ impl LivingEntity {
         }
     }
 
+    /// Vanilla `getLastHurtByMob() != null`: hit by any living attacker in the last 100 ticks.
+    pub fn was_recently_hurt_by_living(&self) -> bool {
+        let current_tick = self.entity.world.load().get_world_age();
+        let recent = |id: &AtomicI32, time: &AtomicI64| {
+            id.load(Relaxed) != 0 && current_tick - time.load(Relaxed) <= 100
+        };
+        recent(&self.last_hurt_by_player_id, &self.last_hurt_by_player_time)
+            || recent(&self.last_hurt_by_mob_id, &self.last_hurt_by_mob_time)
+    }
+
     /// Returns the entity that should receive kill credit for this entity's death.
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).
     /// 2. Then `last_hurt_by_mob` if hurt within the last 100 ticks.
-    /// 3. Fall back to combat tracker's killer entry if available.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
         let world = self.entity.world.load();
-        let current_tick = world.level_info.load().day_time;
+        let current_tick = world.get_world_age();
 
         let player_id = self.last_hurt_by_player_id.load(Relaxed);
         let player_time = self.last_hurt_by_player_time.load(Relaxed);
         if player_id != 0
-            && (current_tick - player_time).abs() <= 100
+            && current_tick - player_time <= 100
             && let Some(player) = world.get_entity_by_id(player_id)
         {
             return Some(player);
@@ -359,20 +394,10 @@ impl LivingEntity {
         let mob_id = self.last_hurt_by_mob_id.load(Relaxed);
         let mob_time = self.last_hurt_by_mob_time.load(Relaxed);
         if mob_id != 0
-            && (current_tick - mob_time).abs() <= 100
+            && current_tick - mob_time <= 100
             && let Some(mob) = world.get_entity_by_id(mob_id)
         {
             return Some(mob);
-        }
-
-        let tracker = self
-            .combat_tracker
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(killer) = tracker.get_killer_entry()
-            && let Some(killer_id) = killer.attacker_id
-        {
-            return world.get_entity_by_id(killer_id);
         }
 
         None
@@ -790,8 +815,11 @@ impl LivingEntity {
         false
     }
 
+    /// Like vanilla, the dead are not healed and a negative amount takes health.
     pub fn heal(&self, additional_health: f32) {
-        assert!(additional_health > 0.0);
+        if self.health.load() <= 0.0 || additional_health == 0.0 {
+            return;
+        }
         let mut event =
             crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
                 self.entity.entity_id,
@@ -803,7 +831,11 @@ impl LivingEntity {
                 return;
             }
         }
-        self.set_health(self.health.load() + additional_health);
+        // A handler may have changed health, or killed the entity.
+        let health = self.health.load();
+        if health > 0.0 {
+            self.set_health(health + additional_health);
+        }
     }
 
     pub fn set_health(&self, health: f32) {
@@ -951,6 +983,59 @@ impl LivingEntity {
             .map_or(attribute.default_value, |a| a.1)
     }
 
+    /// Undead: healing hurts them, harming heals them.
+    #[must_use]
+    pub fn is_inverted_heal_and_harm(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM)
+    }
+
+    /// Vanilla `HealOrHarmMobEffect`. False for other effects.
+    /// `scale` from splash distance or 1 when drunk, `None` for an added effect,
+    /// whose heal never goes negative. With a `source`, harm is indirect magic
+    /// credited to it and its owner.
+    pub fn apply_instant_effect(
+        &self,
+        effect_type: &StatusEffect,
+        amplifier: u8,
+        scale: Option<f64>,
+        source: Option<EffectSource<'_>>,
+    ) -> bool {
+        let is_harm = if effect_type == &StatusEffect::INSTANT_DAMAGE {
+            true
+        } else if effect_type == &StatusEffect::INSTANT_HEALTH {
+            false
+        } else {
+            return false;
+        };
+        // Java's int shift: wraps the count, so high amplifiers stay in range.
+        let scaled = |base: i32| {
+            let shifted = base.wrapping_shl(u32::from(amplifier));
+            scale.map_or(shifted, |scale| (scale * f64::from(shifted) + 0.5) as i32) as f32
+        };
+        if is_harm == self.is_inverted_heal_and_harm() {
+            let amount = scaled(4);
+            self.heal(if scale.is_none() {
+                amount.max(0.0)
+            } else {
+                amount
+            });
+        } else if let Some(dyn_self) = self
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(self.entity.entity_id)
+        {
+            let (damage_type, direct, owner) = source
+                .map_or((DamageType::MAGIC, None, None), |s| {
+                    (DamageType::INDIRECT_MAGIC, Some(s.direct), s.owner)
+                });
+            dyn_self.damage_with_context(&*dyn_self, scaled(6), damage_type, None, direct, owner);
+        }
+        true
+    }
+
     /// Update or insert the base value for an attribute on this entity.
     /// If the attribute doesn't exist locally yet, it will be inserted.
     pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
@@ -1030,22 +1115,8 @@ impl LivingEntity {
             return;
         }
 
-        // Apply instant effects immediately before storing
-        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
-            let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
-            self.heal(heal_amount);
-            // Like vanilla, instant effects are never sent or stored as active effects.
-            return;
-        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
-            let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
-            let dyn_self = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id);
-            if let Some(dyn_self) = dyn_self {
-                let _ = dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
-            }
+        // Like vanilla, instant effects are never sent or stored as active effects.
+        if self.apply_instant_effect(effect.effect_type, effect.amplifier, None, None) {
             return;
         }
 
@@ -2162,10 +2233,11 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
+            // Like vanilla, stats go to the kill credit, loot and XP to the killing blow.
             let kill_credit = self.get_kill_credit();
-            let killer = cause.or(source).or(kill_credit.as_deref());
+            let killer = cause.or(source);
 
-            self.update_death_stats(&*dyn_self, killer);
+            self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
             // Plays the death sound
             world.play_sound_fine(
@@ -2722,6 +2794,20 @@ impl LivingEntity {
             .map(|(damage_type, _)| damage_type)
     }
 
+    /// Vanilla `getLastHurtByMob`: the living attacker, forgotten once dead or after 100 ticks.
+    #[must_use]
+    pub fn last_hurt_by_mob(&self, world: &crate::world::World) -> Option<Arc<dyn EntityBase>> {
+        let id = self.last_attacker_id.load(Relaxed);
+        if id == 0
+            || self.entity.tick_count.load(Relaxed) - self.last_attacked_time.load(Relaxed) > 100
+        {
+            return None;
+        }
+        world.get_entity_by_id(id).filter(|attacker| {
+            attacker.get_living_entity().is_some() && attacker.get_entity().is_alive()
+        })
+    }
+
     /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
     /// entity (0 when none), forgotten after 40 ticks.
     pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
@@ -2738,6 +2824,46 @@ impl LivingEntity {
 
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
+    }
+
+    /// Vanilla `getArmorCoverPercentage`: share of worn humanoid armor slots, in `f32` like vanilla.
+    fn armor_cover_percentage(equipment: &EntityEquipment) -> f32 {
+        let worn = ARMOR_SLOTS
+            .iter()
+            .filter(|slot| !equipment.get(slot).is_empty())
+            .count();
+        worn as f32 / ARMOR_SLOTS.len() as f32
+    }
+
+    /// Vanilla `getVisibilityPercent`: scales how far `targeting` notices this entity.
+    pub fn visibility_percent(&self, targeting: Option<&EntityType>) -> f64 {
+        let mut percent = 1.0;
+        if self.entity.is_sneaking() {
+            percent *= 0.8;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.entity.invisible.load(Ordering::Relaxed) {
+            let cover = Self::armor_cover_percentage(&equipment).max(0.1);
+            percent *= 0.7 * f64::from(cover);
+        }
+        // `mob_visibility` counts only in the slot the item is equippable in. Mob heads.
+        if let Some(targeting) = targeting {
+            for slot in &ALL_SLOTS {
+                let stack = equipment.get(slot);
+                if let Some(visibility) = stack.get_data_component::<MobVisibilityImpl>()
+                    && stack
+                        .get_data_component::<EquippableImpl>()
+                        .is_some_and(|equippable| equippable.slot == slot)
+                    && visibility.targeting_entity_types.contains(targeting)
+                {
+                    percent *= f64::from(visibility.visibility);
+                }
+            }
+        }
+        percent.clamp(0.0, 10.0)
     }
 
     pub fn is_part_of_game(&self) -> bool {
@@ -3113,9 +3239,8 @@ impl LivingEntity {
             return false; // Dying or dead
         }
 
-        if amount < 0.0 {
-            return false;
-        }
+        // Like vanilla, negative damage is still a hit, just of zero.
+        amount = amount.max(0.0);
 
         let mut damage_event =
             crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
@@ -3516,7 +3641,7 @@ impl LivingEntity {
                 self.last_attacked_time
                     .store(self.entity.tick_count.load(Relaxed), Relaxed);
 
-                let current_tick = world.level_info.load().day_time;
+                let current_tick = world.get_world_age();
                 if attacker.get_player().is_some() {
                     self.last_hurt_by_player_id.store(attacker_id, Relaxed);
                     self.last_hurt_by_player_time.store(current_tick, Relaxed);
@@ -3528,7 +3653,7 @@ impl LivingEntity {
         }
 
         if dmg_to_health > 0.0 || absorbed_damage > 0.0 {
-            let current_tick = world.level_info.load().day_time;
+            let current_tick = world.get_world_age();
             let fall_location = FallLocation::get_current_fall_location(self, &world);
             let fall_distance = self.fall_distance.load();
 
@@ -3735,6 +3860,7 @@ impl EntityBase for LivingEntity {
                         effects,
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
+                        None,
                     );
                 }
 
@@ -4083,65 +4209,6 @@ impl LivingEntity {
         }
 
         None
-    }
-
-    /// Mirrors vanilla `LivingEntity.getVisibilityPercent`.
-    #[must_use]
-    pub fn visibility_percent(&self, targeting_entity_type: Option<&'static EntityType>) -> f64 {
-        use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, MobVisibilityImpl};
-
-        let mut percent = 1.0;
-        if self.entity.is_sneaking() {
-            percent *= 0.8;
-        }
-        let equipment = self
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self
-            .entity
-            .invisible
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            let worn = [
-                EquipmentSlot::HEAD,
-                EquipmentSlot::CHEST,
-                EquipmentSlot::LEGS,
-                EquipmentSlot::FEET,
-            ]
-            .iter()
-            .filter(|slot| !equipment.get(slot).is_empty())
-            .count();
-            let cover = (worn as f64 / 4.0).max(0.1);
-            percent *= 0.7 * cover;
-        }
-        if let Some(target_type) = targeting_entity_type {
-            for slot in [
-                EquipmentSlot::MAIN_HAND,
-                EquipmentSlot::OFF_HAND,
-                EquipmentSlot::FEET,
-                EquipmentSlot::LEGS,
-                EquipmentSlot::CHEST,
-                EquipmentSlot::HEAD,
-                EquipmentSlot::BODY,
-                EquipmentSlot::SADDLE,
-            ] {
-                let stack = equipment.get(&slot);
-                if let Some(mob_visibility) = stack.get_data_component::<MobVisibilityImpl>()
-                    && let Some(equippable) = stack.get_data_component::<EquippableImpl>()
-                    && *equippable.slot == slot
-                {
-                    let matches_target = match &mob_visibility.targeting_entity_types {
-                        IDSet::Tag(tag) => target_type.is_tagged_with(tag).unwrap_or(false),
-                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == target_type.id),
-                    };
-                    if matches_target {
-                        percent *= f64::from(mob_visibility.visibility);
-                    }
-                }
-            }
-        }
-        percent.clamp(0.0, 10.0)
     }
 }
 

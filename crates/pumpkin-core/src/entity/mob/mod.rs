@@ -1,5 +1,6 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
+use crate::entity::ai::behavior::temperament::Temperament;
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
@@ -13,6 +14,7 @@ use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::vehicle::boat::BoatEntity;
+use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -1135,6 +1137,11 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    /// Vanilla `LookControl.resetXRotOnTick`: the look control levels the pitch each tick.
+    fn look_resets_pitch(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity;
 
     fn is_mob_immobile(&self) -> bool {
@@ -1419,6 +1426,14 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// How this mob treats players by default. Derived, no per-mob data.
+    fn temperament(&self) -> Temperament {
+        Temperament::classify(
+            self.as_neutral().is_some(),
+            self.get_entity().entity_type.category,
+        )
+    }
+
     fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
         None
     }
@@ -1555,23 +1570,43 @@ pub trait Mob: EntityBase + Send + Sync {
         self.can_attack(target.as_ref()).then_some(target)
     }
 
-    /// Set or clear the mob's target. Override to add side effects when targeting changes.
-    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
+    /// Set or clear the mob's target through `EntityTargetEvent`.
+    /// Returns `false` when a plugin cancelled the change.
+    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>, reason: TargetReason) -> bool {
         let mob = self.get_mob_entity();
-        let target = self.as_valid_target(target);
+        let mut target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
-        *mob.target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = target;
+        // Unchanged: refresh the handle, no event.
+        if mob.get_target().map(|t| t.get_entity().entity_id) == target_id {
+            self.apply_mob_target(target);
+            return true;
+        }
         let world = mob.living_entity.entity.world.load_full();
-        let entity_id = mob.living_entity.entity.entity_id;
         if let Some(server) = world.server.upgrade() {
             let mut event =
-                crate::plugin::api::events::entity::entity_target::EntityTargetEvent::new(
-                    entity_id, target_id,
-                );
+                EntityTargetEvent::new(mob.living_entity.entity.entity_id, target_id, reason);
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            if event.target_id != target_id {
+                target = event
+                    .target_id
+                    .and_then(|id| world.get_entity_by_id(id))
+                    .filter(|entity| entity.get_living_entity().is_some());
+            }
         }
+        self.apply_mob_target(target);
+        true
+    }
+
+    /// Stores an approved target. Override for side effects of a target change.
+    fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        *self
+            .get_mob_entity()
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = target;
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -1588,25 +1623,38 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    fn tame(&self, player: &Arc<Player>) {
+    /// Fires `EntityTameEvent` for a successful taming roll. `false`: a plugin refused.
+    fn approve_taming(&self, player: &Arc<Player>) -> bool {
         let mob = self.get_mob_entity();
+        let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
+            return true;
+        };
         let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
             mob.living_entity.entity.entity_id,
             player.clone(),
         );
-        if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        !event.cancelled
     }
 
-    fn breed(&self, father_id: i32, mother_id: i32, child_id: i32) {
+    /// Called on a newborn for each online player who fed its parents. Foxes trust them.
+    fn on_bred_by(&self, _player: Uuid) {}
+
+    /// Fires `EntityBreedEvent` before the child spawns. `None`: a plugin cancelled,
+    /// else the experience to drop.
+    fn approve_breeding(&self, father_id: i32, child_id: i32, experience: i32) -> Option<i32> {
         let mob = self.get_mob_entity();
+        let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
+            return Some(experience);
+        };
         let mut event = crate::plugin::api::events::entity::entity_breed::EntityBreedEvent::new(
-            father_id, mother_id, child_id,
+            father_id,
+            mob.living_entity.entity.entity_id,
+            child_id,
+            experience,
         );
-        if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.experience)
     }
 
     fn dye(
@@ -1625,16 +1673,19 @@ pub trait Mob: EntityBase + Send + Sync {
         }
     }
 
-    fn enter_love_mode(&self, human_entity_id: Option<i32>, ticks_in_love: i32) {
+    /// Fires `EntityEnterLoveModeEvent`. `None`: a plugin cancelled, else the love ticks.
+    fn approve_love(&self, human_entity_id: Option<i32>, ticks_in_love: i32) -> Option<i32> {
         let mob = self.get_mob_entity();
+        let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
+            return Some(ticks_in_love);
+        };
         let mut event = crate::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent::new(
             mob.living_entity.entity.entity_id,
             human_entity_id,
             ticks_in_love,
         );
-        if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.ticks_in_love)
     }
 
     fn transform(&self, new_entity_id: i32, transform_reason: String) {
@@ -1705,9 +1756,15 @@ pub trait Mob: EntityBase + Send + Sync {
             .and_then(crate::entity::passive::tamable::TamableAnimal::get_owner)
     }
 
+    /// The sitting pose, see [`Self::ordered_to_sit`] for the command.
     fn is_sitting(&self) -> bool {
         self.as_tamable()
             .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_in_sitting_pose)
+    }
+
+    fn ordered_to_sit(&self) -> bool {
+        self.as_tamable()
+            .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_ordered_to_sit)
     }
 
     fn is_tamed(&self) -> bool {

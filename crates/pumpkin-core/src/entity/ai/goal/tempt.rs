@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
+use crate::world::entity_islands;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::vector3::Vector3;
@@ -76,12 +78,28 @@ impl TemptGoal {
             .living_entity
             .get_attribute_value(&Attributes::TEMPT_RANGE);
         let world = mob_entity.living_entity.entity.world.load();
+        let conditions = TargetPredicate::create_non_attackable()
+            .ignore_visibility()
+            .set_base_max_distance(range);
 
-        world.get_nearest_player(
-            mob_entity.living_entity.entity.pos.load(),
-            range,
-            |player| player.living_entity.is_part_of_game() && self.is_holding_tempt_item(player),
-        )
+        // Vanilla `getNearestPlayer`: every player, only the conditions limit the range, so
+        // sneaking shortens it. Only accepted players count as reached.
+        let pos = mob_entity.living_entity.entity.pos.load();
+        world
+            .players
+            .load()
+            .iter()
+            .filter(|player| {
+                self.is_holding_tempt_item(player)
+                    && conditions.test(&world, Some(mob), player.as_ref())
+            })
+            .inspect(|player| entity_islands::check_reached(player.entity_id()))
+            .min_by(|a, b| {
+                let dist =
+                    |player: &Player| player.get_entity().pos.load().squared_distance_to_vec(&pos);
+                dist(a).total_cmp(&dist(b))
+            })
+            .cloned()
     }
 
     fn watch(&mut self, player: &Player) {
