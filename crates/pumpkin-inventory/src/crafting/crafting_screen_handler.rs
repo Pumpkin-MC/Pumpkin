@@ -673,3 +673,115 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity_equipment::EntityEquipment;
+    use pumpkin_data::data_component_impl::EquipmentSlot;
+    use pumpkin_data::item::Item;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory, CSetSelectedSlot,
+    };
+    use pumpkin_protocol::java::server::play::SlotActionType;
+
+    struct TestPlayer {
+        inventory: Arc<PlayerInventory>,
+        dropped: Mutex<Vec<ItemStack>>,
+    }
+
+    impl InventoryPlayer for TestPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
+            self.dropped
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(item);
+        }
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+
+        fn is_creative(&self) -> bool {
+            false
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) {}
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) {}
+
+        fn enqueue_inventory_packet(
+            &self,
+            _packet: &CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_packet(
+            &self,
+            _packet: &CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) {
+        }
+
+        fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
+
+        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+
+        fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
+
+        fn enqueue_set_held_item_packet(&self, _packet: &CSetSelectedSlot) {}
+
+        fn enqueue_equipment_change(&self, _slot: &EquipmentSlot, _stack: &ItemStack) {}
+
+        fn award_experience(&self, _amount: i32) {}
+
+        fn increment_stat(&self, _category: StatisticCategory, _stat_id: i32, _amount: i32) {}
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+    }
+
+    fn handler_with_logs(count: u8) -> (CraftingTableScreenHandler, TestPlayer) {
+        let player = TestPlayer {
+            inventory: Arc::new(PlayerInventory::new(
+                Arc::new(Mutex::new(EntityEquipment::new())),
+                Arc::new(rustc_hash::FxHashMap::default()),
+            )),
+            dropped: Mutex::new(Vec::new()),
+        };
+        let mut handler = CraftingTableScreenHandler::new(1, &player.inventory, None);
+        handler
+            .crafting_inventory
+            .set_stack(0, ItemStack::new(count, &Item::OAK_LOG));
+        handler.send_content_updates();
+        (handler, player)
+    }
+
+    #[test]
+    fn throw_one_from_result_crafts_once() {
+        let (mut handler, player) = handler_with_logs(2);
+
+        handler.on_slot_click(0, 0, SlotActionType::Throw, &player);
+
+        assert_eq!(handler.crafting_inventory.get_stack(0).item_count, 1);
+        assert_eq!(player.dropped.lock().unwrap().len(), 1);
+    }
+}

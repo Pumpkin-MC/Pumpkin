@@ -917,24 +917,26 @@ pub trait ScreenHandler: Send + Sync {
                     .is_empty()
             {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                let prev_stack = slot.get_cloned_stack();
-                if !prev_stack.is_empty() {
-                    if button == 1 {
-                        // Throw all
-                        while slot
-                            .get_cloned_stack()
-                            .are_items_and_components_equal(&prev_stack)
-                        {
-                            let drop_stack = slot.safe_take(prev_stack.item_count, u8::MAX, player);
-                            player.drop_item(drop_stack, true);
-                            // player.handleCreativeModeItemDrop(itemStack);
-                        }
-                    } else {
-                        let drop_stack = slot.safe_take(1, u8::MAX, player);
-                        if !drop_stack.is_empty() {
-                            slot.on_take_item(player, &drop_stack);
-                            player.drop_item(drop_stack, true);
-                        }
+                // Vanilla's Player.drop ignores empty stacks, Pumpkin's does not.
+                let throw = |stack: &ItemStack| {
+                    if !stack.is_empty() {
+                        player.drop_item(stack.clone(), true);
+                    }
+                };
+                let amount = if button == 0 {
+                    1
+                } else {
+                    slot.get_cloned_stack().item_count
+                };
+                let mut item_stack = slot.safe_take(amount, u8::MAX, player);
+                throw(&item_stack);
+                if button == 1 {
+                    // A crafting result refills after each take, so this keeps crafting until
+                    // the take fails or the result turns into a different item.
+                    while !item_stack.is_empty() && slot.get_cloned_stack().item == item_stack.item
+                    {
+                        item_stack = slot.safe_take(amount, u8::MAX, player);
+                        throw(&item_stack);
                     }
                 }
             }
