@@ -5,6 +5,7 @@ use pumpkin_data::data_component_impl::EnchantmentsImpl;
 use pumpkin_data::enchantment::{Enchantment, EnchantmentEntityEffect, EnchantmentTarget};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{Tag, Taggable};
 
 /// Data-driven helper for enchantment effects matching vanilla `EnchantmentHelper`.
 pub struct EnchantmentHelper;
@@ -70,6 +71,19 @@ impl EnchantmentHelper {
                 visitor(enchantment, *level);
             }
         }
+    }
+
+    /// Whether any enchantment on the item stack is in `tag`, matching vanilla `hasTag`.
+    #[must_use]
+    pub fn has_tag(item_stack: &ItemStack, tag: &'static Tag) -> bool {
+        item_stack
+            .get_data_component::<EnchantmentsImpl>()
+            .is_some_and(|enchantments| {
+                enchantments
+                    .enchantment
+                    .iter()
+                    .any(|(enchantment, _)| enchantment.has_tag(tag))
+            })
     }
 
     /// Applies projectile-spawned enchantment effects (e.g. Flame ignites the projectile for 100s).
