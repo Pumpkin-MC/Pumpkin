@@ -17,11 +17,9 @@ use pumpkin_data::{
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
-};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
@@ -123,7 +121,7 @@ fn give_filled_bucket_stack(
     mut filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
-    if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
+    if limit_creative_stack_size && player.has_infinite_materials() {
         let has_item = {
             let inv = player
                 .inventory
@@ -136,7 +134,7 @@ fn give_filled_bucket_stack(
             return;
         }
         player.inventory.insert_stack_anywhere(&mut filled);
-    } else if stack.item_count == 1 && player.gamemode.load() != GameMode::Creative {
+    } else if stack.item_count == 1 && !player.has_infinite_materials() {
         *stack = filled;
     } else {
         stack.decrement_unless_creative(player.gamemode.load(), 1);
@@ -621,7 +619,7 @@ impl ItemBehaviour for FilledBucketItem {
             }
         }
 
-        if player.gamemode.load() != GameMode::Creative {
+        if !player.has_infinite_materials() {
             let item_stack = ItemStack::new(1, &Item::BUCKET);
             player
                 .inventory
