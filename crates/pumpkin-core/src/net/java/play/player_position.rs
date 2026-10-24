@@ -121,7 +121,9 @@ impl JavaClient {
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
-                if new_on_ground && entity.is_fall_flying() {
+                let was_fall_flying = entity.is_fall_flying();
+                if was_fall_flying && (new_on_ground || !player.living_entity.has_elytra_equipped())
+                {
                     entity.set_fall_flying(false);
                 }
                 let world = &player.world();
@@ -158,7 +160,7 @@ impl JavaClient {
                         player.as_ref(),
                         height_difference,
                         packet.collision & FLAG_ON_GROUND != 0,
-                        player.gamemode.load() == GameMode::Creative,
+                        player.gamemode.load() == GameMode::Creative || was_fall_flying,
                     );
                 }
                 chunker::update_position(player);
@@ -262,9 +264,13 @@ impl JavaClient {
                 {
                     player.jump();
                 }
-                entity
-                    .on_ground
-                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
+                let new_on_ground = (packet.collision & FLAG_ON_GROUND) != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                let was_fall_flying = entity.is_fall_flying();
+                if was_fall_flying && (new_on_ground || !player.living_entity.has_elytra_equipped())
+                {
+                    entity.set_fall_flying(false);
+                }
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -317,7 +323,7 @@ impl JavaClient {
                         player.as_ref(),
                         height_difference,
                         (packet.collision & FLAG_ON_GROUND) != 0,
-                        player.gamemode.load() == GameMode::Creative,
+                        player.gamemode.load() == GameMode::Creative || was_fall_flying,
                     );
                 }
                 chunker::update_position(player);

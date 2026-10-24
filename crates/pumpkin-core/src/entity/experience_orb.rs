@@ -142,8 +142,7 @@ impl EntityBase for ExperienceOrbEntity {
             } else {
                 false
             };
-            if can_pickup {
-                player.living_entity.pickup(&self.entity, 1);
+            if can_pickup && player.living_entity.pickup(&self.entity, 1) {
                 self.entity.remove();
                 let amount = self.amount as i32;
                 let remaining = player.apply_mending_from_xp(amount);
