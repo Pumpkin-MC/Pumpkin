@@ -200,6 +200,49 @@ where
     })
 }
 
+/// Restores the sky sections a writer left out because they are uniformly lit. Everything above
+/// the highest stored array is open sky; absent sections below it stay dark.
+///
+/// Mirrors vanilla `SkyLightSectionStorage::getLightValue`, which answers 15 above the top
+/// section it holds data for. Nothing is stored below the world, so a chunk without any sky
+/// array at all (the nether) is left untouched.
+///
+// TODO: vanilla also reconstructs an absent section *inside* the band, by repeating the bottom
+// row of the nearest stored section above it (`SkyLightSectionStorage::createDataLayer` ->
+// `repeatFirstLayer`). Pumpkin never writes that shape, so this only matters for imported
+// vanilla saves whose band has a gap.
+fn restore_open_sky(sky_lights: &mut [LightContainer]) {
+    let Some(top) = sky_lights
+        .iter()
+        .rposition(|container| matches!(container, LightContainer::Full(_)))
+    else {
+        return;
+    };
+
+    for container in &mut sky_lights[top + 1..] {
+        *container = LightContainer::Empty(15);
+    }
+}
+
+/// The highest sky section the writer must store for `restore_open_sky` to rebuild the column:
+/// the topmost section that isn't open sky, or the bottom one when every section is. `None` when
+/// the whole column is dark, which reloads correctly without any array.
+fn top_stored_sky_section(sky_lights: &[LightContainer]) -> Option<usize> {
+    if sky_lights
+        .iter()
+        .all(|container| matches!(container, LightContainer::Empty(0)))
+    {
+        return None;
+    }
+
+    Some(
+        sky_lights
+            .iter()
+            .rposition(|container| !matches!(container, LightContainer::Empty(15)))
+            .unwrap_or(0),
+    )
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -359,6 +402,8 @@ impl ChunkData {
             }
         }
 
+        restore_open_sky(&mut sky_lights);
+
         // Assemble the LightEngine
         let light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
@@ -476,6 +521,7 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
             custom_data: std::sync::Mutex::new(custom_data),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         })
     }
 
@@ -555,6 +601,8 @@ impl ChunkData {
         }
         root_compound.put_compound("Heightmaps", heightmaps_compound);
 
+        let top_stored_sky = top_stored_sky_section(&light_lock.sky_light);
+
         let mut sections_list = Vec::new();
         for i in 0..self.section.count {
             let mut section_comp = NbtCompound::new();
@@ -624,10 +672,20 @@ impl ChunkData {
                 section_comp.put("BlockLight", NbtTag::ByteArray(bytes));
             }
 
-            // sky_light
-            if let Some(light_data) = extract_light_ref(light_lock.sky_light.get(i)) {
-                let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
-                section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+            // sky_light, uniform sections included where the reader can't infer them
+            match light_lock.sky_light.get(i) {
+                Some(LightContainer::Full(data)) => {
+                    let bytes: Box<[i8]> = data.iter().map(|&x| x as i8).collect();
+                    section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+                }
+                Some(LightContainer::Empty(level))
+                    if top_stored_sky.is_some_and(|top| i == top || (i < top && *level != 0)) =>
+                {
+                    let packed = (*level << 4 | *level) as i8;
+                    let bytes: Box<[i8]> = vec![packed; LightContainer::ARRAY_SIZE].into();
+                    section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
+                }
+                _ => {}
             }
 
             sections_list.push(NbtTag::Compound(section_comp));
@@ -672,10 +730,12 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
-        let custom_data = self
+        let mut custom_data = self
             .custom_data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Same lock as the copy below, so a late quadrant flag can't slip in between.
+        crate::lighting::SkyLightHeightMigration::persist_locked(self, &mut custom_data);
         if !custom_data.is_empty() {
             root_compound.put_compound("PumpkinCustomData", custom_data.clone());
         }
@@ -1133,10 +1193,32 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(inhabited_time),
             custom_data: std::sync::Mutex::new(custom_data),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         })
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        self.write_custom_data(namespace, key, value);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Stores custom data **without** marking the chunk dirty.
+    ///
+    /// Only for values that are purely derived from the chunk and can be recomputed for
+    /// free if they are lost — a cache written back, not user state. Marking the chunk
+    /// dirty here would force a full rewrite of every chunk merely because something read
+    /// it, which is exactly the load-time overhead such caches exist to avoid. The value
+    /// still rides along whenever the chunk is saved for some other reason.
+    pub fn set_derived_custom_data(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: pumpkin_nbt::tag::NbtTag,
+    ) {
+        self.write_custom_data(namespace, key, value);
+    }
+
+    fn write_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
         let mut custom_data = self
             .custom_data
             .lock()
@@ -1156,7 +1238,6 @@ impl ChunkData {
             namespace.into(),
             pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
         );
-        self.dirty.store(true, Ordering::Relaxed);
     }
 
     pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {
@@ -1365,6 +1446,15 @@ impl LightContainer {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         matches!(self, Self::Empty(_))
+    }
+
+    /// The one level every cell holds, or `None` once the section carries a real array
+    #[must_use]
+    pub const fn uniform_level(&self) -> Option<u8> {
+        match self {
+            Self::Empty(level) => Some(*level),
+            Self::Full(_) => None,
+        }
     }
 
     #[inline]
@@ -1674,5 +1764,84 @@ mod tests {
                 .unwrap()
                 .id
         );
+    }
+
+    /// A chunk whose open-sky sections are uniform, the shape the light pass produces.
+    fn chunk_with_uniform_sky(top_lit_section: usize) -> ChunkData {
+        chunk_with_sky(|index| match index {
+            i if i < top_lit_section => LightContainer::Empty(0),
+            i if i == top_lit_section => LightContainer::new_filled(7),
+            _ => LightContainer::Empty(15),
+        })
+    }
+
+    fn chunk_with_sky(sky: impl Fn(usize) -> LightContainer) -> ChunkData {
+        let chunk = ChunkData::empty(0, 0);
+        let count = chunk.section.count;
+        chunk
+            .light_populated
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        {
+            let mut light = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            light.sky_light = (0..count).map(sky).collect();
+            light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
+        };
+        chunk
+    }
+
+    fn sky_levels(chunk: &ChunkData) -> Vec<u8> {
+        chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sky_light
+            .iter()
+            .map(|container| container.get(0, 0, 0))
+            .collect()
+    }
+
+    #[test]
+    fn uniform_open_sky_sections_survive_the_disk_round_trip() {
+        let top_lit_section = 5;
+        let chunk = chunk_with_uniform_sky(top_lit_section);
+        let before = sky_levels(&chunk);
+
+        let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+
+        assert_eq!(
+            sky_levels(&reloaded),
+            before,
+            "sections above {top_lit_section} are omitted from disk and must reload as open sky"
+        );
+    }
+
+    fn assert_sky_round_trip(chunk: &ChunkData) {
+        let before = sky_levels(chunk);
+        let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+        assert_eq!(sky_levels(&reloaded), before);
+    }
+
+    #[test]
+    fn all_uniform_sky_sections_survive_the_disk_round_trip() {
+        // Fully open sky
+        assert_sky_round_trip(&chunk_with_sky(|_| LightContainer::Empty(15)));
+        // Fully dark
+        assert_sky_round_trip(&chunk_with_sky(|_| LightContainer::Empty(0)));
+        // Uniform but neither dark nor open, under open sky
+        assert_sky_round_trip(&chunk_with_sky(|index| match index {
+            0..=2 => LightContainer::Empty(0),
+            3..=5 => LightContainer::Empty(9),
+            _ => LightContainer::Empty(15),
+        }));
+        // Dark sections at the top of the column
+        assert_sky_round_trip(&chunk_with_sky(|index| match index {
+            0..=10 => LightContainer::Empty(15),
+            _ => LightContainer::Empty(0),
+        }));
     }
 }
