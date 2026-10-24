@@ -9,7 +9,13 @@ use pumpkin_util::{
 pub mod order;
 pub mod scheduler;
 
-const MAX_TICK_DELAY: usize = 1 << 8;
+const TICK_QUEUE_SIZE: usize = 1 << 8;
+
+/// Converts a saved `t` value to a delay. Vanilla saves overdue ticks with a negative `t`.
+#[must_use]
+pub fn saved_tick_delay(t: i32) -> u32 {
+    u32::try_from(t).unwrap_or(0)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(i32)]
@@ -59,7 +65,7 @@ impl TryFrom<i32> for TickPriority {
 
 #[derive(Clone)]
 pub struct ScheduledTick<T> {
-    pub delay: u8,
+    pub delay: u32,
     pub priority: TickPriority,
     pub position: BlockPos,
     pub value: T,
@@ -133,7 +139,7 @@ where
         let x = nbt.get_int("x")?;
         let y = nbt.get_int("y")?;
         let z = nbt.get_int("z")?;
-        let delay = nbt.get_int("t")? as u8;
+        let delay = saved_tick_delay(nbt.get_int("t")?);
         let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
         let res_loc_str = nbt.get_string("i")?;
         let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;

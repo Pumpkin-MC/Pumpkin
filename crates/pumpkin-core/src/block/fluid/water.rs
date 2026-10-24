@@ -18,7 +18,7 @@ impl FluidMetadata for FlowingWater {
     }
 }
 
-const WATER_FLOW_SPEED: u8 = 5;
+const WATER_FLOW_SPEED: u32 = 5;
 
 impl FluidBehaviour for FlowingWater {
     fn placed(
@@ -62,7 +62,7 @@ impl FlowingFluid for FlowingWater {
         1
     }
 
-    fn get_flow_speed(&self, _world: &World) -> u8 {
+    fn get_flow_speed(&self, _world: &World) -> u32 {
         WATER_FLOW_SPEED
     }
 

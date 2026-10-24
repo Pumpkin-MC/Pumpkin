@@ -12,7 +12,7 @@ pub type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProp
 #[allow(async_fn_in_trait)]
 pub trait FlowingFluid: Send + Sync {
     fn get_level_decrease_per_block(&self, world: &World) -> i32;
-    fn get_flow_speed(&self, world: &World) -> u8;
+    fn get_flow_speed(&self, world: &World) -> u32;
 
     fn get_source(&self, fluid: &Fluid, falling: bool) -> FlowingFluidProperties {
         let mut source_props = FlowingFluidProperties::default(fluid);

@@ -70,7 +70,7 @@ impl BlockBehaviour for LeavesBlock {
             args.world.schedule_fluid_tick(
                 &pumpkin_data::fluid::Fluid::WATER,
                 *args.position,
-                pumpkin_data::fluid::Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow_speed,
                 TickPriority::Normal,
             );
         }

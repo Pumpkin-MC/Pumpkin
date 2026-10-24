@@ -25,7 +25,7 @@ impl SnifferEggBlock {
         block == BlockId::MOSS_BLOCK
     }
 
-    const fn get_hatch_delay(on_moss: bool) -> u8 {
+    const fn get_hatch_delay(on_moss: bool) -> u32 {
         if on_moss { 100 } else { 200 }
     }
 }
