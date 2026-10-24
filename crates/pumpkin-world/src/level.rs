@@ -441,6 +441,19 @@ impl Level {
         self.entity_saver.flush_all().await;
     }
 
+    /// Writes the dirty entity chunks still in memory to disk without unloading them.
+    /// Force-loaded chunks never unload, so without this their entities would only
+    /// reach disk on a clean shutdown.
+    pub async fn save_loaded_entity_chunks(&self) {
+        let chunks_to_write = self
+            .loaded_entity_chunks
+            .iter()
+            .map(|chunk| (*chunk.key(), chunk.value().clone()))
+            .collect::<Vec<_>>();
+        self.write_entity_chunks(chunks_to_write).await;
+        self.entity_saver.flush_all().await;
+    }
+
     /// Writes region files whose saved chunks have waited long enough.
     pub async fn flush_due_regions(&self) {
         self.chunk_saver.flush_due().await;
