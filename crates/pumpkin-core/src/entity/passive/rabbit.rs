@@ -151,14 +151,19 @@ impl RabbitEntity {
             VarInt(variant.id()),
         );
 
-        if variant == RabbitVariant::Evil {
-            let goal_selector = &self.mob_entity.goals_selector;
-            goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.4, true)));
+        // TODO: call `add_killer_bunny_goals` for `Evil` once rabbits hop
+        // (vanilla RabbitMoveControl/RabbitJumpControl, jump power, hop event 1).
+        // so it acts like other rabbits for now.
+    }
 
-            let target_selector = &self.mob_entity.target_selector;
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
-            hunting::apply(target_selector, &self.mob_entity, KILLER_BUNNY_HUNTS);
-        }
+    #[expect(dead_code, reason = "disabled until rabbits hop")]
+    fn add_killer_bunny_goals(&self) {
+        let goal_selector = &self.mob_entity.goals_selector;
+        goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.4, true)));
+
+        let target_selector = &self.mob_entity.target_selector;
+        target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+        hunting::apply(target_selector, &self.mob_entity, KILLER_BUNNY_HUNTS);
     }
 }
 
