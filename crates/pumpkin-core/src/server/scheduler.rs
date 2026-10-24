@@ -29,6 +29,11 @@ impl Ord for ScheduledFunctionEvent {
 #[derive(Default)]
 pub struct ScheduledFunctionQueue {
     queue: Mutex<BinaryHeap<ScheduledFunctionEvent>>,
+    /// Events popped by [`Self::tick`] whose function is still running. A save taken
+    /// meanwhile keeps them, so a self-rescheduling loop is not lost when the snapshot
+    /// lands between popping it and the function scheduling its next run.
+    /// Always locked after `queue`.
+    running: Mutex<Vec<ScheduledFunctionEvent>>,
 }
 
 impl ScheduledFunctionQueue {
@@ -36,6 +41,7 @@ impl ScheduledFunctionQueue {
     pub const fn new() -> Self {
         Self {
             queue: Mutex::new(BinaryHeap::new()),
+            running: Mutex::new(Vec::new()),
         }
     }
 
@@ -110,8 +116,17 @@ impl ScheduledFunctionQueue {
             .queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let running = self
+            .running
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // A running event that has not rescheduled itself yet is saved as due now.
+        let in_flight = running
+            .iter()
+            .filter(|event| !queue.iter().any(|queued| queued.id == event.id));
         let events = queue
             .iter()
+            .chain(in_flight)
             .map(|event| {
                 let remaining = i64::try_from(event.trigger_tick.saturating_sub(current_tick))
                     .unwrap_or(i64::MAX);
@@ -199,19 +214,34 @@ impl ScheduledFunctionQueue {
                     to_run.push(event);
                 }
             }
-        }
+            self.running
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone_from(&to_run);
+        };
         for event in to_run {
             let _ = crate::data::datapack::DatapackManager::execute_function_from_console(
                 server,
                 &event.function_name,
             );
+            let _queue = self
+                .queue
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut running = self
+                .running
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(index) = running.iter().position(|e| e.id == event.id) {
+                running.swap_remove(index);
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ScheduledFunctionQueue;
+    use super::{NbtTag, ScheduledFunctionEvent, ScheduledFunctionQueue};
 
     #[test]
     fn saved_events_keep_their_remaining_delay_across_a_restart() {
@@ -255,5 +285,22 @@ mod tests {
             .peek()
             .map(|e| e.trigger_tick);
         assert_eq!(trigger, Some(7));
+    }
+
+    #[test]
+    fn running_events_are_saved_until_they_reschedule() {
+        let queue = ScheduledFunctionQueue::new();
+        queue.running.lock().unwrap().push(ScheduledFunctionEvent {
+            id: "ns:loop".into(),
+            trigger_tick: 7,
+            function_name: "ns:loop".into(),
+            is_tag: false,
+        });
+        let saved = queue.to_saved_nbt(7, 7);
+        assert_eq!(saved.get_list("events").map(<[NbtTag]>::len), Some(1));
+
+        queue.schedule("ns:loop".into(), 8, "ns:loop".into(), false, true);
+        let saved = queue.to_saved_nbt(7, 7);
+        assert_eq!(saved.get_list("events").map(<[NbtTag]>::len), Some(1));
     }
 }
