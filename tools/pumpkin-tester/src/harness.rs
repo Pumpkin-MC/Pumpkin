@@ -9,7 +9,8 @@ use pumpkin_core::{
     },
     server::Server,
 };
-use pumpkin_util::PermissionLvl;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_util::{PermissionLvl, math::vector2::Vector2};
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -42,6 +43,15 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
     )
     .await
     .map_err(|err| format!("Failed to initialize test Server: {err}"))
+}
+
+/// Generates the overworld spawn chunk, so a bot's join waits on the network, not on world
+/// generation, which can outlast the bot packet timeout on a slow runner.
+pub async fn prepare_spawn_chunk(server: &Server) {
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let info = world.level_info.load();
+    let spawn_chunk = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+    world.level.get_or_fetch_chunk(spawn_chunk, |_| ()).await;
 }
 
 pub fn spawn_java_listener(
