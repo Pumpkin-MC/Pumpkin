@@ -12,6 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -105,8 +106,12 @@ impl BatEntity {
                 entity.head_yaw.store(head_yaw);
             }
 
+            let resting_targeting = TargetPredicate::create_non_attackable()
+                .set_base_max_distance(CLOSE_PLAYER_DISTANCE);
             if world
-                .get_closest_player(*pos, CLOSE_PLAYER_DISTANCE)
+                .get_nearest_player(*pos, CLOSE_PLAYER_DISTANCE, |player| {
+                    resting_targeting.test(world, Some(self), player.as_ref())
+                })
                 .is_some()
             {
                 self.set_roosting(false);
