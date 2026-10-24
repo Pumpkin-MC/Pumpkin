@@ -1245,6 +1245,14 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn mob_is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
+    fn pushes_entities(&self) -> bool {
+        true
+    }
+
     fn before_mob_ai_step(&self) {}
 
     fn mob_ai_step(&self) {}
@@ -1757,7 +1765,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        self.mob_is_pushable()
     }
 
     fn on_lightning_strike(

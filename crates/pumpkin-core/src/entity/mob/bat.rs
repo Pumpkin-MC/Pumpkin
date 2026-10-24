@@ -224,6 +224,14 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn mob_is_pushable(&self) -> bool {
+        false
+    }
+
+    fn pushes_entities(&self) -> bool {
+        false
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
@@ -280,12 +288,12 @@ impl Mob for BatEntity {
             let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
             entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
         } else {
-+            let velocity = entity.velocity.load();
-+            entity.velocity.store(Vector3::new(
-+                velocity.x,
-+                velocity.y * 0.6,
-+                velocity.z,
-+            ));
+            let velocity = entity.velocity.load();
+            entity.velocity.store(Vector3::new(
+                velocity.x,
+                velocity.y * 0.6,
+                velocity.z,
+            ));
         }
     }
 
