@@ -27,6 +27,7 @@ mod entity_index;
 pub(crate) use entity_index::EntityIndex;
 pub mod entity_islands;
 pub mod explosion;
+pub mod game_event;
 pub mod generation_cache;
 pub mod loot;
 pub mod map;
@@ -5480,6 +5481,7 @@ impl World {
                 if item.is_empty() { None } else { Some(item) }
             });
             let params = crate::world::loot::LootContextParameters {
+                world: Some(self),
                 tool,
                 block_state: Some(broken_block_state),
                 position: Some(position.to_f64()),
@@ -6038,7 +6040,7 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
@@ -7050,12 +7052,33 @@ impl World {
     }
 
     pub fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+        self.emit_game_event_with_context(
+            event_key,
+            position,
+            &game_event::GameEventContext {
+                source_entity: None,
+            },
+        );
+    }
+
+    pub fn emit_game_event_with_context(
+        &self,
+        event_key: impl Into<String>,
+        position: Vector3<f64>,
+        context: &game_event::GameEventContext<'_>,
+    ) {
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
             event_key.into(),
             position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return;
+        }
+        if let Some(kind) = pumpkin_data::game_event::GameEvent::from_name(&event.event_key) {
+            self.post_game_event(kind, event.position, context);
         }
     }
 

@@ -170,7 +170,11 @@ impl BlockBehaviour for JukeboxBlock {
     }
 
     /// Vanilla: `JukeboxBlock.onStateReplaced()` -> `ItemScatterer.onStateReplaced()`
-    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::JukeboxStopPlay.name(),
+            args.position.to_centered_f64(),
+        );
         // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
         // TODO: world.updateComparators(pos, block) when implemented
     }
