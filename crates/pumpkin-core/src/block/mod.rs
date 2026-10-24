@@ -357,6 +357,7 @@ pub struct CanPlaceAtArgs<'a> {
     pub use_item_on: Option<&'a SUseItemOn>,
 }
 
+#[derive(Clone, Copy)]
 pub struct CanPlaceLiquidArgs<'a> {
     pub player: Option<&'a Player>,
     pub state_id: BlockStateId,

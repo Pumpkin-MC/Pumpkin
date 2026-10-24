@@ -1,4 +1,4 @@
-//! Shared defaults for vanilla SimpleWaterloggedBlock and waterlogged neighbor updates.
+//! Shared defaults for vanilla `SimpleWaterloggedBlock` and waterlogged neighbor updates.
 
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};

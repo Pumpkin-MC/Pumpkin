@@ -1641,30 +1641,27 @@ impl BlockRegistry {
     #[must_use]
     pub fn can_place_liquid(&self, block: &Block, args: CanPlaceLiquidArgs<'_>) -> bool {
         self.is_liquid_block_container(block)
-            && if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
-                pumpkin_block.can_place_liquid(args)
-            } else {
-                super::simple_waterlogged::can_place_liquid(args)
-            }
+            && self.get_pumpkin_block(block.id).map_or_else(
+                || super::simple_waterlogged::can_place_liquid(args),
+                |pumpkin_block| pumpkin_block.can_place_liquid(args),
+            )
     }
 
     /// Removes fluid from the block and returns the filled bucket item for the caller to give.
     #[must_use]
     pub fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
-        if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
-            pumpkin_block.pickup_fluid(args)
-        } else {
-            super::simple_waterlogged::pickup_fluid(args)
-        }
+        self.get_pumpkin_block(args.block.id).map_or_else(
+            || super::simple_waterlogged::pickup_fluid(args),
+            |pumpkin_block| pumpkin_block.pickup_fluid(args),
+        )
     }
 
     #[must_use]
     pub fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
-        if let Some(pumpkin_block) = self.get_pumpkin_block(args.block.id) {
-            pumpkin_block.place_liquid(args)
-        } else {
-            super::simple_waterlogged::place_liquid(args)
-        }
+        self.get_pumpkin_block(args.block.id).map_or_else(
+            || super::simple_waterlogged::place_liquid(args),
+            |pumpkin_block| pumpkin_block.place_liquid(args),
+        )
     }
 }
 
