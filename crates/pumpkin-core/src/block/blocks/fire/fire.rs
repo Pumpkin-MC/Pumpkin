@@ -223,7 +223,10 @@ impl BlockBehaviour for FireBlock {
             player: None,
             use_item_on: None,
         }) {
-            self.get_state_for_position(args.world, args.block, args.position)
+            let state_id = self.get_state_for_position(args.world, args.block, args.position);
+            let mut properties = FireProperties::from_state_id(state_id);
+            properties.age = FireProperties::from_state_id(args.state_id).age;
+            properties.to_state_id(args.block)
         } else {
             Block::AIR.default_state.id
         }
