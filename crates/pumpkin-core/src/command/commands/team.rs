@@ -944,7 +944,7 @@ fn join_branch() -> LiteralArgumentBuilder {
             .executes(TeamJoinExecutor { has_members: false })
             .then(
                 argument(ARG_MEMBERS, ScoreHolderArgumentType::Multiple)
-                .executes(TeamJoinExecutor { has_members: true }),
+                    .executes(TeamJoinExecutor { has_members: true }),
             ),
     )
 }
@@ -952,7 +952,7 @@ fn join_branch() -> LiteralArgumentBuilder {
 fn leave_branch() -> LiteralArgumentBuilder {
     literal("leave").then(
         argument(ARG_MEMBERS, ScoreHolderArgumentType::Multiple)
-        .executes(TeamLeaveExecutor { has_members: true }),
+            .executes(TeamLeaveExecutor { has_members: true }),
     )
 }
 
