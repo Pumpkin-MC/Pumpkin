@@ -1825,10 +1825,10 @@ impl LivingEntity {
                 velo.y = 0.0;
             }
             // Vanilla `restituteMovementAfterCollisions`: a wall stops or bounces that axis
-            let (moved, _, _) = if velo.horizontal_length_squared() > 0.0 {
-                self.entity.collide(velo, caller)
+            let moved = if velo.horizontal_length_squared() > 0.0 {
+                self.entity.collide(velo, caller).movement
             } else {
-                (velo, None, false)
+                velo
             };
             let x_hit = (velo.x - moved.x).abs() >= 1.0e-5;
             let z_hit = (velo.z - moved.z).abs() >= 1.0e-5;

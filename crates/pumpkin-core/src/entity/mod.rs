@@ -1215,6 +1215,29 @@ impl EntityBoundingBox {
     }
 }
 
+/// Result of `Entity::collide`.
+pub(crate) struct Collision {
+    /// Movement left after the blocks.
+    pub movement: Vector3<f64>,
+    /// Block landed on.
+    pub supporting: Option<BlockPos>,
+    /// A wall stopped X or Z.
+    pub horizontal: bool,
+    /// A block stopped Y.
+    pub vertical: bool,
+}
+
+impl Collision {
+    const fn free(movement: Vector3<f64>) -> Self {
+        Self {
+            movement,
+            supporting: None,
+            horizontal: false,
+            vertical: false,
+        }
+    }
+}
+
 impl Entity {
     pub fn new(
         world: Arc<World>,
@@ -1758,22 +1781,20 @@ impl Entity {
         if movement.length_squared() == 0.0 {
             return movement;
         }
-        let (adjusted, supporting, horizontal_collision) = self.collide(movement, caller);
-        self.on_ground.store(supporting.is_some(), Ordering::SeqCst);
-        self.supporting_block_pos.store(supporting);
+        let collision = self.collide(movement, caller);
+        self.on_ground
+            .store(collision.supporting.is_some(), Ordering::SeqCst);
+        self.supporting_block_pos.store(collision.supporting);
         self.horizontal_collision
-            .store(horizontal_collision, Ordering::SeqCst);
-        adjusted
+            .store(collision.horizontal, Ordering::SeqCst);
+        self.vertical_collision
+            .store(collision.vertical, Ordering::SeqCst);
+        collision.movement
     }
 
-    /// Vanilla `collide` without writing state: the movement left, the block landed on,
-    /// and whether a wall stopped it.
+    /// Vanilla `collide` without writing state.
     #[expect(clippy::float_cmp)]
-    pub(crate) fn collide(
-        &self,
-        movement: Vector3<f64>,
-        caller: &dyn EntityBase,
-    ) -> (Vector3<f64>, Option<BlockPos>, bool) {
+    pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
         let bounding_box = self.bounding_box.load();
 
         let (collisions, block_positions) = self
@@ -1782,11 +1803,12 @@ impl Entity {
             .get_block_collisions(bounding_box.stretch(movement), caller);
 
         if collisions.is_empty() {
-            return (movement, None, false);
+            return Collision::free(movement);
         }
 
         let mut adjusted_movement = movement;
         let mut supporting = None;
+        let mut vertical = false;
 
         // Y-Axis adjustment
         if movement.get_axis(Axis::Y) != 0.0 {
@@ -1820,7 +1842,7 @@ impl Entity {
                 }
 
                 if max_time != 1.0 {
-                    self.vertical_collision.store(true, Ordering::SeqCst);
+                    vertical = true;
                     let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
                     adjusted_movement.set_axis(Axis::Y, changed_component);
                 }
@@ -1856,7 +1878,12 @@ impl Entity {
             }
         }
 
-        (adjusted_movement, supporting, horizontal_collision)
+        Collision {
+            movement: adjusted_movement,
+            supporting,
+            horizontal: horizontal_collision,
+            vertical,
+        }
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
