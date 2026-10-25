@@ -10,6 +10,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     AxolotlVariantImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
     ChickenSoundVariantImpl, ChickenVariantImpl, CowSoundVariantImpl, CowVariantImpl,
@@ -149,9 +150,21 @@ fn apply_variant(item: &ItemStack, mob: &dyn EntityBase) {
         ZombieNautilusVariantImpl,
         SalmonSizeImpl,
         ParrotVariantImpl,
-        TropicalFishPatternImpl,
-        TropicalFishBaseColorImpl,
-        TropicalFishPatternColorImpl,
+    );
+
+    macro_rules! apply_component {
+        ($($ty:ty => $component:ident),+ $(,)?) => {
+            $(
+                if let Some(comp) = item.get_data_component::<$ty>() {
+                    mob.apply_implicit_component(DataComponent::$component, &comp.value);
+                }
+            )+
+        };
+    }
+    apply_component!(
+        TropicalFishPatternImpl => TropicalFishPattern,
+        TropicalFishBaseColorImpl => TropicalFishBaseColor,
+        TropicalFishPatternColorImpl => TropicalFishPatternColor,
     );
 
     macro_rules! apply_sound_variant {

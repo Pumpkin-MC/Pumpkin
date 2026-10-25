@@ -22,7 +22,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::equipment as mob_equipment;
+use crate::entity::mob::{MobMetadata, equipment as mob_equipment};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
@@ -984,6 +984,10 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn spawn_as_baby(&self) -> bool {
         self.set_baby(true);
         true
@@ -1137,7 +1141,8 @@ impl Mob for PiglinEntity {
             self.start_admiring(taken);
             return true;
         }
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
