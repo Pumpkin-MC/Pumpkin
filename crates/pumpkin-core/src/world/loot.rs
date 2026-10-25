@@ -1,26 +1,32 @@
+use crate::{entity::EntityBase, world::World};
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient};
 use pumpkin_data::tag::Taggable;
 pub use pumpkin_util::loot_table::{
-    DynamicLootCondition, DynamicLootEntry, DynamicLootPool, DynamicLootTable, LootBonusFormula,
-    LootCondition, LootEntry, LootPool, LootTable,
+    DynamicLootCondition, DynamicLootEntry, DynamicLootEntryKind, DynamicLootFunction,
+    DynamicLootPool, DynamicLootTable, LootBonusFormula, LootCondition, LootEntityTarget,
+    LootEntry, LootEntryKind, LootFunction, LootFunctionKind, LootNumberProvider, LootPool,
+    LootTable,
 };
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
+mod generation;
+mod predicates;
+
 #[derive(Default, Clone)]
-pub struct LootContextParameters {
+pub struct LootContextParameters<'a> {
+    pub world: Option<&'a World>,
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
     pub killed_by_player: Option<bool>,
     pub luck: f32,
-    pub this_entity: Option<&'static EntityType>,
-    pub killer_entity: Option<&'static EntityType>,
-    pub direct_killer_entity: Option<&'static EntityType>,
+    pub this_entity: Option<&'a dyn EntityBase>,
+    pub killer_entity: Option<&'a dyn EntityBase>,
+    pub direct_killer_entity: Option<&'a dyn EntityBase>,
     pub position: Option<pumpkin_util::math::vector3::Vector3<f64>>,
     pub world_time: u64,
     pub damage_type: Option<DamageType>,
@@ -31,6 +37,31 @@ pub struct LootContextParameters {
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
     pub direct_attacker_weapon: Option<ItemStack>,
+}
+
+fn attacker_enchantment_level(params: &LootContextParameters<'_>, name: &str) -> i32 {
+    pumpkin_data::Enchantment::from_name(name)
+        .and_then(|enchantment| {
+            params.killer_entity.map(|entity| {
+                crate::enchantment::helper::EnchantmentHelper::get_enchantment_level(
+                    enchantment,
+                    entity,
+                )
+            })
+        })
+        .unwrap_or(0)
+}
+
+fn tool_enchantment_level(params: &LootContextParameters<'_>, name: &str) -> i32 {
+    pumpkin_data::Enchantment::from_name(name)
+        .and_then(|enchantment| {
+            params
+                .tool
+                .as_ref()
+                .filter(|tool| !tool.is_empty())
+                .map(|tool| tool.get_enchantment_level(enchantment))
+        })
+        .unwrap_or(0)
 }
 
 fn direct_attacker_weapon_has_enchantment(params: &LootContextParameters, tag: &str) -> bool {
@@ -46,9 +77,9 @@ fn direct_attacker_weapon_has_enchantment(params: &LootContextParameters, tag: &
         })
 }
 
-fn smelt(stack: ItemStack) -> ItemStack {
-    let result = get_cooking_recipe_with_ingredient(stack.item, CookingRecipeKind::Smelting)
-        .and_then(|recipe| {
+fn smelt(item: &'static Item, count: i32) -> (&'static Item, i32) {
+    let result =
+        get_cooking_recipe_with_ingredient(item, CookingRecipeKind::Smelting).and_then(|recipe| {
             let id = recipe
                 .result
                 .id
@@ -56,30 +87,61 @@ fn smelt(stack: ItemStack) -> ItemStack {
                 .unwrap_or(recipe.result.id);
             Item::from_registry_key(id).map(|item| (item, recipe.result.count))
         });
-    let Some((item, count)) = result else {
+    let Some((result, multiplier)) = result else {
         tracing::warn!(
             "Couldn't smelt {} because there is no smelting recipe",
-            stack.item.registry_key
+            item.registry_key
         );
-        return stack;
+        return (item, count);
     };
-    let mut result = ItemStack::new(1, item);
-    let count = (u32::from(stack.item_count) * u32::from(count))
-        .min(u32::from(result.get_max_stack_size()));
-    result.item_count = count as u8;
-    result
+    (result, count.saturating_mul(i32::from(multiplier)))
+}
+
+fn weather_matches(
+    params: &LootContextParameters<'_>,
+    raining: Option<bool>,
+    thundering: Option<bool>,
+) -> bool {
+    raining.is_none_or(|value| {
+        params
+            .is_raining
+            .or_else(|| params.world.map(World::is_raining))
+            .unwrap_or(false)
+            == value
+    }) && thundering.is_none_or(|value| {
+        params
+            .is_thundering
+            .or_else(|| params.world.map(World::is_thundering))
+            .unwrap_or(false)
+            == value
+    })
 }
 
 fn check_dynamic_condition(
     cond: &DynamicLootCondition,
     has_silk_touch: bool,
     has_shears: bool,
-    fortune_level: i32,
     params: &LootContextParameters,
     rng: &mut Xoroshiro,
 ) -> bool {
     match cond {
         DynamicLootCondition::None => true,
+        DynamicLootCondition::Never => false,
+        DynamicLootCondition::LocationCheck { offset, predicate } => {
+            predicates::matches_location(*offset, predicate, params)
+        }
+        DynamicLootCondition::MatchBlock(predicate) => predicates::matches_block(predicate, params),
+        DynamicLootCondition::MatchTool(predicate) => predicates::matches_tool(predicate, params),
+        DynamicLootCondition::WeatherCheck {
+            raining,
+            thundering,
+        } => weather_matches(params, *raining, *thundering),
+        DynamicLootCondition::EntityProperties { target, predicate } => {
+            predicates::matches_entity(*target, predicate, params)
+        }
+        DynamicLootCondition::DamageSourceTag { tag, expected } => params
+            .damage_type
+            .is_some_and(|damage| damage.is_tagged_with(tag) == Some(*expected)),
         DynamicLootCondition::SilkTouch => has_silk_touch,
         DynamicLootCondition::NoSilkTouch => !has_silk_touch,
         DynamicLootCondition::Shears => has_shears,
@@ -91,52 +153,45 @@ fn check_dynamic_condition(
             .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
         DynamicLootCondition::RandomChance { chance } => rng.next_f32() < *chance,
         DynamicLootCondition::RandomChanceWithEnchantedBonus {
+            enchantment,
             unenchanted_chance,
             enchanted_chance_base,
             enchanted_chance_per_level_above_first,
         } => {
-            let chance = if fortune_level > 0 {
-                enchanted_chance_base
-                    + enchanted_chance_per_level_above_first * (fortune_level - 1) as f32
+            let level = attacker_enchantment_level(params, enchantment);
+            let chance = if level > 0 {
+                enchanted_chance_base + enchanted_chance_per_level_above_first * (level - 1) as f32
             } else {
                 *unenchanted_chance
             };
             rng.next_f32() < chance
         }
-        DynamicLootCondition::TableBonus { chances } => {
-            let index = (fortune_level.max(0) as usize).min(chances.len().saturating_sub(1));
+        DynamicLootCondition::TableBonus {
+            enchantment,
+            chances,
+        } => {
+            let index = (tool_enchantment_level(params, enchantment).max(0) as usize)
+                .min(chances.len().saturating_sub(1));
             chances
                 .get(index)
                 .is_some_and(|chance| rng.next_f32() < *chance)
         }
-        DynamicLootCondition::AllOf(conditions) => conditions.iter().all(|c| {
-            check_dynamic_condition(c, has_silk_touch, has_shears, fortune_level, params, rng)
-        }),
-        DynamicLootCondition::AnyOf(conditions) => conditions.iter().any(|c| {
-            check_dynamic_condition(c, has_silk_touch, has_shears, fortune_level, params, rng)
-        }),
+        DynamicLootCondition::AllOf(conditions) => conditions
+            .iter()
+            .all(|c| check_dynamic_condition(c, has_silk_touch, has_shears, params, rng)),
+        DynamicLootCondition::AnyOf(conditions) => conditions
+            .iter()
+            .any(|c| check_dynamic_condition(c, has_silk_touch, has_shears, params, rng)),
         DynamicLootCondition::Inverted(cond) => {
-            !check_dynamic_condition(cond, has_silk_touch, has_shears, fortune_level, params, rng)
+            !check_dynamic_condition(cond, has_silk_touch, has_shears, params, rng)
         }
-        DynamicLootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
+        DynamicLootCondition::EntityOnFire => params.is_on_fire.unwrap_or_else(|| {
+            params
+                .this_entity
+                .is_some_and(|entity| entity.get_entity().is_on_fire())
+        }),
         DynamicLootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
-        }
-        DynamicLootCondition::WeatherCheck {
-            raining,
-            thundering,
-        } => {
-            if let Some(r) = raining
-                && params.is_raining != Some(*r)
-            {
-                return false;
-            }
-            if let Some(t) = thundering
-                && params.is_thundering != Some(*t)
-            {
-                return false;
-            }
-            true
         }
     }
 }
@@ -145,12 +200,30 @@ fn check_condition(
     cond: LootCondition,
     has_silk_touch: bool,
     has_shears: bool,
-    fortune_level: i32,
     params: &LootContextParameters,
     rng: &mut Xoroshiro,
 ) -> bool {
     match cond {
         LootCondition::None => true,
+        LootCondition::Never => false,
+        LootCondition::LocationCheck { offset, predicate } => {
+            predicates::matches_location(offset, predicate, params)
+        }
+        LootCondition::MatchBlock(predicate) => predicates::matches_block(predicate, params),
+        LootCondition::MatchTool(predicate) => predicates::matches_tool(predicate, params),
+        LootCondition::WeatherCheck {
+            raining,
+            thundering,
+        } => weather_matches(params, raining, thundering),
+        LootCondition::EntityProperties { target, predicate } => {
+            predicates::matches_entity(target, predicate, params)
+        }
+        LootCondition::DamageSourceTag { tag, expected } => params
+            .damage_type
+            .is_some_and(|damage| damage.is_tagged_with(tag) == Some(expected)),
+        LootCondition::Inverted(condition) => {
+            !check_condition(*condition, has_silk_touch, has_shears, params, rng)
+        }
         LootCondition::SilkTouch => has_silk_touch,
         LootCondition::NoSilkTouch => !has_silk_touch,
         LootCondition::Shears => has_shears,
@@ -162,31 +235,40 @@ fn check_condition(
             .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
         LootCondition::RandomChance { chance } => rng.next_f32() < chance,
         LootCondition::RandomChanceWithEnchantedBonus {
+            enchantment,
             unenchanted_chance,
             enchanted_chance_base,
             enchanted_chance_per_level_above_first,
         } => {
-            let chance = if fortune_level > 0 {
-                enchanted_chance_base
-                    + enchanted_chance_per_level_above_first * (fortune_level - 1) as f32
+            let level = attacker_enchantment_level(params, enchantment);
+            let chance = if level > 0 {
+                enchanted_chance_base + enchanted_chance_per_level_above_first * (level - 1) as f32
             } else {
                 unenchanted_chance
             };
             rng.next_f32() < chance
         }
-        LootCondition::TableBonus { chances } => {
-            let index = (fortune_level.max(0) as usize).min(chances.len().saturating_sub(1));
+        LootCondition::TableBonus {
+            enchantment,
+            chances,
+        } => {
+            let index = (tool_enchantment_level(params, enchantment).max(0) as usize)
+                .min(chances.len().saturating_sub(1));
             chances
                 .get(index)
                 .is_some_and(|chance| rng.next_f32() < *chance)
         }
         LootCondition::AllOf(conditions) => conditions
             .iter()
-            .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
+            .all(|c| check_condition(*c, has_silk_touch, has_shears, params, rng)),
         LootCondition::AnyOf(conditions) => conditions
             .iter()
-            .any(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
-        LootCondition::EntityOnFire => params.is_on_fire.unwrap_or(false),
+            .any(|c| check_condition(*c, has_silk_touch, has_shears, params, rng)),
+        LootCondition::EntityOnFire => params.is_on_fire.unwrap_or_else(|| {
+            params
+                .this_entity
+                .is_some_and(|entity| entity.get_entity().is_on_fire())
+        }),
         LootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
         }
@@ -209,13 +291,14 @@ fn apply_bonus_formula(
             }
         }
         LootBonusFormula::UniformBonusCount(bonus_multiplier) => {
-            let max_bonus = fortune_level * bonus_multiplier;
-            let extra = if max_bonus > 0 {
-                rng.next_bounded_i32(max_bonus + 1)
+            let bound = fortune_level
+                .saturating_mul(bonus_multiplier)
+                .saturating_add(1);
+            if bound > 0 {
+                base_count.saturating_add(rng.next_bounded_i32(bound))
             } else {
-                0
-            };
-            base_count + extra
+                base_count
+            }
         }
         LootBonusFormula::BinomialWithBonusCount { extra, probability } => {
             let n = fortune_level + extra;
@@ -234,273 +317,26 @@ fn apply_bonus_formula(
 pub fn generate_loot(table: &LootTable, seed: i64) -> Vec<ItemStack> {
     generate_loot_with_context(table, seed, &LootContextParameters::default())
 }
-
 #[must_use]
-#[expect(clippy::too_many_lines)]
 pub fn generate_loot_with_context(
     table: &LootTable,
     seed: i64,
-    params: &LootContextParameters,
+    params: &LootContextParameters<'_>,
 ) -> Vec<ItemStack> {
-    let mut rng = Xoroshiro::from_seed(seed as u64);
-    let mut items_to_place: Vec<ItemStack> = Vec::new();
-
-    let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
-        pumpkin_data::Enchantment::from_name("silk_touch")
-            .is_some_and(|e| tool.get_enchantment_level(e) > 0)
-    });
-
-    let has_shears = params.tool.as_ref().is_some_and(|tool| {
-        let name = tool
-            .item
-            .registry_key
-            .strip_prefix("minecraft:")
-            .unwrap_or(tool.item.registry_key);
-        name == "shears"
-    });
-
-    let fortune_level = params.tool.as_ref().map_or(0, |tool| {
-        let fortune = pumpkin_data::Enchantment::from_name("fortune")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        let looting = pumpkin_data::Enchantment::from_name("looting")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        fortune.max(looting)
-    });
-
-    for pool in table.pools {
-        if !check_condition(
-            pool.condition,
-            has_silk_touch,
-            has_shears,
-            fortune_level,
-            params,
-            &mut rng,
-        ) {
-            continue;
-        }
-
-        let eligible_entries: Vec<&LootEntry> = pool
-            .entries
-            .iter()
-            .filter(|e| {
-                check_condition(
-                    e.condition,
-                    has_silk_touch,
-                    has_shears,
-                    fortune_level,
-                    params,
-                    &mut rng,
-                )
-            })
-            .collect();
-
-        if eligible_entries.is_empty() && pool.empty_weight == 0 {
-            continue;
-        }
-
-        let range = pool.max_rolls - pool.min_rolls;
-        let rolls = pool.min_rolls
-            + if range > 0 {
-                rng.next_bounded_i32(range + 1)
-            } else {
-                0
-            };
-
-        for _ in 0..rolls {
-            let entry_weight: i32 = eligible_entries.iter().map(|e| e.weight).sum();
-            let total_weight = entry_weight + pool.empty_weight;
-            if total_weight == 0 {
-                continue;
-            }
-
-            let mut pick = rng.next_bounded_i32(total_weight);
-
-            pick -= pool.empty_weight;
-            if pick < 0 {
-                continue;
-            }
-
-            for entry in &eligible_entries {
-                pick -= entry.weight;
-                if pick < 0 {
-                    let count_range = entry.max_count - entry.min_count;
-                    let base_count = entry.min_count
-                        + if count_range > 0 {
-                            rng.next_bounded_i32(count_range + 1)
-                        } else {
-                            0
-                        };
-
-                    let mut final_count = base_count;
-                    if let Some(bonus) = entry.bonus_formula {
-                        final_count =
-                            apply_bonus_formula(final_count, bonus, fortune_level, &mut rng);
-                    }
-
-                    if final_count > 0 {
-                        let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
-
-                        if let Some(item) = Item::from_registry_key(item_key) {
-                            let stack = ItemStack::new(final_count as u8, item);
-                            let smelts = entry.furnace_smelt.is_some_and(|c| {
-                                check_condition(
-                                    c,
-                                    has_silk_touch,
-                                    has_shears,
-                                    fortune_level,
-                                    params,
-                                    &mut rng,
-                                )
-                            });
-                            items_to_place.push(if smelts { smelt(stack) } else { stack });
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    items_to_place
+    generation::generate(generation::Table::Static(table), seed, params)
 }
-
 pub use generate_loot as generate_chest_loot;
-
 #[must_use]
 pub fn generate_dynamic_loot(table: &DynamicLootTable, seed: i64) -> Vec<ItemStack> {
     generate_dynamic_loot_with_context(table, seed, &LootContextParameters::default())
 }
-
 #[must_use]
 pub fn generate_dynamic_loot_with_context(
     table: &DynamicLootTable,
     seed: i64,
-    params: &LootContextParameters,
+    params: &LootContextParameters<'_>,
 ) -> Vec<ItemStack> {
-    let mut rng = Xoroshiro::from_seed(seed as u64);
-    let mut items_to_place: Vec<ItemStack> = Vec::new();
-
-    let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
-        pumpkin_data::Enchantment::from_name("silk_touch")
-            .is_some_and(|e| tool.get_enchantment_level(e) > 0)
-    });
-
-    let has_shears = params.tool.as_ref().is_some_and(|tool| {
-        let name = tool
-            .item
-            .registry_key
-            .strip_prefix("minecraft:")
-            .unwrap_or(tool.item.registry_key);
-        name == "shears"
-    });
-
-    let fortune_level = params.tool.as_ref().map_or(0, |tool| {
-        let fortune = pumpkin_data::Enchantment::from_name("fortune")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        let looting = pumpkin_data::Enchantment::from_name("looting")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        fortune.max(looting)
-    });
-
-    for pool in &table.pools {
-        if !check_dynamic_condition(
-            &pool.condition,
-            has_silk_touch,
-            has_shears,
-            fortune_level,
-            params,
-            &mut rng,
-        ) {
-            continue;
-        }
-
-        let eligible_entries: Vec<&DynamicLootEntry> = pool
-            .entries
-            .iter()
-            .filter(|e| {
-                check_dynamic_condition(
-                    &e.condition,
-                    has_silk_touch,
-                    has_shears,
-                    fortune_level,
-                    params,
-                    &mut rng,
-                )
-            })
-            .collect();
-
-        if eligible_entries.is_empty() && pool.empty_weight == 0 {
-            continue;
-        }
-
-        let range = pool.max_rolls - pool.min_rolls;
-        let rolls = pool.min_rolls
-            + if range > 0 {
-                rng.next_bounded_i32(range + 1)
-            } else {
-                0
-            };
-
-        roll_dynamic_entries(
-            rolls,
-            pool.empty_weight,
-            &eligible_entries,
-            fortune_level,
-            &mut rng,
-            &mut items_to_place,
-        );
-    }
-
-    items_to_place
-}
-
-fn roll_dynamic_entries(
-    rolls: i32,
-    empty_weight: i32,
-    eligible_entries: &[&DynamicLootEntry],
-    fortune_level: i32,
-    rng: &mut Xoroshiro,
-    items_to_place: &mut Vec<ItemStack>,
-) {
-    for _ in 0..rolls {
-        let entry_weight: i32 = eligible_entries.iter().map(|e| e.weight).sum();
-        let total_weight = entry_weight + empty_weight;
-        if total_weight == 0 {
-            continue;
-        }
-
-        let mut pick = rng.next_bounded_i32(total_weight);
-        pick -= empty_weight;
-        if pick < 0 {
-            continue;
-        }
-
-        for entry in eligible_entries {
-            pick -= entry.weight;
-            if pick < 0 {
-                let count_range = entry.max_count - entry.min_count;
-                let base_count = entry.min_count
-                    + if count_range > 0 {
-                        rng.next_bounded_i32(count_range + 1)
-                    } else {
-                        0
-                    };
-
-                let mut final_count = base_count;
-                if let Some(bonus) = entry.bonus_formula {
-                    final_count = apply_bonus_formula(final_count, bonus, fortune_level, rng);
-                }
-
-                if final_count > 0 {
-                    let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(&entry.item);
-                    if let Some(item) = Item::from_registry_key(item_key) {
-                        items_to_place.push(ItemStack::new(final_count as u8, item));
-                    }
-                }
-                break;
-            }
-        }
-    }
+    generation::generate(generation::Table::Dynamic(table), seed, params)
 }
 
 /// A handle to either a compile-time static loot table or a datapack dynamic loot table.
@@ -598,8 +434,9 @@ pub fn fill_chest_inventory_handle(
     inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
     handle: &LootTableHandle,
     seed: i64,
+    params: &LootContextParameters<'_>,
 ) {
-    let items_to_place = generate_loot_from_handle(handle, seed, &LootContextParameters::default());
+    let items_to_place = generate_loot_from_handle(handle, seed, params);
     place_items_in_chest(inventory, items_to_place, seed);
 }
 
@@ -659,3 +496,6 @@ fn shuffle_and_split_items(
         result.swap(i, j);
     }
 }
+
+#[cfg(test)]
+mod tests;

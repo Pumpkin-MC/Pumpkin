@@ -376,8 +376,10 @@ impl BlockBehaviour for SignBlock {
             }
             return;
         }
-        args.player
-            .try_send_client_packet(&COpenSignEditor::new(*args.position, true));
+        args.player.try_enqueue_packet_editioned(
+            &COpenSignEditor::new(*args.position, true),
+            &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*args.position, true),
+        );
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -633,7 +635,10 @@ fn open_text_edit(
     *currently_editing_player
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(player.gameprofile.id);
-    player.try_send_client_packet(&COpenSignEditor::new(*position, is_front_text));
+    player.try_enqueue_packet_editioned(
+        &COpenSignEditor::new(*position, is_front_text),
+        &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*position, is_front_text),
+    );
 }
 
 /// Checks if another player is actively editing the sign within reach.
