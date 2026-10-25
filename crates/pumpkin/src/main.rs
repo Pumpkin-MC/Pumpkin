@@ -172,6 +172,7 @@ async fn main() {
         config.telemetry,
         vanilla_data,
         plugin_loaders,
+        true,
     )
     .await
     .unwrap_or_else(|error| {

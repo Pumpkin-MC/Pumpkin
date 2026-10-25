@@ -3,10 +3,8 @@ use std::sync::Arc;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_core::{
     data::VanillaData,
-    net::{
-        ClientPlatform, PacketHandlerResult, PacketRateLimiter,
-        java::{JavaClient, pending::PendingConnection},
-    },
+    net::{PacketRateLimiter, java::pending::PendingConnection},
+    serve_java_connection,
     server::Server,
 };
 use pumpkin_data::dimension::Dimension;
@@ -79,51 +77,14 @@ pub fn spawn_java_listener(
                         let packet_limiter = PacketRateLimiter::from_config(
                             &server_clone.advanced_config.networking.java.packet_limiter,
                         );
-                        let mut pending = PendingConnection::new(
+                        let pending = PendingConnection::new(
                             connection,
                             client_addr,
                             client_id,
                             packet_limiter,
                             Arc::downgrade(&server_clone),
                         );
-                        match pending.handle_login_sequence(&server_clone).await {
-                            PacketHandlerResult::Stop => {
-                                pending.close();
-                            }
-                            PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                let mut java_client = JavaClient::from_pending(
-                                    pending,
-                                    profile.clone(),
-                                    config.clone(),
-                                );
-                                java_client.start_outgoing_packet_task();
-
-                                if let Some((player, world)) = server_clone.add_player(
-                                    Arc::new(ClientPlatform::Java(java_client)),
-                                    profile,
-                                    Some(config),
-                                ) {
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.set_player(player.clone());
-                                    }
-                                    world
-                                        .spawn_java_player(
-                                            &server_clone.basic_config,
-                                            &player,
-                                            &server_clone,
-                                        )
-                                        .await;
-
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player);
-                                }
-                            }
-                        }
+                        serve_java_connection(server_clone, pending).await;
                     });
                 }
             }

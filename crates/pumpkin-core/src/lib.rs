@@ -287,7 +287,7 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     )
 }
 
-/// [`PumpkinServer::new`] fails. embedding host gets it back instead of existing process
+/// Why [`PumpkinServer::new`] failed, returned to the caller instead of exiting the process.
 #[derive(thiserror::Error, Debug)]
 pub enum ServerSetupError {
     #[error("Failed to initialize world storage: {0}")]
@@ -313,7 +313,7 @@ pub struct PumpkinServer {
     pub nethernet_listener: Option<NetherNetListener>,
     /// Whether this instance owns the process: on shutdown, a standalone server also stops the
     /// process, while an embedded server only ends its own world.
-    pub standalone: bool,
+    standalone: bool,
 }
 
 impl PumpkinServer {
@@ -326,6 +326,7 @@ impl PumpkinServer {
         telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
         plugin_loaders: Vec<Arc<dyn PluginLoader>>,
+        standalone: bool,
     ) -> Result<Self, ServerSetupError> {
         let server = Server::new(
             basic_config,
@@ -336,7 +337,7 @@ impl PumpkinServer {
         )
         .await?;
 
-        let result = Self::setup(server.clone()).await;
+        let result = Self::setup(server.clone(), standalone).await;
         if result.is_err() {
             // End what `Server::new` and `setup` already spawned, so the host keeps a clean process
             server.stop();
@@ -346,7 +347,7 @@ impl PumpkinServer {
 
     /// Binds the listeners, then starts the services and the ticker. Binding comes first, so a
     /// bind error leaves nothing running.
-    async fn setup(server: Arc<Server>) -> Result<Self, ServerSetupError> {
+    async fn setup(server: Arc<Server>, standalone: bool) -> Result<Self, ServerSetupError> {
         #[cfg(target_family = "unix")]
         adjust_file_descriptor_limit();
 
@@ -413,7 +414,7 @@ impl PumpkinServer {
             tcp_listener,
             bedrock_status,
             nethernet_listener,
-            standalone: true,
+            standalone,
         })
     }
 
@@ -421,15 +422,10 @@ impl PumpkinServer {
         TcpListener::bind(address).await.map_err(|e| {
             match e.kind() {
                 ErrorKind::AddrInUse => {
-                    error!("Error: Address {address} is already in use.");
                     error!("Make sure another instance of the server isn't already running");
                 }
                 ErrorKind::PermissionDenied => {
-                    error!("Error: Permission denied when binding to {address}.");
                     error!("You might need sudo/admin privileges to use ports below 1024");
-                }
-                ErrorKind::AddrNotAvailable => {
-                    error!("Error: The address {address} is not available on this machine");
                 }
                 _ => {}
             }

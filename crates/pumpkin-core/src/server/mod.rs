@@ -155,8 +155,7 @@ pub struct Server {
     /// process-wide stop reaches it, while an integrated server can stop without ending the
     /// process.
     pub stop_token: CancellationToken,
-    /// `true` once shutdown closed admission.
-    /// so the shutdown kick pass sees every admitted player.
+    /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
     admission_closed: std::sync::RwLock<bool>,
 
     // world stuff which maybe should be put into a struct
