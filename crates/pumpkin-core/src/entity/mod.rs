@@ -4248,6 +4248,8 @@ impl Entity {
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
         if self.is_silent() {
             nbt.put_bool("Silent", true);
+        } else {
+            nbt.child_tags.remove("Silent");
         }
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
         if self.has_visual_fire.load(Relaxed) {

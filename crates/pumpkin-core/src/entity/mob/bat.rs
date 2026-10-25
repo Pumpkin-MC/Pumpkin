@@ -442,13 +442,16 @@ mod tests {
         let silent = bat.get_entity().is_silent();
         let mut saved = NbtCompound::new();
         EntityBase::write_nbt(bat.as_ref(), &mut saved);
+        let saved_silent = saved.get_bool("Silent");
         nbt.put_bool("Silent", false);
         bat.read_nbt_non_mut(&nbt);
         let unsilenced = !bat.get_entity().is_silent();
+        EntityBase::write_nbt(bat.as_ref(), &mut saved);
         world.level.shutdown().await;
         assert!(silent);
-        assert_eq!(saved.get_bool("Silent"), Some(true));
+        assert_eq!(saved_silent, Some(true));
         assert!(unsilenced);
+        assert!(!saved.child_tags.contains_key("Silent"));
         Ok(())
     }
 
