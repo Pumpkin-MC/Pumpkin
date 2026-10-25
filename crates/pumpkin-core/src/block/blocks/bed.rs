@@ -207,7 +207,7 @@ impl BedBlock {
             world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
             world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
 
-            world.explode(
+            world.explode_with_fire(
                 bed_head_pos.to_centered_f64(),
                 5.0,
                 crate::world::ExplosionInteraction::Block,
