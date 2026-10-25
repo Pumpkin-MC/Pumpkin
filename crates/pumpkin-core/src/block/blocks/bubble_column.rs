@@ -15,8 +15,8 @@ use crate::block::{
 };
 use crate::world::World;
 
-const CREATE_DELAY_TICKS: u8 = 20;
-const REMOVE_DELAY_TICKS: u8 = 5;
+const CREATE_DELAY_TICKS: u32 = 20;
+const REMOVE_DELAY_TICKS: u32 = 5;
 
 const UPWARD_ACCELERATION: f64 = 0.06;
 const UPWARD_MAX_SPEED: f64 = 0.7;
@@ -126,7 +126,7 @@ fn reconcile_action(
     }
 }
 
-fn schedule_reconcile(world: &Arc<World>, position: BlockPos, delay: u8) {
+fn schedule_reconcile(world: &Arc<World>, position: BlockPos, delay: u32) {
     world.schedule_block_tick(&Block::BUBBLE_COLUMN, position, delay, TickPriority::Normal);
 }
 

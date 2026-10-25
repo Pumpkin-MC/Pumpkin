@@ -103,7 +103,7 @@ pub struct LecternBlock;
 
 impl LecternBlock {
     /// Vanilla pulse length of a page-turn signal, in game ticks.
-    const PAGE_TURN_PULSE_TICKS: u8 = 2;
+    const PAGE_TURN_PULSE_TICKS: u32 = 2;
 
     /// The lectern strongly powers the block below it, so its neighbors need
     /// updating whenever the power or book state changes.

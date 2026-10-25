@@ -653,6 +653,11 @@ impl ChunkData {
         std::sync::Arc::new(Self::empty(x, z))
     }
 
+    #[must_use]
+    pub fn has_scheduled_ticks(&self) -> bool {
+        self.block_ticks.has_ticks() || self.fluid_ticks.has_ticks()
+    }
+
     /// Returns the replaced block state ID
     pub fn set_block_absolute_y(
         &self,
