@@ -1,6 +1,9 @@
 use crate::command::argument_builder::{
     ArgumentBuilder, LiteralArgumentBuilder, argument, command, literal,
 };
+use crate::command::argument_types::argument_type::JavaClientArgumentType;
+use crate::command::argument_types::client_parsed::ClientParsed;
+use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
@@ -92,7 +95,7 @@ impl CommandExecutor for TeamAddExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = StringArgumentType::get(context, ARG_TEAM_NAME)?;
         let display_name = if self.has_display_name {
-            TextComponent::text(StringArgumentType::get(context, ARG_DISPLAY_NAME)?.to_string())
+            ComponentArgumentType::get(context, ARG_DISPLAY_NAME)?
         } else {
             TextComponent::text(team_name.to_string())
         };
@@ -538,11 +541,10 @@ struct TeamModifyDisplayNameExecutor;
 impl CommandExecutor for TeamModifyDisplayNameExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_name_str = StringArgumentType::get(context, ARG_DISPLAY_NAME)?;
+        let new_display_name = ComponentArgumentType::get(context, ARG_DISPLAY_NAME)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
-        let new_name_owned = new_name_str.to_string();
 
         let mut scoreboard = world
             .scoreboard
@@ -556,7 +558,6 @@ impl CommandExecutor for TeamModifyDisplayNameExecutor {
         };
 
         let mut team = team.clone();
-        let new_display_name = TextComponent::text(new_name_owned);
         if team.display_name == new_display_name {
             return Err(NAME_UNCHANGED_ERROR.create_without_context());
         }
@@ -583,11 +584,10 @@ struct TeamModifyPrefixExecutor;
 impl CommandExecutor for TeamModifyPrefixExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_prefix_str = StringArgumentType::get(context, ARG_PREFIX)?;
+        let new_prefix = ComponentArgumentType::get(context, ARG_PREFIX)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
-        let new_prefix_owned = new_prefix_str.to_string();
 
         let mut scoreboard = world
             .scoreboard
@@ -601,7 +601,6 @@ impl CommandExecutor for TeamModifyPrefixExecutor {
         };
 
         let mut team = team.clone();
-        let new_prefix = TextComponent::text(new_prefix_owned);
         team.player_prefix = new_prefix.clone();
         let team_display_name = team.display_name.clone();
         scoreboard.update_team(&world, team);
@@ -624,11 +623,10 @@ struct TeamModifySuffixExecutor;
 impl CommandExecutor for TeamModifySuffixExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
-        let new_suffix_str = StringArgumentType::get(context, ARG_SUFFIX)?;
+        let new_suffix = ComponentArgumentType::get(context, ARG_SUFFIX)?;
 
         let world = context.world().clone();
         let team_name_owned = team_name.to_string();
-        let new_suffix_owned = new_suffix_str.to_string();
 
         let mut scoreboard = world
             .scoreboard
@@ -642,7 +640,6 @@ impl CommandExecutor for TeamModifySuffixExecutor {
         };
 
         let mut team = team.clone();
-        let new_suffix = TextComponent::text(new_suffix_owned);
         team.player_suffix = new_suffix.clone();
         let team_display_name = team.display_name.clone();
         scoreboard.update_team(&world, team);
@@ -942,11 +939,9 @@ fn add_branch() -> LiteralArgumentBuilder {
                 has_display_name: false,
             })
             .then(
-                argument(ARG_DISPLAY_NAME, StringArgumentType::GreedyPhrase).executes(
-                    TeamAddExecutor {
-                        has_display_name: true,
-                    },
-                ),
+                argument(ARG_DISPLAY_NAME, ComponentArgumentType).executes(TeamAddExecutor {
+                    has_display_name: true,
+                }),
             ),
     )
 }
@@ -964,16 +959,32 @@ fn join_branch() -> LiteralArgumentBuilder {
         argument(ARG_TEAM, TeamArgumentType)
             .executes(TeamJoinExecutor { has_members: false })
             .then(
-                argument(ARG_MEMBERS, EntityArgumentType::Entities)
-                    .executes(TeamJoinExecutor { has_members: true }),
+                argument(
+                    ARG_MEMBERS,
+                    ClientParsed::new(
+                        EntityArgumentType::Entities,
+                        JavaClientArgumentType::ScoreHolder {
+                            flags: JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE,
+                        },
+                    ),
+                )
+                .executes(TeamJoinExecutor { has_members: true }),
             ),
     )
 }
 
 fn leave_branch() -> LiteralArgumentBuilder {
     literal("leave").then(
-        argument(ARG_MEMBERS, EntityArgumentType::Entities)
-            .executes(TeamLeaveExecutor { has_members: true }),
+        argument(
+            ARG_MEMBERS,
+            ClientParsed::new(
+                EntityArgumentType::Entities,
+                JavaClientArgumentType::ScoreHolder {
+                    flags: JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE,
+                },
+            ),
+        )
+        .executes(TeamLeaveExecutor { has_members: true }),
     )
 }
 
@@ -983,7 +994,6 @@ fn list_branch() -> LiteralArgumentBuilder {
         .then(argument(ARG_TEAM, TeamArgumentType).executes(TeamListExecutor { has_team: true }))
 }
 
-#[expect(clippy::too_many_lines)]
 fn modify_branch() -> LiteralArgumentBuilder {
     literal("modify").then(
         argument(ARG_TEAM, TeamArgumentType)
@@ -997,22 +1007,16 @@ fn modify_branch() -> LiteralArgumentBuilder {
             )
             .then(
                 literal("displayName").then(
-                    argument(ARG_DISPLAY_NAME, StringArgumentType::GreedyPhrase)
+                    argument(ARG_DISPLAY_NAME, ComponentArgumentType)
                         .executes(TeamModifyDisplayNameExecutor),
                 ),
             )
-            .then(
-                literal("prefix").then(
-                    argument(ARG_PREFIX, StringArgumentType::GreedyPhrase)
-                        .executes(TeamModifyPrefixExecutor),
-                ),
-            )
-            .then(
-                literal("suffix").then(
-                    argument(ARG_SUFFIX, StringArgumentType::GreedyPhrase)
-                        .executes(TeamModifySuffixExecutor),
-                ),
-            )
+            .then(literal("prefix").then(
+                argument(ARG_PREFIX, ComponentArgumentType).executes(TeamModifyPrefixExecutor),
+            ))
+            .then(literal("suffix").then(
+                argument(ARG_SUFFIX, ComponentArgumentType).executes(TeamModifySuffixExecutor),
+            ))
             .then(literal("friendlyFire").then(
                 argument(ARG_ALLOWED, BoolArgumentType).executes(TeamModifyFriendlyFireExecutor),
             ))

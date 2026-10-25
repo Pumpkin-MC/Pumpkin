@@ -16,7 +16,9 @@
 use crate::command::argument_builder::{
     ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::argument_type::JavaClientArgumentType;
+use crate::command::argument_types::block_predicate::BlockPredicateArgumentType;
+use crate::command::argument_types::client_parsed::ClientParsed;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::coordinates::swizzle::SwizzleArgumentType;
@@ -29,7 +31,9 @@ use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
 use crate::command::argument_types::objective::ObjectiveArgumentType;
 use crate::command::argument_types::range::{FloatRangeArgumentType, IntRangeArgumentType};
 use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
-use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
+use crate::command::argument_types::resource_key::{
+    BIOME_REGISTRY, DIMENSION_REGISTRY, ResourceKeyArgument,
+};
 use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
 use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
 use crate::command::commands::data::{
@@ -48,8 +52,6 @@ use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
 use crate::world::scoreboard::Scoreboard;
 use crate::world::stopwatches::Stopwatches;
-use pumpkin_data::biome::Biome;
-use pumpkin_data::tag::{self, RegistryKey};
 use pumpkin_data::translation;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::PermissionLvl;
@@ -58,7 +60,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -72,8 +73,6 @@ const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
 );
-
-static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 
 fn execute_as_modifier(context: &CommandContext) -> crate::command::node::RedirectModifierResult {
     let targets = EntityArgumentType::get_optional_entities(context, "targets")?;
@@ -168,7 +167,7 @@ fn execute_positioned_over_modifier(
 fn execute_rotated_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let rot_coords = RotationArgumentType::get(context, "rotation")?;
+    let rot_coords = RotationArgumentType::get(context, "rot")?;
     let rot = rot_coords.rotation(&context.source);
     let mut source = context.source.as_ref().clone();
     source.rotation = rot;
@@ -192,7 +191,7 @@ fn execute_rotated_as_modifier(
 fn execute_if_entity_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let targets = EntityArgumentType::get_optional_entities(context, "targets")?;
+    let targets = EntityArgumentType::get_optional_entities(context, "entities")?;
     if targets.is_empty() {
         Ok(vec![])
     } else {
@@ -203,7 +202,7 @@ fn execute_if_entity_modifier(
 fn execute_unless_entity_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let targets = EntityArgumentType::get_optional_entities(context, "targets")?;
+    let targets = EntityArgumentType::get_optional_entities(context, "entities")?;
     if targets.is_empty() {
         Ok(vec![context.source.clone()])
     } else {
@@ -278,11 +277,11 @@ fn execute_if_block_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-    let expected_block = BlockArgumentType::get(context, "block")?;
+    let expected = BlockPredicateArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
         let block = world.get_block(&pos);
-        if block == expected_block {
+        if expected.test(block) {
             return Ok(vec![context.source.clone()]);
         }
     }
@@ -293,11 +292,11 @@ fn execute_unless_block_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-    let expected_block = BlockArgumentType::get(context, "block")?;
+    let expected = BlockPredicateArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
         let block = world.get_block(&pos);
-        if block != expected_block {
+        if !expected.test(block) {
             return Ok(vec![context.source.clone()]);
         }
     } else {
@@ -382,20 +381,7 @@ fn execute_if_biome_modifier(
 
     if let Some(ref world) = context.source.world {
         let biome = world.get_biome(&pos);
-        let targets: FxHashSet<u8> = match &biome_arg {
-            ResourceOrTag::Resource(id) => Biome::from_name(id.path())
-                .map(|b| b.id)
-                .into_iter()
-                .collect(),
-            ResourceOrTag::Tag(id) => {
-                tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|name| Biome::from_name(*name))
-                    .map(|b| b.id)
-                    .collect()
-            }
-        };
+        let targets = biome_arg.biome_ids();
 
         if targets.contains(&biome.id) {
             return Ok(vec![context.source.clone()]);
@@ -412,20 +398,7 @@ fn execute_unless_biome_modifier(
 
     if let Some(ref world) = context.source.world {
         let biome = world.get_biome(&pos);
-        let targets: FxHashSet<u8> = match &biome_arg {
-            ResourceOrTag::Resource(id) => Biome::from_name(id.path())
-                .map(|b| b.id)
-                .into_iter()
-                .collect(),
-            ResourceOrTag::Tag(id) => {
-                tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|name| Biome::from_name(*name))
-                    .map(|b| b.id)
-                    .collect()
-            }
-        };
+        let targets = biome_arg.biome_ids();
 
         if !targets.contains(&biome.id) {
             return Ok(vec![context.source.clone()]);
@@ -497,7 +470,7 @@ fn execute_if_score_matches_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
     if let Some(score) = get_score(context, &target, target_obj)? {
@@ -512,7 +485,7 @@ fn execute_unless_score_matches_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
     if let Some(score) = get_score(context, &target, target_obj)? {
@@ -529,10 +502,10 @@ fn execute_if_score_eq_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a == b {
@@ -546,10 +519,10 @@ fn execute_if_score_lt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a < b {
@@ -563,10 +536,10 @@ fn execute_if_score_le_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a <= b {
@@ -580,10 +553,10 @@ fn execute_if_score_gt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a > b {
@@ -597,10 +570,10 @@ fn execute_if_score_ge_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a >= b {
@@ -614,10 +587,10 @@ fn execute_unless_score_eq_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a != b {
@@ -633,10 +606,10 @@ fn execute_unless_score_lt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a >= b {
@@ -652,10 +625,10 @@ fn execute_unless_score_le_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a > b {
@@ -671,10 +644,10 @@ fn execute_unless_score_gt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a <= b {
@@ -690,10 +663,10 @@ fn execute_unless_score_ge_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
     let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
-    let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
+    let target_obj = ObjectiveArgumentType::get(context, "targetObjective")?;
     let target_score = get_score(context, &target, target_obj)?;
     let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
-    let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
+    let source_obj = ObjectiveArgumentType::get(context, "sourceObjective")?;
 
     if let (Some(a), Some(b)) = (target_score, get_score(context, &source, source_obj)?) {
         if a < b {
@@ -912,7 +885,7 @@ fn execute_unless_stopwatch_modifier(
 fn execute_summon_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let entity_type = ResourceArgument::get_summonable_entity_type(context, "entity_type")?;
+    let entity_type = ResourceArgument::get_summonable_entity_type(context, "entity")?;
     let entity = from_type(
         entity_type,
         context.source.position,
@@ -1134,12 +1107,21 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         RedirectModifier::Custom(Arc::new(execute_positioned_as_modifier)),
                     )),
                 )
-                .then(literal("over").then(
-                    argument("heightmap", StringArgumentType::SingleWord).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_positioned_over_modifier)),
+                .then(
+                    literal("over").then(
+                        argument(
+                            "heightmap",
+                            ClientParsed::new(
+                                StringArgumentType::SingleWord,
+                                JavaClientArgumentType::Heightmap,
+                            ),
+                        )
+                        .redirect_with_modifier(
+                            Redirection::Root,
+                            RedirectModifier::Custom(Arc::new(execute_positioned_over_modifier)),
+                        ),
                     ),
-                ))
+                )
                 .then(
                     argument("pos", Vec3ArgumentType::Default).redirect_with_modifier(
                         Redirection::Root,
@@ -1156,7 +1138,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     )),
                 )
                 .then(
-                    argument("rotation", RotationArgumentType).redirect_with_modifier(
+                    argument("rot", RotationArgumentType).redirect_with_modifier(
                         Redirection::Root,
                         RedirectModifier::Custom(Arc::new(execute_rotated_modifier)),
                     ),
@@ -1192,7 +1174,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 ),
         )
         .then(literal("summon").then(
-            argument("entity_type", ENTITY_TYPE_ARGUMENT.clone()).redirect_with_modifier(
+            argument("entity", ENTITY_TYPE_ARGUMENT.clone()).redirect_with_modifier(
                 Redirection::Root,
                 RedirectModifier::Custom(Arc::new(execute_summon_modifier)),
             ),
@@ -1234,43 +1216,57 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("if")
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
-                    ),
-                ))
                 .then(
-                    literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_if_block_modifier)),
-                        ),
-                    )),
-                )
-                .then(literal("loaded").then(
-                    argument("pos", BlockPosArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_if_loaded_modifier)),
+                    literal("entity").then(
+                        argument("entities", EntityArgumentType::Entities)
+                            .fork(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
+                            )
+                            .executes(ConditionalExecutor(execute_if_entity_modifier)),
                     ),
-                ))
+                )
+                .then(
+                    literal("block").then(
+                        argument("pos", BlockPosArgumentType).then(
+                            argument("block", BlockPredicateArgumentType)
+                                .fork(
+                                    Redirection::Root,
+                                    RedirectModifier::Custom(Arc::new(execute_if_block_modifier)),
+                                )
+                                .executes(ConditionalExecutor(execute_if_block_modifier)),
+                        ),
+                    ),
+                )
+                .then(
+                    literal("loaded").then(
+                        argument("pos", BlockPosArgumentType)
+                            .fork(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_if_loaded_modifier)),
+                            )
+                            .executes(ConditionalExecutor(execute_if_loaded_modifier)),
+                    ),
+                )
                 .then(
                     literal("dimension").then(
                         argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
-                            .redirect_with_modifier(
+                            .fork(
                                 Redirection::Root,
                                 RedirectModifier::Custom(Arc::new(execute_if_dimension_modifier)),
-                            ),
+                            )
+                            .executes(ConditionalExecutor(execute_if_dimension_modifier)),
                     ),
                 )
                 .then(
                     literal("biome").then(
                         argument("pos", BlockPosArgumentType).then(
                             argument("biome", ResourceOrTagArgument(BIOME_REGISTRY.clone()))
-                                .redirect_with_modifier(
+                                .fork(
                                     Redirection::Root,
                                     RedirectModifier::Custom(Arc::new(execute_if_biome_modifier)),
-                                ),
+                                )
+                                .executes(ConditionalExecutor(execute_if_biome_modifier)),
                         ),
                     ),
                 )
@@ -1279,18 +1275,30 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         argument("start", BlockPosArgumentType).then(
                             argument("end", BlockPosArgumentType).then(
                                 argument("destination", BlockPosArgumentType)
-                                    .then(literal("all").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_if_blocks_all_modifier,
-                                        )),
-                                    ))
-                                    .then(literal("masked").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_if_blocks_masked_modifier,
-                                        )),
-                                    )),
+                                    .then(
+                                        literal("all")
+                                            .fork(
+                                                Redirection::Root,
+                                                RedirectModifier::Custom(Arc::new(
+                                                    execute_if_blocks_all_modifier,
+                                                )),
+                                            )
+                                            .executes(ConditionalExecutor(
+                                                execute_if_blocks_all_modifier,
+                                            )),
+                                    )
+                                    .then(
+                                        literal("masked")
+                                            .fork(
+                                                Redirection::Root,
+                                                RedirectModifier::Custom(Arc::new(
+                                                    execute_if_blocks_masked_modifier,
+                                                )),
+                                            )
+                                            .executes(ConditionalExecutor(
+                                                execute_if_blocks_masked_modifier,
+                                            )),
+                                    ),
                             ),
                         ),
                     ),
@@ -1298,7 +1306,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
-                            argument("target_obj", ObjectiveArgumentType)
+                            argument("targetObjective", ObjectiveArgumentType)
                                 .then(literal("matches").then(add_conditional(
                                     argument("range", IntRangeArgumentType),
                                     execute_if_score_matches_modifier,
@@ -1306,7 +1314,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_if_score_eq_modifier,
                                         ),
                                     ),
@@ -1314,7 +1322,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("<").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_if_score_lt_modifier,
                                         ),
                                     ),
@@ -1322,7 +1330,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("<=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_if_score_le_modifier,
                                         ),
                                     ),
@@ -1330,7 +1338,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal(">").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_if_score_gt_modifier,
                                         ),
                                     ),
@@ -1338,7 +1346,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal(">=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_if_score_ge_modifier,
                                         ),
                                     ),
@@ -1349,88 +1357,128 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("data")
                         .then(
-                            literal("block").then(argument("pos", BlockPosArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_block_modifier,
-                                    )),
+                            literal("block").then(
+                                argument("pos", BlockPosArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_if_data_block_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_if_data_block_modifier,
+                                        )),
                                 ),
-                            )),
+                            ),
                         )
-                        .then(literal("entity").then(
-                            argument("target", EntityArgumentType::Entity).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_entity_modifier,
-                                    )),
+                        .then(
+                            literal("entity").then(
+                                argument("target", EntityArgumentType::Entity).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_if_data_entity_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_if_data_entity_modifier,
+                                        )),
                                 ),
                             ),
-                        ))
-                        .then(literal("storage").then(
-                            argument("id", IdentifierArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_if_data_storage_modifier,
-                                    )),
+                        )
+                        .then(
+                            literal("storage").then(
+                                argument("id", IdentifierArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_if_data_storage_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_if_data_storage_modifier,
+                                        )),
                                 ),
                             ),
-                        )),
+                        ),
                 )
                 .then(
-                    literal("stopwatch").then(argument("id", IdentifierArgumentType).then(
-                        argument("range", FloatRangeArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_if_stopwatch_modifier)),
+                    literal("stopwatch").then(
+                        argument("id", IdentifierArgumentType).then(
+                            argument("range", FloatRangeArgumentType)
+                                .fork(
+                                    Redirection::Root,
+                                    RedirectModifier::Custom(Arc::new(
+                                        execute_if_stopwatch_modifier,
+                                    )),
+                                )
+                                .executes(ConditionalExecutor(execute_if_stopwatch_modifier)),
                         ),
-                    )),
+                    ),
                 ),
         )
         .then(
             literal("unless")
-                .then(literal("entity").then(
-                    argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
-                    ),
-                ))
                 .then(
-                    literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_unless_block_modifier)),
-                        ),
-                    )),
-                )
-                .then(literal("loaded").then(
-                    argument("pos", BlockPosArgumentType).redirect_with_modifier(
-                        Redirection::Root,
-                        RedirectModifier::Custom(Arc::new(execute_unless_loaded_modifier)),
+                    literal("entity").then(
+                        argument("entities", EntityArgumentType::Entities)
+                            .fork(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
+                            )
+                            .executes(ConditionalExecutor(execute_unless_entity_modifier)),
                     ),
-                ))
+                )
+                .then(
+                    literal("block").then(
+                        argument("pos", BlockPosArgumentType).then(
+                            argument("block", BlockPredicateArgumentType)
+                                .fork(
+                                    Redirection::Root,
+                                    RedirectModifier::Custom(Arc::new(
+                                        execute_unless_block_modifier,
+                                    )),
+                                )
+                                .executes(ConditionalExecutor(execute_unless_block_modifier)),
+                        ),
+                    ),
+                )
+                .then(
+                    literal("loaded").then(
+                        argument("pos", BlockPosArgumentType)
+                            .fork(
+                                Redirection::Root,
+                                RedirectModifier::Custom(Arc::new(execute_unless_loaded_modifier)),
+                            )
+                            .executes(ConditionalExecutor(execute_unless_loaded_modifier)),
+                    ),
+                )
                 .then(
                     literal("dimension").then(
                         argument("dimension", ResourceKeyArgument(DIMENSION_REGISTRY))
-                            .redirect_with_modifier(
+                            .fork(
                                 Redirection::Root,
                                 RedirectModifier::Custom(Arc::new(
                                     execute_unless_dimension_modifier,
                                 )),
-                            ),
+                            )
+                            .executes(ConditionalExecutor(execute_unless_dimension_modifier)),
                     ),
                 )
                 .then(
                     literal("biome").then(
                         argument("pos", BlockPosArgumentType).then(
                             argument("biome", ResourceOrTagArgument(BIOME_REGISTRY.clone()))
-                                .redirect_with_modifier(
+                                .fork(
                                     Redirection::Root,
                                     RedirectModifier::Custom(Arc::new(
                                         execute_unless_biome_modifier,
                                     )),
-                                ),
+                                )
+                                .executes(ConditionalExecutor(execute_unless_biome_modifier)),
                         ),
                     ),
                 )
@@ -1439,18 +1487,30 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         argument("start", BlockPosArgumentType).then(
                             argument("end", BlockPosArgumentType).then(
                                 argument("destination", BlockPosArgumentType)
-                                    .then(literal("all").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_unless_blocks_all_modifier,
-                                        )),
-                                    ))
-                                    .then(literal("masked").redirect_with_modifier(
-                                        Redirection::Root,
-                                        RedirectModifier::Custom(Arc::new(
-                                            execute_unless_blocks_masked_modifier,
-                                        )),
-                                    )),
+                                    .then(
+                                        literal("all")
+                                            .fork(
+                                                Redirection::Root,
+                                                RedirectModifier::Custom(Arc::new(
+                                                    execute_unless_blocks_all_modifier,
+                                                )),
+                                            )
+                                            .executes(ConditionalExecutor(
+                                                execute_unless_blocks_all_modifier,
+                                            )),
+                                    )
+                                    .then(
+                                        literal("masked")
+                                            .fork(
+                                                Redirection::Root,
+                                                RedirectModifier::Custom(Arc::new(
+                                                    execute_unless_blocks_masked_modifier,
+                                                )),
+                                            )
+                                            .executes(ConditionalExecutor(
+                                                execute_unless_blocks_masked_modifier,
+                                            )),
+                                    ),
                             ),
                         ),
                     ),
@@ -1458,7 +1518,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("score").then(
                         argument("target", ScoreHolderArgumentType::Single).then(
-                            argument("target_obj", ObjectiveArgumentType)
+                            argument("targetObjective", ObjectiveArgumentType)
                                 .then(literal("matches").then(add_conditional(
                                     argument("range", IntRangeArgumentType),
                                     execute_unless_score_matches_modifier,
@@ -1466,7 +1526,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_unless_score_eq_modifier,
                                         ),
                                     ),
@@ -1474,7 +1534,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("<").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_unless_score_lt_modifier,
                                         ),
                                     ),
@@ -1482,7 +1542,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal("<=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_unless_score_le_modifier,
                                         ),
                                     ),
@@ -1490,7 +1550,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal(">").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_unless_score_gt_modifier,
                                         ),
                                     ),
@@ -1498,7 +1558,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(literal(">=").then(
                                     argument("source", ScoreHolderArgumentType::Single).then(
                                         add_conditional(
-                                            argument("source_obj", ObjectiveArgumentType),
+                                            argument("sourceObjective", ObjectiveArgumentType),
                                             execute_unless_score_ge_modifier,
                                         ),
                                     ),
@@ -1509,43 +1569,67 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 .then(
                     literal("data")
                         .then(
-                            literal("block").then(argument("pos", BlockPosArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_block_modifier,
-                                    )),
+                            literal("block").then(
+                                argument("pos", BlockPosArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_unless_data_block_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_unless_data_block_modifier,
+                                        )),
                                 ),
-                            )),
+                            ),
                         )
-                        .then(literal("entity").then(
-                            argument("target", EntityArgumentType::Entity).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_entity_modifier,
-                                    )),
+                        .then(
+                            literal("entity").then(
+                                argument("target", EntityArgumentType::Entity).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_unless_data_entity_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_unless_data_entity_modifier,
+                                        )),
                                 ),
                             ),
-                        ))
-                        .then(literal("storage").then(
-                            argument("id", IdentifierArgumentType).then(
-                                argument("path", NbtPathArgumentType).redirect_with_modifier(
-                                    Redirection::Root,
-                                    RedirectModifier::Custom(Arc::new(
-                                        execute_unless_data_storage_modifier,
-                                    )),
+                        )
+                        .then(
+                            literal("storage").then(
+                                argument("id", IdentifierArgumentType).then(
+                                    argument("path", NbtPathArgumentType)
+                                        .fork(
+                                            Redirection::Root,
+                                            RedirectModifier::Custom(Arc::new(
+                                                execute_unless_data_storage_modifier,
+                                            )),
+                                        )
+                                        .executes(ConditionalExecutor(
+                                            execute_unless_data_storage_modifier,
+                                        )),
                                 ),
                             ),
-                        )),
+                        ),
                 )
                 .then(
-                    literal("stopwatch").then(argument("id", IdentifierArgumentType).then(
-                        argument("range", FloatRangeArgumentType).redirect_with_modifier(
-                            Redirection::Root,
-                            RedirectModifier::Custom(Arc::new(execute_unless_stopwatch_modifier)),
+                    literal("stopwatch").then(
+                        argument("id", IdentifierArgumentType).then(
+                            argument("range", FloatRangeArgumentType)
+                                .fork(
+                                    Redirection::Root,
+                                    RedirectModifier::Custom(Arc::new(
+                                        execute_unless_stopwatch_modifier,
+                                    )),
+                                )
+                                .executes(ConditionalExecutor(execute_unless_stopwatch_modifier)),
                         ),
-                    )),
+                    ),
                 ),
         );
 
