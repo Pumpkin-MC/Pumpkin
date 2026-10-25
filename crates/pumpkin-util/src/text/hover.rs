@@ -149,7 +149,10 @@ mod tests {
     fn item_components_must_be_an_object() {
         assert!(serde_json::from_str::<ItemComponents>(r#"{"minecraft:damage":3}"#).is_ok());
         for bad in ["[]", r#""x""#, "3", "null", "true"] {
-            assert!(serde_json::from_str::<ItemComponents>(bad).is_err(), "{bad}");
+            assert!(
+                serde_json::from_str::<ItemComponents>(bad).is_err(),
+                "{bad}"
+            );
         }
     }
 }
