@@ -720,16 +720,6 @@ impl EntityBase for ItemEntity {
             (stack.item.id, stack.item_count)
         };
 
-        // Gate on the cancellable pickup event before touching the player's inventory or
-        // this item's own stack - a plugin that cancels it must see no effect at all, not
-        // just a missing pickup animation after the item already changed hands.
-        if !player
-            .living_entity
-            .can_pickup(&self.entity, count_before.into())
-        {
-            return;
-        }
-
         let mut local_stack = self
             .item_stack
             .lock()
@@ -762,7 +752,7 @@ impl EntityBase for ItemEntity {
 
             player
                 .living_entity
-                .broadcast_pickup(&self.entity, amount_picked_up.into());
+                .pickup(&self.entity, amount_picked_up.into());
 
             player
                 .current_screen_handler

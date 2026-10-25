@@ -494,11 +494,7 @@ impl TrackedEntity {
                         skin_parts,
                     ),
                 ] {
-                    if let Err(err) = meta.write(&mut buf, &version) {
-                        tracing::warn!(
-                            "Failed to write skin-parts metadata for entity {target_id} version {version:?}: {err}"
-                        );
-                    }
+                    let _ = meta.write(&mut buf, &version);
                 }
                 buf.put_u8(255);
                 let meta_packet = CSetEntityMetadata::new(target_id.into(), buf.into());

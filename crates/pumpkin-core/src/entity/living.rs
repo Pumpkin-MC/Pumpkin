@@ -632,11 +632,8 @@ impl LivingEntity {
         }
     }
 
-    /// Fires the cancellable pickup event for picking up an Item entity or XP Orb. Callers
-    /// must check this - and do so before mutating any inventory, item stack or stat, not
-    /// just before the pickup animation - or a cancelled pickup still happens in every way
-    /// that matters.
-    pub fn can_pickup(&self, item: &Entity, stack_amount: u32) -> bool {
+    /// Picks up an Item entity or XP Orb
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         let mut pickup_event =
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
                 self.entity.entity_id,
@@ -651,13 +648,7 @@ impl LivingEntity {
                 return false;
             }
         }
-        true
-    }
 
-    /// Broadcasts the "item flies to the player" pickup animation. Call only once the pickup
-    /// has actually happened: the event already allowed it (see [`Self::can_pickup`]) and the
-    /// amount here is what was actually taken, not just offered.
-    pub fn broadcast_pickup(&self, item: &Entity, stack_amount: u32) {
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity.world.load().broadcast_to_chunk_editioned(
             chunk_pos,
@@ -671,19 +662,6 @@ impl LivingEntity {
                 actor_runtime_id: VarULong(self.entity.entity_id as u64),
             },
         );
-    }
-
-    /// Picks up an Item entity or XP Orb: fires the cancellable pickup event and, if it's
-    /// allowed, broadcasts the pickup animation. Returns whether the pickup was allowed.
-    /// Only correct for callers with nothing to mutate between the event check and the
-    /// animation (e.g. an XP orb); a caller that inserts into an inventory first needs the
-    /// amount actually taken, so it must call [`Self::can_pickup`] before mutating anything
-    /// and [`Self::broadcast_pickup`] after, instead of this.
-    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
-        if !self.can_pickup(item, stack_amount) {
-            return false;
-        }
-        self.broadcast_pickup(item, stack_amount);
         true
     }
 

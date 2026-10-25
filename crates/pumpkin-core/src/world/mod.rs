@@ -1291,11 +1291,7 @@ impl World {
                     skin_parts,
                 ),
             ] {
-                if let Err(err) = meta.write(&mut buf, &version) {
-                    tracing::warn!(
-                        "Failed to write skin-parts metadata for entity {entity_id} version {version:?}: {err}"
-                    );
-                }
+                let _ = meta.write(&mut buf, &version);
             }
             buf.put_u8(255);
             let packet = CSetEntityMetadata::new(entity_id.into(), buf.into());
