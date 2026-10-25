@@ -125,6 +125,17 @@ pub enum PacketHandlerResult {
 /// Maximum payload bytes that may be queued for a client before it is considered stalled/overflowing and disconnected.
 pub const MAX_PENDING_BYTES: usize = 64 * 1024 * 1024; // 64 MB
 
+/// Vanilla clamps a client supplied position to these bounds in its movement
+/// handlers before using it, so every handler that accepts one does the same.
+pub(crate) const fn clamp_horizontal_position(pos: f64) -> f64 {
+    pos.clamp(-3.0E7, 3.0E7)
+}
+
+/// See [`clamp_horizontal_position`].
+pub(crate) const fn clamp_vertical_position(pos: f64) -> f64 {
+    pos.clamp(-2.0E7, 2.0E7)
+}
+
 /// Defensively decrement an atomic pending byte counter without underflowing.
 #[inline]
 pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
