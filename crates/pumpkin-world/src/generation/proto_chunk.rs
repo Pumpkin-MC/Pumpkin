@@ -1165,7 +1165,8 @@ impl ProtoChunk {
                 let mut fluid_height = i32::MIN;
                 for y in (min_y as i32..=top_block).rev() {
                     let pos = Vector3::new(x, y, z);
-                    let state = self.get_block_state(&pos).to_state();
+                    let raw_state = self.get_block_state(&pos);
+                    let state = raw_state.to_state();
                     if state.is_air() {
                         stone_depth_above = 0;
                         fluid_height = i32::MIN;
@@ -1175,6 +1176,16 @@ impl ProtoChunk {
                         if fluid_height == i32::MIN {
                             fluid_height = y + 1;
                         }
+                        continue;
+                    }
+                    // Surface rules should only replace uncarved base noise terrain
+                    // (dimension default block such as stone/netherrack, or deepslate).
+                    // If neighbor chunk features (tree canopies, fallen logs) are
+                    // already written into this column, leave untouched and do not
+                    // increment stone depth.
+                    let is_base_terrain = state.id == settings.default_block.id
+                        || raw_state.to_block_id() == Block::DEEPSLATE;
+                    if !is_base_terrain {
                         continue;
                     }
                     if min >= y {
@@ -1205,27 +1216,26 @@ impl ProtoChunk {
                     let stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
 
-                    if !state.is_air() && !state.is_liquid() {
-                        let Some(biome_id) = self.get_terrain_gen_biome_id_from_neighborhood(
-                            surface_biomes,
-                            context.block_pos_x,
-                            context.block_pos_y,
-                            context.block_pos_z,
-                        ) else {
-                            panic!("surface biome neighborhood must cover fuzzy biome lookup");
-                        };
-                        context.biome = Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS);
-                        let new_state = try_apply_material_rule(
-                            generator.surface_rule,
-                            self,
-                            &mut context,
-                            surface_height_estimate_sampler,
-                        );
+                    let Some(biome_id) = self.get_terrain_gen_biome_id_from_neighborhood(
+                        surface_biomes,
+                        context.block_pos_x,
+                        context.block_pos_y,
+                        context.block_pos_z,
+                    ) else {
+                        panic!("surface biome neighborhood must cover fuzzy biome lookup");
+                    };
+                    context.biome = Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS);
+                    let new_state = try_apply_material_rule(
+                        generator.surface_rule,
+                        self,
+                        &mut context,
+                        surface_height_estimate_sampler,
+                    );
 
-                        if let Some(state) = new_state {
-                            self.set_block_state(x, y, z, state);
-                        }
+                    if let Some(state) = new_state {
+                        self.set_block_state(x, y, z, state);
                     }
+
                 }
                 if this_biome == Biome::FROZEN_OCEAN || this_biome == Biome::DEEP_FROZEN_OCEAN {
                     let surface_estimate =
