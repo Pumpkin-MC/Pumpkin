@@ -1305,10 +1305,8 @@ impl LivingEntity {
 
     /// Mirrors vanilla's elytra-eligibility gate (`LivingEntity.tryToStartFallFlying`, minus the
     /// actual state transition): flight requires a non-broken item with the `glider` data
-    /// component in the chest slot (not just an elytra by item id - a datapack can grant any
-    /// item that component), and is blocked while underwater or under Levitation (which
-    /// already provides its own upward motion). The caller is still responsible for checking
-    /// that the entity is airborne.
+    /// component equipped in some slot, and is blocked while underwater or under Levitation.
+    /// The caller is still responsible for checking that the entity is airborne.
     pub fn can_glide(&self) -> bool {
         if self.is_in_water() || self.has_effect(&StatusEffect::LEVITATION) {
             return false;
@@ -1317,27 +1315,24 @@ impl LivingEntity {
             .entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        equipment
-            .equipment
-            .get(&EquipmentSlot::CHEST)
-            .is_some_and(|stack| {
-                stack.get_data_component::<GliderImpl>().is_some()
-                    && stack
-                        .get_max_damage()
-                        .is_none_or(|max| max.saturating_sub(stack.get_damage()) > 1)
-            })
+        equipment.equipment.values().any(|stack| {
+            stack.get_data_component::<GliderImpl>().is_some()
+                && stack
+                    .get_max_damage()
+                    .is_none_or(|max| max.saturating_sub(stack.get_damage()) > 1)
+        })
     }
 
-    /// Whether a glider item (of any durability) is in the chest slot. An already-active glide
-    /// continues until it's removed, even at 1 durability; `can_glide` additionally requires a
-    /// non-broken one to *start* one.
+    /// Whether a glider item (of any durability) is equipped in some slot. An already-active
+    /// glide continues until it's removed, even at 1 durability; `can_glide` additionally
+    /// requires a non-broken one to *start* one.
     pub fn has_elytra_equipped(&self) -> bool {
         self.entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .equipment
-            .get(&EquipmentSlot::CHEST)
-            .is_some_and(|stack| stack.get_data_component::<GliderImpl>().is_some())
+            .values()
+            .any(|stack| stack.get_data_component::<GliderImpl>().is_some())
     }
 
     // Check if the entity is in powder snow

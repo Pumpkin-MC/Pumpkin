@@ -3680,6 +3680,16 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         let player = self.get(&player)?.clone();
 
         let ability = from_wasm_bedrock_ability(ability);
+        // `Player::set_flying` takes the abilities lock itself (and also resets fall distance
+        // and clears an active glide), so the Flying case can't go through the locked match
+        // below like the other abilities do.
+        if matches!(
+            ability,
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying
+        ) {
+            player.set_flying(value);
+            return Ok(());
+        }
         {
             let mut abilities = player.abilities.lock_ignore_poison();
             match ability {
@@ -3689,9 +3699,6 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
                     abilities.invulnerable = value;
-                }
-                pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
-                    abilities.flying = value;
                 }
                 pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
                     abilities.allow_flying = value;
