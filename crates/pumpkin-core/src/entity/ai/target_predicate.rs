@@ -89,6 +89,18 @@ impl TargetPredicate {
         tester: Option<&dyn EntityBase>,
         target: &dyn EntityBase,
     ) -> bool {
+        self.test_with_alliance(world, tester, target, |tester, target| {
+            tester.is_allied_to(target)
+        })
+    }
+
+    pub fn test_with_alliance(
+        &self,
+        world: &World,
+        tester: Option<&dyn EntityBase>,
+        target: &dyn EntityBase,
+        is_allied: impl FnOnce(&dyn EntityBase, &dyn EntityBase) -> bool,
+    ) -> bool {
         let Some(target_living) = target.get_living_entity() else {
             return false;
         };
@@ -115,7 +127,7 @@ impl TargetPredicate {
             && (!tester.get_mob().map_or_else(
                 || tester_living.can_attack(target),
                 |mob| mob.can_attack(target),
-            ) || tester.is_allied_to(target))
+            ) || is_allied(tester, target))
         {
             return false;
         }

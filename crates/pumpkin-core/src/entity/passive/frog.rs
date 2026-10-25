@@ -97,6 +97,19 @@ impl Animal for FrogEntity {
 }
 
 impl Mob for FrogEntity {
+    fn mob_get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        use pumpkin_data::{data_component::DataComponent, data_component_impl::FrogVariantImpl};
+        match component {
+            DataComponent::FrogVariant => Some(Box::new(FrogVariantImpl {
+                value: format!("minecraft:{}", self.get_variant().to_name()).into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

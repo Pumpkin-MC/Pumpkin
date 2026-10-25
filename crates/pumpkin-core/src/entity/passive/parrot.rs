@@ -96,7 +96,9 @@ impl Mob for ParrotEntity {
             .get_item()
             .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
         {
-            return self.mob_entity.mob_interact(player, item_stack);
+            return self
+                .mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed());
         }
 
         self.eat_cookie(player, item_stack);
