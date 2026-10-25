@@ -20,6 +20,24 @@ pub enum DyeColor {
     Black,
 }
 impl DyeColor {
+    pub const ALL: &'static [Self] = &[
+        Self::White,
+        Self::Orange,
+        Self::Magenta,
+        Self::LightBlue,
+        Self::Yellow,
+        Self::Lime,
+        Self::Pink,
+        Self::Gray,
+        Self::LightGray,
+        Self::Cyan,
+        Self::Purple,
+        Self::Blue,
+        Self::Brown,
+        Self::Green,
+        Self::Red,
+        Self::Black,
+    ];
     #[must_use]
     pub const fn id(&self) -> u8 {
         match self {

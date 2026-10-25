@@ -22,6 +22,8 @@ pub enum AdvancementTrigger {
     Bullseye,
     CuredZombieVillager,
     TradedWithVillager,
+    AllayDropItemOnBlock { block_id: String, item_id: String },
+    ThrownItemPickedUpByPlayer { thrower_type: String },
 }
 
 impl Player {
@@ -621,6 +623,28 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
                         "trade_at_world_height",
+                    );
+                }
+            }
+            AdvancementTrigger::AllayDropItemOnBlock { block_id, item_id } => {
+                if block_id == "minecraft:note_block"
+                    && item_id == "minecraft:cake"
+                    && !self
+                        .has_advancement(Advancement::HUSBANDRY_ALLAY_DELIVER_CAKE_TO_NOTE_BLOCK)
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_ALLAY_DELIVER_CAKE_TO_NOTE_BLOCK,
+                        "allay_deliver_cake_to_note_block",
+                    );
+                }
+            }
+            AdvancementTrigger::ThrownItemPickedUpByPlayer { thrower_type } => {
+                if thrower_type == "minecraft:allay"
+                    && !self.has_advancement(Advancement::HUSBANDRY_ALLAY_DELIVER_ITEM_TO_PLAYER)
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::HUSBANDRY_ALLAY_DELIVER_ITEM_TO_PLAYER,
+                        "allay_deliver_item_to_player",
                     );
                 }
             }

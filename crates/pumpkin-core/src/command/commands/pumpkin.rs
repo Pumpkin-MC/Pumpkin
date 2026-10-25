@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 
-use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::argument_builder::{ArgumentBuilder, command, literal};
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -20,8 +20,11 @@ const DESCRIPTION: &str = "Display information about Pumpkin.";
 const PERMISSION: &str = "pumpkin:command.pumpkin";
 
 const CACHE_DURATION: Duration = Duration::from_hours(24);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+const SPONSOR_URL: &str = "https://pumpkinmc.org/donate/";
 
 struct Executor;
+struct ContributorsExecutor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_HASH: &str = env!("GIT_HASH");
@@ -40,12 +43,12 @@ struct ContributorCache {
 static CONTRIBUTORS_CACHE: LazyLock<Mutex<Option<ContributorCache>>> =
     LazyLock::new(|| Mutex::new(None));
 
-struct DonatorCache {
+struct SponsorCache {
     fetched_at: Instant,
     data: TextComponent,
 }
 
-static DONATORS_CACHE: LazyLock<Mutex<Option<DonatorCache>>> = LazyLock::new(|| Mutex::new(None));
+static SPONSORS_CACHE: LazyLock<Mutex<Option<SponsorCache>>> = LazyLock::new(|| Mutex::new(None));
 
 fn fetch_all_contributors_cached() -> Vec<Contributor> {
     if let Ok(guard) = CONTRIBUTORS_CACHE.lock()
@@ -82,6 +85,7 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
 async fn fetch_all_contributors() -> Vec<Contributor> {
     let client = pumpkin_auth::client_builder()
         .user_agent("Pumpkin-MC")
+        .timeout(HTTP_TIMEOUT)
         .build()
         .unwrap_or_default();
 
@@ -132,17 +136,17 @@ fn extract_next_url(header: &str) -> Option<String> {
 }
 
 #[derive(Deserialize)]
-struct Donator {
+struct Sponsor {
     name: String,
     tier: String,
     tier_slug: String,
 }
 
 #[derive(Deserialize)]
-struct DonatorResponse {
-    current: Vec<Donator>,
+struct SponsorResponse {
+    current: Vec<Sponsor>,
     #[allow(dead_code)]
-    past: Vec<Donator>,
+    past: Vec<Sponsor>,
 }
 
 fn tier_priority(tier_slug: &str, tier_name: &str) -> u32 {
@@ -193,18 +197,21 @@ fn tier_color(tier_slug: &str, tier_name: &str) -> NamedColor {
     }
 }
 
-async fn fetch_donators_hover() -> TextComponent {
+async fn fetch_sponsors() -> TextComponent {
     let url = "https://market.pumpkinmc.org/api/v1/rest/donators";
     let client = pumpkin_auth::client_builder()
         .user_agent("Pumpkin-MC")
+        .timeout(HTTP_TIMEOUT)
         .build()
         .unwrap_or_default();
     let response = client.get(url).send().await;
 
-    let mut donators_text = TextComponent::text("Click to open Donate\n\nDonators:\n");
+    let mut sponsors_text = TextComponent::text("Pumpkin Sponsors:\n")
+        .color_named(NamedColor::Gold)
+        .bold();
 
     if let Ok(res) = response
-        && let Ok(data) = res.json::<DonatorResponse>().await
+        && let Ok(data) = res.json::<SponsorResponse>().await
     {
         let mut current = data.current;
         current.sort_by(|a, b| {
@@ -217,81 +224,105 @@ async fn fetch_donators_hover() -> TextComponent {
         });
 
         if current.is_empty() {
-            donators_text = donators_text.add_child(TextComponent::text("No active donators"));
+            sponsors_text = sponsors_text.add_child(
+                TextComponent::text("No active sponsors at the moment.\n")
+                    .color_named(NamedColor::White),
+            );
         } else {
             let mut current_tier = String::new();
-            for donator in current {
-                if donator.tier != current_tier {
-                    current_tier.clone_from(&donator.tier);
-                    let color = tier_color(&donator.tier_slug, &donator.tier);
-                    donators_text = donators_text.add_child(
+            for sponsor in current {
+                if sponsor.tier != current_tier {
+                    current_tier.clone_from(&sponsor.tier);
+                    let color = tier_color(&sponsor.tier_slug, &sponsor.tier);
+                    sponsors_text = sponsors_text.add_child(
                         TextComponent::text(format!("\n{current_tier}:\n"))
                             .color_named(color)
                             .bold(),
                     );
                 }
-                let color = tier_color(&donator.tier_slug, &donator.tier);
-                donators_text = donators_text.add_child(
-                    TextComponent::text(format!("  • {}\n", donator.name)).color_named(color),
+                let color = tier_color(&sponsor.tier_slug, &sponsor.tier);
+                sponsors_text = sponsors_text.add_child(
+                    TextComponent::text(format!("  • {}\n", sponsor.name)).color_named(color),
                 );
             }
         }
-        return donators_text;
+
+        sponsors_text = sponsors_text.add_child(
+            TextComponent::text("\nSupport Pumpkin: ")
+                .color_named(NamedColor::Gray)
+                .add_child(
+                    TextComponent::text("[Become a Sponsor]")
+                        .click_event(ClickEvent::OpenUrl {
+                            url: Cow::from(SPONSOR_URL),
+                        })
+                        .hover_event(HoverEvent::show_text(TextComponent::text(format!(
+                            "Click to open {SPONSOR_URL}"
+                        ))))
+                        .color_named(NamedColor::Green)
+                        .bold()
+                        .underlined(),
+                ),
+        );
+
+        return sponsors_text;
     }
 
-    donators_text.add_child(TextComponent::text("Unable to load donators"))
+    sponsors_text.add_child(
+        TextComponent::text("Unable to load sponsors.\n")
+            .color_named(NamedColor::Red)
+            .add_child(
+                TextComponent::text("[Become a Sponsor]")
+                    .click_event(ClickEvent::OpenUrl {
+                        url: Cow::from(SPONSOR_URL),
+                    })
+                    .hover_event(HoverEvent::show_text(TextComponent::text(format!(
+                        "Click to open {SPONSOR_URL}"
+                    ))))
+                    .color_named(NamedColor::Green)
+                    .bold()
+                    .underlined(),
+            ),
+    )
 }
 
-fn fetch_donators_hover_cached() -> TextComponent {
-    if let Ok(guard) = DONATORS_CACHE.lock()
+fn fetch_sponsors_cached() -> TextComponent {
+    if let Ok(guard) = SPONSORS_CACHE.lock()
         && let Some(cache) = guard.as_ref()
         && cache.fetched_at.elapsed() < CACHE_DURATION
     {
         return cache.data.clone();
     }
 
-    let donators = tokio::runtime::Handle::try_current().map_or_else(
+    let sponsors = tokio::runtime::Handle::try_current().map_or_else(
         |_| {
             tokio::runtime::Runtime::new().map_or_else(
-                |_| TextComponent::text("Unable to load donators"),
-                |rt| rt.block_on(fetch_donators_hover()),
+                |_| TextComponent::text("Unable to load sponsors").color_named(NamedColor::Red),
+                |rt| rt.block_on(fetch_sponsors()),
             )
         },
-        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_donators_hover())),
+        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_sponsors())),
     );
 
-    if let Ok(mut guard) = DONATORS_CACHE.lock() {
-        *guard = Some(DonatorCache {
+    if let Ok(mut guard) = SPONSORS_CACHE.lock() {
+        *guard = Some(SponsorCache {
             fetched_at: Instant::now(),
-            data: donators.clone(),
+            data: sponsors.clone(),
         });
     }
 
-    donators
+    sponsors
 }
 
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let contributors = fetch_all_contributors_cached();
-        let contributor_names = contributors
-            .iter()
-            .map(|c| c.login.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
         let locale = context.source.output.get_locale();
         let profile = if cfg!(debug_assertions) {
             "debug"
         } else {
             "release"
         };
-        let version_string = format!(
-            "{} (Commit: {}/{}) - {} Contributors",
-            CARGO_PKG_VERSION,
-            GIT_HASH,
-            profile,
-            contributors.len()
-        );
+        let version_string = format!("{CARGO_PKG_VERSION} (Commit: {GIT_HASH}/{profile})");
         let mut msg = TextComponent::text("");
 
         let version_translation = get_translation_text(
@@ -301,14 +332,9 @@ impl CommandExecutor for Executor {
         );
         msg = msg.add_child(
             TextComponent::text(version_translation.clone())
-                .hover_event(HoverEvent::show_text(
-                    TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n"))
-                        .add_child(
-                            TextComponent::text(contributor_names)
-                                .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
-                                .new_line(),
-                        ),
-                ))
+                .hover_event(HoverEvent::show_text(TextComponent::text(format!(
+                    "Commit: {GIT_HASH_FULL}\n\nClick to copy version\nRun /pumpkin contributors to see all contributors"
+                ))))
                 .click_event(ClickEvent::CopyToClipboard {
                     value: Cow::from(version_translation.replace('\n', "")),
                 })
@@ -373,20 +399,6 @@ impl CommandExecutor for Executor {
 
         msg = msg.add_child(TextComponent::text("  "));
 
-        let donators_hover = fetch_donators_hover_cached();
-        msg = msg.add_child(
-            TextComponent::text("[Donate]")
-                .click_event(ClickEvent::OpenUrl {
-                    url: Cow::from("https://pumpkinmc.org/donate/"),
-                })
-                .hover_event(HoverEvent::show_text(donators_hover))
-                .rainbow()
-                .bold()
-                .underlined(),
-        );
-
-        msg = msg.add_child(TextComponent::text("  "));
-
         let website_translation =
             get_translation_text("pumpkin:commands.pumpkin.website", locale, vec![]);
         let website_hover_translation =
@@ -404,11 +416,75 @@ impl CommandExecutor for Executor {
                 .underlined(),
         );
 
+        msg = msg.add_child(TextComponent::text("  "));
+
+        msg = msg.add_child(
+            TextComponent::text("[Sponsor]")
+                .click_event(ClickEvent::OpenUrl {
+                    url: Cow::from(SPONSOR_URL),
+                })
+                .hover_event(HoverEvent::show_text(TextComponent::text(format!(
+                    "Click to open {SPONSOR_URL}\nRun /pumpkin contributors to see active sponsors"
+                ))))
+                .rainbow()
+                .bold()
+                .underlined(),
+        );
+
+        msg = msg.add_child(TextComponent::text("  "));
+
+        msg = msg.add_child(
+            TextComponent::text("[Contributors]")
+                .click_event(ClickEvent::RunCommand {
+                    command: Cow::from("/pumpkin contributors"),
+                })
+                .hover_event(HoverEvent::show_text(TextComponent::text(
+                    "Click to run /pumpkin contributors",
+                )))
+                .color_named(NamedColor::Yellow)
+                .bold()
+                .underlined(),
+        );
+
         context.source.send_message(msg);
 
-        // It makes total sense to return the number of
-        // contributors as the i32 result for this command.
-        Ok(contributors.len() as i32)
+        Ok(1)
+    }
+}
+
+impl CommandExecutor for ContributorsExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let contributors = fetch_all_contributors_cached();
+        let sponsors_msg = fetch_sponsors_cached();
+
+        if contributors.is_empty() {
+            let mut msg = TextComponent::text("Unable to load contributors.\n\n")
+                .color_named(NamedColor::Red);
+            msg = msg.add_child(sponsors_msg);
+            context.source.send_message(msg);
+            return Ok(0);
+        }
+
+        let count = contributors.len();
+        let contributor_names = contributors
+            .iter()
+            .map(|c| c.login.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut msg = TextComponent::text(format!("Pumpkin Contributors ({count}):\n"))
+            .color_named(NamedColor::Green)
+            .bold();
+        msg = msg.add_child(
+            TextComponent::text(contributor_names)
+                .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green]),
+        );
+
+        msg = msg.add_child(TextComponent::text("\n\n"));
+        msg = msg.add_child(sponsors_msg);
+
+        context.source.send_message(msg);
+        Ok(count as i32)
     }
 }
 
@@ -422,6 +498,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     dispatcher.register_with_aliases(
         command("pumpkin", DESCRIPTION)
             .requires(PERMISSION)
+            .then(literal("contributors").executes(ContributorsExecutor))
             .executes(Executor),
         &["version"],
     );
@@ -455,18 +532,18 @@ mod test {
     }
 
     #[test]
-    fn donator_cache_updates_and_retrieves() {
-        let expected = TextComponent::text("Cached Donator Test");
-        let mut guard = DONATORS_CACHE
+    fn sponsor_cache_updates_and_retrieves() {
+        let expected = TextComponent::text("Cached Sponsor Test");
+        let mut guard = SPONSORS_CACHE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *guard = Some(DonatorCache {
+        *guard = Some(SponsorCache {
             fetched_at: Instant::now(),
             data: expected.clone(),
         });
         drop(guard);
 
-        let cached = fetch_donators_hover_cached();
+        let cached = fetch_sponsors_cached();
         assert_eq!(cached, expected);
     }
 }

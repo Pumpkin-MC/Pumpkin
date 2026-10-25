@@ -69,6 +69,21 @@ impl BlockEntity for CampfireBlockEntity {
         self.write_cooking_nbt(nbt);
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let items: [ItemStack; Self::SLOT_COUNT] = std::array::from_fn(|i| {
+            self.items[i]
+                .lock()
+                .map_or_else(|_| ItemStack::EMPTY.clone(), |g| g.clone())
+        });
+        Some(crate::block::entities::bedrock::build_campfire_actor(
+            self.position,
+            &items,
+        ))
+    }
+
     fn tick(&self, world: &Arc<World>) {
         let block = world.get_block(&self.position);
         if block != &Block::CAMPFIRE && block != &Block::SOUL_CAMPFIRE {

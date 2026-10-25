@@ -60,6 +60,27 @@ impl BlockEntity for BannerBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let (block, _) = pumpkin_data::BlockState::from_id_with_block(state_id);
+        let base_color =
+            crate::block::entities::bedrock::banner_base_color_from_block_name(block.name)
+                .unwrap_or(pumpkin_data::dye_color::DyeColor::White);
+        let patterns_guard = self.patterns.lock().ok();
+        let patterns = patterns_guard.as_ref().and_then(|p| p.as_deref());
+        let name_guard = self.custom_name.lock().ok();
+        let name = name_guard.as_ref().and_then(|n| n.as_deref());
+
+        Some(crate::block::entities::bedrock::build_banner_actor(
+            self.position,
+            base_color,
+            patterns,
+            name,
+        ))
+    }
+
     fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
         if let Ok(pats) = self.patterns.lock()
             && let Some(pats) = pats.as_ref()
