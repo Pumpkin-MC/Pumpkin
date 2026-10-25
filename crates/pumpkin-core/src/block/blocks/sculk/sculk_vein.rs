@@ -5,13 +5,11 @@ use crate::block::{
     GetStateForNeighborUpdateArgs, OnPlaceArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 use crate::entity::{EntityBase, player::Player};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt,
     block_properties::GlowLichenLikeProperties,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct MultifaceBlock;
@@ -92,14 +90,6 @@ impl BlockBehaviour for MultifaceBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let old_props = GlowLichenLikeProperties::from_state_id(args.state_id);
-        if old_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
 
         let mut new_directions = active_directions(old_props);
         let support = args

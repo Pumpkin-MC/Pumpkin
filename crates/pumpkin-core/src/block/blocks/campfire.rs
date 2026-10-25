@@ -172,7 +172,6 @@ impl BlockBehaviour for CampfireBlock {
         let mut props = CampfireLikeProperties::from_state_id(args.state_id);
         if props.waterlogged {
             props.lit = false;
-            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
 
         if args.direction == BlockDirection::Down {

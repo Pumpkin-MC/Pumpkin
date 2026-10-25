@@ -8,7 +8,6 @@ use pumpkin_data::block_properties::{
     OakTrapdoorLikeProperties, WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
 };
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
@@ -19,7 +18,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
@@ -1055,22 +1053,6 @@ impl BlockBehaviour for WeatheringCopperGrateBlock {
         props.to_state_id(args.block)
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = MangroveRootsLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
-    }
-
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
@@ -1150,22 +1132,6 @@ impl BlockBehaviour for CopperGolemStatueBlock {
             args.world
                 .add_block_entity(Arc::new(CopperGolemStatueBlockEntity::new(*args.position)));
         }
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = CopperGolemStatueLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

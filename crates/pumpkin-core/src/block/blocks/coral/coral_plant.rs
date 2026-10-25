@@ -55,6 +55,10 @@ impl BlockBehaviour for CoralPlantBlock {
         false
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

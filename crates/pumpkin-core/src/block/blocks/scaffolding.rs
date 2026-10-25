@@ -1,9 +1,7 @@
 use pumpkin_data::block_properties::ScaffoldingLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs};
@@ -62,14 +60,6 @@ impl BlockBehaviour for ScaffoldingBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let props = ScaffoldingLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         let distance = Self::get_distance(args.world, args.position);
         if distance == 7 {
             return Block::AIR.default_state.id;

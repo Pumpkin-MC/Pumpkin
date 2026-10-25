@@ -1379,18 +1379,16 @@ impl BlockRegistry {
         for direction in BlockDirection::all() {
             let neighbor_pos = position.offset(direction.to_offset());
             let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
-            let pumpkin_block = self.get_pumpkin_block(block.id);
-            if let Some(pumpkin_block) = pumpkin_block {
-                let new_state =
-                    pumpkin_block.get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
-                        world,
-                        block,
-                        state_id,
-                        position,
-                        direction: direction.opposite(),
-                        neighbor_position: &neighbor_pos,
-                        neighbor_state_id,
-                    });
+            if self.get_pumpkin_block(block.id).is_some() {
+                let new_state = self.get_state_for_neighbor_update(
+                    world,
+                    block,
+                    state_id,
+                    position,
+                    direction.opposite(),
+                    &neighbor_pos,
+                    neighbor_state_id,
+                );
                 world.set_block_state(&neighbor_pos, new_state, flags);
             }
         }
@@ -1436,11 +1434,13 @@ impl BlockRegistry {
             neighbor_position: neighbor_location,
             neighbor_state_id,
         };
-        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
-            return pumpkin_block.get_state_for_neighbor_update(args);
+        let behaviour = self.get_pumpkin_block(block.id);
+        if !behaviour.is_some_and(|behaviour| behaviour.handles_neighbor_water_tick()) {
+            super::simple_waterlogged::schedule_water_tick(&args);
         }
-        super::simple_waterlogged::schedule_water_tick(&args);
-        state_id
+        behaviour.map_or(state_id, |behaviour| {
+            behaviour.get_state_for_neighbor_update(args)
+        })
     }
 
     pub fn update_neighbors(&self, world: &Arc<World>, position: &BlockPos, flags: BlockFlags) {

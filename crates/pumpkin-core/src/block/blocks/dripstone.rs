@@ -11,14 +11,10 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
-    fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block_from_tag("minecraft:speleothems")]
 pub struct DripstoneBlock;
@@ -96,14 +92,6 @@ impl BlockBehaviour for DripstoneBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let mut dripstone_props = PointedDripstoneLikeProperties::from_state_id(args.state_id);
-        if dripstone_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         if !can_place_at_pos(args.world, args.block, args.position, None, None) {
             return Block::AIR.default_state.id;
         }

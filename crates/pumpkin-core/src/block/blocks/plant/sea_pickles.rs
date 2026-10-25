@@ -108,6 +108,10 @@ impl BlockBehaviour for SeaPickleBlock {
             && SeaPickleProperties::from_state_id(args.state_id).pickles < Self::MAX_PICKLES
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

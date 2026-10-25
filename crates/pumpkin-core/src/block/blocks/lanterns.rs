@@ -5,7 +5,6 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::LanternLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -38,15 +37,6 @@ impl BlockBehaviour for LanternBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = LanternLikeProperties::from_state_id(args.state_id);
-        if props.r#waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         if !can_place_at(args.world, args.position) {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);

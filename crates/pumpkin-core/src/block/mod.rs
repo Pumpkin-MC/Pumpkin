@@ -184,11 +184,16 @@ pub trait BlockBehaviour: Send + Sync {
     /// Called if a block state is replaced or it replaces another state
     fn prepare(&self, _args: PrepareArgs<'_>) {}
 
+    /// Returns whether this behaviour handles neighbor water ticks itself.
+    /// Override when vanilla schedules water after a survival check.
+    fn handles_neighbor_water_tick(&self) -> bool {
+        false
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 

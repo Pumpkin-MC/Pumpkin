@@ -26,7 +26,6 @@ impl BlockBehaviour for FenceBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        crate::block::simple_waterlogged::schedule_water_tick(&args);
         let fence_props = FenceProperties::from_state_id(args.state_id);
         compute_fence_state(fence_props, args.world, args.block, args.position)
     }
