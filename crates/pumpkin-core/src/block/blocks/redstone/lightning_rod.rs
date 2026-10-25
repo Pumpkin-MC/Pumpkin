@@ -1,18 +1,20 @@
 use std::sync::Arc;
 
+use crate::block::blocks::weathering_copper::change_over_time;
 use crate::block::{
-    BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs,
-    OnStateReplacedArgs, PathComputationType,
+    BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, RandomTickArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::LightningRodLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockState, BlockStateId, FacingExt};
-use pumpkin_macros::pumpkin_block;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
-#[pumpkin_block("minecraft:lightning_rod")]
+#[pumpkin_block_from_tag("minecraft:lightning_rods")]
 pub struct LightningRodBlock;
 
 impl LightningRodBlock {
@@ -42,7 +44,24 @@ impl BlockBehaviour for LightningRodBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = LightningRodLikeProperties::default(args.block);
         props.facing = args.direction.to_facing().opposite();
+        props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = LightningRodLikeProperties::from_state_id(args.state_id);
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        args.state_id
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -76,6 +95,10 @@ impl BlockBehaviour for LightningRodBlock {
             );
             Self::update_neighbors(args.world, args.position, props);
         }
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {

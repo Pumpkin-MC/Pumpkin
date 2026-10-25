@@ -25,7 +25,7 @@ use tracing::{debug, trace, warn};
 use webrtc::peer_connection::RTCIceCandidateInit;
 
 use super::{peer::negotiate, state::NetherNetState};
-use crate::{STOP_INTERRUPT, server::Server};
+use crate::server::Server;
 
 const DISCOVERY_PORT: u16 = 7551;
 const CHECKSUM_SIZE: usize = 32;
@@ -200,7 +200,7 @@ impl NetherNetDiscovery {
                         Err(error) => warn!("Failed to encode NetherNet LAN signal: {error}"),
                     }
                     tokio::select! {
-                        () = STOP_INTERRUPT.cancelled() => {},
+                        () = state.stop_token.cancelled() => {},
                         () = tokio::time::sleep(Duration::from_secs(30)) => {},
                     }
                     candidates.lock().await.remove(&key);

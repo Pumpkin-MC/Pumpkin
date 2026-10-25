@@ -66,11 +66,7 @@ impl WolfEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal selector (matching Vanilla registerGoals):
             // 1: SwimGoal (FloatGoal)
@@ -102,11 +98,7 @@ impl WolfEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target selector (matching Vanilla registerGoals):
             // 1: OwnerHurtByTargetGoal
@@ -116,7 +108,7 @@ impl WolfEntity {
             // 3: HurtByTargetGoal (RevengeGoal)
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
+            apply_targets(target_selector, &mob_arc.mob_entity, 4, 8, true);
             // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
             target_selector.add_goal(
                 5,
@@ -192,6 +184,27 @@ impl Mob for WolfEntity {
 
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_baby() {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        if self.is_angry() {
+            meta = meta.angry(true);
+        }
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
+        Some(meta)
     }
 
     fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
@@ -343,10 +356,11 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
-                if let Some(color) = super::animal::get_dye_color_from_item(item)
-                    && color != self.get_collar_color()
+                if let Some(dye) =
+                    item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                    && dye.color.id() != self.get_collar_color()
                 {
-                    self.set_collar_color(color);
+                    self.set_collar_color(dye.color.id());
                     item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                     return true;
                 }

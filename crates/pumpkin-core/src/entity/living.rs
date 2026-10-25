@@ -1,4 +1,3 @@
-use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -42,7 +41,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -73,6 +72,7 @@ use std::sync::RwLock;
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
+#[repr(C)]
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
@@ -97,6 +97,7 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    speed: AtomicCell<f32>,
     pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -113,6 +114,8 @@ pub struct LivingEntity {
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
     last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    /// Entity id of the last damage source's causing entity, 0 when it had none.
+    last_damage_attacker: AtomicI32,
     last_damage_stamp: std::sync::atomic::AtomicI64,
 
     /// The entity ID of the entity this living entity last attacked.
@@ -125,6 +128,7 @@ pub struct LivingEntity {
 
     /// The ID of the player that last hurt this entity.
     pub last_hurt_by_player_id: AtomicI32,
+    pub no_action_time: AtomicI32,
     /// The tick at which this entity was last hurt by a player.
     pub last_hurt_by_player_time: AtomicI64,
     /// The ID of the mob/entity that last hurt this entity.
@@ -222,6 +226,18 @@ fn is_allowed_by_team_rules(
 }
 
 impl LivingEntity {
+    pub fn is_dead_or_dying(&self) -> bool {
+        self.health.load() <= 0.0 || self.dead.load(Relaxed)
+    }
+
+    pub fn get_speed(&self) -> f32 {
+        self.speed.load()
+    }
+
+    pub fn set_speed(&self, speed: f32) {
+        self.speed.store(speed);
+    }
+
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     const RANDOM_TELEPORT_ATTEMPTS: usize = 16;
@@ -243,7 +259,7 @@ impl LivingEntity {
         entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
     }
 
-    fn get_pitch(&self) -> f32 {
+    pub(crate) fn get_pitch(&self) -> f32 {
         let is_baby = self
             .get_mob()
             .and_then(|x| x.as_ageable())
@@ -257,7 +273,8 @@ impl LivingEntity {
         }
     }
 
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
         } else if entity.entity_type == &EntityType::SKELETON_HORSE {
@@ -303,15 +320,18 @@ impl LivingEntity {
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
             last_damage_type: std::sync::Mutex::new(None),
+            last_damage_attacker: AtomicI32::new(0),
             last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
             last_hurt_by_player_id: AtomicI32::new(0),
+            no_action_time: AtomicI32::new(0),
             last_hurt_by_player_time: AtomicI64::new(0),
             last_hurt_by_mob_id: AtomicI32::new(0),
             last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
             equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
@@ -506,7 +526,7 @@ impl LivingEntity {
                     continue;
                 }
                 instance.modifiers = modifiers;
-                instance.dirty.store(true, Ordering::Relaxed);
+                instance.mark_dirty();
                 changed.push(attribute);
             }
         }
@@ -881,7 +901,23 @@ impl LivingEntity {
         });
 
         f(inst);
-        inst.dirty.store(true, Ordering::Relaxed);
+        inst.mark_dirty();
+    }
+
+    /// Vanilla `refreshDirtyAttributes`: reports every attribute modified since the last refresh.
+    fn refresh_dirty_attributes(&self, caller: &dyn EntityBase) {
+        let updated: Vec<u8> = self
+            .attributes
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter_mut()
+            .filter_map(|(id, instance)| std::mem::take(instance.updated.get_mut()).then_some(*id))
+            .collect();
+        if let Some(mob) = caller.get_mob() {
+            for attribute in updated {
+                mob.get_mob_entity().on_attribute_updated(attribute);
+            }
+        }
     }
 
     /// Returns the computed value for `attribute` using the local instance, falling back
@@ -924,10 +960,10 @@ impl LivingEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(inst) = map.get_mut(&attribute.id) {
             inst.base_value = new_base;
-            inst.dirty.store(true, Ordering::Relaxed);
+            inst.mark_dirty();
         } else {
             let ai = AttributeInstance::new(new_base);
-            ai.dirty.store(true, Ordering::Relaxed);
+            ai.mark_dirty();
             map.insert(attribute.id, ai);
         }
     }
@@ -1326,7 +1362,11 @@ impl LivingEntity {
     }
 
     fn get_effective_gravity(&self, caller: &dyn EntityBase) -> f64 {
-        let final_gravity = caller.get_gravity();
+        let final_gravity = if self.entity.has_no_gravity() {
+            0.0
+        } else {
+            caller.get_gravity()
+        };
 
         if self.entity.velocity.load().y <= 0.0 && self.has_effect(&StatusEffect::SLOW_FALLING) {
             final_gravity.min(0.01)
@@ -1370,6 +1410,9 @@ impl LivingEntity {
     }
 
     fn tick_movement(&self, caller: &dyn EntityBase) {
+        if let Some(mob) = caller.get_mob() {
+            mob.before_mob_ai_step();
+        }
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -1386,7 +1429,16 @@ impl LivingEntity {
 
         self.movement_input.store(movement_input);
 
-        // TODO: Tick AI
+        if caller.is_immobile() {
+            self.jumping.store(false, Relaxed);
+            let input = self.movement_input.load();
+            self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
+        } else if let Some(mob) = caller.get_mob()
+            && !mob.get_mob_entity().is_no_ai()
+        {
+            // Prepare old motion before controllers produce this tick's inputs.
+            mob.get_mob_entity().server_ai_step(mob, caller);
+        }
 
         if self.jumping.load(SeqCst) && should_swim_in_fluids {
             let in_lava = self.entity.touching_lava.load(SeqCst);
@@ -1437,8 +1489,7 @@ impl LivingEntity {
 
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if !effective_ai {
-            // No travel.
+        if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
         } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
@@ -1457,6 +1508,22 @@ impl LivingEntity {
         }
 
         self.push_entities(caller);
+
+        if let Some(ageable) = caller.get_mob().and_then(|mob| mob.as_ageable())
+            && self.entity.is_alive()
+            && !self.is_dead_or_dying()
+        {
+            ageable.ageable_ai_step();
+        }
+
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_ai_step();
+            mob.get_mob_entity()
+                .body_rotation_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .client_tick(mob);
+        }
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
@@ -1503,6 +1570,33 @@ impl LivingEntity {
         }
     }
 
+    pub(crate) fn compute_modified_friction(friction: f32, modifier: f32) -> f64 {
+        f64::from((1.0 - (1.0 - friction) * modifier).clamp(0.0, 1.0))
+    }
+
+    /// `getFrictionInfluencedSpeed`.
+    pub(crate) fn friction_influenced_speed(speed: f64, block_friction: f64) -> f64 {
+        if block_friction > 0.6 {
+            speed * 0.216_000_02 / block_friction.powi(3)
+        } else {
+            speed
+        }
+    }
+
+    fn get_block_friction(&self) -> f64 {
+        if self.entity.on_ground.load(Relaxed) {
+            Self::compute_modified_friction(
+                self.entity
+                    .get_block_with_y_offset(0.500_001)
+                    .1
+                    .slipperiness,
+                self.get_attribute_value(&Attributes::FRICTION_MODIFIER) as f32,
+            )
+        } else {
+            1.0
+        }
+    }
+
     /// Decays player velocity like vanilla `travelInAir` friction.
     fn apply_travel_friction(&self) {
         let mut velo = self.entity.velocity.load();
@@ -1510,16 +1604,12 @@ impl LivingEntity {
             return;
         }
 
-        let friction = if self.entity.on_ground.load(Relaxed) {
-            f64::from(
-                self.entity
-                    .get_block_with_y_offset(0.500_001)
-                    .1
-                    .slipperiness,
-            ) * 0.91
-        } else {
-            0.91
-        };
+        let block_friction = self.get_block_friction();
+        let friction = block_friction
+            * Self::compute_modified_friction(
+                0.91,
+                self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32,
+            );
 
         velo.x *= friction;
 
@@ -1531,29 +1621,23 @@ impl LivingEntity {
     fn travel_in_air(&self, caller: &dyn EntityBase) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-
-        let (speed, friction) = if self.entity.on_ground.load(Relaxed) {
-            // getVelocityAffectingPos
-
-            let slipperiness = f64::from(
-                self.entity
-                    .get_block_with_y_offset(0.500_001)
-                    .1
-                    .slipperiness,
-            );
-
-            let speed =
-                effective_speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness);
-
-            (speed, slipperiness * 0.91)
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
         } else {
-            let speed = caller
-                .get_player()
-                .map_or(0.02, super::player::Player::get_off_ground_speed);
-
-            (speed, 0.91)
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
         };
+
+        let air_drag_modifier = self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32;
+        let air_drag = Self::compute_modified_friction(0.91, air_drag_modifier);
+        let block_friction = self.get_block_friction();
+        let speed = if self.entity.on_ground.load(Relaxed) {
+            Self::friction_influenced_speed(effective_speed, block_friction)
+        } else {
+            caller
+                .get_player()
+                .map_or(0.02, super::player::Player::get_off_ground_speed)
+        };
+        let friction = block_friction * air_drag;
 
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -1596,13 +1680,79 @@ impl LivingEntity {
 
         velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
             if caller.is_flutterer() {
-                friction
+                air_drag
             } else {
-                0.98
+                Self::compute_modified_friction(0.98, air_drag_modifier)
             }
         });
 
         self.entity.velocity.store(velo);
+    }
+
+    pub(crate) fn travel_flying(&self, caller: &dyn EntityBase) {
+        let (speed, drag) = if self.entity.is_in_water() {
+            (f64::from(0.02f32), f64::from(0.8f32))
+        } else if self.entity.touching_lava.load(Relaxed) {
+            (f64::from(0.02f32), 0.5)
+        } else {
+            (f64::from(self.get_speed()), f64::from(0.91f32))
+        };
+        self.entity
+            .update_velocity_from_input(self.movement_input.load(), speed);
+        self.make_move(caller);
+        self.entity
+            .velocity
+            .store(self.entity.velocity.load() * drag);
+    }
+
+    pub(crate) fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
+        let old_y = self.entity.pos.load().y;
+        let movement_input = self.movement_input.load();
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
+        } else {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        };
+        let mut friction = if self.entity.sprinting.load(Relaxed) {
+            0.9
+        } else {
+            f64::from(self.water_movement_speed_multiplier)
+        };
+
+        let mut speed = 0.02;
+
+        // Apply water movement efficiency attribute
+        let mut water_movement_efficiency =
+            self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
+
+        if water_movement_efficiency > 0.0 {
+            if !self.entity.on_ground.load(SeqCst) {
+                water_movement_efficiency *= 0.5;
+            }
+
+            friction += (0.546_000_06 - friction) * water_movement_efficiency;
+            speed += (effective_speed - speed) * water_movement_efficiency;
+        }
+
+        if self.has_effect(&StatusEffect::DOLPHINS_GRACE) {
+            friction = 0.96;
+        }
+
+        self.entity
+            .update_velocity_from_input(movement_input, speed);
+
+        self.make_move(caller);
+
+        let mut velo = self.entity.velocity.load();
+        if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
+            velo.y = 0.2;
+        }
+
+        velo = velo.multiply(friction, 0.8, friction);
+
+        self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
+        self.entity.velocity.store(velo);
+        self.jump_out_of_fluid(old_y);
     }
 
     fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) {
@@ -1610,49 +1760,15 @@ impl LivingEntity {
 
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller);
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
         if water {
-            let mut friction = if self.entity.sprinting.load(Relaxed) {
-                0.9
+            if let Some(mob) = caller.get_mob() {
+                mob.travel_in_water(caller, gravity, falling);
             } else {
-                f64::from(self.water_movement_speed_multiplier)
-            };
-
-            let mut speed = 0.02;
-
-            // Apply water movement efficiency attribute
-            let mut water_movement_efficiency =
-                self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
-
-            if water_movement_efficiency > 0.0 {
-                if !self.entity.on_ground.load(SeqCst) {
-                    water_movement_efficiency *= 0.5;
-                }
-
-                friction += (0.546_000_06 - friction) * water_movement_efficiency;
-                speed += (effective_speed - speed) * water_movement_efficiency;
+                self.travel_in_water(caller, gravity, falling);
             }
-
-            if self.has_effect(&StatusEffect::DOLPHINS_GRACE) {
-                friction = 0.96;
-            }
-
-            self.entity
-                .update_velocity_from_input(movement_input, speed);
-
-            self.make_move(caller);
-
-            let mut velo = self.entity.velocity.load();
-            if self.entity.horizontal_collision.load(SeqCst) && self.climbing.load(Relaxed) {
-                velo.y = 0.2;
-            }
-
-            velo = velo.multiply(friction, 0.8, friction);
-
-            self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
-            self.entity.velocity.store(velo);
         } else {
+            let old_y = self.entity.pos.load().y;
             self.entity.update_velocity_from_input(movement_input, 0.02);
 
             self.make_move(caller);
@@ -1674,19 +1790,24 @@ impl LivingEntity {
             }
 
             self.entity.velocity.store(velo);
+            self.jump_out_of_fluid(old_y);
         }
+    }
 
+    fn jump_out_of_fluid(&self, old_y: f64) {
         let mut velo = self.entity.velocity.load();
-
-        if self.entity.horizontal_collision.load(SeqCst)
-            && !self
-                .entity
-                .world
-                .load()
-                .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
-        {
-            velo.y = 0.3;
-
+        if !self.entity.horizontal_collision.load(SeqCst) {
+            return;
+        }
+        let lift = velo.y + f64::from(0.6f32) - self.entity.pos.load().y + old_y;
+        let bounding_box = self
+            .entity
+            .bounding_box
+            .load()
+            .shift(Vector3::new(velo.x, lift, velo.z));
+        let world = self.entity.world.load();
+        if world.is_space_empty(bounding_box) && !world.contains_any_liquid(bounding_box) {
+            velo.y = f64::from(0.3f32);
             self.entity.velocity.store(velo);
         }
     }
@@ -1701,7 +1822,7 @@ impl LivingEntity {
         }
     }
 
-    fn make_move(&self, caller: &dyn EntityBase) {
+    pub(crate) fn make_move(&self, caller: &dyn EntityBase) {
         self.entity.move_entity(caller, self.entity.velocity.load());
 
         self.check_climbing();
@@ -1847,7 +1968,7 @@ impl LivingEntity {
         self.entity.velocity_dirty.store(true, SeqCst);
     }
 
-    fn get_jump_velocity(&self, mut strength: f64) -> f64 {
+    pub(crate) fn get_jump_velocity(&self, mut strength: f64) -> f64 {
         strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
         strength *= f64::from(self.entity.get_jump_velocity_multiplier());
         if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST) {
@@ -1863,6 +1984,12 @@ impl LivingEntity {
         ground: bool,
         dont_damage: bool,
     ) {
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.should_check_fall_damage())
+        {
+            return;
+        }
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
@@ -2043,9 +2170,18 @@ impl LivingEntity {
             // Plays the death sound
             world.play_sound_fine(
                 self.death_sound(&*dyn_self),
-                SoundCategory::Players,
+                dyn_self
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(
+                        SoundCategory::Players,
+                        super::custom_sound::CustomSound::sound_category,
+                    ),
                 &self.entity.pos.load(),
-                1.0,
+                dyn_self
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
                 self.get_pitch(),
             );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -2085,9 +2221,10 @@ impl LivingEntity {
 
             let params = LootContextParameters {
                 killed_by_player: Some(has_player_kill),
-                this_entity: Some(self.entity.entity_type),
-                killer_entity: killer.map(|c| c.get_entity().entity_type),
-                direct_killer_entity: source.map(|s| s.get_entity().entity_type),
+                world: Some(&world),
+                this_entity: Some(dyn_self.as_ref()),
+                killer_entity: killer,
+                direct_killer_entity: source,
                 position: Some(self.entity.pos.load()),
                 world_time: world.level_info.load().day_time as u64,
                 damage_type: Some(damage_type),
@@ -2123,6 +2260,9 @@ impl LivingEntity {
             self.entity.pose.store(EntityPose::Dying);
 
             self.drop_equipment(looting_level);
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.drop_inventory();
+            }
 
             // Broadcast death message if it's a player and the gamerule is enabled
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause);
@@ -2185,6 +2325,9 @@ impl LivingEntity {
                 .remove(slot)
                 .unwrap_or_else(|| ItemStack::EMPTY.clone());
             if item.is_empty() {
+                continue;
+            }
+            if prevents_equipment_drop(&item) {
                 continue;
             }
             // Vanilla approximation: Mob.dropCustomDeathLoot applies random
@@ -2341,7 +2484,7 @@ impl LivingEntity {
             let Ok(mut effects) = self.active_effects.try_lock() else {
                 return;
             };
-            let entity_age = self.entity.age.load(Relaxed);
+            let entity_age = self.entity.tick_count.load(Relaxed);
             for effect in effects.values_mut() {
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
@@ -2575,6 +2718,13 @@ impl LivingEntity {
 
     /// Forgotten after 40 ticks.
     pub fn get_last_damage_type(&self) -> Option<DamageType> {
+        self.get_last_damage_source()
+            .map(|(damage_type, _)| damage_type)
+    }
+
+    /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
+    /// entity (0 when none), forgotten after 40 ticks.
+    pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
         let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
         let mut last = self
             .last_damage_type
@@ -2583,7 +2733,7 @@ impl LivingEntity {
         if self.entity.world.load().get_world_age() - stamp > 40 {
             *last = None;
         }
-        *last
+        last.map(|damage_type| (damage_type, self.last_damage_attacker.load(Relaxed)))
     }
 
     pub fn can_take_damage(&self) -> bool {
@@ -3088,27 +3238,30 @@ impl LivingEntity {
                     );
                 }
 
-                let active_hand = self
+                let active_hand = *self
                     .active_hand
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(hand) = *active_hand {
+                if let Some(hand) = active_hand {
                     let slot = if hand == Hand::Left {
                         EquipmentSlot::MAIN_HAND
                     } else {
                         EquipmentSlot::OFF_HAND
                     };
 
+                    let mut blocking_item_key = None;
                     let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                     if let Some(player) = caller.get_player() {
+                        let hand_slot = match &slot {
+                            EquipmentSlot::OffHand(_) => Hand::Left,
+                            _ => Hand::Right,
+                        };
+                        let stack_before = player.inventory.get_stack_in_hand(hand_slot);
+                        if !stack_before.is_empty() {
+                            blocking_item_key = Some(stack_before.item.registry_key.to_string());
+                        }
                         let broke = player.damage_item_in_slot(&slot, durability_damage);
-                        let empty = player
-                            .inventory
-                            .get_stack_in_hand(match &slot {
-                                EquipmentSlot::OffHand(_) => Hand::Left,
-                                _ => Hand::Right,
-                            })
-                            .is_empty();
+                        let empty = player.inventory.get_stack_in_hand(hand_slot).is_empty();
                         if broke && empty {
                             self.clear_active_hand();
                         }
@@ -3117,20 +3270,67 @@ impl LivingEntity {
                             .entity_equipment
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(stack) = equipment_guard.equipment.get_mut(&slot)
-                            && stack.damage_item(durability_damage) == DamageResult::Broken
-                        {
-                            world.send_entity_status(
-                                &self.entity,
-                                crate::entity::equipment_break_status(&slot),
-                                None,
-                            );
-                            *stack = ItemStack::EMPTY.clone();
-                            let broken_stack = stack.clone();
-                            drop(equipment_guard);
+                        if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                            let break_sound = stack
+                                .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
+                                .and_then(|bs| match bs.sound {
+                                    pumpkin_data::data_component_impl::IdOr::Id(s) => Some(s),
+                                    pumpkin_data::data_component_impl::IdOr::Value(_) => None,
+                                });
+                            if stack.damage_item(durability_damage) == DamageResult::Broken {
+                                if let Some(sound) = break_sound {
+                                    world.play_sound(sound, SoundCategory::Neutral, &player_pos);
+                                }
+                                world.send_entity_status(
+                                    &self.entity,
+                                    crate::entity::equipment_break_status(&slot),
+                                    None,
+                                );
+                                *stack = ItemStack::EMPTY.clone();
+                                let broken_stack = stack.clone();
+                                drop(equipment_guard);
 
-                            self.send_equipment_changes(&[(slot, broken_stack)]);
+                                self.send_equipment_changes(&[(slot, broken_stack)]);
+                                self.clear_active_hand();
+                            }
+                        }
+                    }
+
+                    let disable_seconds = cause.or(source).map_or(0.0, |attacker| {
+                        if attacker.get_entity().entity_type == &EntityType::WARDEN {
+                            5.0
+                        } else if let Some(attacker_player) = attacker.get_player() {
+                            attacker_player
+                                .inventory()
+                                .held_item()
+                                .get_data_component::<pumpkin_data::data_component_impl::WeaponImpl>()
+                                .map_or(0.0, |w| w.disable_blocking_for_seconds)
+                        } else if let Some(attacker_living) = attacker.get_living_entity() {
+                            attacker_living
+                                .entity_equipment
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .get(&EquipmentSlot::MAIN_HAND)
+                                .get_data_component::<pumpkin_data::data_component_impl::WeaponImpl>()
+                                .map_or(0.0, |w| w.disable_blocking_for_seconds)
+                        } else {
+                            0.0
+                        }
+                    });
+                    if disable_seconds > 0.0 {
+                        let cooldown_ticks = (disable_seconds * 20.0).round() as i32;
+                        if cooldown_ticks > 0 {
+                            if let Some(player) = caller.get_player()
+                                && let Some(blocking_key) = blocking_item_key
+                            {
+                                player.start_cooldown(blocking_key, cooldown_ticks);
+                            }
                             self.clear_active_hand();
+                            world.play_sound(
+                                Sound::ItemShieldBreak,
+                                SoundCategory::Players,
+                                &player_pos,
+                            );
                         }
                     }
                 }
@@ -3176,6 +3376,12 @@ impl LivingEntity {
             .last_damage_type
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
+        self.last_damage_attacker.store(
+            cause
+                .or(source)
+                .map_or(0, |attacker| attacker.get_entity().entity_id),
+            Relaxed,
+        );
         self.last_damage_stamp.store(world.get_world_age(), Relaxed);
 
         let Some(server) = world.server.upgrade() else {
@@ -3212,12 +3418,25 @@ impl LivingEntity {
             position,
         );
 
+        self.no_action_time.store(0, Relaxed);
         if play_sound {
+            if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
+                sound.on_hurt_sound();
+            }
             world.play_sound_fine(
                 self.hurt_sound(caller),
-                SoundCategory::Players,
+                caller
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(
+                        SoundCategory::Players,
+                        super::custom_sound::CustomSound::sound_category,
+                    ),
                 &self.entity.pos.load(),
-                1.0,
+                caller
+                    .get_mob()
+                    .and_then(|mob| mob.as_custom_sound())
+                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
                 self.get_pitch(),
             );
 
@@ -3262,7 +3481,7 @@ impl LivingEntity {
                 self.last_attacker_id
                     .store(attacker.get_entity().entity_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
             }
         }
 
@@ -3295,7 +3514,7 @@ impl LivingEntity {
                 let attacker_id = attacker.get_entity().entity_id;
                 self.last_attacker_id.store(attacker_id, Relaxed);
                 self.last_attacked_time
-                    .store(self.entity.age.load(Relaxed), Relaxed);
+                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
 
                 let current_tick = world.level_info.load().day_time;
                 if attacker.get_player().is_some() {
@@ -3381,6 +3600,9 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
+        if let Some(mob) = caller.get_mob() {
+            mob.base_tick();
+        }
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).
@@ -3398,7 +3620,12 @@ impl EntityBase for LivingEntity {
             self.apply_travel_friction();
 
             let suffocating = self.entity.tick_block_collisions(caller);
-            if suffocating {
+            // Vanilla `LivingEntity.isInWall`: sleeping entities are never in a wall.
+            if suffocating
+                && !caller
+                    .get_player()
+                    .is_some_and(super::player::Player::is_sleeping)
+            {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
 
@@ -3482,7 +3709,6 @@ impl EntityBase for LivingEntity {
                 .clone();
             if let Some(item) = item_in_use.as_ref() {
                 // Consume item
-                let mut is_potion = false;
                 if let Some(food) = item.get_data_component::<FoodImpl>()
                     && let Some(player) = caller.get_player()
                 {
@@ -3510,7 +3736,39 @@ impl EntityBase for LivingEntity {
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
                     );
-                    is_potion = true;
+                }
+
+                if let Some(ominous) = item
+                    .get_data_component::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>()
+                {
+                    self.add_effect(Effect {
+                        effect_type: &StatusEffect::BAD_OMEN,
+                        duration: 120_000,
+                        amplifier: ominous.amplifier.clamp(0, 4) as u8,
+                        ambient: false,
+                        show_particles: false,
+                        show_icon: true,
+                        blend: false,
+                    });
+                }
+
+                if let Some(stew) = item
+                    .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
+                {
+                    for entry in stew.effects.iter() {
+                        if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect)
+                        {
+                            self.add_effect(Effect {
+                                effect_type,
+                                duration: entry.duration,
+                                amplifier: 0,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            });
+                        }
+                    }
                 }
 
                 if let Some(player) = caller.get_player() {
@@ -3520,6 +3778,28 @@ impl EntityBase for LivingEntity {
                         },
                     );
 
+                    // Vanilla `ItemStack.finishUsingItem`: consume one, then apply `use_remainder`.
+                    let finish_using = |mut stack: ItemStack| {
+                        let stack_count_before_using = stack.item_count;
+                        let gamemode = player.gamemode.load();
+                        stack.decrement_unless_creative(gamemode, 1);
+                        match item.get_data_component::<UseRemainderImpl>() {
+                            Some(use_remainder) => use_remainder.convert_into_remainder(
+                                stack,
+                                stack_count_before_using,
+                                gamemode == GameMode::Creative,
+                                |mut extra| {
+                                    if !player.inventory.insert_stack_anywhere(&mut extra)
+                                        && !extra.is_empty()
+                                    {
+                                        player.drop_item(extra);
+                                    }
+                                },
+                            ),
+                            None => stack,
+                        }
+                    };
+
                     // Prefer modifying the exact stack that matches the consumed item:
                     // 1) selected hotbar (held_item)
                     // 2) off-hand
@@ -3527,37 +3807,19 @@ impl EntityBase for LivingEntity {
                     let mut handled = false;
 
                     // Check main hand (hotbar selected)
-                    let mut held = player.inventory.held_item();
+                    let held = player.inventory.held_item();
                     if held.are_items_and_components_equal(item) {
-                        if is_potion {
-                            if player.gamemode.load() != GameMode::Creative {
-                                held.decrement(1);
-                                if held.is_empty() {
-                                    held = ItemStack::new(1, &Item::GLASS_BOTTLE);
-                                }
-                            }
-                        } else {
-                            held.decrement_unless_creative(player.gamemode.load(), 1);
-                        }
-                        player.inventory.set_held_item(held);
+                        player.inventory.set_held_item(finish_using(held));
                         handled = true;
                     }
 
                     if !handled {
                         // Check off-hand
-                        let mut off_hand = player.inventory.off_hand_item();
+                        let off_hand = player.inventory.off_hand_item();
                         if off_hand.are_items_and_components_equal(item) {
-                            if is_potion {
-                                if player.gamemode.load() != GameMode::Creative {
-                                    off_hand.decrement(1);
-                                    if off_hand.is_empty() {
-                                        off_hand = ItemStack::new(1, &Item::GLASS_BOTTLE);
-                                    }
-                                }
-                            } else {
-                                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                            }
-                            player.inventory.set_stack_in_hand(Hand::Left, off_hand);
+                            player
+                                .inventory
+                                .set_stack_in_hand(Hand::Left, finish_using(off_hand));
                             handled = true;
                         }
                     }
@@ -3569,21 +3831,10 @@ impl EntityBase for LivingEntity {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let hand_to_modify = active_hand.unwrap_or(Hand::Right);
-                        let mut item_stack = self.get_stack_in_hand(caller, hand_to_modify);
-
-                        if is_potion {
-                            if player.gamemode.load() != GameMode::Creative {
-                                item_stack.decrement(1);
-                                if item_stack.is_empty() {
-                                    item_stack = ItemStack::new(1, &Item::GLASS_BOTTLE);
-                                }
-                            }
-                        } else {
-                            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-                        }
+                        let item_stack = self.get_stack_in_hand(caller, hand_to_modify);
                         player
                             .inventory
-                            .set_stack_in_hand(hand_to_modify, item_stack);
+                            .set_stack_in_hand(hand_to_modify, finish_using(item_stack));
                     }
 
                     if let Some(cooldown) = item.get_use_cooldown() {
@@ -3602,6 +3853,9 @@ impl EntityBase for LivingEntity {
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
+
+        self.refresh_dirty_attributes(caller);
+
         if self.health.load() <= 0.0 {
             let time = self
                 .death_time
@@ -3765,7 +4019,15 @@ impl LivingEntity {
                         );
                     }
                 }
-                ConsumeEffect::PlaySound(_) => {}
+                ConsumeEffect::PlaySound(sound) => {
+                    if let pumpkin_data::data_component_impl::IdOr::Id(sound) = sound {
+                        self.entity.world.load().play_sound(
+                            *sound,
+                            SoundCategory::Neutral,
+                            &self.entity.pos.load(),
+                        );
+                    }
+                }
             }
         }
     }
@@ -3822,6 +4084,65 @@ impl LivingEntity {
 
         None
     }
+
+    /// Mirrors vanilla `LivingEntity.getVisibilityPercent`.
+    #[must_use]
+    pub fn visibility_percent(&self, targeting_entity_type: Option<&'static EntityType>) -> f64 {
+        use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, MobVisibilityImpl};
+
+        let mut percent = 1.0;
+        if self.entity.is_sneaking() {
+            percent *= 0.8;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self
+            .entity
+            .invisible
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let worn = [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ]
+            .iter()
+            .filter(|slot| !equipment.get(slot).is_empty())
+            .count();
+            let cover = (worn as f64 / 4.0).max(0.1);
+            percent *= 0.7 * cover;
+        }
+        if let Some(target_type) = targeting_entity_type {
+            for slot in [
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::OFF_HAND,
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ] {
+                let stack = equipment.get(&slot);
+                if let Some(mob_visibility) = stack.get_data_component::<MobVisibilityImpl>()
+                    && let Some(equippable) = stack.get_data_component::<EquippableImpl>()
+                    && *equippable.slot == slot
+                {
+                    let matches_target = match &mob_visibility.targeting_entity_types {
+                        IDSet::Tag(tag) => target_type.is_tagged_with(tag).unwrap_or(false),
+                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == target_type.id),
+                    };
+                    if matches_target {
+                        percent *= f64::from(mob_visibility.visibility);
+                    }
+                }
+            }
+        }
+        percent.clamp(0.0, 10.0)
+    }
 }
 
 fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
@@ -3838,7 +4159,7 @@ fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
     }
 }
 
-const fn attribute_modifier_slot_matches(
+pub(crate) const fn attribute_modifier_slot_matches(
     modifier_slot: &AttributeModifierSlot,
     equipment_slot: &EquipmentSlot,
 ) -> bool {
@@ -3941,6 +4262,16 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
         | (1u64 << DamageType::SONIC_BOOM.id)
         | (1u64 << DamageType::OUTSIDE_BORDER.id);
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments.enchantment.iter().any(|(enchantment, level)| {
+                *level > 0 && enchantment.effects.prevent_equipment_drop
+            })
+        })
 }
 
 #[cfg(test)]
@@ -4085,5 +4416,686 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+}
+
+#[cfg(test)]
+mod ai_step_tests {
+    use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    use crate::entity::Entity;
+    use crate::entity::ai::control::move_control::MoveControl;
+    use crate::entity::ai::control::{Control, MoveControlTrait};
+    use crate::entity::ai::goal::Goal;
+    use crate::entity::ai::pathfinder::node::Node;
+    use crate::entity::ai::pathfinder::path::Path;
+    use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
+    use crate::entity::ai::test_support::world;
+    use crate::entity::mob::{Mob, MobEntity};
+    use crate::world::World;
+    use pumpkin_data::{attributes::Attributes, entity::EntityType};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    struct ProbeMob {
+        mob: MobEntity,
+        immobile: bool,
+    }
+
+    impl Mob for ProbeMob {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.mob
+        }
+
+        fn is_mob_immobile(&self) -> bool {
+            self.immobile || self.mob.living_entity.is_dead_or_dying()
+        }
+    }
+
+    #[derive(Default)]
+    struct Observation {
+        velocity: Vector3<f64>,
+        input: Vector3<f64>,
+    }
+
+    struct ObserveGoal(Arc<Mutex<Observation>>);
+
+    impl Goal for ObserveGoal {
+        fn can_start(&mut self, mob: &dyn Mob) -> bool {
+            let living = &mob.get_mob_entity().living_entity;
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Observation {
+                velocity: living.entity.velocity.load(),
+                input: living.movement_input.load(),
+            };
+            false
+        }
+    }
+
+    struct ProbeControl(Arc<AtomicUsize>);
+
+    struct TargetControl(Arc<Mutex<Option<NavigationTarget>>>);
+
+    impl Control for TargetControl {}
+
+    impl MoveControlTrait for TargetControl {
+        fn tick(&mut self, _mob: &dyn Mob) {}
+
+        fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(NavigationTarget {
+                position: Vector3::new(x, y, z),
+                speed_modifier,
+            });
+        }
+    }
+
+    struct JumpOnceGoal(bool);
+
+    impl Goal for JumpOnceGoal {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            self.0
+        }
+
+        fn start(&mut self, mob: &dyn Mob) {
+            self.0 = false;
+            mob.get_mob_entity()
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .jump();
+        }
+    }
+
+    impl Control for ProbeControl {}
+
+    impl MoveControlTrait for ProbeControl {
+        fn tick(&mut self, mob: &dyn Mob) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            let living = &mob.get_mob_entity().living_entity;
+            living.entity.velocity.store(Vector3::new(0.002, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.0, 0.0, 0.5));
+        }
+    }
+
+    fn probe(world: Arc<World>, calls: Arc<AtomicUsize>) -> ProbeMob {
+        let mob = MobEntity::new(Entity::new(
+            world,
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        *mob.move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(ProbeControl(calls));
+        ProbeMob {
+            mob,
+            immobile: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn follow_range_updates_resize_the_search_budget_even_when_reverted() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        *mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::flying();
+        let reaches_target = || {
+            mob.mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .create_path(living, Vector3::new(8.0, 64.0, 0.0), 0)
+                .is_some_and(|path| path.can_reach())
+        };
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        let initial = reaches_target();
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 16.0);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        living.refresh_dirty_attributes(&mob);
+        let updated = reaches_target();
+        world.level.shutdown().await;
+        assert!(!initial);
+        assert!(updated);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ai_step_preserves_controller_motion_after_input_preparation() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        let observation = Arc::new(Mutex::new(Observation::default()));
+        mob.mob
+            .goals_selector
+            .add_goal(0, Box::new(ObserveGoal(observation.clone())));
+        let living = &mob.mob.living_entity;
+        living.entity.velocity.store(Vector3::new(0.001, 0.0, 0.0));
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.5));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let observed = observation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(observed.velocity.x, 0.0);
+        assert_eq!(observed.input.y, 0.25);
+        assert!((observed.input.z - 0.49).abs() < f64::EPSILON);
+        assert!((living.entity.pos.load().x - 0.002).abs() < f64::EPSILON);
+        assert_eq!(living.movement_input.load().z, 0.5);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_skips_controller_and_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        mob.mob.set_no_ai(true);
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert_eq!(living.entity.pos.load(), position);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn goal_jump_survives_navigation_finish_and_expires_next_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        mob.mob
+            .goals_selector
+            .add_goal(0, Box::new(JumpOnceGoal(true)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_progress(NavigatorGoal::new(position, position, 1.0));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.jumping_cooldown.load(Ordering::Relaxed), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn move_control_jump_is_applied_in_the_same_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        let mut control = MoveControl::default();
+        control.set_wanted_position(position.x, position.y + 2.0, position.z, 1.0);
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(control);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn navigation_hands_the_next_waypoint_to_the_installed_control() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let target = Arc::new(Mutex::new(None));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(TargetControl(target.clone()));
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let destination = Vector3::new(2.5, 64.0, 0.5);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                destination,
+                1.5,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![
+                        Node::new(BlockPos::new(0, 64, 0)),
+                        Node::new(BlockPos::new(2, 64, 0)),
+                    ],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.5,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .map(|target| (target.position, target.speed_modifier)),
+            Some((destination, 1.5))
+        );
+        assert_eq!(living.entity.yaw.load(), 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn finishing_navigation_stops_the_default_controller() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(MoveControl::default());
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                Vector3::new(2.5, 64.0, 0.5),
+                1.0,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(2, 64, 0))],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.0,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        let moving_input = living.movement_input.load().z;
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(moving_input > 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dead_ai_step_clears_input_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mut results = Vec::new();
+        for dead_flag in [false, true] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mob = probe(world.clone(), calls.clone());
+            let living = &mob.mob.living_entity;
+            if dead_flag {
+                living.dead.store(true, Ordering::Relaxed);
+            } else {
+                living.health.store(0.0);
+            }
+            living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+            living.jumping.store(true, Ordering::Relaxed);
+
+            living.tick_movement(&mob);
+            results.push((
+                calls.load(Ordering::Relaxed),
+                living.movement_input.load(),
+                living.jumping.load(Ordering::Relaxed),
+                living.entity.pos.load().x,
+            ));
+        }
+        world.level.shutdown().await;
+
+        for (calls, input, jumping, position_x) in results {
+            assert_eq!(calls, 0);
+            assert_eq!(input, Vector3::new(0.0, 0.25, 0.0));
+            assert!(!jumping);
+            assert!(position_x > 0.05);
+        }
+        Ok(())
+    }
+    #[tokio::test]
+    async fn ground_control_speed_reaches_travel_without_losing_its_modifier() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        living.entity.set_has_no_gravity(true);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = MoveControl::default();
+        control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load().x, 0.3);
+        assert_eq!(living.movement_input.load().y, 0.25);
+        living
+            .movement_input
+            .store(Vector3::new(0.0, 0.0, living.movement_input.load().z));
+        living.travel_in_air(&mob);
+        let moved = living.entity.pos.load().z;
+        world.level.shutdown().await;
+        assert!((moved - 0.04).abs() < 1.0e-8);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn strafe_checks_live_collision_before_publishing_original_inputs() -> TestResult {
+        use pumpkin_data::Block;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 1.0);
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.0));
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(
+            &BlockPos::new(0, 63, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        let mut control = MoveControl::default();
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load(), Vector3::new(0.5, 0.25, 0.5));
+        world.set_block_state(
+            &BlockPos::new(0, 64, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        let input = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(input, Vector3::new(0.0, 0.25, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_control_preserves_strafe_and_clears_only_its_owned_axes() -> TestResult {
+        use crate::entity::ai::control::flying_move_control::FlyingMoveControl;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::FLYING_SPEED, 0.8);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = FlyingMoveControl::new(20, true);
+        control.set_wanted_position(0.0, 65.0, 8.0, 0.5);
+        control.tick(&mob);
+        let moving = living.movement_input.load();
+        assert_eq!(moving.x, 0.3);
+        assert!((moving.y - 0.4).abs() < 1.0e-7);
+        assert_eq!(moving.y, moving.z);
+        control.tick(&mob);
+        let idle = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(idle, Vector3::new(0.3, 0.0, 0.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dolphin_water_travel_consumes_control_speed_and_unscaled_direction() -> TestResult {
+        use crate::entity::passive::dolphin::DolphinEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let dolphin = DolphinEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::DOLPHIN,
+        ));
+        let living = &dolphin.mob_entity.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = dolphin
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(0, 64, 8))],
+                    BlockPos::new(0, 64, 8),
+                    true,
+                )),
+                0.5,
+                living,
+            )
+        };
+        let input = {
+            let mut control = dolphin
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+            control.tick(&*dolphin);
+            living.movement_input.load()
+        };
+        living.travel_in_fluid(&*dolphin, true);
+        let position = living.entity.pos.load();
+        let velocity = living.entity.velocity.load();
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        world.set_block_state(
+            &BlockPos::new(0, 64, 1),
+            pumpkin_data::Block::STONE.default_state.id,
+            pumpkin_world::world::BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                | pumpkin_world::world::BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.velocity.store(Vector3::new(0.0, 0.0, 1.0));
+        living.travel_in_fluid(&*dolphin, true);
+        let wall_velocity = living.entity.velocity.load();
+        let wall_collision = living.entity.horizontal_collision.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert!(wall_collision);
+        assert!(wall_velocity.y < 0.0);
+        assert!((input.z - 0.2).abs() < 1.0e-7);
+        assert!((position.z - 0.0008).abs() < 1.0e-9);
+        assert!((velocity.z - 0.00072).abs() < 1.0e-9);
+        assert!((velocity.y + 0.0005).abs() < 1.0e-9);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn zero_air_drag_preserves_controller_velocity_in_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::AIR_DRAG_MODIFIER, 0.0);
+        living.entity.set_has_no_gravity(true);
+        living.entity.velocity.store(Vector3::new(1.0, 1.0, 1.0));
+        living.travel_in_air(&mob);
+        let velocity = living.entity.velocity.load();
+        world.level.shutdown().await;
+        assert_eq!(velocity, Vector3::new(1.0, 1.0, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn installed_bee_look_control_pauses_while_angry() -> TestResult {
+        use crate::entity::passive::bee::BeeEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        let entity = &bee.mob_entity.living_entity.entity;
+        entity.pitch.store(30.0);
+        bee.neutral_data
+            .anger_end_time
+            .store(100, Ordering::Relaxed);
+        let angry_pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        assert_eq!(angry_pitch, 30.0);
+        bee.neutral_data.anger_end_time.store(-1, Ordering::Relaxed);
+        let pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        world.level.shutdown().await;
+        assert_eq!(pitch, 0.0);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn immobile_living_mobs_skip_ai_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut mob = probe(world.clone(), calls.clone());
+        mob.immobile = true;
+        let living = &mob.mob.living_entity;
+        living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+        living.jumping.store(true, Ordering::Relaxed);
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert!(!living.is_dead_or_dying());
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.movement_input.load(), Vector3::new(0.0, 0.25, 0.0));
+        assert!(living.entity.pos.load().x > 0.05);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_pauses_species_decisions_while_age_still_advances() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::bee::BeeEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        bee.set_age(-20);
+        bee.set_has_stung(true);
+        bee.time_since_sting.store(100, Ordering::Relaxed);
+        bee.mob_entity.set_no_ai(true);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        assert_eq!(bee.get_age(), -19);
+        assert_eq!(bee.time_since_sting.load(Ordering::Relaxed), 100);
+        bee.mob_entity.set_no_ai(false);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        let age = bee.get_age();
+        let sting = bee.time_since_sting.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -18);
+        assert_eq!(sting, 101);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ageable_mobs_grow_once_per_ai_step_without_tick_count() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::cow::CowEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.set_age(-20);
+        let entity = &cow.mob_entity.living_entity.entity;
+        entity.tick_count.store(7, Ordering::Relaxed);
+        cow.mob_entity.living_entity.tick_movement(&*cow);
+        let age = cow.get_age();
+        let tick_count = entity.tick_count.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -19);
+        assert_eq!(tick_count, 7);
+        Ok(())
     }
 }
