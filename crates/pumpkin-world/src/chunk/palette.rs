@@ -745,7 +745,7 @@ impl BlockPalette {
             Self::Heterogeneous(data) => {
                 let raw_bits_per_entry = encompassing_bits(data.counts.len());
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
-                    let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
+                    let bits_per_entry = block_network_max_bits();
                     let values_per_i64 = 64 / bits_per_entry;
                     let mut packed_data =
                         Vec::with_capacity(Self::VOLUME.div_ceil(values_per_i64 as usize));
@@ -988,8 +988,20 @@ impl BlockPalette {
         }
     }
 
-    pub(crate) fn read_pump_binary(buf: &mut &[u8]) -> Result<Self, super::ChunkParsingError> {
+    pub(crate) fn read_pump_binary(
+        buf: &mut &[u8],
+        unresolved: &mut bool,
+    ) -> Result<Self, super::ChunkParsingError> {
         use bytes::Buf;
+
+        /// A palette id of a registered state, air and `unresolved` for an id that does not exist
+        /// (yet).
+        fn state(id: u16, unresolved: &mut bool) -> BlockStateId {
+            BlockStateId::from_raw(id).unwrap_or_else(|| {
+                *unresolved = true;
+                BlockStateId::AIR
+            })
+        }
 
         if !buf.has_remaining() {
             return Err(super::ChunkParsingError::ErrorDeserializingChunk(
@@ -1003,7 +1015,7 @@ impl BlockPalette {
                         "Unexpected EOF reading homogeneous block palette".into(),
                     ));
                 }
-                Ok(Self::Homogeneous(BlockStateId::new_or_air(buf.get_u16())))
+                Ok(Self::Homogeneous(state(buf.get_u16(), unresolved)))
             }
             1 => {
                 if buf.remaining() < 2 {
@@ -1021,7 +1033,7 @@ impl BlockPalette {
                 }
                 let mut palette = Vec::with_capacity(palette_len);
                 for _ in 0..palette_len {
-                    palette.push(BlockStateId::new_or_air(buf.get_u16()));
+                    palette.push(state(buf.get_u16(), unresolved));
                     buf.advance(2);
                 }
                 if palette_len == 1 {
@@ -1055,7 +1067,7 @@ impl BlockPalette {
                 let mut cube =
                     Box::new([[[BlockStateId::AIR; Self::SIZE]; Self::SIZE]; Self::SIZE]);
                 for slot in cube.as_flattened_mut().as_flattened_mut() {
-                    *slot = BlockStateId::new_or_air(buf.get_u16());
+                    *slot = state(buf.get_u16(), unresolved);
                 }
                 Ok(Self::from_cube(cube))
             }
@@ -1204,7 +1216,16 @@ pub type BlockPalette = PalettedContainer<BlockStateId, 16>;
 const BLOCK_DISK_MIN_BITS: u8 = 4;
 const BLOCK_NETWORK_MIN_MAP_BITS: u8 = 4;
 const BLOCK_NETWORK_MAX_MAP_BITS: u8 = 8;
-pub(crate) const BLOCK_NETWORK_MAX_BITS: u8 = 16;
+
+/// Bits per entry of the global block palette, covering the generated and registered block states.
+pub(crate) fn block_network_max_bits() -> u8 {
+    global_palette_bits(BlockStateId::total_count())
+}
+
+/// Bits per entry of the global block palette for `state_count` block states.
+pub(crate) fn global_palette_bits(state_count: u32) -> u8 {
+    encompassing_bits(state_count as usize).max(BLOCK_NETWORK_MAX_MAP_BITS + 1)
+}
 
 pub type BiomePalette = PalettedContainer<u8, 4>;
 const BIOME_DISK_MIN_BITS: u8 = 0;
@@ -1271,7 +1292,9 @@ mod tests {
         encoded.put_u16(air.as_u16());
         encoded.put_u16(BlockPalette::VOLUME as u16);
         encoded.resize(encoded.len() + BlockPalette::VOLUME, 0);
-        let palette = BlockPalette::read_pump_binary(&mut encoded.as_slice())?;
+        let mut unresolved = false;
+        let palette = BlockPalette::read_pump_binary(&mut encoded.as_slice(), &mut unresolved)?;
+        assert!(!unresolved);
         assert!(palette.iter().all(|value| value == plate));
         assert!(palette.contains_matching(|value| value == plate));
         assert!(!palette.contains_matching(|value| value == air));

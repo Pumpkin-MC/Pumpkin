@@ -69,9 +69,12 @@ impl Dirtiable for ChunkData {
         self.dirty.store(flag, Ordering::Relaxed);
     }
 
+    /// Whether the chunk names blocks that are not registered (yet), so saving would replace them
+    /// by air.
     #[inline]
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
+            && !self.holds_unregistered_blocks.load(Ordering::Relaxed)
     }
 }
 
@@ -108,31 +111,51 @@ fn lowest_biome_section_y(root_tag: &NbtCompound) -> Option<i32> {
         .map(|y| y.min(0))
 }
 
-fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId]>> {
+/// Whether a chunk read from disk names blocks that are not registered (yet), so saving it would
+/// replace them by air. Registration happens during startup, so a block that is missing while the
+/// registry is still open may simply not be loaded yet.
+fn holds_unregistered_blocks(unresolved: bool, position: Vector2<i32>) -> AtomicBool {
+    let holds = unresolved && !Block::is_dynamic_registry_frozen();
+    if holds {
+        tracing::warn!(
+            "Chunk {}, {} names blocks that are not registered yet, it is not saved until it is read again after startup",
+            position.x,
+            position.y
+        );
+    }
+    AtomicBool::new(holds)
+}
+
+/// Reads a block palette. Sets `unresolved` when an entry names an unregistered or malformed block
+/// (it becomes air).
+fn extract_block_palette(
+    tag: &pumpkin_nbt::tag::NbtTag,
+    unresolved: &mut bool,
+) -> Option<Box<[BlockStateId]>> {
     match tag {
         pumpkin_nbt::tag::NbtTag::IntArray(arr) => Some(
             arr.iter()
-                .map(|&x| BlockStateId::new_or_air(x as u16))
+                .map(|&x| BlockStateId::from_raw_or_air(x as u16))
                 .collect(),
         ),
         pumpkin_nbt::tag::NbtTag::ByteArray(arr) => Some(
             arr.iter()
-                .map(|&x| BlockStateId::new_or_air(x as u16))
+                .map(|&x| BlockStateId::from_raw_or_air(x as u16))
                 .collect(),
         ),
         pumpkin_nbt::tag::NbtTag::LongArray(arr) => Some(
             arr.iter()
-                .map(|&x| BlockStateId::new_or_air(x as u16))
+                .map(|&x| BlockStateId::from_raw_or_air(x as u16))
                 .collect(),
         ),
         pumpkin_nbt::tag::NbtTag::List(list) => {
             let ids: Box<[BlockStateId]> = list
                 .iter()
                 .map(|t| match t {
-                    pumpkin_nbt::tag::NbtTag::Int(x) => BlockStateId::new_or_air(*x as u16),
-                    pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::new_or_air(*x as u16),
-                    pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
-                    pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Int(x) => BlockStateId::from_raw_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::from_raw_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::from_raw_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::from_raw_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Compound(compound) => {
                         if let Ok(entry) =
                             crate::generation::structure::template::PaletteEntry::from_nbt_compound(
@@ -145,6 +168,7 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
                         {
                             return state.id;
                         }
+                        *unresolved = true;
                         BlockStateId::AIR
                     }
                     _ => BlockStateId::AIR,
@@ -277,6 +301,7 @@ impl ChunkData {
         let mut sky_lights = vec![LightContainer::Empty(0); section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
         let mut biome_palettes = vec![BiomePalette::default(); section_count];
+        let mut unresolved_blocks = false;
 
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
@@ -332,7 +357,7 @@ impl ChunkData {
                             .map(|arr| arr.to_vec().into_boxed_slice());
                         let palette = bs_compound
                             .get("palette")
-                            .and_then(extract_u16_array)
+                            .and_then(|tag| extract_block_palette(tag, &mut unresolved_blocks))
                             .unwrap_or_else(|| vec![BlockStateId::AIR].into_boxed_slice());
 
                         block_palettes[index] =
@@ -460,6 +485,10 @@ impl ChunkData {
             .cloned()
             .unwrap_or_default();
 
+        // Plugin blocks are registered during load; a chunk read earlier has air in their place and
+        // must not be written back.
+        let holds_unregistered_blocks = holds_unregistered_blocks(unresolved_blocks, position);
+
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
@@ -467,6 +496,7 @@ impl ChunkData {
             z: position.y,
             // This chunk is read from disk, so it has not been modified
             dirty: AtomicBool::new(false),
+            holds_unregistered_blocks,
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -573,12 +603,7 @@ impl ChunkData {
                 .map(|&id| {
                     let block = Block::from_state_id(id);
                     let mut comp = NbtCompound::new();
-                    let name = if block.name.starts_with("minecraft:") {
-                        block.name.to_string()
-                    } else {
-                        format!("minecraft:{}", block.name)
-                    };
-                    comp.put_string("Name", name);
+                    comp.put_string("Name", block.resource_location().into_owned());
                     if let Some(props) = block.properties(id) {
                         let prop_vec = props.to_props();
                         if !prop_vec.is_empty() {
@@ -941,9 +966,13 @@ impl ChunkData {
         let mut biome_palettes = Vec::with_capacity(section_count);
         let mut block_lights = Vec::with_capacity(section_count);
         let mut sky_lights = Vec::with_capacity(section_count);
+        let mut unresolved_blocks = false;
 
         for _ in 0..section_count {
-            block_palettes.push(BlockPalette::read_pump_binary(&mut buf)?);
+            block_palettes.push(BlockPalette::read_pump_binary(
+                &mut buf,
+                &mut unresolved_blocks,
+            )?);
             biome_palettes.push(BiomePalette::read_pump_binary(&mut buf)?);
 
             if !buf.has_remaining() {
@@ -1124,6 +1153,7 @@ impl ChunkData {
             x: position.x,
             z: position.y,
             dirty: AtomicBool::new(false),
+            holds_unregistered_blocks: holds_unregistered_blocks(unresolved_blocks, position),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -1639,7 +1669,10 @@ mod tests {
         entry2.put_compound("Properties", props);
 
         let list_tag = NbtTag::List(vec![NbtTag::Compound(entry1), NbtTag::Compound(entry2)]);
-        let result = extract_u16_array(&list_tag).expect("should extract palette");
+        let mut unresolved = false;
+        let result =
+            extract_block_palette(&list_tag, &mut unresolved).expect("should extract palette");
+        assert!(!unresolved);
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Block::STONE.default_state.id);
@@ -1653,6 +1686,41 @@ mod tests {
             ])
             .to_state_id(&Block::REPEATER);
         assert_eq!(result[1], repeater_state);
+    }
+
+    #[test]
+    fn unknown_palette_entries_are_air_and_reported() {
+        let mut unknown = NbtCompound::new();
+        unknown.put_string("Name", "test_unregistered:thing".to_string());
+        let mut stone = NbtCompound::new();
+        stone.put_string("Name", "minecraft:stone".to_string());
+        let list_tag = NbtTag::List(vec![NbtTag::Compound(stone), NbtTag::Compound(unknown)]);
+
+        let mut unresolved = false;
+        let result =
+            extract_block_palette(&list_tag, &mut unresolved).expect("should extract palette");
+        assert!(unresolved);
+        assert_eq!(result[0], Block::STONE.default_state.id);
+        assert_eq!(result[1], BlockStateId::AIR);
+    }
+
+    #[test]
+    fn chunk_with_unregistered_blocks_is_not_saved_before_the_registry_closes() {
+        use crate::chunk::ChunkData;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let bytes = test_chunk(vec![test_section(0, "test_unregistered:thing", true)]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk reads");
+        assert!(!Block::is_dynamic_registry_frozen());
+        assert!(chunk.holds_unregistered_blocks.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+        assert!(!chunk.is_dirty());
+
+        let bytes = test_chunk(vec![test_section(0, "minecraft:stone", true)]).write();
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk reads");
+        assert!(!chunk.holds_unregistered_blocks.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+        assert!(chunk.is_dirty());
     }
 
     #[test]

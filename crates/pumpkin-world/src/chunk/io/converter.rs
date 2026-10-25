@@ -492,6 +492,7 @@ mod tests {
             light_populated: AtomicBool::new(true),
             status: ChunkStatus::Full,
             dirty: AtomicBool::new(false),
+            holds_unregistered_blocks: AtomicBool::new(false),
             blending_data: None,
             inhabited_time: AtomicU64::new(12345),
             custom_data: Mutex::new(NbtCompound::default()),
