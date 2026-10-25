@@ -109,7 +109,7 @@ impl TargetPredicate {
             return false;
         }
 
-        if !target_living.is_part_of_game() {
+        if target.is_spectator() || !target_living.is_part_of_game() {
             return false;
         }
 
@@ -166,5 +166,48 @@ impl TargetPredicate {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::Entity;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+
+    struct Spectator(LivingEntity);
+
+    impl EntityBase for Spectator {
+        fn cast_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn get_entity(&self) -> &Entity {
+            &self.0.entity
+        }
+
+        fn get_living_entity(&self) -> Option<&LivingEntity> {
+            Some(&self.0)
+        }
+
+        fn is_spectator(&self) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn non_combat_targeting_excludes_spectators() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let target = Spectator(LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PLAYER,
+        )));
+        let selected = TargetPredicate::create_non_attackable().test(&world, None, &target);
+        world.level.shutdown().await;
+        assert!(!selected);
+        Ok(())
     }
 }

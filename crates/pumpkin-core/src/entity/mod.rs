@@ -4229,6 +4229,9 @@ impl Entity {
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
+        if self.is_silent() {
+            nbt.put_bool("Silent", true);
+        }
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
         if self.has_visual_fire.load(Relaxed) {
             nbt.put_bool("HasVisualFire", true);
@@ -4324,6 +4327,9 @@ impl Entity {
         }
         if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
             self.invulnerable.store(invulnerable, Relaxed);
+        }
+        if let Some(silent) = nbt.get_bool("Silent") {
+            self.set_silent(silent);
         }
         if let Some(cooldown) = nbt.get_int("PortalCooldown") {
             self.portal_cooldown.store(cooldown as u32, Relaxed);

@@ -425,6 +425,33 @@ mod tests {
     use crate::entity::ai::test_support::world;
     use pumpkin_data::entity::EntityType;
 
+    #[tokio::test]
+    async fn summoned_silent_bat_preserves_silence_in_nbt() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(-605.0, 89.0, -543.0),
+            &EntityType::BAT,
+        ));
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("Silent", true);
+        nbt.put_byte("BatFlags", ROOSTING_FLAG);
+        bat.read_nbt_non_mut(&nbt);
+        let silent = bat.get_entity().is_silent();
+        let mut saved = NbtCompound::new();
+        EntityBase::write_nbt(bat.as_ref(), &mut saved);
+        nbt.put_bool("Silent", false);
+        bat.read_nbt_non_mut(&nbt);
+        let unsilenced = !bat.get_entity().is_silent();
+        world.level.shutdown().await;
+        assert!(silent);
+        assert_eq!(saved.get_bool("Silent"), Some(true));
+        assert!(unsilenced);
+        Ok(())
+    }
+
     struct EventListener {
         mob: MobEntity,
         events: Mutex<Vec<pumpkin_data::game_event::GameEvent>>,
