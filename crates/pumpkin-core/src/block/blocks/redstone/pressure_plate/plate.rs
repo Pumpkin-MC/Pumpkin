@@ -3,7 +3,6 @@ use pumpkin_data::{
     tag::{self},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
@@ -64,10 +63,7 @@ impl BlockBehaviour for PressurePlateBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !Self::can_pressure_plate_place_at(args.world, args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
+        self.on_neighbor_update_pp(args);
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
