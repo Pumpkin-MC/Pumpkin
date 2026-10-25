@@ -35,6 +35,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
+use rand::RngExt;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use std::sync::{Arc, LazyLock};
@@ -946,16 +947,23 @@ impl MobEntity {
             return;
         }
 
-        if nearest_dist_sq > 128.0 * 128.0 {
+        let despawn_distance = f64::from(entity.entity_type.category.despawn_distance);
+        if nearest_dist_sq > despawn_distance * despawn_distance {
             mob.get_entity().remove();
             return;
         }
 
-        if nearest_dist_sq > 32.0 * 32.0 && rand::random::<i32>().wrapping_abs() % 800 == 0 {
+        if self.living_entity.no_action_time.load(Relaxed) > RANDOM_DESPAWN_IDLE_TICKS
+            && mob.get_random().random_range(0..RANDOM_DESPAWN_CHANCE) == 0
+            && nearest_dist_sq > no_despawn_distance * no_despawn_distance
+        {
             mob.get_entity().remove();
         }
     }
 }
+
+const RANDOM_DESPAWN_IDLE_TICKS: i32 = 600;
+const RANDOM_DESPAWN_CHANCE: u32 = 800;
 
 /// Least slippery block in the game data, which lets walking speed up the most.
 static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
@@ -1453,6 +1461,10 @@ pub trait Mob: EntityBase + Send + Sync {
         group_data
     }
 
+    fn is_max_group_size_reached(&self, _group_size: i32) -> bool {
+        false
+    }
+
     fn populate_default_equipment_slots(
         &self,
         _world: &Arc<World>,
@@ -1749,6 +1761,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+    fn mob_apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn mob_set_sound_variant_name(&self, _name: &str) {}
 
     fn mob_on_lightning_strike(
@@ -1814,6 +1832,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn set_variant_name(&self, name: &str) {
         self.mob_set_variant_name(name);
+    }
+
+    fn apply_implicit_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+        value: &str,
+    ) {
+        self.mob_apply_implicit_component(component, value);
     }
 
     fn set_sound_variant_name(&self, name: &str) {

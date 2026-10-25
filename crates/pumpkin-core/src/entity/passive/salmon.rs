@@ -12,7 +12,6 @@ use pumpkin_data::{
     sound::Sound,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use rand::RngExt;
 
 use super::{
@@ -64,22 +63,7 @@ impl SalmonEntity {
         self.variant.store(variant.id(), Relaxed);
         self.get_entity()
             .set_synced_data(pumpkin_data::tracked_data::salmon::DATA_TYPE, variant.id());
-        self.refresh_dimensions();
-    }
-
-    fn refresh_dimensions(&self) {
-        let entity = self.get_entity();
-        let scale = self.get_variant().bounding_box_scale();
-        let dimensions = EntityDimensions::new(
-            entity.entity_type.dimension[0] * scale,
-            entity.entity_type.dimension[1] * scale,
-            entity.entity_type.eye_height * scale,
-        );
-        entity.entity_dimension.store(dimensions);
-        let pos = entity.pos.load();
-        entity
-            .bounding_box
-            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
+        self.set_dimension_scale(variant.bounding_box_scale());
     }
 
     fn random_spawn_variant(&self) -> SalmonSize {
@@ -152,7 +136,7 @@ crate::impl_abstract_fish!(
     SalmonEntity,
     bucket: &Item::SALMON_BUCKET,
     flop: Sound::EntitySalmonFlop,
-    ambient: Sound::EntitySalmonAmbient,
+    ambient: Some(Sound::EntitySalmonAmbient),
     bucket_extra: {
         fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
             self.save_default_data_to_bucket_tag(bucket);
