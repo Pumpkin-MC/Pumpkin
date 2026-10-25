@@ -12,7 +12,7 @@ use pumpkin_util::{PermissionLvl, math::vector2::Vector2};
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Server>, String> {
+pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, AdvancedConfiguration) {
     let basic_config = BasicConfiguration {
         default_level_name: temp_dir.path().to_string_lossy().into_owned(),
         allow_nether: false,
@@ -32,6 +32,11 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
     advanced_config.player_data.save_player_data = false;
     advanced_config.advancement.save_advancements = false;
 
+    (basic_config, advanced_config)
+}
+
+pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Server>, String> {
+    let (basic_config, advanced_config) = test_configs(temp_dir);
     Server::new(
         basic_config,
         advanced_config,
