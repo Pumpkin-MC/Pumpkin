@@ -1,3 +1,4 @@
+use crate::net::can_not_join;
 use pumpkin_protocol::bedrock::client::PackIdVersion;
 
 #[allow(clippy::wildcard_imports)]
@@ -21,6 +22,17 @@ fn build_username(display_name: &str, prefix: &str, replace_spaces: bool) -> Str
 }
 
 impl BedrockClient {
+    /// Bans, IP bans and the whitelist apply to Bedrock logins like they do to Java ones.
+    /// Returns whether the client was kicked.
+    async fn kick_if_not_allowed(&self, profile: &GameProfile, server: &Server) -> bool {
+        let Some(reason) = can_not_join(profile, &self.address, server).await else {
+            return false;
+        };
+        self.kick(DisconnectReason::NotAllowed, reason.get_text())
+            .await;
+        true
+    }
+
     pub async fn handle_login(
         self: &Arc<Self>,
         packet: SLogin,
@@ -100,6 +112,10 @@ impl BedrockClient {
                     "NetherNet and Bedrock login identities do not match".into(),
                 ),
             ));
+        }
+
+        if self.kick_if_not_allowed(&profile, server).await {
+            return Ok(PacketHandlerResult::Stop);
         }
 
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
