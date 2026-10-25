@@ -6,9 +6,23 @@ use super::{TextComponent, TextComponentBase};
 
 /// An item's data component patch in a `show_item` hover event, kept as the
 /// JSON it was given (`{"minecraft:enchantments":{"minecraft:sharpness":5}}`).
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ItemComponents(pub serde_json::Value);
+
+impl<'de> Deserialize<'de> for ItemComponents {
+    /// Only a JSON object is a component patch.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        if value.is_object() {
+            Ok(Self(value))
+        } else {
+            Err(serde::de::Error::custom(
+                "show_item components must be an object",
+            ))
+        }
+    }
+}
 
 impl std::hash::Hash for ItemComponents {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -123,6 +137,19 @@ impl HoverEvent {
                 Some(name) => Some(vec![name.0]),
                 None => None,
             },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_components_must_be_an_object() {
+        assert!(serde_json::from_str::<ItemComponents>(r#"{"minecraft:damage":3}"#).is_ok());
+        for bad in ["[]", r#""x""#, "3", "null", "true"] {
+            assert!(serde_json::from_str::<ItemComponents>(bad).is_err(), "{bad}");
         }
     }
 }
