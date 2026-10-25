@@ -365,12 +365,15 @@ impl Mob for BatEntity {
             let pos = entity.pos.load();
             let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
             entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
-        } else {
-            let velocity = entity.velocity.load();
-            entity
-                .velocity
-                .store(Vector3::new(velocity.x, velocity.y * 0.6, velocity.z));
         }
+    }
+
+    fn get_mob_gravity(&self) -> f64 {
+        0.0
+    }
+
+    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
+        Some(0.6)
     }
 
     fn pre_damage_with_context(
