@@ -338,12 +338,13 @@ impl StructurePieceBase for ShipwreckPiece {
 
             if chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id {
                 let mut modified_entry = palette_entry.clone();
-                if let Some((_, waterlogged)) = modified_entry
-                    .properties
-                    .iter_mut()
-                    .find(|(name, _)| name == "waterlogged")
+                if let Some(waterlogged) =
+                    modified_entry.properties.iter_mut().find_map(|p| match p {
+                        pumpkin_data::Property::Waterlogged(w) => Some(w),
+                        _ => None,
+                    })
                 {
-                    *waterlogged = "true".to_string();
+                    *waterlogged = true;
                     if let Some(waterlogged_state) =
                         BlockStateResolver::resolve(&modified_entry, self.rotation, Mirror::None)
                     {

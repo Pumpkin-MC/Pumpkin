@@ -215,15 +215,20 @@ use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::dragon_egg::DragonEggBlock;
+use crate::block::blocks::dried_ghast::DriedGhastBlock;
 use crate::block::blocks::enchanting_table::EnchantingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::frogspawn::FrogspawnBlock;
 use crate::block::blocks::hopper::HopperBlock;
+use crate::block::blocks::huge_mushroom::HugeMushroomBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::netherrack::NetherrackBlock;
+use crate::block::blocks::plant::pale_hanging_moss::PaleHangingMossBlock;
+use crate::block::blocks::potent_sulfur::PotentSulfurBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::rooted_dirt::RootedDirtBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
@@ -231,9 +236,9 @@ use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
 use crate::block::blocks::weathering_copper::{
-    WeatheringCopperBlock, WeatheringCopperChainBlock, WeatheringCopperDoorBlock,
-    WeatheringCopperGrateBlock, WeatheringCopperSlabBlock, WeatheringCopperStairBlock,
-    WeatheringCopperTrapDoorBlock,
+    CopperGolemStatueBlock, WeatheringCopperBlock, WeatheringCopperChainBlock,
+    WeatheringCopperDoorBlock, WeatheringCopperGrateBlock, WeatheringCopperSlabBlock,
+    WeatheringCopperStairBlock, WeatheringCopperTrapDoorBlock,
 };
 
 #[must_use]
@@ -277,6 +282,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(GlassPaneBlock);
     manager.register(GlazedTerracottaBlock);
     manager.register(HayBlock);
+    manager.register(HugeMushroomBlock);
     manager.register(GrindstoneBlock);
     manager.register(IceBlock);
     manager.register(FrostedIceBlock);
@@ -317,6 +323,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(VaultBlock);
     manager.register(DecoratedPotBlock);
     manager.register(CreakingHeartBlock);
+    manager.register(DriedGhastBlock);
+    manager.register(FrogspawnBlock);
     manager.register(SnifferEggBlock);
     manager.register(TurtleEggBlock);
     manager.register(BrushableBlock);
@@ -330,6 +338,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CaveVinesBlock);
     manager.register(AzaleaBlock);
     manager.register(HangingRootsBlock);
+    manager.register(PaleHangingMossBlock);
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
@@ -348,12 +357,14 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PotentSulfurBlock);
     manager.register(PowderSnowBlock);
     manager.register(SpongeBlock);
     manager.register(PumpkinBlock);
     manager.register(WetSpongeBlock);
 
     // Weathering copper blocks
+    manager.register(CopperGolemStatueBlock);
     manager.register(WeatheringCopperBlock);
     manager.register(WeatheringCopperChainBlock);
     manager.register(WeatheringCopperDoorBlock);
@@ -617,52 +628,22 @@ impl BlockRegistry {
         })
     }
 
-    #[expect(clippy::too_many_lines)]
-    pub fn place_block(
+    /// Mirrors vanilla `BlockPlaceContext`: where the placed block would go, or `None` when `canPlace()` is false.
+    pub fn placement_target(
         &self,
-        player: &Arc<Player>,
-        placed_block: &'static Block,
-        server: &Arc<Server>,
+        world: &World,
+        player: &Player,
+        placed_block: &Block,
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
-    ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
-        let entity = &player.get_entity();
-
-        match player.gamemode.load() {
-            pumpkin_util::GameMode::Spectator | pumpkin_util::GameMode::Adventure => {
-                return Err(BlockPlacingError::InvalidGamemode);
-            }
-            _ => {}
-        }
-
+    ) -> Option<(BlockPos, BlockDirection, BlockIsReplacing)> {
         let clicked_block_pos = BlockPos(location.0);
-        let world = entity.world.load_full();
-
-        if location.0.y + face.to_offset().y < world.get_bottom_y() {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        if location.0.y + face.to_offset().y > world.get_top_y() {
-            player.send_system_message_raw(
-                &pumpkin_util::text::TextComponent::translate_cross(
-                    pumpkin_data::translation::java::BUILD_TOOHIGH,
-                    pumpkin_data::translation::bedrock::BUILD_TOOHIGH,
-                    vec![pumpkin_util::text::TextComponent::text(
-                        (world.get_top_y()).to_string(),
-                    )],
-                )
-                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                true,
-            );
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
         let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
 
         let replace_clicked_block = if clicked_block == placed_block {
             self.can_update_at(
-                &world,
+                world,
                 clicked_block,
                 clicked_block_state.id,
                 &clicked_block_pos,
@@ -683,44 +664,99 @@ impl BlockRegistry {
             None
         };
 
-        let (final_block_pos, final_face, replacing) =
-            if let Some(replacing) = replace_clicked_block {
-                (clicked_block_pos, face.opposite(), replacing)
-            } else {
-                let block_pos = BlockPos(location.0 + face.to_offset());
-                let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
+        if let Some(replacing) = replace_clicked_block {
+            return Some((clicked_block_pos, face.opposite(), replacing));
+        }
 
-                let replace_previous_block = if previous_block == placed_block {
-                    self.can_update_at(
-                        &world,
-                        previous_block,
-                        previous_block_state.id,
-                        &block_pos,
-                        face.opposite(),
-                        use_item_on,
-                        player,
-                    )
-                    .then_some(BlockIsReplacing::Itself(previous_block_state.id))
+        let block_pos = BlockPos(location.0 + face.to_offset());
+        let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
+
+        let replace_previous_block = if previous_block == placed_block {
+            self.can_update_at(
+                world,
+                previous_block,
+                previous_block_state.id,
+                &block_pos,
+                face.opposite(),
+                use_item_on,
+                player,
+            )
+            .then_some(BlockIsReplacing::Itself(previous_block_state.id))
+        } else {
+            can_replace_with_other_block(previous_block, previous_block_state).then(|| {
+                if previous_block == &Block::WATER {
+                    use pumpkin_data::block_properties::WaterLikeProperties;
+                    let water_props = WaterLikeProperties::from_state_id(previous_block_state.id);
+                    BlockIsReplacing::Water(water_props.level)
                 } else {
-                    can_replace_with_other_block(previous_block, previous_block_state).then(|| {
-                        if previous_block == &Block::WATER {
-                            use pumpkin_data::block_properties::WaterLikeProperties;
-                            let water_props =
-                                WaterLikeProperties::from_state_id(previous_block_state.id);
-                            BlockIsReplacing::Water(water_props.level)
-                        } else {
-                            BlockIsReplacing::None
-                        }
-                    })
-                };
-
-                match replace_previous_block {
-                    Some(replacing) => (block_pos, face.opposite(), replacing),
-                    None => {
-                        return Ok(None);
-                    }
+                    BlockIsReplacing::None
                 }
-            };
+            })
+        };
+
+        replace_previous_block.map(|replacing| (block_pos, face.opposite(), replacing))
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn place_block(
+        &self,
+        player: &Arc<Player>,
+        placed_block: &'static Block,
+        server: &Arc<Server>,
+        use_item_on: &SUseItemOn,
+        location: BlockPos,
+        face: BlockDirection,
+    ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
+        let entity = &player.get_entity();
+        let held_stack = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
+            .ok()
+            .map(|hand| player.inventory().get_stack_in_hand(hand));
+        let clicked_block_pos = BlockPos(location.0);
+        let world = entity.world.load_full();
+        let clicked_block = world.get_block(&clicked_block_pos);
+
+        match player.gamemode.load() {
+            pumpkin_util::GameMode::Spectator => {
+                return Err(BlockPlacingError::InvalidGamemode);
+            }
+            pumpkin_util::GameMode::Adventure => {
+                let can_place = held_stack
+                    .as_ref()
+                    .and_then(|s| {
+                        s.get_data_component::<pumpkin_data::data_component_impl::CanPlaceOnImpl>()
+                    })
+                    .is_some_and(|comp| comp.matches_block(clicked_block));
+                if !can_place {
+                    return Err(BlockPlacingError::InvalidGamemode);
+                }
+            }
+            _ => {}
+        }
+
+        if location.0.y + face.to_offset().y < world.get_bottom_y() {
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        if location.0.y + face.to_offset().y > world.get_top_y() {
+            player.send_system_message_raw(
+                &pumpkin_util::text::TextComponent::translate_cross(
+                    pumpkin_data::translation::java::BUILD_TOOHIGH,
+                    pumpkin_data::translation::bedrock::BUILD_TOOHIGH,
+                    vec![pumpkin_util::text::TextComponent::text(
+                        (world.get_top_y()).to_string(),
+                    )],
+                )
+                .color_named(pumpkin_util::text::color::NamedColor::Red),
+                true,
+            );
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        let Some((final_block_pos, final_face, replacing)) =
+            self.placement_target(&world, player, placed_block, use_item_on, location, face)
+        else {
+            return Ok(None);
+        };
 
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
@@ -747,7 +783,7 @@ impl BlockRegistry {
             return Ok(None);
         }
 
-        let new_state = self.on_place(
+        let mut new_state = self.on_place(
             server,
             &world,
             player,
@@ -757,6 +793,34 @@ impl BlockRegistry {
             replacing,
             use_item_on,
         );
+
+        if let Some(ref stack) = held_stack
+            && let Some(block_state_comp) =
+                stack.get_data_component::<pumpkin_data::data_component_impl::BlockStateImpl>()
+            && let Some(props) = placed_block.properties(new_state)
+        {
+            let mut prop_list = props.to_props();
+            for (k, v) in block_state_comp.properties.iter() {
+                for p in &mut prop_list {
+                    if p.key().to_str() == k.as_ref() {
+                        for state_entry in placed_block.states {
+                            if let Some(sp) = placed_block.properties(state_entry.id)
+                                && let Some(candidate) = sp
+                                    .to_props()
+                                    .into_iter()
+                                    .find(|cp| cp.key() == p.key() && cp.value_str() == v.as_ref())
+                            {
+                                *p = candidate;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            new_state = placed_block
+                .from_properties(&prop_list)
+                .to_state_id(placed_block);
+        }
 
         // Mirror vanilla obstruction checks: only entities that block building should prevent
         // placement. (e.g. arrows/xp orbs/displays/markers should not)
@@ -806,11 +870,27 @@ impl BlockRegistry {
             BlockState::to_be_network_id(new_state) as i32,
         );
 
-        if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
+        if let Some(ref stack) = held_stack
             && placed_block.default_state.block_entity_type != u16::MAX
-            && let Some(block_entity) = world.get_block_entity(&final_block_pos)
         {
-            block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
+            if let Some(block_entity_data) =
+                stack.get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
+                && let Some(existing_be) = world.get_block_entity(&final_block_pos)
+            {
+                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                existing_be.write_internal(&mut nbt);
+                for (k, v) in &block_entity_data.nbt.child_tags {
+                    if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
+                        nbt.child_tags.insert(k.clone(), v.clone());
+                    }
+                }
+                if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
+                    world.add_block_entity(reloaded);
+                }
+            }
+            if let Some(block_entity) = world.get_block_entity(&final_block_pos) {
+                block_entity.apply_item_components(stack);
+            }
         }
 
         self.player_placed(
@@ -1528,9 +1608,7 @@ impl BlockRegistry {
         self.get_pumpkin_block(block.id).map_or_else(
             || match computation_type {
                 PathComputationType::Water => {
-                    state.is_waterlogged()
-                        || Fluid::from_state_id(state.id)
-                            .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                    World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
                 }
                 PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
             },

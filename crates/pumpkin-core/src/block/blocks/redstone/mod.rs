@@ -34,6 +34,9 @@ pub mod tripwire_hook;
 pub mod abstract_redstone_gate;
 pub mod dispenser;
 
+/// Strongest redstone signal (`Redstone.SIGNAL_MAX`).
+pub const SIGNAL_MAX: u8 = 15;
+
 pub fn is_emitting_redstone_power(
     block: &Block,
     state: &BlockState,

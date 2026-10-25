@@ -75,6 +75,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
+pub mod bucketable;
 pub mod custom_sound;
 pub mod decoration;
 pub mod effect;
@@ -106,6 +107,34 @@ pub mod predicate;
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
 pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
+/// Push strength per axis in `Entity.push`.
+pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+
+/// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
+const WATER_PUSH_SPEED: f64 = 0.014;
+const FAST_LAVA_PUSH_SPEED: f64 = 0.007;
+const LAVA_PUSH_SPEED: f64 = 0.002_333_333_333_333_333_5;
+
+/// Speed range of `moveTowardsClosestSpace`.
+const PUSH_OUT_MIN_SPEED: f64 = 0.1;
+const PUSH_OUT_RANDOM_SPEED: f64 = 0.2;
+pub(crate) const MAX_PUSH_OUT_SPEED: f64 = PUSH_OUT_MIN_SPEED + PUSH_OUT_RANDOM_SPEED;
+
+#[must_use]
+pub(crate) const fn lava_push_speed(fast_lava: bool) -> f64 {
+    if fast_lava {
+        FAST_LAVA_PUSH_SPEED
+    } else {
+        LAVA_PUSH_SPEED
+    }
+}
+
+/// Speed water and lava currents can add together in one tick.
+#[must_use]
+pub(crate) const fn max_fluid_push_speed(fast_lava: bool) -> f64 {
+    WATER_PUSH_SPEED + lava_push_speed(fast_lava)
+}
+
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
 #[must_use]
@@ -129,6 +158,17 @@ impl dyn EntityBase + '_ {
         self.get_entity().entity_id == other.get_entity().entity_id
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
+    }
+
+    #[must_use]
+    pub fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team) = self.get_team_name() else {
+            return true;
+        };
+        other.get_team_name().as_ref() != Some(&team)
+            || self
+                .get_team()
+                .is_some_and(|team| team.is_allow_friendly_fire())
     }
 }
 
@@ -199,6 +239,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())
     }
 
+    fn get_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        None
+    }
+
     fn init_data_tracker(&self) {
         let entity = self.get_entity();
 
@@ -213,6 +260,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
     fn set_variant_name(&self, _name: &str) {}
+    fn apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn set_sound_variant_name(&self, _name: &str) {}
 
     fn teleport(
@@ -248,6 +301,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .pos
             .load()
             .add_raw(0.0, self.bedrock_y_offset(), 0.0)
+    }
+
+    /// What this entity can touch next tick; `None` means a conservative reach.
+    fn audited_reach(&self) -> Option<crate::world::entity_islands::AuditedReach> {
+        self.get_mob()
+            .and_then(|mob| mob.get_mob_entity().audited_reach(mob))
     }
 
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
@@ -300,11 +359,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
+        if let Some(considered) = self
+            .get_mob()
+            .and_then(|mob| mob.mob_considers_entity_as_ally(other, None))
+        {
+            return considered;
+        }
         if let Some(tamable) = self.get_mob().and_then(mob::Mob::as_tamable)
             && let Some(considered) = tamable.tamable_considers_entity_as_ally(other)
         {
             return considered;
         }
+        self.is_on_same_team(other)
+    }
+
+    fn is_on_same_team(&self, other: &dyn EntityBase) -> bool {
         let Some(team) = self.get_team_name() else {
             return false;
         };
@@ -342,12 +411,32 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn dampens_vibrations(&self) -> bool {
+        false
+    }
+
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
         false
     }
 
     fn can_hit(&self) -> bool {
         false
+    }
+
+    fn is_immobile(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(LivingEntity::is_dead_or_dying)
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        None
+    }
+
+    fn can_control_vehicle(&self) -> bool {
+        !self
+            .get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_NON_CONTROLLING_RIDER)
     }
 
     fn is_flutterer(&self) -> bool {
@@ -485,6 +574,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn interact_with_hand(
+        &self,
+        _player: &Arc<Player>,
+        _item_stack: &mut ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        None
+    }
+
     fn set_on_fire_for(&self, seconds: f32) {
         let entity = self.get_entity();
         // Exclude fire-immune entities (ex. certain items) from burn damage
@@ -574,8 +672,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             }
             dx *= d2;
             dz *= d2;
-            dx *= 0.05;
-            dz *= 0.05;
+            dx *= PUSH_STRENGTH;
+            dz *= PUSH_STRENGTH;
 
             if !self_entity.has_passengers() && self.is_pushable() {
                 let mut vel = self_entity.velocity.load();
@@ -847,6 +945,7 @@ struct SpawnState {
 }
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
+#[repr(C)]
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: i32,
@@ -885,6 +984,7 @@ pub struct Entity {
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Tracks a horizontal collision
     pub horizontal_collision: AtomicBool,
+    pub vertical_collision: AtomicBool,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
@@ -906,7 +1006,7 @@ pub struct Entity {
     /// The entity's current pose (e.g., standing, sitting, swimming).
     pub pose: AtomicCell<EntityPose>,
     /// The bounding box of an entity (hitbox)
-    pub bounding_box: AtomicCell<BoundingBox>,
+    pub bounding_box: EntityBoundingBox,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
     /// Whether this entity is invulnerable to all damage
@@ -933,7 +1033,9 @@ pub struct Entity {
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
-    /// The age of the entity in ticks. Negative values indicate a baby.
+    /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
+    pub tick_count: AtomicI32,
+    /// Vanilla `AgeableMob.age`. Negative values indicate a baby.
     pub age: AtomicI32,
 
     pub current_biome: ArcSwap<&'static Biome>,
@@ -946,7 +1048,9 @@ pub struct Entity {
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: AtomicBool,
+    pub blocks_building: bool,
     pub silent: AtomicBool,
+    pub air_supply: AtomicI32,
     pub has_no_gravity: AtomicBool,
     /// Scoreboard tags attached to this entity, managed with `/tag`.
     /// Vanilla allows at most [`MAX_SCOREBOARD_TAGS`] tags per entity.
@@ -982,11 +1086,63 @@ pub struct Entity {
     pub custom_data: std::sync::Mutex<NbtCompound>,
 }
 
-impl Entity {
-    const WATER_FLOW_SCALE: f64 = 0.014;
-    const LAVA_FAST_FLOW_SCALE: f64 = 0.007;
-    const LAVA_SLOW_FLOW_SCALE: f64 = 0.002_333_333_333_333_333_5;
+/// Entity bounds that keep the world's spatial queries current when written.
+pub struct EntityBoundingBox {
+    value: AtomicCell<BoundingBox>,
+    index: std::sync::RwLock<std::sync::Weak<crate::world::EntityIndex>>,
+    indexed: bool,
+    entity_id: i32,
+}
 
+impl EntityBoundingBox {
+    fn new(world: &World, entity_id: i32, entity_type: &EntityType, bounds: BoundingBox) -> Self {
+        let index = if entity_type == &EntityType::PLAYER {
+            std::sync::Weak::new()
+        } else {
+            Arc::downgrade(&world.entity_index)
+        };
+        Self {
+            value: AtomicCell::new(bounds),
+            index: std::sync::RwLock::new(index),
+            indexed: entity_type != &EntityType::PLAYER,
+            entity_id,
+        }
+    }
+
+    /// Returns the current bounds.
+    #[must_use]
+    pub fn load(&self) -> BoundingBox {
+        self.value.load()
+    }
+
+    /// Publishes bounds and their spatial index membership together.
+    pub fn store(&self, bounds: BoundingBox) {
+        if !self.indexed {
+            self.value.store(bounds);
+            return;
+        }
+        let index = self
+            .index
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(index) = index.upgrade() {
+            index.set_bounds(self.entity_id, &self.value, bounds);
+        } else {
+            self.value.store(bounds);
+        }
+    }
+
+    fn set_index(&self, index: &Arc<crate::world::EntityIndex>) {
+        let mut owner = self
+            .index
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *owner = Arc::downgrade(index);
+        index.set_bounds(self.entity_id, &self.value, self.value.load());
+    }
+}
+
+impl Entity {
     pub fn new(
         world: Arc<World>,
         position: Vector3<f64>,
@@ -1031,6 +1187,13 @@ impl Entity {
             .level
             .get_rough_biome(&BlockPos::new(floor_x, floor_y, floor_z));
 
+        let bounding_box = EntityBoundingBox::new(
+            &world,
+            entity_id,
+            entity_type,
+            BoundingBox::new_from_pos(position.x, position.y, position.z, &bounding_box_size),
+        );
+
         Self {
             entity_id,
             entity_uuid,
@@ -1041,6 +1204,7 @@ impl Entity {
             touching_lava: AtomicBool::new(false),
             lava_height: AtomicCell::new(0.0),
             horizontal_collision: AtomicBool::new(false),
+            vertical_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
             movement: AtomicCell::new(Vector3::default()),
@@ -1063,12 +1227,7 @@ impl Entity {
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             pose: AtomicCell::new(EntityPose::Standing),
-            bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
-                position.x,
-                position.y,
-                position.z,
-                &bounding_box_size,
-            )),
+            bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
@@ -1088,6 +1247,7 @@ impl Entity {
             leashed_to: std::sync::Mutex::new(None),
 
             riding_cooldown: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
             age: AtomicI32::new(0),
             current_biome: ArcSwap::new(Arc::new(current_biome)),
             last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
@@ -1095,7 +1255,9 @@ impl Entity {
             portal_manager: std::sync::Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
             custom_name_visible: AtomicBool::new(false),
+            blocks_building: false,
             silent: AtomicBool::new(false),
+            air_supply: AtomicI32::new(breath::MAX_AIR),
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
@@ -1128,6 +1290,9 @@ impl Entity {
         let biome = world.level.get_rough_biome(&block_pos);
         self.current_biome.store(Arc::new(biome));
         self.last_biome_update_pos.store(block_pos);
+        if self.entity_type != &EntityType::PLAYER {
+            self.bounding_box.set_index(&world.entity_index);
+        }
         self.world.store(world);
     }
 
@@ -1193,8 +1358,7 @@ impl Entity {
         }
     }
 
-    /// Sets the entity's age in ticks.
-    /// Negative values indicate that the entity is a baby.
+    /// Sets the entity's growth age. Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
         self.age.store(age, Relaxed);
     }
@@ -1265,6 +1429,26 @@ impl Entity {
         );
         self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE, visible);
         self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    pub fn set_air_supply(&self, mut air: i32) {
+        if air == self.air_supply.load(Relaxed) {
+            return;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                    self.entity_id,
+                    air,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            air = event.amount;
+        }
+        self.air_supply.store(air, Relaxed);
+        self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
     }
 
     pub fn is_silent(&self) -> bool {
@@ -1402,6 +1586,17 @@ impl Entity {
         }
     }
 
+    #[must_use]
+    pub fn root_vehicle_id(&self) -> i32 {
+        let mut id = self.entity_id;
+        let mut vehicle = self.get_vehicle();
+        while let Some(current) = vehicle {
+            id = current.get_entity().entity_id;
+            vehicle = current.get_entity().get_vehicle();
+        }
+        id
+    }
+
     /// Returns the block position of the block the (non-player) entity is standing on, if any.
     pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         // Check if the entity is on the ground
@@ -1418,6 +1613,7 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
+        self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
@@ -1436,6 +1632,8 @@ impl Entity {
 
         let (adjusted_movement, supporting_block, on_ground) =
             Self::collide_with_shapes(movement, bounding_box, &collisions, &block_positions);
+        self.vertical_collision
+            .store(movement.y != adjusted_movement.y, Ordering::SeqCst);
         self.on_ground.store(on_ground, Ordering::SeqCst);
         self.supporting_block_pos.store(supporting_block);
         self.horizontal_collision.store(
@@ -1453,22 +1651,40 @@ impl Entity {
     ) -> Vec<BoundingBox> {
         const EPSILON: f64 = 1.0e-7;
         let is_boat = caller.cast_any().is::<BoatEntity>();
-        let root_vehicle = self.get_root_vehicle_id();
-        self.world
-            .load()
-            .get_all_at_box(&bounding_box.expand(EPSILON, EPSILON, EPSILON))
-            .into_iter()
-            .filter(|other| {
-                let entity = other.get_entity();
-                entity.entity_id != self.entity_id
-                    && !entity.is_removed()
-                    && !other.is_spectator()
-                    && (other.cast_any().is::<BoatEntity>()
-                        || (is_boat && Self::can_collide_with_boat(other.as_ref())))
-                    && entity.get_root_vehicle_id() != root_vehicle
+        let world = self.world.load();
+        let entities = world.entities.load_full();
+        if !is_boat && !world.entity_index.has_boats(&entities) {
+            return Vec::new();
+        }
+        let root_vehicle = self.root_vehicle_id();
+        let query = bounding_box.expand_all(EPSILON);
+        let can_collide = |other: &dyn EntityBase| {
+            let entity = other.get_entity();
+            (other.cast_any().is::<BoatEntity>() || (is_boat && Self::can_collide_with_boat(other)))
+                && entity.entity_id != self.entity_id
+                && !entity.is_removed()
+                && !other.is_spectator()
+                && entity.root_vehicle_id() != root_vehicle
+        };
+        let mut collisions: Vec<_> = world
+            .entity_index
+            .query_filtered(entities, query, can_collide)
+            .map(|other| {
+                crate::world::entity_islands::check_reached(other.get_entity().entity_id);
+                other.get_entity().bounding_box.load()
             })
-            .map(|other| other.get_entity().bounding_box.load())
-            .collect()
+            .collect();
+        if is_boat {
+            collisions.extend(world.players.load().iter().filter_map(|player| {
+                let entity = player.get_entity();
+                let bounds = entity.bounding_box.load();
+                (bounds.intersects(&query) && can_collide(player.as_ref())).then(|| {
+                    crate::world::entity_islands::check_reached(entity.entity_id);
+                    bounds
+                })
+            }));
+        }
+        collisions
     }
 
     fn can_collide_with_boat(other: &dyn EntityBase) -> bool {
@@ -1879,13 +2095,9 @@ impl Entity {
             }
         }
 
-        let lava_speed = if world.dimension.fast_lava {
-            Self::LAVA_FAST_FLOW_SCALE
-        } else {
-            Self::LAVA_SLOW_FLOW_SCALE
-        };
+        let lava_speed = lava_push_speed(world.dimension.fast_lava);
 
-        self.push_by_fluid(Self::WATER_FLOW_SCALE, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(WATER_PUSH_SPEED, fluid_push[0], fluid_n[0]);
 
         self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
 
@@ -2113,6 +2325,7 @@ impl Entity {
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
+            self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
             return;
@@ -2210,7 +2423,7 @@ impl Entity {
             }
         }
 
-        let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
+        let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
 
@@ -2505,7 +2718,7 @@ impl Entity {
         // Vanilla parity: full-freeze damage is tick-phase based.
         if can_freeze
             && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
-            && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
+            && self.tick_count.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             let world = self.world.load_full();
             if world.level_info.load().game_rules.freeze_damage
@@ -2943,7 +3156,7 @@ impl Entity {
                 return;
             }
             for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
@@ -2992,7 +3205,7 @@ impl Entity {
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
             for player in players {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
@@ -3072,7 +3285,7 @@ impl Entity {
             && world
                 .entity_tracker
                 .get_tracked_entity(self.entity_id)
-                .is_some_and(|tracked| tracked.seen_by.is_empty())
+                .is_some_and(|tracked| !tracked.has_viewers())
         {
             self.synched_data.clear_dirty();
             return;
@@ -3595,16 +3808,6 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
-    }
-
-    fn get_root_vehicle_id(&self) -> i32 {
-        let mut root = self.entity_id;
-        let mut vehicle = self.get_vehicle();
-        while let Some(current) = vehicle {
-            root = current.get_entity().entity_id;
-            vehicle = current.get_entity().get_vehicle();
-        }
-        root
     }
 
     pub fn is_leashed(&self) -> bool {
@@ -4172,6 +4375,9 @@ impl Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
+        if self.entity_type != &EntityType::PLAYER {
+            nbt.put_short("Air", self.air_supply.load(Relaxed) as i16);
+        }
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
@@ -4260,6 +4466,13 @@ impl Entity {
         }
         if let Some(on_ground) = nbt.get_bool("OnGround") {
             self.on_ground.store(on_ground, Relaxed);
+        }
+        if self.entity_type != &EntityType::PLAYER
+            && let Some(air) = nbt.get_short("Air")
+        {
+            let air = i32::from(air);
+            self.air_supply.store(air, Relaxed);
+            self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
         if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
             self.invulnerable.store(invulnerable, Relaxed);
@@ -4452,6 +4665,36 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn boat_landing_sets_and_clears_vertical_collision()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let cow = passive::cow::CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 66.0, 0.0),
+            &EntityType::COW,
+        ));
+        let boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        )));
+        world.entities.store(Arc::new(vec![boat]));
+        let entity = cow.get_entity();
+        let movement =
+            entity.adjust_movement_for_collisions(Vector3::new(0.0, -2.0, 0.0), cow.as_ref());
+        assert_eq!(movement, Vector3::new(0.0, -1.4375, 0.0));
+        assert!(entity.vertical_collision.load(Relaxed));
+        assert!(entity.on_ground.load(Relaxed));
+        assert_eq!(entity.supporting_block_pos.load(), None);
+        entity.adjust_movement_for_collisions(Vector3::new(0.0, 1.0, 0.0), cow.as_ref());
+        assert!(!entity.vertical_collision.load(Relaxed));
+        assert!(!entity.on_ground.load(Relaxed));
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn boat_collision_rejects_fast_crossing_with_a_clear_destination() {

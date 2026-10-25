@@ -89,6 +89,18 @@ impl TargetPredicate {
         tester: Option<&dyn EntityBase>,
         target: &dyn EntityBase,
     ) -> bool {
+        self.test_with_alliance(world, tester, target, |tester, target| {
+            tester.is_allied_to(target)
+        })
+    }
+
+    pub fn test_with_alliance(
+        &self,
+        world: &World,
+        tester: Option<&dyn EntityBase>,
+        target: &dyn EntityBase,
+        is_allied: impl FnOnce(&dyn EntityBase, &dyn EntityBase) -> bool,
+    ) -> bool {
         let Some(target_living) = target.get_living_entity() else {
             return false;
         };
@@ -115,17 +127,18 @@ impl TargetPredicate {
             && (!tester.get_mob().map_or_else(
                 || tester_living.can_attack(target),
                 |mob| mob.can_attack(target),
-            ) || tester.is_allied_to(target))
+            ) || is_allied(tester, target))
         {
             return false;
         }
 
         if self.base_max_distance > 0.0 {
-            // TODO: use distance_scaling_factor from target
-            // Vanilla `getVisibilityPercent`: sneaking, invisibility (by armor cover) and mob heads
-            // shrink the range, min 2 blocks. Only piglin_ai::visibility_percent has it, move to
-            // `LivingEntity` and gate on `use_distance_scaling_factor` (revenge ignores it).
-            let max_dist = self.base_max_distance.max(MIN_DISTANCE);
+            let modifier = if self.use_distance_scaling_factor {
+                target_living.visibility_percent(Some(tester.get_entity().entity_type))
+            } else {
+                1.0
+            };
+            let max_dist = (self.base_max_distance * modifier).max(MIN_DISTANCE);
             let dist_sq = tester
                 .get_entity()
                 .pos

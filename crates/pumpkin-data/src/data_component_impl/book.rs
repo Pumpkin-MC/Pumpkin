@@ -110,14 +110,35 @@ impl DataComponentImpl for WrittenBookContentImpl {
     default_impl!(WrittenBookContent);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DebugStickStateImpl;
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct DebugStickStateImpl {
+    pub properties: Vec<(String, String)>,
+}
+#[allow(non_upper_case_globals)]
+pub const DebugStickStateImpl: DebugStickStateImpl = DebugStickStateImpl {
+    properties: Vec::new(),
+};
 impl DebugStickStateImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut properties = Vec::new();
+        if let Some(compound) = data.extract_compound() {
+            for (k, v) in &compound.child_tags {
+                if let Some(s) = v.extract_string() {
+                    properties.push((k.to_string(), s.to_string()));
+                }
+            }
+        }
+        Some(Self { properties })
     }
 }
 impl DataComponentImpl for DebugStickStateImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        for (k, v) in &self.properties {
+            compound.put_string(k.as_str(), v.clone());
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(DebugStickState);
 }
 

@@ -1,3 +1,4 @@
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::player::statistics::StatisticCategory;
 use crate::server::Server;
 use crate::world::World;
@@ -31,10 +32,13 @@ use std::sync::{
 };
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
+use crate::world::entity_islands::{self, AuditedReach};
 
 pub struct ItemEntity {
     entity: Entity,
     item_age: AtomicU32,
+    thrower: crossbeam::atomic::AtomicCell<Option<uuid::Uuid>>,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
@@ -89,6 +93,9 @@ const LIFETIME: u32 = 6000; // 5 minutes in ticks
 /// Vanilla `ItemEntity.merge(to, from, 64)`: cap on top of `getMaxStackSize`.
 const MERGE_MAX_COUNT: u8 = 64;
 
+/// Horizontal search distance of `mergeWithNeighbours`.
+const MERGE_DISTANCE: f64 = 0.5;
+
 impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
@@ -105,6 +112,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(Self::DEFAULT_PICKUP_DELAY),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -127,6 +135,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -142,6 +151,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(0),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -152,6 +162,10 @@ impl ItemEntity {
 
     pub const fn get_item_stack(&self) -> &Mutex<ItemStack> {
         &self.item_stack
+    }
+
+    pub fn set_thrower(&self, uuid: uuid::Uuid) {
+        self.thrower.store(Some(uuid));
     }
 
     pub fn get_pickup_delay(&self) -> u8 {
@@ -211,7 +225,11 @@ impl ItemEntity {
             return;
         }
 
-        let bounding_box = self.entity.bounding_box.load().expand(0.5, 0.0, 0.5);
+        let bounding_box =
+            self.entity
+                .bounding_box
+                .load()
+                .expand(MERGE_DISTANCE, 0.0, MERGE_DISTANCE);
         let world = self.entity.world.load();
         for other in world.get_entities_at_box(&bounding_box) {
             let Some(item) = other.get_item_entity() else {
@@ -467,7 +485,7 @@ impl ItemEntity {
         !entity.on_ground.load(Ordering::SeqCst)
             || move_velo.horizontal_length_squared() > 1.0e-5
             || entity
-                .age
+                .tick_count
                 .load(Ordering::Relaxed)
                 .wrapping_add(entity.entity_id)
                 % 4
@@ -531,7 +549,7 @@ impl ItemEntity {
         let moved =
             BlockPos::floored_v(entity.last_pos.load()) != BlockPos::floored_v(entity.pos.load());
         let rate = if moved { 2 } else { 40 };
-        if entity.age.load(Ordering::Relaxed) % rate == 0 {
+        if entity.tick_count.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
         }
 
@@ -553,6 +571,47 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
+    fn dampens_vibrations(&self) -> bool {
+        self.item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_DAMPENS_VIBRATIONS)
+    }
+
+    fn get_owner_id(&self) -> Option<i32> {
+        let uuid = self.thrower.load()?;
+        self.entity
+            .world
+            .load()
+            .get_entity_by_uuid(uuid)
+            .map(|entity| entity.get_entity().entity_id)
+    }
+
+    fn audited_reach(&self) -> Option<AuditedReach> {
+        let entity = &self.entity;
+        let world = entity.world.load();
+        let pushes =
+            super::MAX_PUSH_OUT_SPEED + super::max_fluid_push_speed(world.dimension.fast_lava);
+        let velocity = entity.velocity.load();
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (
+                velocity.x.hypot(velocity.z) + pushes,
+                velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION,
+            ),
+            entities: MERGE_DISTANCE,
+            players: 0.0,
+            block_reads: 1.0,
+            route: None,
+            changes_blocks: false,
+            global: false,
+            links: entity_islands::links_of(self),
+        };
+        reach.scan_contact_blocks(&world);
+        Some(reach)
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         if self
@@ -710,6 +769,19 @@ impl EntityBase for ItemEntity {
             };
 
             if amount_picked_up > 0 {
+                if inserted
+                    && let Some(thrower) = self
+                        .thrower
+                        .load()
+                        .and_then(|uuid| self.entity.world.load().get_entity_by_uuid(uuid))
+                {
+                    player.trigger_advancement(AdvancementTrigger::ThrownItemPickedUpByPlayer {
+                        thrower_type: format!(
+                            "minecraft:{}",
+                            thrower.get_entity().entity_type.resource_name
+                        ),
+                    });
+                }
                 player.increment_stat(
                     StatisticCategory::PickedUp,
                     item_id as i32,
@@ -772,9 +844,13 @@ impl EntityBase for ItemEntity {
             self.pickup_delay.load(Ordering::Relaxed) as i16,
         );
         nbt.put_short("Health", self.health.load(Relaxed) as i16);
+        if let Some(thrower) = self.thrower.load() {
+            nbt.put_uuid("Thrower", thrower);
+        }
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.thrower.store(nbt.get_uuid("Thrower"));
         // Restore the item stack from the "Item" compound
         if let Some(item_compound) = nbt.get_compound("Item")
             && let Some(stack) = ItemStack::read_item_stack(item_compound)

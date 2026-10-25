@@ -58,11 +58,7 @@ impl PolarBearEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, true)));
@@ -77,11 +73,7 @@ impl PolarBearEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             target_selector.add_goal(
                 1,
@@ -92,7 +84,7 @@ impl PolarBearEntity {
                 ),
             );
             // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 5, false);
+            apply_targets(target_selector, &mob_arc.mob_entity, 3, 5, false);
             target_selector.add_goal(
                 4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true)
@@ -159,10 +151,6 @@ impl Mob for PolarBearEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

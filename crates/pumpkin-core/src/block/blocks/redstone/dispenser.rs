@@ -13,7 +13,6 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::passive::sheep::SheepEntity;
@@ -156,27 +155,6 @@ fn is_allowed_entity(
         None => true,
         Some(IDSet::Tag(tag)) => entity_type.is_tagged_with(tag).unwrap_or(false),
         Some(IDSet::IDs(types)) => types.contains(&entity_type),
-    }
-}
-
-const fn wool_of_color(color: u8) -> &'static Item {
-    match color {
-        1 => &Item::ORANGE_WOOL,
-        2 => &Item::MAGENTA_WOOL,
-        3 => &Item::LIGHT_BLUE_WOOL,
-        4 => &Item::YELLOW_WOOL,
-        5 => &Item::LIME_WOOL,
-        6 => &Item::PINK_WOOL,
-        7 => &Item::GRAY_WOOL,
-        8 => &Item::LIGHT_GRAY_WOOL,
-        9 => &Item::CYAN_WOOL,
-        10 => &Item::PURPLE_WOOL,
-        11 => &Item::BLUE_WOOL,
-        12 => &Item::BROWN_WOOL,
-        13 => &Item::GREEN_WOOL,
-        14 => &Item::RED_WOOL,
-        15 => &Item::BLACK_WOOL,
-        _ => &Item::WHITE_WOOL,
     }
 }
 
@@ -758,7 +736,7 @@ impl DispenserBlock {
     }
 
     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let _ = item.split(1);
+        let launched_stack = item.split(1);
         let facing = to_normal(ctx.facing);
         // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
         let position = ctx
@@ -767,7 +745,8 @@ impl DispenserBlock {
             .add(&(facing * (0.7 * 0.5125)))
             .add(&Vector3::new(0.0, 0.08, 0.0));
         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
-        let rocket = FireworkRocketEntity::new(entity);
+        let rocket = FireworkRocketEntity::new_with_stack(entity, launched_stack);
+        rocket.set_shot_at_angle(true);
 
         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
         // `ThrownItemEntity::set_velocity` here.
@@ -946,7 +925,7 @@ impl DispenserBlock {
     }
 
     fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx) {
+        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx, item) {
             // `damage_item` already consumes the tool from the stack when it breaks.
             let _ = item.damage_item(1);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
@@ -985,28 +964,21 @@ impl DispenserBlock {
         true
     }
 
-    fn shear_entity_in_front(ctx: &DispenseContext<'_>) -> bool {
-        let target_box = BoundingBox::from_block(&Self::target_position(ctx));
+    fn shear_entity_in_front(ctx: &DispenseContext<'_>, tool: &ItemStack) -> bool {
+        let target = Self::target_position(ctx);
+        let target_box = BoundingBox::from_block(&target);
 
         for entity in ctx.world.get_entities_at_box(&target_box) {
             let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>() else {
                 continue;
             };
-            if sheep.is_sheared() || sheep.is_baby() || !entity.get_entity().is_alive() {
+            if !sheep.ready_for_shearing() || !entity.get_entity().is_alive() {
                 continue;
             }
 
-            let position = entity.get_entity().pos.load();
-            sheep.set_sheared(true);
+            sheep.shear(SoundCategory::Blocks, tool);
             ctx.world
-                .play_sound(Sound::EntitySheepShear, SoundCategory::Blocks, &position);
-
-            let count = rng().random_range(1..=3);
-            Self::drop_at(
-                ctx.world,
-                position,
-                ItemStack::new(count, wool_of_color(sheep.get_color())),
-            );
+                .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
 
             return true;
         }
@@ -1198,6 +1170,9 @@ impl DispenserBlock {
             };
             if !living.is_part_of_game()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.can_dispenser_equip_into_slot(slot))
             {
                 continue;
             }

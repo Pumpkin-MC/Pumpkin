@@ -7,12 +7,16 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockDirection,
+    data_component_impl::{
+        BucketEntityDataImpl, CustomNameImpl, EquipmentSlot, SulfurCubeContentImpl,
+    },
     entity::EntityType,
     fluid::Fluid,
     item::Item,
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
@@ -44,6 +48,7 @@ impl ItemMetadata for FilledBucketItem {
             Item::TROPICAL_FISH_BUCKET.id,
             Item::PUFFERFISH_BUCKET.id,
             Item::TADPOLE_BUCKET.id,
+            Item::SULFUR_CUBE_BUCKET.id,
         ]
         .into()
     }
@@ -82,6 +87,8 @@ const fn get_mob_for_bucket(item: &Item) -> Option<(&'static EntityType, Sound)>
         Some((&EntityType::PUFFERFISH, Sound::ItemBucketEmptyFish))
     } else if item.id == Item::TADPOLE_BUCKET.id {
         Some((&EntityType::TADPOLE, Sound::ItemBucketEmptyTadpole))
+    } else if item.id == Item::SULFUR_CUBE_BUCKET.id {
+        Some((&EntityType::SULFUR_CUBE, Sound::ItemBucketEmptySulfurCube))
     } else {
         None
     }
@@ -109,39 +116,139 @@ const fn get_fill_sound(item: &Item) -> Sound {
     }
 }
 
-fn give_player_bucket_item(player: &Player, item: &'static Item) {
-    if player.gamemode.load() == GameMode::Creative {
+fn give_filled_bucket_stack(
+    stack: &mut ItemStack,
+    player: &Player,
+    mut filled: ItemStack,
+    limit_creative_stack_size: bool,
+) {
+    if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
                 .inventory
                 .main_inventory
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            inv.iter().any(|stack| stack.item.id == item.id)
+            inv.iter().any(|s| s.are_equal(&filled))
         };
         if has_item {
             return;
         }
-        let mut item_stack = ItemStack::new(1, item);
-        player.inventory.insert_stack_anywhere(&mut item_stack);
+        player.inventory.insert_stack_anywhere(&mut filled);
+    } else if stack.item_count == 1 && player.gamemode.load() != GameMode::Creative {
+        *stack = filled;
     } else {
-        let item_stack = ItemStack::new(1, item);
-        let mut held_stack = player.inventory.held_item();
-
-        if held_stack.item_count == 1 {
-            player.inventory.set_held_item(item_stack);
-        } else {
-            held_stack.decrement(1);
-            player.inventory.set_held_item(held_stack);
-            let mut stack_to_give = item_stack;
-            let was_added = player.inventory.insert_stack_anywhere(&mut stack_to_give);
-            if !was_added && !stack_to_give.is_empty() {
-                player
-                    .world()
-                    .drop_stack(&player.position().to_block_pos(), stack_to_give);
-            }
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        let was_added = player.inventory.insert_stack_anywhere(&mut filled);
+        if !was_added && !filled.is_empty() {
+            player
+                .world()
+                .drop_stack(&player.position().to_block_pos(), filled);
         }
     }
+}
+
+pub(crate) fn give_filled_mob_bucket(stack: &mut ItemStack, player: &Player, bucket: ItemStack) {
+    give_filled_bucket_stack(stack, player, bucket, false);
+}
+
+pub(crate) fn fill_bucket_stack(stack: &mut ItemStack, player: &Player, item: &'static Item) {
+    give_filled_bucket_stack(stack, player, ItemStack::new(1, item), true);
+}
+
+fn fill_mob_bucket_stack(
+    stack: &mut ItemStack,
+    player: &Player,
+    item: &'static Item,
+    entity: &dyn EntityBase,
+) {
+    let mut bucket_stack = ItemStack::new(1, item);
+    if let Some(custom_name) = entity.get_entity().custom_name.load().as_ref() {
+        bucket_stack.set_data_component(CustomNameImpl {
+            name: custom_name.clone(),
+        });
+    }
+    if entity.get_entity().entity_type == &EntityType::SULFUR_CUBE
+        && let Some(living) = entity.get_living_entity()
+    {
+        let body_stack = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EquipmentSlot::BODY);
+        if !body_stack.is_empty() {
+            bucket_stack.set_data_component(SulfurCubeContentImpl { item: body_stack });
+        }
+    }
+    let mut nbt = NbtCompound::new();
+    entity.write_nbt(&mut nbt);
+    for key in [
+        "id",
+        "UUID",
+        "Pos",
+        "Motion",
+        "Rotation",
+        "FallDistance",
+        "Dimension",
+        "PortalCooldown",
+    ] {
+        nbt.child_tags.remove(key);
+    }
+    bucket_stack.set_data_component(BucketEntityDataImpl { nbt: Some(nbt) });
+    give_filled_bucket_stack(stack, player, bucket_stack, true);
+}
+
+fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, player: &Player) {
+    crate::item::items::spawn_egg::apply_entity_variant(bucket_stack, mob, Some(player));
+    if let Some(bucketable) = mob.get_mob().and_then(|mob| mob.as_bucketable()) {
+        if let Some(data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
+            && let Some(nbt) = &data.nbt
+        {
+            bucketable.load_from_bucket_tag(nbt);
+        }
+        bucketable.set_from_bucket(true);
+        return;
+    }
+    if let Some(bucket_data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
+        && let Some(ref raw_nbt) = bucket_data.nbt
+        && !raw_nbt.is_empty()
+    {
+        let mut nbt = raw_nbt.clone();
+        for key in ["id", "UUID", "Pos"] {
+            nbt.child_tags.remove(key);
+        }
+        if !nbt.is_empty() {
+            let mut merged = NbtCompound::new();
+            mob.write_nbt(&mut merged);
+            merged.merge(&nbt);
+            mob.read_nbt_non_mut(&merged);
+        }
+    }
+    if let Some(custom_name) = bucket_stack.get_data_component::<CustomNameImpl>() {
+        mob.get_entity().set_custom_name(custom_name.name.clone());
+    }
+    if let Some(sulfur_content) = bucket_stack.get_data_component::<SulfurCubeContentImpl>()
+        && !sulfur_content.item.is_empty()
+        && let Some(living) = mob.get_living_entity()
+    {
+        living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(&EquipmentSlot::BODY, sulfur_content.item.clone());
+    }
+    if let Some(mob_trait) = mob.get_mob() {
+        mob_trait
+            .get_mob_entity()
+            .persistence_required
+            .store(true, Ordering::Relaxed);
+    }
+}
+
+fn give_player_bucket_item(player: &Player, item: &'static Item) {
+    let mut held_stack = player.inventory.held_item();
+    fill_bucket_stack(&mut held_stack, player, item);
+    player.inventory.set_held_item(held_stack);
 }
 
 pub(crate) fn try_pickup_fluid_at(
@@ -205,6 +312,7 @@ fn try_pickup_bucket_item(
 pub(crate) const fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
+        && item.id != Item::SULFUR_CUBE_BUCKET.id
         && world.dimension.water_evaporates
 }
 
@@ -243,6 +351,9 @@ pub(crate) fn try_place_filled_bucket(
     pos: BlockPos,
     direction: BlockDirection,
 ) -> bool {
+    if item.id == Item::SULFUR_CUBE_BUCKET.id {
+        return true;
+    }
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
         return try_place_powder_snow(world, pos, direction);
@@ -335,12 +446,19 @@ impl ItemBehaviour for EmptyBucketItem {
         give_player_bucket_item(player, item);
     }
 
-    fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
         let ent = entity.get_entity();
         let entity_type = ent.entity_type;
-        if (entity_type == &EntityType::COW
-            || entity_type == &EntityType::MOOSHROOM
-            || entity_type == &EntityType::GOAT)
+        if entity_type == &EntityType::SULFUR_CUBE && ent.age.load(Ordering::Relaxed) >= 0 {
+            let world = ent.world.load();
+            world.play_sound(
+                Sound::ItemBucketFillSulfurCube,
+                SoundCategory::Neutral,
+                &ent.pos.load(),
+            );
+            fill_mob_bucket_stack(item, player, &Item::SULFUR_CUBE_BUCKET, entity.as_ref());
+            ent.remove();
+        } else if (entity_type == &EntityType::MOOSHROOM || entity_type == &EntityType::GOAT)
             && ent.age.load(Ordering::Relaxed) >= 0
         {
             let world = ent.world.load();
@@ -358,7 +476,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 Sound::EntityCowMilk
             };
             world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
-            give_player_bucket_item(player, &Item::MILK_BUCKET);
+            fill_bucket_stack(item, player, &Item::MILK_BUCKET);
         }
     }
 
@@ -409,30 +527,53 @@ impl ItemBehaviour for FilledBucketItem {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
-        let place_pos = if world
-            .get_block_and_state(&pos)
-            .0
-            .is_waterlogged(world.get_block_state_id(&pos))
+        let place_pos = if item.id != Item::SULFUR_CUBE_BUCKET.id
+            && world
+                .get_block_and_state(&pos)
+                .0
+                .is_waterlogged(world.get_block_state_id(&pos))
         {
             pos
         } else {
             pos.offset(direction.to_offset())
         };
 
-        world.play_sound(
-            get_empty_sound(item),
-            SoundCategory::Blocks,
-            &place_pos.to_f64(),
-        );
+        let sound_category = if get_mob_for_bucket(item).is_some() {
+            SoundCategory::Neutral
+        } else {
+            SoundCategory::Blocks
+        };
+
+        world.play_sound(get_empty_sound(item), sound_category, &place_pos.to_f64());
 
         if let Some((entity_type, _)) = get_mob_for_bucket(item) {
+            let held = player.inventory.held_item();
+            let bucket_stack = if !held.is_empty() && held.item.id == item.id {
+                held
+            } else {
+                player.inventory.off_hand_item()
+            };
             let spawn_coord = Vector3::new(
                 f64::from(place_pos.0.x) + 0.5,
                 f64::from(place_pos.0.y),
                 f64::from(place_pos.0.z) + 0.5,
             );
             let mob = from_type(entity_type, spawn_coord, &world, Uuid::new_v4());
-            world.spawn_entity(mob);
+            if mob.get_mob().and_then(|mob| mob.as_bucketable()).is_some() {
+                crate::entity::mob::spawn::finalize_spawn(&mob, &world, None);
+                apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
+                if world.spawn_creature(
+                    mob.clone(),
+                    crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason::Bucket,
+                    world.get_player_by_uuid(player.gameprofile.id),
+                ) && let Some(fish) = mob.get_mob().and_then(|mob| mob.as_fish())
+                {
+                    fish.play_ambient_sound();
+                }
+            } else {
+                apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
+                world.spawn_entity(mob);
+            }
         }
 
         if player.gamemode.load() != GameMode::Creative {
@@ -444,6 +585,13 @@ impl ItemBehaviour for FilledBucketItem {
     }
 
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if entity
+            .get_mob()
+            .and_then(|mob| mob.as_bucketable())
+            .is_some()
+        {
+            return;
+        }
         if item.item.id == Item::WATER_BUCKET.id {
             let entity_type = entity.get_entity().entity_type;
             let result_item = if entity_type == &EntityType::AXOLOTL {
@@ -466,7 +614,7 @@ impl ItemBehaviour for FilledBucketItem {
                 let ent = entity.get_entity();
                 let world = ent.world.load();
                 world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
-                give_player_bucket_item(player, mob_bucket);
+                fill_mob_bucket_stack(item, player, mob_bucket, entity.as_ref());
                 ent.remove();
             }
         }
@@ -478,16 +626,8 @@ impl ItemBehaviour for FilledBucketItem {
 }
 
 impl ItemBehaviour for MilkBucketItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
-        let stack = player.inventory().held_item();
-        player
-            .living_entity
-            .set_active_hand(pumpkin_util::Hand::Right, stack, 32);
-    }
-
-    fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
-        player.living_entity.reset_effects_and_attributes();
-        give_player_bucket_item(player, &Item::BUCKET);
+    fn normal_use(&self, _item: &Item, _player: &Player) {
+        // Drinking is handled by the consumable flow in the server (active hand + consumption tick).
     }
 
     fn get_use_duration(&self) -> i32 {
