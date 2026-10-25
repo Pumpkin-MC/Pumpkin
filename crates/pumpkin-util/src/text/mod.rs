@@ -334,12 +334,19 @@ impl TextComponentBase {
                             hover_tag.put_list("contents", list);
                         }
                     }
-                    HoverEvent::ShowItem { id, count, .. } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_tag.put_string("action", "show_item".to_string());
                         let mut contents = pumpkin_nbt::NbtCompound::new();
                         contents.put_string("id", id.to_string());
                         if let Some(cnt) = count {
                             contents.put_int("count", *cnt);
+                        }
+                        if let Some(components) = components {
+                            contents.put("components", components.to_nbt());
                         }
                         hover_tag.put_compound("contents", contents);
                     }
@@ -720,7 +727,11 @@ impl TextComponentBase {
                             hover_map.insert("value".to_string(), serde_json::Value::Array(list));
                         }
                     }
-                    HoverEvent::ShowItem { id, count, .. } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_map.insert(
                             "action".to_string(),
                             serde_json::Value::String("show_item".to_string()),
@@ -729,6 +740,9 @@ impl TextComponentBase {
                             .insert("id".to_string(), serde_json::Value::String(id.to_string()));
                         if let Some(cnt) = count {
                             hover_map.insert("count".to_string(), serde_json::json!(*cnt));
+                        }
+                        if let Some(components) = components {
+                            hover_map.insert("components".to_string(), components.0.clone());
                         }
                     }
                     HoverEvent::ShowEntity { id, uuid, name } => {
@@ -780,7 +794,11 @@ impl TextComponentBase {
                                 .insert("contents".to_string(), serde_json::Value::Array(list));
                         }
                     }
-                    HoverEvent::ShowItem { id, count, .. } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_map.insert(
                             "action".to_string(),
                             serde_json::Value::String("show_item".to_string()),
@@ -790,6 +808,9 @@ impl TextComponentBase {
                             .insert("id".to_string(), serde_json::Value::String(id.to_string()));
                         if let Some(cnt) = count {
                             contents.insert("count".to_string(), serde_json::json!(*cnt));
+                        }
+                        if let Some(components) = components {
+                            contents.insert("components".to_string(), components.0.clone());
                         }
                         hover_map
                             .insert("contents".to_string(), serde_json::Value::Object(contents));

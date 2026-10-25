@@ -74,6 +74,11 @@ const ERROR_CONDITIONAL_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
 );
 
+const ERROR_CONDITIONAL_FAILED_COUNT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+    translation::java::COMMANDS_EXECUTE_CONDITIONAL_FAIL_COUNT,
+);
+
 fn execute_as_modifier(context: &CommandContext) -> crate::command::node::RedirectModifierResult {
     let targets = EntityArgumentType::get_optional_entities(context, "targets")?;
     let mut sources = Vec::new();
@@ -188,22 +193,26 @@ fn execute_rotated_as_modifier(
     Ok(sources)
 }
 
+/// The number of matched entities, `None` when there is none.
+fn count_entities(context: &CommandContext) -> Result<Option<i32>, CommandSyntaxError> {
+    let targets = EntityArgumentType::get_optional_entities(context, "entities")?;
+    Ok((!targets.is_empty()).then(|| i32::try_from(targets.len()).unwrap_or(i32::MAX)))
+}
+
 fn execute_if_entity_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let targets = EntityArgumentType::get_optional_entities(context, "entities")?;
-    if targets.is_empty() {
-        Ok(vec![])
-    } else {
+    if count_entities(context)?.is_some() {
         Ok(vec![context.source.clone()])
+    } else {
+        Ok(vec![])
     }
 }
 
 fn execute_unless_entity_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let targets = EntityArgumentType::get_optional_entities(context, "entities")?;
-    if targets.is_empty() {
+    if count_entities(context)?.is_none() {
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
@@ -454,6 +463,46 @@ impl CommandExecutor for ConditionalExecutor {
     }
 }
 
+/// A terminal `if`/`unless` that reports how many things matched, like vanilla's numeric handler.
+/// The count is `None` when the test did not match.
+struct NumericConditionalExecutor {
+    expected: bool,
+    count: fn(&CommandContext) -> Result<Option<i32>, CommandSyntaxError>,
+}
+
+impl CommandExecutor for NumericConditionalExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let count = (self.count)(context)?;
+        match (self.expected, count) {
+            (true, Some(count)) => {
+                context.source.send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                        translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS_COUNT,
+                        [TextComponent::text(count.to_string())],
+                    ),
+                    false,
+                );
+                Ok(count)
+            }
+            (false, None) => {
+                context.source.send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                        translation::java::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                        [],
+                    ),
+                    false,
+                );
+                Ok(1)
+            }
+            (false, Some(count)) => Err(ERROR_CONDITIONAL_FAILED_COUNT
+                .create_without_context(TextComponent::text(count.to_string()))),
+            (true, None) => Err(ERROR_CONDITIONAL_FAILED.create_without_context()),
+        }
+    }
+}
+
 fn add_conditional(
     builder: RequiredArgumentBuilder,
     modifier: fn(&CommandContext) -> RedirectModifierResult,
@@ -678,7 +727,11 @@ fn execute_unless_score_ge_modifier(
     Ok(vec![])
 }
 
-fn check_blocks_match(context: &CommandContext, masked: bool) -> Result<bool, CommandSyntaxError> {
+/// The number of compared blocks, `None` when the regions differ.
+fn count_blocks_match(
+    context: &CommandContext,
+    masked: bool,
+) -> Result<Option<i32>, CommandSyntaxError> {
     let start = BlockPosArgumentType::get_block_pos(context, "start")?;
     let end = BlockPosArgumentType::get_block_pos(context, "end")?;
     let destination = BlockPosArgumentType::get_block_pos(context, "destination")?;
@@ -695,6 +748,7 @@ fn check_blocks_match(context: &CommandContext, masked: bool) -> Result<bool, Co
         let dy = destination.0.y - min_y;
         let dz = destination.0.z - min_z;
 
+        let mut count = 0i32;
         for y in min_y..=max_y {
             for z in min_z..=max_z {
                 for x in min_x..=max_x {
@@ -707,20 +761,21 @@ fn check_blocks_match(context: &CommandContext, masked: bool) -> Result<bool, Co
                         continue;
                     }
                     if src_block != dst_block {
-                        return Ok(false);
+                        return Ok(None);
                     }
+                    count = count.saturating_add(1);
                 }
             }
         }
-        return Ok(true);
+        return Ok(Some(count));
     }
-    Ok(false)
+    Ok(None)
 }
 
 fn execute_if_blocks_all_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    if check_blocks_match(context, false)? {
+    if count_blocks_match(context, false)?.is_some() {
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
@@ -730,7 +785,7 @@ fn execute_if_blocks_all_modifier(
 fn execute_if_blocks_masked_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    if check_blocks_match(context, true)? {
+    if count_blocks_match(context, true)?.is_some() {
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
@@ -740,7 +795,7 @@ fn execute_if_blocks_masked_modifier(
 fn execute_unless_blocks_all_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    if !check_blocks_match(context, false)? {
+    if count_blocks_match(context, false)?.is_none() {
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
@@ -750,7 +805,7 @@ fn execute_unless_blocks_all_modifier(
 fn execute_unless_blocks_masked_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    if !check_blocks_match(context, true)? {
+    if count_blocks_match(context, true)?.is_none() {
         Ok(vec![context.source.clone()])
     } else {
         Ok(vec![])
@@ -1223,7 +1278,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 Redirection::Root,
                                 RedirectModifier::Custom(Arc::new(execute_if_entity_modifier)),
                             )
-                            .executes(ConditionalExecutor(execute_if_entity_modifier)),
+                            .executes(NumericConditionalExecutor {
+                                expected: true,
+                                count: count_entities,
+                            }),
                     ),
                 )
                 .then(
@@ -1283,9 +1341,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                                     execute_if_blocks_all_modifier,
                                                 )),
                                             )
-                                            .executes(ConditionalExecutor(
-                                                execute_if_blocks_all_modifier,
-                                            )),
+                                            .executes(NumericConditionalExecutor {
+                                                expected: true,
+                                                count: |context| count_blocks_match(context, false),
+                                            }),
                                     )
                                     .then(
                                         literal("masked")
@@ -1295,9 +1354,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                                     execute_if_blocks_masked_modifier,
                                                 )),
                                             )
-                                            .executes(ConditionalExecutor(
-                                                execute_if_blocks_masked_modifier,
-                                            )),
+                                            .executes(NumericConditionalExecutor {
+                                                expected: true,
+                                                count: |context| count_blocks_match(context, true),
+                                            }),
                                     ),
                             ),
                         ),
@@ -1429,7 +1489,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 Redirection::Root,
                                 RedirectModifier::Custom(Arc::new(execute_unless_entity_modifier)),
                             )
-                            .executes(ConditionalExecutor(execute_unless_entity_modifier)),
+                            .executes(NumericConditionalExecutor {
+                                expected: false,
+                                count: count_entities,
+                            }),
                     ),
                 )
                 .then(
@@ -1495,9 +1558,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                                     execute_unless_blocks_all_modifier,
                                                 )),
                                             )
-                                            .executes(ConditionalExecutor(
-                                                execute_unless_blocks_all_modifier,
-                                            )),
+                                            .executes(NumericConditionalExecutor {
+                                                expected: false,
+                                                count: |context| count_blocks_match(context, false),
+                                            }),
                                     )
                                     .then(
                                         literal("masked")
@@ -1507,9 +1571,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                                     execute_unless_blocks_masked_modifier,
                                                 )),
                                             )
-                                            .executes(ConditionalExecutor(
-                                                execute_unless_blocks_masked_modifier,
-                                            )),
+                                            .executes(NumericConditionalExecutor {
+                                                expected: false,
+                                                count: |context| count_blocks_match(context, true),
+                                            }),
                                     ),
                             ),
                         ),

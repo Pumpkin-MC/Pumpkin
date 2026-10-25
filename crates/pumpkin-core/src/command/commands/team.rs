@@ -1,12 +1,10 @@
 use crate::command::argument_builder::{
     ArgumentBuilder, LiteralArgumentBuilder, argument, command, literal,
 };
-use crate::command::argument_types::argument_type::JavaClientArgumentType;
-use crate::command::argument_types::client_parsed::ClientParsed;
 use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
-use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
 use crate::command::argument_types::team::TeamArgumentType;
 use crate::command::argument_types::team_color::TeamColorArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -233,16 +231,9 @@ impl CommandExecutor for TeamJoinExecutor {
         let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
 
         let entity_names = if self.has_members {
-            let targets = EntityArgumentType::get_optional_entities(context, ARG_MEMBERS)?;
-            if targets.is_empty() {
-                return Err(
-                    crate::command::argument_types::entity::NO_ENTITIES_ERROR_TYPE
-                        .create_without_context(),
-                );
-            }
-            targets
+            ScoreHolderArgumentType::get_score_holders(context, ARG_MEMBERS)?
                 .into_iter()
-                .map(|e| e.get_scoreboard_name())
+                .map(|holder| holder.name)
                 .collect::<Vec<_>>()
         } else {
             let sender_name = context.source.name.clone();
@@ -300,16 +291,9 @@ struct TeamLeaveExecutor {
 impl CommandExecutor for TeamLeaveExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let entity_names = if self.has_members {
-            let targets = EntityArgumentType::get_optional_entities(context, ARG_MEMBERS)?;
-            if targets.is_empty() {
-                return Err(
-                    crate::command::argument_types::entity::NO_ENTITIES_ERROR_TYPE
-                        .create_without_context(),
-                );
-            }
-            targets
+            ScoreHolderArgumentType::get_score_holders(context, ARG_MEMBERS)?
                 .into_iter()
-                .map(|e| e.get_scoreboard_name())
+                .map(|holder| holder.name)
                 .collect::<Vec<_>>()
         } else {
             let sender_name = context.source.name.clone();
@@ -959,15 +943,7 @@ fn join_branch() -> LiteralArgumentBuilder {
         argument(ARG_TEAM, TeamArgumentType)
             .executes(TeamJoinExecutor { has_members: false })
             .then(
-                argument(
-                    ARG_MEMBERS,
-                    ClientParsed::new(
-                        EntityArgumentType::Entities,
-                        JavaClientArgumentType::ScoreHolder {
-                            flags: JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE,
-                        },
-                    ),
-                )
+                argument(ARG_MEMBERS, ScoreHolderArgumentType::Multiple)
                 .executes(TeamJoinExecutor { has_members: true }),
             ),
     )
@@ -975,15 +951,7 @@ fn join_branch() -> LiteralArgumentBuilder {
 
 fn leave_branch() -> LiteralArgumentBuilder {
     literal("leave").then(
-        argument(
-            ARG_MEMBERS,
-            ClientParsed::new(
-                EntityArgumentType::Entities,
-                JavaClientArgumentType::ScoreHolder {
-                    flags: JavaClientArgumentType::SCORE_HOLDER_FLAG_ALLOW_MULTIPLE,
-                },
-            ),
-        )
+        argument(ARG_MEMBERS, ScoreHolderArgumentType::Multiple)
         .executes(TeamLeaveExecutor { has_members: true }),
     )
 }
