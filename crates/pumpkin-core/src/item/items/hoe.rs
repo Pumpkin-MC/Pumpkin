@@ -61,7 +61,13 @@ impl ItemBehaviour for HoeItem {
                 && let Some(loot_table) = world.get_loot_table(loot_key)
             {
                 let seed = rand::random::<i64>();
-                let drops = loot_table.generate_loot(seed);
+                let drops = loot_table.generate_loot_with_context(
+                    seed,
+                    &crate::world::loot::LootContextParameters {
+                        world: Some(&world),
+                        ..Default::default()
+                    },
+                );
                 for drop_stack in drops {
                     if result.entry.drop_strategy == Some(DropStrategy::ClickedFace) {
                         world.drop_stack_from_face(&location, face, drop_stack);

@@ -14,7 +14,8 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{BlockBehaviour, OnSyncedBlockEventArgs},
-    world::World,
+    entity::EntityBase,
+    world::{World, game_event::GameEventContext},
 };
 
 use super::redstone::block_receives_redstone_power;
@@ -23,7 +24,12 @@ use super::redstone::block_receives_redstone_power;
 pub struct NoteBlock;
 
 impl NoteBlock {
-    pub fn play_note(props: &NoteBlockLikeProperties, world: &World, pos: &BlockPos) {
+    pub fn play_note(
+        props: &NoteBlockLikeProperties,
+        world: &World,
+        pos: &BlockPos,
+        source: Option<&dyn EntityBase>,
+    ) {
         if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).is_air() {
             let mut event = crate::plugin::api::events::block::note_play::NotePlayEvent::new(
                 *pos,
@@ -37,6 +43,13 @@ impl NoteBlock {
                 return;
             }
             world.add_synced_block_event(*pos, 0, 0);
+            world.emit_game_event_with_context(
+                pumpkin_data::game_event::GameEvent::NoteBlockPlay.name(),
+                pos.to_centered_f64(),
+                &GameEventContext {
+                    source_entity: source,
+                },
+            );
         }
     }
     fn get_note_pitch(note: u16) -> f32 {
@@ -75,7 +88,7 @@ impl BlockBehaviour for NoteBlock {
         // check if powered state changed
         if note_props.powered != powered {
             if powered {
-                Self::play_note(&note_props, args.world, args.position);
+                Self::play_note(&note_props, args.world, args.position, None);
             }
             note_props.powered = powered;
             args.world.set_block_state(
@@ -95,7 +108,12 @@ impl BlockBehaviour for NoteBlock {
             note_props.to_state_id(args.block),
             BlockFlags::NOTIFY_ALL,
         );
-        Self::play_note(&note_props, args.world, args.position);
+        Self::play_note(
+            &note_props,
+            args.world,
+            args.position,
+            Some(args.player.as_ref()),
+        );
 
         args.player.increment_stat(
             pumpkin_data::statistic::StatisticCategory::Custom,
@@ -108,7 +126,12 @@ impl BlockBehaviour for NoteBlock {
 
     fn attack(&self, args: AttackArgs<'_>) {
         let note_props = NoteBlockLikeProperties::from_state_id(args.state.id);
-        Self::play_note(&note_props, args.world, args.position);
+        Self::play_note(
+            &note_props,
+            args.world,
+            args.position,
+            Some(args.player.as_ref()),
+        );
         args.player.increment_stat(
             pumpkin_data::statistic::StatisticCategory::Custom,
             pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
