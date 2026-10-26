@@ -80,6 +80,17 @@ impl BlockEntity for DispenserBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_container_actor(
+            "Dispenser",
+            self.position,
+            None,
+        ))
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

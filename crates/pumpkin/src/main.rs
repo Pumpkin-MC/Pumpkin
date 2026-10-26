@@ -76,6 +76,45 @@ async fn main() {
 
     pumpkin_core::init_logger(&config.advanced);
 
+    if let Some(target_arg) = parse_convert_world_arg(std::env::args().skip(1)) {
+        let anvil_default = match &config.advanced.world.chunk {
+            pumpkin_config::chunk::ChunkConfig::Anvil(cfg) => cfg.clone(),
+            _ => pumpkin_config::chunk::AnvilChunkConfig::default(),
+        };
+        let Some(target_config) =
+            pumpkin_world::chunk::io::converter::parse_chunk_config(&target_arg, anvil_default)
+        else {
+            tracing::error!(
+                "Unknown chunk format '{target_arg}'. Expected 'pump', 'anvil', or 'linear'."
+            );
+            exit(1);
+        };
+        let target_format =
+            pumpkin_world::chunk::io::converter::RegionFormat::from_config(&target_config);
+        let world_dir = exec_dir.join(config.basic.get_world_path());
+        info!(
+            "Converting world at {} to {} format...",
+            world_dir.display(),
+            target_format.name()
+        );
+        match pumpkin_world::chunk::io::converter::convert_world(&world_dir, &target_config, true) {
+            Ok(stats) => {
+                info!(
+                    "Converted {} region(s) ({} chunk(s)) to {} format in {}ms",
+                    stats.regions_converted,
+                    stats.chunks_converted,
+                    target_format.name(),
+                    time.elapsed().as_millis()
+                );
+                exit(0);
+            }
+            Err(err) => {
+                tracing::error!("World conversion failed: {err}");
+                exit(1);
+            }
+        }
+    }
+
     info!(
         "{}",
         TextComponent::text(format!(
@@ -133,10 +172,11 @@ async fn main() {
         config.telemetry,
         vanilla_data,
         plugin_loaders,
+        true,
     )
     .await
     .unwrap_or_else(|error| {
-        tracing::error!("Failed to initialize world storage: {error}");
+        tracing::error!("{error}");
         exit(1);
     });
     let plugin_wait_time = pumpkin_server.init_plugins().await;
@@ -360,4 +400,16 @@ async fn setup_sighandler() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn parse_convert_world_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
+    while let Some(arg) = args.next() {
+        if arg == "--convert-world" {
+            return Some(args.next().unwrap_or_default());
+        }
+        if let Some(value) = arg.strip_prefix("--convert-world=") {
+            return Some(value.to_string());
+        }
+    }
+    None
 }

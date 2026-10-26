@@ -4,6 +4,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::world::WorldEvent;
@@ -37,9 +38,10 @@ impl ItemBehaviour for BoneMealItem {
             .block_registry
             .bone_meal(block, &world, &location, state_id)
         {
+            world.emit_game_event(GameEvent::ItemInteractFinish.name(), player.position());
             world.sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, location, 15);
             item.decrement_unless_creative(player.gamemode.load(), 1);
-            BlockActionResult::Success
+            BlockActionResult::SuccessServer
         } else {
             BlockActionResult::Pass
         }

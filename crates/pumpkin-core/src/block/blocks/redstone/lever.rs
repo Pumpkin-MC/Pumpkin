@@ -22,29 +22,6 @@ use crate::{
     world::World,
 };
 
-fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_state_id(block_pos);
-
-    let mut lever_props = LeverLikeProperties::from_state_id(state);
-    lever_props.powered = !lever_props.powered;
-    world.set_block_state(
-        block_pos,
-        lever_props.to_state_id(block),
-        BlockFlags::NOTIFY_ALL,
-    );
-
-    LeverBlock::update_neighbors(world, block_pos, lever_props);
-
-    play_lever_sound(world, block_pos, lever_props.powered);
-
-    let game_event = if lever_props.powered {
-        GameEvent::BlockActivate
-    } else {
-        GameEvent::BlockDeactivate
-    };
-    world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
-}
-
 fn play_lever_sound(world: &Arc<World>, block_pos: &BlockPos, powered: bool) {
     world.play_sound_fine(
         Sound::BlockLeverClick,
@@ -60,8 +37,8 @@ pub struct LeverBlock;
 
 impl BlockBehaviour for LeverBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        toggle_lever(args.world, args.position);
-        BlockActionResult::Consume
+        Self::pull(args.world, args.position);
+        BlockActionResult::Success
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -83,30 +60,24 @@ impl BlockBehaviour for LeverBlock {
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        let block_pos = args.position;
+        if !args.moved {
+            let lever_props = LeverLikeProperties::from_state_id(args.old_state_id);
 
-        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id);
-
-        if lever_props.powered {
-            Self::update_neighbors(args.world, block_pos, lever_props);
+            if lever_props.powered {
+                Self::update_neighbors(args.world, args.position, lever_props);
+            }
         }
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = LeverLikeProperties::default(args.block);
-        (props.face, props.facing) =
-            WallMountedBlock::get_placement_face(self, args.player, args.direction);
+        (props.face, props.facing) = WallMountedBlock::get_placement_face_for_args(self, &args);
 
         props.to_state_id(args.block)
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        // Use the provided direction, or fallback to the current state's direction if missing
-        let direction = args
-            .direction
-            .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
-
-        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
+        WallMountedBlock::can_place_at_args(self, &args)
     }
 
     fn get_state_for_neighbor_update(
@@ -129,6 +100,29 @@ impl WallMountedBlock for LeverBlock {
 }
 
 impl LeverBlock {
+    pub(crate) fn pull(world: &Arc<World>, block_pos: &BlockPos) {
+        let (block, state) = world.get_block_and_state_id(block_pos);
+
+        let mut lever_props = LeverLikeProperties::from_state_id(state);
+        lever_props.powered = !lever_props.powered;
+        world.set_block_state(
+            block_pos,
+            lever_props.to_state_id(block),
+            BlockFlags::NOTIFY_ALL,
+        );
+
+        Self::update_neighbors(world, block_pos, lever_props);
+
+        play_lever_sound(world, block_pos, lever_props.powered);
+
+        let game_event = if lever_props.powered {
+            GameEvent::BlockActivate
+        } else {
+            GameEvent::BlockDeactivate
+        };
+        world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
+    }
+
     fn update_neighbors(
         world: &Arc<World>,
         block_pos: &BlockPos,

@@ -12,6 +12,7 @@ pub mod arrow;
 pub mod egg;
 pub mod ender_pearl;
 pub mod evoker_fangs;
+pub mod experience_bottle;
 pub mod eye_of_ender;
 pub mod fireball;
 pub mod firework_rocket;
@@ -34,6 +35,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::TRIDENT
         || *entity_type == EntityType::EGG
         || *entity_type == EntityType::SNOWBALL
+        || *entity_type == EntityType::EXPERIENCE_BOTTLE
         || *entity_type == EntityType::FIREWORK_ROCKET
         || *entity_type == EntityType::WIND_CHARGE
         || *entity_type == EntityType::SPLASH_POTION
@@ -262,7 +264,9 @@ impl ThrownItemEntity {
         }
 
         // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id
+            && self_ent.tick_count.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 

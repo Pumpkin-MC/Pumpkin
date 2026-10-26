@@ -106,6 +106,11 @@ impl Weather {
         self.temperature
     }
 
+    #[must_use]
+    pub const fn has_precipitation(&self) -> bool {
+        self.has_precipitation
+    }
+
     /// Computes the effective temperature at a given position.
     ///
     /// # Parameters
