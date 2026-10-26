@@ -574,8 +574,18 @@ fn surface_builder_preserves_tree_features_across_border() {
     let log_y = ground_y + 2;
     let leaf_y = ground_y + 3;
 
-    chunk.set_block_state(test_x, log_y, test_z, &pumpkin_data::Block::OAK_LOG.default_state);
-    chunk.set_block_state(test_x, leaf_y, test_z, &pumpkin_data::Block::OAK_LEAVES.default_state);
+    chunk.set_block_state(
+        test_x,
+        log_y,
+        test_z,
+        pumpkin_data::Block::OAK_LOG.default_state,
+    );
+    chunk.set_block_state(
+        test_x,
+        leaf_y,
+        test_z,
+        pumpkin_data::Block::OAK_LEAVES.default_state,
+    );
 
     // Run build_surface
     let center_surface_biomes = surface_biomes(&world_gen, 0, 0);
@@ -583,10 +593,14 @@ fn surface_builder_preserves_tree_features_across_border() {
 
     // Assert that oak leaves and log were NOT overwritten with grass or dirt
     let state_leaf = chunk
-        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(test_x, leaf_y, test_z))
+        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(
+            test_x, leaf_y, test_z,
+        ))
         .to_state();
     let state_log = chunk
-        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(test_x, log_y, test_z))
+        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(
+            test_x, log_y, test_z,
+        ))
         .to_state();
 
     assert_eq!(

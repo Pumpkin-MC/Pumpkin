@@ -372,14 +372,14 @@ mod tests {
         assert_eq!(
             StagedChunkEnum::FULL_DEPENDENCIES,
             &[
-                StagedChunkEnum::Full,        // dst 0
-                StagedChunkEnum::Spawn,       // dst 1
-                StagedChunkEnum::Lighting,    // dst 2
-                StagedChunkEnum::Features,    // dst 3
-                StagedChunkEnum::Carvers,     // dst 4
-                StagedChunkEnum::Surface,     // dst 5
-                StagedChunkEnum::Noise,       // dst 6
-                StagedChunkEnum::Biomes,      // dst 7
+                StagedChunkEnum::Full,     // dst 0
+                StagedChunkEnum::Spawn,    // dst 1
+                StagedChunkEnum::Lighting, // dst 2
+                StagedChunkEnum::Features, // dst 3
+                StagedChunkEnum::Carvers,  // dst 4
+                StagedChunkEnum::Surface,  // dst 5
+                StagedChunkEnum::Noise,    // dst 6
+                StagedChunkEnum::Biomes,   // dst 7
             ]
         );
     }
@@ -387,12 +387,19 @@ mod tests {
     #[test]
     fn features_has_complete_terrain_neighbors() {
         // When center chunk generates Features (dst 3),
-        // neighbor chunks (dst 4) must be at least Carvers (which guarantees Surface and Noise are done).
+        // neighbor chunks (dst 4) must be at least Carvers (which
+        // guarantees Surface and Noise are done).
         let features_dst = 3;
         let neighbor_dst = features_dst + 1;
 
-        assert_eq!(StagedChunkEnum::FULL_DEPENDENCIES[features_dst], StagedChunkEnum::Features);
-        assert_eq!(StagedChunkEnum::FULL_DEPENDENCIES[neighbor_dst], StagedChunkEnum::Carvers);
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES[features_dst],
+            StagedChunkEnum::Features
+        );
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES[neighbor_dst],
+            StagedChunkEnum::Carvers
+        );
         assert!(StagedChunkEnum::FULL_DEPENDENCIES[neighbor_dst] > StagedChunkEnum::Biomes);
     }
 }

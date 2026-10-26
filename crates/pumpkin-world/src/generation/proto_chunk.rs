@@ -1231,11 +1231,9 @@ impl ProtoChunk {
                         &mut context,
                         surface_height_estimate_sampler,
                     );
-
                     if let Some(state) = new_state {
                         self.set_block_state(x, y, z, state);
                     }
-
                 }
                 if this_biome == Biome::FROZEN_OCEAN || this_biome == Biome::DEEP_FROZEN_OCEAN {
                     let surface_estimate =
