@@ -37,7 +37,7 @@ impl BlockBehaviour for HangingRootsBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !Self::can_survive(args.world, args.position) {
+        if args.direction == BlockDirection::Up && !Self::can_survive(args.world, args.position) {
             return Block::AIR.default_state.id;
         }
 
