@@ -429,10 +429,11 @@ pub(crate) fn try_place_filled_bucket(
         .block_registry
         .can_be_replaced_with_fluid(block, state, fluid)
     {
+        let cause = player.and_then(|player| world.get_player_by_uuid(player.gameprofile.id));
         if !state.is_air()
             && !state.is_liquid()
             && world
-                .break_block(&target_pos, None, BlockFlags::NOTIFY_ALL)
+                .break_block(&target_pos, cause.as_ref(), BlockFlags::NOTIFY_ALL)
                 .is_none()
         {
             return None;
