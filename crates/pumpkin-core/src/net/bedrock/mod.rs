@@ -323,6 +323,10 @@ impl BedrockClient {
         warn!("Closing connection for {}: {message}", self.address);
         self.send_packet(&CDisconnect::new(reason as i32, message))
             .await;
+        let _ = self
+            .session
+            .flush_reliable(std::time::Duration::from_secs(1))
+            .await;
         self.close().await;
     }
 
@@ -343,6 +347,10 @@ impl BedrockClient {
                 filtered_message,
             })
             .await;
+            let _ = self
+                .session
+                .flush_reliable(std::time::Duration::from_secs(1))
+                .await;
         }
         self.close().await;
     }
