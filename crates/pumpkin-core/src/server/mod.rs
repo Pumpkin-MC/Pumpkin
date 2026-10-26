@@ -1481,8 +1481,16 @@ impl Server {
             {
                 let server = self.clone();
                 self.spawn_task(async move {
-                    let result =
-                        tokio::task::spawn_blocking(move || server.save_persistent_data()).await;
+                    // level.dat holds the game time that scheduled_events.dat is relative to,
+                    // so both are saved together; otherwise a crash restores an old time and
+                    // pushes every scheduled function far into the future.
+                    let result = tokio::task::spawn_blocking(move || {
+                        if let Err(err) = server.save_world_info() {
+                            error!("Failed to save level.dat: {err}");
+                        }
+                        server.save_persistent_data()
+                    })
+                    .await;
                     if let Ok(Err(err)) = result {
                         error!("{err}");
                     }
