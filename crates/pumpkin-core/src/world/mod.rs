@@ -5491,7 +5491,7 @@ impl World {
             crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
+        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id
@@ -7449,7 +7449,7 @@ impl WorldPortalExt for WorldPortal {
     ) -> bool {
         self.0.block_registry.can_place_at(
             None,
-            Some(&self.0),
+            None,
             block_accessor,
             None,
             block,

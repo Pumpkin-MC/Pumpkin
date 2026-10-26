@@ -1,12 +1,15 @@
 use crate::block::{
     BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    is_exception_for_connection,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
@@ -27,6 +30,14 @@ impl BlockBehaviour for FenceBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let fence_props = FenceProperties::from_state_id(args.state_id);
+        if fence_props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
         compute_fence_state(fence_props, args.world, args.block, args.position)
     }
 
@@ -62,23 +73,20 @@ pub fn compute_fence_state(
     fence_props.to_state_id(block)
 }
 
+fn is_same_fence(from: &Block, to: &Block) -> bool {
+    to.has_tag(&tag::Block::MINECRAFT_FENCES)
+        && (from.has_tag(&tag::Block::MINECRAFT_WOODEN_FENCES)
+            == to.has_tag(&tag::Block::MINECRAFT_WOODEN_FENCES))
+}
+
 fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: BlockDirection) -> bool {
-    if from == to {
-        return true;
-    }
-
-    if to_state.is_side_solid(direction.opposite()) {
-        return true;
-    }
-
-    if to.has_tag(&tag::Block::C_FENCE_GATES) {
+    let same_fence = is_same_fence(from, to);
+    let gate = to.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && {
         let fence_gate_props = FenceGateProperties::from_state_id(to_state.id);
-        if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
+        BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
-        {
-            return true;
-        }
-    }
-
-    *from != Block::NETHER_BRICK_FENCE && to.has_tag(&tag::Block::C_FENCES_WOODEN)
+    };
+    (!is_exception_for_connection(to) && to_state.is_side_solid(direction.opposite()))
+        || same_fence
+        || gate
 }

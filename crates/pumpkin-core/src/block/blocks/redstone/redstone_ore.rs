@@ -1,11 +1,11 @@
 use crate::block::{
-    BlockBehaviour, BlockMetadata, OnEntityCollisionArgs, OnEntityStepArgs, RandomTickArgs,
-    UseWithItemArgs, registry::BlockActionResult,
+    AttackArgs, BlockBehaviour, BlockMetadata, OnEntityStepArgs, RandomTickArgs, UseWithItemArgs,
+    registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::RedstoneOreLikeProperties;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::{Block, BlockId, BlockState};
+use pumpkin_data::{Block, BlockId};
 use pumpkin_protocol::VarInt;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -21,7 +21,8 @@ impl BlockMetadata for RedstoneOreBlock {
 }
 
 impl RedstoneOreBlock {
-    fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block, state: &BlockState) {
+    fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block) {
+        let state = world.get_block_state(pos);
         let mut props = RedstoneOreLikeProperties::from_state_id(state.id);
         if !props.lit {
             props.lit = true;
@@ -31,9 +32,12 @@ impl RedstoneOreBlock {
 }
 
 impl BlockBehaviour for RedstoneOreBlock {
+    fn attack(&self, args: AttackArgs<'_>) {
+        Self::light_up(args.world, args.position, args.block);
+    }
+
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
+        Self::light_up(args.world, args.position, args.block);
         if args.item_stack.is_empty() {
             return BlockActionResult::Success;
         }
@@ -69,14 +73,10 @@ impl BlockBehaviour for RedstoneOreBlock {
         }
     }
 
-    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
-    }
-
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
+        if !args.entity.get_entity().is_sneaking() {
+            Self::light_up(args.world, args.position, args.block);
+        }
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
