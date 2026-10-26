@@ -4281,8 +4281,16 @@ impl World {
     pub fn should_skip_night(&self) -> bool {
         let players = self.players.load();
 
-        let player_count = players.len();
-        let sleeping_player_count = players
+        let eligible_players: Vec<_> = players
+            .iter()
+            .filter(|player| {
+                !player
+                    .sleeping_ignored
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            })
+            .collect();
+        let player_count = eligible_players.len();
+        let sleeping_player_count = eligible_players
             .iter()
             .filter(|player| {
                 player

@@ -430,6 +430,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Head position of the bed the player is currently sleeping in.
     pub sleeping_bed_pos: AtomicCell<Option<BlockPos>>,
+    /// Whether the player is ignored when calculating the percentage of sleeping players needed to skip the night.
+    pub sleeping_ignored: AtomicBool,
     /// Manages the player's breath level
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
@@ -767,6 +769,7 @@ impl Player {
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
+            sleeping_ignored: AtomicBool::new(false),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)

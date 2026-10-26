@@ -730,6 +730,37 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_mob().is_some())
     }
 
+    fn get_item_stack(
+        &mut self,
+        this: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<crate::pumpkin::plugin::item_stack::ItemStack>>> {
+        let entity = self.get(&this)?;
+        let Some(item_entity) = entity.get_item_entity() else {
+            return Ok(None);
+        };
+        let stack = item_entity.get_item_stack().lock_ignore_poison().clone();
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_pickup_delay(&mut self, this: Resource<Entity>) -> wasmtime::Result<Option<u32>> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_item_entity()
+            .map(|item_entity| u32::from(item_entity.get_pickup_delay())))
+    }
+
+    fn set_pickup_delay(&mut self, this: Resource<Entity>, ticks: u8) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity.get_item_entity().is_some_and(|item_entity| {
+            item_entity.set_pickup_delay(ticks);
+            true
+        }))
+    }
+
     fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -843,6 +874,21 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             }
         })
         .await
+    }
+
+    async fn set_item_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<Entity>,
+        item: Resource<crate::pumpkin::plugin::item_stack::ItemStack>,
+    ) -> wasmtime::Result<bool> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        let entity = accessor.get_res(&this)?;
+        let Some(item_entity) = entity.get_item_entity() else {
+            return Ok(false);
+        };
+        *item_entity.get_item_stack().lock_ignore_poison() = stack;
+        entity.init_data_tracker();
+        Ok(true)
     }
 }
 
