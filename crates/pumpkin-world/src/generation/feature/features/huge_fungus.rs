@@ -26,7 +26,7 @@ impl HugeFungusFeature {
         chunk: &mut T,
         block_registry: &dyn WorldPortalExt,
         _min_y: i8,
-        _height: u16,
+        height: u16,
         _feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -43,7 +43,8 @@ impl HugeFungusFeature {
             total_height *= 2;
         }
 
-        if !self.planted && pos.0.y + total_height + 1 >= chunk.top_y() as i32 {
+        // HugeFungusFeature.place uses the generator depth, not the dimension's build height.
+        if !self.planted && pos.0.y + total_height + 1 >= i32::from(height) {
             return false;
         }
 
@@ -61,10 +62,9 @@ impl HugeFungusFeature {
         pos: BlockPos,
         check_non_replaceable_plants: bool,
     ) -> bool {
-        if chunk.is_air(&pos.0)
-            || GenerationCache::get_block_state(chunk, &pos.0)
-                .to_state()
-                .is_air()
+        if GenerationCache::get_block_state(chunk, &pos.0)
+            .to_state()
+            .replaceable()
         {
             true
         } else if check_non_replaceable_plants {
@@ -242,6 +242,182 @@ impl HugeFungusFeature {
                 23,
                 25,
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ProtoChunk,
+        chunk_system::{Cache, Chunk},
+        generation::{
+            feature::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature},
+            get_world_gen,
+            proto_chunk_test::stage_parity::TestBlockRegistry,
+        },
+    };
+    use pumpkin_data::{
+        configured_feature::ConfiguredFeature as FeatureKey, dimension::Dimension,
+        placed_feature::PlacedFeature,
+    };
+    use pumpkin_util::{random::legacy_rand::LegacyRand, world_seed::Seed};
+
+    fn cache(pos: BlockPos) -> Cache {
+        let generator = get_world_gen(
+            Seed(1790201723474643596),
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut cache = Cache::new((pos.0.x >> 4) - 1, (pos.0.z >> 4) - 1, 3);
+        for x in cache.x..cache.x + cache.size {
+            for z in cache.z..cache.z + cache.size {
+                cache
+                    .chunks
+                    .push(Chunk::Proto(Box::new(ProtoChunk::new(x, z, &generator))));
+            }
+        }
+        cache
+    }
+
+    #[expect(clippy::panic, reason = "The test requires a configured huge fungus")]
+    fn fungus(key: FeatureKey) -> &'static HugeFungusFeature {
+        match &CONFIGURED_FEATURES[&key] {
+            ConfiguredFeature::HugeFungus(feature) => feature,
+            _ => panic!("Expected a huge fungus feature"),
+        }
+    }
+
+    fn generate(feature: &HugeFungusFeature, cache: &mut Cache, pos: BlockPos) -> (bool, i32) {
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(0));
+        let height = cache.get_center_chunk().generation_height();
+        let placed = feature.generate(
+            cache,
+            &TestBlockRegistry,
+            0,
+            height,
+            PlacedFeature::CrimsonFungi,
+            &mut random,
+            pos,
+        );
+        (placed, random.next_i32())
+    }
+
+    #[test]
+    fn natural_fungus_respects_generation_depth_and_rejection_random_order() {
+        for key in [FeatureKey::CrimsonFungus, FeatureKey::WarpedFungus] {
+            let feature = fungus(key);
+            // Java LegacyRandomSource seed 0 selects height 4 without doubling.
+            for (y, expected) in [(122, true), (123, false)] {
+                let pos = BlockPos::new(1187, y, -1160);
+                let mut cache = cache(pos);
+                cache.set_block_state(&pos.down().0, feature.valid_base_block);
+                cache.set_block_state(&pos.0, Block::CRIMSON_FUNGUS.default_state);
+                let (placed, next_random) = generate(feature, &mut cache, pos);
+                assert_eq!(placed, expected);
+                if !expected {
+                    assert_eq!(
+                        GenerationCache::get_block_state(&cache, &pos.0),
+                        Block::CRIMSON_FUNGUS.default_state.id
+                    );
+                    assert!(cache.is_air(&pos.up().0));
+                    let mut random = LegacyRand::from_seed(0);
+                    random.next_bounded_i32(10);
+                    random.next_bounded_i32(12);
+                    assert_eq!(next_random, random.next_i32());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn planted_fungus_can_grow_above_generation_depth() {
+        for key in [
+            FeatureKey::CrimsonFungusPlanted,
+            FeatureKey::WarpedFungusPlanted,
+        ] {
+            let feature = fungus(key);
+            let pos = BlockPos::new(1322, 126, -2725);
+            let mut cache = cache(pos);
+            cache.set_block_state(&pos.down().0, feature.valid_base_block);
+            assert!(generate(feature, &mut cache, pos).0);
+            assert_eq!(
+                GenerationCache::get_block_state(&cache, &pos.add(0, 3, 0).0),
+                feature.stem_state.id
+            );
+        }
+    }
+
+    #[test]
+    fn replaceable_vegetation_matches_air_across_chunk_boundaries() {
+        // Minecraft 26.3 server output: x/z/y traversal, FNV-1a of block names,
+        // followed by the next LegacyRandomSource(0) integer after placement.
+        for (key, expected_hash, expected_next) in [
+            (FeatureKey::CrimsonFungus, 8902037722595437051, 1781447028),
+            (FeatureKey::WarpedFungus, 13021075935757590473, 768747578),
+            (
+                FeatureKey::CrimsonFungusPlanted,
+                13687396282542717472,
+                1781447028,
+            ),
+            (
+                FeatureKey::WarpedFungusPlanted,
+                18350003501919296469,
+                -840115328,
+            ),
+        ] {
+            let feature = fungus(key);
+            let pos = BlockPos::new(-1, 60, -1);
+            let mut air = cache(pos);
+            let mut vegetation = cache(pos);
+            for dx in -4..=4 {
+                for dz in -4..=4 {
+                    for dy in 0..=8 {
+                        let target = pos.add(dx, dy, dz);
+                        vegetation.set_block_state(&target.0, Block::SHORT_GRASS.default_state);
+                    }
+                    // Vanilla skips solid blocks individually, rather than rejecting the fungus.
+                    let target = pos.add(dx, 2, dz);
+                    air.set_block_state(&target.0, Block::NETHERRACK.default_state);
+                    vegetation.set_block_state(&target.0, Block::NETHERRACK.default_state);
+                }
+            }
+            for cache in [&mut air, &mut vegetation] {
+                cache.set_block_state(&pos.down().0, feature.valid_base_block);
+            }
+            let air_result = generate(feature, &mut air, pos);
+            assert_eq!(air_result, (true, expected_next));
+            assert_eq!(generate(feature, &mut vegetation, pos), air_result);
+            assert_eq!(
+                GenerationCache::get_block_state(&air, &pos.add(0, 3, 0).0),
+                feature.stem_state.id
+            );
+            let mut hash = 0xcbf2_9ce4_8422_2325u64;
+            for dx in -4..=4 {
+                for dz in -4..=4 {
+                    for dy in 0..=8 {
+                        let target = pos.add(dx, dy, dz);
+                        let actual = GenerationCache::get_block_state(&vegetation, &target.0);
+                        let actual = if actual == Block::SHORT_GRASS.default_state.id {
+                            Block::AIR.default_state.id
+                        } else {
+                            actual
+                        };
+                        assert_eq!(actual, GenerationCache::get_block_state(&air, &target.0));
+                        for byte in actual.to_block().name.bytes() {
+                            hash ^= u64::from(byte);
+                            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+                        }
+                        if dy == 2 {
+                            assert_eq!(actual, Block::NETHERRACK.default_state.id);
+                        }
+                    }
+                }
+            }
+            assert_eq!(hash, expected_hash);
         }
     }
 }
