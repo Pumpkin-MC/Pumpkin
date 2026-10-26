@@ -56,10 +56,13 @@ static STRUCTURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_PLACE_STRUCTURE_INVALID,
     "commands.place.structure.invalid",
 );
-static FEATURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::COMMANDS_PLACE_FEATURE_INVALID,
-    "commands.place.feature.invalid",
+/// Vanilla 26.3 reports an unknown feature through its `ResourceOrIdArgument`; the old
+/// `commands.place.feature.invalid` key is gone from the client.
+static FEATURE_INVALID: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_RESOURCE_OR_ID_NO_SUCH_ELEMENT,
+    "argument.resource_or_id.no_such_element",
 );
+const FEATURE_REGISTRY: &str = "minecraft:worldgen/feature";
 
 const CHUNK_DIM: i32 = 16;
 
@@ -544,16 +547,25 @@ impl CommandExecutor for PlaceFeatureExecutor {
         let feature_name = feature_id.to_string();
 
         let key = PlacedFeatureKey::from_name(&feature_name).ok_or_else(|| {
-            FEATURE_INVALID.create_without_context(TextComponent::text(feature_name.clone()))
+            FEATURE_INVALID.create_without_context_args_slice(&[
+                TextComponent::text(feature_name.clone()),
+                TextComponent::text(FEATURE_REGISTRY),
+            ])
         })?;
 
         let placed = PLACED_FEATURES.get(&key).ok_or_else(|| {
-            FEATURE_INVALID.create_without_context(TextComponent::text(feature_name.clone()))
+            FEATURE_INVALID.create_without_context_args_slice(&[
+                TextComponent::text(feature_name.clone()),
+                TextComponent::text(FEATURE_REGISTRY),
+            ])
         })?;
 
         let configured = match &placed.feature {
             Feature::Named(name) => CONFIGURED_FEATURES.get(name).ok_or_else(|| {
-                FEATURE_INVALID.create_without_context(TextComponent::text(feature_name.clone()))
+                FEATURE_INVALID.create_without_context_args_slice(&[
+                    TextComponent::text(feature_name.clone()),
+                    TextComponent::text(FEATURE_REGISTRY),
+                ])
             })?,
             Feature::Inlined(f) => f.as_ref(),
         };

@@ -731,6 +731,17 @@ impl DatapackManager {
         names
     }
 
+    /// Returns the functions a `#tag` name expands to, or `None` for a plain function name or an
+    /// unknown tag.
+    pub fn function_tag_members(&self, name: &str) -> Option<Vec<String>> {
+        let tag_name = name.strip_prefix('#')?;
+        self.function_tags
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(tag_name)
+            .cloned()
+    }
+
     pub fn execute_function(
         &self,
         server: &Arc<Server>,
