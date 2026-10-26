@@ -61,16 +61,16 @@ fn resolve_base(
                     if i > 0 {
                         prefix.push(TextComponent::text(", ").0);
                     }
-                    let parsed = serde_json::from_str::<TextComponent>(value)
-                        .unwrap_or_else(|_| TextComponent::text(value.clone()));
+                    let parsed = interpret_tag(value);
                     prefix.push(resolve_base(&parsed.0, source, target, depth + 1));
                 }
                 resolved.content = Box::new(TextContent::Text {
                     text: Cow::Borrowed(""),
                 });
             } else {
+                let text: Vec<String> = values.iter().map(tag_to_plain).collect();
                 resolved.content = Box::new(TextContent::Text {
-                    text: values.join(", ").into(),
+                    text: text.join(", ").into(),
                 });
             }
         }
@@ -162,7 +162,7 @@ fn resolve_nbt(
     storage: Option<&str>,
     entity: Option<&str>,
     source: &CommandSource,
-) -> Vec<String> {
+) -> Vec<NbtTag> {
     let mut reader = StringReader::new(path);
     let Ok(path) = <NbtPathArgumentType as ArgumentType<CommandSource>>::parse(
         &NbtPathArgumentType,
@@ -196,9 +196,24 @@ fn resolve_nbt(
     compounds
         .into_iter()
         .flat_map(|compound| path.get(&NbtTag::Compound(compound)).unwrap_or_default())
-        .map(|tag| match tag {
-            NbtTag::String(value) => value.to_string(),
-            other => other.to_string(),
-        })
         .collect()
+}
+
+/// Plain text of an NBT value, as vanilla prints it without `interpret`.
+fn tag_to_plain(tag: &NbtTag) -> String {
+    match tag {
+        NbtTag::String(value) => value.to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// Decodes an NBT value as a text component, like vanilla's `interpret: true`.
+/// Compounds and lists are components already; strings may hold JSON from
+/// older datapacks.
+fn interpret_tag(tag: &NbtTag) -> TextComponent {
+    match tag {
+        NbtTag::String(value) => serde_json::from_str::<TextComponent>(value)
+            .unwrap_or_else(|_| TextComponent::text(value.to_string())),
+        other => TextComponent::from_nbt(other),
+    }
 }
