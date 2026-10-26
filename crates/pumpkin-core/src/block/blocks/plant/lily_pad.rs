@@ -7,24 +7,16 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, OnEntityCollisionArgs};
+use crate::entity::vehicle::boat::BoatEntity;
 
 #[pumpkin_block("minecraft:lily_pad")]
 pub struct LilyPadBlock;
 
 impl BlockBehaviour for LilyPadBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        {
-            // Proberbly not the best solution, but works
-            if args
-                .entity
-                .get_entity()
-                .entity_type
-                .resource_name
-                .ends_with("_boat")
-            {
-                args.world
-                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-            }
+        if args.entity.cast_any().is::<BoatEntity>() {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 

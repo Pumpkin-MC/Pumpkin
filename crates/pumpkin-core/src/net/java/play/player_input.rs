@@ -37,29 +37,8 @@ impl JavaClient {
                 PlayerToggleSneakEvent::new(player.clone(), sneak);
                 'after: {
                     player.get_entity().set_sneaking(event.is_sneaking);
-                    if event.is_sneaking {
-                        let vehicle = player
-                            .get_entity()
-                            .vehicle
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .clone();
-                        if let Some(vehicle) = vehicle {
-                            vehicle.get_entity().remove_passenger(player.entity_id());
-                        }
-                    }
                 }
             }}
-        } else if sneak {
-            let vehicle = player
-                .get_entity()
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(vehicle) = vehicle {
-                vehicle.get_entity().remove_passenger(player.entity_id());
-            }
         }
     }
 }

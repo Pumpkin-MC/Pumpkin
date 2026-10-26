@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock, Weak};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use rustc_hash::FxHashMap;
 
-use crate::entity::EntityBase;
+use crate::entity::{EntityBase, vehicle::boat::BoatEntity};
 use crossbeam::atomic::AtomicCell;
 
 type Registry = Vec<Arc<dyn EntityBase>>;
@@ -60,6 +60,7 @@ impl CellRange {
 #[derive(Default)]
 struct Index {
     registry: Weak<Registry>,
+    has_boats: bool,
     slots: FxHashMap<i32, usize>,
     ranges: Vec<Option<CellRange>>,
     cells: FxHashMap<Cell, Vec<usize>>,
@@ -72,11 +73,13 @@ impl Index {
     }
 
     fn rebuild(&mut self, registry: &Arc<Registry>) {
+        self.has_boats = false;
         self.slots.clear();
         self.ranges.clear();
         self.cells.clear();
         self.oversized.clear();
         for (slot, entity) in registry.iter().enumerate() {
+            self.has_boats |= entity.cast_any().is::<BoatEntity>();
             let entity = entity.get_entity();
             self.slots.insert(entity.entity_id, slot);
             let range = Self::entity_range(&entity.bounding_box.load());
@@ -183,11 +186,29 @@ impl EntityIndex {
         registry: Arc<Registry>,
         area: BoundingBox,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<> {
+        self.query_filtered(registry, area, |_| true)
+    }
+
+    #[must_use]
+    pub fn has_boats(&self, registry: &Arc<Registry>) -> bool {
+        self.with_index(registry, |index| index.has_boats)
+    }
+
+    pub fn query_filtered<F>(
+        &self,
+        registry: Arc<Registry>,
+        area: BoundingBox,
+        predicate: F,
+    ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<F>
+    where
+        F: Fn(&dyn EntityBase) -> bool,
+    {
         let slots = self.with_index(&registry, |index| index.candidates(&area, registry.len()));
         slots.into_iter().filter_map(move |slot| {
             let entity = &registry[slot];
-            area.intersects(&entity.get_entity().bounding_box.load())
-                .then(|| entity.clone())
+            (area.intersects(&entity.get_entity().bounding_box.load())
+                && predicate(entity.as_ref()))
+            .then(|| entity.clone())
         })
     }
 
@@ -230,6 +251,77 @@ mod tests {
             .iter()
             .map(|entity| entity.get_entity().entity_id)
             .collect()
+    }
+
+    #[tokio::test]
+    async fn boat_queries_track_registry_changes_and_filter_before_cloning()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(-4.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        )));
+        let area = BoundingBox::new(Vector3::new(-6.0, 63.0, -2.0), Vector3::new(2.0, 66.0, 2.0));
+        world.entities.store(Arc::new(vec![cow.clone()]));
+        assert!(
+            cow.get_entity()
+                .get_boat_collisions(area, cow.as_ref())
+                .is_empty()
+        );
+        world
+            .entities
+            .store(Arc::new(vec![cow.clone(), boat.clone()]));
+        let cow_refs = Arc::strong_count(&cow);
+        let boats: Vec<_> = world
+            .entity_index
+            .query_filtered(world.entities.load_full(), area, |entity| {
+                assert_eq!(Arc::strong_count(&cow), cow_refs);
+                entity.cast_any().is::<BoatEntity>()
+            })
+            .collect();
+        assert_eq!(boats.len(), 1);
+        assert_eq!(boats[0].get_entity().entity_id, boat.get_entity().entity_id);
+        let colliders = |entity: &dyn EntityBase| {
+            entity
+                .get_entity()
+                .get_boat_collisions(area, entity)
+                .into_iter()
+                .map(|bounds| (bounds.min, bounds.max))
+                .collect::<Vec<_>>()
+        };
+        let boat_bounds = boat.get_entity().bounding_box.load();
+        let cow_bounds = cow.get_entity().bounding_box.load();
+        assert_eq!(
+            colliders(cow.as_ref()),
+            [(boat_bounds.min, boat_bounds.max)],
+        );
+        assert_eq!(colliders(boat.as_ref()), [(cow_bounds.min, cow_bounds.max)],);
+        boat.get_entity().set_pos(Vector3::new(100.0, 64.0, 0.0));
+        assert!(
+            cow.get_entity()
+                .get_boat_collisions(area, cow.as_ref())
+                .is_empty()
+        );
+        boat.get_entity().set_pos(Vector3::new(-4.0, 64.0, 0.0));
+        boat.get_entity()
+            .removal_reason
+            .store(Some(crate::entity::RemovalReason::Discarded));
+        assert!(
+            cow.get_entity()
+                .get_boat_collisions(area, cow.as_ref())
+                .is_empty()
+        );
+        world.entities.store(Arc::new(vec![cow.clone()]));
+        assert!(!world.entity_index.has_boats(&world.entities.load_full()));
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]

@@ -7,8 +7,7 @@ use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::boundingbox::BoundingBox;
 
 pub struct BoatItem;
 
@@ -43,15 +42,6 @@ impl BoatItem {
                 &EntityType::OAK_BOAT
             }
         }
-    }
-
-    /// Gets entity dimensions for the boat type
-    const fn get_entity_dimensions(entity_type: &EntityType) -> EntityDimensions {
-        EntityDimensions::new(
-            entity_type.dimension[0],
-            entity_type.dimension[1],
-            entity_type.eye_height,
-        )
     }
 }
 
@@ -89,13 +79,15 @@ impl ItemBehaviour for BoatItem {
     /// Vanilla: `BoatItem.use()` - raycasts to find placement position
     fn normal_use(&self, item: &Item, player: &Player) {
         let world = player.world();
-        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
+        let start_pos = player.eye_position();
+        let view_vector = player.get_looking_vector();
+        let end_pos = start_pos + view_vector * player.block_interaction_range();
 
         // Vanilla: BoatItem.use() clips with FluidHandling.ANY
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
             start_pos,
             end_pos,
-            pumpkin_world::clip::ClipBlock::Collider,
+            pumpkin_world::clip::ClipBlock::Outline,
             pumpkin_world::clip::ClipFluid::Any,
         ));
         if hit.is_miss {
@@ -106,53 +98,46 @@ impl ItemBehaviour for BoatItem {
 
         // Vanilla: Check for entities in the path that would block placement
         // Get player's rotation vector stretched by 5.0 and expanded by 1.0
-        let (yaw, pitch) = player.rotation();
-        let rotation_vec =
-            Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)).multiply(5.0, 5.0, 5.0);
         let player_entity = player.get_entity().bounding_box.load();
-        let search_box = player_entity.stretch(rotation_vec).expand_all(1.0);
+        let search_box = player_entity.stretch(view_vector * 5.0).expand_all(1.0);
 
-        let entities = world.get_entities_at_box(&search_box);
-        let player_eye_pos = player.eye_position();
+        let entities = world.get_all_at_box(&search_box);
 
         for entity in &entities {
             // Vanilla: EntityPredicates.CAN_HIT = !isSpectator() && canHit()
-            if entity.is_spectator() || !entity.can_hit() {
+            if entity.get_entity().entity_id == player.entity_id()
+                || entity.is_spectator()
+                || (!entity.can_hit() && entity.get_player().is_none())
+            {
                 continue;
             }
 
             // Vanilla: expand by getTargetingMargin() (0.0 for most entities)
             let entity_box = entity.get_entity().bounding_box.load();
             // Check if entity's bounding box contains the player's eye position
-            if entity_box.intersects(&BoundingBox::new(player_eye_pos, player_eye_pos)) {
+            if entity_box.intersects(&BoundingBox::new(start_pos, start_pos)) {
                 // Entity is blocking the line of sight at eye position
                 return;
             }
         }
 
-        // Create the boat entity
         let entity_type = Self::item_to_entity(item);
-        let dimensions = Self::get_entity_dimensions(entity_type);
-        let boat_box = BoundingBox::new_from_pos(hit_vec.x, hit_vec.y, hit_vec.z, &dimensions);
-
-        // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
-        if !world.is_space_empty(boat_box) {
-            return;
-        }
-
-        // Check no entities occupy the space
-        if !world.get_entities_at_box(&boat_box).is_empty() {
-            return;
-        }
-
-        // Create and spawn the boat
         let entity = Entity::new(world.clone(), hit_vec, entity_type);
-
-        // Set yaw to player's yaw
         let (player_yaw, _) = player.rotation();
         entity.set_rotation(player_yaw, 0.0);
-
         let boat_entity = Arc::new(BoatEntity::new(entity));
+        let entity = boat_entity.get_entity();
+        let boat_box = entity.bounding_box.load();
+
+        // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
+        if !world.is_space_empty(boat_box)
+            || entity
+                .get_boat_collisions(boat_box, boat_entity.as_ref())
+                .iter()
+                .any(|shape| shape.intersects(&boat_box))
+        {
+            return;
+        }
         world.spawn_entity(boat_entity);
 
         let mut main_hand = player.inventory.held_item();

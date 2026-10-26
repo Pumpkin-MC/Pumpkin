@@ -11,6 +11,7 @@ replaceables = "replaceables"
 convertable = "convertable"
 
 [default.extend-identifiers]
-# Vanilla method names
+# Vanilla names
 areMergable = "areMergable"
 isMergable = "isMergable"
+MAX_MOVEMENTS_HANDELED_PER_TICK = "MAX_MOVEMENTS_HANDELED_PER_TICK"
