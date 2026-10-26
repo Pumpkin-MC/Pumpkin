@@ -12,6 +12,7 @@ use pumpkin_inventory::Inventory;
 pub mod barrel;
 pub mod beacon;
 pub mod bed;
+pub mod bedrock;
 pub mod bell;
 pub mod blasting_furnace;
 pub mod brewing_stand;

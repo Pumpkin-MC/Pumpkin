@@ -92,7 +92,7 @@ impl BlockBehaviour for FurnaceBlock {
             args.player
                 .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
-        crate::block::registry::BlockActionResult::Consume
+        crate::block::registry::BlockActionResult::Success
     }
 
     fn get_screen_handler_factory(

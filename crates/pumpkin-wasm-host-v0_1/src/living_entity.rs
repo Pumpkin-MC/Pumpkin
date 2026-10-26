@@ -133,14 +133,11 @@ pub fn from_wit_damage_type(wit: WitDamageType) -> pumpkin_data::damage::DamageT
 }
 
 impl HostLivingEntity for PluginHostState {
-    async fn as_entity(
-        &mut self,
-        this: Resource<WitLivingEntity>,
-    ) -> wasmtime::Result<Resource<Entity>> {
+    fn as_entity(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<Resource<Entity>> {
         self.add(self.get(&this)?.clone())
     }
 
-    async fn as_mob(
+    fn as_mob(
         &mut self,
         this: Resource<WitLivingEntity>,
     ) -> wasmtime::Result<Option<Resource<WitMob>>> {
@@ -152,23 +149,19 @@ impl HostLivingEntity for PluginHostState {
         }
     }
 
-    async fn is_mob(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+    fn is_mob(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some())
     }
 
-    async fn get_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
+    fn get_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
         let entity = self.get(&this)?;
         Ok(entity
             .get_living_entity()
             .map_or(0.0, |living| living.health.load()))
     }
 
-    async fn set_health(
-        &mut self,
-        this: Resource<WitLivingEntity>,
-        health: f32,
-    ) -> wasmtime::Result<()> {
+    fn set_health(&mut self, this: Resource<WitLivingEntity>, health: f32) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
             living.health.store(health);
@@ -176,7 +169,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_max_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
+    fn get_max_health(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
         let entity = self.get(&this)?;
         Ok(entity.get_living_entity().map_or(
             0.0,
@@ -184,7 +177,7 @@ impl HostLivingEntity for PluginHostState {
         ))
     }
 
-    async fn set_max_health(
+    fn set_max_health(
         &mut self,
         this: Resource<WitLivingEntity>,
         max_health: f32,
@@ -196,7 +189,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn is_dead(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+    fn is_dead(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_living_entity().map_or_else(
             || entity.get_entity().removal_reason.load().is_some(),
@@ -204,14 +197,14 @@ impl HostLivingEntity for PluginHostState {
         ))
     }
 
-    async fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
+    fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
         let entity = self.get(&this)?;
         Ok(entity
             .get_living_entity()
             .map_or(0.0, |living| living.absorption.load()))
     }
 
-    async fn set_absorption(
+    fn set_absorption(
         &mut self,
         this: Resource<WitLivingEntity>,
         amount: f32,
@@ -223,7 +216,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_attribute_value(
+    fn get_attribute_value(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -237,7 +230,7 @@ impl HostLivingEntity for PluginHostState {
             }))
     }
 
-    async fn get_attribute_base(
+    fn get_attribute_base(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -251,7 +244,7 @@ impl HostLivingEntity for PluginHostState {
             }))
     }
 
-    async fn set_attribute_base(
+    fn set_attribute_base(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -269,7 +262,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn add_attribute_modifier(
+    fn add_attribute_modifier(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -292,7 +285,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn remove_attribute_modifier(
+    fn remove_attribute_modifier(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -310,7 +303,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_attribute_modifiers(
+    fn get_attribute_modifiers(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -337,7 +330,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(Vec::new())
     }
 
-    async fn reset_attribute(
+    fn reset_attribute(
         &mut self,
         this: Resource<WitLivingEntity>,
         attr: Attribute,
@@ -360,10 +353,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn reset_all_attributes(
-        &mut self,
-        this: Resource<WitLivingEntity>,
-    ) -> wasmtime::Result<()> {
+    fn reset_all_attributes(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
             living.reset_effects_and_attributes();
@@ -371,7 +361,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_equipment(
+    fn get_equipment(
         &mut self,
         this: Resource<WitLivingEntity>,
         slot: WitEquipmentSlot,
@@ -419,7 +409,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn clear_equipment(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
+    fn clear_equipment(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
             let mut equipment = living
@@ -441,14 +431,14 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_age(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<i32> {
+    fn get_age(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<i32> {
         let entity = self.get(&this)?;
         Ok(entity.get_living_entity().map_or(0, |living| {
             living.entity.age.load(std::sync::atomic::Ordering::Relaxed)
         }))
     }
 
-    async fn set_age(&mut self, this: Resource<WitLivingEntity>, age: i32) -> wasmtime::Result<()> {
+    fn set_age(&mut self, this: Resource<WitLivingEntity>, age: i32) -> wasmtime::Result<()> {
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
             living
@@ -459,7 +449,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn send_system_message(
+    fn send_system_message(
         &mut self,
         this: Resource<WitLivingEntity>,
         message: Resource<TextComponent>,
@@ -471,7 +461,7 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
-    async fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

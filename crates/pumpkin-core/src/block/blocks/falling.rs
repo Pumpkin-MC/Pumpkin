@@ -17,12 +17,31 @@ use pumpkin_world::world::BlockAccessor;
 pub struct FallingBlock;
 
 impl FallingBlock {
+    // FallingBlock.getDelayAfterPlace
+    const DELAY_AFTER_PLACE: u8 = 2;
+
+    /// `FallingBlock.onPlace`, for subclasses that override `getDelayAfterPlace` in vanilla (`DragonEggBlock`).
+    pub fn placed_with_delay(args: &PlacedArgs<'_>, delay: u8) {
+        args.world
+            .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
+    }
+
+    /// `FallingBlock.updateShape`, for subclasses that override `getDelayAfterPlace`.
+    #[must_use]
+    pub fn get_state_for_neighbor_update_with_delay(
+        args: &GetStateForNeighborUpdateArgs<'_>,
+        delay: u8,
+    ) -> BlockStateId {
+        args.world
+            .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
+        args.state_id
+    }
+
     #[must_use]
     pub fn can_fall_through(state: &BlockState, block: &Block) -> bool {
-        state.is_air()
-            || block.has_tag(&tag::Block::MINECRAFT_FIRE)
-            || state.is_liquid()
-            || state.replaceable()
+        // Vanilla also checks liquid(), but only water, lava and bubble columns set it and
+        // those are replaceable. is_liquid() would also match waterlogged blocks.
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_FIRE) || state.replaceable()
     }
 
     #[must_use]
@@ -34,12 +53,13 @@ impl FallingBlock {
 
     #[must_use]
     pub fn touches_liquid(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let current = world.get_block_state(pos);
         for dir in BlockDirection::all() {
-            if dir == BlockDirection::Down {
+            if dir == BlockDirection::Down && !Self::can_solidify(current) {
                 continue;
             }
             let neighbor = world.get_block_state(&pos.offset(dir.to_offset()));
-            if Self::can_solidify(neighbor) {
+            if Self::can_solidify(neighbor) && !neighbor.is_side_solid(dir.opposite()) {
                 return true;
             }
         }
@@ -96,8 +116,7 @@ impl BlockBehaviour for FallingBlock {
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
+        Self::placed_with_delay(&args, Self::DELAY_AFTER_PLACE);
     }
 
     fn get_state_for_neighbor_update(
@@ -112,9 +131,7 @@ impl BlockBehaviour for FallingBlock {
             return concrete.default_state.id;
         }
 
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
-        args.state_id
+        Self::get_state_for_neighbor_update_with_delay(&args, Self::DELAY_AFTER_PLACE)
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {

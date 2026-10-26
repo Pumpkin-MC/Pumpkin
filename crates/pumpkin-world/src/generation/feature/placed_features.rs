@@ -180,6 +180,7 @@ pub enum PlacementModifier {
     HeightRange(HeightRangePlacementModifier),
     InSquare(SquarePlacementModifier),
     RandomOffset(RandomOffsetPlacementModifier),
+    Offset(OffsetPlacementModifier),
     FixedPlacement(Vec<BlockPos>),
 }
 
@@ -220,6 +221,7 @@ impl PlacementModifier {
             Self::HeightRange(modifier) => modifier.get_positions(min_y, height, random, pos),
             Self::InSquare(_) => SquarePlacementModifier::get_positions(random, pos),
             Self::RandomOffset(modifier) => modifier.get_positions(random, pos),
+            Self::Offset(modifier) => modifier.get_positions(random, pos),
             Self::FixedPlacement(positions) => Box::new(positions.clone().into_iter()),
         }
     }
@@ -318,6 +320,25 @@ impl RandomOffsetPlacementModifier {
         let x = pos.0.x + self.xz_spread.get(random);
         let y = pos.0.y + self.y_spread.get(random);
         let z = pos.0.z + self.xz_spread.get(random);
+        Box::new(iter::once(BlockPos(Vector3::new(x, y, z))))
+    }
+}
+
+pub struct OffsetPlacementModifier {
+    pub x: IntProvider,
+    pub y: IntProvider,
+    pub z: IntProvider,
+}
+
+impl OffsetPlacementModifier {
+    pub fn get_positions(
+        &self,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Box<dyn Iterator<Item = BlockPos>> {
+        let x = pos.0.x + self.x.get(random);
+        let y = pos.0.y + self.y.get(random);
+        let z = pos.0.z + self.z.get(random);
         Box::new(iter::once(BlockPos(Vector3::new(x, y, z))))
     }
 }

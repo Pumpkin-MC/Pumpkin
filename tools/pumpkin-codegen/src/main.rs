@@ -42,7 +42,7 @@ mod chunk_view_lut;
 mod configured_feature;
 mod context_provider;
 mod damage_type;
-mod data_component;
+pub mod data_component;
 mod decorated_pot_pattern;
 mod dimension;
 mod dye_color;
@@ -52,6 +52,7 @@ mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod entity_variant;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
@@ -88,9 +89,9 @@ mod sound_category;
 mod spawn_egg;
 mod statistic;
 mod structure_metadata;
+mod structure_template;
 mod structures;
 mod tag;
-mod template_bytes;
 mod template_pool;
 mod test_instance;
 mod tracked_data;
@@ -112,6 +113,22 @@ pub const OUT_DIR: &str = "../../crates/pumpkin-data/src/generated";
 pub fn main() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     std::env::set_current_dir(manifest_dir).expect("Failed to set current dir to manifest dir");
+
+    let mc_data_dir = std::path::Path::new("../../assets/datapack/data/minecraft");
+    if !mc_data_dir.is_dir() {
+        println!(
+            "Vanilla datapack missing. Triggering pumpkin-data build script to download it..."
+        );
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let status = Command::new(cargo)
+            .args(["check", "-p", "pumpkin-data"])
+            .status()
+            .expect("Failed to run cargo check -p pumpkin-data");
+        assert!(
+            status.success(),
+            "Failed to download and extract vanilla datapack"
+        );
+    }
 
     type BuilderFn = fn() -> TokenStream;
 
@@ -152,7 +169,7 @@ pub fn main() {
         (template_pool::build, "template_pool.rs"),
         (processor_list::build, "processor_list.rs"),
         (structure_metadata::build, "structure_metadata.rs"),
-        (template_bytes::build, "template_bytes.rs"),
+        (structure_template::build, "structure_template.rs"),
         (test_instance::build, "test_instance.rs"),
         (painting_variant::build, "painting_variant.rs"),
         (context_provider::build, "context_provider.rs"),
@@ -187,6 +204,7 @@ pub fn main() {
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (entity_variant::build, "entity_variant.rs"),
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
         (banner_pattern::build, "banner_pattern.rs"),
@@ -217,12 +235,10 @@ pub fn main() {
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
     if filters.iter().any(|f| f == "wit") {
-        wit::v0_1::main();
         wit::v0_2::main();
         return;
     }
     let build_functions: Vec<_> = if filters.is_empty() {
-        wit::v0_1::main();
         wit::v0_2::main();
         sdk::main();
         build_functions

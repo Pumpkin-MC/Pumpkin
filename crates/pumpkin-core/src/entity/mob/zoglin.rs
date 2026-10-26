@@ -15,7 +15,7 @@ use crate::entity::{
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     living::LivingEntity,
-    mob::{Mob, MobEntity, hoglin::throw_target},
+    mob::{Mob, MobEntity, MobMetadata, hoglin::throw_target},
 };
 use crate::world::World;
 
@@ -76,11 +76,7 @@ impl ZoglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -91,11 +87,7 @@ impl ZoglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
@@ -138,6 +130,10 @@ impl ZoglinEntity {
 }
 
 impl Mob for ZoglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -121,12 +121,14 @@ pub fn update_position(player: &Arc<Player>) {
             lock.add_ticket(new_chunk_center, sim);
         }
 
-        if let Some((held_view, held_sim)) = held_tickets.replace((new_view_level, new_sim_level)) {
+        if let Some((held_center, held_view, held_sim)) =
+            held_tickets.replace((new_chunk_center, new_view_level, new_sim_level))
+        {
             if let Some(view) = held_view {
-                lock.remove_ticket(old_cylindrical.center, view);
+                lock.remove_ticket(held_center, view);
             }
             if let Some(sim) = held_sim {
-                lock.remove_ticket(old_cylindrical.center, sim);
+                lock.remove_ticket(held_center, sim);
             }
         }
         lock.send_change();
@@ -157,12 +159,8 @@ pub fn update_position(player: &Arc<Player>) {
 
         if let Some(server) = world.server.upgrade() {
             server.spawn_task(async move {
-                level
-                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
-                    .await;
-                let chunks_to_clean = level
-                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
-                    .await;
+                level.mark_chunks_as_newly_watched(&loading_chunks_clone);
+                let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks_clone);
 
                 if !chunks_to_clean.is_empty() {
                     world_clone

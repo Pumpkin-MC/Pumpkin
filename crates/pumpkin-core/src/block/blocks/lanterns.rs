@@ -1,52 +1,85 @@
+use crate::block::blocks::weathering_copper::change_over_time;
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PathComputationType,
+    BlockBehaviour, BlockIsReplacing, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    PathComputationType, RandomTickArgs, can_support_center,
 };
-use crate::world::World;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, BlockState, BlockStateId, tag};
+use crate::entity::EntityBase;
+use pumpkin_data::block_properties::{Facing, LanternLikeProperties};
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::BlockAccessor;
 
 #[pumpkin_block_from_tag("minecraft:lanterns")]
 pub struct LanternBlock;
 
 impl BlockBehaviour for LanternBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = pumpkin_data::block_properties::LanternLikeProperties::default(args.block);
+        let mut props = LanternLikeProperties::default(args.block);
         props.r#waterlogged = args.replacing.water_source();
 
-        let block_up_state = args.world.get_block_state(&args.position.up());
-        if block_up_state.is_center_solid(BlockDirection::Down) {
-            props.r#hanging = true;
+        let mut directions = args.player.get_entity().get_entity_facing_order();
+        if args.replacing == BlockIsReplacing::None {
+            let face = args.direction.to_facing();
+            if let Some(i) = directions.iter().position(|&d| d == face)
+                && i > 0
+            {
+                directions.copy_within(0..i, 1);
+                directions[0] = face;
+            }
         }
 
-        props.to_state_id(args.block)
+        for dir in directions {
+            if dir == Facing::Up || dir == Facing::Down {
+                let hanging = dir == Facing::Up;
+                if can_survive(args.world, args.position, hanging) {
+                    props.r#hanging = hanging;
+                    return props.to_state_id(args.block);
+                }
+            }
+        }
+
+        Block::AIR.default_state.id
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        args.world
-            .is_some_and(|world| can_place_at(world, args.position))
+        if args.player.is_none() {
+            let props = LanternLikeProperties::from_state_id(args.state.id);
+            return can_survive(args.block_accessor, args.position, props.hanging);
+        }
+        can_survive(args.block_accessor, args.position, false)
+            || can_survive(args.block_accessor, args.position, true)
     }
 
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.position) {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        let props = LanternLikeProperties::from_state_id(args.state_id);
+        if props.r#waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        let support_dir = if props.r#hanging {
+            BlockDirection::Up
+        } else {
+            BlockDirection::Down
+        };
+        if support_dir == args.direction && !can_survive(args.world, args.position, props.r#hanging)
+        {
+            return Block::AIR.default_state.id;
         }
         args.state_id
     }
 
-    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world, args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        change_over_time(args.world, args.position, args.block);
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
@@ -54,24 +87,15 @@ impl BlockBehaviour for LanternBlock {
     }
 }
 
-fn can_place_at(world: &World, position: &BlockPos) -> bool {
-    //idk why this don't update with .is_center_solid so this is a 'temporary patch'
-    if world
-        .get_block(&position.down())
-        .has_tag(&tag::Block::C_FENCE_GATES)
-    {
-        let fence_gate_props =
-            pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
-                world.get_block_state_id(&position.down()),
-            );
-
-        if fence_gate_props.open {
-            return false;
-        }
-    }
-    let (block_down, block_down_state) = world.get_block_and_state(&position.down());
-    let block_up_state = world.get_block_state(&position.up());
-    block_down_state.is_center_solid(BlockDirection::Up)
-        || block_up_state.is_center_solid(BlockDirection::Down)
-        || block_down.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
+fn can_survive(block_accessor: &dyn BlockAccessor, position: &BlockPos, hanging: bool) -> bool {
+    let direction = if hanging {
+        BlockDirection::Up
+    } else {
+        BlockDirection::Down
+    };
+    can_support_center(
+        block_accessor,
+        &position.offset(direction.to_offset()),
+        direction.opposite(),
+    )
 }

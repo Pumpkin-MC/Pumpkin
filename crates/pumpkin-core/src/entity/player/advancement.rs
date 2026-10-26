@@ -375,7 +375,10 @@ impl PlayerAdvancement {
 
     /// Flushes any pending advancement state down to the client.
     pub fn flush_dirty(&mut self, player: &Player, show_advancement: bool) {
-        if self.is_first_packet || !self.roots_to_update.is_empty() {
+        if self.is_first_packet
+            || !self.roots_to_update.is_empty()
+            || !self.progress_changed.is_empty()
+        {
             let mut progress: HashMap<Identifier, &AdvancementProgress> = HashMap::new();
             let mut added: Vec<&Advancement> = Vec::new();
             let mut removed: Vec<Identifier> = Vec::new();

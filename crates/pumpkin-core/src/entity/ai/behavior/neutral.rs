@@ -10,7 +10,7 @@ use crate::entity::mob::MobEntity;
 ///
 /// The revenge goal stays at the call site -> its priority and alert filter differ per mob.
 pub fn apply_targets(
-    targets: &mut GoalSelector,
+    targets: &GoalSelector,
     mob: &MobEntity,
     angry_priority: u8,
     reset_priority: u8,

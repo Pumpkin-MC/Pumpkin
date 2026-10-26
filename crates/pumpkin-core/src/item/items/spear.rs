@@ -35,7 +35,14 @@ impl ItemMetadata for SpearItem {
 }
 
 impl ItemBehaviour for SpearItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
         if player
             .living_entity
             .item_in_use
@@ -47,11 +54,6 @@ impl ItemBehaviour for SpearItem {
         }
 
         let inventory = player.inventory();
-        let hand = if inventory.held_item().item.id == item.id {
-            Hand::Right
-        } else {
-            Hand::Left
-        };
         let stack = inventory.get_stack_in_hand(hand);
         let sound = stack
             .get_data_component::<KineticWeaponImpl>()
@@ -216,7 +218,7 @@ impl SpearItem {
             .last_attacking_id
             .store(target_entity.entity_id, Ordering::Relaxed);
         player.living_entity.last_attack_time.store(
-            player.get_entity().age.load(Ordering::Relaxed),
+            player.get_entity().tick_count.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         if was_hurt {
@@ -254,7 +256,7 @@ impl SpearItem {
         let base_damage = player
             .living_entity
             .get_attribute_base(&Attributes::ATTACK_DAMAGE) as f32;
-        let now = player.get_entity().age.load(Ordering::Relaxed);
+        let now = player.get_entity().tick_count.load(Ordering::Relaxed);
         let mut affected = false;
 
         for target in Self::targets_in_range(player, &server, stack) {
@@ -626,17 +628,7 @@ impl SpearItem {
                 return false;
             }
         }
-        Self::root_vehicle_id(player.get_entity()) != Self::root_vehicle_id(entity)
-    }
-
-    fn root_vehicle_id(entity: &Entity) -> i32 {
-        let mut id = entity.entity_id;
-        let mut vehicle = entity.get_vehicle();
-        while let Some(current) = vehicle {
-            id = current.get_entity().entity_id;
-            vehicle = current.get_entity().get_vehicle();
-        }
-        id
+        player.get_entity().root_vehicle_id() != entity.root_vehicle_id()
     }
 }
 
