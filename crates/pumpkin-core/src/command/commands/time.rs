@@ -15,6 +15,7 @@ const DESCRIPTION: &str = "Query or modify the world time and clocks.";
 const PERMISSION: &str = "minecraft:command.time";
 
 const DEFAULT_CLOCK: &str = "minecraft:overworld";
+const DAY_TIMELINE: &str = "minecraft:day";
 
 #[derive(Clone, Copy)]
 enum PresetTime {
@@ -54,6 +55,33 @@ enum QueryMode {
 
 const fn wrap_time(ticks: i64) -> i32 {
     (ticks % 2_147_483_647) as i32
+}
+
+/// The Java 26.3 client no longer has `commands.time.query`, so Java gets the text vanilla
+/// prints for `/time query minecraft:day` (and `... repetitions`). Bedrock keeps its own
+/// one-argument keys.
+fn day_timeline_feedback(
+    context: &CommandContext,
+    java_key: &'static str,
+    bedrock_key: &'static str,
+    value: i64,
+) -> TextComponent {
+    let value = TextComponent::text(value.to_string());
+    let is_bedrock = context.source.output.as_player().is_some_and(|player| {
+        matches!(
+            player.client.as_ref(),
+            crate::net::ClientPlatform::Bedrock(_)
+        )
+    });
+    if is_bedrock {
+        TextComponent::translate_cross(java_key, bedrock_key, [value])
+    } else {
+        TextComponent::translate_cross(
+            java_key,
+            bedrock_key,
+            [TextComponent::text(DAY_TIMELINE), value],
+        )
+    }
 }
 
 struct QueryExecutor {
@@ -106,10 +134,11 @@ impl CommandExecutor for QueryExecutor {
             QueryMode::DayTime => {
                 let curr_time = level_time.query_daytime();
                 context.source.send_feedback(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_TIME_QUERY,
+                    day_timeline_feedback(
+                        context,
+                        translation::java::COMMANDS_TIME_QUERY_TIMELINE,
                         translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
-                        TextComponent::text(curr_time.to_string())
+                        curr_time,
                     ),
                     false,
                 );
@@ -118,10 +147,11 @@ impl CommandExecutor for QueryExecutor {
             QueryMode::Day => {
                 let curr_time = level_time.query_day();
                 context.source.send_feedback(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_TIME_QUERY,
+                    day_timeline_feedback(
+                        context,
+                        translation::java::COMMANDS_TIME_QUERY_TIMELINE_REPETITIONS,
                         translation::bedrock::COMMANDS_TIME_QUERY_DAY,
-                        TextComponent::text(curr_time.to_string())
+                        curr_time,
                     ),
                     false,
                 );
