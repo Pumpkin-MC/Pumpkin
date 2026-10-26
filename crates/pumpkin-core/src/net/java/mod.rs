@@ -328,8 +328,7 @@ impl JavaClient {
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
     }
 
@@ -356,7 +355,7 @@ impl JavaClient {
         }
 
         let (tx, rx) = oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let mut serialized = Vec::with_capacity(valid_chunks.len());
             for chunk in valid_chunks {
                 let mut buf = Vec::with_capacity(32 * 1024);
@@ -755,18 +754,27 @@ impl JavaClient {
         // The multiversion plugin has converted older clients' packets to 26.3 by now.
         let version = CURRENT_MC_VERSION;
 
-        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-            player.clone(),
-            packet.id,
-            packet.payload.clone(),
-        );
-        server.plugin_manager.fire_blocking(server, &mut event);
-        if event.cancelled {
-            return Ok(());
-        }
+        let event_payload;
+        let (packet_id, mut payload) = if server
+            .plugin_manager
+            .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
+        ) {
+            let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                player.clone(),
+                packet.id,
+                packet.payload.clone(),
+            );
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                return Ok(());
+            }
+            event_payload = event.payload;
+            (event.packet_id, &event_payload[..])
+        } else {
+            (packet.id, &packet.payload[..])
+        };
 
-        let mut payload = &event.payload[..];
-        match event.packet_id {
+        match packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -1235,7 +1243,7 @@ impl JavaClient {
                 self.handle_configuration_acknowledged(player);
             }
             _ => {
-                warn!("Failed to handle player packet id {}", event.packet_id);
+                warn!("Failed to handle player packet id {}", packet_id);
             }
         }
         Ok(())

@@ -787,7 +787,6 @@ impl PumpkinServer {
 
 fn setup_stdin_console(server: &Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let mut line = String::new();
@@ -802,7 +801,9 @@ fn setup_stdin_console(server: &Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 warn!("Console command was not terminated with a newline");
             }
-            let _ = rt.block_on(tx.send(line.trim().to_string()));
+            if tx.blocking_send(line.trim().to_string()).is_err() {
+                break;
+            }
         }
     });
     let server_clone = server.clone();
