@@ -44,7 +44,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 3;
+pub const PLUGIN_API_VERSION: u32 = 4;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -1042,18 +1042,16 @@ impl PluginManager {
         for name in loading {
             self.wait_for_initialization(&name).await;
         }
-        // Resident plugins satisfy dependencies, they are already initialized, so they have none
-        // left to resolve. States first, then plugins, like `plugin_entries`
-        let states = self.plugin_states.read().await;
+        // Active plugins satisfy dependencies, they are already initialized, so they have none left
+        // to resolve. Records still loading or kept after an unload are not active
         let resident: Vec<(String, Vec<String>)> = self
             .plugins
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
-            .filter(|p| !matches!(states.get(&p.metadata.name), Some(PluginState::Loading)))
+            .filter(|p| p.is_active)
             .map(|p| (p.metadata.name.clone(), Vec::new()))
             .collect();
-        drop(states);
         metadata_list.extend(resident);
 
         let sorted_names =
