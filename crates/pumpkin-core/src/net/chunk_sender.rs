@@ -386,6 +386,9 @@ impl ChunkSender {
             if queued {
                 self.sent_chunks.insert(chunk.position);
                 dispatched_positions.push(chunk.position);
+            } else {
+                // Still owed to the client, so a later batch retries it
+                self.pending_chunks.insert(chunk.position);
             }
         }
 
