@@ -8,11 +8,13 @@ use crate::entity::{
     Entity, EntityBase,
     mob::{
         Mob, MobEntity, MobMetadata,
+        spawn::SpawnGroupData,
         spider::{
             initialize_spider_navigation, register_spider_goals, set_climbing, spider_metadata,
         },
     },
 };
+use crate::world::World;
 
 pub struct CaveSpiderEntity {
     pub mob_entity: MobEntity,
@@ -36,12 +38,13 @@ impl CaveSpiderEntity {
 }
 
 impl Mob for CaveSpiderEntity {
+    // Vanilla skips super here, so no jockey, effect or follow range bonus.
     fn finalize_spawn(
         &self,
-        world: &Arc<crate::world::World>,
-        group_data: Option<super::spawn::SpawnGroupData>,
-    ) -> Option<super::spawn::SpawnGroupData> {
-        super::spider::finalize_spider_spawn(&self.mob_entity, world, group_data)
+        _world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        group_data
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

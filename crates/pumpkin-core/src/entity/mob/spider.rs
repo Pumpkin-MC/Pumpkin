@@ -108,7 +108,7 @@ pub fn register_spider_goals(mob_entity: &MobEntity, mob_weak: Weak<dyn Mob>) {
     );
 }
 
-/// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,
+/// Vanilla `Spider.finalizeSpawn`: a skeleton jockey,
 /// and on hard difficulty a random effect shared by the whole spawn group.
 pub fn finalize_spider_spawn(
     mob: &MobEntity,
