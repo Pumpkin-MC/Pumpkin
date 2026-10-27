@@ -301,7 +301,13 @@ fn read_pump_light(
                 "Unexpected EOF reading {what}"
             )));
         }
-        Ok(LightContainer::Empty(buf.get_u8()))
+        let level = buf.get_u8();
+        if level > 15 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Invalid {what} level {level}"
+            )));
+        }
+        Ok(LightContainer::Empty(level))
     } else {
         Ok(LightContainer::Empty(0))
     }
@@ -1887,6 +1893,21 @@ mod tests {
         let bytes = chunk.to_pump_bytes().expect("serializes");
         let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
         assert_eq!(sky_levels(&reloaded), before);
+    }
+
+    #[test]
+    fn pump_uniform_light_level_above_15_is_rejected() {
+        let mut buf: &[u8] = &[16];
+        assert!(
+            read_pump_light(
+                &mut buf,
+                PUMP_SKY_LIGHT_UNIFORM,
+                PUMP_SKY_LIGHT_FULL,
+                PUMP_SKY_LIGHT_UNIFORM,
+                "sky light",
+            )
+            .is_err()
+        );
     }
 
     #[test]
