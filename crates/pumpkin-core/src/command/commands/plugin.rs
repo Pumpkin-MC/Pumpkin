@@ -286,7 +286,8 @@ impl CommandExecutor for ReloadExecutor {
                 .plugin_manager
                 .wait_for_initialization(&plugin_name)
                 .await;
-            if server_clone.plugin_manager.is_plugin_loaded(&plugin_name)
+            let was_loaded = server_clone.plugin_manager.is_plugin_loaded(&plugin_name);
+            if was_loaded
                 && let Err(e) = server_clone
                     .plugin_manager
                     .unload_plugin(&plugin_name)
@@ -304,9 +305,14 @@ impl CommandExecutor for ReloadExecutor {
                 .plugin_manager
                 .try_load_plugin(&server_clone, &entry.path)
                 .await
-                // The plugin is unloaded at this point, so say so
                 .map_err(|e| {
-                    format!("Plugin {plugin_name} was unloaded but could not be loaded again: {e}")
+                    if was_loaded {
+                        format!(
+                            "Plugin {plugin_name} was unloaded but could not be loaded again: {e}"
+                        )
+                    } else {
+                        format!("Plugin {plugin_name} could not be loaded: {e}")
+                    }
                 });
 
             send_result(
