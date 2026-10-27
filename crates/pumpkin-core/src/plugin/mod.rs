@@ -832,6 +832,8 @@ impl PluginManager {
                     context.unregister_commands();
                     context.unregister_permissions();
                     let _ = instance.on_unload(context).await;
+                    // The instance's code lives in the library, so drop it before unloading
+                    drop(instance);
 
                     // Get the loader data before removing the plugin
                     let loader_data: Option<Box<dyn Any + Send + Sync>> = {
@@ -1007,17 +1009,14 @@ impl PluginManager {
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
         // Resident plugins satisfy dependencies, they are already initialized, so they have none left to resolve
-        {
-            let plugins = self
-                .plugins
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            metadata_list.extend(
-                plugins
-                    .iter()
-                    .map(|p| (p.metadata.name.clone(), Vec::new())),
-            );
-        }
+        let resident: Vec<(String, Vec<String>)> = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|p| (p.metadata.name.clone(), Vec::new()))
+            .collect();
+        metadata_list.extend(resident);
 
         let sorted_names =
             Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
