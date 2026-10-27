@@ -1,5 +1,6 @@
 use crate::block::{
     BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    is_exception_for_connection,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::EastWall;
@@ -7,10 +8,12 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::NorthWall;
 use pumpkin_data::block_properties::SouthWall;
 use pumpkin_data::block_properties::WestWall;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
@@ -32,6 +35,14 @@ impl BlockBehaviour for WallBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let wall_props = WallProperties::from_state_id(args.state_id);
+        if wall_props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
         compute_wall_state(wall_props, args.world, args.block, args.position)
     }
 
@@ -67,7 +78,7 @@ pub fn compute_wall_state(
                 }
             } else if block_above.has_tag(&tag::Block::C_GLASS_PANES)
                 || block_above.has_tag(&tag::Block::MINECRAFT_FENCES)
-                || block_above == &Block::IRON_BARS
+                || block_above.has_tag(&tag::Block::MINECRAFT_BARS)
             {
                 let other_props = FenceLikeProperties::from_state_id(block_above_state.id);
                 match direction {
@@ -115,8 +126,14 @@ pub fn compute_wall_state(
         && wall_props.south != SouthWall::None
         && wall_props.east != EastWall::None
         && wall_props.west != WestWall::None;
+    let has_high_wall = wall_props.north == NorthWall::Tall
+        || wall_props.south == SouthWall::Tall
+        || wall_props.east == EastWall::Tall
+        || wall_props.west == WestWall::Tall;
 
-    wall_props.up = if !(cross || connected_north_south || connected_east_west) {
+    wall_props.up = if !(cross || connected_north_south || connected_east_west)
+        || (block_above.has_tag(&tag::Block::MINECRAFT_WALL_POST_OVERRIDE) && !has_high_wall)
+    {
         true
     } else if block_above.has_tag(&tag::Block::MINECRAFT_WALLS) {
         let other_props = WallProperties::from_state_id(block_above_state.id);
@@ -143,13 +160,15 @@ fn is_connected(
     other_block: &Block,
     other_block_state: &BlockState,
 ) -> bool {
+    let not_exception = !is_exception_for_connection(other_block);
     let mut connected = other_block == block
-        || (other_block_state.is_solid() && other_block_state.is_full_cube())
-        || other_block_state.is_side_solid(BlockDirection::from_cardinal_direction(
-            direction.opposite(),
-        ))
+        || (not_exception
+            && ((other_block_state.is_solid() && other_block_state.is_full_cube())
+                || other_block_state.is_side_solid(BlockDirection::from_cardinal_direction(
+                    direction.opposite(),
+                ))))
         || other_block.has_tag(&tag::Block::MINECRAFT_WALLS)
-        || other_block == &Block::IRON_BARS
+        || other_block.has_tag(&tag::Block::MINECRAFT_BARS)
         || other_block.has_tag(&tag::Block::C_GLASS_PANES);
 
     // fence gates do not pass is_side_solid check
