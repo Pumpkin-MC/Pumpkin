@@ -35,6 +35,7 @@ struct Contributor {
     login: String,
 }
 
+#[derive(Clone)]
 struct ContributorCache {
     fetched_at: Instant,
     data: Vec<Contributor>,
@@ -43,6 +44,7 @@ struct ContributorCache {
 static CONTRIBUTORS_CACHE: LazyLock<Mutex<Option<ContributorCache>>> =
     LazyLock::new(|| Mutex::new(None));
 
+#[derive(Clone)]
 struct SponsorCache {
     fetched_at: Instant,
     data: TextComponent,
@@ -50,6 +52,7 @@ struct SponsorCache {
 
 static SPONSORS_CACHE: LazyLock<Mutex<Option<SponsorCache>>> = LazyLock::new(|| Mutex::new(None));
 
+#[cfg(test)]
 fn fetch_all_contributors_cached() -> Vec<Contributor> {
     if let Ok(guard) = CONTRIBUTORS_CACHE.lock()
         && let Some(cache) = guard.as_ref()
@@ -58,28 +61,7 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
         return cache.data.clone();
     }
 
-    let contributors = tokio::runtime::Handle::try_current().map_or_else(
-        |_| {
-            tokio::runtime::Runtime::new()
-                .map_or_else(|_| Vec::new(), |rt| rt.block_on(fetch_all_contributors()))
-        },
-        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_all_contributors())),
-    );
-
-    if !contributors.is_empty() {
-        if let Ok(mut guard) = CONTRIBUTORS_CACHE.lock() {
-            *guard = Some(ContributorCache {
-                fetched_at: Instant::now(),
-                data: contributors.clone(),
-            });
-        }
-    } else if let Ok(guard) = CONTRIBUTORS_CACHE.lock()
-        && let Some(cache) = guard.as_ref()
-    {
-        return cache.data.clone();
-    }
-
-    contributors
+    Vec::new()
 }
 
 async fn fetch_all_contributors() -> Vec<Contributor> {
@@ -285,6 +267,7 @@ async fn fetch_sponsors() -> TextComponent {
     )
 }
 
+#[cfg(test)]
 fn fetch_sponsors_cached() -> TextComponent {
     if let Ok(guard) = SPONSORS_CACHE.lock()
         && let Some(cache) = guard.as_ref()
@@ -293,24 +276,7 @@ fn fetch_sponsors_cached() -> TextComponent {
         return cache.data.clone();
     }
 
-    let sponsors = tokio::runtime::Handle::try_current().map_or_else(
-        |_| {
-            tokio::runtime::Runtime::new().map_or_else(
-                |_| TextComponent::text("Unable to load sponsors").color_named(NamedColor::Red),
-                |rt| rt.block_on(fetch_sponsors()),
-            )
-        },
-        |handle| tokio::task::block_in_place(|| handle.block_on(fetch_sponsors())),
-    );
-
-    if let Ok(mut guard) = SPONSORS_CACHE.lock() {
-        *guard = Some(SponsorCache {
-            fetched_at: Instant::now(),
-            data: sponsors.clone(),
-        });
-    }
-
-    sponsors
+    TextComponent::text("Unable to load sponsors").color_named(NamedColor::Red)
 }
 
 #[expect(clippy::too_many_lines)]
@@ -452,39 +418,108 @@ impl CommandExecutor for Executor {
     }
 }
 
+fn format_contributors_message(
+    contributors: &[Contributor],
+    sponsors_msg: TextComponent,
+) -> TextComponent {
+    if contributors.is_empty() {
+        let mut msg =
+            TextComponent::text("Unable to load contributors.\n\n").color_named(NamedColor::Red);
+        msg = msg.add_child(sponsors_msg);
+        return msg;
+    }
+
+    let count = contributors.len();
+    let contributor_names = contributors
+        .iter()
+        .map(|c| c.login.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut msg = TextComponent::text(format!("Pumpkin Contributors ({count}):\n"))
+        .color_named(NamedColor::Green)
+        .bold();
+    msg = msg.add_child(
+        TextComponent::text(contributor_names)
+            .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green]),
+    );
+
+    msg = msg.add_child(TextComponent::text("\n\n"));
+    msg = msg.add_child(sponsors_msg);
+    msg
+}
+
 impl CommandExecutor for ContributorsExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let contributors = fetch_all_contributors_cached();
-        let sponsors_msg = fetch_sponsors_cached();
+        let cached_contributors = CONTRIBUTORS_CACHE.lock().ok().and_then(|g| g.clone());
+        let cached_sponsors = SPONSORS_CACHE.lock().ok().and_then(|g| g.clone());
 
-        if contributors.is_empty() {
-            let mut msg = TextComponent::text("Unable to load contributors.\n\n")
-                .color_named(NamedColor::Red);
-            msg = msg.add_child(sponsors_msg);
+        let has_fresh_contributors = cached_contributors
+            .as_ref()
+            .is_some_and(|c| c.fetched_at.elapsed() < CACHE_DURATION);
+        let has_fresh_sponsors = cached_sponsors
+            .as_ref()
+            .is_some_and(|s| s.fetched_at.elapsed() < CACHE_DURATION);
+
+        if has_fresh_contributors && has_fresh_sponsors {
+            let contributors = cached_contributors.map(|c| c.data).unwrap_or_default();
+            let sponsors_msg = cached_sponsors.map_or_else(
+                || TextComponent::text("Unable to load sponsors"),
+                |s| s.data,
+            );
+            let count = contributors.len();
+            let msg = format_contributors_message(&contributors, sponsors_msg);
             context.source.send_message(msg);
-            return Ok(0);
+            return Ok(count as i32);
         }
 
-        let count = contributors.len();
-        let contributor_names = contributors
-            .iter()
-            .map(|c| c.login.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        if let (Some(c), Some(s)) = (&cached_contributors, &cached_sponsors) {
+            let msg = format_contributors_message(&c.data, s.data.clone());
+            context.source.send_message(msg);
+        } else {
+            context.source.send_message(
+                TextComponent::text("Fetching Pumpkin contributors and sponsors...")
+                    .color_named(NamedColor::Gray),
+            );
+        }
 
-        let mut msg = TextComponent::text(format!("Pumpkin Contributors ({count}):\n"))
-            .color_named(NamedColor::Green)
-            .bold();
-        msg = msg.add_child(
-            TextComponent::text(contributor_names)
-                .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green]),
-        );
+        let rt_handle = context
+            .source
+            .server
+            .as_ref()
+            .map(|s| s.runtime.clone())
+            .or_else(|| tokio::runtime::Handle::try_current().ok());
 
-        msg = msg.add_child(TextComponent::text("\n\n"));
-        msg = msg.add_child(sponsors_msg);
+        if let Some(handle) = rt_handle {
+            let source = context.source.clone();
+            let has_stale = cached_contributors.is_some() && cached_sponsors.is_some();
+            handle.spawn(async move {
+                let contributors = fetch_all_contributors().await;
+                let sponsors_msg = fetch_sponsors().await;
 
-        context.source.send_message(msg);
-        Ok(count as i32)
+                if !contributors.is_empty()
+                    && let Ok(mut guard) = CONTRIBUTORS_CACHE.lock()
+                {
+                    *guard = Some(ContributorCache {
+                        fetched_at: Instant::now(),
+                        data: contributors.clone(),
+                    });
+                }
+                if let Ok(mut guard) = SPONSORS_CACHE.lock() {
+                    *guard = Some(SponsorCache {
+                        fetched_at: Instant::now(),
+                        data: sponsors_msg.clone(),
+                    });
+                }
+
+                if !has_stale {
+                    let msg = format_contributors_message(&contributors, sponsors_msg);
+                    source.send_message(msg);
+                }
+            });
+        }
+
+        Ok(cached_contributors.map_or(0, |c| c.data.len() as i32))
     }
 }
 

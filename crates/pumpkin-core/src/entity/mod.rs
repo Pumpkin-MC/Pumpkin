@@ -158,6 +158,17 @@ impl dyn EntityBase + '_ {
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
     }
+
+    #[must_use]
+    pub fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team) = self.get_team_name() else {
+            return true;
+        };
+        other.get_team_name().as_ref() != Some(&team)
+            || self
+                .get_team()
+                .is_some_and(|team| team.is_allow_friendly_fire())
+    }
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -248,6 +259,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
     fn set_variant_name(&self, _name: &str) {}
+    fn apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn set_sound_variant_name(&self, _name: &str) {}
 
     fn teleport(
@@ -981,6 +998,7 @@ pub struct Entity {
     pub bounding_box: EntityBoundingBox,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
+    default_dimensions: AtomicCell<Option<EntityDimensions>>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -1201,6 +1219,7 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
+            default_dimensions: AtomicCell::new(None),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
@@ -1280,13 +1299,17 @@ impl Entity {
         }
 
         let mut metadata = SyncedActorDataList::new();
+        let dimensions = self
+            .default_dimensions
+            .load()
+            .unwrap_or_else(|| Self::type_dimensions(self.entity_type));
         metadata.set(
             entity_data_key::WIDTH,
-            MetadataValue::Float(self.entity_type.dimension[0]),
+            MetadataValue::Float(dimensions.width),
         );
         metadata.set(
             entity_data_key::HEIGHT,
-            MetadataValue::Float(self.entity_type.dimension[1]),
+            MetadataValue::Float(dimensions.height),
         );
         metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
         metadata.set(
@@ -1473,7 +1496,28 @@ impl Entity {
                 _ => {}
             }
         }
-        Self::type_dimensions(self.entity_type)
+        self.default_dimensions
+            .load()
+            .unwrap_or_else(|| Self::type_dimensions(self.entity_type))
+    }
+
+    pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
+        self.default_dimensions.store(Some(dimensions));
+        let dimensions = self.get_dimensions(self.pose.load());
+        self.entity_dimension.store(dimensions);
+        let pos = self.pos.load();
+        self.bounding_box
+            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
+        let mut metadata = SyncedActorDataList::new();
+        metadata.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimensions.width),
+        );
+        metadata.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimensions.height),
+        );
+        self.send_bedrock_actor_data(&metadata);
     }
 
     pub fn get_eye_height(&self) -> f64 {
@@ -2314,38 +2358,40 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
-                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
-                rayon::spawn(move || {
-                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
-                    let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
-                        return;
-                    };
-                    let transition = portal_type.get_portal_destination(
-                        &world_clone,
-                        dest_world_opt,
-                        entity_arc.as_ref(),
-                        src_portal.as_ref(),
-                    );
+                if let Some(server) = world_clone.server.upgrade() {
+                    server.spawn_task(async move {
+                        let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
+                            return;
+                        };
+                        let transition = portal_type
+                            .get_portal_destination(
+                                &world_clone,
+                                dest_world_opt,
+                                entity_arc.as_ref(),
+                                src_portal.as_ref(),
+                            )
+                            .await;
 
-                    if let Some(transition) = transition {
-                        let dest_world = transition.new_world.clone();
-                        let yaw_val = transition.yaw;
-                        let pitch = transition.pitch;
-                        let teleport_pos = transition.position;
+                        if let Some(transition) = transition {
+                            let dest_world = transition.new_world.clone();
+                            let yaw_val = transition.yaw;
+                            let pitch = transition.pitch;
+                            let teleport_pos = transition.position;
 
-                        // Teleport the main entity
-                        entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            // Teleport the main entity
+                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
 
-                        // Teleport all passengers recursively along with the vehicle
-                        let yaw_delta = yaw_val.map(|y| y - yaw);
-                        Self::teleport_passengers_recursive(
-                            entity_arc.get_entity(),
-                            teleport_pos,
-                            yaw_delta,
-                            &dest_world,
-                        );
-                    }
-                });
+                            // Teleport all passengers recursively along with the vehicle
+                            let yaw_delta = yaw_val.map(|y| y - yaw);
+                            Self::teleport_passengers_recursive(
+                                entity_arc.get_entity(),
+                                teleport_pos,
+                                yaw_delta,
+                                &dest_world,
+                            );
+                        }
+                    });
+                }
             } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }

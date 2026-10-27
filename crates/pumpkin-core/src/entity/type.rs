@@ -640,11 +640,8 @@ pub fn check_spawn_rules(
     if id == EntityType::GLOW_SQUID.id {
         let sea_level = world.sea_level;
         return pos.0.y <= sea_level - 33
-            && world.get_max_local_raw_brightness(pos) == 0
-            && (world.get_block(pos) == &pumpkin_data::Block::WATER
-                || world
-                    .get_fluid(pos)
-                    .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER));
+            && world.get_raw_brightness(pos, 0) == 0
+            && world.get_block(pos) == &pumpkin_data::Block::WATER;
     }
     if id == EntityType::NAUTILUS.id {
         let sea_level = world.sea_level;

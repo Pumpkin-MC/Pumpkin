@@ -11,7 +11,10 @@ use crate::entity::{
 };
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{
+    boundingbox::{BoundingBox, EntityDimensions},
+    vector3::Vector3,
+};
 use rand::RngExt;
 
 use super::water_animal::{AMBIENT_SOUND_INTERVAL, WaterAnimal};
@@ -143,21 +146,13 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
             );
             entity.on_ground.store(false, Relaxed);
             entity.velocity_dirty.store(true, Relaxed);
-            if !entity.is_silent() {
-                entity.world.load().play_sound_raw(
-                    self.flop_sound() as u16,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &entity.pos.load(),
-                    1.0,
-                    self.get_mob_entity().living_entity.get_pitch(),
-                );
-            }
+            self.make_sound(self.flop_sound());
         }
     }
 
     fn fish_data(&self) -> &FishData;
 
-    fn ambient_sound(&self) -> Sound;
+    fn ambient_sound(&self) -> Option<Sound>;
 
     fn fish_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("FromBucket", self.is_from_bucket());
@@ -168,16 +163,36 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
     }
 
     fn play_ambient_sound(&self) {
+        if let Some(sound) = self.ambient_sound() {
+            self.make_sound(sound);
+        }
+    }
+
+    fn make_sound(&self, sound: Sound) {
         let entity = self.get_entity();
         if !entity.is_silent() {
             entity.world.load().play_sound_raw(
-                self.ambient_sound() as u16,
+                sound as u16,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &entity.pos.load(),
                 1.0,
                 self.get_mob_entity().living_entity.get_pitch(),
             );
         }
+    }
+
+    fn set_dimension_scale(&self, scale: f32) {
+        let entity = self.get_entity();
+        let dimensions = EntityDimensions::new(
+            entity.entity_type.dimension[0] * scale,
+            entity.entity_type.dimension[1] * scale,
+            entity.entity_type.eye_height * scale,
+        );
+        entity.entity_dimension.store(dimensions);
+        let pos = entity.pos.load();
+        entity
+            .bounding_box
+            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
     }
 
     fn fish_base_tick(&self, caller: &dyn crate::entity::EntityBase) {
@@ -235,7 +250,7 @@ macro_rules! impl_abstract_fish {
                 &self.fish_data
             }
 
-            fn ambient_sound(&self) -> pumpkin_data::sound::Sound {
+            fn ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> {
                 $ambient
             }
         }

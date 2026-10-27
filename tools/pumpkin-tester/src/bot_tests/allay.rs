@@ -10,9 +10,9 @@ use pumpkin_data::{
 use pumpkin_protocol::{codec::var_int::VarInt, java::server::play::SInteract};
 use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
 
-use crate::bot::HeadlessBot;
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
-const MAX_INTERACT_TICKS: usize = 200;
+const MAX_INTERACT_TICKS: usize = MAX_POLL_TICKS;
 // A longer wait would let the death animation finish and remove the Allay.
 const DYING_INTERACT_TICKS: usize = 10;
 
@@ -91,7 +91,7 @@ pub async fn run_allay_interaction_test(
         }
     }
 
-    interact(bot, server, &allay, 1, || false).await?;
+    interact(bot, server, &allay, 1, ticks_elapsed(20)).await?;
     if living.held_item(allay.as_ref()).is_empty() {
         return Err("An empty offhand took the Allay sample".to_string());
     }
