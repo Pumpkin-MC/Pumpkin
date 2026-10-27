@@ -1562,15 +1562,41 @@ interface event {
         cancelled: bool
     }
 
+    /// What caused a weather change.
+    enum weather-cause {
+        /// The weather cycle ran out a timer.
+        natural,
+        /// The `/weather` command.
+        command,
+        /// A plugin changed the weather.
+        plugin,
+        /// Players slept through the night.
+        sleep,
+    }
+
+    /// Fired when rain starts or stops. A natural change caused by a `/weather clear`
+    /// countdown can not be cancelled.
     record weather-change-event-data {
         target-world: %world,
         to-weather-state: bool,
+        cause: weather-cause,
         cancelled: bool
     }
 
     record thunder-change-event-data {
         target-world: %world,
         to-thunder-state: bool,
+        cause: weather-cause,
+        cancelled: bool
+    }
+
+    /// Fired when a custom phase of the world's weather profile starts or ends.
+    record weather-phase-change-event-data {
+        target-world: %world,
+        /// The phase id from the weather profile.
+        phase: string,
+        to-active: bool,
+        cause: weather-cause,
         cancelled: bool
     }
 
@@ -1977,6 +2003,7 @@ interface event {
         tnt-prime-event,
         weather-change-event,
         thunder-change-event,
+        weather-phase-change-event,
         world-load-event,
         world-unload-event,
         async-structure-generate-event,
@@ -2253,6 +2280,7 @@ interface event {
         tnt-prime-event(tnt-prime-event-data),
         weather-change-event(weather-change-event-data),
         thunder-change-event(thunder-change-event-data),
+        weather-phase-change-event(weather-phase-change-event-data),
         world-load-event(world-load-event-data),
         world-unload-event(world-unload-event-data),
         async-structure-generate-event(async-structure-generate-event-data),

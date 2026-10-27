@@ -35,6 +35,7 @@ pub(crate) mod test_support {
             Arc::new(ArcSwap::from_pointee(LevelData::default(Seed(0)))),
             dimension,
             default_registry(),
+            crate::world::weather::WeatherSetup::default(),
             Weak::new(),
         ))
     }

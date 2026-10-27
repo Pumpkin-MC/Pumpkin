@@ -304,6 +304,9 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::ThunderChangeEvent(data) => {
             cleanup_world(state, &data.target_world);
         }
+        Event::WeatherPhaseChangeEvent(data) => {
+            cleanup_world(state, &data.target_world);
+        }
         Event::WorldLoadEvent(data) => {
             cleanup_world(state, &data.target_world);
         }

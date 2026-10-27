@@ -2,6 +2,7 @@ use super::{AccessorExt, in_active_context, run_blocking};
 use crate::RequireServer;
 use crate::RwLockIgnorePoison;
 
+use crate::pumpkin::plugin::world::{WeatherCycle as WitWeatherCycle, WorldWeatherSettings};
 use pumpkin_util::text::TextComponent;
 use wasmtime::component::{Accessor, HasSelf, Resource};
 
@@ -35,7 +36,43 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
+const fn internal_dimension(dimension: Dimension) -> pumpkin_data::dimension::Dimension {
+    match dimension {
+        Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
+        Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
+        Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
+    }
+}
+
+fn internal_weather_settings(
+    settings: WorldWeatherSettings,
+) -> pumpkin_core::world::weather_profile::WorldWeatherSettings {
+    use pumpkin_core::world::weather_profile::WeatherCycle;
+    pumpkin_core::world::weather_profile::WorldWeatherSettings {
+        cycle: match settings.cycle {
+            WitWeatherCycle::Shared => WeatherCycle::Shared,
+            WitWeatherCycle::Dedicated => WeatherCycle::Own,
+            WitWeatherCycle::Fixed(fixed) => WeatherCycle::Fixed {
+                raining: fixed.raining,
+                thundering: fixed.thundering,
+            },
+        },
+        profile: settings.profile,
+        enabled: settings.enabled,
+    }
+}
+
 impl pumpkin::plugin::server::HostServer for PluginHostState {
+    fn register_weather_profile(
+        &mut self,
+        _res: Resource<Server>,
+        id: String,
+        json: String,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let server = self.require_server()?;
+        Ok(server.weather_profiles.register(&id, &json))
+    }
+
     fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
         let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
 
@@ -476,16 +513,35 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
         let server = accessor.server()?;
 
-        let internal_dim = match dimension {
-            Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
-            Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
-            Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
-        };
+        let internal_dim = internal_dimension(dimension);
         let world = run_blocking(accessor, move || server.create_world(name, internal_dim)).await?;
 
         accessor
             .add_res(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+    }
+
+    async fn create_world_with_weather(
+        accessor: &Accessor<PluginHostState, Self>,
+        _rep: Resource<Server>,
+        name: String,
+        dimension: Dimension,
+        weather: WorldWeatherSettings,
+    ) -> wasmtime::Result<Result<Resource<pumpkin::plugin::world::World>, String>> {
+        let server = accessor.server()?;
+        let internal_dim = internal_dimension(dimension);
+        let settings = internal_weather_settings(weather);
+        let created = run_blocking(accessor, move || {
+            server.create_world_with_weather(name, internal_dim, &settings)
+        })
+        .await?;
+        match created {
+            Ok(world) => accessor
+                .add_res(world)
+                .map(Ok)
+                .map_err(|_| wasmtime::Error::msg("failed to add world resource")),
+            Err(e) => Ok(Err(e)),
+        }
     }
 
     async fn unload_world(
