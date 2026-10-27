@@ -65,6 +65,80 @@ pub fn load_function_tags_from_dir<S: std::hash::BuildHasher>(
     }
 }
 
+/// A block tag as declared by datapacks.
+#[derive(Debug, Default, Clone)]
+pub struct BlockTagEntry {
+    /// Set when a pack used `"replace": true`, so the built-in tag is dropped.
+    pub replace: bool,
+    /// Block ids and `#tag` references, in load order.
+    pub values: Vec<String>,
+}
+
+pub fn load_block_tags_from_dir<S: std::hash::BuildHasher>(
+    namespace: &str,
+    tags_dir: &Path,
+    block_tags: &mut HashMap<String, BlockTagEntry, S>,
+) {
+    for dir in [tags_dir.join("block"), tags_dir.join("blocks")] {
+        if dir.is_dir() {
+            load_block_tags_recursive(namespace, &dir, &dir, block_tags);
+        }
+    }
+}
+
+fn load_block_tags_recursive<S: std::hash::BuildHasher>(
+    namespace: &str,
+    base_dir: &Path,
+    current_dir: &Path,
+    tags: &mut HashMap<String, BlockTagEntry, S>,
+) {
+    let Ok(entries) = fs::read_dir(current_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            load_block_tags_recursive(namespace, base_dir, &path, tags);
+            continue;
+        }
+        if !path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
+            continue;
+        }
+        let Ok(rel_path) = path.strip_prefix(base_dir) else {
+            continue;
+        };
+        let stem = rel_path.to_string_lossy().replace('\\', "/");
+        let stem = stem.strip_suffix(".json").unwrap_or(&stem);
+        let Some(val) = fs::read_to_string(&path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        else {
+            continue;
+        };
+        let Some(values) = val.get("values").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+        let tag = tags.entry(format!("{namespace}:{stem}")).or_default();
+        if val
+            .get("replace")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            tag.replace = true;
+            tag.values.clear();
+        }
+        // Entries are either a plain id or `{"id": ..., "required": ...}`.
+        tag.values.extend(values.iter().filter_map(|v| {
+            v.as_str()
+                .or_else(|| v.get("id").and_then(serde_json::Value::as_str))
+                .map(ToString::to_string)
+        }));
+    }
+}
+
 fn load_tags_recursive<S: std::hash::BuildHasher>(
     namespace: &str,
     base_dir: &Path,

@@ -16,7 +16,7 @@
 use crate::command::argument_builder::{
     ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block_predicate::{BlockPredicate, BlockPredicateArgumentType};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::coordinates::swizzle::SwizzleArgumentType;
@@ -277,33 +277,44 @@ fn execute_facing_entity_modifier(
 fn execute_if_block_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-    let expected_block = BlockArgumentType::get(context, "block")?;
-
-    if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if block == expected_block {
-            return Ok(vec![context.source.clone()]);
-        }
+    if block_matches(context)? {
+        Ok(vec![context.source.clone()])
+    } else {
+        Ok(vec![])
     }
-    Ok(vec![])
 }
 
 fn execute_unless_block_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-    let expected_block = BlockArgumentType::get(context, "block")?;
-
-    if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if block != expected_block {
-            return Ok(vec![context.source.clone()]);
-        }
+    if block_matches(context)? {
+        Ok(vec![])
     } else {
-        return Ok(vec![context.source.clone()]);
+        Ok(vec![context.source.clone()])
     }
-    Ok(vec![])
+}
+
+/// Tests the `block` predicate at `pos`, resolving datapack block tags against the loaded packs.
+fn block_matches(context: &CommandContext) -> Result<bool, CommandSyntaxError> {
+    let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
+    let predicate = BlockPredicateArgumentType::get(context, "block")?;
+    let Some(ref world) = context.source.world else {
+        return Ok(false);
+    };
+    let block = world.get_block(&pos);
+    Ok(match &predicate {
+        BlockPredicate::Tag {
+            tag_name,
+            block_ids,
+            ..
+        } if block_ids.is_empty() => context.source.server.as_ref().is_some_and(|server| {
+            server
+                .datapack_manager
+                .resolve_block_tag(tag_name)
+                .contains(&block.id.as_u16())
+        }),
+        _ => predicate.test(block),
+    })
 }
 
 fn execute_if_loaded_modifier(
@@ -1242,7 +1253,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 ))
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
+                        argument("block", BlockPredicateArgumentType).redirect_with_modifier(
                             Redirection::Root,
                             RedirectModifier::Custom(Arc::new(execute_if_block_modifier)),
                         ),
@@ -1398,7 +1409,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 ))
                 .then(
                     literal("block").then(argument("pos", BlockPosArgumentType).then(
-                        argument("block", BlockArgumentType).redirect_with_modifier(
+                        argument("block", BlockPredicateArgumentType).redirect_with_modifier(
                             Redirection::Root,
                             RedirectModifier::Custom(Arc::new(execute_unless_block_modifier)),
                         ),
