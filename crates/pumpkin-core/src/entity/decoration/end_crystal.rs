@@ -75,6 +75,10 @@ impl EntityBase for EndCrystalEntity {
         None
     }
 
+    fn can_hit(&self) -> bool {
+        !self.entity.is_removed()
+    }
+
     fn damage_with_context(
         &self,
         _caller: &dyn EntityBase,
