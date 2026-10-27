@@ -64,7 +64,7 @@ impl Goal for BegGoal {
             TargetPredicate::create_non_attackable().set_base_max_distance(self.look_distance);
 
         // Nearest player the wolf sees, after the held item is checked.
-        let Some(player) = world.get_nearest_player(pos, f64::INFINITY, |player| {
+        let Some(player) = world.get_nearest_player(pos, self.look_distance, |player| {
             conditions.test(&world, Some(mob), player.as_ref())
         }) else {
             return false;
