@@ -393,9 +393,11 @@ impl ChunkSender {
         }
 
         let sent_count = dispatched_positions.len();
-        // A started batch is always closed -> the client acks every `CChunkBatchEnd`.
-        if let Some(java_client) = batch_client {
-            java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
+        // A started batch is always closed. The client acks every `CChunkBatchEnd` it receives,
+        // so only a queued one counts as in flight
+        if let Some(java_client) = batch_client
+            && java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16))
+        {
             self.in_flight_batches = self.in_flight_batches.saturating_add(1);
         }
         self.send_quota -= sent_count as f32;

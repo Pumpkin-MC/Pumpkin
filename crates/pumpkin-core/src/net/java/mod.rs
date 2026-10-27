@@ -664,10 +664,10 @@ impl JavaClient {
         Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
     }
 
-    pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) {
-        if let Ok(data) = self.serialize_packet(packet) {
-            self.try_enqueue_packet(data);
-        }
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) -> bool {
+        self.serialize_packet(packet)
+            .is_ok_and(|data| self.try_enqueue_packet_data(data))
     }
 
     pub async fn send_packet<P: ClientPacket>(&self, packet: &P) {
