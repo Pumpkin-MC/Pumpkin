@@ -4693,37 +4693,8 @@ impl Player {
         {
             return false;
         }
-        // Vanilla `Player.hurtServer`: mob damage follows the difficulty
-        let amount = if Self::scales_with_difficulty(&damage_type, cause) {
-            match self.world().level_info.load().difficulty {
-                Difficulty::Peaceful => 0.0,
-                Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
-                Difficulty::Normal => amount,
-                Difficulty::Hard => amount * 3.0 / 2.0,
-            }
-        } else {
-            amount
-        };
-        if amount == 0.0 {
-            return false;
-        }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
-    }
-
-    /// Vanilla `DamageSource.scalesWithDifficulty`
-    fn scales_with_difficulty(
-        damage_type: &pumpkin_data::damage::DamageType,
-        cause: Option<&dyn crate::entity::EntityBase>,
-    ) -> bool {
-        use pumpkin_data::damage::DamageScaling;
-        match damage_type.scaling {
-            DamageScaling::Never => false,
-            DamageScaling::WhenCausedByLivingNonPlayer => cause.is_some_and(|cause| {
-                cause.get_living_entity().is_some() && cause.get_player().is_none()
-            }),
-            DamageScaling::Always => true,
-        }
     }
 
     pub fn damage_generic(&self, amount: f32) -> bool {
