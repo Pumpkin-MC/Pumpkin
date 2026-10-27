@@ -152,12 +152,9 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for BlockPredicateArgument
             let tag_ids = get_tag_ids(RegistryKey::Block, &normalized)
                 .or_else(|| get_tag_ids(RegistryKey::Block, stripped));
 
-            let block_ids = match tag_ids {
-                Some(ids) => ids.to_vec(),
-                None => {
-                    return Err(ERROR_UNKNOWN_TAG.create(reader, TextComponent::text(normalized)));
-                }
-            };
+            // Datapack tags are not known at parse time; callers with access to the
+            // loaded datapacks resolve an empty id list by `tag_name`.
+            let block_ids = tag_ids.map(<[u16]>::to_vec).unwrap_or_default();
 
             let properties = parse_properties(reader)?;
             let nbt = parse_nbt(reader)?;

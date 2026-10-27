@@ -28,7 +28,9 @@ impl PendingConnection {
                 tags.push(key);
             }
         }
-        self.send_packet_now(&CUpdateTags::new(&tags)).await;
+        let block_tags = server.datapack_manager.resolved_block_tags();
+        self.send_packet_now(&CUpdateTags::new(&tags).with_block_tags(&block_tags))
+            .await;
         self.send_packet_now(&CFinishConfig).await;
     }
 }
