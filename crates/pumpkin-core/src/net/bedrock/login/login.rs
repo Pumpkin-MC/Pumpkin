@@ -1,4 +1,6 @@
+use pumpkin_data::translation;
 use pumpkin_protocol::bedrock::client::PackIdVersion;
+use pumpkin_util::text::TextComponent;
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -24,7 +26,7 @@ impl BedrockClient {
     pub async fn handle_login(
         self: &Arc<Self>,
         packet: SLogin,
-        server: &Server,
+        server: &Arc<Server>,
     ) -> Result<PacketHandlerResult, LoginError> {
         self.try_handle_login(packet, server).await
     }
@@ -32,7 +34,7 @@ impl BedrockClient {
     pub async fn try_handle_login(
         self: &Arc<Self>,
         packet: SLogin,
-        server: &Server,
+        server: &Arc<Server>,
     ) -> Result<PacketHandlerResult, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
@@ -102,6 +104,10 @@ impl BedrockClient {
             ));
         }
 
+        if !self.can_complete_login(&profile, server).await {
+            return Ok(PacketHandlerResult::Stop);
+        }
+
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
@@ -141,6 +147,79 @@ impl BedrockClient {
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
         Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
+    }
+
+    async fn can_complete_login(
+        self: &Arc<Self>,
+        profile: &GameProfile,
+        server: &Arc<Server>,
+    ) -> bool {
+        server
+            .data
+            .user_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .upsert(profile.id, profile.name.clone());
+
+        let max_players = server.advanced_config.networking.bedrock.max_players;
+        if max_players > 0 && server.get_player_count() >= max_players as usize {
+            self.kick(
+                DisconnectReason::ServerFull,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+                    translation::bedrock::DISCONNECTIONSCREEN_SERVERFULL,
+                    [],
+                )
+                .get_text(),
+            )
+            .await;
+            return false;
+        }
+
+        if let Some(reason) = crate::net::can_not_join(profile, &self.address, server).await {
+            self.kick(DisconnectReason::NotAllowed, reason.get_text())
+                .await;
+            return false;
+        }
+
+        if server.get_player_by_uuid(profile.id).is_some()
+            || server.get_player_by_name(&profile.name).is_some()
+        {
+            self.kick(
+                DisconnectReason::LoggedInOtherLocation,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                    translation::bedrock::DISCONNECTIONSCREEN_LOGGEDINOTHERLOCATION,
+                    [],
+                )
+                .get_text(),
+            )
+            .await;
+            return false;
+        }
+
+        let mut pre_login_event =
+            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
+                player_name: profile.name.clone(),
+                player_uuid: profile.id,
+                ip_address: self.address,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+        server
+            .plugin_manager
+            .fire(server, &mut pre_login_event)
+            .await;
+        if pre_login_event.cancelled {
+            self.kick(
+                DisconnectReason::Kicked,
+                pre_login_event.kick_message.get_text(),
+            )
+            .await;
+            return false;
+        }
+
+        true
     }
 }
 

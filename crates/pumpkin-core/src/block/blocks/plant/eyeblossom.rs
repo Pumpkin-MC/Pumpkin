@@ -6,6 +6,7 @@ use pumpkin_data::{
     entity::EntityType,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    tag::{self, Taggable},
 };
 use pumpkin_util::{
     Difficulty,
@@ -51,12 +52,6 @@ impl BlockBehaviour for EyeblossomBlock {
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-            return;
-        }
-
         let was_open = args.block == &Block::OPEN_EYEBLOSSOM;
         if try_changing_state(args.world, args.block, args.position) {
             let sound = if was_open {
@@ -89,25 +84,25 @@ impl BlockBehaviour for EyeblossomBlock {
     }
 
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        {
-            if args.world.level_info.load().difficulty == Difficulty::Peaceful {
-                return;
-            }
+        if args.world.level_info.load().difficulty == Difficulty::Peaceful {
+            return;
+        }
 
-            if args.entity.get_entity().entity_type == &EntityType::BEE
-                && let Some(living_entity) = args.entity.get_living_entity()
-            {
-                let effect = pumpkin_data::potion::Effect {
-                    effect_type: &StatusEffect::POISON,
-                    duration: 25,
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: true,
-                };
-                living_entity.add_effect(effect);
-            }
+        if args.entity.get_entity().entity_type == &EntityType::BEE
+            && args.block.has_tag(&tag::Block::MINECRAFT_BEE_ATTRACTIVE)
+            && let Some(living_entity) = args.entity.get_living_entity()
+            && !living_entity.has_effect(&StatusEffect::POISON)
+        {
+            let effect = pumpkin_data::potion::Effect {
+                effect_type: &StatusEffect::POISON,
+                duration: 25,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: true,
+            };
+            living_entity.add_effect(effect);
         }
     }
 }

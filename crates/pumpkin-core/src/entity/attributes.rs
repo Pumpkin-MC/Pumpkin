@@ -27,6 +27,8 @@ pub struct AttributeInstance {
     pub modifiers: Vec<Modifier>,
     pub cached_value: AtomicU64,
     pub dirty: AtomicBool,
+    /// Vanilla `AttributeMap.attributesToUpdate` membership, drained by the owner's tick.
+    pub updated: AtomicBool,
 }
 
 impl AttributeInstance {
@@ -37,7 +39,14 @@ impl AttributeInstance {
             modifiers: Vec::new(),
             cached_value: AtomicU64::new(base_value.to_bits()),
             dirty: AtomicBool::new(false),
+            updated: AtomicBool::new(false),
         }
+    }
+
+    /// Invalidates the cached value and queues an attribute update for the owner.
+    pub fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+        self.updated.store(true, Ordering::Relaxed);
     }
 
     pub fn value(&self) -> f64 {
@@ -77,14 +86,14 @@ impl AttributeInstance {
             self.modifiers.remove(pos);
         }
         self.modifiers.push(modifier);
-        self.dirty.store(true, Ordering::Relaxed);
+        self.mark_dirty();
     }
 
     pub fn remove_modifier(&mut self, id: &str) {
         if let Some(pos) = self.modifiers.iter().position(|m| m.id == id) {
             self.modifiers.swap_remove(pos);
         }
-        self.dirty.store(true, Ordering::Relaxed);
+        self.mark_dirty();
     }
 }
 
@@ -188,6 +197,7 @@ impl Clone for AttributeInstance {
             modifiers: self.modifiers.clone(),
             cached_value: AtomicU64::new(self.cached_value.load(Ordering::Relaxed)),
             dirty: AtomicBool::new(self.dirty.load(Ordering::Relaxed)),
+            updated: AtomicBool::new(self.updated.load(Ordering::Relaxed)),
         }
     }
 }

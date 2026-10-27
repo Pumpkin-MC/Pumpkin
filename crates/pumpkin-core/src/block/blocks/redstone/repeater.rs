@@ -96,9 +96,12 @@ impl BlockBehaviour for RepeaterBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if !args.player.may_build() {
+            return BlockActionResult::Pass;
+        }
         let state = args.world.get_block_state(args.position);
         let props = RepeaterProperties::from_state_id(state.id);
-        Self::on_use(props, args.world, *args.position, args.block);
+        self.on_use(props, args.world, *args.position, args.block);
 
         BlockActionResult::Success
     }
@@ -217,11 +220,18 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
 }
 
 impl RepeaterBlock {
-    fn on_use(props: RepeaterProperties, world: &Arc<World>, block_pos: BlockPos, block: &Block) {
+    fn on_use(
+        &self,
+        props: RepeaterProperties,
+        world: &Arc<World>,
+        block_pos: BlockPos,
+        block: &Block,
+    ) {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
         world.set_block_state(&block_pos, state, BlockFlags::NOTIFY_ALL);
+        RedstoneGateBlock::update_target(self, world, block_pos, state, block);
     }
 
     fn is_locked(

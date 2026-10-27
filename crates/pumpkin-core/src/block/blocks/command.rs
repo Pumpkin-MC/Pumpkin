@@ -126,9 +126,8 @@ impl CommandBlock {
             return;
         };
 
-        if command.is_empty() {
-            command_entity.success_count.store(0, Ordering::Release);
-        } else {
+        command_entity.success_count.store(0, Ordering::Release);
+        if !command.is_empty() {
             let source = CommandSender::CommandBlock(command_entity, world).into_source(server);
 
             server
@@ -321,6 +320,9 @@ impl BlockBehaviour for CommandBlock {
             args.world
                 .schedule_block_tick(block, *args.position, 1, TickPriority::Normal);
         }
+
+        args.world
+            .update_neighbour_for_output_signal(args.position, block);
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
@@ -334,18 +336,41 @@ impl BlockBehaviour for CommandBlock {
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        {
-            let send_command_feedback = {
-                let game_rules = &args.world.level_info.load().game_rules;
-                game_rules.send_command_feedback
-            };
+        let send_command_feedback = args
+            .world
+            .level_info
+            .load()
+            .game_rules
+            .send_command_feedback;
 
-            let entity = CommandBlockEntity::new(
+        let command_entity = if let Some(block_entity) = args.world.get_block_entity(args.position)
+            && let Ok(existing) = Arc::downcast::<CommandBlockEntity>(block_entity)
+        {
+            existing
+                .track_output
+                .store(send_command_feedback, Ordering::Relaxed);
+            if args.block.id == Block::CHAIN_COMMAND_BLOCK.id {
+                existing.auto.store(true, Ordering::Relaxed);
+            }
+            existing
+        } else {
+            let entity = Arc::new(CommandBlockEntity::new(
                 *args.position,
                 send_command_feedback,
                 args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
+            ));
+            args.world.add_block_entity(entity.clone());
+            entity
+        };
+
+        if args.world.level_info.load().game_rules.command_blocks_work {
+            Self::update(
+                args.world,
+                args.block,
+                &command_entity,
+                args.position,
+                block_receives_redstone_power(args.world, args.position),
             );
-            args.world.add_block_entity(Arc::new(entity));
         }
     }
 

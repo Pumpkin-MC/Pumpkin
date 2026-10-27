@@ -61,16 +61,23 @@ impl SpreadingSnowyBlock {
         let state = world.get_block_state(pos);
         let block = state.id.to_block();
         if block == &Block::WATER || block == &Block::LAVA {
-            return WaterLikeProperties::from_state_id(state.id).level == 0;
+            let level = WaterLikeProperties::from_state_id(state.id).level;
+            return level == 0 || level == 8;
         }
         state.id.is_waterlogged()
+            || matches!(
+                block.id,
+                BlockId::KELP
+                    | BlockId::KELP_PLANT
+                    | BlockId::SEAGRASS
+                    | BlockId::TALL_SEAGRASS
+                    | BlockId::BUBBLE_COLUMN
+            )
     }
 
     #[must_use]
     pub fn is_water_fluid(world: &World, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(pos);
-        let block = state.id.to_block();
-        block == &Block::WATER || state.id.is_waterlogged()
+        world.get_fluid(pos).has_tag(&tag::Fluid::MINECRAFT_WATER)
     }
 
     #[must_use]

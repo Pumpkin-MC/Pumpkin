@@ -3,7 +3,7 @@ use std::fs;
 use wit_encoder::{Enum, Interface, Package, PackageName, TypeDef, TypeDefKind};
 
 pub fn build() -> String {
-    let game_events: Vec<String> =
+    let game_events: Vec<crate::game_event::GameEvent> =
         serde_json::from_str(&fs::read_to_string("../../assets/game_event.json").unwrap())
             .expect("Failed to parse game_event.json");
 
@@ -16,6 +16,7 @@ pub fn build() -> String {
 
     let mut game_event_enum = Enum::empty();
     for game_event in game_events {
+        let game_event = game_event.name;
         let name = game_event
             .strip_prefix("minecraft:")
             .unwrap_or(&game_event)
