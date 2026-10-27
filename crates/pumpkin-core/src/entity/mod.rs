@@ -1245,7 +1245,12 @@ impl Entity {
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
             flags: std::sync::atomic::AtomicI8::new(0),
-            bedrock_flags: std::sync::atomic::AtomicI64::new(0),
+            bedrock_flags: std::sync::atomic::AtomicI64::new(
+                (1i64 << entity_data_flag::HAS_GRAVITY)
+                    | (1i64 << entity_data_flag::CLIMB)
+                    | (1i64 << entity_data_flag::HAS_COLLISION)
+                    | (1i64 << entity_data_flag::BREATHING),
+            ),
             bedrock_flags_two: std::sync::atomic::AtomicI64::new(0),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
@@ -1309,16 +1314,6 @@ impl Entity {
     }
 
     pub fn bedrock_metadata(&self) -> SyncedActorDataList {
-        if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
-            self.bedrock_flags.fetch_or(
-                (1i64 << entity_data_flag::HAS_GRAVITY)
-                    | (1i64 << entity_data_flag::CLIMB)
-                    | (1i64 << entity_data_flag::HAS_COLLISION)
-                    | (1i64 << entity_data_flag::BREATHING),
-                Ordering::Relaxed,
-            );
-        }
-
         let mut metadata = SyncedActorDataList::new();
         let dimensions = self
             .default_dimensions

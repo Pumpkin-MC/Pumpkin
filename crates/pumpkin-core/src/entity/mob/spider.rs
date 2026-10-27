@@ -5,6 +5,9 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tracked_data::spider::DATA_FLAGS_ID;
+use pumpkin_protocol::bedrock::client::set_actor_data::{
+    MetadataValue, SyncedActorDataList, entity_data_flag, entity_data_key,
+};
 use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
@@ -25,6 +28,7 @@ use crate::entity::{
     mob::{
         Mob, MobEntity, MobMetadata,
         equipment::RegionalDifficulty,
+        metadata::JavaMetadataEntry,
         spawn::{SpawnGroupData, finalize_spawn},
     },
     r#type::from_type,
@@ -66,15 +70,26 @@ pub fn set_climbing(mob: &MobEntity, climbing: bool) {
     if mob.living_entity.climbing.swap(climbing, Ordering::Relaxed) != climbing {
         let entity = &mob.living_entity.entity;
         entity.set_synced_data(DATA_FLAGS_ID, i8::from(climbing));
-        let meta = MobMetadata::new().spider_climbing(climbing);
-        entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+
+        let mask = 1i64 << entity_data_flag::WALL_CLIMBING;
+        if climbing {
+            entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+        } else {
+            entity.bedrock_flags.fetch_and(!mask, Ordering::Relaxed);
+        }
+        let mut meta = SyncedActorDataList::new();
+        meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        entity.send_bedrock_actor_data(&meta);
     }
 }
 
 pub fn spider_metadata(mob: &MobEntity) -> MobMetadata {
     let meta = MobMetadata::new();
     if is_climbing(mob) {
-        meta.spider_climbing(true)
+        meta.with_java_entry(JavaMetadataEntry::Byte(DATA_FLAGS_ID, 1))
     } else {
         meta
     }
