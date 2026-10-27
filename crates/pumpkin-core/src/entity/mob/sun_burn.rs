@@ -1,9 +1,11 @@
 use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_data::item_stack::DamageResult;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::mob::Mob;
 use crate::entity::{Entity, EntityBase, equipment_break_status};
+use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 
 /// Fire an unprotected mob is set alight for.
@@ -18,7 +20,7 @@ pub fn passes_burn_roll(sunlight: f32, roll: f32) -> bool {
 /// Sun reaches the mob this tick and the dice agree.
 fn is_sun_burn_tick(entity: &Entity) -> bool {
     let world = entity.world.load();
-    let eye = entity.get_eye_pos().to_block_pos();
+    let eye = BlockPos::containing_vec(entity.get_eye_pos());
 
     if !world.monsters_burn(&eye) {
         return false;
@@ -34,11 +36,30 @@ fn is_sun_burn_tick(entity: &Entity) -> bool {
     if !world.can_see_sky_with_light(&eye, sky_light) {
         return false;
     }
+    if has_opaque_block_above(&world, &eye) {
+        return false;
+    }
 
     !(entity.touching_water.load(Relaxed)
         || entity.is_in_powder_snow()
         || entity.was_in_powder_snow.load(Relaxed)
         || world.is_raining_at(&eye))
+}
+
+/// Returns whether there is an opaque or occluding block directly above the mob up to build height.
+#[must_use]
+pub fn has_opaque_block_above(world: &World, eye: &BlockPos) -> bool {
+    let current_y = eye.0.y + 1;
+    let max_height = world.dimension.min_y + world.dimension.height;
+
+    for y in current_y..=max_height {
+        let pos = BlockPos::new(eye.0.x, y, eye.0.z);
+        let block_state = world.get_block_state(&pos);
+        if block_state.opacity > 0 || block_state.can_occlude() {
+            return true;
+        }
+    }
+    false
 }
 
 /// An item in the protection slot takes the sun instead of the mob.
