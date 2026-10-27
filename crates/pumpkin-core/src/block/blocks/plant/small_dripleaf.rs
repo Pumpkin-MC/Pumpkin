@@ -6,12 +6,10 @@ use crate::block::{
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, DoubleBlockHalf, SmallDripleafLikeProperties};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block("minecraft:small_dripleaf")]
@@ -79,14 +77,6 @@ impl BlockBehaviour for SmallDripleafBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let props = SmallDripleafLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
 
         if args.direction.to_axis() == Axis::Y
             && (props.half == DoubleBlockHalf::Lower) == (args.direction == BlockDirection::Up)

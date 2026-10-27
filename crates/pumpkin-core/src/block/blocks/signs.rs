@@ -472,16 +472,10 @@ impl BlockBehaviour for SignBlock {
         args.world.remove_block_entity(args.position);
     }
 
-    fn handles_neighbor_water_tick(&self) -> bool {
-        true
-    }
-
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        crate::block::simple_waterlogged::schedule_water_tick(&args);
-
         let is_hanging = args.block.name.contains("hanging");
         let is_wall_sign = args.block.name.contains("wall");
 

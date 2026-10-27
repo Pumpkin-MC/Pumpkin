@@ -185,7 +185,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn prepare(&self, _args: PrepareArgs<'_>) {}
 
     /// Returns whether this behaviour handles neighbor water ticks itself.
-    /// Override when vanilla schedules water after a survival check.
+    /// Override when scheduling must stay inside the neighbor callback to preserve ordering.
     fn handles_neighbor_water_tick(&self) -> bool {
         false
     }
