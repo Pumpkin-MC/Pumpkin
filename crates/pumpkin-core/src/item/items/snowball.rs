@@ -9,6 +9,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::statistic::StatisticCategory;
 
 pub struct SnowBallItem;
 
@@ -59,6 +60,7 @@ impl ItemBehaviour for SnowBallItem {
             .set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
         world.spawn_entity(Arc::new(snowball));
 
+        let item_id = stack.item.id;
         stack.decrement_unless_creative(player.gamemode.load(), 1);
         match hand {
             pumpkin_util::Hand::Right => player.inventory.set_held_item(stack),
@@ -66,6 +68,7 @@ impl ItemBehaviour for SnowBallItem {
                 .inventory
                 .set_stack_in_hand(pumpkin_util::Hand::Left, stack),
         }
+        player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

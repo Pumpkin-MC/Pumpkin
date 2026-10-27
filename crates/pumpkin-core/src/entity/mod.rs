@@ -459,6 +459,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn can_be_seen_by_anyone(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !self.is_spectator() && living.is_alive())
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !living.entity.invulnerable.load(Ordering::Relaxed))
+            && self.can_be_seen_by_anyone()
+    }
+
     fn dampens_vibrations(&self) -> bool {
         false
     }
@@ -960,6 +971,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         0
     }
 
+    fn should_drop_loot(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_loot)
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_experience)
+    }
+
     fn get_base_experience_reward(&self) -> u32 {
         0
     }
@@ -1071,8 +1092,8 @@ pub struct Entity {
     pub bounding_box: EntityBoundingBox,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
-    /// Size before the pose: the type size, or a baby or slime size. Vanilla `getDefaultDimensions`.
-    pub default_dimension: AtomicCell<EntityDimensions>,
+    /// Vanilla `getDefaultDimensions` when it differs from the type size (baby, slime, ...)
+    default_dimensions: AtomicCell<Option<EntityDimensions>>,
     /// Vanilla `LivingEntity.getScale` (`Attributes.SCALE`). 1.0 for non-living.
     pub scale: AtomicCell<f32>,
     /// Whether this entity is invulnerable to all damage
@@ -1325,7 +1346,7 @@ impl Entity {
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
-            default_dimension: AtomicCell::new(bounding_box_size),
+            default_dimensions: AtomicCell::new(None),
             scale: AtomicCell::new(1.0),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
@@ -1650,15 +1671,18 @@ impl Entity {
         if pose == EntityPose::Sleeping {
             return EntityDimensions::new(0.2, 0.2, 0.2);
         }
+        let default = self
+            .default_dimensions
+            .load()
+            .unwrap_or_else(|| Self::type_dimensions(self.entity_type));
         // Vanilla `Warden.getDefaultDimensions`: fixed 1 high while in the ground, unscaled
         if self.entity_type == &EntityType::WARDEN
             && matches!(pose, EntityPose::Digging | EntityPose::Emerging)
         {
-            let width = self.default_dimension.load().width;
-            return EntityDimensions::new(width, 1.0, 0.85);
+            return EntityDimensions::new(default.width, 1.0, 0.85);
         }
         let base = match pose {
-            _ if self.entity_type != &EntityType::PLAYER => self.default_dimension.load(),
+            _ if self.entity_type != &EntityType::PLAYER => default,
             EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
                 EntityDimensions::new(0.6, 0.6, 0.4)
             }
@@ -2588,38 +2612,40 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
-                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
-                rayon::spawn(move || {
-                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
-                    let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
-                        return;
-                    };
-                    let transition = portal_type.get_portal_destination(
-                        &world_clone,
-                        dest_world_opt,
-                        entity_arc.as_ref(),
-                        src_portal.as_ref(),
-                    );
+                if let Some(server) = world_clone.server.upgrade() {
+                    server.spawn_task(async move {
+                        let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
+                            return;
+                        };
+                        let transition = portal_type
+                            .get_portal_destination(
+                                &world_clone,
+                                dest_world_opt,
+                                entity_arc.as_ref(),
+                                src_portal.as_ref(),
+                            )
+                            .await;
 
-                    if let Some(transition) = transition {
-                        let dest_world = transition.new_world.clone();
-                        let yaw_val = transition.yaw;
-                        let pitch = transition.pitch;
-                        let teleport_pos = transition.position;
+                        if let Some(transition) = transition {
+                            let dest_world = transition.new_world.clone();
+                            let yaw_val = transition.yaw;
+                            let pitch = transition.pitch;
+                            let teleport_pos = transition.position;
 
-                        // Teleport the main entity
-                        entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            // Teleport the main entity
+                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
 
-                        // Teleport all passengers recursively along with the vehicle
-                        let yaw_delta = yaw_val.map(|y| y - yaw);
-                        Self::teleport_passengers_recursive(
-                            entity_arc.get_entity(),
-                            teleport_pos,
-                            yaw_delta,
-                            &dest_world,
-                        );
-                    }
-                });
+                            // Teleport all passengers recursively along with the vehicle
+                            let yaw_delta = yaw_val.map(|y| y - yaw);
+                            Self::teleport_passengers_recursive(
+                                entity_arc.get_entity(),
+                                teleport_pos,
+                                yaw_delta,
+                                &dest_world,
+                            );
+                        }
+                    });
+                }
             } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }
@@ -3492,14 +3518,14 @@ impl Entity {
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        self.refresh_dimensions_into(&mut bedrock_meta);
         self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
         self.send_bedrock_actor_data(&bedrock_meta);
-        self.refresh_dimensions();
     }
 
     /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.
     pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
-        self.default_dimension.store(dimensions);
+        self.default_dimensions.store(Some(dimensions));
         self.refresh_dimensions();
     }
 
@@ -3515,77 +3541,76 @@ impl Entity {
     }
 
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
-    fn refresh_dimensions(&self) {
-        let dimension = self.get_dimensions(self.pose.load());
-        let old = self.entity_dimension.swap(dimension);
+    pub fn refresh_dimensions(&self) {
+        let mut metadata = SyncedActorDataList::new();
+        self.refresh_dimensions_into(&mut metadata);
+        self.send_bedrock_actor_data(&metadata);
+    }
+
+    fn refresh_dimensions_into(&self, metadata: &mut SyncedActorDataList) {
+        let dimensions = self.get_dimensions(self.pose.load());
+        let old = self.entity_dimension.swap(dimensions);
         // Vanilla `reapplyPosition`: the box is rebuilt even at the same size
-        let position = self.pos.load();
         self.bounding_box.store(Self::make_bounding_box(
             self.entity_type,
-            position,
-            &dimension,
+            self.pos.load(),
+            &dimensions,
         ));
-        if old == dimension {
-            return;
-        }
+        metadata.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimensions.width),
+        );
+        metadata.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimensions.height),
+        );
         if !self.first_tick.load(Ordering::Relaxed)
             && !self.no_physics.load(Ordering::Relaxed)
-            && dimension.width <= 4.0
-            && dimension.height <= 4.0
-            && (dimension.width > old.width || dimension.height > old.height)
+            && dimensions.width <= 4.0
+            && dimensions.height <= 4.0
+            && (dimensions.width > old.width || dimensions.height > old.height)
             && self.entity_type != &EntityType::PLAYER
         {
-            self.fudge_position_after_size_change(old, dimension);
+            self.fudge_position_after_size_change(old);
         }
-        let mut bedrock_meta = SyncedActorDataList::new();
-        bedrock_meta.set(
-            entity_data_key::WIDTH,
-            MetadataValue::Float(dimension.width),
-        );
-        bedrock_meta.set(
-            entity_data_key::HEIGHT,
-            MetadataValue::Float(dimension.height),
-        );
-        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     /// Vanilla `fudgePositionAfterSizeChange`: a grown entity moves to the closest free spot.
-    fn fudge_position_after_size_change(&self, old: EntityDimensions, new: EntityDimensions) {
+    pub fn fudge_position_after_size_change(&self, previous: EntityDimensions) -> bool {
         let world = self.world.load();
-        let old_height = f64::from(old.height);
-        let (new_width, new_height) = (f64::from(new.width), f64::from(new.height));
-        let old_center = self.pos.load().add_raw(0.0, old_height / 2.0, 0.0);
-        let width_delta = f64::from((new.width - old.width).max(0.0)) + 1.0E-6;
-        let height_delta = f64::from((new.height - old.height).max(0.0)) + 1.0E-6;
-        let centers = |height: f64| {
-            let half = Vector3::new(width_delta / 2.0, height / 2.0, width_delta / 2.0);
-            BoundingBox::new(old_center.sub(&half), old_center.add(&half))
+        // The full entity, so block collisions see its context (powder snow, ...)
+        let Some(this) = world.get_entity_by_id(self.entity_id) else {
+            return false;
         };
+        let new = self.get_dimensions(self.pose.load());
+        let previous_height = f64::from(previous.height);
+        let (new_width, new_height) = (f64::from(new.width), f64::from(new.height));
+        let old_center = self.pos.load().add_raw(0.0, previous_height / 2.0, 0.0);
+        let width_delta = f64::from((new.width - previous.width).max(0.0)) + 1.0E-6;
+        let height_delta = f64::from((new.height - previous.height).max(0.0)) + 1.0E-6;
         if let Some(free) = world.find_free_position(
-            self,
-            centers(height_delta),
+            this.as_ref(),
+            &BoundingBox::of_size(old_center, width_delta, height_delta, width_delta),
             old_center,
-            new_width,
-            new_height,
-            new_width,
+            Vector3::new(new_width, new_height, new_width),
         ) {
             self.set_pos(free.add_raw(0.0, -new_height / 2.0, 0.0));
-            return;
+            return true;
         }
         // Grown both ways: free space for the new width at the old height
-        if new.width > old.width
-            && new.height > old.height
+        if new.width > previous.width
+            && new.height > previous.height
             && let Some(free) = world.find_free_position(
-                self,
-                centers(1.0E-6),
+                this.as_ref(),
+                &BoundingBox::of_size(old_center, width_delta, 1.0E-6, width_delta),
                 old_center,
-                new_width,
-                old_height,
-                new_width,
+                Vector3::new(new_width, previous_height, new_width),
             )
         {
-            self.set_pos(free.add_raw(0.0, -old_height / 2.0 + 1.0E-6, 0.0));
+            self.set_pos(free.add_raw(0.0, -previous_height / 2.0 + 1.0E-6, 0.0));
+            return true;
         }
+        false
     }
 
     /// Vanilla `Entity.fireImmune`: the entity type.
@@ -4573,6 +4598,12 @@ impl Entity {
             nbt.put("CustomName", tag);
         }
         nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+        if self.is_silent() {
+            nbt.put_bool("Silent", true);
+        }
+        if self.has_no_gravity() {
+            nbt.put_bool("NoGravity", true);
+        }
 
         let tags = self
             .scoreboard_tags
@@ -4676,6 +4707,8 @@ impl Entity {
         if let Some(visible) = nbt.get_bool("CustomNameVisible") {
             self.set_custom_name_visible(visible);
         }
+        self.set_silent(nbt.get_bool("Silent").unwrap_or(false));
+        self.set_has_no_gravity(nbt.get_bool("NoGravity").unwrap_or(false));
 
         if let Some(tag_list) = nbt.get_list("Tags") {
             let mut tags = self

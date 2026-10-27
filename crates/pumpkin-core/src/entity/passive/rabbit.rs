@@ -186,7 +186,6 @@ impl Mob for RabbitEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_int("RabbitType", self.get_variant().id());
         nbt.put_int(
             "MoreCarrotTicks",
@@ -195,7 +194,6 @@ impl Mob for RabbitEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(rabbit_type) = nbt.get_int("RabbitType") {
             self.set_variant(RabbitVariant::from_id(rabbit_type));
         }

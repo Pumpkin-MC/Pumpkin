@@ -12,7 +12,7 @@ use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob, speed_up_seconds_when_feeding},
+    ageable::{AgeableData, AgeableMob, get_speed_up_seconds_when_feeding},
     ai::control::{
         smooth_swimming_look_control::SmoothSwimmingLookControl,
         smooth_swimming_move_control::SmoothSwimmingMoveControl,
@@ -105,6 +105,10 @@ impl AgeableMob for DolphinEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::DOLPHIN_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Mob for DolphinEntity {
@@ -173,7 +177,7 @@ impl Mob for DolphinEntity {
 
         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
         if self.can_age_up() {
-            self.age_up(speed_up_seconds_when_feeding(-self.get_age()), true);
+            self.age_up(get_speed_up_seconds_when_feeding(-self.get_age()), true);
         } else {
             self.set_got_fish(true);
         }

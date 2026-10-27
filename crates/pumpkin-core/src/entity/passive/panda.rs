@@ -239,6 +239,10 @@ impl AgeableMob for PandaEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::PANDA_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for PandaEntity {
@@ -259,13 +263,11 @@ impl Mob for PandaEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_string("MainGene", self.get_main_gene().as_str().to_string());
         nbt.put_string("HiddenGene", self.get_hidden_gene().as_str().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(main) = nbt.get_string("MainGene") {
             self.set_main_gene(PandaGene::from_name(main));
         }

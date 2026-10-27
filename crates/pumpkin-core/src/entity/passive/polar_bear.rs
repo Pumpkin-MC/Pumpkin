@@ -6,7 +6,6 @@ use std::sync::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -114,6 +113,10 @@ impl AgeableMob for PolarBearEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::POLAR_BEAR_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for PolarBearEntity {
@@ -139,14 +142,6 @@ impl Mob for PolarBearEntity {
 
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
-    }
-
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

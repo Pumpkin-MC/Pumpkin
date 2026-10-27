@@ -143,6 +143,10 @@ impl AgeableMob for HorseEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for HorseEntity {
@@ -173,7 +177,6 @@ impl Mob for HorseEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_int("Variant", self.get_variant());
         nbt.put_bool("Tame", self.is_tame());
         nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
@@ -183,7 +186,6 @@ impl Mob for HorseEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(variant) = nbt.get_int("Variant") {
             self.set_variant(variant);
         }

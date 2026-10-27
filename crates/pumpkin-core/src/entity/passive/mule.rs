@@ -132,6 +132,10 @@ impl AgeableMob for MuleEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for MuleEntity {
@@ -161,7 +165,6 @@ impl Mob for MuleEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("ChestedHorse", self.has_chest());
         nbt.put_bool("Tame", self.is_tame());
         nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
@@ -171,7 +174,6 @@ impl Mob for MuleEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(chested) = nbt.get_bool("ChestedHorse") {
             self.set_has_chest(chested);
         }

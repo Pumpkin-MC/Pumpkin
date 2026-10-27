@@ -1881,6 +1881,11 @@ impl AgeableMob for VillagerEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    // Vanilla `AbstractVillager.finalizeSpawn`
+    fn default_should_spawn_baby(&self) -> bool {
+        false
+    }
 }
 
 impl Mob for VillagerEntity {

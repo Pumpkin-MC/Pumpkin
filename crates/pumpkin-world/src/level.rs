@@ -24,7 +24,7 @@ use pumpkin_data::{Block, BlockStateId, block_properties::has_random_ticks, flui
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashSet;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 use std::{
     path::PathBuf,
@@ -96,6 +96,7 @@ pub struct Level {
 
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
+    pub rt_handle: OnceLock<tokio::runtime::Handle>,
     pub chunk_system_tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub cancel_token: CancellationToken,
@@ -286,6 +287,10 @@ impl Level {
         let level_channel = Arc::new(LevelChannel::new());
         let thread_tracker = Mutex::new(Vec::new());
         let listener = Arc::new(ChunkListener::new());
+        let rt_handle = OnceLock::new();
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let _ = rt_handle.set(handle);
+        }
 
         let level_ref = Arc::new(Self {
             seed,
@@ -304,6 +309,7 @@ impl Level {
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
+            rt_handle,
             chunk_system_tasks: TaskTracker::new(),
             cancel_token: CancellationToken::new(),
             shut_down_chunk_system: AtomicBool::new(false),
@@ -342,34 +348,38 @@ impl Level {
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
-        let level = self.clone();
-        rayon::spawn(move || {
-            let arc_chunk = Arc::new(ChunkEntityData {
-                x: pos.x,
-                z: pos.y,
-                data: std::sync::Mutex::new(Vec::new()),
-                live: AtomicBool::new(false),
-                dirty: AtomicBool::new(false),
-            });
-
-            level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
-
-            if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
-                for tx in waiters {
-                    let _ = tx.send(arc_chunk.clone());
-                }
-            }
+        let arc_chunk = Arc::new(ChunkEntityData {
+            x: pos.x,
+            z: pos.y,
+            data: std::sync::Mutex::new(Vec::new()),
+            live: AtomicBool::new(false),
+            dirty: AtomicBool::new(false),
         });
+
+        self.loaded_entity_chunks.insert(pos, arc_chunk.clone());
+
+        if let Some((_, waiters)) = self.pending_entity_generations.remove(&pos) {
+            for tx in waiters {
+                let _ = tx.send(arc_chunk.clone());
+            }
+        }
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
     /// when the client. This means tasks should complete in a reasonable (no looping) amount of time.
-    pub fn spawn_task<F>(&self, task: F) -> JoinHandle<F::Output>
+    pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.tasks.spawn(task)
+        if let Some(handle) = self.rt_handle.get() {
+            Some(self.tasks.spawn_on(task, handle))
+        } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let _ = self.rt_handle.set(handle.clone());
+            Some(self.tasks.spawn_on(task, &handle))
+        } else {
+            None
+        }
     }
 
     pub async fn shutdown(&self) {
@@ -774,7 +784,7 @@ impl Level {
                                     }
                                 }
                                 let sender_clone = sender.clone();
-                                tokio::spawn(async move {
+                                level.spawn_task(async move {
                                     if let Ok(chunk) = rx.await {
                                         let _ =
                                             sender_clone.send((Arc::downgrade(&chunk), true)).await;

@@ -7,11 +7,19 @@ use crate::entity::Entity;
 use crate::entity::mob::Mob;
 
 pub const BABY_START_AGE: i32 = -24000;
+pub const DEFAULT_BABY_SPAWN_CHANCE: f32 = 0.05;
+pub const ABSTRACT_HORSE_BABY_SPAWN_CHANCE: f32 = 0.2;
+pub const DOLPHIN_BABY_SPAWN_CHANCE: f32 = 0.1;
+pub const OCELOT_BABY_SPAWN_CHANCE: f32 = 1.0;
+pub const PANDA_BABY_SPAWN_CHANCE: f32 = 0.2;
+pub const POLAR_BEAR_BABY_SPAWN_CHANCE: f32 = 1.0;
+pub const STRIDER_BABY_SPAWN_CHANCE: f32 = 0.5;
 pub const FORCED_AGE_PARTICLE_TICKS: i32 = 40;
+pub const AGE_LOCK_COOLDOWN_TICKS: i32 = 40;
 
 /// Seconds a feeding takes off a baby's remaining growth time.
 #[must_use]
-pub fn speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
     ((ticks_until_adult / 20) as f32 * 0.1) as i32
 }
 
@@ -33,6 +41,22 @@ impl Default for AgeableData {
     }
 }
 
+/// One particle at a random horizontal spot in the entity's width, `y` above its feet.
+fn send_random_particle(entity: &Entity, particle: Particle, y: f64) {
+    let mut rng = rand::rng();
+    let width = f64::from(entity.width());
+    let pos = entity.pos.load()
+        + Vector3::new(
+            (rng.random::<f64>() * 2.0 - 1.0) * width,
+            y,
+            (rng.random::<f64>() * 2.0 - 1.0) * width,
+        );
+    entity
+        .world
+        .load()
+        .spawn_particle(pos, Vector3::new(0.0, 0.0, 0.0), 0.0, 1, particle);
+}
+
 pub trait AgeableMob: Mob {
     fn get_ageable_data(&self) -> &AgeableData;
 
@@ -41,11 +65,13 @@ pub trait AgeableMob: Mob {
     }
 
     fn is_baby(&self) -> bool {
-        self.get_mob_entity().living_entity.entity.age.load(Relaxed) < 0
+        self.can_be_a_baby() && self.get_mob_entity().living_entity.is_baby()
     }
 
     fn set_baby(&self, baby: bool) {
-        self.set_age(if baby { self.get_baby_start_age() } else { 0 });
+        if self.can_be_a_baby() {
+            self.set_age(if baby { self.get_baby_start_age() } else { 0 });
+        }
     }
 
     fn get_age(&self) -> i32 {
@@ -75,12 +101,129 @@ pub trait AgeableMob: Mob {
     /// Runs when the mob turns into a baby or grows up.
     fn age_boundary_reached(&self) {}
 
+    fn default_should_spawn_baby(&self) -> bool {
+        true
+    }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        DEFAULT_BABY_SPAWN_CHANCE
+    }
+
+    /// Vanilla `AgeableMob.finalizeSpawn`: every mob after the first of a group may be a baby.
+    fn finalize_ageable_spawn(
+        &self,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        use crate::entity::mob::spawn::SpawnGroupData;
+
+        let (group_size, should_spawn_baby, baby_spawn_chance) = match group_data {
+            Some(SpawnGroupData::Ageable {
+                group_size,
+                should_spawn_baby,
+                baby_spawn_chance,
+            }) => (group_size, should_spawn_baby, baby_spawn_chance),
+            _ => (
+                0,
+                self.default_should_spawn_baby(),
+                self.default_baby_spawn_chance(),
+            ),
+        };
+        if should_spawn_baby
+            && group_size > 0
+            && self.get_random().random::<f32>() <= baby_spawn_chance
+        {
+            self.set_age(self.get_baby_start_age());
+        }
+        self.get_mob_entity().finalize_spawn_base();
+        Some(SpawnGroupData::Ageable {
+            group_size: group_size + 1,
+            should_spawn_baby,
+            baby_spawn_chance,
+        })
+    }
+
     fn is_age_locked(&self) -> bool {
         self.get_ageable_data().age_locked.load(Relaxed)
     }
 
     fn set_age_locked(&self, locked: bool) {
         self.get_ageable_data().age_locked.store(locked, Relaxed);
+        self.get_entity()
+            .set_synced_data(tracked_data::ageable_mob::AGE_LOCKED, locked);
+    }
+
+    fn ageable_interact(
+        &self,
+        player: &std::sync::Arc<crate::entity::player::Player>,
+        stack: &mut pumpkin_data::item_stack::ItemStack,
+    ) -> bool {
+        use pumpkin_data::{
+            item::Item,
+            sound::{Sound, SoundCategory},
+            tag::{self, Taggable},
+        };
+        let entity = self.get_entity();
+        if stack.item != &Item::GOLDEN_DANDELION
+            || !self.is_baby()
+            || self
+                .get_ageable_data()
+                .age_lock_particle_timer
+                .load(Relaxed)
+                != 0
+            || entity
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_CANNOT_BE_AGE_LOCKED)
+        {
+            return false;
+        }
+        self.set_age_locked(!self.is_age_locked());
+        self.set_age(self.get_baby_start_age());
+        self.get_ageable_data()
+            .age_lock_particle_timer
+            .store(AGE_LOCK_COOLDOWN_TICKS, Relaxed);
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        if self.is_age_locked() {
+            self.get_mob_entity()
+                .persistence_required
+                .store(true, Relaxed);
+        }
+        entity.world.load().play_sound(
+            if self.is_age_locked() {
+                Sound::ItemGoldenDandelionUse
+            } else {
+                Sound::ItemGoldenDandelionUnuse
+            },
+            SoundCategory::Players,
+            &entity.block_pos.load().0.to_f64().add_raw(0.5, 0.5, 0.5),
+        );
+        true
+    }
+
+    /// Vanilla `makeAgeLockedParticle`: a pause or reset particle above the head every 2 ticks.
+    fn tick_age_lock_particle_timer(&self) {
+        let timer = &self.get_ageable_data().age_lock_particle_timer;
+        let ticks = timer.load(Relaxed);
+        if ticks <= 0 {
+            return;
+        }
+        if ticks % 2 == 0 {
+            let entity = self.get_entity();
+            let locked = self.is_age_locked();
+            let height = f64::from(entity.height());
+            let y = height * (rand::rng().random::<f64>() * 2.0 - 1.0) * 0.2
+                + height
+                + if locked { 0.2 } else { 0.0 };
+            send_random_particle(
+                entity,
+                if locked {
+                    Particle::PauseMobGrowth
+                } else {
+                    Particle::ResetMobGrowth
+                },
+                y,
+            );
+        }
+        timer.store(ticks - 1, Relaxed);
     }
 
     fn can_age_up(&self) -> bool {
@@ -142,36 +285,20 @@ pub trait AgeableMob: Mob {
         let forced_timer = data.forced_age_timer.load(Relaxed);
         if forced_timer > 0 {
             if forced_timer % 4 == 0 {
-                let entity = &self.get_mob_entity().living_entity.entity;
-                let mut rng = rand::rng();
-                let width = f64::from(entity.width());
-                let pos = entity.pos.load()
-                    + Vector3::new(
-                        (rng.random::<f64>() * 2.0 - 1.0) * width,
-                        rng.random::<f64>() * f64::from(entity.height()) + 0.5,
-                        (rng.random::<f64>() * 2.0 - 1.0) * width,
-                    );
-                entity.world.load().spawn_particle(
-                    pos,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    0.0,
-                    1,
-                    Particle::HappyVillager,
-                );
+                let entity = self.get_entity();
+                let y = rand::rng().random::<f64>() * f64::from(entity.height()) + 0.5;
+                send_random_particle(entity, Particle::HappyVillager, y);
             }
             data.forced_age_timer.store(forced_timer - 1, Relaxed);
         }
 
-        let living = &self.get_mob_entity().living_entity;
-        if living.dead.load(Relaxed) || living.health.load() <= 0.0 {
-            return;
+        if self.get_mob_entity().living_entity.is_alive() {
+            if self.can_age_up() {
+                self.set_age(self.get_age() + 1);
+            } else if self.get_age() > 0 {
+                self.set_age(self.get_age() - 1);
+            }
         }
-        if self.can_age_up() {
-            let age = self.get_age() + 1;
-            self.set_age(age);
-        } else if self.get_age() > 0 {
-            let age = self.get_age() - 1;
-            self.set_age(age);
-        }
+        self.tick_age_lock_particle_timer();
     }
 }

@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
+use pumpkin_core::net::java::{JavaReadHalf, JavaWriteHalf};
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     ClientPacket, ConnectionState, RawPacket, ServerPacket,
@@ -28,11 +29,8 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use tokio::{
-    io::{BufReader, BufWriter},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    io::{AsyncWrite, BufReader, BufWriter},
+    net::TcpStream,
     time::timeout,
 };
 use uuid::Uuid;
@@ -42,8 +40,8 @@ pub const MAX_POLL_TICKS: usize = 500;
 
 pub struct HeadlessBot {
     pub name: String,
-    pub reader: TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
-    pub writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    pub reader: TCPNetworkDecoder<BufReader<JavaReadHalf>>,
+    pub writer: TCPNetworkEncoder<BufWriter<JavaWriteHalf>>,
     pub position: Vector3<f64>,
     pub yaw: f32,
     pub pitch: f32,
@@ -74,6 +72,15 @@ impl HeadlessBot {
             .map_err(|err| format!("Bot '{name}' failed to connect to {addr}: {err}"))?;
         let _ = stream.set_nodelay(true);
         let (read_half, write_half) = stream.into_split();
+        Self::join(Box::new(read_half), Box::new(write_half), addr.port(), name).await
+    }
+
+    pub async fn join(
+        read_half: JavaReadHalf,
+        write_half: JavaWriteHalf,
+        port: u16,
+        name: &str,
+    ) -> Result<Self, String> {
         let mut bot = Self {
             name: name.to_string(),
             reader: TCPNetworkDecoder::new(BufReader::new(read_half)),
@@ -87,7 +94,7 @@ impl HeadlessBot {
         bot.send_packet(&SHandShake {
             protocol_version: VarInt(CURRENT_MC_VERSION.protocol_version()),
             server_address: "127.0.0.1".into(),
-            server_port: addr.port(),
+            server_port: port,
             next_state: ConnectionState::Login,
         })
         .await?;
@@ -223,8 +230,8 @@ impl HeadlessBot {
     }
 }
 
-pub async fn send_framed_packet<P: ClientPacket + MultiVersionJavaPacket>(
-    writer: &mut TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+pub async fn send_framed_packet<P: ClientPacket + MultiVersionJavaPacket, W: AsyncWrite + Unpin>(
+    writer: &mut TCPNetworkEncoder<BufWriter<W>>,
     packet: &P,
 ) -> Result<(), String> {
     let packet_id = P::to_id(CURRENT_MC_VERSION);

@@ -112,12 +112,10 @@ impl Mob for TurtleEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("HasEgg", self.has_egg());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(has_egg) = nbt.get_bool("HasEgg") {
             self.set_has_egg(has_egg);
         }

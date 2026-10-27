@@ -269,6 +269,10 @@ impl BlockBehaviour for DispenserBlock {
             } else {
                 args.world
                     .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
+                args.world.emit_game_event(
+                    GameEvent::BlockActivate.name(),
+                    args.position.to_centered_f64(),
+                );
             }
         }
     }
@@ -1168,7 +1172,8 @@ impl DispenserBlock {
             let Some(living) = entity.get_living_entity() else {
                 continue;
             };
-            if !living.is_part_of_game()
+            if !living.is_alive()
+                || entity.is_spectator()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
                 || entity
                     .get_mob()

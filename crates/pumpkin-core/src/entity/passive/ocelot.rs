@@ -120,6 +120,10 @@ impl AgeableMob for OcelotEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::OCELOT_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Mob for OcelotEntity {

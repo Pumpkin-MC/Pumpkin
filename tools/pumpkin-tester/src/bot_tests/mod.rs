@@ -1,5 +1,6 @@
 mod block_tuning_and_invert;
 mod commands_and_gamemode;
+mod embedded_stop;
 mod login_and_movement;
 mod loot_tables;
 mod player_actions;
@@ -44,6 +45,8 @@ pub async fn run_bot_tests(
 
     player_actions::run_player_actions_and_disconnect_tests(server, bot1, bot2, summary_lines)
         .await?;
+
+    embedded_stop::run_embedded_stop_test(summary_lines).await?;
 
     Ok(())
 }

@@ -195,8 +195,7 @@ impl Mob for HoglinEntity {
         if rand::random::<f32>() < 0.2 {
             self.set_baby(true);
         }
-        self.mob_entity.finalize_spawn_base();
-        group_data
+        self.finalize_spawn_super(group_data)
     }
 
     fn should_drop_experience(&self) -> bool {

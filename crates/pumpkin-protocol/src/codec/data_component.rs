@@ -1568,11 +1568,7 @@ macro_rules! codec_dye_color {
                 seq.write_var_int(&VarInt(i32::from(color.id())))
             }
             fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-                let id = seq.get_var_int()?.0;
-                let color = u8::try_from(id)
-                    .ok()
-                    .and_then(pumpkin_data::dye_color::DyeColor::by_id)
-                    .unwrap_or(pumpkin_data::dye_color::DyeColor::White);
+                let color = pumpkin_data::dye_color::DyeColor::by_id_or_white(seq.get_var_int()?.0);
                 Ok(Self {
                     value: Cow::Borrowed(color.name()),
                 })

@@ -236,6 +236,8 @@ mod tests {
         // face-full check rejects it; vanilla accepts it anyway.
         let snow_8 = SnowLikeProperties { layers: 8 }.to_state_id(&Block::SNOW);
         chunk.set_block_state(4, GROUND_Y, 0, snow_8.to_state());
+        chunk.flat_motion_blocking_height_map
+            [ProtoChunk::local_position_to_height_map_index(4, 0)] = GROUND_Y as i16;
 
         run_freeze(&mut chunk);
 
@@ -256,6 +258,8 @@ mod tests {
         }
         let snow_4 = SnowLikeProperties { layers: 4 }.to_state_id(&Block::SNOW);
         chunk.set_block_state(4, GROUND_Y, 0, snow_4.to_state());
+        chunk.flat_motion_blocking_height_map
+            [ProtoChunk::local_position_to_height_map_index(4, 0)] = GROUND_Y as i16;
 
         run_freeze(&mut chunk);
 
