@@ -1317,11 +1317,12 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
         "minecraft:randomized_int_state_provider" | "minecraft:randomized_int" => {
             let src = value_to_block_state_provider(&v["source"]);
             let prop = v["property"].as_str().unwrap_or("");
+            let prop_ident = format_ident!("{}", prop.to_pascal_case());
             let vals = value_to_int_provider(&v["values"]);
             quote! {
                 BlockStateProvider::RandomizedInt(RandomizedIntBlockStateProvider {
                     source: Box::new(#src),
-                    property: #prop.to_string(),
+                    property: pumpkin_data::block_properties::PropertyKey::#prop_ident,
                     values: #vals,
                 })
             }

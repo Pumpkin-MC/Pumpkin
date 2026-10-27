@@ -6,9 +6,10 @@ use std::{
 
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
-use crate::{STOP_INTERRUPT, net::bedrock::status::IceSocket};
+use crate::net::bedrock::status::IceSocket;
 
 enum Command {
     Register {
@@ -51,12 +52,12 @@ impl Drop for Registration {
 }
 
 impl IceRouter {
-    pub(super) async fn bind(public: IceSocket) -> Result<Self, Error> {
+    pub(super) async fn bind(public: IceSocket, stop: CancellationToken) -> Result<Self, Error> {
         let public_addr = public.local_addr()?;
         let internal = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
         let internal_addr = internal.local_addr()?;
         let (commands, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(run(public, internal, receiver));
+        tokio::spawn(run(public, internal, receiver, stop));
         Ok(Self {
             internal_addr,
             public_addr,
@@ -95,6 +96,7 @@ async fn run(
     public: IceSocket,
     internal_socket: UdpSocket,
     mut commands: mpsc::UnboundedReceiver<Command>,
+    stop: CancellationToken,
 ) {
     let mut routes = HashMap::<SocketAddr, Route>::new();
     let mut by_ufrag = HashMap::<String, SocketAddr>::new();
@@ -104,7 +106,7 @@ async fn run(
 
     loop {
         tokio::select! {
-            () = STOP_INTERRUPT.cancelled() => break,
+            () = stop.cancelled() => break,
             Some(command) = commands.recv() => match command {
                 Command::Register { ufrag, internal, candidates } => {
                     if let Some(old) = routes.insert(internal, Route {

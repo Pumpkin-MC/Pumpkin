@@ -16,6 +16,7 @@ pub mod door_interact;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod flee_sun;
+pub mod follow_flock_leader;
 pub mod follow_mob;
 pub mod follow_owner;
 pub mod follow_parent;
@@ -37,6 +38,7 @@ pub mod owner_hurt_target;
 pub mod pathfind_to_raid;
 pub mod pick_up_block;
 pub mod place_block;
+pub mod random_swimming;
 pub mod ranged_attack;
 pub mod ranged_crossbow_attack;
 pub mod reset_universal_anger;
@@ -101,6 +103,34 @@ pub trait Goal: Send + Sync {
 
     fn controls(&self) -> Controls {
         Controls::empty()
+    }
+
+    /// What the goal can touch outside its mob next tick, or `None` if unaudited.
+    /// See `world::entity_islands`.
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        None
+    }
+}
+
+/// What a goal can touch in one tick, as distances from the mob's body.
+#[derive(Clone, Default, Debug)]
+pub struct GoalReach {
+    pub entities: f64,
+    pub players: f64,
+    /// Highest speed modifier it passes to navigation.
+    pub speed: f64,
+    pub changes_blocks: bool,
+    /// Entities and players touched at any distance.
+    pub links: Vec<i32>,
+}
+
+impl GoalReach {
+    pub fn add(&mut self, other: Self) {
+        self.entities = self.entities.max(other.entities);
+        self.players = self.players.max(other.players);
+        self.speed = self.speed.max(other.speed);
+        self.changes_blocks |= other.changes_blocks;
+        self.links.extend(other.links);
     }
 }
 
@@ -189,10 +219,6 @@ impl PrioritizedGoal {
             type_id,
         }
     }
-
-    fn can_be_replaced_by(&self, goal: &Self) -> bool {
-        self.can_stop() && goal.priority < self.priority
-    }
 }
 
 impl Goal for PrioritizedGoal {
@@ -236,6 +262,10 @@ impl Goal for PrioritizedGoal {
 
     fn controls(&self) -> Controls {
         self.goal.controls()
+    }
+
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        self.goal.tick_reach(mob, running)
     }
 }
 
