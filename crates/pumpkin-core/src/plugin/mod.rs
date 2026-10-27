@@ -1008,6 +1008,18 @@ impl PluginManager {
             .iter()
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
+        // A plugin another task is still loading must finish (or fail) before it counts
+        let loading: Vec<String> = self
+            .plugin_states
+            .read()
+            .await
+            .iter()
+            .filter(|(_, state)| matches!(state, PluginState::Loading))
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in loading {
+            self.wait_for_initialization(&name).await;
+        }
         // Resident plugins satisfy dependencies, they are already initialized, so they have none left to resolve
         let resident: Vec<(String, Vec<String>)> = self
             .plugins
