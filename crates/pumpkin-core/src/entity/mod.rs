@@ -2073,14 +2073,6 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_on_pos_legacy(&self) -> BlockPos {
-        self.get_pos_with_y_offset(f64::from(0.2f32)).0
-    }
-
-    pub(crate) fn get_on_pos(&self) -> BlockPos {
-        self.get_pos_with_y_offset(f64::from(1.0e-5f32)).0
-    }
-
     fn get_pos_with_y_offset(
         &self,
         offset: f64,
@@ -2265,11 +2257,6 @@ impl Entity {
             world
                 .block_registry
                 .update_entity_movement_after_fall_on(block, caller);
-        }
-        if !caller.is_passenger()
-            && let Some(mob) = caller.get_mob()
-        {
-            mob.movement_emission(final_move);
         }
     }
 
@@ -4248,8 +4235,6 @@ impl Entity {
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
         if self.is_silent() {
             nbt.put_bool("Silent", true);
-        } else {
-            nbt.child_tags.remove("Silent");
         }
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
         if self.has_visual_fire.load(Relaxed) {

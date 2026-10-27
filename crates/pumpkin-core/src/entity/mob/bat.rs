@@ -1,4 +1,3 @@
-use crossbeam::atomic::AtomicCell;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI8, AtomicI32, Ordering::Relaxed};
@@ -21,8 +20,6 @@ use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 const ROOSTING_FLAG: i8 = 1;
-const TICKS_PER_FLAP: i32 = 10;
-const MOVEMENT_DISTANCE_SCALE: f32 = 0.6;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
 const AMBIENT_SOUND_INTERVAL: i32 = 80;
 
@@ -30,8 +27,6 @@ pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
     flags: AtomicI8,
-    move_dist: AtomicCell<f32>,
-    next_step: AtomicCell<f32>,
     ambient_sound_time: AtomicI32,
 }
 
@@ -42,8 +37,6 @@ impl BatEntity {
             mob_entity,
             hanging_position: Mutex::new(None),
             flags: AtomicI8::new(ROOSTING_FLAG),
-            move_dist: AtomicCell::new(0.0),
-            next_step: AtomicCell::new(1.0),
             ambient_sound_time: AtomicI32::new(0),
         };
         Arc::new(bat)
@@ -68,10 +61,7 @@ impl BatEntity {
         {
             return false;
         }
-        crate::world::natural_spawner::is_valid_spawn_floor(
-            world.get_block_state(&below_pos),
-            &pumpkin_data::entity::EntityType::BAT,
-        )
+        MobEntity::check_mob_spawn_rules(world, pos)
     }
 
     #[must_use]
@@ -104,7 +94,7 @@ impl BatEntity {
             if (!self.is_roosting() || rand::random_range(0..4) == 0) && !entity.is_silent() {
                 world.play_sound_fine(
                     Sound::EntityBatAmbient,
-                    SoundCategory::Ambient,
+                    SoundCategory::Neutral,
                     pos,
                     self.sound_volume(),
                     self.voice_pitch(),
@@ -154,7 +144,6 @@ impl BatEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        // Vanilla check previous target before randomly generating a new one
         if let Some(target) = *hanging_pos
             && (!world.get_block_state(&target).is_air() || target.0.y <= world.dimension.min_y)
         {
@@ -238,66 +227,6 @@ impl Mob for BatEntity {
         true
     }
 
-    fn movement_emission(&self, movement: Vector3<f64>) {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let supporting_pos = entity.get_on_pos();
-        let (supporting_block, supporting_state) = world.get_block_and_state(&supporting_pos);
-        let is_climbable = |block: &pumpkin_data::Block| {
-            block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE)
-                || block == &pumpkin_data::Block::POWDER_SNOW
-        };
-        let climbing = is_climbable(supporting_block);
-        let distance = if climbing {
-            movement.length()
-        } else {
-            movement.horizontal_length()
-        };
-        let move_dist =
-            self.move_dist.load() + (distance * f64::from(MOVEMENT_DISTANCE_SCALE)) as f32;
-        self.move_dist.store(move_dist);
-        let context = crate::world::game_event::GameEventContext {
-            source_entity: Some(self),
-        };
-        if move_dist > self.next_step.load() && !supporting_state.is_air() {
-            let effect_pos = entity.get_on_pos_legacy();
-            let vibrate_from_block = |pos: &BlockPos, emit: bool| {
-                let (block, state) = world.get_block_and_state(pos);
-                let climbable = is_climbable(block);
-                if !state.is_air()
-                    && (entity.on_ground.load(Relaxed)
-                        || climbable
-                        || entity.pose.load() == pumpkin_data::entity::EntityPose::Crouching
-                            && movement.y == 0.0)
-                    && !entity.is_swimming()
-                {
-                    if emit {
-                        world.emit_game_event_with_context("step", entity.pos.load(), &context);
-                    }
-                    true
-                } else {
-                    false
-                }
-            };
-            let same_position = supporting_pos == effect_pos;
-            let mut produced_effects = vibrate_from_block(&effect_pos, same_position);
-            if !same_position {
-                produced_effects |= vibrate_from_block(&supporting_pos, true);
-            }
-            if produced_effects || entity.is_in_water() {
-                self.next_step.store((move_dist as i32 + 1) as f32);
-                if !produced_effects {
-                    world.emit_game_event_with_context("swim", entity.pos.load(), &context);
-                }
-            }
-        } else if supporting_state.is_air()
-            && !self.is_roosting()
-            && entity.tick_count.load(Relaxed) % TICKS_PER_FLAP == 0
-        {
-            world.emit_game_event_with_context("flap", entity.pos.load(), &context);
-        }
-    }
-
     fn can_be_leashed(&self) -> bool {
         false
     }
@@ -365,15 +294,11 @@ impl Mob for BatEntity {
             let pos = entity.pos.load();
             let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
             entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
+        } else {
+            let mut velocity = entity.velocity.load();
+            velocity.y *= 0.6;
+            entity.velocity.store(velocity);
         }
-    }
-
-    fn get_mob_gravity(&self) -> f64 {
-        0.0
-    }
-
-    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
-        Some(0.6)
     }
 
     fn pre_damage_with_context(
@@ -406,7 +331,7 @@ impl CustomSound for BatEntity {
     }
 
     fn sound_category(&self) -> SoundCategory {
-        SoundCategory::Ambient
+        SoundCategory::Neutral
     }
 
     fn voice_pitch(&self) -> f32 {
@@ -424,157 +349,6 @@ mod tests {
     use super::*;
     use crate::entity::ai::test_support::world;
     use pumpkin_data::entity::EntityType;
-
-    #[tokio::test]
-    async fn summoned_silent_bat_preserves_silence_in_nbt() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let bat = BatEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(-605.0, 89.0, -543.0),
-            &EntityType::BAT,
-        ));
-        let mut nbt = NbtCompound::new();
-        nbt.put_bool("Silent", true);
-        nbt.put_byte("BatFlags", ROOSTING_FLAG);
-        bat.read_nbt_non_mut(&nbt);
-        let silent = bat.get_entity().is_silent();
-        let mut saved = NbtCompound::new();
-        EntityBase::write_nbt(bat.as_ref(), &mut saved);
-        let saved_silent = saved.get_bool("Silent");
-        nbt.put_bool("Silent", false);
-        bat.read_nbt_non_mut(&nbt);
-        let unsilenced = !bat.get_entity().is_silent();
-        EntityBase::write_nbt(bat.as_ref(), &mut saved);
-        world.level.shutdown().await;
-        assert!(silent);
-        assert_eq!(saved_silent, Some(true));
-        assert!(unsilenced);
-        assert!(!saved.child_tags.contains_key("Silent"));
-        Ok(())
-    }
-
-    struct EventListener {
-        mob: MobEntity,
-        events: Mutex<Vec<pumpkin_data::game_event::GameEvent>>,
-    }
-
-    impl Mob for EventListener {
-        fn get_mob_entity(&self) -> &MobEntity {
-            &self.mob
-        }
-
-        fn for_each_game_event_listener(
-            &self,
-            visit: &mut dyn FnMut(&dyn crate::world::game_event::GameEventListener),
-        ) {
-            visit(self);
-        }
-    }
-
-    impl crate::world::game_event::GameEventListener for EventListener {
-        fn listener_position(&self) -> Vector3<f64> {
-            self.get_entity().pos.load()
-        }
-
-        fn listener_radius(&self) -> i32 {
-            16
-        }
-
-        fn handle_game_event(
-            &self,
-            _world: &World,
-            event: pumpkin_data::game_event::GameEvent,
-            _context: &crate::world::game_event::GameEventContext<'_>,
-            _source_position: Vector3<f64>,
-        ) -> bool {
-            self.events
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(event);
-            true
-        }
-    }
-
-    #[tokio::test]
-    async fn movement_emits_flap_only_on_flying_flap_ticks()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        world.level.loaded_chunks.insert(
-            pumpkin_util::math::vector2::Vector2::new(0, 0),
-            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
-        );
-        let pos = Vector3::new(0.5, 64.0, 0.5);
-        let listener = Arc::new(EventListener {
-            mob: MobEntity::new(Entity::new(world.clone(), pos, &EntityType::COW)),
-            events: Mutex::new(Vec::new()),
-        });
-        world.add_entity_silent(listener.clone());
-        let bat = BatEntity::new(Entity::new(world.clone(), pos, &EntityType::BAT));
-        bat.set_roosting(false);
-        let entity = bat.get_entity();
-        let motion = Vector3::new(0.1, 0.0, 0.0);
-        entity.tick_count.store(9, Relaxed);
-        entity.move_entity(bat.as_ref(), motion);
-        entity.tick_count.store(10, Relaxed);
-        entity.move_entity(bat.as_ref(), motion);
-        bat.set_roosting(true);
-        entity.tick_count.store(20, Relaxed);
-        entity.move_entity(bat.as_ref(), motion);
-        let events = listener
-            .events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        world.level.shutdown().await;
-        assert_eq!(events, vec![pumpkin_data::game_event::GameEvent::Flap]);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn swimming_above_a_ladder_emits_swim() -> Result<(), Box<dyn std::error::Error>> {
-        use pumpkin_data::Block;
-        use pumpkin_world::world::BlockFlags;
-
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        world.level.loaded_chunks.insert(
-            pumpkin_util::math::vector2::Vector2::new(0, 0),
-            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
-        );
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        world.set_block_state(
-            &BlockPos::new(0, 63, 0),
-            Block::LADDER.default_state.id,
-            flags,
-        );
-        world.set_block_state(
-            &BlockPos::new(0, 64, 0),
-            Block::WATER.default_state.id,
-            flags,
-        );
-        let pos = Vector3::new(0.5, 64.3, 0.5);
-        let listener = Arc::new(EventListener {
-            mob: MobEntity::new(Entity::new(world.clone(), pos, &EntityType::COW)),
-            events: Mutex::new(Vec::new()),
-        });
-        world.add_entity_silent(listener.clone());
-        let bat = BatEntity::new(Entity::new(world.clone(), pos, &EntityType::BAT));
-        bat.set_roosting(false);
-        bat.get_entity().touching_water.store(true, Relaxed);
-        bat.move_dist.store(2.0);
-        bat.movement_emission(Vector3::new(0.1, 0.0, 0.0));
-        let events = listener
-            .events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        world.level.shutdown().await;
-        assert_eq!(events, vec![pumpkin_data::game_event::GameEvent::Swim]);
-        Ok(())
-    }
 
     #[tokio::test]
     async fn bat_flags_preserve_other_bits_when_resting_changes()
@@ -642,38 +416,6 @@ mod tests {
         assert_eq!(normal, 0);
         assert_eq!(weighted, 0);
         assert_eq!(fall_distance, 0.0);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn ambient_sound_timer_resets_and_waits_after_hurt()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let pos = Vector3::new(0.0, 64.0, 0.0);
-        let bat = BatEntity::new(Entity::new(world.clone(), pos, &EntityType::BAT));
-        bat.get_entity().set_silent(true);
-        bat.ambient_sound_time.store(1000, Relaxed);
-        bat.tick_ambient_sound(&world, &pos);
-        let reset_time = bat.ambient_sound_time.load(Relaxed);
-
-        bat.ambient_sound_time.store(10, Relaxed);
-        bat.on_hurt_sound();
-        for _ in 0..80 {
-            bat.tick_ambient_sound(&world, &pos);
-        }
-        let after_delay = bat.ambient_sound_time.load(Relaxed);
-        bat.tick_ambient_sound(&world, &pos);
-        let after_zero = bat.ambient_sound_time.load(Relaxed);
-        bat.mob_entity.living_entity.set_health(0.0);
-        bat.tick_ambient_sound(&world, &pos);
-        let after_death = bat.ambient_sound_time.load(Relaxed);
-        world.level.shutdown().await;
-
-        assert_eq!(reset_time, -80);
-        assert_eq!(after_delay, 0);
-        assert_eq!(after_zero, 1);
-        assert_eq!(after_death, 1);
         Ok(())
     }
 

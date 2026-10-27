@@ -65,10 +65,7 @@ pub fn atan2(mut y: f64, mut x: f64) -> f64 {
         std::mem::swap(&mut x, &mut y);
     }
 
-    let half_length = 0.5 * squared_length;
-    let bits = 6_910_469_410_427_058_090u64.wrapping_sub(squared_length.to_bits() >> 1);
-    let mut inverse_length = f64::from_bits(bits);
-    inverse_length *= 1.5 - half_length * inverse_length * inverse_length;
+    let inverse_length = fast_inv_sqrt(squared_length);
 
     x *= inverse_length;
     y *= inverse_length;

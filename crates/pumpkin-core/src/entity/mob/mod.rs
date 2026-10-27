@@ -736,7 +736,7 @@ impl MobEntity {
     pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
         let below = pos.down();
         let state = world.get_block_state(&below);
-        state.is_side_solid(BlockDirection::Up)
+        state.is_side_solid(BlockDirection::Up) && state.luminance < 14
     }
 
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -1318,8 +1318,6 @@ pub trait Mob: EntityBase + Send + Sync {
     fn ignores_block_triggers(&self) -> bool {
         false
     }
-
-    fn movement_emission(&self, _movement: Vector3<f64>) {}
 
     fn on_removed(&self) {}
 
