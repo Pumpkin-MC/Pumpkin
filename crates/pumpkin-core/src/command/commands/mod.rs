@@ -94,6 +94,7 @@ mod trigger;
 mod waypoint;
 mod weather;
 mod whitelist;
+pub(crate) use whitelist::kick_non_whitelisted_players;
 mod worldborder;
 
 #[allow(clippy::too_many_lines)]

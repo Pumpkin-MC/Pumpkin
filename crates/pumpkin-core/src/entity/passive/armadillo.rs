@@ -139,11 +139,7 @@ impl ArmadilloEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
@@ -227,8 +223,8 @@ impl ArmadilloEntity {
         }
     }
 
-    pub fn brush_off_scute(&self, player: &Arc<Player>) -> bool {
-        if self.is_baby() {
+    pub fn brush_off_scute(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
+        if self.is_baby() || !self.get_entity().is_alive() {
             return false;
         }
         let entity = self.get_entity();
@@ -240,7 +236,9 @@ impl ArmadilloEntity {
         ));
         world.spawn_entity(item_entity);
         world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
-        player.damage_held_item(16);
+        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+            let _ = item_stack.damage_item(16);
+        }
         true
     }
 
@@ -346,9 +344,10 @@ impl Mob for ArmadilloEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
         self.in_state_ticks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let danger_ticks = self.danger_detected_recently_ticks.load(Ordering::Relaxed);
         if danger_ticks > 0 {
             self.danger_detected_recently_ticks
@@ -417,7 +416,7 @@ impl Mob for ArmadilloEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.item == &Item::BRUSH && self.brush_off_scute(player) {
+        if item_stack.item == &Item::BRUSH && self.brush_off_scute(player, item_stack) {
             return true;
         }
         if self.is_scared() {

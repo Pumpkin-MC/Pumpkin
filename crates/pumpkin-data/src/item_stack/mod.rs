@@ -341,6 +341,13 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        self.is_damageable()
+            && !self.is_unbreakable()
+            && self.get_damage() >= self.get_max_damage().unwrap_or(0) - 1
+    }
+
     pub fn repair_item(&mut self, amount: i32) -> i32 {
         if amount <= 0 {
             return 0;
@@ -809,6 +816,9 @@ impl ItemStack {
         let mut tag = NbtCompound::new();
 
         for (id, data) in &self.patch {
+            if !id.is_persistent() {
+                continue;
+            }
             if let Some(data) = data {
                 tag.put(id.to_name(), data.write_data());
             } else {
@@ -841,12 +851,15 @@ impl ItemStack {
         if let Some(tag) = compound.get_compound("components") {
             for (name, data) in &tag.child_tags {
                 if let Some(name) = name.strip_prefix("!") {
-                    item_stack
-                        .patch
-                        .push((DataComponent::try_from_name(name)?, None));
+                    let id = DataComponent::try_from_name(name)?;
+                    if id.is_persistent() {
+                        item_stack.patch.push((id, None));
+                    }
                 } else {
                     let id = DataComponent::try_from_name(name)?;
-                    item_stack.patch.push((id, Some(read_data(id, data)?)));
+                    if id.is_persistent() {
+                        item_stack.patch.push((id, Some(read_data(id, data)?)));
+                    }
                 }
             }
         }
@@ -871,8 +884,11 @@ mod tests {
     use crate::data_component::DataComponent;
     use crate::data_component_impl::{
         CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, ItemNameImpl,
-        LoreImpl, UnbreakableImpl,
+        LoreImpl, MapDecorationsImpl, UnbreakableImpl,
     };
+    use pumpkin_nbt::Nbt;
+    use pumpkin_nbt::deserializer::NbtReadHelperJava;
+    use std::io::Cursor;
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
@@ -1094,6 +1110,30 @@ mod tests {
                 .name,
             "filled_map.mansion"
         );
+    }
+
+    #[test]
+    fn map_decorations_survives_item_stack_nbt_roundtrip() {
+        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        stack.patch.push((
+            DataComponent::MapDecorations,
+            Some(MapDecorationsImpl.to_dyn()),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+        let bytes = Nbt::new(String::new(), compound).write();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(bytes.as_ref()));
+        let decoded = Nbt::read(&mut reader).expect("written item stack should re-read");
+        let components = decoded
+            .root_tag
+            .get_compound("components")
+            .expect("components compound should survive");
+
+        assert!(matches!(
+            components.get("minecraft:map_decorations"),
+            Some(NbtTag::Compound(_))
+        ));
     }
 
     // ── damage_item ───────────────────────────────────────────────
@@ -1526,5 +1566,64 @@ mod tests {
                 "damage should clamp to 0 for set_damage({amount})"
             );
         }
+    }
+
+    #[test]
+    fn data_component_metadata_matches_vanilla_26_3() {
+        // In vanilla 26.3, only minecraft:damage ignores swap animation
+        assert!(DataComponent::Damage.ignore_swap_animation());
+        assert!(!DataComponent::MaxDamage.ignore_swap_animation());
+        assert!(!DataComponent::CustomData.ignore_swap_animation());
+
+        // In vanilla 26.3, exactly 3 components are transient:
+        // creative_slot_lock, additional_trade_cost, and map_post_processing
+        assert!(DataComponent::CreativeSlotLock.is_transient());
+        assert!(!DataComponent::CreativeSlotLock.is_persistent());
+
+        assert!(DataComponent::AdditionalTradeCost.is_transient());
+        assert!(!DataComponent::AdditionalTradeCost.is_persistent());
+
+        assert!(DataComponent::MapPostProcessing.is_transient());
+        assert!(!DataComponent::MapPostProcessing.is_persistent());
+
+        // Other components must be persistent
+        assert!(DataComponent::Damage.is_persistent());
+        assert!(DataComponent::CustomName.is_persistent());
+        assert!(DataComponent::Enchantments.is_persistent());
+    }
+
+    #[test]
+    fn transient_components_are_omitted_from_nbt_saving() {
+        let mut stack = ItemStack::new(1, &Item::DIAMOND_SWORD);
+        // Add a transient component and a persistent component
+        stack.patch.push((
+            DataComponent::AdditionalTradeCost,
+            Some(crate::data_component_impl::AdditionalTradeCostImpl { cost: 0 }.to_dyn()),
+        ));
+        stack.patch.push((
+            DataComponent::Damage,
+            Some(DamageImpl { damage: 10 }.to_dyn()),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+
+        let components = compound
+            .get_compound("components")
+            .expect("components compound missing");
+
+        assert!(
+            !components.has("minecraft:additional_trade_cost"),
+            "transient component must not be saved to NBT"
+        );
+        assert!(
+            components.has("minecraft:damage"),
+            "persistent component must be saved to NBT"
+        );
+
+        // Verify round-trip does not contain transient component
+        let loaded = ItemStack::read_item_stack(&compound).expect("failed to load item stack");
+        assert_eq!(loaded.patch.len(), 1);
+        assert_eq!(loaded.patch[0].0, DataComponent::Damage);
     }
 }

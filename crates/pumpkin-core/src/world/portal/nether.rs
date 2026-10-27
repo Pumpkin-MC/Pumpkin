@@ -282,7 +282,7 @@ impl NetherPortal {
             world.set_block_state(
                 &pos,
                 state,
-                BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
             );
             world
                 .portal_poi
@@ -492,7 +492,7 @@ impl NetherPortal {
         }
     }
 
-    pub fn search_for_portal(
+    pub async fn search_for_portal(
         world: &Arc<World>,
         target_pos: BlockPos,
     ) -> Option<PortalSearchResult> {
@@ -525,26 +525,15 @@ impl NetherPortal {
                 candidate_chunks.push(chunk);
             }
         }
-        if !candidate_chunks.is_empty()
-            && let Ok(handle) = tokio::runtime::Handle::try_current()
-        {
-            tokio::task::block_in_place(|| {
-                handle.block_on(async {
-                    for chunk in &candidate_chunks {
-                        for dx in -1..=1 {
-                            for dz in -1..=1 {
-                                world
-                                    .level
-                                    .get_or_fetch_chunk(
-                                        Vector2::new(chunk.x + dx, chunk.y + dz),
-                                        |_| (),
-                                    )
-                                    .await;
-                            }
-                        }
-                    }
-                });
-            });
+        for chunk in &candidate_chunks {
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    world
+                        .level
+                        .get_or_fetch_chunk(Vector2::new(chunk.x + dx, chunk.y + dz), |_| ())
+                        .await;
+                }
+            }
         }
 
         let worldborder = world
@@ -844,7 +833,7 @@ impl NetherPortal {
                 world.set_block_state(
                     &pos,
                     portal_state,
-                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::UPDATE_KNOWN_SHAPE,
                 );
                 world
                     .portal_poi

@@ -1,5 +1,9 @@
+use super::{AccessorExt, run_blocking};
+use crate::LockIgnorePoison;
+use crate::pumpkin::plugin::world::HostEntityWithStore;
+
 use std::sync::Arc;
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -28,16 +32,6 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
 
-fn active_plugin(
-    state: &PluginHostState,
-) -> wasmtime::Result<Arc<pumpkin_wasm_host_common::plugin::WasmPlugin>> {
-    state
-        .plugin
-        .as_ref()
-        .and_then(std::sync::Weak::upgrade)
-        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
-}
-
 const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
     match pose {
         InternalEntityPose::Standing => EntityPose::Standing,
@@ -62,53 +56,50 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
 }
 
 impl HostEntity for PluginHostState {
-    async fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
+    fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_id as u32)
     }
 
-    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
+    fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
         let entity = self.get(&entity)?;
         Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
     }
 
-    async fn get_type(
-        &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<entity_types::EntityType> {
+    fn get_type(&mut self, entity: Resource<Entity>) -> wasmtime::Result<entity_types::EntityType> {
         let entity = self.get(&entity)?;
         let original_name = entity.get_entity().entity_type.resource_name;
         to_wit_entity_type(original_name)
     }
 
-    async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
+    fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
         let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_entity().pos.load()))
     }
 
-    async fn get_world(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<World>> {
+    fn get_world(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<World>> {
         let entity = self.get(&entity)?;
         let world = entity.get_entity().world.load_full();
         self.add(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
 
-    async fn get_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().yaw.load())
     }
 
-    async fn get_pitch(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_pitch(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().pitch.load())
     }
 
-    async fn get_head_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_head_yaw(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().head_yaw.load())
     }
 
-    async fn is_on_ground(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_on_ground(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -116,7 +107,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_sneaking(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_sneaking(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -124,7 +115,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_sprinting(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_sprinting(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -132,7 +123,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_invisible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_invisible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -140,7 +131,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_glowing(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_glowing(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -148,7 +139,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_velocity(
+    fn set_velocity(
         &mut self,
         entity: Resource<Entity>,
         velocity: Position,
@@ -163,32 +154,24 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_velocity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
+    fn get_velocity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
         let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_entity().velocity.load()))
     }
 
-    async fn set_sneaking(
-        &mut self,
-        entity: Resource<Entity>,
-        sneaking: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_sneaking(&mut self, entity: Resource<Entity>, sneaking: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_sneaking(sneaking);
         Ok(())
     }
 
-    async fn set_sprinting(
-        &mut self,
-        entity: Resource<Entity>,
-        sprinting: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_sprinting(&mut self, entity: Resource<Entity>, sprinting: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_sprinting(sprinting);
         Ok(())
     }
 
-    async fn is_swimming(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_swimming(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -196,27 +179,19 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_invisible(
-        &mut self,
-        entity: Resource<Entity>,
-        invisible: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_invisible(&mut self, entity: Resource<Entity>, invisible: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_invisible(invisible);
         Ok(())
     }
 
-    async fn set_glowing(
-        &mut self,
-        entity: Resource<Entity>,
-        glowing: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_glowing(&mut self, entity: Resource<Entity>, glowing: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_glowing(glowing);
         Ok(())
     }
 
-    async fn is_fall_flying(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_fall_flying(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -224,7 +199,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_fall_flying(
+    fn set_fall_flying(
         &mut self,
         entity: Resource<Entity>,
         fall_flying: bool,
@@ -234,7 +209,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn is_on_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_on_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -243,32 +218,25 @@ impl HostEntity for PluginHostState {
             > 0)
     }
 
-    async fn set_on_fire(
-        &mut self,
-        entity: Resource<Entity>,
-        on_fire: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_on_fire(&mut self, entity: Resource<Entity>, on_fire: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_on_fire(on_fire);
         Ok(())
     }
 
-    async fn get_pose(&mut self, entity: Resource<Entity>) -> wasmtime::Result<EntityPose> {
+    fn get_pose(&mut self, entity: Resource<Entity>) -> wasmtime::Result<EntityPose> {
         let entity = self.get(&entity)?;
         Ok(map_entity_pose(entity.get_entity().pose.load()))
     }
 
-    async fn get_name(
-        &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Resource<TextComponent>> {
+    fn get_name(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<TextComponent>> {
         let entity = self.get(&entity)?;
         let name = entity.get_name();
         self.add(name)
             .map_err(|_| wasmtime::Error::msg("failed to add text component resource"))
     }
 
-    async fn set_custom_name(
+    fn set_custom_name(
         &mut self,
         entity: Resource<Entity>,
         name: Resource<TextComponent>,
@@ -279,7 +247,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_custom_name(
+    fn get_custom_name(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<TextComponent>>> {
@@ -294,7 +262,7 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn set_custom_name_visible(
+    fn set_custom_name_visible(
         &mut self,
         entity: Resource<Entity>,
         visible: bool,
@@ -304,7 +272,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn is_custom_name_visible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_custom_name_visible(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -312,7 +280,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_invulnerable(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_invulnerable(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -320,7 +288,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_invulnerable(
+    fn set_invulnerable(
         &mut self,
         entity: Resource<Entity>,
         invulnerable: bool,
@@ -333,7 +301,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_fire_ticks(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+    fn get_fire_ticks(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -341,11 +309,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_fire_ticks(
-        &mut self,
-        entity: Resource<Entity>,
-        ticks: i32,
-    ) -> wasmtime::Result<()> {
+    fn set_fire_ticks(&mut self, entity: Resource<Entity>, ticks: i32) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity
             .get_entity()
@@ -354,14 +318,14 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_fall_distance(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_fall_distance(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_living_entity()
             .map_or(0.0, |living| living.fall_distance.load()))
     }
 
-    async fn set_fall_distance(
+    fn set_fall_distance(
         &mut self,
         entity: Resource<Entity>,
         distance: f32,
@@ -373,43 +337,39 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn is_silent(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_silent(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().is_silent())
     }
 
-    async fn set_silent(&mut self, entity: Resource<Entity>, silent: bool) -> wasmtime::Result<()> {
+    fn set_silent(&mut self, entity: Resource<Entity>, silent: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_silent(silent);
         Ok(())
     }
 
-    async fn has_gravity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn has_gravity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(!entity.get_entity().has_no_gravity())
     }
 
-    async fn set_has_gravity(
-        &mut self,
-        entity: Resource<Entity>,
-        gravity: bool,
-    ) -> wasmtime::Result<()> {
+    fn set_has_gravity(&mut self, entity: Resource<Entity>, gravity: bool) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().set_has_no_gravity(!gravity);
         Ok(())
     }
 
-    async fn get_eye_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_eye_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().eye_height)
     }
 
-    async fn get_eye_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
+    fn get_eye_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
         let entity = self.get(&entity)?;
         Ok(to_wasm_position(entity.get_eye_pos()))
     }
 
-    async fn get_nearby_entities(
+    fn get_nearby_entities(
         &mut self,
         entity: Resource<Entity>,
         x: f64,
@@ -438,16 +398,12 @@ impl HostEntity for PluginHostState {
         Ok(result)
     }
 
-    async fn get_vehicle(
+    fn get_vehicle(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let vehicle = entity
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let vehicle = entity.get_entity().vehicle.lock_ignore_poison();
         if let Some(v) = vehicle.as_ref() {
             Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
@@ -457,16 +413,12 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn get_passengers(
+    fn get_passengers(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Vec<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let passengers = entity
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let passengers = entity.get_entity().passengers.lock_ignore_poison();
         let mut result = Vec::new();
         for p in passengers.iter() {
             result.push(
@@ -477,10 +429,7 @@ impl HostEntity for PluginHostState {
         Ok(result)
     }
 
-    async fn get_bounding_box(
-        &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<WitBoundingBox> {
+    fn get_bounding_box(&mut self, entity: Resource<Entity>) -> wasmtime::Result<WitBoundingBox> {
         let entity = self.get(&entity)?;
         let bb = entity.get_entity().bounding_box.load();
         Ok(WitBoundingBox {
@@ -489,7 +438,7 @@ impl HostEntity for PluginHostState {
         })
     }
 
-    async fn is_in_water(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_in_water(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -497,7 +446,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn is_in_lava(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_in_lava(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -505,38 +454,34 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn get_ticks_lived(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+    fn get_ticks_lived(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
-            .age
+            .tick_count
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_ticks_lived(
-        &mut self,
-        entity: Resource<Entity>,
-        ticks: i32,
-    ) -> wasmtime::Result<()> {
+    fn set_ticks_lived(&mut self, entity: Resource<Entity>, ticks: i32) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity
             .get_entity()
-            .age
+            .tick_count
             .store(ticks, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 
-    async fn get_width(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_width(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().width)
     }
 
-    async fn get_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
+    fn get_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_entity().entity_dimension.load().height)
     }
 
-    async fn set_rotation(
+    fn set_rotation(
         &mut self,
         entity: Resource<Entity>,
         yaw: f32,
@@ -547,7 +492,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn has_visual_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn has_visual_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -555,7 +500,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_visual_fire(
+    fn set_visual_fire(
         &mut self,
         entity: Resource<Entity>,
         visual_fire: bool,
@@ -565,7 +510,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_portal_cooldown(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
+    fn get_portal_cooldown(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
         Ok(entity
             .get_entity()
@@ -573,7 +518,7 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_portal_cooldown(
+    fn set_portal_cooldown(
         &mut self,
         entity: Resource<Entity>,
         cooldown: u32,
@@ -586,7 +531,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_remaining_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+    fn get_remaining_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
         let entity = self.get(&entity)?;
         Ok(entity.get_player().map_or(0, |player| {
             player
@@ -596,11 +541,7 @@ impl HostEntity for PluginHostState {
         }))
     }
 
-    async fn set_remaining_air(
-        &mut self,
-        entity: Resource<Entity>,
-        air: i32,
-    ) -> wasmtime::Result<()> {
+    fn set_remaining_air(&mut self, entity: Resource<Entity>, air: i32) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         if let Some(player) = entity.get_player() {
             player
@@ -612,17 +553,17 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_max_air(&mut self, _entity: Resource<Entity>) -> wasmtime::Result<i32> {
+    fn get_max_air(&mut self, _entity: Resource<Entity>) -> wasmtime::Result<i32> {
         Ok(pumpkin_core::entity::breath::MAX_AIR)
     }
 
-    async fn remove(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+    fn remove(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
         let entity = self.get(&entity)?;
         entity.get_entity().remove();
         Ok(())
     }
 
-    async fn raycast(
+    fn raycast(
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
@@ -646,7 +587,7 @@ impl HostEntity for PluginHostState {
         }))
     }
 
-    async fn ray_trace_block(
+    fn ray_trace_block(
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
@@ -671,7 +612,7 @@ impl HostEntity for PluginHostState {
         }))
     }
 
-    async fn ray_trace_entity(
+    fn ray_trace_entity(
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
@@ -700,16 +641,16 @@ impl HostEntity for PluginHostState {
         Ok(None)
     }
 
-    async fn get_target_entity(
+    fn get_target_entity(
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let res = self.ray_trace_entity(entity, max_distance).await?;
+        let res = self.ray_trace_entity(entity, max_distance)?;
         Ok(res.map(|r| r.entity))
     }
 
-    async fn set_custom_data(
+    fn set_custom_data(
         &mut self,
         this: Resource<Entity>,
         namespace: String,
@@ -723,7 +664,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_custom_data(
+    fn get_custom_data(
         &mut self,
         this: Resource<Entity>,
         namespace: String,
@@ -735,7 +676,7 @@ impl HostEntity for PluginHostState {
         Ok(tag.map(super::common::to_wit_nbt_tree))
     }
 
-    async fn remove_custom_data(
+    fn remove_custom_data(
         &mut self,
         this: Resource<Entity>,
         namespace: String,
@@ -747,7 +688,7 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn has_custom_data(
+    fn has_custom_data(
         &mut self,
         this: Resource<Entity>,
         namespace: String,
@@ -758,7 +699,7 @@ impl HostEntity for PluginHostState {
         Ok(base_entity.has_custom_data(&namespace, &key))
     }
 
-    async fn as_living(
+    fn as_living(
         &mut self,
         this: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<WitLivingEntity>>> {
@@ -770,10 +711,7 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn as_mob(
-        &mut self,
-        this: Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<WitMob>>> {
+    fn as_mob(&mut self, this: Resource<Entity>) -> wasmtime::Result<Option<Resource<WitMob>>> {
         let entity = self.get(&this)?.clone();
         if entity.get_mob().is_some() {
             Ok(Some(self.add(entity)?))
@@ -782,164 +720,175 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn is_living(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_living(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_living_entity().is_some())
     }
 
-    async fn is_mob(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
+    fn is_mob(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
         let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some())
     }
 
-    async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
+    fn get_item_stack(
+        &mut self,
+        this: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<crate::pumpkin::plugin::item_stack::ItemStack>>> {
+        let entity = self.get(&this)?;
+        let Some(item_entity) = entity.get_item_entity() else {
+            return Ok(None);
+        };
+        let stack = item_entity.get_item_stack().lock_ignore_poison().clone();
+        if stack.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
+        }
+    }
+
+    fn get_pickup_delay(&mut self, this: Resource<Entity>) -> wasmtime::Result<Option<u32>> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_item_entity()
+            .map(|item_entity| u32::from(item_entity.get_pickup_delay())))
+    }
+
+    fn set_pickup_delay(&mut self, this: Resource<Entity>, ticks: u8) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity.get_item_entity().is_some_and(|item_entity| {
+            item_entity.set_pickup_delay(ticks);
+            true
+        }))
+    }
+
+    fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
 
-impl crate::pumpkin::plugin::world::HostEntityWithStore<PluginHostState>
-    for HasSelf<PluginHostState>
-{
+impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
     async fn teleport(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         pos: Position,
         world: Resource<World>,
     ) -> wasmtime::Result<()> {
-        let (entity, world, plugin) = {
+        let (entity, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let world = state.take(world)?;
             let entity = state.get(&entity)?.clone();
-            (entity, world, active_plugin(state)?)
-        };
+            Ok((entity, world))
+        })?;
         let pos = Vector3::new(pos.0, pos.1, pos.2);
-        plugin
-            .store
-            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
-            .await
+        run_blocking(accessor, move || entity.teleport(pos, None, None, world)).await
     }
 
     async fn set_swimming(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         swimming: bool,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (state.get(&entity)?.clone(), active_plugin(state)?)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.get_entity().set_swimming(swimming);
-            })
-            .await
+        let entity = accessor.get_res(&entity)?;
+        run_blocking(accessor, move || {
+            entity.get_entity().set_swimming(swimming);
+        })
+        .await
     }
 
     async fn set_vehicle(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         vehicle: Option<Resource<Entity>>,
     ) -> wasmtime::Result<()> {
-        let (entity, vehicle, plugin) = {
+        let (entity, vehicle) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let entity = state.get(&entity)?.clone();
             let vehicle = vehicle.map(|vehicle| state.take(vehicle)).transpose()?;
-            (entity, vehicle, active_plugin(state)?)
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let current_vehicle = entity
+            Ok((entity, vehicle))
+        })?;
+        run_blocking(accessor, move || {
+            let current_vehicle = entity.get_entity().vehicle.lock_ignore_poison().clone();
+            if let Some(current_vehicle) = current_vehicle {
+                current_vehicle
                     .get_entity()
-                    .vehicle
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(current_vehicle) = current_vehicle {
-                    current_vehicle
-                        .get_entity()
-                        .remove_passenger(entity.get_entity().entity_id);
-                }
-                if let Some(vehicle) = vehicle {
-                    vehicle
-                        .get_entity()
-                        .add_passenger(Arc::clone(&vehicle), entity);
-                }
-            })
-            .await
+                    .remove_passenger(entity.get_entity().entity_id);
+            }
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .add_passenger(Arc::clone(&vehicle), entity);
+            }
+        })
+        .await
     }
 
     async fn add_passenger(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         passenger: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, passenger, plugin) = {
+        let (entity, passenger) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
-            (
-                state.get(&entity)?.clone(),
-                state.take(passenger)?,
-                active_plugin(state)?,
-            )
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity
-                    .get_entity()
-                    .add_passenger(Arc::clone(&entity), passenger);
-            })
-            .await
+            Ok((state.get(&entity)?.clone(), state.take(passenger)?))
+        })?;
+        run_blocking(accessor, move || {
+            entity
+                .get_entity()
+                .add_passenger(Arc::clone(&entity), passenger);
+        })
+        .await
     }
 
     async fn remove_passenger(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
         passenger: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, passenger_id, plugin) = {
+        let (entity, passenger_id) = accessor.with(|mut host| -> wasmtime::Result<_> {
             let state = host.get();
             let entity = state.get(&entity)?.clone();
             let passenger = state.take(passenger)?;
-            (
-                entity,
-                passenger.get_entity().entity_id,
-                active_plugin(state)?,
-            )
-        };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                entity.get_entity().remove_passenger(passenger_id);
-            })
-            .await
+            Ok((entity, passenger.get_entity().entity_id))
+        })?;
+        run_blocking(accessor, move || {
+            entity.get_entity().remove_passenger(passenger_id);
+        })
+        .await
     }
 
     async fn eject_passengers(
-        mut host: Access<'_, PluginHostState, Self>,
+        accessor: &Accessor<PluginHostState, Self>,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let (entity, plugin) = {
-            let state = host.get();
-            (state.get(&entity)?.clone(), active_plugin(state)?)
+        let entity = accessor.get_res(&entity)?;
+        run_blocking(accessor, move || {
+            let passenger_ids: Vec<i32> = entity
+                .get_entity()
+                .passengers
+                .lock_ignore_poison()
+                .iter()
+                .map(|passenger| passenger.get_entity().entity_id)
+                .collect();
+            for passenger_id in passenger_ids {
+                entity.get_entity().remove_passenger(passenger_id);
+            }
+        })
+        .await
+    }
+
+    async fn set_item_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<Entity>,
+        item: Resource<crate::pumpkin::plugin::item_stack::ItemStack>,
+    ) -> wasmtime::Result<bool> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        let entity = accessor.get_res(&this)?;
+        let Some(item_entity) = entity.get_item_entity() else {
+            return Ok(false);
         };
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                let passenger_ids: Vec<i32> = entity
-                    .get_entity()
-                    .passengers
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .iter()
-                    .map(|passenger| passenger.get_entity().entity_id)
-                    .collect();
-                for passenger_id in passenger_ids {
-                    entity.get_entity().remove_passenger(passenger_id);
-                }
-            })
-            .await
+        *item_entity.get_item_stack().lock_ignore_poison() = stack;
+        entity.init_data_tracker();
+        Ok(true)
     }
 }
 

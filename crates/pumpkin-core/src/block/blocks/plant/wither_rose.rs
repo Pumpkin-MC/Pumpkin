@@ -1,6 +1,7 @@
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::{
+    damage::DamageType,
     effect::StatusEffect,
     entity::EntityType,
     tag::{self, Taggable},
@@ -18,23 +19,24 @@ impl BlockBehaviour for WitherRoseBlock {
             if args.world.level_info.load().difficulty == Difficulty::Peaceful {
                 return;
             }
-            let entity_type = args.entity.get_entity().entity_type;
-            if entity_type == &EntityType::ENDER_DRAGON
-                || entity_type == &EntityType::WITHER
-                || entity_type == &EntityType::WITHER_SKELETON
+            if !living_entity
+                .entity
+                .is_invulnerable_to(&DamageType::WITHER, None)
+                && living_entity.entity.entity_type != &EntityType::WITHER
+                && living_entity.entity.entity_type != &EntityType::WITHER_SKELETON
+                && args.entity.damage(args.entity, 1.0, DamageType::WITHER)
             {
-                return;
+                let effect = pumpkin_data::potion::Effect {
+                    effect_type: &StatusEffect::WITHER,
+                    duration: 40,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: true,
+                };
+                living_entity.add_effect(effect);
             }
-            let effect = pumpkin_data::potion::Effect {
-                effect_type: &StatusEffect::WITHER,
-                duration: 40,
-                amplifier: 0,
-                ambient: false,
-                show_particles: true,
-                show_icon: true,
-                blend: true,
-            };
-            living_entity.add_effect(effect);
         }
     }
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

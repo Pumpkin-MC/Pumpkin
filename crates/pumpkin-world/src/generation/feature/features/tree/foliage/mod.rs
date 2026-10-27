@@ -9,7 +9,7 @@ use mega_pine::MegaPineFoliagePlacer;
 use pine::PineFoliagePlacer;
 use poplar::PoplarFoliagePlacer;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockState;
+use pumpkin_data::block_properties::{BlockProperties, OakLeavesLikeProperties};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -19,6 +19,7 @@ use random_spread::RandomSpreadFoliagePlacer;
 use spruce::SpruceFoliagePlacer;
 
 use super::{TreeFeature, TreeNode};
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
 
 pub mod acacia;
@@ -85,7 +86,7 @@ impl FoliagePlacer {
         radius: i32,
         y: i32,
         giant_trunk: bool,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) {
         let i = i32::from(giant_trunk);
 
@@ -95,32 +96,47 @@ impl FoliagePlacer {
                     continue;
                 }
                 let pos = BlockPos(center_pos.0.add(&Vector3::new(x, y, z)));
-                if Self::place_foliage_block(chunk, pos, foliage_provider) {
+                if Self::place_foliage_block(chunk, random, pos, foliage_provider) {
                     foliage_positions.push(pos);
                 }
             }
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
+        foliage_positions: &mut Vec<BlockPos>,
         chunk: &mut T,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
         radius: i32,
-        foliage_provider: &BlockState,
-    ) -> Vec<BlockPos> {
+        foliage_provider: &BlockStateProvider,
+    ) {
         let offset = self.offset.get(random);
-        self.r#type.generate(
-            chunk,
-            random,
-            node,
-            foliage_height,
-            radius,
-            offset,
-            foliage_provider,
-        )
+        if let FoliageType::Cherry(cherry) = &self.r#type {
+            cherry.generate(
+                foliage_positions,
+                chunk,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            );
+        } else {
+            foliage_positions.extend(self.r#type.generate(
+                chunk,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ));
+        }
     }
 
     pub fn get_random_radius(&self, random: &mut RandomGenerator, base_height: i32) -> i32 {
@@ -132,23 +148,32 @@ impl FoliagePlacer {
 
     pub fn place_foliage_block<T: GenerationCache>(
         chunk: &mut T,
+        random: &mut RandomGenerator,
         pos: BlockPos,
-        block_state: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
+        if OakLeavesLikeProperties::handles_block_id(block.to_block_id())
+            && OakLeavesLikeProperties::from_state_id(block).persistent
+        {
+            return false;
+        }
         if !TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
             return false;
+        }
+        let mut block_state = foliage_provider
+            .get_for_bonemeal(random, pos)
+            .unwrap_or(pumpkin_data::Block::AIR.default_state);
+        if block == pumpkin_data::Block::WATER.default_state.id || block.is_waterlogged() {
+            block_state = block_state.set_waterlogged(true).unwrap_or(block_state);
         }
         chunk.set_block_state(&pos.0, block_state);
         true
     }
 
-    pub fn is_set<T: GenerationCache>(
-        chunk: &T,
-        pos: BlockPos,
-        foliage_provider: &BlockState,
-    ) -> bool {
-        GenerationCache::get_block_state(chunk, &pos.0) == foliage_provider.id
+    #[must_use]
+    pub fn is_set(foliage_positions: &[BlockPos], pos: BlockPos) -> bool {
+        foliage_positions.contains(&pos)
     }
 
     fn try_place_extension<T: GenerationCache>(
@@ -158,12 +183,12 @@ impl FoliagePlacer {
         chance: f32,
         log_pos: BlockPos,
         pos: BlockPos,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> bool {
         if pos.manhattan_distance(log_pos) >= 7 || random.next_f32() > chance {
             false
         } else {
-            let placed = Self::place_foliage_block(chunk, pos, foliage_provider);
+            let placed = Self::place_foliage_block(chunk, random, pos, foliage_provider);
             if placed {
                 foliage_positions.push(pos);
             }
@@ -181,7 +206,7 @@ impl FoliagePlacer {
         radius: i32,
         y: i32,
         giant_trunk: bool,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
         hanging_leaves_chance: f32,
         hanging_leaves_extension_chance: f32,
     ) {
@@ -202,8 +227,8 @@ impl FoliagePlacer {
 
         let directions = [
             BlockDirection::North,
-            BlockDirection::South,
             BlockDirection::East,
+            BlockDirection::South,
             BlockDirection::West,
         ];
 
@@ -222,7 +247,7 @@ impl FoliagePlacer {
                 .offset_dir(along_edge.to_offset(), -radius);
 
             for _ in -radius..(radius + i) {
-                let leaves_above = Self::is_set(chunk, pos.up(), foliage_provider);
+                let leaves_above = Self::is_set(foliage_positions, pos.up());
                 if leaves_above
                     && Self::try_place_extension(
                         foliage_positions,
@@ -276,7 +301,7 @@ impl FoliageType {
         foliage_height: i32,
         radius: i32,
         offset: i32,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> Vec<BlockPos> {
         match self {
             Self::Blob(blob) => blob.generate(
@@ -369,15 +394,20 @@ impl FoliageType {
                 offset,
                 foliage_provider,
             ),
-            Self::Cherry(cherry) => cherry.generate(
-                chunk,
-                random,
-                node,
-                foliage_height,
-                radius,
-                offset,
-                foliage_provider,
-            ),
+            Self::Cherry(cherry) => {
+                let mut positions = Vec::new();
+                cherry.generate(
+                    &mut positions,
+                    chunk,
+                    random,
+                    node,
+                    foliage_height,
+                    radius,
+                    offset,
+                    foliage_provider,
+                );
+                positions
+            }
             Self::Poplar(poplar) => poplar.generate(
                 chunk,
                 random,

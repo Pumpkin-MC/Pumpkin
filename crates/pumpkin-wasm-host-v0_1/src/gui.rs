@@ -76,7 +76,7 @@ pub const fn from_wit_screen(screen: WitScreen) -> WindowType {
 impl gui::Host for PluginHostState {}
 
 impl gui::HostGui for PluginHostState {
-    async fn new(
+    fn new(
         &mut self,
         screen: WitScreen,
         title: Resource<crate::pumpkin::plugin::text::TextComponent>,
@@ -84,16 +84,7 @@ impl gui::HostGui for PluginHostState {
         let title = self.take(title)?;
         let window_type = from_wit_screen(screen);
 
-        let size = match window_type {
-            pumpkin_data::screen::WindowType::Generic9x2 => 18,
-            pumpkin_data::screen::WindowType::Generic9x4 => 36,
-            pumpkin_data::screen::WindowType::Generic9x5 => 45,
-            pumpkin_data::screen::WindowType::Generic9x6 => 54,
-            pumpkin_data::screen::WindowType::Generic3x3 => 9,
-            pumpkin_data::screen::WindowType::Generic9x1
-            | pumpkin_data::screen::WindowType::Hopper => 5,
-            _ => 27, // Default
-        };
+        let size = PluginGui::inventory_size(window_type);
 
         let gui = Arc::new(Mutex::new(PluginGui {
             window_type,
@@ -229,7 +220,7 @@ impl gui::HostGui for PluginHostState {
         Ok(gui.allow_put_items)
     }
 
-    async fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
