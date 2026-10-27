@@ -723,6 +723,9 @@ impl PluginManager {
         let token = self
             .next_plugin_token
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // States first, then plugins, like `plugin_entries`; the Loading state is set in the same
+        // section so an unload in between cannot leave it stuck
+        let mut states = self.plugin_states.write().await;
         let reserved = {
             let mut plugins = self
                 .plugins
@@ -741,9 +744,11 @@ impl PluginManager {
                     context: context.clone(),
                     path,
                 });
+                states.insert(metadata.name.clone(), PluginState::Loading);
                 Ok(())
             }
         };
+        drop(states);
 
         if let Err(loader_data) = reserved {
             // The rejected instance's code lives in the library, so drop it before unloading
@@ -754,12 +759,6 @@ impl PluginManager {
                 format!("Plugin \"{}\" is already loaded", metadata.name),
             )));
         }
-
-        // Mark plugin as loading, only now that this load owns the name
-        self.plugin_states
-            .write()
-            .await
-            .insert(metadata.name.clone(), PluginState::Loading);
 
         // Spawn async task for plugin initialization
         let self_ref_clone = Arc::clone(self);
