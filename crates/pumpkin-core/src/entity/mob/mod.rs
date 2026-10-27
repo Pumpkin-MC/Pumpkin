@@ -141,6 +141,7 @@ pub struct MobEntity {
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
+    pub ambient_sound_time: AtomicI32,
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
@@ -185,6 +186,7 @@ impl MobEntity {
     const CAN_PICK_UP_LOOT_FLAG: u8 = 8;
 
     pub const MAX_WEARING_ARMOR_CHANCE: f32 = 0.15;
+    pub const DEFAULT_AMBIENT_SOUND_INTERVAL: i32 = 80;
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE: f32 = 0.1087;
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
@@ -267,6 +269,7 @@ impl MobEntity {
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
+            ambient_sound_time: AtomicI32::new(0),
             pending_riders: std::sync::Mutex::new(Vec::new()),
             mob_flags: AtomicU8::new(0),
         }
@@ -1352,6 +1355,16 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
+    fn on_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.on_damage(damage_type, source);
+        true
+    }
+
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
@@ -1391,6 +1404,49 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         None
+    }
+
+    fn get_ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+        None
+    }
+
+    fn get_ambient_sound_interval(&self) -> i32 {
+        MobEntity::DEFAULT_AMBIENT_SOUND_INTERVAL
+    }
+
+    fn play_ambient_sound(&self) {
+        if let Some(sound) = self.get_ambient_sound() {
+            self.make_sound(sound);
+        }
+    }
+
+    fn make_sound(&self, sound: pumpkin_data::sound::Sound) {
+        let custom_sound = self.as_custom_sound();
+        self.get_mob_entity().living_entity.make_sound(
+            sound,
+            custom_sound.map_or(
+                pumpkin_data::sound::SoundCategory::Players,
+                crate::entity::custom_sound::CustomSound::sound_category,
+            ),
+            custom_sound.map_or(1.0, crate::entity::custom_sound::CustomSound::sound_volume),
+        );
+    }
+
+    fn reset_ambient_sound_time(&self) {
+        self.get_mob_entity()
+            .ambient_sound_time
+            .store(-self.get_ambient_sound_interval(), Relaxed);
+    }
+
+    fn tick_ambient_sound(&self) {
+        let mob = self.get_mob_entity();
+        if mob.living_entity.is_alive()
+            && self.get_random().random_range(0..1000)
+                < mob.ambient_sound_time.fetch_add(1, Relaxed)
+        {
+            self.reset_ambient_sound_time();
+            self.play_ambient_sound();
+        }
     }
 
     fn as_schooling_fish(
@@ -1458,6 +1514,16 @@ pub trait Mob: EntityBase + Send + Sync {
         _world: &Arc<World>,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
+        self.finalize_spawn_super(group_data)
+    }
+
+    fn finalize_spawn_super(
+        &self,
+        group_data: Option<spawn::SpawnGroupData>,
+    ) -> Option<spawn::SpawnGroupData> {
+        if let Some(ageable) = self.as_ageable() {
+            return ageable.finalize_ageable_spawn(group_data);
+        }
         self.get_mob_entity().finalize_spawn_base();
         group_data
     }
@@ -1788,6 +1854,27 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_entity().entity_type.experience_reward
     }
 
+    fn should_drop_loot(&self) -> bool {
+        let living = &self.get_mob_entity().living_entity;
+        if self.get_entity().entity_type.category == &pumpkin_data::entity::MobCategory::MONSTER {
+            living
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .mob_drops
+        } else {
+            living.should_drop_loot()
+        }
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        self.get_entity().entity_type.category == &pumpkin_data::entity::MobCategory::MONSTER
+            || self.get_mob_entity().living_entity.should_drop_experience()
+    }
+
     fn mob_get_component(
         &self,
         _component: pumpkin_data::data_component::DataComponent,
@@ -1974,13 +2061,16 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             cause,
         );
         if damaged {
-            self.on_damage(damage_type, source);
+            return self.on_damage_with_context(damage_type, source, cause);
         }
         damaged
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.mob_interact(player, item_stack)
+            || self
+                .as_ageable()
+                .is_some_and(|ageable| ageable.ageable_interact(player, item_stack))
     }
 
     fn interact_with_hand(
@@ -2098,16 +2188,16 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
-        if self
-            .get_entity()
-            .age
-            .load(std::sync::atomic::Ordering::Relaxed)
-            < 0
-        {
-            return 0;
-        }
         // TODO: apply enchantment processing like in vanilla
         Mob::get_base_experience_reward(self)
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        Mob::should_drop_loot(self)
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        Mob::should_drop_experience(self)
     }
 
     fn get_base_experience_reward(&self) -> u32 {

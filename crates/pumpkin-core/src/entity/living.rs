@@ -20,17 +20,19 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use tracing::warn;
+use uuid::Uuid;
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
-use crate::entity::ageable::AgeableMob;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
+use crate::entity::breath::DROWNING_INTERVAL;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
+use crate::entity::mob::neutral::find_by_uuid;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::LootContextParameters;
@@ -69,24 +71,11 @@ use pumpkin_util::text::TextComponent;
 use rand::RngExt;
 use std::sync::RwLock;
 
-const ARMOR_SLOTS: [EquipmentSlot; 4] = [
-    EquipmentSlot::HEAD,
-    EquipmentSlot::CHEST,
-    EquipmentSlot::LEGS,
-    EquipmentSlot::FEET,
-];
-
-/// Vanilla `EquipmentSlot.VALUES`, in its order.
-const ALL_SLOTS: [EquipmentSlot; 8] = [
-    EquipmentSlot::MAIN_HAND,
-    EquipmentSlot::OFF_HAND,
-    EquipmentSlot::FEET,
-    EquipmentSlot::LEGS,
-    EquipmentSlot::CHEST,
-    EquipmentSlot::HEAD,
-    EquipmentSlot::BODY,
-    EquipmentSlot::SADDLE,
-];
+#[derive(Clone, Copy)]
+struct LastHurtByMob {
+    uuid: Uuid,
+    entity_id: i32,
+}
 
 /// Represents a living entity within the game world.
 ///
@@ -128,10 +117,8 @@ pub struct LivingEntity {
     /// The position where the entity was last climbing, used for death messages
     pub climbing_pos: AtomicCell<Option<BlockPos>>,
 
-    /// The entity ID of the entity that last attacked this living entity.
-    pub last_attacker_id: AtomicI32,
-    /// The tick at which this entity was last attacked (entity age).
-    pub last_attacked_time: AtomicI32,
+    last_hurt_by_mob: AtomicCell<Option<LastHurtByMob>>,
+    last_hurt_by_mob_timestamp: AtomicI32,
     last_damage_type: std::sync::Mutex<Option<DamageType>>,
     /// Entity id of the last damage source's causing entity, 0 when it had none.
     last_damage_attacker: AtomicI32,
@@ -150,10 +137,6 @@ pub struct LivingEntity {
     pub no_action_time: AtomicI32,
     /// The tick at which this entity was last hurt by a player.
     pub last_hurt_by_player_time: AtomicI64,
-    /// The ID of the mob/entity that last hurt this entity.
-    pub last_hurt_by_mob_id: AtomicI32,
-    /// The tick at which this entity was last hurt by a mob/entity.
-    pub last_hurt_by_mob_time: AtomicI64,
 
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
@@ -202,19 +185,6 @@ impl EffectParticle {
                 | effect.effect_type.color as u32) as i32,
         }
     }
-}
-
-/// Vanilla `LivingEntity.canBeSeenAsEnemy`, with `Player`'s `abilities.invulnerable` override.
-#[must_use]
-pub fn can_be_seen_as_enemy(target: &dyn EntityBase) -> bool {
-    target.get_player().map_or_else(
-        || {
-            target
-                .get_living_entity()
-                .is_some_and(LivingEntity::can_take_damage)
-        },
-        crate::entity::player::Player::can_be_seen_as_enemy,
-    )
 }
 
 fn is_allowed_by_team_rules(
@@ -285,14 +255,57 @@ impl LivingEntity {
         entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
     }
 
-    pub(crate) fn get_pitch(&self) -> f32 {
-        let is_baby = self
-            .get_mob()
-            .and_then(|x| x.as_ageable())
-            .is_some_and(AgeableMob::is_baby);
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.entity.age.load(Relaxed) < 0
+    }
 
+    #[must_use]
+    pub fn should_drop_loot(&self) -> bool {
+        !self.is_baby()
+            && self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .mob_drops
+    }
+
+    #[must_use]
+    pub fn should_drop_experience(&self) -> bool {
+        !self.is_baby()
+    }
+
+    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32) {
+        if self.entity.is_silent() {
+            return;
+        }
+        self.entity.world.load().play_sound_fine(
+            sound,
+            category,
+            &self.entity.pos.load(),
+            volume,
+            self.get_pitch(),
+        );
+    }
+
+    fn make_voice_sound(&self, caller: &dyn EntityBase, sound: Sound) {
+        let custom_sound = caller.get_mob().and_then(|mob| mob.as_custom_sound());
+        self.make_sound(
+            sound,
+            custom_sound.map_or(
+                SoundCategory::Players,
+                super::custom_sound::CustomSound::sound_category,
+            ),
+            custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+        );
+    }
+
+    pub(crate) fn get_pitch(&self) -> f32 {
         let mut rng = rand::rng();
-        if is_baby {
+        if self.is_baby() {
             (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5
         } else {
             (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0
@@ -343,8 +356,8 @@ impl LivingEntity {
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
             climbing_pos: AtomicCell::new(None),
-            last_attacker_id: AtomicI32::new(0),
-            last_attacked_time: AtomicI32::new(0),
+            last_hurt_by_mob: AtomicCell::new(None),
+            last_hurt_by_mob_timestamp: AtomicI32::new(0),
             last_damage_type: std::sync::Mutex::new(None),
             last_damage_attacker: AtomicI32::new(0),
             last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
@@ -354,8 +367,6 @@ impl LivingEntity {
             last_hurt_by_player_id: AtomicI32::new(0),
             no_action_time: AtomicI32::new(0),
             last_hurt_by_player_time: AtomicI64::new(0),
-            last_hurt_by_mob_id: AtomicI32::new(0),
-            last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
@@ -364,20 +375,63 @@ impl LivingEntity {
         }
     }
 
-    /// Vanilla `getLastHurtByMob() != null`: hit by any living attacker in the last 100 ticks.
-    pub fn was_recently_hurt_by_living(&self) -> bool {
-        let current_tick = self.entity.world.load().get_world_age();
-        let recent = |id: &AtomicI32, time: &AtomicI64| {
-            id.load(Relaxed) != 0 && current_tick - time.load(Relaxed) <= 100
-        };
-        recent(&self.last_hurt_by_player_id, &self.last_hurt_by_player_time)
-            || recent(&self.last_hurt_by_mob_id, &self.last_hurt_by_mob_time)
+    pub fn get_last_hurt_by_mob(&self) -> Option<Arc<dyn EntityBase>> {
+        let reference = self.last_hurt_by_mob.load()?;
+        let world = self.entity.world.load();
+        if reference.entity_id != 0 {
+            return world.get_entity_by_id(reference.entity_id);
+        }
+        let attacker = find_by_uuid(&world, reference.uuid)?;
+        self.last_hurt_by_mob.store(Some(LastHurtByMob {
+            entity_id: attacker.get_entity().entity_id,
+            ..reference
+        }));
+        Some(attacker)
+    }
+
+    pub fn get_last_hurt_by_mob_id(&self) -> Option<i32> {
+        match self.last_hurt_by_mob.load()?.entity_id {
+            0 => self
+                .get_last_hurt_by_mob()
+                .map(|attacker| attacker.get_entity().entity_id),
+            entity_id => Some(entity_id),
+        }
+    }
+
+    pub fn get_last_hurt_by_mob_timestamp(&self) -> i32 {
+        self.last_hurt_by_mob_timestamp.load(Relaxed)
+    }
+
+    pub fn set_last_hurt_by_mob(&self, attacker: Option<&dyn EntityBase>) {
+        self.last_hurt_by_mob.store(attacker.map(|attacker| {
+            let entity = attacker.get_entity();
+            LastHurtByMob {
+                uuid: entity.entity_uuid,
+                entity_id: entity.entity_id,
+            }
+        }));
+        self.last_hurt_by_mob_timestamp
+            .store(self.entity.tick_count.load(Relaxed), Relaxed);
+    }
+
+    fn tick_last_hurt_by_mob(&self) {
+        if self.last_hurt_by_mob.load().is_none() {
+            return;
+        }
+        if self.entity.tick_count.load(Relaxed) - self.get_last_hurt_by_mob_timestamp() > 100
+            || self
+                .get_last_hurt_by_mob()
+                .is_some_and(|attacker| !attacker.get_living_entity().is_some_and(Self::is_alive))
+        {
+            self.set_last_hurt_by_mob(None);
+        }
     }
 
     /// Returns the entity that should receive kill credit for this entity's death.
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).
-    /// 2. Then `last_hurt_by_mob` if hurt within the last 100 ticks.
+    /// 2. Then `last_hurt_by_mob`, which is cleared 100 ticks after the hit.
+    /// 3. Fall back to combat tracker's killer entry if available.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
         let world = self.entity.world.load();
         let current_tick = world.get_world_age();
@@ -391,12 +445,7 @@ impl LivingEntity {
             return Some(player);
         }
 
-        let mob_id = self.last_hurt_by_mob_id.load(Relaxed);
-        let mob_time = self.last_hurt_by_mob_time.load(Relaxed);
-        if mob_id != 0
-            && current_tick - mob_time <= 100
-            && let Some(mob) = world.get_entity_by_id(mob_id)
-        {
+        if let Some(mob) = self.get_last_hurt_by_mob() {
             return Some(mob);
         }
 
@@ -2239,23 +2288,7 @@ impl LivingEntity {
 
             self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
-            // Plays the death sound
-            world.play_sound_fine(
-                self.death_sound(&*dyn_self),
-                dyn_self
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(
-                        SoundCategory::Players,
-                        super::custom_sound::CustomSound::sound_category,
-                    ),
-                &self.entity.pos.load(),
-                dyn_self
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                self.get_pitch(),
-            );
+            self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2317,12 +2350,15 @@ impl LivingEntity {
                 ..Default::default()
             };
 
-            // Drop loot
-            self.drop_loot(&params);
+            let should_drop_loot = dyn_self.should_drop_loot();
+            if should_drop_loot {
+                self.drop_loot(&params);
+            }
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
                 && world.level_info.load().game_rules.mob_drops
+                && dyn_self.should_drop_experience()
             {
                 let amount = dyn_self.get_experience_reward(killer);
                 if amount > 0 {
@@ -2331,7 +2367,9 @@ impl LivingEntity {
             }
             self.entity.pose.store(EntityPose::Dying);
 
-            self.drop_equipment(looting_level);
+            if should_drop_loot {
+                self.drop_equipment(looting_level);
+            }
             if let Some(mob) = dyn_self.get_mob() {
                 mob.drop_inventory();
             }
@@ -2794,20 +2832,6 @@ impl LivingEntity {
             .map(|(damage_type, _)| damage_type)
     }
 
-    /// Vanilla `getLastHurtByMob`: the living attacker, forgotten once dead or after 100 ticks.
-    #[must_use]
-    pub fn last_hurt_by_mob(&self, world: &crate::world::World) -> Option<Arc<dyn EntityBase>> {
-        let id = self.last_attacker_id.load(Relaxed);
-        if id == 0
-            || self.entity.tick_count.load(Relaxed) - self.last_attacked_time.load(Relaxed) > 100
-        {
-            return None;
-        }
-        world.get_entity_by_id(id).filter(|attacker| {
-            attacker.get_living_entity().is_some() && attacker.get_entity().is_alive()
-        })
-    }
-
     /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
     /// entity (0 when none), forgotten after 40 ticks.
     pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
@@ -2822,52 +2846,14 @@ impl LivingEntity {
         last.map(|damage_type| (damage_type, self.last_damage_attacker.load(Relaxed)))
     }
 
-    pub fn can_take_damage(&self) -> bool {
-        !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
+    #[must_use]
+    pub fn should_take_drowning_damage(&self) -> bool {
+        self.entity.air_supply.load(Relaxed) <= -DROWNING_INTERVAL
     }
 
-    /// Vanilla `getArmorCoverPercentage`: share of worn humanoid armor slots, in `f32` like vanilla.
-    fn armor_cover_percentage(equipment: &EntityEquipment) -> f32 {
-        let worn = ARMOR_SLOTS
-            .iter()
-            .filter(|slot| !equipment.get(slot).is_empty())
-            .count();
-        worn as f32 / ARMOR_SLOTS.len() as f32
-    }
-
-    /// Vanilla `getVisibilityPercent`: scales how far `targeting` notices this entity.
-    pub fn visibility_percent(&self, targeting: Option<&EntityType>) -> f64 {
-        let mut percent = 1.0;
-        if self.entity.is_sneaking() {
-            percent *= 0.8;
-        }
-        let equipment = self
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self.entity.invisible.load(Ordering::Relaxed) {
-            let cover = Self::armor_cover_percentage(&equipment).max(0.1);
-            percent *= 0.7 * f64::from(cover);
-        }
-        // `mob_visibility` counts only in the slot the item is equippable in. Mob heads.
-        if let Some(targeting) = targeting {
-            for slot in &ALL_SLOTS {
-                let stack = equipment.get(slot);
-                if let Some(visibility) = stack.get_data_component::<MobVisibilityImpl>()
-                    && stack
-                        .get_data_component::<EquippableImpl>()
-                        .is_some_and(|equippable| equippable.slot == slot)
-                    && visibility.targeting_entity_types.contains(targeting)
-                {
-                    percent *= f64::from(visibility.visibility);
-                }
-            }
-        }
-        percent.clamp(0.0, 10.0)
-    }
-
-    pub fn is_part_of_game(&self) -> bool {
-        !self.is_spectator() && self.entity.is_alive()
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        self.entity.is_alive() && self.health.load() > 0.0
     }
 
     pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
@@ -2876,7 +2862,7 @@ impl LivingEntity {
         {
             return false;
         }
-        can_be_seen_as_enemy(target)
+        target.can_be_seen_as_enemy()
     }
 
     pub fn reset_state(&self) {
@@ -3007,6 +2993,13 @@ impl LivingEntity {
         if !equipment.child_tags.is_empty() {
             nbt.put("equipment", NbtTag::Compound(equipment));
         }
+        if let Some(reference) = self.last_hurt_by_mob.load() {
+            nbt.put_uuid("last_hurt_by_mob", reference.uuid);
+            nbt.put_int(
+                "ticks_since_last_hurt_by_mob",
+                self.entity.tick_count.load(Relaxed) - self.get_last_hurt_by_mob_timestamp(),
+            );
+        }
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
@@ -3084,6 +3077,15 @@ impl LivingEntity {
                 }
             }
         }
+        self.last_hurt_by_mob.store(
+            nbt.get_uuid("last_hurt_by_mob")
+                .map(|uuid| LastHurtByMob { uuid, entity_id: 0 }),
+        );
+        self.last_hurt_by_mob_timestamp.store(
+            self.entity.tick_count.load(Relaxed)
+                - nbt.get_int("ticks_since_last_hurt_by_mob").unwrap_or(0),
+            Relaxed,
+        );
         // todo more...
     }
 
@@ -3512,6 +3514,17 @@ impl LivingEntity {
         let Some(server) = world.server.upgrade() else {
             return false;
         };
+        if let Some(attacker) = cause.or(source)
+            && attacker.get_living_entity().is_some()
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_ANGER)
+            && (damage_type != DamageType::WIND_CHARGE
+                || !self
+                    .entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_NO_ANGER_FROM_WIND_CHARGE))
+        {
+            self.set_last_hurt_by_mob(Some(attacker));
+        }
         let config = &server.advanced_config.pvp;
 
         if config.hurt_animation {
@@ -3545,25 +3558,10 @@ impl LivingEntity {
 
         self.no_action_time.store(0, Relaxed);
         if play_sound {
-            if let Some(sound) = caller.get_mob().and_then(|mob| mob.as_custom_sound()) {
-                sound.on_hurt_sound();
+            if let Some(mob) = caller.get_mob() {
+                mob.reset_ambient_sound_time();
             }
-            world.play_sound_fine(
-                self.hurt_sound(caller),
-                caller
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(
-                        SoundCategory::Players,
-                        super::custom_sound::CustomSound::sound_category,
-                    ),
-                &self.entity.pos.load(),
-                caller
-                    .get_mob()
-                    .and_then(|mob| mob.as_custom_sound())
-                    .map_or(1.0, super::custom_sound::CustomSound::sound_volume),
-                self.get_pitch(),
-            );
+            self.make_voice_sound(caller, self.hurt_sound(caller));
 
             if let Some(source) = source {
                 let source_pos = source.get_entity().pos.load();
@@ -3601,13 +3599,6 @@ impl LivingEntity {
                     (absorbed_damage * 10.0).round() as i32,
                 );
             }
-
-            if let Some(attacker) = cause.or(source) {
-                self.last_attacker_id
-                    .store(attacker.get_entity().entity_id, Relaxed);
-                self.last_attacked_time
-                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
-            }
         }
 
         let max_h = self.get_max_health();
@@ -3637,17 +3628,10 @@ impl LivingEntity {
 
             if let Some(attacker) = cause.or(source) {
                 let attacker_id = attacker.get_entity().entity_id;
-                self.last_attacker_id.store(attacker_id, Relaxed);
-                self.last_attacked_time
-                    .store(self.entity.tick_count.load(Relaxed), Relaxed);
-
                 let current_tick = world.get_world_age();
                 if attacker.get_player().is_some() {
                     self.last_hurt_by_player_id.store(attacker_id, Relaxed);
                     self.last_hurt_by_player_time.store(current_tick, Relaxed);
-                } else if attacker.get_living_entity().is_some() {
-                    self.last_hurt_by_mob_id.store(attacker_id, Relaxed);
-                    self.last_hurt_by_mob_time.store(current_tick, Relaxed);
                 }
             }
         }
@@ -3725,7 +3709,9 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
+        self.tick_last_hurt_by_mob();
         if let Some(mob) = caller.get_mob() {
+            mob.tick_ambient_sound();
             mob.base_tick();
         }
 
@@ -4209,6 +4195,66 @@ impl LivingEntity {
         }
 
         None
+    }
+
+    /// Mirrors vanilla `LivingEntity.getVisibilityPercent`.
+    #[must_use]
+    pub fn visibility_percent(&self, targeting_entity_type: Option<&'static EntityType>) -> f64 {
+        use pumpkin_data::data_component_impl::IDSet;
+
+        let mut percent = 1.0;
+        if self.entity.is_sneaking() {
+            percent *= 0.8;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self
+            .entity
+            .invisible
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let worn = [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ]
+            .iter()
+            .filter(|slot| !equipment.get(slot).is_empty())
+            .count();
+            // Clamped in f32 like vanilla's `0.1F`.
+            let cover = (worn as f32 / 4.0).max(0.1);
+            percent *= 0.7 * f64::from(cover);
+        }
+        if let Some(target_type) = targeting_entity_type {
+            for slot in [
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::OFF_HAND,
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ] {
+                let stack = equipment.get(&slot);
+                if let Some(mob_visibility) = stack.get_data_component::<MobVisibilityImpl>()
+                    && let Some(equippable) = stack.get_data_component::<EquippableImpl>()
+                    && *equippable.slot == slot
+                {
+                    let matches_target = match &mob_visibility.targeting_entity_types {
+                        IDSet::Tag(tag) => target_type.is_tagged_with(tag).unwrap_or(false),
+                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == target_type.id),
+                    };
+                    if matches_target {
+                        percent *= f64::from(mob_visibility.visibility);
+                    }
+                }
+            }
+        }
+        percent.clamp(0.0, 10.0)
     }
 }
 

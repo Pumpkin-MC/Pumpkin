@@ -215,8 +215,8 @@ impl Goal for DefendTrustedTargetGoal {
         let Some(living) = trusted.get_living_entity() else {
             return false;
         };
-        let timestamp = living.last_attacked_time.load(Relaxed);
-        let attacker = living.last_hurt_by_mob(&world);
+        let timestamp = living.get_last_hurt_by_mob_timestamp();
+        let attacker = living.get_last_hurt_by_mob();
         self.trusted = Some(trusted.clone());
         self.attacker.clone_from(&attacker);
         if timestamp == self.timestamp {
@@ -242,7 +242,7 @@ impl Goal for DefendTrustedTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         mob.set_mob_target(self.attacker.clone(), TargetReason::TargetAttackedOwner);
         if let Some(living) = self.trusted.as_ref().and_then(|t| t.get_living_entity()) {
-            self.timestamp = living.last_attacked_time.load(Relaxed);
+            self.timestamp = living.get_last_hurt_by_mob_timestamp();
         }
         if let Some(fox) = as_fox(mob) {
             fox.get_entity().play_sound(Sound::EntityFoxAggro);

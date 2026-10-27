@@ -52,7 +52,7 @@ impl Goal for SitWhenOrderedToGoal {
             .load()
             .squared_distance_to_vec(&owner.get_entity().pos.load())
             < TELEPORT_WHEN_DISTANCE_IS_SQ
-            && owner.living_entity.was_recently_hurt_by_living()
+            && owner.living_entity.get_last_hurt_by_mob().is_some()
         {
             return false;
         }

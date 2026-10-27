@@ -150,7 +150,11 @@ impl PotionContents {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
 
-                let dur = ((duration as f32) * duration_scale).max(1.0) as i32;
+                let dur = if duration == -1 {
+                    -1
+                } else {
+                    ((duration as f32) * duration_scale).max(1.0) as i32
+                };
                 let eff = pumpkin_data::potion::Effect {
                     effect_type,
                     duration: dur,

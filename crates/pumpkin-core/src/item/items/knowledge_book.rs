@@ -4,6 +4,8 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::{CustomDataImpl, RecipesImpl};
 use pumpkin_data::item::Item;
+use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_protocol::java::client::play::CRecipeBookAdd;
@@ -83,7 +85,12 @@ impl ItemBehaviour for KnowledgeBookItem {
         }
 
         held.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory().set_stack_in_hand(hand, held);
+        player.inventory().set_stack_in_hand(hand, held.clone());
+        let slot_index = match hand {
+            Hand::Right => player.inventory().get_selected_slot() as usize,
+            Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+        };
+        player.sync_hand_slot(slot_index, held);
 
         if recipe_ids.is_empty() {
             return;
@@ -110,6 +117,11 @@ impl ItemBehaviour for KnowledgeBookItem {
 
         let packet = CRecipeBookAdd::new(false, &matching_recipes);
         player.try_send_client_packet(&packet);
+        player.increment_stat(
+            StatisticCategory::Used,
+            i32::from(Item::KNOWLEDGE_BOOK.id),
+            1,
+        );
     }
 
     fn as_any(&self) -> &dyn Any {
