@@ -990,10 +990,22 @@ impl PluginManager {
         }
 
         // Resolve dependencies
-        let metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
+        let mut metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
             .iter()
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
+        // Resident plugins satisfy dependencies, they are already initialized, so they have none left to resolve
+        {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            metadata_list.extend(
+                plugins
+                    .iter()
+                    .map(|p| (p.metadata.name.clone(), Vec::new())),
+            );
+        }
 
         let sorted_names =
             Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
