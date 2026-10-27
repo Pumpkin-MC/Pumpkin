@@ -1,11 +1,12 @@
 use arc_swap::ArcSwap;
-use futures::future::join_all;
+use futures::{FutureExt, future::join_all};
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
     any::Any,
     borrow::Cow,
     collections::{HashMap, HashSet},
+    panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     pin::Pin,
     sync::{
@@ -32,6 +33,11 @@ pub mod loader;
 pub mod permissions;
 
 use crate::{LOGGER_IMPL, server::Server};
+
+tokio::task_local! {
+    /// Name of the plugin whose `on_load` runs on this task
+    static INITIALIZING_PLUGIN: String;
+}
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -767,8 +773,15 @@ impl PluginManager {
         let loader_clone = loader.clone();
 
         let task = server.spawn_task(async move {
-            // Initialize the plugin
-            match instance.on_load(context.clone()).await {
+            // A panic must still reach the failure path, or the plugin stays Loading forever
+            let result = INITIALIZING_PLUGIN
+                .scope(
+                    plugin_name.clone(),
+                    AssertUnwindSafe(instance.on_load(context.clone())).catch_unwind(),
+                )
+                .await
+                .unwrap_or_else(|_| Err("on_load panicked".to_string()));
+            match result {
                 Ok(()) => {
                     // Update plugin state to loaded
                     let still_reserved = {
@@ -831,7 +844,9 @@ impl PluginManager {
                     self_ref_clone.unregister_handlers(&plugin_name);
                     context.unregister_commands();
                     context.unregister_permissions();
-                    let _ = instance.on_unload(context).await;
+                    let _ = AssertUnwindSafe(instance.on_unload(context))
+                        .catch_unwind()
+                        .await;
                     // The instance's code lives in the library, so drop it before unloading
                     drop(instance);
 
@@ -1008,26 +1023,37 @@ impl PluginManager {
             .iter()
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
-        // A plugin another task is still loading must finish (or fail) before it counts
+        // A needed dependency that is still loading must finish (or fail) before it counts. The
+        // plugin calling this from its own on_load is never waited for, it would wait on itself
+        let caller = INITIALIZING_PLUGIN.try_with(Clone::clone).ok();
+        let needed: HashSet<&String> = metadata_list.iter().flat_map(|(_, deps)| deps).collect();
         let loading: Vec<String> = self
             .plugin_states
             .read()
             .await
             .iter()
-            .filter(|(_, state)| matches!(state, PluginState::Loading))
+            .filter(|(name, state)| {
+                matches!(state, PluginState::Loading)
+                    && needed.contains(name)
+                    && caller.as_ref() != Some(*name)
+            })
             .map(|(name, _)| name.clone())
             .collect();
         for name in loading {
             self.wait_for_initialization(&name).await;
         }
-        // Resident plugins satisfy dependencies, they are already initialized, so they have none left to resolve
+        // Resident plugins satisfy dependencies, they are already initialized, so they have none
+        // left to resolve. States first, then plugins, like `plugin_entries`
+        let states = self.plugin_states.read().await;
         let resident: Vec<(String, Vec<String>)> = self
             .plugins
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
+            .filter(|p| !matches!(states.get(&p.metadata.name), Some(PluginState::Loading)))
             .map(|p| (p.metadata.name.clone(), Vec::new()))
             .collect();
+        drop(states);
         metadata_list.extend(resident);
 
         let sorted_names =
