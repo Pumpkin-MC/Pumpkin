@@ -2874,13 +2874,8 @@ impl Player {
             sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
         });
 
-        let total_sent_chunks = prepared_batch.map_or_else(
-            || {
-                self.chunk_sender
-                    .try_lock()
-                    .map_or(0, |s| s.sent_chunks_count())
-            },
-            |batch| match self.client.as_ref() {
+        if let Some(batch) = prepared_batch {
+            match self.client.as_ref() {
                 ClientPlatform::Java(_) => {
                     let mut batch = batch;
                     let cancelled = match world.server.upgrade() {
@@ -2893,27 +2888,20 @@ impl Player {
                     let encoded =
                         crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let (sent, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
-                        |_| (Vec::new(), 0),
+                    let sent = self.chunk_sender.try_lock().map_or_else(
+                        |_| Vec::new(),
                         |mut sender| {
                             sender.cancel_pending(&batch, current_epoch, &cancelled);
-                            let sent =
-                                sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
-                            (sent, sender.sent_chunks_count())
+                            sender.commit_batch(&batch, &encoded, &self.client, current_epoch)
                         },
                     );
                     self.pair_entities_in_chunks(&world, &sent);
-                    total_sent_chunks
                 }
                 ClientPlatform::Bedrock(_) => {
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let (chunks, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
-                        |_| (Vec::new(), 0),
-                        |mut sender| {
-                            let chunks = sender.commit_bedrock_batch(&batch, current_epoch);
-                            let total_sent_chunks = sender.sent_chunks_count();
-                            (chunks, total_sent_chunks)
-                        },
+                    let chunks = self.chunk_sender.try_lock().map_or_else(
+                        |_| Vec::new(),
+                        |mut sender| sender.commit_bedrock_batch(&batch, current_epoch),
                     );
                     if !chunks.is_empty() {
                         let client = self.client.clone();
@@ -2939,28 +2927,15 @@ impl Player {
                                 let delivered = sender.mark_delivered(&deliveries);
                                 drop(sender);
                                 player.pair_entities_in_chunks(&world, &delivered);
+                                player.try_bedrock_spawn();
                             }
                         });
                     }
-                    total_sent_chunks
                 }
-            },
-        );
-
-        if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
-            && !self.bedrock_spawned.load(Ordering::Relaxed)
-            && total_sent_chunks > 4
-        {
-            if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
-                bedrock_client.try_enqueue_packet(data);
-            }
-            self.bedrock_spawned.store(true, Ordering::Relaxed);
-            self.set_client_loaded(true);
-            self.send_health();
-            if self.living_entity.health.load() <= 0.0 {
-                self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
             }
         }
+
+        self.try_bedrock_spawn();
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
         self.living_entity
             .entity
@@ -3209,6 +3184,32 @@ impl Player {
             self.client_loaded_timeout.store(60, Ordering::Relaxed);
         }
         self.client_loaded.store(loaded, Ordering::Relaxed);
+    }
+
+    /// Spawns a Bedrock player once five chunks are queued ahead of `PlayerSpawn`.
+    fn try_bedrock_spawn(&self) {
+        let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref() else {
+            return;
+        };
+        if self.bedrock_spawned.load(Ordering::Relaxed)
+            || self
+                .chunk_sender
+                .try_lock()
+                .map_or(0, |sender| sender.ready_chunks_count())
+                <= 4
+            // Chunk tasks finish concurrently, so only one may spawn
+            || self.bedrock_spawned.swap(true, Ordering::Relaxed)
+        {
+            return;
+        }
+        if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
+            bedrock_client.try_enqueue_packet(data);
+        }
+        self.set_client_loaded(true);
+        self.send_health();
+        if self.living_entity.health.load() <= 0.0 {
+            self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
+        }
     }
 
     pub fn get_attack_cooldown_progress(&self, tps: f64, base_time: f64, attack_speed: f64) -> f64 {

@@ -153,6 +153,14 @@ impl ChunkSender {
         self.sent_chunks.len()
     }
 
+    /// Chunks the client holds, without Bedrock dispatches still being queued.
+    #[must_use]
+    pub fn ready_chunks_count(&self) -> usize {
+        self.sent_chunks
+            .len()
+            .saturating_sub(self.awaiting_delivery.len())
+    }
+
     /// Records a chunk sent outside the batch path as held.
     pub fn mark_sent_out_of_band(&mut self, pos: Vector2<i32>) {
         self.pending_chunks.remove(&pos);
