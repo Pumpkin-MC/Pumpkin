@@ -924,6 +924,11 @@ impl PluginManager {
                 continue;
             }
 
+            // Loading a resident file again would build a second instance and loader handle
+            if self.is_path_resident(&path) {
+                continue;
+            }
+
             // Find a loader that can handle this file
             let mut loader_found = false;
             for loader in &loaders {
@@ -932,6 +937,14 @@ impl PluginManager {
                         Ok((instance, metadata, loader_data)) => {
                             // A rescan must not register a second copy of something still resident
                             if self.is_plugin_loaded(&metadata.name) {
+                                // The instance's code lives in the library, so it goes first
+                                drop(instance);
+                                if loader.can_unload() {
+                                    loader.unload(loader_data).await.ok();
+                                } else {
+                                    // Dropping the library here could unmap code that is still running
+                                    Box::leak(loader_data);
+                                }
                                 loader_found = true;
                                 break;
                             }
@@ -1326,6 +1339,15 @@ impl PluginManager {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         plugins.iter().any(|p| p.token == token)
+    }
+
+    /// Whether a loaded plugin came from this file.
+    fn is_path_resident(&self, path: &Path) -> bool {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins.iter().any(|p| p.path == path)
     }
 
     /// Checks if plugin loaded
