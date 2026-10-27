@@ -16,9 +16,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-        OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
-        blocks::{piston::piston_head::PistonHeadProperties, redstone::is_emitting_redstone_power},
+        BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, OnSyncedBlockEventArgs,
+        PathComputationType, PlacedArgs, blocks::redstone::is_emitting_redstone_power,
     },
     world::World,
 };
@@ -83,33 +82,12 @@ impl BlockBehaviour for PistonBlock {
         props.to_state_id(args.block)
     }
 
-    fn broken(&self, args: BrokenArgs<'_>) {
-        let props = PistonProps::from_state_id(args.state.id);
-        let pos = args
-            .position
-            .offset(props.facing.to_block_direction().to_offset());
-        let (block_to_check, block_to_check_state_id) = args.world.get_block_and_state_id(&pos);
-        if &Block::PISTON_HEAD == block_to_check {
-            let head_props = PistonHeadProperties::from_state_id(block_to_check_state_id);
-
-            if (head_props.facing.to_block_direction() != props.facing.to_block_direction())
-                && &Block::PISTON_HEAD == block_to_check
-            {
-                //Then this is a head of some other piston.
-                return;
-            }
-
-            args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
-        } else if &Block::MOVING_PISTON == block_to_check {
-            args.world.break_block(&pos, None, BlockFlags::SKIP_DROPS);
-        }
-    }
-
     fn placed(&self, args: PlacedArgs<'_>) {
-        if args.old_state_id == args.state_id {
-            return;
+        if Block::from_state_id(args.old_state_id) != args.block
+            && args.world.get_block_entity(args.position).is_none()
+        {
+            try_move(args.world, args.block, args.position);
         }
-        try_move(args.world, args.block, args.position);
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -187,6 +165,10 @@ impl PistonBlock {
                 0.5,
                 pitch,
             );
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::BlockActivate.name(),
+                pos.to_centered_f64(),
+            );
             return true;
         }
         // Reduce Piston
@@ -240,27 +222,27 @@ impl PistonBlock {
             source: true,
         }));
 
-        world.set_block_state(
-            &extended_pos,
-            Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-        );
-
         world.update_neighbors(pos, None);
         if sticky {
             let pull_pos = pos.offset_dir(dir.to_offset(), 2);
-            let (block, state) = world.get_block_and_state(&pull_pos);
-            if data == 2 {
-                world.set_block_state(
-                    &extended_pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                );
-            } else {
-                let is_air = state.is_air();
-                if !is_air
-                    && (Self::is_movable(block, state, dir, false, dir.opposite())
-                        || Self::is_movable(block, state, dir, false, dir))
+            let (block, _) = world.get_block_and_state(&pull_pos);
+            let mut dropped = false;
+            if block == &Block::MOVING_PISTON
+                && let Some(entity) = world.get_block_entity(&pull_pos)
+                && let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>()
+                && piston.facing == dir
+                && piston.extending
+            {
+                if piston.last_progress.load() < 0.5 {
+                    dropped = true;
+                }
+                piston.finish(world);
+            }
+            if !dropped {
+                let (block, state) = world.get_block_and_state(&pull_pos);
+                if r#type == 1
+                    && !state.is_air()
+                    && Self::is_movable(block, state, dir.opposite(), false, dir)
                     && (state.piston_behavior == PistonBehavior::Normal
                         || block == &Block::PISTON
                         || block == &Block::STICKY_PISTON)
@@ -292,6 +274,10 @@ impl PistonBlock {
             0.5,
             pitch,
         );
+        world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::BlockDeactivate.name(),
+            pos.to_centered_f64(),
+        );
         true
     }
 }
@@ -305,11 +291,6 @@ fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection
         {
             continue;
         }
-        return true;
-    }
-    let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_state(&neighbor_pos);
-    if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down) {
         return true;
     }
     for dir in BlockDirection::all() {

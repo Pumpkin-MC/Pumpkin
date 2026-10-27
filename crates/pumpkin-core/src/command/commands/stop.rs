@@ -27,7 +27,12 @@ impl CommandExecutor for StopCommandExecutor {
             .color_named(NamedColor::Red),
             true,
         );
-        stop_server();
+        // Stopping this server rather than the process lets an integrated server end its world
+        // without taking the client down, a standalone server passes it on to the process.
+        match &context.source.server {
+            Some(server) => server.stop(),
+            None => stop_server(),
+        }
         Ok(1)
     }
 }

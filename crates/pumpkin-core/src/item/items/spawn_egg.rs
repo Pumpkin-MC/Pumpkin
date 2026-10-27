@@ -21,16 +21,20 @@ use pumpkin_data::data_component_impl::{
     WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl,
 };
 use pumpkin_data::dye_color::DyeColor;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity::entity_from_egg;
+use pumpkin_data::entity::{EntityType, MobCategory};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::{Difficulty, Hand};
 use uuid::Uuid;
 
 pub struct SpawnEggItem;
@@ -39,6 +43,13 @@ impl ItemMetadata for SpawnEggItem {
     fn ids() -> Box<[u16]> {
         pumpkin_data::entity::spawn_egg_ids()
     }
+}
+
+fn is_disallowed_in_peaceful(entity_type: &EntityType, world: &World) -> bool {
+    entity_type.category == &MobCategory::MONSTER
+        && entity_type != &EntityType::PIGLIN
+        && entity_type != &EntityType::SHULKER
+        && world.level_info.load().difficulty == Difficulty::Peaceful
 }
 
 /// Vanilla's `EntityTypes.OP_ONLY_CUSTOM_DATA`: types whose `entity_data` only a server
@@ -217,9 +228,14 @@ pub(crate) fn prepare_egg_mob(
 
 impl ItemBehaviour for SpawnEggItem {
     fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
+
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         if let Some(entity_type) = entity_from_egg(item.id) {
             let world = player.world();
-            let (start_pos, end_pos) = self.get_start_and_end_pos(player);
+            let (start_pos, end_pos) = self.get_start_and_end_pos_with_rotation(player, yaw, pitch);
             let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
                 start_pos,
                 end_pos,
@@ -232,22 +248,28 @@ impl ItemBehaviour for SpawnEggItem {
             }
 
             let hit_pos = hit.block_pos;
+            let hit_block = world.get_block(&hit_pos);
+            if hit_block != &Block::WATER && hit_block != &Block::LAVA {
+                return;
+            }
+            if is_disallowed_in_peaceful(entity_type, &world) {
+                return;
+            }
+
+            let mut stack = player.inventory.get_stack_in_hand(hand);
+            if stack.is_empty() || stack.item.id != item.id {
+                return;
+            }
 
             let pos = Vector3::new(
                 f64::from(hit_pos.0.x) + 0.5,
                 f64::from(hit_pos.0.y),
                 f64::from(hit_pos.0.z) + 0.5,
             );
-            let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
+            let spawn_yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
-            mob.get_entity().set_rotation(yaw, 0.0);
+            mob.get_entity().set_rotation(spawn_yaw, 0.0);
 
-            let held = player.inventory.held_item();
-            let stack = if !held.is_empty() && held.item.id == item.id {
-                held
-            } else {
-                player.inventory.off_hand_item()
-            };
             prepare_egg_mob(&stack, &mob, &world, Some(player));
             if !world.spawn_creature(
                 mob,
@@ -257,24 +279,15 @@ impl ItemBehaviour for SpawnEggItem {
                 return;
             }
 
-            let mut main_hand = player.inventory.held_item();
-            let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
-                main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                player.inventory.set_held_item(main_hand);
-                true
-            } else {
-                false
+            stack.decrement_unless_creative(player.gamemode.load(), 1);
+            player.inventory.set_stack_in_hand(hand, stack.clone());
+            let slot_index = match hand {
+                Hand::Right => player.inventory.get_selected_slot() as usize,
+                Hand::Left => PlayerInventory::OFF_HAND_SLOT,
             };
-
-            if !consumed {
-                let mut off_hand = player.inventory.off_hand_item();
-                if !off_hand.is_empty() && off_hand.item.id == item.id {
-                    off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                    player
-                        .inventory
-                        .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
-                }
-            }
+            player.sync_hand_slot(slot_index, stack);
+            world.emit_game_event(GameEvent::EntityPlace.name(), pos);
+            player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
         }
     }
 
@@ -298,6 +311,7 @@ impl ItemBehaviour for SpawnEggItem {
                 {
                     spawner.set_entity_type(entity_type);
                     world.update_block_entity(&block_entity);
+                    world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
                     item.decrement_unless_creative(player.gamemode.load(), 1);
                     return BlockActionResult::Success;
                 }
@@ -307,17 +321,18 @@ impl ItemBehaviour for SpawnEggItem {
                 {
                     trial_spawner.set_entity_type(entity_type, &world);
                     world.update_block_entity(&block_entity);
+                    world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
                     item.decrement_unless_creative(player.gamemode.load(), 1);
                     return BlockActionResult::Success;
                 }
             }
 
+            if is_disallowed_in_peaceful(entity_type, &world) {
+                return BlockActionResult::Fail;
+            }
+
             let target_state = world.get_block_state(&location);
-            let target_block = world.get_block(&location);
-            let spawn_block_pos = if target_state.is_air()
-                || target_block.id == Block::WATER.id
-                || target_block.id == Block::LAVA.id
-            {
+            let spawn_block_pos = if target_state.collision_shapes.is_empty() {
                 location
             } else {
                 BlockPos(location.0 + face.to_offset())
@@ -341,6 +356,7 @@ impl ItemBehaviour for SpawnEggItem {
                 world.get_player_by_uuid(player.gameprofile.id),
             ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
+                world.emit_game_event(GameEvent::EntityPlace.name(), spawn_block_pos.to_f64());
             }
             BlockActionResult::Success
         } else {
@@ -353,6 +369,9 @@ impl ItemBehaviour for SpawnEggItem {
             && entity.get_entity().entity_type.id == entity_type.id
         {
             let world = player.world();
+            if is_disallowed_in_peaceful(entity_type, &world) {
+                return;
+            }
             let pos = entity.get_entity().pos.load();
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
             // no baby form, no offspring.
@@ -371,6 +390,7 @@ impl ItemBehaviour for SpawnEggItem {
                 world.get_player_by_uuid(player.gameprofile.id),
             ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
+                world.emit_game_event(GameEvent::EntityPlace.name(), pos);
             }
         }
     }

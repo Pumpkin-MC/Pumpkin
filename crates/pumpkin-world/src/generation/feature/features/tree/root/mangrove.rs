@@ -66,9 +66,7 @@ impl MangroveRootPlacer {
 
         let mut placed: Vec<BlockPos> = Vec::new();
         for root_pos in roots {
-            if self.place_roots(chunk, block_registry, random, root_pos) {
-                placed.push(root_pos);
-            }
+            self.place_roots(chunk, block_registry, random, root_pos, &mut placed);
         }
         Some(placed)
     }
@@ -151,7 +149,8 @@ impl MangroveRootPlacer {
         block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
-    ) -> bool {
+        placed: &mut Vec<BlockPos>,
+    ) {
         let existing_id = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         if self
             .mangrove_root_placement
@@ -166,14 +165,16 @@ impl MangroveRootPlacer {
             );
             let state = Self::apply_waterlogging(chunk, pos, state);
             chunk.set_block_state(&pos.0, state);
-            return true;
+            placed.push(pos);
+            return;
         }
         if !self.can_grow_through(chunk, pos) {
-            return false;
+            return;
         }
         let state = self.root_provider.get(random, pos, chunk, block_registry);
         let state = Self::apply_waterlogging(chunk, pos, state);
         chunk.set_block_state(&pos.0, state);
+        placed.push(pos);
         if let Some(above) = &self.above_root_placement {
             let above_pos = pos.up();
             if random.next_f32() < above.above_root_placement_chance && chunk.is_air(&above_pos.0) {
@@ -183,9 +184,9 @@ impl MangroveRootPlacer {
                         .get(random, above_pos, chunk, block_registry);
                 let above_state = Self::apply_waterlogging(chunk, above_pos, above_state);
                 chunk.set_block_state(&above_pos.0, above_state);
+                placed.push(above_pos);
             }
         }
-        true
     }
 
     fn apply_waterlogging<T: GenerationCache>(

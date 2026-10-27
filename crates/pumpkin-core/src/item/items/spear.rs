@@ -35,7 +35,14 @@ impl ItemMetadata for SpearItem {
 }
 
 impl ItemBehaviour for SpearItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
         if player
             .living_entity
             .item_in_use
@@ -47,11 +54,6 @@ impl ItemBehaviour for SpearItem {
         }
 
         let inventory = player.inventory();
-        let hand = if inventory.held_item().item.id == item.id {
-            Hand::Right
-        } else {
-            Hand::Left
-        };
         let stack = inventory.get_stack_in_hand(hand);
         let sound = stack
             .get_data_component::<KineticWeaponImpl>()

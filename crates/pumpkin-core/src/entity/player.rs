@@ -430,6 +430,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Head position of the bed the player is currently sleeping in.
     pub sleeping_bed_pos: AtomicCell<Option<BlockPos>>,
+    /// Whether the player is ignored when calculating the percentage of sleeping players needed to skip the night.
+    pub sleeping_ignored: AtomicBool,
     /// Manages the player's breath level
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
@@ -578,8 +580,9 @@ struct SkinMetadata {
 }
 
 impl Player {
-    #[must_use]
-    pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+    pub async fn fetch_skin(
+        properties: &[Property],
+    ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
         let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
         let decoded = BASE64_STANDARD
             .decode(textures_prop.value.as_bytes())
@@ -593,19 +596,8 @@ impl Player {
             .and_then(|m| m.model.as_deref())
             .is_some_and(|model| model == "slim");
 
-        let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle.block_on(async {
-                    let client = pumpkin_auth::client();
-                    client.get(&url).send().await.ok()?.bytes().await.ok()
-                })
-            })?
-        } else {
-            tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_auth::client();
-                client.get(&url).send().await.ok()?.bytes().await.ok()
-            })?
-        };
+        let client = pumpkin_auth::client();
+        let bytes = client.get(&url).send().await.ok()?.bytes().await.ok()?;
         let img = image::load_from_memory(&bytes).ok()?;
 
         let width = img.width();
@@ -709,9 +701,7 @@ impl Player {
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
 
-        let properties = gameprofile.properties.load();
-        let mut bedrock_skin = Self::fetch_skin(&properties)
-            .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve);
+        let mut bedrock_skin = pumpkin_protocol::bedrock::client::Skin::steve();
 
         // Standard_Custom is a shared placeholder. Give fallback skins a stable,
         // per-player identity so Bedrock never sees duplicate skin IDs.
@@ -767,6 +757,7 @@ impl Player {
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
+            sleeping_ignored: AtomicBool::new(false),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -2744,15 +2735,23 @@ impl Player {
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
-                    let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-                        player_arc.clone(),
-                        packet.id,
-                        packet.payload.clone(),
-                    );
-                    server_arc
+                    let cancelled = if server_arc
                         .plugin_manager
-                        .fire_blocking(&server_arc, &mut event);
-                    if !event.cancelled
+                        .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
+                    ) {
+                        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                            player_arc.clone(),
+                            packet.id,
+                            packet.payload.clone(),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut event);
+                        event.cancelled
+                    } else {
+                        false
+                    };
+                    if !cancelled
                         && let Err(err) =
                             client.handle_play_packet(&player_arc, &server_arc, &packet)
                     {

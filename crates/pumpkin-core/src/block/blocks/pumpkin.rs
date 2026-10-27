@@ -17,7 +17,7 @@ pub struct PumpkinBlock;
 impl crate::block::BlockBehaviour for PumpkinBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.item != &Item::SHEARS {
-            return BlockActionResult::Pass;
+            return BlockActionResult::PassToDefaultBlockAction;
         }
         let mut props = WallTorchLikeProperties::default(&Block::CARVED_PUMPKIN);
         props.facing = args.hit.face.to_horizontal_facing().unwrap_or_else(|| {
@@ -48,6 +48,15 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
         ));
         args.world.spawn_entity(item_entity);
         args.player.damage_item_in_slot(args.equipment_slot, 1);
-        BlockActionResult::SuccessServer
+        args.world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::Shear.name(),
+            args.position.to_centered_f64(),
+        );
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Used,
+            i32::from(Item::SHEARS.id),
+            1,
+        );
+        BlockActionResult::Success
     }
 }

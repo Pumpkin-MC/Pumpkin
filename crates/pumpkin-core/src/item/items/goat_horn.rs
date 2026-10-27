@@ -2,10 +2,12 @@ use std::any::Any;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use pumpkin_data::data_component_impl::{CustomDataImpl, InstrumentImpl, UseCooldownImpl};
+use pumpkin_data::data_component_impl::{CustomDataImpl, InstrumentImpl};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::instrument::Instrument;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_util::Hand;
 
 pub struct GoatHornItem;
@@ -31,7 +33,7 @@ impl ItemBehaviour for GoatHornItem {
         hand: Hand,
     ) {
         let stack = player.inventory().get_stack_in_hand(hand);
-        let instrument = stack
+        let Some(instrument) = stack
             .get_data_component::<InstrumentImpl>()
             .and_then(|inst| Instrument::from_name(&inst.instrument))
             .or_else(|| {
@@ -45,16 +47,16 @@ impl ItemBehaviour for GoatHornItem {
                     })
                     .and_then(Instrument::from_name)
             })
-            .unwrap_or(Instrument::PonderGoatHorn);
+        else {
+            return;
+        };
 
         let duration = instrument.use_duration_ticks() as i32;
         let volume = instrument.range() / 16.0;
         let world = player.world();
         let pos = player.position();
 
-        player
-            .living_entity
-            .set_active_hand(hand, stack.clone(), duration);
+        player.living_entity.set_active_hand(hand, stack, duration);
         world.play_sound_raw(
             instrument.sound() as u16,
             SoundCategory::Records,
@@ -62,27 +64,8 @@ impl ItemBehaviour for GoatHornItem {
             volume,
             1.0,
         );
-        world.emit_game_event("instrument_play", pos);
-        let (cooldown_key, cooldown_ticks) =
-            stack.get_data_component::<UseCooldownImpl>().map_or_else(
-                || (item.registry_key.to_string(), duration),
-                |cooldown| {
-                    (
-                        cooldown
-                            .cooldown_group
-                            .clone()
-                            .unwrap_or_else(|| item.registry_key.to_string()),
-                        if cooldown.seconds > 0.0 {
-                            (cooldown.seconds * 20.0).floor() as i32
-                        } else {
-                            duration
-                        },
-                    )
-                },
-            );
-        if cooldown_ticks > 0 {
-            player.start_cooldown(cooldown_key, cooldown_ticks);
-        }
+        world.emit_game_event(GameEvent::InstrumentPlay.name(), pos);
+        player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
     fn get_use_duration(&self) -> i32 {

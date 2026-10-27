@@ -323,6 +323,10 @@ impl BedrockClient {
         warn!("Closing connection for {}: {message}", self.address);
         self.send_packet(&CDisconnect::new(reason as i32, message))
             .await;
+        let _ = self
+            .session
+            .flush_reliable(std::time::Duration::from_secs(1))
+            .await;
         self.close().await;
     }
 
@@ -343,6 +347,10 @@ impl BedrockClient {
                 filtered_message,
             })
             .await;
+            let _ = self
+                .session
+                .flush_reliable(std::time::Duration::from_secs(1))
+                .await;
         }
         self.close().await;
     }
@@ -387,7 +395,7 @@ impl BedrockClient {
 
         let world = player.world();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let mut encoded_payloads = Vec::with_capacity(valid_chunks.len());
             let mut new_blobs = Vec::new();
             for chunk in valid_chunks {
@@ -932,8 +940,7 @@ impl BedrockClient {
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
     }
 }

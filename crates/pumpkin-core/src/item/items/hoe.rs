@@ -5,6 +5,7 @@ use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_transformer::DropStrategy;
 use pumpkin_data::data_component_impl::BlockTransformerImpl;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, tag};
@@ -56,6 +57,7 @@ impl ItemBehaviour for HoeItem {
             }
 
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
+            world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
 
             if let Some(loot_key) = result.entry.loot
                 && let Some(loot_table) = world.get_loot_table(loot_key)
