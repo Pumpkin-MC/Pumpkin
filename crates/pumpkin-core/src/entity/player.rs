@@ -2618,6 +2618,20 @@ impl Player {
         (!event.cancelled).then_some(event.velocity)
     }
 
+    /// Vanilla `hurtMarked` send: `PlayerVelocityEvent`, then watchers and the own client.
+    pub fn send_hurt_velocity(&self) {
+        let entity = self.get_entity();
+        let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
+            // Cancelled -> back to the motion the client has, watchers get that instead
+            entity.velocity.store(entity.known_movement());
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
+            return;
+        };
+        entity.velocity.store(velocity);
+        entity.send_velocity_to_watchers();
+        self.send_own_velocity(velocity);
+    }
+
     /// Server motion to the own client. For Bedrock -> tagged with the last processed input tick.
     pub fn send_own_velocity(&self, velocity: Vector3<f64>) {
         if let Some(client) = self.client.bedrock() {
@@ -2662,16 +2676,8 @@ impl Player {
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
             // The server velocity already holds the pushes
             entity.push_impulse.store(Vector3::default());
-            let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
-                // Cancelled -> back to the motion the client has, watchers get that instead
-                entity.velocity.store(entity.known_movement());
-                entity.velocity_dirty.store(true, Ordering::SeqCst);
-                return;
-            };
-            entity.velocity.store(velocity);
             entity.velocity_dirty.store(false, Ordering::SeqCst);
-            entity.send_velocity_to_watchers();
-            self.send_own_velocity(entity.velocity.load());
+            self.send_hurt_velocity();
             return;
         }
         if entity.velocity_dirty.swap(false, Ordering::SeqCst)
@@ -3309,8 +3315,9 @@ impl Player {
         if ticks % 10 == 0 {
             if ticks % 20 == 0 {
                 let slots = self.glider_slots();
-                let slot = &slots[rand::random_range(0..slots.len())];
-                self.damage_item_in_slot(slot, 1);
+                if !slots.is_empty() {
+                    self.damage_item_in_slot(&slots[rand::random_range(0..slots.len())], 1);
+                }
             }
             self.world().emit_game_event(
                 pumpkin_data::game_event::GameEvent::ElytraGlide.name(),
@@ -7226,10 +7233,7 @@ impl EntityBase for Player {
 
     fn is_pushable(&self) -> bool {
         // Creative players get pushed too.
-        !self.is_spectator()
-            && self.living_entity.health.load() > 0.0
-            && !self.living_entity.dead.load(Ordering::Relaxed)
-            && !self.on_climbable()
+        !self.is_spectator() && self.living_entity.can_be_pushed(self.on_climbable())
     }
 
     fn get_name(&self) -> TextComponent {

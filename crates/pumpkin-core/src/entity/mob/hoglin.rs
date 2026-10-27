@@ -6,6 +6,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::{
@@ -192,7 +193,7 @@ impl Mob for HoglinEntity {
         _world: &Arc<World>,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        if rand::random::<f32>() < 0.2 {
+        if self.get_random().random::<f32>() < 0.2 {
             self.set_baby(true);
         }
         self.finalize_spawn_super(group_data)

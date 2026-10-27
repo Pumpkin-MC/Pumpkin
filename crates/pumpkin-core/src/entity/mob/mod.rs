@@ -1931,8 +1931,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        let living = &self.get_mob_entity().living_entity;
-        living.health.load() > 0.0 && !living.dead.load(Relaxed) && !Mob::on_climbable(self)
+        self.get_mob_entity()
+            .living_entity
+            .can_be_pushed(Mob::on_climbable(self))
     }
 
     fn on_climbable(&self) -> bool {

@@ -1623,15 +1623,7 @@ impl Entity {
         if self.entity_type == &EntityType::PLAYER
             && let Some(player) = self.world.load().get_player_by_id(self.entity_id)
         {
-            let Some(velocity) = player.fire_velocity_event(self.velocity.load()) else {
-                // Cancelled -> back to the motion the client has, watchers get that instead
-                self.velocity.store(self.known_movement());
-                self.velocity_dirty.store(true, Ordering::SeqCst);
-                return;
-            };
-            self.velocity.store(velocity);
-            self.send_velocity_to_watchers();
-            player.send_own_velocity(velocity);
+            player.send_hurt_velocity();
             return;
         }
         self.send_velocity_to_watchers();

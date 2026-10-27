@@ -644,12 +644,7 @@ impl EntityBase for MinecartEntity {
                 }
             } else {
                 // Vanilla `AbstractMinecart.push`
-                let mut vel = self_entity.velocity.load();
-                vel.x -= xa;
-                vel.z -= za;
-                self_entity.velocity.store(vel);
-                self_entity.send_velocity();
-
+                self_entity.push_by(Vector3::new(-xa, 0.0, -za));
                 other_entity.push_by(Vector3::new(xa / 4.0, 0.0, za / 4.0));
             }
         }

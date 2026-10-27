@@ -1964,10 +1964,10 @@ impl LivingEntity {
         false
     }
 
-    /// Vanilla `LivingEntity.isPushable` without the unloaded-chunk short circuit:
-    /// Pumpkin only ticks entities in ticking chunks.
-    pub fn is_pushable(&self) -> bool {
-        self.health.load() > 0.0 && !self.dead.load(Relaxed) && !self.on_climbable()
+    /// Vanilla `LivingEntity.isPushable` for the caller's own `onClimbable`, without the
+    /// unloaded-chunk short circuit: Pumpkin only ticks entities in ticking chunks.
+    pub fn can_be_pushed(&self, on_climbable: bool) -> bool {
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && !on_climbable
     }
 
     /// Stores the climb state of the end position, only from this entity's own tick.
@@ -4041,7 +4041,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        Self::is_pushable(self)
+        self.can_be_pushed(EntityBase::on_climbable(self))
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

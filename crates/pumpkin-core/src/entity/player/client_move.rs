@@ -186,16 +186,10 @@ impl Player {
             return ClientMoveOutcome::Ignored;
         }
 
-        if let (Some(x), Some(y), Some(z)) = (
-            requested.position.map(|p| p.x),
-            requested.position.map(|p| p.y),
-            requested.position.map(|p| p.z),
-        ) && !(x.is_finite() && y.is_finite() && z.is_finite())
-        {
-            self.kick_invalid_movement();
-            return ClientMoveOutcome::Rejected;
-        }
-        if requested.yaw.is_some_and(|yaw| !yaw.is_finite())
+        if requested
+            .position
+            .is_some_and(|p| !(p.x.is_finite() && p.y.is_finite() && p.z.is_finite()))
+            || requested.yaw.is_some_and(|yaw| !yaw.is_finite())
             || requested.pitch.is_some_and(|pitch| !pitch.is_finite())
             || requested.head_yaw.is_some_and(|yaw| !yaw.is_finite())
         {
@@ -321,8 +315,6 @@ impl Player {
             self.check_location_enchantments(pos, requested.on_ground);
         }
         self.progress_motion(delta);
-        // Vanilla `handlePlayerKnownMovement` / `setKnownMovement`
-        entity.movement.store(delta);
 
         ClientMoveOutcome::Applied
     }
@@ -411,6 +403,7 @@ impl Player {
                 ),
                 &self.bedrock_move_packet(CMovePlayer::MODE_TELEPORT, on_ground, 0),
             );
+            // Bedrock ignores head yaw on teleport -> a normal move re-asserts it
             world.send_to_tracking_players_bedrock(
                 entity,
                 &self.bedrock_move_packet(CMovePlayer::MODE_NORMAL, on_ground, 0),
