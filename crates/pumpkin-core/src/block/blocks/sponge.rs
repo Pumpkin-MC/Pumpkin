@@ -46,8 +46,8 @@ impl SpongeBlock {
                     + (next_pos.0.y - position.0.y).abs()
                     + (next_pos.0.z - position.0.z).abs();
 
-                // Wiki standard: distance 7, max 118 blocks
-                if taxicab_dist > 7 || water_blocks.len() >= 118 {
+                // Vanilla SpongeBlock: MAX_DEPTH = 6, MAX_COUNT = 64
+                if taxicab_dist > 6 || water_blocks.len() >= 64 {
                     continue;
                 }
 
@@ -98,10 +98,7 @@ impl BlockBehaviour for SpongeBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        // If a neighboring block changed and it's water, attempt to absorb.
-        if args.source_block.id == Block::WATER.id {
-            Self::absorb_water(args.world, args.position);
-        }
+        Self::absorb_water(args.world, args.position);
     }
 }
 

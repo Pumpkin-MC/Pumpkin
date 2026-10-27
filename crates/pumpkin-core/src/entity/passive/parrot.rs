@@ -38,11 +38,7 @@ impl ParrotEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
@@ -100,7 +96,9 @@ impl Mob for ParrotEntity {
             .get_item()
             .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
         {
-            return self.mob_entity.mob_interact(player, item_stack);
+            return self
+                .mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed());
         }
 
         self.eat_cookie(player, item_stack);

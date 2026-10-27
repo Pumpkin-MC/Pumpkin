@@ -64,6 +64,37 @@ impl BlockEntity for HangingSignBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_sign_actor(
+            self.position,
+            true,
+            &self.front_text,
+            &self.back_text,
+            self.is_waxed.load(Ordering::Relaxed),
+        ))
+    }
+
+    fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        crate::block::entities::sign::collect_sign_item_components(
+            &self.front_text,
+            &self.back_text,
+            &self.is_waxed,
+            stack,
+        );
+    }
+
+    fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
+        crate::block::entities::sign::apply_sign_item_components(
+            &self.front_text,
+            &self.back_text,
+            &self.is_waxed,
+            stack,
+        );
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

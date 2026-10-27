@@ -2,7 +2,7 @@ use crate::block::{
     BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
     blocks::plant::{
         PlantBlockBase,
-        crop::{CropBlockBase, get_available_moisture},
+        crop::{CropBlockBase, MIN_GROWTH_LIGHT, get_available_moisture},
     },
 };
 use pumpkin_data::{
@@ -53,6 +53,23 @@ impl StemBlock {
             _ => &Block::MELON, // Should never happen
         }
     }
+
+    fn can_survive(stem_block: &Block, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let below = block_accessor.get_block(&pos.down());
+        if stem_block == &Block::PUMPKIN_STEM {
+            below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
+        } else {
+            below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_MELON_STEM)
+        }
+    }
+
+    fn supports_fruit(stem_block: &Block, under_block: &Block) -> bool {
+        if stem_block == &Block::PUMPKIN_STEM {
+            under_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM_FRUIT)
+        } else {
+            under_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_MELON_STEM_FRUIT)
+        }
+    }
 }
 
 impl BlockBehaviour for StemBlock {
@@ -76,23 +93,24 @@ impl BlockBehaviour for StemBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+        Self::can_survive(args.block, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
-            self,
-            args.world,
-            args.position,
-            args.state_id,
-        )
+        if !Self::can_survive(args.block, args.world, args.position) {
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO add light level check
+        if args.world.get_raw_brightness(args.position, 0) < MIN_GROWTH_LIGHT {
+            return;
+        }
+
         let f: f32 = get_available_moisture(args.world, args.position, args.block);
         if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
             let (block, state) = args.world.get_block_and_state_id(args.position);
@@ -102,7 +120,7 @@ impl BlockBehaviour for StemBlock {
                 args.world.set_block_state(
                     args.position,
                     Self::state_with_age(block, state, age + 1),
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_LISTENERS,
                 );
             } else {
                 let dir = BlockDirection::random_horizontal(&mut RandomGenerator::Xoroshiro(
@@ -111,21 +129,18 @@ impl BlockBehaviour for StemBlock {
                 let plant_block_pos = args.position.offset(dir.to_offset());
                 let plant_block_state = args.world.get_block_state(&plant_block_pos);
                 let under_block: &Block = args.world.get_block(&plant_block_pos.down());
-                if plant_block_state.is_air()
-                    && (under_block == &Block::FARMLAND
-                        || under_block.has_tag(&tag::Block::MINECRAFT_DIRT))
-                {
+                if plant_block_state.is_air() && Self::supports_fruit(block, under_block) {
                     let attached_stem = Self::get_attached_stem(dir, block);
                     let gourd = Self::get_gourd(block);
                     args.world.set_block_state(
                         &plant_block_pos,
                         gourd.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
+                        BlockFlags::NOTIFY_ALL,
                     );
                     args.world.set_block_state(
                         args.position,
                         attached_stem,
-                        BlockFlags::NOTIFY_NEIGHBORS,
+                        BlockFlags::NOTIFY_ALL,
                     );
                 }
             }
@@ -136,11 +151,7 @@ impl BlockBehaviour for StemBlock {
 impl PlantBlockBase for StemBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos);
-        if block == &Block::PUMPKIN_STEM {
-            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
-        } else {
-            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_MELON_STEM)
-        }
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_STEM_CROPS)
     }
 }
 

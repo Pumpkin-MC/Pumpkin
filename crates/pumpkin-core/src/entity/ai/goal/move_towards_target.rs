@@ -96,11 +96,8 @@ impl Goal for MoveTowardsTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(wanted_pos) = self.wanted_pos {
             let mob_pos = mob.get_entity().pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(mob_pos, wanted_pos, self.speed));
         }
     }

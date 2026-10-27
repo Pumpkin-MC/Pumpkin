@@ -20,7 +20,7 @@ use tokio::{
 };
 use tracing::{debug, info, trace, warn};
 
-use crate::{STOP_INTERRUPT, server::Server};
+use crate::server::Server;
 
 use super::state::NetherNetState;
 use super::{
@@ -48,7 +48,7 @@ impl NetherNetListener {
         let address = config.address;
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
-        let ice_router = Arc::new(IceRouter::bind(ice_socket).await?);
+        let ice_router = Arc::new(IceRouter::bind(ice_socket, server.stop_token.clone()).await?);
         let ice_local_addr = ice_router.public_addr();
         let (incoming, receiver) = mpsc::channel(128);
         let state = NetherNetState {
@@ -61,6 +61,7 @@ impl NetherNetListener {
             ice_local_addr,
             external_ip: config.external_ip,
             ice_router,
+            stop_token: server.stop_token.clone(),
         };
         let router = Router::new()
             .route("/v1/join", get(status))
@@ -79,7 +80,7 @@ impl NetherNetListener {
                     let mut buffer = vec![0; 65_535];
                     loop {
                         tokio::select! {
-                            () = STOP_INTERRUPT.cancelled() => break,
+                            () = state.stop_token.cancelled() => break,
                             result = discovery.receive(&state, &mut buffer) => {
                                 if let Err(error) = result {
                                     debug!("NetherNet LAN discovery packet failed: {error}");
@@ -92,12 +93,13 @@ impl NetherNetListener {
             Err(error) => warn!("Failed to bind NetherNet LAN discovery: {error}"),
         }
 
+        let stop_token = server.stop_token.clone();
         tokio::spawn(async move {
             let result = axum::serve(
                 listener,
                 router.into_make_service_with_connect_info::<SocketAddr>(),
             )
-            .with_graceful_shutdown(STOP_INTERRUPT.clone().cancelled_owned())
+            .with_graceful_shutdown(stop_token.cancelled_owned())
             .await;
             if let Err(error) = result {
                 warn!("NetherNet signaling server stopped: {error}");
