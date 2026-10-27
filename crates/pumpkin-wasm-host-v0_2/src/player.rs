@@ -1529,6 +1529,92 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    fn send_block_damage(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::common::BlockPos,
+        progress: f32,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let stage = if (0.0..=1.0).contains(&progress) {
+            (progress * 10.0).floor().clamp(0.0, 9.0) as i8
+        } else {
+            -1
+        };
+        let block_pos = pumpkin_util::math::position::BlockPos(
+            pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
+        );
+        let packet = pumpkin_protocol::java::client::play::CSetBlockDestroyStage::new(
+            player.entity_id().into(),
+            block_pos,
+            stage,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
+    fn look_at(
+        &mut self,
+        player: Resource<Player>,
+        target: pumpkin::plugin::common::Position,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let target_vec = from_wasm_position(target);
+        let packet = pumpkin_protocol::java::client::play::CPlayerLookAt::at_position(
+            pumpkin_protocol::codec::var_int::VarInt(1),
+            target_vec.x,
+            target_vec.y,
+            target_vec.z,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
+    fn add_custom_chat_completions(
+        &mut self,
+        player: Resource<Player>,
+        completions: Vec<String>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let str_refs: Vec<&str> = completions.iter().map(String::as_str).collect();
+        let packet = pumpkin_protocol::java::client::play::CCustomChatCompletions::new(
+            pumpkin_protocol::codec::var_int::VarInt(0),
+            &str_refs,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
+    fn remove_custom_chat_completions(
+        &mut self,
+        player: Resource<Player>,
+        completions: Vec<String>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let str_refs: Vec<&str> = completions.iter().map(String::as_str).collect();
+        let packet = pumpkin_protocol::java::client::play::CCustomChatCompletions::new(
+            pumpkin_protocol::codec::var_int::VarInt(1),
+            &str_refs,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
+    fn set_custom_chat_completions(
+        &mut self,
+        player: Resource<Player>,
+        completions: Vec<String>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let str_refs: Vec<&str> = completions.iter().map(String::as_str).collect();
+        let packet = pumpkin_protocol::java::client::play::CCustomChatCompletions::new(
+            pumpkin_protocol::codec::var_int::VarInt(2),
+            &str_refs,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
     fn open_book(
         &mut self,
         player: Resource<Player>,
@@ -1580,6 +1666,57 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
         player.apply_knockback(strength, x, z);
+        Ok(())
+    }
+
+    fn is_sneaking(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.living_entity.entity.is_sneaking())
+    }
+
+    fn set_sneaking(&mut self, player: Resource<Player>, sneaking: bool) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.living_entity.entity.set_sneaking(sneaking);
+        Ok(())
+    }
+
+    fn is_sprinting(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.living_entity.entity.is_sprinting())
+    }
+
+    fn set_sprinting(&mut self, player: Resource<Player>, sprinting: bool) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.set_sprinting(sprinting);
+        Ok(())
+    }
+
+    fn is_on_ground(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player
+            .living_entity
+            .entity
+            .on_ground
+            .load(Ordering::Relaxed))
+    }
+
+    fn is_sleeping(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.is_sleeping())
+    }
+
+    fn is_sleeping_ignored(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.sleeping_ignored.load(Ordering::Relaxed))
+    }
+
+    fn set_sleeping_ignored(
+        &mut self,
+        player: Resource<Player>,
+        ignored: bool,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.sleeping_ignored.store(ignored, Ordering::Relaxed);
         Ok(())
     }
 
@@ -1690,6 +1827,20 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             }
         }
         Ok(list)
+    }
+
+    fn get_post_effects(&mut self, player: Resource<Player>) -> wasmtime::Result<Vec<String>> {
+        let player = self.get(&player)?;
+        Ok(player.get_post_effects())
+    }
+
+    fn has_post_effect(
+        &mut self,
+        player: Resource<Player>,
+        effect: String,
+    ) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.has_post_effect(&effect))
     }
 
     fn get_statistic(
@@ -2227,6 +2378,15 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.inventory.get_selected_slot())
     }
 
+    fn has_open_inventory(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        let current = player.current_screen_handler.lock_ignore_poison().clone();
+        let player_screen_handler: Arc<
+            std::sync::Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>,
+        > = player.player_screen_handler.clone();
+        Ok(!Arc::ptr_eq(&current, &player_screen_handler))
+    }
+
     fn get_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = self.get(&player)?;
         Ok(player.living_entity.health.load())
@@ -2639,6 +2799,85 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 }
 
 impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn perform_command(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        command: String,
+    ) -> wasmtime::Result<bool> {
+        let (player, server) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            Ok((
+                state.get(&player)?.clone(),
+                state.require_server().cloned()?,
+            ))
+        })?;
+
+        let command_str = command.strip_prefix('/').unwrap_or(&command);
+        let dispatcher = server.command_dispatcher.load();
+        let source = player.get_command_source(&server);
+        dispatcher.handle_command(&source, command_str);
+        Ok(true)
+    }
+
+    async fn chat(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        message: String,
+    ) -> wasmtime::Result<()> {
+        let (player, server) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            Ok((
+                state.get(&player)?.clone(),
+                state.require_server().cloned()?,
+            ))
+        })?;
+
+        if let Some(command) = message.strip_prefix('/') {
+            let dispatcher = server.command_dispatcher.load();
+            let source = player.get_command_source(&server);
+            dispatcher.handle_command(&source, command);
+        } else {
+            let config = &server.advanced_config;
+            let decorated = pumpkin_util::text::TextComponent::chat_decorated(
+                &config.chat.format,
+                &player.gameprofile.name,
+                &message,
+            );
+            server.broadcast_message(
+                &decorated,
+                &pumpkin_util::text::TextComponent::text(player.gameprofile.name.clone()),
+                0,
+                None,
+            );
+        }
+        Ok(())
+    }
+
+    async fn send_equipment_change(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        entity_id: u32,
+        slot: pumpkin::plugin::world::EquipmentSlot,
+        item: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let stack = if let Some(stack_res) = item {
+            accessor.take_res(stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+        let player = accessor.get_res(&player)?;
+        let slot = crate::living_entity::from_wit_equipment_slot(slot);
+        let equipment = vec![(
+            slot.discriminant(),
+            pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(stack),
+        )];
+        let packet = pumpkin_protocol::java::client::play::CSetEquipment::new(
+            pumpkin_protocol::codec::var_int::VarInt(entity_id as i32),
+            equipment,
+        );
+        player.try_send_client_packet(&packet);
+        Ok(())
+    }
     async fn set_item_in_hand(
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
@@ -2889,6 +3128,41 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         run_blocking(accessor, move || player.add_effect(effect)).await
     }
 
+    async fn add_post_effect(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        effect: String,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        Ok(player.add_post_effect(effect))
+    }
+
+    async fn remove_post_effect(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        effect: String,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        Ok(player.remove_post_effect(&effect))
+    }
+
+    async fn clear_post_effects(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<u32> {
+        let player = accessor.get_res(&player)?;
+        Ok(player.clear_post_effects() as u32)
+    }
+
+    async fn send_post_effects(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
+        player.send_post_effects();
+        Ok(())
+    }
+
     async fn heal(
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
@@ -3011,6 +3285,45 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
                 allow_put_items,
             )));
             player.open_handled_screen_direct(screen_handler, &title);
+        })
+        .await
+    }
+
+    async fn close_inventory(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
+        run_blocking(accessor, move || {
+            player.close_handled_screen();
+        })
+        .await
+    }
+
+    async fn drop_held_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        drop_all: bool,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
+        run_blocking(accessor, move || {
+            player.drop_held_item(drop_all);
+        })
+        .await
+    }
+
+    async fn drop_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        item: Resource<WitHostItemStack>,
+    ) -> wasmtime::Result<()> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        if stack.is_empty() {
+            return Ok(());
+        }
+        let player = accessor.get_res(&player)?;
+        run_blocking(accessor, move || {
+            player.drop_item(stack);
         })
         .await
     }

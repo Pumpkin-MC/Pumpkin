@@ -2335,38 +2335,40 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
-                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
-                rayon::spawn(move || {
-                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
-                    let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
-                        return;
-                    };
-                    let transition = portal_type.get_portal_destination(
-                        &world_clone,
-                        dest_world_opt,
-                        entity_arc.as_ref(),
-                        src_portal.as_ref(),
-                    );
+                if let Some(server) = world_clone.server.upgrade() {
+                    server.spawn_task(async move {
+                        let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
+                            return;
+                        };
+                        let transition = portal_type
+                            .get_portal_destination(
+                                &world_clone,
+                                dest_world_opt,
+                                entity_arc.as_ref(),
+                                src_portal.as_ref(),
+                            )
+                            .await;
 
-                    if let Some(transition) = transition {
-                        let dest_world = transition.new_world.clone();
-                        let yaw_val = transition.yaw;
-                        let pitch = transition.pitch;
-                        let teleport_pos = transition.position;
+                        if let Some(transition) = transition {
+                            let dest_world = transition.new_world.clone();
+                            let yaw_val = transition.yaw;
+                            let pitch = transition.pitch;
+                            let teleport_pos = transition.position;
 
-                        // Teleport the main entity
-                        entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            // Teleport the main entity
+                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
 
-                        // Teleport all passengers recursively along with the vehicle
-                        let yaw_delta = yaw_val.map(|y| y - yaw);
-                        Self::teleport_passengers_recursive(
-                            entity_arc.get_entity(),
-                            teleport_pos,
-                            yaw_delta,
-                            &dest_world,
-                        );
-                    }
-                });
+                            // Teleport all passengers recursively along with the vehicle
+                            let yaw_delta = yaw_val.map(|y| y - yaw);
+                            Self::teleport_passengers_recursive(
+                                entity_arc.get_entity(),
+                                teleport_pos,
+                                yaw_delta,
+                                &dest_world,
+                            );
+                        }
+                    });
+                }
             } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }

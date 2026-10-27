@@ -269,6 +269,10 @@ impl BlockBehaviour for DispenserBlock {
             } else {
                 args.world
                     .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
+                args.world.emit_game_event(
+                    GameEvent::BlockActivate.name(),
+                    args.position.to_centered_f64(),
+                );
             }
         }
     }

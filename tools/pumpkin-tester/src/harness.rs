@@ -3,17 +3,16 @@ use std::sync::Arc;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_core::{
     data::VanillaData,
-    net::{
-        ClientPlatform, PacketHandlerResult, PacketRateLimiter,
-        java::{JavaClient, pending::PendingConnection},
-    },
+    net::{PacketRateLimiter, java::pending::PendingConnection},
+    serve_java_connection,
     server::Server,
 };
-use pumpkin_util::PermissionLvl;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_util::{PermissionLvl, math::vector2::Vector2};
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Server>, String> {
+pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, AdvancedConfiguration) {
     let basic_config = BasicConfiguration {
         default_level_name: temp_dir.path().to_string_lossy().into_owned(),
         allow_nether: false,
@@ -33,6 +32,11 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
     advanced_config.player_data.save_player_data = false;
     advanced_config.advancement.save_advancements = false;
 
+    (basic_config, advanced_config)
+}
+
+pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Server>, String> {
+    let (basic_config, advanced_config) = test_configs(temp_dir);
     Server::new(
         basic_config,
         advanced_config,
@@ -42,6 +46,15 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
     )
     .await
     .map_err(|err| format!("Failed to initialize test Server: {err}"))
+}
+
+/// Generates the overworld spawn chunk, so a bot's join waits on the network, not on world
+/// generation, which can outlast the bot packet timeout on a slow runner.
+pub async fn prepare_spawn_chunk(server: &Server) {
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let info = world.level_info.load();
+    let spawn_chunk = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+    world.level.get_or_fetch_chunk(spawn_chunk, |_| ()).await;
 }
 
 pub fn spawn_java_listener(
@@ -69,51 +82,14 @@ pub fn spawn_java_listener(
                         let packet_limiter = PacketRateLimiter::from_config(
                             &server_clone.advanced_config.networking.java.packet_limiter,
                         );
-                        let mut pending = PendingConnection::new(
+                        let pending = PendingConnection::new(
                             connection,
                             client_addr,
                             client_id,
                             packet_limiter,
                             Arc::downgrade(&server_clone),
                         );
-                        match pending.handle_login_sequence(&server_clone).await {
-                            PacketHandlerResult::Stop => {
-                                pending.close();
-                            }
-                            PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                let mut java_client = JavaClient::from_pending(
-                                    pending,
-                                    profile.clone(),
-                                    config.clone(),
-                                );
-                                java_client.start_outgoing_packet_task();
-
-                                if let Some((player, world)) = server_clone.add_player(
-                                    Arc::new(ClientPlatform::Java(java_client)),
-                                    profile,
-                                    Some(config),
-                                ) {
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.set_player(player.clone());
-                                    }
-                                    world
-                                        .spawn_java_player(
-                                            &server_clone.basic_config,
-                                            &player,
-                                            &server_clone,
-                                        )
-                                        .await;
-
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player);
-                                }
-                            }
-                        }
+                        serve_java_connection(server_clone, pending).await;
                     });
                 }
             }
