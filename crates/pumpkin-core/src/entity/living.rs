@@ -56,7 +56,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
+    CHurtAnimation, CSetPlayerInventory, CSwingArm, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -1395,10 +1395,7 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
-        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
-            entity_id.into(),
-            pumpkin_protocol::java::client::play::Animation::SwingOffhand,
-        );
+        let je_packet = CSwingArm::new(entity_id.into(), true);
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
