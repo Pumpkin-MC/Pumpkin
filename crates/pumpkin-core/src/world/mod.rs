@@ -3439,8 +3439,6 @@ impl World {
             }
         };
 
-        self.pair_new_player_with_tracked_entities(player);
-
         // Send the current ticking state to the new player so they are in sync.
         server.tick_rate_manager.update_joining_player(player).await;
 
@@ -3505,6 +3503,9 @@ impl World {
 
         debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch);
+
+        // Vanilla pairs after the teleport; range, watched section and chunk readiness need the spawn position.
+        self.pair_new_player_with_tracked_entities(player);
 
         // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
         self.entity_tracker
