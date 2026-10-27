@@ -760,8 +760,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
+            // A Java client runs only the other side's `pushEntities` on its player, so
+            // the pusher's own half stays off the Bedrock impulse
             if !other_entity.has_passengers() && entity.is_pushable() {
-                other_entity.push_by(Vector3::new(dx, 0.0, dz));
+                other_entity.push_back_by(Vector3::new(dx, 0.0, dz));
             }
         }
     }
@@ -1162,7 +1164,7 @@ pub struct Entity {
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
     /// Unsent entity pushes on a player. Bedrock clients don't predict them, so they stay
-    /// pending until `SetActorMotion` can layer them on the last client delta.
+    /// pending at full size until `SetActorMotion` can layer them on the last client delta.
     pub push_impulse: AtomicCell<Vector3<f64>>,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
@@ -2175,6 +2177,12 @@ impl Entity {
         if self.entity_type == &EntityType::PLAYER {
             self.push_impulse.store(self.push_impulse.load() + impulse);
         }
+    }
+
+    /// `push_by` on the pusher in its own `pushEntities`, which stays off the Bedrock impulse.
+    pub fn push_back_by(&self, impulse: Vector3<f64>) {
+        self.velocity.store(self.velocity.load() + impulse);
+        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     /// Vanilla `getKnownMovement`: a player's own client motion, otherwise the velocity.

@@ -1,5 +1,6 @@
 pub mod advancement;
 pub mod client_move;
+pub mod client_push;
 pub mod statistics;
 
 pub use client_move::{ClientMove, ClientMoveOutcome};
@@ -2639,6 +2640,11 @@ impl Player {
             client
                 .own_motion_tick
                 .store(client.input_tick.load(Ordering::Relaxed), Ordering::Relaxed);
+            client
+                .push_residual
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
         }
         self.send_own_motion(velocity);
     }
@@ -2656,59 +2662,6 @@ impl Player {
                 tick: VarULong(tick),
             },
         );
-    }
-
-    /// Ticks until a Bedrock `SetActorMotion` should show up in `PlayerAuthInput.delta`.
-    /// `ping_ms == 0` is unsampled and keeps the 10-tick cap.
-    fn bedrock_motion_in_flight_ticks(ping_ms: u32) -> i64 {
-        const MIN: i64 = 2;
-        const MAX: i64 = 10;
-        if ping_ms == 0 {
-            return MAX;
-        }
-        (i64::from(ping_ms.div_ceil(50)) + 1).clamp(MIN, MAX)
-    }
-
-    /// Velocity part of vanilla `ServerEntity.sendChanges`. Runs after the entity pass,
-    /// so this tick's knockback goes out before the next packets and friction.
-    pub fn send_velocity_changes(&self) {
-        let entity = self.get_entity();
-        if entity.sync_velocity.swap(false, Ordering::SeqCst) {
-            // The server velocity already holds the pushes
-            entity.push_impulse.store(Vector3::default());
-            entity.velocity_dirty.store(false, Ordering::SeqCst);
-            self.send_hurt_velocity();
-            return;
-        }
-        if entity.velocity_dirty.swap(false, Ordering::SeqCst)
-            && entity.velocity_changed_since_sent()
-        {
-            // Vanilla `needsSync`: watchers only, Java clients predict their own pushes
-            entity.send_velocity_to_watchers();
-        }
-        let Some(client) = self.client.bedrock() else {
-            entity.push_impulse.store(Vector3::default());
-            return;
-        };
-        // `SetActorMotion` replaces velocity; there is no add-impulse packet. Bedrock also
-        // does not predict entity pushes, so the server layers them onto the last client
-        // delta. While a previous own-player motion is in flight those deltas are stale
-        // and a new set would overwrite it (e.g. knockback), so the impulse stays pending
-        // and fades in `travel` like Java friction would.
-        let since_motion = self
-            .world()
-            .get_world_age()
-            .saturating_sub(client.own_motion_age.load());
-        let input_caught_up = client.input_tick.load(Ordering::Relaxed)
-            > client.own_motion_tick.load(Ordering::Relaxed);
-        if since_motion >= Self::bedrock_motion_in_flight_ticks(self.ping.load(Ordering::Relaxed))
-            && input_caught_up
-        {
-            let push = entity.push_impulse.swap(Vector3::default());
-            if push != Vector3::default() {
-                self.send_own_velocity(client.client_delta.load() + push);
-            }
-        }
     }
 
     /// Vanilla `LivingEntity.knockback`, sent to the player like a hit with `PlayerVelocityEvent`
@@ -2761,14 +2714,6 @@ impl Player {
         }
         let packet = CPlayServerLinks::new(links);
         self.try_send_client_packet(&packet);
-    }
-
-    /// Vanilla `LivingEntity.pushEntities` for a player, run after all player ticks.
-    pub fn push_entities(&self) {
-        let living = &self.living_entity;
-        if !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0 {
-            living.push_entities(self);
-        }
     }
 
     pub fn process_inbound_packets(&self) {
@@ -8349,21 +8294,9 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{Player, read_root_vehicle, write_root_vehicle};
+    use super::{read_root_vehicle, write_root_vehicle};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
-
-    #[test]
-    fn bedrock_motion_wait_uses_ping_and_caps() {
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(0), 10);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(1), 2);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(20), 2);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(50), 2);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(100), 3);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(250), 6);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(500), 10);
-        assert_eq!(Player::bedrock_motion_in_flight_ticks(2000), 10);
-    }
 
     #[test]
     fn root_vehicle_uuid_round_trips_with_vanilla_shape() {

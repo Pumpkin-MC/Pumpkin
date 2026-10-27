@@ -146,6 +146,8 @@ pub struct BedrockClient {
     pub own_motion_age: AtomicCell<i64>,
     /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
     pub own_motion_tick: AtomicU64,
+    /// Push velocity the client carries from the server's motions.
+    pub push_residual: std::sync::Mutex<crate::entity::player::client_push::PushResidual>,
     /// Ids and send times of unanswered `NetworkStackLatency` probes, oldest first.
     pending_latencies: std::sync::Mutex<VecDeque<(u64, Instant)>>,
     next_latency_id: AtomicU64,
@@ -199,6 +201,7 @@ impl BedrockClient {
             client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             own_motion_age: AtomicCell::new(i64::MIN),
             own_motion_tick: AtomicU64::new(0),
+            push_residual: std::sync::Mutex::default(),
             pending_latencies: std::sync::Mutex::new(VecDeque::new()),
             next_latency_id: AtomicU64::new(1),
             last_latency_send: AtomicCell::new(Instant::now()),

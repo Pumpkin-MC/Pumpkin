@@ -3749,18 +3749,12 @@ impl EntityBase for LivingEntity {
             if !self.entity.sync_velocity.load(Ordering::SeqCst) {
                 let old_y = self.entity.velocity.load().y;
                 let friction = self.travel(caller);
-                // Unsent Bedrock pushes fade like the client's motion would
-                let push = self.entity.push_impulse.load();
-                if push != Vector3::default() {
-                    self.entity
-                        .push_impulse
-                        .store(push.multiply(friction, 0.98, friction));
+                let player = caller.get_player();
+                if let Some(player) = player {
+                    player.tick_push_residual(friction);
                 }
                 // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
-                if caller
-                    .get_player()
-                    .is_some_and(super::player::Player::is_flying)
-                {
+                if player.is_some_and(super::player::Player::is_flying) {
                     let velo = self.entity.velocity.load();
                     self.entity
                         .velocity
