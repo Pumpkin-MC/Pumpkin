@@ -867,16 +867,28 @@ impl PluginManager {
                         loader_clone.unload(data).await.ok();
                     }
 
+                    // Same states-then-plugins section as the reservation, so a new load of
+                    // this name cannot reserve in between and get its state overwritten
                     let removed = {
-                        let mut plugins = self_ref_clone
-                            .plugins
-                            .write()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        plugins
-                            .iter()
-                            .position(|p| p.token == token)
-                            .map(|index| plugins.remove(index))
-                            .is_some()
+                        let mut states = self_ref_clone.plugin_states.write().await;
+                        let removed = {
+                            let mut plugins = self_ref_clone
+                                .plugins
+                                .write()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            plugins
+                                .iter()
+                                .position(|p| p.token == token)
+                                .map(|index| plugins.remove(index))
+                                .is_some()
+                        };
+                        if removed {
+                            states.insert(
+                                plugin_name.clone(),
+                                PluginState::Failed(error_msg.clone()),
+                            );
+                        }
+                        removed
                     };
 
                     // Unloaded during on_unload
@@ -886,11 +898,6 @@ impl PluginManager {
                         return;
                     }
 
-                    self_ref_clone
-                        .plugin_states
-                        .write()
-                        .await
-                        .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
                     // Keep it listed with its error, so it can be tried again
                     self_ref_clone.mark_inactive(
                         &plugin_path,
@@ -1544,16 +1551,23 @@ impl PluginManager {
         // on_load runs inside the library, so it must finish before the library is released
         self.wait_for_initialization(name).await;
 
+        // State goes in the same section as the record, or a load reserving the freed name
+        // would lose its Loading state to this unload
         let mut plugin = {
-            let mut plugins = self
-                .plugins
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let index = plugins
-                .iter()
-                .position(|p| p.metadata.name == name)
-                .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
-            plugins.remove(index)
+            let mut states = self.plugin_states.write().await;
+            let plugin = {
+                let mut plugins = self
+                    .plugins
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let index = plugins
+                    .iter()
+                    .position(|p| p.metadata.name == name)
+                    .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
+                plugins.remove(index)
+            };
+            states.remove(name);
+            plugin
         };
 
         self.unregister_handlers(name);
@@ -1577,9 +1591,6 @@ impl PluginManager {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .push(plugin);
         }
-
-        // Remove from plugin states
-        self.plugin_states.write().await.remove(name);
 
         Ok(())
     }
