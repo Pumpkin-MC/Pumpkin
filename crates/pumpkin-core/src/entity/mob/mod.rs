@@ -1345,6 +1345,16 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
+    fn on_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.on_damage(damage_type, source);
+        true
+    }
+
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
@@ -1917,7 +1927,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             cause,
         );
         if damaged {
-            self.on_damage(damage_type, source);
+            return self.on_damage_with_context(damage_type, source, cause);
         }
         damaged
     }

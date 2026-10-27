@@ -25,7 +25,6 @@ use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
-use crate::entity::ageable::AgeableMob;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
@@ -113,6 +112,7 @@ pub struct LivingEntity {
     pub last_attacker_id: AtomicI32,
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
+    last_hurt_by_mob: AtomicCell<Option<(i32, i32)>>,
     last_damage_type: std::sync::Mutex<Option<DamageType>>,
     /// Entity id of the last damage source's causing entity, 0 when it had none.
     last_damage_attacker: AtomicI32,
@@ -131,10 +131,6 @@ pub struct LivingEntity {
     pub no_action_time: AtomicI32,
     /// The tick at which this entity was last hurt by a player.
     pub last_hurt_by_player_time: AtomicI64,
-    /// The ID of the mob/entity that last hurt this entity.
-    pub last_hurt_by_mob_id: AtomicI32,
-    /// The tick at which this entity was last hurt by a mob/entity.
-    pub last_hurt_by_mob_time: AtomicI64,
 
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
@@ -260,10 +256,7 @@ impl LivingEntity {
     }
 
     pub(crate) fn get_pitch(&self) -> f32 {
-        let is_baby = self
-            .get_mob()
-            .and_then(|x| x.as_ageable())
-            .is_some_and(AgeableMob::is_baby);
+        let is_baby = self.entity.age.load(Relaxed) < 0;
 
         let mut rng = rand::rng();
         if is_baby {
@@ -319,6 +312,7 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_hurt_by_mob: AtomicCell::new(None),
             last_damage_type: std::sync::Mutex::new(None),
             last_damage_attacker: AtomicI32::new(0),
             last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
@@ -328,8 +322,6 @@ impl LivingEntity {
             last_hurt_by_player_id: AtomicI32::new(0),
             no_action_time: AtomicI32::new(0),
             last_hurt_by_player_time: AtomicI64::new(0),
-            last_hurt_by_mob_id: AtomicI32::new(0),
-            last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
@@ -338,10 +330,26 @@ impl LivingEntity {
         }
     }
 
+    pub fn get_last_hurt_by_mob(&self) -> Option<Arc<dyn EntityBase>> {
+        let id = self.get_last_hurt_by_mob_id()?;
+        self.entity.world.load().get_entity_by_id(id)
+    }
+
+    pub fn get_last_hurt_by_mob_id(&self) -> Option<i32> {
+        self.last_hurt_by_mob.load().map(|(id, _)| id)
+    }
+
+    pub fn set_last_hurt_by_mob(&self, attacker: &dyn EntityBase) {
+        self.last_hurt_by_mob.store(Some((
+            attacker.get_entity().entity_id,
+            self.entity.tick_count.load(Relaxed),
+        )));
+    }
+
     /// Returns the entity that should receive kill credit for this entity's death.
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).
-    /// 2. Then `last_hurt_by_mob` if hurt within the last 100 ticks.
+    /// 2. Then `last_hurt_by_mob`, which is cleared 100 ticks after the hit.
     /// 3. Fall back to combat tracker's killer entry if available.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
         let world = self.entity.world.load();
@@ -356,12 +364,7 @@ impl LivingEntity {
             return Some(player);
         }
 
-        let mob_id = self.last_hurt_by_mob_id.load(Relaxed);
-        let mob_time = self.last_hurt_by_mob_time.load(Relaxed);
-        if mob_id != 0
-            && (current_tick - mob_time).abs() <= 100
-            && let Some(mob) = world.get_entity_by_id(mob_id)
-        {
+        if let Some(mob) = self.get_last_hurt_by_mob() {
             return Some(mob);
         }
 
@@ -3387,6 +3390,17 @@ impl LivingEntity {
         let Some(server) = world.server.upgrade() else {
             return false;
         };
+        if let Some(attacker) = cause.or(source)
+            && attacker.get_living_entity().is_some()
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_ANGER)
+            && (damage_type != DamageType::WIND_CHARGE
+                || !self
+                    .entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_NO_ANGER_FROM_WIND_CHARGE))
+        {
+            self.set_last_hurt_by_mob(attacker);
+        }
         let config = &server.advanced_config.pvp;
 
         if config.hurt_animation {
@@ -3520,9 +3534,6 @@ impl LivingEntity {
                 if attacker.get_player().is_some() {
                     self.last_hurt_by_player_id.store(attacker_id, Relaxed);
                     self.last_hurt_by_player_time.store(current_tick, Relaxed);
-                } else if attacker.get_living_entity().is_some() {
-                    self.last_hurt_by_mob_id.store(attacker_id, Relaxed);
-                    self.last_hurt_by_mob_time.store(current_tick, Relaxed);
                 }
             }
         }
@@ -3600,6 +3611,17 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
+        if let Some((_, timestamp)) = self.last_hurt_by_mob.load()
+            && (self.entity.tick_count.load(Relaxed) - timestamp > 100
+                || self.get_last_hurt_by_mob().is_none_or(|attacker| {
+                    attacker
+                        .get_living_entity()
+                        .is_none_or(Self::is_dead_or_dying)
+                        || !attacker.get_entity().is_alive()
+                }))
+        {
+            self.last_hurt_by_mob.store(None);
+        }
         if let Some(mob) = caller.get_mob() {
             mob.base_tick();
         }
