@@ -47,16 +47,8 @@ impl SpiderEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
@@ -90,10 +82,11 @@ impl SpiderEntity {
     pub fn set_climbing(&self, climbing: bool) {
         if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
             let flags = i8::from(climbing);
-            self.mob_entity
-                .living_entity
-                .entity
-                .set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
+            let entity = &self.mob_entity.living_entity.entity;
+            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
+            if let Some(meta) = self.mob_metadata() {
+                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+            }
         }
     }
 }
@@ -130,8 +123,7 @@ pub fn finalize_spider_spawn(
         SpawnGroupData::SpiderEffects(effect)
     });
 
-    let SpawnGroupData::SpiderEffects(effect) = &group_data;
-    if let Some(effect_type) = effect {
+    if let SpawnGroupData::SpiderEffects(Some(effect_type)) = &group_data {
         mob.living_entity.add_effect(Effect {
             effect_type,
             duration: -1,
@@ -156,6 +148,14 @@ impl Mob for SpiderEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_climbing() {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

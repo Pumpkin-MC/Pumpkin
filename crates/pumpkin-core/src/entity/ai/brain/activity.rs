@@ -3,6 +3,24 @@ use pumpkin_data::environment_attribute::Activity;
 use super::behavior::BehaviorControl;
 use super::memory::{MemoryModuleId, MemoryStatus};
 
+// Java's per-priority HashMap preserves registration order within each bucket.
+pub(super) fn activity_slot(activity: Activity, activities: usize) -> usize {
+    let hash = activity
+        .name()
+        .encode_utf16()
+        .fold(0i32, |hash, unit| {
+            hash.wrapping_mul(31).wrapping_add(i32::from(unit))
+        })
+        .cast_unsigned();
+    let mut capacity = JAVA_HASH_MAP_CAPACITY;
+    while activities > capacity / 4 * 3 {
+        capacity *= 2;
+    }
+    (hash ^ (hash >> 16)) as usize & (capacity - 1)
+}
+
+const JAVA_HASH_MAP_CAPACITY: usize = 16;
+
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 pub struct ActivitySet(u32);
 
