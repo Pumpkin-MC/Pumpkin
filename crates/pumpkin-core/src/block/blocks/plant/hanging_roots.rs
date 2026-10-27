@@ -13,8 +13,8 @@ impl HangingRootsBlock {
     #[must_use]
     pub fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let above_pos = pos.up();
-        let (above_block, above_state) = world.get_block_and_state(&above_pos);
-        above_state.is_side_solid(BlockDirection::Down) && above_block.is_solid()
+        let above_state = world.get_block_state(&above_pos);
+        above_state.is_side_solid(BlockDirection::Down)
     }
 }
 

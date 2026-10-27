@@ -36,7 +36,7 @@ impl BlockBehaviour for SlabBlock {
             BlockDirection::Up => SlabType::Top,
             BlockDirection::Down => SlabType::Bottom,
             _ => match args.use_item_on.cursor_pos.y {
-                0.0..0.5 => SlabType::Bottom,
+                0.0..=0.5 => SlabType::Bottom,
                 _ => SlabType::Top,
             },
         };
@@ -52,7 +52,7 @@ impl BlockBehaviour for SlabBlock {
                 BlockDirection::Up => SlabType::Bottom,
                 BlockDirection::Down => SlabType::Top,
                 _ => match args.use_item_on.cursor_pos.y {
-                    0.0..0.5 => SlabType::Top,
+                    0.0..=0.5 => SlabType::Top,
                     _ => SlabType::Bottom,
                 },
             }

@@ -4,18 +4,17 @@ use pumpkin_data::block_properties::TurtleEggLikeProperties;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, BlockStateId, tag};
+use pumpkin_data::{Block, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use rand::RngExt;
 use uuid::Uuid;
 
 use crate::block::{
-    BlockBehaviour, BlockIsReplacing, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
-    GetStateForNeighborUpdateArgs, OnEntityStepArgs, OnLandedUponArgs, OnPlaceArgs,
-    OnScheduledTickArgs, RandomTickArgs,
+    BlockBehaviour, BlockIsReplacing, BrokenArgs, CanUpdateAtArgs, OnEntityStepArgs,
+    OnLandedUponArgs, OnPlaceArgs, RandomTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
@@ -107,33 +106,11 @@ impl BlockBehaviour for TurtleEggBlock {
         properties.to_state_id(args.block)
     }
 
-    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.position)
-    }
-
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let b = BlockAccessor::get_block(args.world, args.position);
         args.player.get_entity().pose.load() != EntityPose::Crouching
             && TurtleEggProperties::from_state_id(args.state_id).eggs < 4
             && args.block.id == b.id
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if !can_place_at(args.world, args.position) {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
-        }
-        args.state_id
-    }
-
-    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
@@ -172,6 +149,22 @@ impl BlockBehaviour for TurtleEggBlock {
         if !Self::on_sand(args.world.as_ref(), args.position) {
             return;
         }
+        let time_of_day = (args
+            .world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .time_of_day
+            % 24000) as f32
+            / 24000.0;
+        let should_update = if (0.65..=0.69).contains(&time_of_day) {
+            true
+        } else {
+            rand::rng().random_range(0..500) == 0
+        };
+        if !should_update {
+            return;
+        }
 
         let state_id = args.world.get_block_state_id(args.position);
         let mut props = TurtleEggProperties::from_state_id(state_id);
@@ -181,7 +174,7 @@ impl BlockBehaviour for TurtleEggBlock {
             args.world.set_block_state(
                 args.position,
                 props.to_state_id(args.block),
-                BlockFlags::NOTIFY_ALL,
+                BlockFlags::NOTIFY_LISTENERS,
             );
 
             args.world.play_sound(
@@ -209,24 +202,17 @@ impl BlockBehaviour for TurtleEggBlock {
                     let turtle =
                         from_type(&EntityType::TURTLE, spawn_pos, args.world, Uuid::new_v4());
                     turtle.get_entity().set_age(-24000);
-                    args.world.spawn_entity_non_save(turtle);
+                    args.world.spawn_entity(turtle);
                 }
             }
         }
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
-        {
-            args.world.play_sound(
-                Sound::EntityTurtleEggBreak,
-                SoundCategory::Blocks,
-                &args.position.to_f64(),
-            );
-        }
+        args.world.play_sound(
+            Sound::EntityTurtleEggBreak,
+            SoundCategory::Blocks,
+            &args.position.to_f64(),
+        );
     }
-}
-
-fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let (support_block, state) = block_accessor.get_block_and_state(&position.down());
-    support_block.has_tag(&tag::Block::MINECRAFT_SAND) || state.is_center_solid(BlockDirection::Up)
 }

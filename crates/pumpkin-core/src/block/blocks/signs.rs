@@ -382,6 +382,38 @@ impl BlockBehaviour for SignBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let is_hanging = args.block.name.contains("hanging");
+        let is_wall_sign = args.block.name.contains("wall");
+
+        if args.player.is_none() {
+            let support_dir = if is_wall_sign {
+                get_wall_support_direction(args.block, args.state.id)
+            } else if is_hanging {
+                Some(BlockDirection::Up)
+            } else {
+                Some(BlockDirection::Down)
+            };
+            let Some(dir) = support_dir else {
+                return false;
+            };
+            let support_pos = args.position.offset(dir.to_offset());
+            let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
+            if !is_hanging {
+                return state.is_solid();
+            }
+            let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+                || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS);
+            return match dir {
+                BlockDirection::Up => {
+                    crate::block::can_support_center(
+                        args.block_accessor,
+                        &support_pos,
+                        BlockDirection::Down,
+                    ) || is_permissive
+                }
+                _ => state.is_side_solid(dir.opposite()) || is_permissive,
+            };
+        }
+
         let clicked_face = args
             .use_item_on
             .and_then(|u| pumpkin_data::BlockDirection::try_from(u.face.0).ok())
@@ -394,7 +426,7 @@ impl BlockBehaviour for SignBlock {
                 let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
                 if state.is_side_solid(d.opposite().to_block_direction())
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
+                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS)
                 {
                     return true;
                 }
@@ -410,14 +442,19 @@ impl BlockBehaviour for SignBlock {
 
         let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
         let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS);
 
         match clicked_face {
             // Standing signs need a legacy-solid block below,
             // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
             BlockDirection::Up => !is_hanging && state.is_solid(),
             BlockDirection::Down => {
-                is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
+                is_hanging
+                    && (crate::block::can_support_center(
+                        args.block_accessor,
+                        &support_pos,
+                        BlockDirection::Down,
+                    ) || is_permissive)
             }
             _ => {
                 if is_hanging {
@@ -443,6 +480,8 @@ impl BlockBehaviour for SignBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
+
         let is_hanging = args.block.name.contains("hanging");
         let is_wall_sign = args.block.name.contains("wall");
 
@@ -458,7 +497,9 @@ impl BlockBehaviour for SignBlock {
             Some(BlockDirection::Down)
         };
 
-        if let Some(dir) = support_dir {
+        if let Some(dir) = support_dir
+            && args.direction == dir
+        {
             let support_pos = args.position.offset(dir.to_offset());
             let support_state = args.world.get_block_state(&support_pos);
 
@@ -474,7 +515,9 @@ impl BlockBehaviour for SignBlock {
 
             let is_valid = match dir {
                 BlockDirection::Up => {
-                    support_state.is_center_solid(BlockDirection::Down) || is_leaf || is_sign
+                    crate::block::can_support_center(args.world, &support_pos, BlockDirection::Down)
+                        || is_leaf
+                        || is_sign
                 }
                 // Standing signs survive on a legacy-solid block,
                 // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
@@ -494,8 +537,6 @@ impl BlockBehaviour for SignBlock {
                 return BlockStateId::AIR;
             }
         }
-
-        crate::block::simple_waterlogged::schedule_water_tick(&args);
 
         args.state_id
     }

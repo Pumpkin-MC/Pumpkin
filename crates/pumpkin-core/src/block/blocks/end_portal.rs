@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
+use crate::block::GetInsideCollisionShapeArgs;
 use crate::block::OnEntityCollisionArgs;
 use crate::block::PlacedArgs;
 use crate::block::entities::end_portal::EndPortalBlockEntity;
@@ -8,6 +9,8 @@ use pumpkin_data::BlockState;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
 
 #[pumpkin_block("minecraft:end_portal")]
 pub struct EndPortalBlock;
@@ -15,6 +18,10 @@ pub struct EndPortalBlock;
 impl BlockBehaviour for EndPortalBlock {
     fn can_be_replaced_with_fluid(&self, _state: &BlockState, _fluid: &Fluid) -> bool {
         false
+    }
+
+    fn get_inside_collision_shape(&self, _args: GetInsideCollisionShapeArgs<'_>) -> BoundingBox {
+        BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.75, 1.0))
     }
 
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {

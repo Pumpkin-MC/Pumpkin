@@ -86,7 +86,8 @@ const fn horizontal_directions() -> [BlockDirection; 4] {
 }
 
 fn can_spread_to(world: &crate::world::World, position: BlockPos) -> bool {
-    world.is_loaded(&position)
+    world.is_in_build_limit(position)
+        && world.is_loaded(&position)
         && world.get_block_state(&position).is_air()
         && world.block_registry.can_place_at(
             None,
