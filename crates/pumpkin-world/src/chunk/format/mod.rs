@@ -255,6 +255,58 @@ fn top_stored_sky_section(sky_lights: &[LightContainer]) -> Option<usize> {
     )
 }
 
+// Per-section light flags in the Pump format. A layer with neither flag is dark.
+const PUMP_BLOCK_LIGHT_FULL: u8 = 1;
+const PUMP_SKY_LIGHT_FULL: u8 = 1 << 1;
+const PUMP_BLOCK_LIGHT_UNIFORM: u8 = 1 << 2;
+const PUMP_SKY_LIGHT_UNIFORM: u8 = 1 << 3;
+
+/// How one light layer of a section is stored in the Pump format.
+enum PumpLight<'a> {
+    Full(&'a [u8]),
+    /// A single nonzero level, stored as one byte.
+    Uniform(u8),
+    Dark,
+}
+
+fn pump_light_payload(container: Option<&LightContainer>) -> PumpLight<'_> {
+    match container {
+        Some(LightContainer::Full(data)) if data.len() == LightContainer::ARRAY_SIZE => {
+            PumpLight::Full(data)
+        }
+        Some(LightContainer::Empty(level)) if *level != 0 => PumpLight::Uniform(*level),
+        _ => PumpLight::Dark,
+    }
+}
+
+fn read_pump_light(
+    buf: &mut &[u8],
+    light_flags: u8,
+    full_flag: u8,
+    uniform_flag: u8,
+    what: &str,
+) -> Result<LightContainer, ChunkParsingError> {
+    if light_flags & full_flag != 0 {
+        if buf.remaining() < LightContainer::ARRAY_SIZE {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unexpected EOF reading {what}"
+            )));
+        }
+        let data: Box<[u8]> = buf[..LightContainer::ARRAY_SIZE].into();
+        buf.advance(LightContainer::ARRAY_SIZE);
+        Ok(LightContainer::Full(data))
+    } else if light_flags & uniform_flag != 0 {
+        if !buf.has_remaining() {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unexpected EOF reading {what}"
+            )));
+        }
+        Ok(LightContainer::Empty(buf.get_u8()))
+    } else {
+        Ok(LightContainer::Empty(0))
+    }
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -855,31 +907,26 @@ impl ChunkData {
             block_lock[i].write_pump_binary(&mut out);
             biome_lock[i].write_pump_binary(&mut out);
 
-            let bl = match light_lock.block_light.get(i) {
-                Some(LightContainer::Full(data)) if data.len() == LightContainer::ARRAY_SIZE => {
-                    Some(data.as_ref())
-                }
-                _ => None,
-            };
-            let sl = match light_lock.sky_light.get(i) {
-                Some(LightContainer::Full(data)) if data.len() == LightContainer::ARRAY_SIZE => {
-                    Some(data.as_ref())
-                }
-                _ => None,
-            };
+            let bl = pump_light_payload(light_lock.block_light.get(i));
+            let sl = pump_light_payload(light_lock.sky_light.get(i));
             let mut light_flags = 0u8;
-            if bl.is_some() {
-                light_flags |= 1;
-            }
-            if sl.is_some() {
-                light_flags |= 2;
+            for (payload, full_flag, uniform_flag) in [
+                (&bl, PUMP_BLOCK_LIGHT_FULL, PUMP_BLOCK_LIGHT_UNIFORM),
+                (&sl, PUMP_SKY_LIGHT_FULL, PUMP_SKY_LIGHT_UNIFORM),
+            ] {
+                match payload {
+                    PumpLight::Full(_) => light_flags |= full_flag,
+                    PumpLight::Uniform(_) => light_flags |= uniform_flag,
+                    PumpLight::Dark => {}
+                }
             }
             out.put_u8(light_flags);
-            if let Some(data) = bl {
-                out.extend_from_slice(data);
-            }
-            if let Some(data) = sl {
-                out.extend_from_slice(data);
+            for payload in [bl, sl] {
+                match payload {
+                    PumpLight::Full(data) => out.extend_from_slice(data),
+                    PumpLight::Uniform(level) => out.put_u8(level),
+                    PumpLight::Dark => {}
+                }
             }
         }
 
@@ -1024,30 +1071,20 @@ impl ChunkData {
                 ));
             }
             let light_flags = buf.get_u8();
-            let block_light = if (light_flags & 1) != 0 {
-                if buf.remaining() < LightContainer::ARRAY_SIZE {
-                    return Err(ChunkParsingError::ErrorDeserializingChunk(
-                        "Unexpected EOF reading block light".into(),
-                    ));
-                }
-                let data: Box<[u8]> = buf[..LightContainer::ARRAY_SIZE].into();
-                buf.advance(LightContainer::ARRAY_SIZE);
-                LightContainer::Full(data)
-            } else {
-                LightContainer::Empty(0)
-            };
-            let sky_light = if (light_flags & 2) != 0 {
-                if buf.remaining() < LightContainer::ARRAY_SIZE {
-                    return Err(ChunkParsingError::ErrorDeserializingChunk(
-                        "Unexpected EOF reading sky light".into(),
-                    ));
-                }
-                let data: Box<[u8]> = buf[..LightContainer::ARRAY_SIZE].into();
-                buf.advance(LightContainer::ARRAY_SIZE);
-                LightContainer::Full(data)
-            } else {
-                LightContainer::Empty(0)
-            };
+            let block_light = read_pump_light(
+                &mut buf,
+                light_flags,
+                PUMP_BLOCK_LIGHT_FULL,
+                PUMP_BLOCK_LIGHT_UNIFORM,
+                "block light",
+            )?;
+            let sky_light = read_pump_light(
+                &mut buf,
+                light_flags,
+                PUMP_SKY_LIGHT_FULL,
+                PUMP_SKY_LIGHT_UNIFORM,
+                "sky light",
+            )?;
             block_lights.push(block_light);
             sky_lights.push(sky_light);
         }
@@ -1834,6 +1871,20 @@ mod tests {
     fn assert_sky_round_trip(chunk: &ChunkData) {
         let before = sky_levels(chunk);
         let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+        assert_eq!(sky_levels(&reloaded), before);
+    }
+
+    #[test]
+    fn uniform_sky_sections_survive_the_pump_round_trip() {
+        let chunk = chunk_with_sky(|index| match index {
+            0..=2 => LightContainer::Empty(0),
+            3..=5 => LightContainer::Empty(9),
+            6 => LightContainer::new_filled(7),
+            _ => LightContainer::Empty(15),
+        });
+        let before = sky_levels(&chunk);
+        let bytes = chunk.to_pump_bytes().expect("serializes");
         let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
         assert_eq!(sky_levels(&reloaded), before);
     }
