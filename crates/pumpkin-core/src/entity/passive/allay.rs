@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
+    atomic::{AtomicBool, AtomicI64, Ordering},
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -42,7 +42,6 @@ mod vibration;
 
 const DUPLICATION_COOLDOWN_TICKS: i64 = 6000;
 const ITEM_PICKUP_REACH: Vector3<f64> = Vector3::new(1.0, 1.0, 1.0);
-const AMBIENT_SOUND_INTERVAL: i32 = 80;
 const THROW_SOUND_PITCHES: &[f32] = &[
     0.5625, 0.625, 0.75, 0.9375, 1.0, 1.0, 1.125, 1.25, 1.5, 1.875, 2.0, 2.25, 2.5, 3.0, 3.75, 4.0,
 ];
@@ -54,7 +53,6 @@ pub struct AllayEntity {
     inventory: Mutex<ItemStack>,
     jukebox_pos: AtomicCell<Option<BlockPos>>,
     vibration: Mutex<vibration::VibrationData>,
-    ambient_sound_time: AtomicI32,
     noteblock_chunk: Mutex<Option<chunk_loading::NoteBlockChunk>>,
 }
 
@@ -81,7 +79,6 @@ impl AllayEntity {
             inventory: Mutex::new(ItemStack::EMPTY.clone()),
             jukebox_pos: AtomicCell::new(None),
             vibration: Mutex::new(vibration::VibrationData::default()),
-            ambient_sound_time: AtomicI32::new(0),
             noteblock_chunk: Mutex::new(None),
         })
     }
@@ -413,10 +410,6 @@ impl CustomSound for AllayEntity {
     fn sound_category(&self) -> SoundCategory {
         SoundCategory::Neutral
     }
-    fn on_hurt_sound(&self) {
-        self.ambient_sound_time
-            .store(-AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
-    }
 }
 
 impl Mob for AllayEntity {
@@ -428,29 +421,12 @@ impl Mob for AllayEntity {
         Some(self)
     }
 
-    fn base_tick(&self) {
-        if !self.mob_entity.living_entity.is_dead_or_dying()
-            && self.get_random().random_range(0..1000)
-                < self.ambient_sound_time.fetch_add(1, Ordering::Relaxed)
-        {
-            self.ambient_sound_time
-                .store(-AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
-            let entity = self.get_entity();
-            if !entity.is_silent() {
-                let sound = if self.sample().is_empty() {
-                    Sound::EntityAllayAmbientWithoutItem
-                } else {
-                    Sound::EntityAllayAmbientWithItem
-                };
-                entity.world.load().play_sound_fine(
-                    sound,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                    self.sound_volume(),
-                    self.mob_entity.living_entity.get_pitch(),
-                );
-            }
-        }
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.sample().is_empty() {
+            Sound::EntityAllayAmbientWithoutItem
+        } else {
+            Sound::EntityAllayAmbientWithItem
+        })
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

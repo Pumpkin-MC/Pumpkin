@@ -374,8 +374,7 @@ impl Mob for SheepEntity {
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
         self.set_color(self.get_random_sheep_color(biome).id());
-        self.mob_entity.finalize_spawn_base();
-        group_data
+        self.finalize_spawn_super(group_data)
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
