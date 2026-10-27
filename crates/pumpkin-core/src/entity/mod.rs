@@ -410,6 +410,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn can_be_seen_by_anyone(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !self.is_spectator() && living.is_alive())
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !living.entity.invulnerable.load(Ordering::Relaxed))
+            && self.can_be_seen_by_anyone()
+    }
+
     fn dampens_vibrations(&self) -> bool {
         false
     }
@@ -885,6 +896,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
         0
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_loot)
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_experience)
     }
 
     fn get_base_experience_reward(&self) -> u32 {
@@ -1503,12 +1524,22 @@ impl Entity {
 
     pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
         self.default_dimensions.store(Some(dimensions));
+        self.refresh_dimensions();
+    }
+
+    pub fn refresh_dimensions(&self) {
+        let mut metadata = SyncedActorDataList::new();
+        self.refresh_dimensions_into(&mut metadata);
+        self.send_bedrock_actor_data(&metadata);
+    }
+
+    fn refresh_dimensions_into(&self, metadata: &mut SyncedActorDataList) {
+        let old_dimensions = self.entity_dimension.load();
         let dimensions = self.get_dimensions(self.pose.load());
         self.entity_dimension.store(dimensions);
         let pos = self.pos.load();
         self.bounding_box
             .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
-        let mut metadata = SyncedActorDataList::new();
         metadata.set(
             entity_data_key::WIDTH,
             MetadataValue::Float(dimensions.width),
@@ -1517,7 +1548,63 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimensions.height),
         );
-        self.send_bedrock_actor_data(&metadata);
+        let is_small = dimensions.width <= 4.0 && dimensions.height <= 4.0;
+        if self.tick_count.load(Relaxed) > 0
+            && !self.no_physics.load(Relaxed)
+            && is_small
+            && (dimensions.width > old_dimensions.width
+                || dimensions.height > old_dimensions.height)
+            && self.entity_type != &EntityType::PLAYER
+        {
+            self.fudge_position_after_size_change(old_dimensions);
+        }
+    }
+
+    pub fn fudge_position_after_size_change(&self, previous_dimensions: EntityDimensions) -> bool {
+        let world = self.world.load();
+        let Some(this) = world.get_entity_by_id(self.entity_id) else {
+            return false;
+        };
+        let new_dimensions = self.get_dimensions(self.pose.load());
+        let old_center =
+            self.pos
+                .load()
+                .add_raw(0.0, f64::from(previous_dimensions.height) / 2.0, 0.0);
+        let width_delta =
+            f64::from((new_dimensions.width - previous_dimensions.width).max(0.0)) + 1.0E-6;
+        let height_delta =
+            f64::from((new_dimensions.height - previous_dimensions.height).max(0.0)) + 1.0E-6;
+        let new_width = f64::from(new_dimensions.width);
+        let new_height = f64::from(new_dimensions.height);
+        let previous_height = f64::from(previous_dimensions.height);
+
+        let allowed_centers =
+            BoundingBox::of_size(old_center, width_delta, height_delta, width_delta);
+        if let Some(free_position) = world.find_free_position(
+            this.as_ref(),
+            &allowed_centers,
+            old_center,
+            Vector3::new(new_width, new_height, new_width),
+        ) {
+            self.set_pos(free_position.add_raw(0.0, -new_height / 2.0, 0.0));
+            return true;
+        }
+        if new_dimensions.width > previous_dimensions.width
+            && new_dimensions.height > previous_dimensions.height
+        {
+            let allowed_centers_ignoring_y =
+                BoundingBox::of_size(old_center, width_delta, 1.0E-6, width_delta);
+            if let Some(free_position) = world.find_free_position(
+                this.as_ref(),
+                &allowed_centers_ignoring_y,
+                old_center,
+                Vector3::new(new_width, previous_height, new_width),
+            ) {
+                self.set_pos(free_position.add_raw(0.0, -previous_height / 2.0 + 1.0E-6, 0.0));
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_eye_height(&self) -> f64 {
@@ -3274,23 +3361,11 @@ impl Entity {
             }
         }
 
-        let dimension = self.get_dimensions(pose);
-        let position = self.pos.load();
-        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
-        self.bounding_box.store(aabb);
-        self.entity_dimension.store(dimension);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-        bedrock_meta.set(
-            entity_data_key::WIDTH,
-            MetadataValue::Float(dimension.width),
-        );
-        bedrock_meta.set(
-            entity_data_key::HEIGHT,
-            MetadataValue::Float(dimension.height),
-        );
+        self.refresh_dimensions_into(&mut bedrock_meta);
         self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
         self.send_bedrock_actor_data(&bedrock_meta);
     }
@@ -4277,6 +4352,12 @@ impl Entity {
             nbt.put("CustomName", tag);
         }
         nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+        if self.is_silent() {
+            nbt.put_bool("Silent", true);
+        }
+        if self.has_no_gravity() {
+            nbt.put_bool("NoGravity", true);
+        }
 
         let tags = self
             .scoreboard_tags
@@ -4380,6 +4461,8 @@ impl Entity {
         if let Some(visible) = nbt.get_bool("CustomNameVisible") {
             self.set_custom_name_visible(visible);
         }
+        self.set_silent(nbt.get_bool("Silent").unwrap_or(false));
+        self.set_has_no_gravity(nbt.get_bool("NoGravity").unwrap_or(false));
 
         if let Some(tag_list) = nbt.get_list("Tags") {
             let mut tags = self

@@ -184,6 +184,71 @@ impl BoundingBox {
         }
     }
 
+    #[must_use]
+    pub fn of_size(center: Vector3<f64>, x: f64, y: f64, z: f64) -> Self {
+        Self::new(center, center).expand(x / 2.0, y / 2.0, z / 2.0)
+    }
+
+    #[must_use]
+    pub const fn closest_point_to(&self, point: Vector3<f64>) -> Vector3<f64> {
+        Vector3::new(
+            point.x.clamp(self.min.x, self.max.x),
+            point.y.clamp(self.min.y, self.max.y),
+            point.z.clamp(self.min.z, self.max.z),
+        )
+    }
+
+    #[must_use]
+    pub fn subtract(&self, other: &Self) -> Vec<Self> {
+        if !self.intersects(other) {
+            return vec![*self];
+        }
+        let mut pieces = Vec::with_capacity(6);
+        let mut rest = *self;
+        if other.min.x > rest.min.x {
+            pieces.push(Self::new(
+                rest.min,
+                Vector3::new(other.min.x, rest.max.y, rest.max.z),
+            ));
+            rest.min.x = other.min.x;
+        }
+        if other.max.x < rest.max.x {
+            pieces.push(Self::new(
+                Vector3::new(other.max.x, rest.min.y, rest.min.z),
+                rest.max,
+            ));
+            rest.max.x = other.max.x;
+        }
+        if other.min.y > rest.min.y {
+            pieces.push(Self::new(
+                rest.min,
+                Vector3::new(rest.max.x, other.min.y, rest.max.z),
+            ));
+            rest.min.y = other.min.y;
+        }
+        if other.max.y < rest.max.y {
+            pieces.push(Self::new(
+                Vector3::new(rest.min.x, other.max.y, rest.min.z),
+                rest.max,
+            ));
+            rest.max.y = other.max.y;
+        }
+        if other.min.z > rest.min.z {
+            pieces.push(Self::new(
+                rest.min,
+                Vector3::new(rest.max.x, rest.max.y, other.min.z),
+            ));
+            rest.min.z = other.min.z;
+        }
+        if other.max.z < rest.max.z {
+            pieces.push(Self::new(
+                Vector3::new(rest.min.x, rest.min.y, other.max.z),
+                rest.max,
+            ));
+        }
+        pieces
+    }
+
     /// Creates a bounding box from explicit min and max coordinates.
     ///
     /// # Arguments

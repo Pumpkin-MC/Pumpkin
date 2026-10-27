@@ -6379,17 +6379,6 @@ impl Player {
         self.gamemode.load() == GameMode::Creative
     }
 
-    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
-    #[must_use]
-    pub fn can_be_seen_as_enemy(&self) -> bool {
-        !self
-            .abilities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .invulnerable
-            && self.living_entity.can_take_damage()
-    }
-
     /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
     /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
     #[must_use]
@@ -6940,6 +6929,16 @@ impl EntityBase for Player {
 
     fn is_spectator(&self) -> bool {
         self.gamemode.load() == GameMode::Spectator
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && !self.get_entity().invulnerable.load(Ordering::Relaxed)
+            && self.can_be_seen_by_anyone()
     }
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {

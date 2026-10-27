@@ -1072,12 +1072,10 @@ impl PathNavigation {
                 let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
                     && dy.abs() < NODE_REACH_Y;
 
-                let corner_cut =
-                    path.get_next_node().is_some_and(|n| {
-                        n.path_type != PathType::DangerFire
-                            && n.path_type != PathType::DamageFire
-                            && n.path_type != PathType::WalkableDoor
-                    }) && Self::should_target_next_node_in_direction(mob_pos, path, || false);
+                let corner_cut = path
+                    .get_next_node()
+                    .is_some_and(|n| Self::can_cut_corner(n.path_type))
+                    && Self::should_target_next_node_in_direction(mob_pos, path, || false);
 
                 if close_enough || corner_cut {
                     path.advance();

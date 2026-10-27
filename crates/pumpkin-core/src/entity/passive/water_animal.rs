@@ -3,7 +3,7 @@ use rand::RngExt;
 
 use crate::entity::{
     EntityBase,
-    breath::{DROWNING_DAMAGE, DROWNING_INTERVAL, MAX_AIR},
+    breath::{DROWNING_DAMAGE, MAX_AIR},
     mob::Mob,
 };
 
@@ -14,8 +14,8 @@ pub trait WaterAnimal: Mob {
         check_spawn_obstruction(self, world)
     }
 
-    fn handle_air_supply(&self, caller: &dyn EntityBase) {
-        handle_air_supply(self, caller);
+    fn handle_air_supply(&self, pre_tick_air_supply: i32, caller: &dyn EntityBase) {
+        handle_air_supply(self, pre_tick_air_supply, caller);
     }
 
     fn water_animal_experience_reward(&self) -> u32 {
@@ -44,12 +44,16 @@ pub(super) fn check_spawn_obstruction<M: Mob + ?Sized>(
             .all(|player| player.is_spectator() || unobstructed(player.as_ref()))
 }
 
-pub(super) fn handle_air_supply<M: Mob + ?Sized>(mob: &M, caller: &dyn EntityBase) {
+pub(super) fn handle_air_supply<M: Mob + ?Sized>(
+    mob: &M,
+    pre_tick_air_supply: i32,
+    caller: &dyn EntityBase,
+) {
     let entity = mob.get_entity();
     let living = &mob.get_mob_entity().living_entity;
-    if !living.is_dead_or_dying() && entity.is_alive() && !entity.is_in_water() {
-        entity.set_air_supply(entity.air_supply.load(std::sync::atomic::Ordering::Relaxed) - 1);
-        if entity.air_supply.load(std::sync::atomic::Ordering::Relaxed) <= -DROWNING_INTERVAL {
+    if living.is_alive() && !entity.is_in_water() {
+        entity.set_air_supply(pre_tick_air_supply - 1);
+        if living.should_take_drowning_damage() {
             entity.set_air_supply(0);
             caller.damage(caller, DROWNING_DAMAGE, DamageType::DROWN);
         }

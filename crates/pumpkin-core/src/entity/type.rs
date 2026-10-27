@@ -620,10 +620,7 @@ pub fn check_spawn_rules(
         let valid_water = world
             .get_fluid(&pos.down())
             .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
-            && (world.get_block(&pos.up()) == &pumpkin_data::Block::WATER
-                || world
-                    .get_fluid(&pos.up())
-                    .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER));
+            && world.get_block(&pos.up()) == &pumpkin_data::Block::WATER;
         if !valid_water {
             return false;
         }

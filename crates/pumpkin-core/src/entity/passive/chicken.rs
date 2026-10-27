@@ -226,8 +226,7 @@ impl Mob for ChickenEntity {
         self.set_sound_variant(
             sound_variants[self.get_random().random_range(0..sound_variants.len())],
         );
-        self.mob_entity.finalize_spawn_base();
-        group_data
+        self.finalize_spawn_super(group_data)
     }
 
     fn has_audited_tick(&self) -> bool {

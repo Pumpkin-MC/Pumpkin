@@ -114,6 +114,10 @@ impl AgeableMob for PolarBearEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::POLAR_BEAR_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for PolarBearEntity {
