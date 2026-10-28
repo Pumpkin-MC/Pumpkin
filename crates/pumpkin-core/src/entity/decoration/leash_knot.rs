@@ -12,18 +12,13 @@ use std::sync::Arc;
 
 pub struct LeashKnotEntity {
     entity: Entity,
-    pos: BlockPos,
 }
 
 impl LeashKnotEntity {
     pub const OFFSET_Y: f64 = 0.375;
 
-    pub const fn new(entity: Entity, pos: BlockPos) -> Self {
-        Self { entity, pos }
-    }
-
-    pub const fn block_pos(&self) -> BlockPos {
-        self.pos
+    pub const fn new(entity: Entity) -> Self {
+        Self { entity }
     }
 
     pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<dyn EntityBase> {
@@ -61,7 +56,7 @@ impl LeashKnotEntity {
         );
 
         let entity = Entity::new(world.clone(), raw_pos, &EntityType::LEASH_KNOT);
-        let knot: Arc<dyn EntityBase> = Arc::new(Self::new(entity, pos));
+        let knot: Arc<dyn EntityBase> = Arc::new(Self::new(entity));
         world.spawn_entity(knot.clone());
 
         world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &raw_pos);
@@ -88,7 +83,7 @@ impl EntityBase for LeashKnotEntity {
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let world = self.entity.world.load();
-        let block = world.get_block(&self.pos);
+        let block = world.get_block(&self.entity.block_pos.load());
         if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
             let knot_id = self.entity.entity_id;
             let search_dim = EntityDimensions {
@@ -155,7 +150,7 @@ impl EntityBase for LeashKnotEntity {
             }
         }
 
-        if let Some(self_knot) = Self::get_knot(&world, self.pos) {
+        if let Some(self_knot) = Self::get_knot(&world, self.entity.block_pos.load()) {
             for mob in player_leashed_mobs {
                 mob.leash_to(self_knot.clone());
                 attached_mob = true;
