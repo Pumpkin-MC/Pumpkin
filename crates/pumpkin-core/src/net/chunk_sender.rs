@@ -64,8 +64,9 @@ impl EncodedChunk {
 pub struct ChunkSender {
     pub pending_chunks: FxHashSet<Vector2<i32>>,
     sent_chunks: FxHashSet<Vector2<i32>>,
-    /// Committed Bedrock chunks packets are still being encoded, by dispatch token.
-    awaiting_delivery: FxHashMap<Vector2<i32>, u64>,
+    /// Committed Bedrock chunks packets are still being encoded, by dispatch token and
+    /// whether the client already held an earlier copy.
+    awaiting_delivery: FxHashMap<Vector2<i32>, (u64, bool)>,
     /// Monotonic across resets, so a superseded dispatch can never match again.
     next_delivery_token: u64,
     pub in_flight_batches: u16,
@@ -114,7 +115,7 @@ impl ChunkSender {
     pub fn mark_delivered(&mut self, deliveries: &[(Vector2<i32>, u64)]) -> Vec<Vector2<i32>> {
         let mut delivered = Vec::with_capacity(deliveries.len());
         for &(pos, token) in deliveries {
-            if self.awaiting_delivery.get(&pos) == Some(&token) {
+            if self.awaiting_delivery.get(&pos).map(|d| d.0) == Some(token) {
                 self.awaiting_delivery.remove(&pos);
                 delivered.push(pos);
             }
@@ -137,13 +138,17 @@ impl ChunkSender {
         }
     }
 
-    /// Bedrock dispatch that never reached the client -> no longer held. A re-enqueue since
-    /// then holds a newer token and is kept.
+    /// Bedrock dispatch that never reached the client -> no longer held, unless an earlier
+    /// copy was. A re-enqueue since then holds a newer token and is kept.
     pub fn cancel_delivery(&mut self, cancelled: &[(Vector2<i32>, u64)]) {
         for &(pos, token) in cancelled {
-            if self.awaiting_delivery.get(&pos) == Some(&token) {
+            if let Some(&(current, held_before)) = self.awaiting_delivery.get(&pos)
+                && current == token
+            {
                 self.awaiting_delivery.remove(&pos);
-                self.sent_chunks.remove(&pos);
+                if !held_before {
+                    self.sent_chunks.remove(&pos);
+                }
             }
         }
     }
@@ -436,9 +441,13 @@ impl ChunkSender {
 
             let delivery_token = self.next_delivery_token;
             self.next_delivery_token += 1;
+            let held_before = self
+                .awaiting_delivery
+                .get(&candidate.position)
+                .map_or_else(|| self.sent_chunks.contains(&candidate.position), |d| d.1);
             self.sent_chunks.insert(candidate.position);
             self.awaiting_delivery
-                .insert(candidate.position, delivery_token);
+                .insert(candidate.position, (delivery_token, held_before));
             dispatched_chunks.push(DispatchedChunk {
                 position: candidate.position,
                 chunk: candidate.chunk.clone(),
