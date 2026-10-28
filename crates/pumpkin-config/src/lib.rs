@@ -97,7 +97,7 @@ impl LoadConfiguration for PumpkinConfig {
 
     fn deserialize_toml(value: Spanned<DeTable<'_>>) -> Result<Self, toml::de::Error> {
         // Read flattened fields and internally tagged enums buffer values
-        // seperately from source locations for diagnostics.
+        // separately from source locations for diagnostics.
         #[derive(Deserialize)]
         struct TelemetrySection {
             #[serde(default)]
