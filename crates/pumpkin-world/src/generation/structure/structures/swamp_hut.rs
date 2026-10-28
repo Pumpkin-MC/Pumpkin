@@ -95,7 +95,7 @@ impl SwampHutPiece {
                     ],
                 );
                 nbt.put_bool("PersistenceRequired", true);
-                chunk.add_structure_entity(nbt);
+                chunk.add_structure_entity(nbt, true);
             }
         }
     }
@@ -117,7 +117,7 @@ impl SwampHutPiece {
                 );
                 nbt.put_bool("PersistenceRequired", true);
                 nbt.put_string("variant", "minecraft:all_black".to_string());
-                chunk.add_structure_entity(nbt);
+                chunk.add_structure_entity(nbt, true);
             }
         }
     }

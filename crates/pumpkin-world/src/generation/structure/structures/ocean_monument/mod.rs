@@ -466,7 +466,7 @@ impl MonumentPiece {
         if !chunk_box.contains_pos(&pos) {
             return;
         }
-        chunk.add_structure_entity(elder_guardian_nbt(pos));
+        chunk.add_structure_entity(elder_guardian_nbt(pos), true);
     }
 }
 

@@ -197,16 +197,19 @@ impl EndCityTemplatePiece {
             return;
         }
         if marker.starts_with("Sentry") {
-            chunk.add_structure_entity(entity_nbt(
-                "minecraft:shulker",
-                Vector3::new(
-                    f64::from(position.x) + 0.5,
-                    f64::from(position.y),
-                    f64::from(position.z) + 0.5,
+            chunk.add_structure_entity(
+                entity_nbt(
+                    "minecraft:shulker",
+                    Vector3::new(
+                        f64::from(position.x) + 0.5,
+                        f64::from(position.y),
+                        f64::from(position.z) + 0.5,
+                    ),
                 ),
-            ));
+                false,
+            );
         } else if marker.starts_with("Elytra") {
-            chunk.add_structure_entity(self.item_frame_nbt(position));
+            chunk.add_structure_entity(self.item_frame_nbt(position), false);
         }
     }
 

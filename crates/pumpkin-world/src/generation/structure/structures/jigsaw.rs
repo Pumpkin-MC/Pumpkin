@@ -853,6 +853,8 @@ impl StructurePieceBase for PoolElementStructurePiece {
                     placement_origin,
                     self.rotation,
                     chunk_box,
+                    // Vanilla `SinglePoolElement` places with `setFinalizeEntities(true)`.
+                    true,
                 );
             });
 

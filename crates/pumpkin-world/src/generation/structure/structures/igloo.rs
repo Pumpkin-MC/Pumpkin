@@ -300,6 +300,7 @@ impl IglooPiece {
             self.template_position,
             rotation,
             chunk_box,
+            false,
         );
     }
 }

@@ -10,7 +10,7 @@ use pumpkin_protocol::bedrock::client::{
 };
 use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
-use pumpkin_world::generation::proto_chunk::GenerationCache;
+use pumpkin_world::generation::proto_chunk::{GenerationCache, StructureEntity};
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
@@ -7514,8 +7514,8 @@ impl WorldPortalExt for WorldPortal {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
     }
 
-    fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for nbt in entities {
+    fn spawn_structure_entities(&self, entities: Vec<StructureEntity>) {
+        for StructureEntity { nbt, finalize } in entities {
             let Some(id) = nbt.get_string("id") else {
                 continue;
             };
@@ -7533,6 +7533,9 @@ impl WorldPortalExt for WorldPortal {
             );
             entity.get_entity().read_nbt_non_mut(&nbt);
             entity.read_nbt_non_mut(&nbt);
+            if finalize {
+                crate::entity::mob::spawn::finalize_spawn(&entity, &self.0, None);
+            }
             self.0.spawn_entity(entity);
         }
     }

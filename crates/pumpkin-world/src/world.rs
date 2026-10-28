@@ -1,7 +1,6 @@
-use crate::generation::proto_chunk::GenerationCache;
+use crate::generation::proto_chunk::{GenerationCache, StructureEntity};
 use bitflags::bitflags;
 use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 
@@ -82,7 +81,7 @@ pub trait WorldPortalExt: Send + Sync {
         chunk_z: i32,
     );
 
-    fn spawn_structure_entities(&self, _entities: Vec<NbtCompound>) {}
+    fn spawn_structure_entities(&self, _entities: Vec<StructureEntity>) {}
 }
 
 pub trait BlockAccessor: Send + Sync {

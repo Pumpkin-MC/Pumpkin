@@ -1160,7 +1160,7 @@ impl MineShaftCorridor {
                 if seed != 0 {
                     nbt.put_long("LootTableSeed", seed);
                 }
-                chunk.add_structure_entity(nbt);
+                chunk.add_structure_entity(nbt, false);
                 return true;
             }
         }
@@ -2056,7 +2056,7 @@ mod tests {
         assert!(created);
         let entities = chunk.take_pending_structure_entities();
         assert_eq!(entities.len(), 1);
-        let entity = &entities[0];
+        let entity = &entities[0].nbt;
         assert_eq!(entity.get_string("id"), Some("minecraft:chest_minecart"));
         assert_eq!(
             entity.get_string("LootTable"),
