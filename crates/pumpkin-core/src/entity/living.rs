@@ -2090,6 +2090,16 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
                 self.on_changed_block(caller, self.entity.block_pos.load());
+                if let Some(player) = caller.get_player() {
+                    let current_y = self.entity.pos.load().y;
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::FallFromHeight {
+                            distance_y: f64::from(fall_distance),
+                            from_y: current_y + f64::from(fall_distance),
+                            to_y: current_y,
+                        },
+                    );
+                }
             }
             if fall_distance <= 0.0
                 || dont_damage
@@ -2544,6 +2554,10 @@ impl LivingEntity {
                         crate::entity::player::advancement::trigger::AdvancementTrigger::Arbalistic,
                     );
                 }
+
+                killer_player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::KillMobNearSculkCatalyst,
+                );
             }
         }
     }
@@ -2626,12 +2640,18 @@ impl LivingEntity {
                     return false;
                 }
 
+                let item_key = stack.item.registry_key.to_string();
                 stack.clear();
                 let slot = match hand {
                     Hand::Right => EquipmentSlot::MAIN_HAND,
                     Hand::Left => EquipmentSlot::OFF_HAND,
                 };
                 if let Some(player) = caller.get_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::UsedTotem {
+                            item_id: item_key,
+                        },
+                    );
                     player
                         .inventory()
                         .entity_equipment

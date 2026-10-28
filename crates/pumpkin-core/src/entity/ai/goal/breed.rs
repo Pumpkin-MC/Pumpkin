@@ -93,13 +93,10 @@ impl BreedGoal {
                 1,
             );
 
-            player.trigger_advancement_criterion(
-                pumpkin_data::advancement::Advancement::HUSBANDRY_BREED_AN_ANIMAL,
-                "bred",
-            );
-            player.trigger_advancement_criterion(
-                pumpkin_data::advancement::Advancement::HUSBANDRY_BRED_ALL_ANIMALS,
-                &format!("minecraft:{entity_type_name}"),
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::BredAnimal {
+                    parent_type: format!("minecraft:{entity_type_name}"),
+                },
             );
         }
 

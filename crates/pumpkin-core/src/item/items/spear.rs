@@ -88,9 +88,9 @@ impl ItemBehaviour for SpearItem {
         }
 
         let damage = Self::attack_damage(player, stack) as f32;
-        let mut hit_something = false;
+        let mut hit_count = 0;
         for target in Self::targets_in_range(player, &server, stack) {
-            hit_something |= Self::stab_attack(
+            if Self::stab_attack(
                 player,
                 &server,
                 Hand::Right,
@@ -101,6 +101,16 @@ impl ItemBehaviour for SpearItem {
                     damage: true,
                     knockback: piercing.deals_knockback,
                     dismount: piercing.dismounts,
+                },
+            ) {
+                hit_count += 1;
+            }
+        }
+        let hit_something = hit_count > 0;
+        if hit_something {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SpearMobs {
+                    count: hit_count,
                 },
             );
         }
