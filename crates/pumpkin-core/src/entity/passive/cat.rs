@@ -35,45 +35,6 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
-fn get_dye_color_from_item(item: &Item) -> Option<u8> {
-    let key = item.registry_key;
-    if key.contains("white") {
-        Some(0)
-    } else if key.contains("orange") {
-        Some(1)
-    } else if key.contains("magenta") {
-        Some(2)
-    } else if key.contains("light_blue") {
-        Some(3)
-    } else if key.contains("yellow") {
-        Some(4)
-    } else if key.contains("lime") {
-        Some(5)
-    } else if key.contains("pink") {
-        Some(6)
-    } else if key.contains("light_gray") {
-        Some(8)
-    } else if key.contains("gray") {
-        Some(7)
-    } else if key.contains("cyan") {
-        Some(9)
-    } else if key.contains("purple") {
-        Some(10)
-    } else if key.contains("blue") {
-        Some(11)
-    } else if key.contains("brown") {
-        Some(12)
-    } else if key.contains("green") {
-        Some(13)
-    } else if key.contains("red") {
-        Some(14)
-    } else if key.contains("black") {
-        Some(15)
-    } else {
-        None
-    }
-}
-
 pub struct CatEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
@@ -103,11 +64,7 @@ impl CatEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal 1: SwimGoal (FloatGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
@@ -138,11 +95,7 @@ impl CatEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target Goal 1: NonTameRandomTargetGoal for Rabbit and Turtle
             target_selector.add_goal(
@@ -302,6 +255,24 @@ impl Mob for CatEntity {
         Some(self)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
+        Some(meta)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         let variant_id = self.variant.load(Ordering::Relaxed);
         let variant_str = CatVariant::all()
@@ -399,10 +370,11 @@ impl Mob for CatEntity {
                 if item.has_tag(&tag::Item::MINECRAFT_CAT_COLLAR_DYES)
                     || item.has_tag(&tag::Item::C_DYES)
                 {
-                    if let Some(color) = get_dye_color_from_item(item)
-                        && color != self.get_collar_color()
+                    if let Some(dye) = item_stack
+                        .get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                        && dye.color.id() != self.get_collar_color()
                     {
-                        self.set_collar_color(color);
+                        self.set_collar_color(dye.color.id());
                         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                         return true;
                     }
@@ -416,7 +388,9 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
+                let parent_interaction =
+                    self.mob_entity
+                        .mob_interact(player, item_stack, self.can_be_leashed());
                 if !parent_interaction {
                     self.set_sitting(!self.is_sitting());
                     return true;
@@ -447,6 +421,11 @@ impl Mob for CatEntity {
             return true;
         }
 
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_tame() && self.get_entity().age.load(Ordering::Relaxed) > 2400
     }
 }

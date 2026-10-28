@@ -1,16 +1,18 @@
+use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState, BlockStateId,
     tag::{self},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
-        GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
-        OnStateReplacedArgs,
+        GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+        OnScheduledTickArgs, OnStateReplacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -63,16 +65,20 @@ impl BlockBehaviour for PressurePlateBlock {
         true
     }
 
-    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !Self::can_pressure_plate_place_at(args.world, args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction == BlockDirection::Down
+            && !Self::can_pressure_plate_place_at(args.world, args.position)
+        {
+            return Block::AIR.default_state.id;
         }
+        args.state_id
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        args.world
-            .is_some_and(|world| Self::can_pressure_plate_place_at(world, args.position))
+        Self::can_pressure_plate_place_at(args.block_accessor, args.position)
     }
 }
 
@@ -82,19 +88,36 @@ impl PressurePlate for PressurePlateBlock {
         if props.powered { 15 } else { 0 }
     }
 
-    fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
+    fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
         let aabb = detection_box_at(pos);
-        if !world.get_entities_at_box(&aabb).is_empty()
-            || !world.get_players_at_box(&aabb).is_empty()
-        {
-            return 15;
-        }
-        0
+        let require_living = block == &Block::STONE_PRESSURE_PLATE
+            || block == &Block::POLISHED_BLACKSTONE_PRESSURE_PLATE;
+        let has_entity = world.get_entities_at_box(&aabb).iter().any(|e| {
+            !e.get_entity().is_spectator() && (!require_living || e.get_living_entity().is_some())
+        }) || world
+            .get_players_at_box(&aabb)
+            .iter()
+            .any(|p| !p.get_entity().is_spectator());
+        if has_entity { 15 } else { 0 }
     }
 
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
         let mut props = PressurePlateProps::from_state_id(state.id);
         props.powered = output > 0;
         props.to_state_id(block)
+    }
+
+    fn click_sounds(&self, block: &Block) -> (Sound, Sound) {
+        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES) {
+            (
+                Sound::BlockWoodenPressurePlateClickOn,
+                Sound::BlockWoodenPressurePlateClickOff,
+            )
+        } else {
+            (
+                Sound::BlockStonePressurePlateClickOn,
+                Sound::BlockStonePressurePlateClickOff,
+            )
+        }
     }
 }

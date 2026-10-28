@@ -14,61 +14,36 @@ use wasmtime::{Engine, Store};
 mod bindings;
 
 pub mod advancement;
-// wasmtime's `bindgen!` requires every Host trait method to be `async fn`, even the ones whose
-// implementation here happens not to need to `.await` anything - so `unused_async_trait_impl`
-// can't be avoided without breaking the generated trait signatures.
-#[allow(clippy::unused_async_trait_impl)]
 pub mod block_entity;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod boss_bar;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod commands;
 pub mod common;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod context;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod datapack;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod display;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod enchantment;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod entity;
 pub mod events;
 pub mod forms;
 pub mod generated_packets;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod gui;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod i18n;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod inventory;
 pub mod ipc;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod item_stack;
 pub mod java_dialogs;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod living_entity;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod logging;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod mob;
 pub mod permission;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod player;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod recipe;
 pub mod scheduler;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod scoreboard;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod server;
 pub mod status_effect;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod text;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod uuid;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod world;
 
 pub use crate::bindings::{Plugin, pumpkin};
@@ -411,24 +386,18 @@ pub async fn init_plugin(
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
 
-    store
-        .run_concurrent(async |accessor| {
-            legacy_sync_reentry
-                .scope_bootstrap(plugin.call_init_plugin(accessor))
-                .await
-        })
+    legacy_sync_reentry
+        .scope_bootstrap(plugin.call_init_plugin(&mut store))
         .await
-        .map_err(PluginInitError::CallInitPluginFailed)?
         .map_err(PluginInitError::CallInitPluginFailed)?;
 
-    let metadata = store
-        .run_concurrent(async |accessor| {
-            legacy_sync_reentry
-                .scope_bootstrap(plugin.pumpkin_plugin_metadata().call_get_metadata(accessor))
-                .await
-        })
+    let metadata = legacy_sync_reentry
+        .scope_bootstrap(
+            plugin
+                .pumpkin_plugin_metadata()
+                .call_get_metadata(&mut store),
+        )
         .await
-        .map_err(PluginInitError::CallGetMetadataFailed)?
         .map_err(PluginInitError::CallGetMetadataFailed)?;
 
     let metadata = PluginMetadata {

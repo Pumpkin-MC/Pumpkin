@@ -34,7 +34,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 2;
+pub const PLUGIN_API_VERSION: u32 = 3;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -181,10 +181,11 @@ pub enum PluginState {
 }
 
 /// Core plugin management system
+#[repr(C)]
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
-    handlers: Arc<ArcSwap<HandlerMap>>,
+    pub handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
@@ -1202,12 +1203,21 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
+        self.fire_dyn(server, E::get_name_static(), event).await;
+    }
+
+    async fn fire_dyn(
+        &self,
+        server: &Arc<Server>,
+        event_name: &'static str,
+        event: &mut (dyn Payload + Send + Sync),
+    ) {
         let handlers_map = self.handlers.load();
         if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(event_name) else {
             return;
         };
 
@@ -1222,11 +1232,15 @@ impl PluginManager {
             }
         }
 
-        // Process non-blocking handlers
-        for handler in handlers {
-            if !handler.is_blocking() {
-                handler.handle_dyn(server, event).await;
-            }
+        // Run non-blocking handlers concurrently
+        let non_blocking: Vec<_> = handlers
+            .iter()
+            .filter(|h| !h.is_blocking())
+            .map(|h| h.handle_dyn(server, event))
+            .collect();
+
+        if !non_blocking.is_empty() {
+            futures::future::join_all(non_blocking).await;
         }
     }
 
@@ -1237,12 +1251,21 @@ impl PluginManager {
         server: &Arc<Server>,
         event: &mut E,
     ) {
+        self.fire_blocking_dyn(server, E::get_name_static(), event);
+    }
+
+    fn fire_blocking_dyn(
+        &self,
+        server: &Arc<Server>,
+        event_name: &'static str,
+        event: &mut (dyn Payload + Send + Sync),
+    ) {
         let handlers_map = self.handlers.load();
         if handlers_map.is_empty() {
             return;
         }
 
-        let Some(handlers) = handlers_map.get(E::get_name_static()) else {
+        let Some(handlers) = handlers_map.get(event_name) else {
             return;
         };
 
@@ -1252,10 +1275,14 @@ impl PluginManager {
 
         if tokio::runtime::Handle::try_current().is_ok() {
             tokio::task::block_in_place(|| {
-                server.runtime.block_on(self.fire(server, event));
+                server
+                    .runtime
+                    .block_on(self.fire_dyn(server, event_name, event));
             });
         } else {
-            server.runtime.block_on(self.fire(server, event));
+            server
+                .runtime
+                .block_on(self.fire_dyn(server, event_name, event));
         }
     }
 

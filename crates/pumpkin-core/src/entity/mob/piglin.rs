@@ -22,7 +22,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::equipment as mob_equipment;
+use crate::entity::mob::{MobMetadata, equipment as mob_equipment};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
@@ -122,11 +122,7 @@ impl PiglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(true)));
@@ -140,11 +136,7 @@ impl PiglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
 
@@ -229,11 +221,11 @@ impl PiglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        if baby {
-            entity.entity_dimension.store(Self::BABY_DIMENSIONS);
+        entity.set_default_dimensions(if baby {
+            Self::BABY_DIMENSIONS
         } else {
-            entity.entity_dimension.store(Self::ADULT_DIMENSIONS);
-        }
+            Self::ADULT_DIMENSIONS
+        });
     }
 
     #[must_use]
@@ -429,7 +421,10 @@ impl PiglinEntity {
 
     fn hold_in_off_hand(&self, item: ItemStack) {
         if self.is_holding_item_in_off_hand() {
-            self.mob_entity.spawn_at_location(self.off_hand_item());
+            self.mob_entity
+                .living_entity
+                .entity
+                .spawn_at_location(self.off_hand_item());
         }
         let keep_loaded = !PiglinAi::is_barter_currency(&item);
         *self
@@ -468,11 +463,7 @@ impl PiglinEntity {
     }
 
     fn stop_walking(&self) {
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.mob_entity.steered().navigator().stop();
     }
 
     pub fn start_admiring(&self, item: ItemStack) {
@@ -551,12 +542,13 @@ impl PiglinEntity {
                 .map(|(_, candidate)| candidate)
                 .find(|candidate| {
                     world
-                        .raycast(
+                        .clip(&pumpkin_world::clip::ClipContext::new(
                             eye_pos,
                             candidate.get_entity().get_eye_pos(),
-                            |block_pos, w| w.get_block_state(block_pos).is_solid(),
-                        )
-                        .is_none()
+                            pumpkin_world::clip::ClipBlock::Visual,
+                            pumpkin_world::clip::ClipFluid::None,
+                        ))
+                        .is_miss
                 })
         } else {
             None
@@ -896,7 +888,10 @@ impl PiglinEntity {
 
     pub fn cancel_admiring(&self) {
         if self.is_admiring() && self.is_holding_item_in_off_hand() {
-            self.mob_entity.spawn_at_location(self.off_hand_item());
+            self.mob_entity
+                .living_entity
+                .entity
+                .spawn_at_location(self.off_hand_item());
             self.mob_entity
                 .set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone());
             self.admiring_item
@@ -989,6 +984,10 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn spawn_as_baby(&self) -> bool {
         self.set_baby(true);
         true
@@ -1142,7 +1141,8 @@ impl Mob for PiglinEntity {
             self.start_admiring(taken);
             return true;
         }
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
@@ -1161,7 +1161,11 @@ impl Mob for PiglinEntity {
         } else {
             self.time_in_overworld.store(0, Ordering::Relaxed);
         }
+    }
 
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
         if self.admiring_disabled_timer.load(Ordering::Relaxed) > 0 {
             self.admiring_disabled_timer.fetch_sub(1, Ordering::Relaxed);
         }
@@ -1191,10 +1195,10 @@ impl Mob for PiglinEntity {
         }
         self.stop_holding_item_if_no_longer_admiring();
         self.start_admiring_if_seen();
+        self.update_activity();
     }
 
     fn post_tick(&self) {
-        self.update_activity();
         self.pick_up_nearby_items();
     }
 

@@ -1,3 +1,5 @@
+//! Clientbound Bedrock protocol packets sent to clients.
+
 pub mod add_actor;
 pub mod add_item_actor;
 pub mod add_player;
@@ -31,11 +33,14 @@ pub mod move_actor_delta;
 pub mod move_player;
 pub mod network_chunk_publisher_update;
 pub mod network_settings;
+pub mod open_sign;
 pub mod play_status;
 pub mod player_hotbar;
 pub mod player_list;
 pub mod remove_actor;
 pub mod remove_objective;
+pub mod resource_pack_chunk_data;
+pub mod resource_pack_data_info;
 pub mod resource_pack_stack;
 pub mod resource_packs_info;
 pub mod set_actor_data;
@@ -92,11 +97,14 @@ pub use move_actor_delta::*;
 pub use move_player::*;
 pub use network_chunk_publisher_update::*;
 pub use network_settings::*;
+pub use open_sign::*;
 pub use play_status::*;
 pub use player_hotbar::*;
 pub use player_list::*;
 pub use remove_actor::*;
 pub use remove_objective::*;
+pub use resource_pack_chunk_data::*;
+pub use resource_pack_data_info::*;
 pub use resource_pack_stack::*;
 pub use resource_packs_info::*;
 pub use set_actor_data::*;

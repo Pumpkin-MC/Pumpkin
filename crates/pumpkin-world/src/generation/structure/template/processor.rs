@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockId, BlockState,
+    Block, BlockId, BlockState, Property,
     processor_list::{
         StaticAxis, StaticBlockEntityModifier, StaticHeightmapType, StaticPosRuleTest,
         StaticProcessor, StaticProcessorList, StaticRottableBlocks, StaticRuleTest,
@@ -42,7 +42,7 @@ pub enum StructureProcessor {
         offset: i32,
     },
     /// Protects specific world blocks from being overridden by the structure.
-    ProtectedBlocks(String),
+    ProtectedBlocks(BlockTagFilter),
     /// Replaces stone variants with blackstone variants and iron bars with chains.
     BlackstoneReplace,
     /// Replaces jigsaw blocks with their target `final_state`.
@@ -59,8 +59,44 @@ pub enum StructureProcessor {
 }
 
 #[derive(Clone, Debug)]
+pub enum BlockTagFilter {
+    Static(&'static [u16]),
+    Dynamic(String),
+}
+
+impl BlockTagFilter {
+    #[must_use]
+    pub fn from_tag_str(tag: &str) -> Self {
+        let raw_tag = tag.strip_prefix('#').unwrap_or(tag);
+        if let Some(ids) =
+            pumpkin_data::tag::get_tag_ids(pumpkin_data::tag::RegistryKey::Block, raw_tag)
+        {
+            return Self::Static(ids);
+        }
+        if !raw_tag.contains(':') {
+            let with_namespace = format!("minecraft:{raw_tag}");
+            if let Some(ids) = pumpkin_data::tag::get_tag_ids(
+                pumpkin_data::tag::RegistryKey::Block,
+                &with_namespace,
+            ) {
+                return Self::Static(ids);
+            }
+        }
+        Self::Dynamic(tag.to_string())
+    }
+
+    #[must_use]
+    pub fn matches(&self, block_id: BlockId) -> bool {
+        match self {
+            Self::Static(ids) => ids.binary_search(&block_id.as_u16()).is_ok(),
+            Self::Dynamic(tag) => check_block_has_tag(block_id, tag),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum RottableBlocks {
-    Tag(String),
+    Tag(BlockTagFilter),
     Block(BlockId),
     List(Vec<BlockId>),
 }
@@ -69,7 +105,7 @@ impl RottableBlocks {
     #[must_use]
     pub fn matches(&self, block_id: BlockId) -> bool {
         match self {
-            Self::Tag(tag) => check_block_has_tag(block_id, tag),
+            Self::Tag(tag) => tag.matches(block_id),
             Self::Block(id) => *id == block_id,
             Self::List(list) => list.contains(&block_id),
         }
@@ -79,7 +115,7 @@ impl RottableBlocks {
 #[derive(Clone, Debug)]
 pub struct IgnoredBlock {
     pub block_id: BlockId,
-    pub properties: Option<Vec<(String, String)>>,
+    pub properties: Option<Vec<Property>>,
 }
 
 impl IgnoredBlock {
@@ -92,8 +128,8 @@ impl IgnoredBlock {
             let block = Block::from_id(self.block_id);
             if let Some(state_props) = block.properties(state.id) {
                 let actual = state_props.to_props();
-                for (k, v) in props {
-                    if !actual.iter().any(|(ak, av)| ak == k && av == v) {
+                for p in props {
+                    if !actual.iter().any(|ap| ap.matches_property(*p)) {
                         return false;
                     }
                 }
@@ -138,13 +174,13 @@ pub enum RuleTest {
         match_state: BlockStateMatch,
         probability: f32,
     },
-    TagMatch(String),
+    TagMatch(BlockTagFilter),
 }
 
 #[derive(Clone, Debug)]
 pub struct BlockStateMatch {
     pub block_id: BlockId,
-    pub properties: Vec<(String, String)>,
+    pub properties: Vec<Property>,
 }
 
 impl BlockStateMatch {
@@ -159,8 +195,8 @@ impl BlockStateMatch {
         let block = Block::from_id(self.block_id);
         if let Some(state_props) = block.properties(state.id) {
             let actual = state_props.to_props();
-            for (k, v) in &self.properties {
-                if !actual.iter().any(|(ak, av)| ak == k && av == v) {
+            for p in &self.properties {
+                if !actual.iter().any(|ap| ap.matches_property(*p)) {
                     return false;
                 }
             }
@@ -185,7 +221,7 @@ impl RuleTest {
                 match_state,
                 probability,
             } => match_state.matches(state) && rng.next_f32() < *probability,
-            Self::TagMatch(tag) => check_block_has_tag(state.id.to_block_id(), tag),
+            Self::TagMatch(tag) => tag.matches(state.id.to_block_id()),
         }
     }
 }
@@ -454,7 +490,7 @@ impl StructureProcessor {
             Self::Gravity { .. } | Self::Nop => Some(state),
             Self::ProtectedBlocks(tag) => {
                 let world_state_id = placer.get_block_state(&world_pos);
-                if check_block_has_tag(world_state_id.to_block_id(), tag) {
+                if tag.matches(world_state_id.to_block_id()) {
                     None
                 } else {
                     Some(state)
@@ -519,11 +555,7 @@ fn replace_preserving_properties(
     old_block
         .properties(old_state.id)
         .map_or(target_block.default_state, |props_source| {
-            let props: Vec<(&str, &str)> = props_source
-                .to_props()
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect();
+            let props = props_source.to_props();
             let new_state_id = target_block
                 .from_properties(&props)
                 .to_state_id(target_block);
@@ -535,11 +567,12 @@ fn get_random_facing_stairs(
     rng: &mut impl RandomImpl,
     stair_block: &'static Block,
 ) -> &'static BlockState {
-    let facings = ["north", "south", "east", "west"];
-    let halves = ["bottom", "top"];
+    use pumpkin_data::block_properties::{Facing, Half};
+    let facings = [Facing::North, Facing::South, Facing::East, Facing::West];
+    let halves = [Half::Bottom, Half::Top];
     let facing = facings[rng.next_bounded_i32(4) as usize];
     let half = halves[rng.next_bounded_i32(2) as usize];
-    let props = [("facing", facing), ("half", half)];
+    let props = [Property::Facing(facing), Property::Half(half)];
     let state_id = stair_block.from_properties(&props).to_state_id(stair_block);
     BlockState::from_id(state_id)
 }
@@ -575,7 +608,7 @@ fn process_block_age(
             }
             return non_mossy[idx];
         }
-    } else if check_block_has_tag(block_id, "stairs") {
+    } else if block_id.has_tag(pumpkin_data::tag::Block::MINECRAFT_STAIRS) {
         if rng.next_f32() < 0.5 {
             let non_mossy = [
                 Block::STONE_SLAB.default_state,
@@ -591,11 +624,11 @@ fn process_block_age(
             }
             return non_mossy[idx];
         }
-    } else if check_block_has_tag(block_id, "slabs") {
+    } else if block_id.has_tag(pumpkin_data::tag::Block::MINECRAFT_SLABS) {
         if rng.next_f32() < mossiness {
             return replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_SLAB);
         }
-    } else if check_block_has_tag(block_id, "walls") {
+    } else if block_id.has_tag(pumpkin_data::tag::Block::MINECRAFT_WALLS) {
         if rng.next_f32() < mossiness {
             return replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_WALL);
         }
@@ -850,10 +883,10 @@ fn resolve_output_state(raw: &RawOutputState) -> Option<&'static BlockState> {
     if raw.properties.is_empty() {
         Some(block.default_state)
     } else {
-        let props_vec: Vec<(&str, &str)> = raw
+        let props_vec: Vec<Property> = raw
             .properties
             .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .filter_map(|(k, v)| Property::from_str_pair(k, v))
             .collect();
         let state_id = block.from_properties(&props_vec).to_state_id(block);
         Some(BlockState::from_id(state_id))
@@ -902,7 +935,11 @@ fn convert_raw_rule_test(raw: RawRuleTest) -> Option<RuleTest> {
                     Block::from_name(name).or_else(|| Block::from_registry_key(name))?;
                 Some(RuleTest::BlockStateMatch(BlockStateMatch {
                     block_id: block_obj.id,
-                    properties: raw_state.properties.into_iter().collect(),
+                    properties: raw_state
+                        .properties
+                        .into_iter()
+                        .filter_map(|(k, v)| Property::from_str_pair(&k, &v))
+                        .collect(),
                 }))
             } else if let Some(b) = block {
                 let block_name = b.strip_prefix("minecraft:").unwrap_or(&b);
@@ -937,7 +974,11 @@ fn convert_raw_rule_test(raw: RawRuleTest) -> Option<RuleTest> {
                 Some(RuleTest::RandomBlockStateMatch {
                     match_state: BlockStateMatch {
                         block_id: block_obj.id,
-                        properties: raw_state.properties.into_iter().collect(),
+                        properties: raw_state
+                            .properties
+                            .into_iter()
+                            .filter_map(|(k, v)| Property::from_str_pair(&k, &v))
+                            .collect(),
                     },
                     probability,
                 })
@@ -953,7 +994,9 @@ fn convert_raw_rule_test(raw: RawRuleTest) -> Option<RuleTest> {
                 None
             }
         }
-        RawRuleTest::TagMatch { tag } => Some(RuleTest::TagMatch(tag)),
+        RawRuleTest::TagMatch { tag } => {
+            Some(RuleTest::TagMatch(BlockTagFilter::from_tag_str(&tag)))
+        }
     }
 }
 
@@ -1004,13 +1047,13 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
             let rottable = rottable_blocks.and_then(|r| match r {
                 RawRottableBlocks::Single(s) => {
                     if s.starts_with('#') {
-                        Some(RottableBlocks::Tag(s))
+                        Some(RottableBlocks::Tag(BlockTagFilter::from_tag_str(&s)))
                     } else {
                         let name = s.strip_prefix("minecraft:").unwrap_or(&s);
                         Block::from_name(name)
                             .or_else(|| Block::from_registry_key(name))
                             .map(|b| RottableBlocks::Block(b.id))
-                            .or(Some(RottableBlocks::Tag(s)))
+                            .or_else(|| Some(RottableBlocks::Tag(BlockTagFilter::from_tag_str(&s))))
                     }
                 }
                 RawRottableBlocks::List(list) => {
@@ -1048,7 +1091,13 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
                             properties: if raw_state.properties.is_empty() {
                                 None
                             } else {
-                                Some(raw_state.properties.into_iter().collect())
+                                Some(
+                                    raw_state
+                                        .properties
+                                        .into_iter()
+                                        .filter_map(|(k, v)| Property::from_str_pair(&k, &v))
+                                        .collect(),
+                                )
                             },
                         })
                     }
@@ -1076,7 +1125,9 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
             };
             Some(StructureProcessor::Gravity { heightmap, offset })
         }
-        RawProcessor::ProtectedBlocks { value } => Some(StructureProcessor::ProtectedBlocks(value)),
+        RawProcessor::ProtectedBlocks { value } => Some(StructureProcessor::ProtectedBlocks(
+            BlockTagFilter::from_tag_str(&value),
+        )),
         RawProcessor::BlackstoneReplace => Some(StructureProcessor::BlackstoneReplace),
         RawProcessor::JigsawReplacement => Some(StructureProcessor::JigsawReplacement),
         RawProcessor::LavaSubmergedBlock => Some(StructureProcessor::LavaSubmergedBlock),
@@ -1165,10 +1216,7 @@ fn convert_static_rule_test(rule: &StaticRuleTest) -> RuleTest {
             properties,
         } => RuleTest::BlockStateMatch(BlockStateMatch {
             block_id: *block_id,
-            properties: properties
-                .iter()
-                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-                .collect(),
+            properties: properties.to_vec(),
         }),
         StaticRuleTest::RandomBlockMatch { block, probability } => RuleTest::RandomBlockMatch {
             block: *block,
@@ -1181,14 +1229,11 @@ fn convert_static_rule_test(rule: &StaticRuleTest) -> RuleTest {
         } => RuleTest::RandomBlockStateMatch {
             match_state: BlockStateMatch {
                 block_id: *block_id,
-                properties: properties
-                    .iter()
-                    .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-                    .collect(),
+                properties: properties.to_vec(),
             },
             probability: *probability,
         },
-        StaticRuleTest::TagMatch(tag) => RuleTest::TagMatch((*tag).to_string()),
+        StaticRuleTest::TagMatch(tag) => RuleTest::TagMatch(BlockTagFilter::Static(tag.1)),
     }
 }
 
@@ -1273,7 +1318,9 @@ impl StructureProcessor {
             } => Self::BlockRot {
                 integrity: *integrity,
                 rottable_blocks: rottable_blocks.as_ref().map(|r| match r {
-                    StaticRottableBlocks::Tag(t) => RottableBlocks::Tag((*t).to_string()),
+                    StaticRottableBlocks::Tag(t) => {
+                        RottableBlocks::Tag(BlockTagFilter::Static(t.1))
+                    }
                     StaticRottableBlocks::Block(b) => RottableBlocks::Block(*b),
                     StaticRottableBlocks::List(l) => RottableBlocks::List(l.to_vec()),
                 }),
@@ -1286,11 +1333,7 @@ impl StructureProcessor {
                     .iter()
                     .map(|b| IgnoredBlock {
                         block_id: b.block_id,
-                        properties: b.properties.map(|p| {
-                            p.iter()
-                                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-                                .collect()
-                        }),
+                        properties: b.properties.map(<[Property]>::to_vec),
                     })
                     .collect(),
             ),
@@ -1307,7 +1350,9 @@ impl StructureProcessor {
                 },
                 offset: *offset,
             },
-            StaticProcessor::ProtectedBlocks(tag) => Self::ProtectedBlocks((*tag).to_string()),
+            StaticProcessor::ProtectedBlocks(tag) => {
+                Self::ProtectedBlocks(BlockTagFilter::Static(tag.1))
+            }
             StaticProcessor::BlackstoneReplace => Self::BlackstoneReplace,
             StaticProcessor::JigsawReplacement => Self::JigsawReplacement,
             StaticProcessor::LavaSubmergedBlock => Self::LavaSubmergedBlock,

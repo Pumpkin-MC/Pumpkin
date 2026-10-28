@@ -39,18 +39,15 @@ impl MultifaceGrowthFeature {
         for search_direction in shuffled_dirs {
             let placement_directions =
                 self.get_shuffled_directions_except(random, search_direction.opposite());
-            let mut cur_pos = pos;
 
-            for _ in 0..self.search_range {
-                cur_pos = cur_pos.offset(search_direction.to_offset());
-                let block_id = GenerationCache::get_block_state(chunk, &cur_pos.0).to_block_id();
-                if !Self::is_air_or_water(chunk, cur_pos) && block_id != self.place_block {
-                    break;
-                }
+            let cur_pos = pos.offset(search_direction.to_offset());
+            let block_id = GenerationCache::get_block_state(chunk, &cur_pos.0).to_block_id();
+            if !Self::is_air_or_water(chunk, cur_pos) && block_id != self.place_block {
+                continue;
+            }
 
-                if self.place_growth_if_possible(chunk, cur_pos, random, &placement_directions) {
-                    return true;
-                }
+            if self.place_growth_if_possible(chunk, cur_pos, random, &placement_directions) {
+                return true;
             }
         }
 
@@ -61,7 +58,7 @@ impl MultifaceGrowthFeature {
         &self,
         chunk: &mut T,
         pos: BlockPos,
-        _random: &mut RandomGenerator,
+        random: &mut RandomGenerator,
         placement_directions: &[BlockDirection],
     ) -> bool {
         for &direction in placement_directions {
@@ -70,41 +67,155 @@ impl MultifaceGrowthFeature {
                 GenerationCache::get_block_state(chunk, &neighbor_pos.0).to_block_id();
 
             if self.can_be_placed_on.contains(&neighbor_id) {
-                let is_water = GenerationCache::get_block_state(chunk, &pos.0).to_block_id()
-                    == Block::WATER.id;
-                let block = Block::from_id(self.place_block);
-
-                let mut props = GlowLichenLikeProperties {
-                    down: direction == BlockDirection::Down,
-                    up: direction == BlockDirection::Up,
-                    north: direction == BlockDirection::North,
-                    south: direction == BlockDirection::South,
-                    west: direction == BlockDirection::West,
-                    east: direction == BlockDirection::East,
-                    waterlogged: is_water,
-                };
-
-                let cur_state = GenerationCache::get_block_state(chunk, &pos.0);
-                if cur_state.to_block_id() == self.place_block
-                    && (self.place_block == Block::GLOW_LICHEN.id
-                        || self.place_block == Block::SCULK_VEIN.id)
-                {
-                    let cur_props = GlowLichenLikeProperties::from_state_id(cur_state);
-                    props.down |= cur_props.down;
-                    props.up |= cur_props.up;
-                    props.north |= cur_props.north;
-                    props.south |= cur_props.south;
-                    props.west |= cur_props.west;
-                    props.east |= cur_props.east;
+                if !self.is_valid_state_for_placement(chunk, pos, direction) {
+                    return false;
                 }
+                self.place_face(chunk, pos, direction);
 
-                let state_id = props.to_state_id(block);
-                chunk.set_block_state(&pos.0, BlockState::from_id(state_id));
+                if random.next_f32() < self.chance_of_spreading {
+                    self.spread_from_face_toward_random_direction(chunk, pos, direction, random);
+                }
                 return true;
             }
         }
 
         false
+    }
+
+    fn spread_from_face_toward_random_direction<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        pos: BlockPos,
+        starting_face: BlockDirection,
+        random: &mut RandomGenerator,
+    ) {
+        let mut dirs = [
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ];
+        for i in (1..dirs.len()).rev() {
+            let j = random.next_bounded_i32((i + 1) as i32) as usize;
+            dirs.swap(i, j);
+        }
+
+        for spread_direction in dirs {
+            if spread_direction.to_axis() == starting_face.to_axis() {
+                continue;
+            }
+
+            let cur_state = GenerationCache::get_block_state(chunk, &pos.0);
+            if cur_state.to_block_id() == self.place_block {
+                let cur_props = GlowLichenLikeProperties::from_state_id(cur_state);
+                let has_spread_face = match spread_direction {
+                    BlockDirection::Down => cur_props.down,
+                    BlockDirection::Up => cur_props.up,
+                    BlockDirection::North => cur_props.north,
+                    BlockDirection::South => cur_props.south,
+                    BlockDirection::West => cur_props.west,
+                    BlockDirection::East => cur_props.east,
+                };
+                if has_spread_face {
+                    continue;
+                }
+            }
+
+            let candidates = [
+                (pos, spread_direction),
+                (pos.offset(spread_direction.to_offset()), starting_face),
+                (
+                    pos.offset(spread_direction.to_offset())
+                        .offset(starting_face.to_offset()),
+                    spread_direction.opposite(),
+                ),
+            ];
+
+            for (target_pos, target_face) in candidates {
+                if self.can_spread_into(chunk, target_pos, target_face) {
+                    self.place_face(chunk, target_pos, target_face);
+                    return;
+                }
+            }
+        }
+    }
+
+    fn is_valid_state_for_placement<T: GenerationCache>(
+        &self,
+        chunk: &T,
+        pos: BlockPos,
+        face: BlockDirection,
+    ) -> bool {
+        let existing = GenerationCache::get_block_state(chunk, &pos.0);
+        if existing.to_block_id() == self.place_block {
+            let props = GlowLichenLikeProperties::from_state_id(existing);
+            let has_face = match face {
+                BlockDirection::Down => props.down,
+                BlockDirection::Up => props.up,
+                BlockDirection::North => props.north,
+                BlockDirection::South => props.south,
+                BlockDirection::West => props.west,
+                BlockDirection::East => props.east,
+            };
+            if has_face {
+                return false;
+            }
+        }
+        let neighbour_pos = pos.offset(face.to_offset());
+        let neighbour_state = GenerationCache::get_block_state(chunk, &neighbour_pos.0).to_state();
+        neighbour_state.is_side_solid(face.opposite()) || neighbour_state.is_full_cube()
+    }
+
+    fn can_spread_into<T: GenerationCache>(
+        &self,
+        chunk: &T,
+        pos: BlockPos,
+        face: BlockDirection,
+    ) -> bool {
+        let existing = GenerationCache::get_block_state(chunk, &pos.0);
+        let id = existing.to_block_id();
+        let replaceable = existing.to_state().is_air()
+            || id == self.place_block
+            || existing == Block::WATER.default_state.id;
+        if !replaceable {
+            return false;
+        }
+        self.is_valid_state_for_placement(chunk, pos, face)
+    }
+
+    fn place_face<T: GenerationCache>(&self, chunk: &mut T, pos: BlockPos, face: BlockDirection) {
+        let cur_state = GenerationCache::get_block_state(chunk, &pos.0);
+        let is_water_source = cur_state == Block::WATER.default_state.id;
+        let block = Block::from_id(self.place_block);
+
+        let mut props = GlowLichenLikeProperties {
+            down: face == BlockDirection::Down,
+            up: face == BlockDirection::Up,
+            north: face == BlockDirection::North,
+            south: face == BlockDirection::South,
+            west: face == BlockDirection::West,
+            east: face == BlockDirection::East,
+            waterlogged: is_water_source,
+        };
+
+        if cur_state.to_block_id() == self.place_block
+            && (self.place_block == Block::GLOW_LICHEN.id
+                || self.place_block == Block::SCULK_VEIN.id)
+        {
+            let cur_props = GlowLichenLikeProperties::from_state_id(cur_state);
+            props.down |= cur_props.down;
+            props.up |= cur_props.up;
+            props.north |= cur_props.north;
+            props.south |= cur_props.south;
+            props.west |= cur_props.west;
+            props.east |= cur_props.east;
+            props.waterlogged = cur_props.waterlogged;
+        }
+
+        let state_id = props.to_state_id(block);
+        chunk.set_block_state(&pos.0, BlockState::from_id(state_id));
     }
 
     fn get_valid_directions(&self) -> Vec<BlockDirection> {
@@ -150,7 +261,7 @@ impl MultifaceGrowthFeature {
     }
 
     fn is_air_or_water<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
-        let id = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-        id == Block::AIR.id || id == Block::WATER.id
+        let state = GenerationCache::get_block_state(chunk, &pos.0);
+        state.to_state().is_air() || state.to_block_id() == Block::WATER.id
     }
 }

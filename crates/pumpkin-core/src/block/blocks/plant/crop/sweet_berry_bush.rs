@@ -4,14 +4,22 @@ use crate::{
     block::{
         BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
         OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
-        blocks::plant::{PlantBlockBase, crop::CropBlockBase},
+        blocks::plant::{
+            PlantBlockBase,
+            crop::{CropBlockBase, MIN_GROWTH_LIGHT},
+        },
         registry::BlockActionResult,
     },
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockStateId, block_properties::NetherWartLikeProperties, damage::DamageType,
-    entity::EntityType, item::Item, item_stack::ItemStack,
+    Block, BlockStateId,
+    block_properties::NetherWartLikeProperties,
+    damage::DamageType,
+    entity::EntityType,
+    item::Item,
+    item_stack::ItemStack,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -58,10 +66,18 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 for stack in drops {
                     args.world.drop_stack(args.position, stack);
                 }
+                let pitch = rand::rng().random_range(0.8f32..1.2f32);
+                args.world.play_sound_fine(
+                    Sound::BlockSweetBerryBushPickBerries,
+                    SoundCategory::Blocks,
+                    &args.position.to_centered_f64(),
+                    1.0,
+                    pitch,
+                );
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(&Block::SWEET_BERRY_BUSH),
-                    BlockFlags::NOTIFY_ALL,
+                    BlockFlags::NOTIFY_LISTENERS,
                 );
                 BlockActionResult::SuccessServer
             }
@@ -174,16 +190,11 @@ impl CropBlockBase for SweetBerryBushBlock {
     fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
-        if age < self.max_age() {
-            let state_above = world.get_block_state(&pos.up());
-
-            if state_above.is_full_cube() || state_above.is_solid() {
-                return;
-            }
+        if age < self.max_age() && world.get_raw_brightness(&pos.up(), 0) >= MIN_GROWTH_LIGHT {
             world.set_block_state(
                 pos,
                 self.state_with_age(block, state, age + 1),
-                BlockFlags::NOTIFY_NEIGHBORS,
+                BlockFlags::NOTIFY_LISTENERS,
             );
         }
     }

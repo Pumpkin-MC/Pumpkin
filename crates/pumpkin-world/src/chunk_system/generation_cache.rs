@@ -233,8 +233,16 @@ impl GenerationCache for Cache {
         let id = GenerationCache::get_block_state(self, pos);
 
         let Some(fluid) = Fluid::from_state_id(id) else {
-            let fluid = if id.is_waterlogged() {
-                Fluid::FLOWING_WATER
+            let fluid = if id.is_waterlogged()
+                || matches!(
+                    id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                ) {
+                Fluid::WATER
             } else {
                 Fluid::EMPTY
             };
@@ -243,7 +251,6 @@ impl GenerationCache for Cache {
             return (fluid, state);
         };
 
-        //let state = fluid.get_state(id);
         let state = fluid.states[0].clone();
 
         (fluid.clone(), state)
@@ -322,12 +329,10 @@ impl GenerationCache for Cache {
 
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
-                self.top_block_height_exclusive(x, z)
-            }
-            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
-                self.ocean_floor_height_exclusive(x, z)
-            }
+            HeightMap::WorldSurfaceWg => self.top_block_wg_height_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_wg_height_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -348,7 +353,7 @@ impl GenerationCache for Cache {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
 
-                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
+                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
@@ -366,7 +371,7 @@ impl GenerationCache for Cache {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
-                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
+                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
@@ -384,9 +389,27 @@ impl GenerationCache for Cache {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
-                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
+        }
+    }
+
+    fn top_block_wg_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.z;
+        debug_assert!(dx < self.size && dy < self.size);
+        debug_assert!(dx >= 0 && dy >= 0);
+        match &self.chunks[(dx * self.size + dy) as usize] {
+            Chunk::Level(data) => {
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) + 1
+            }
+            Chunk::Proto(data) => data.top_block_wg_height_exclusive(x, z),
         }
     }
 
@@ -401,6 +424,18 @@ impl GenerationCache for Cache {
                 0 // todo missing
             }
             Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
+        }
+    }
+
+    fn ocean_floor_wg_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.z;
+        if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            return 0;
+        }
+        match &self.chunks[(dx * self.size + dy) as usize] {
+            Chunk::Level(_data) => 0,
+            Chunk::Proto(data) => data.ocean_floor_wg_height_exclusive(x, z),
         }
     }
 

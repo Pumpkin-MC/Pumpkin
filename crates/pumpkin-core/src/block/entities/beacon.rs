@@ -390,6 +390,21 @@ impl BlockEntity for BeaconBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let name_guard = self.custom_name.lock().ok();
+        let name = name_guard.as_ref().and_then(|n| n.as_deref());
+        Some(crate::block::entities::bedrock::build_beacon_actor(
+            self.position,
+            self.primary_effect().map_or(0, StatusEffect::to_bedrock_id),
+            self.secondary_effect()
+                .map_or(0, StatusEffect::to_bedrock_id),
+            name,
+        ))
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -404,5 +419,40 @@ impl BlockEntity for BeaconBlockEntity {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bedrock_actor_uses_bedrock_effect_ids() {
+        let position = BlockPos::new(5, 64, 5);
+        let mut nbt = NbtCompound::new();
+        for (primary, secondary, expected_primary, expected_secondary) in [
+            ("", "", 0, 0),
+            ("minecraft:speed", "minecraft:regeneration", 1, 10),
+        ] {
+            nbt.put_string("primary_effect", primary.to_string());
+            nbt.put_string("secondary_effect", secondary.to_string());
+            nbt.put_string("CustomName", "Beacon".to_string());
+            let beacon = BeaconBlockEntity::from_nbt(&nbt, position);
+            let actor = beacon.bedrock_block_actor_data(Block::BEACON.default_state.id);
+            assert_eq!(
+                actor.as_ref().and_then(|actor| actor.get_int("primary")),
+                Some(expected_primary)
+            );
+            assert_eq!(
+                actor.as_ref().and_then(|actor| actor.get_int("secondary")),
+                Some(expected_secondary)
+            );
+            assert_eq!(
+                actor
+                    .as_ref()
+                    .and_then(|actor| actor.get_string("CustomName")),
+                Some("Beacon")
+            );
+        }
     }
 }
