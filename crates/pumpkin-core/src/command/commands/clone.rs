@@ -171,11 +171,9 @@ impl CommandExecutor for CloneExecutor {
                     let should_clone = match self.mask_mode {
                         MaskMode::Replace => true,
                         MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
-                        MaskMode::Filtered => {
-                            filter_block.as_ref().is_some_and(|f| {
-                                f.test(state_id, || world.get_block_entity_nbt(&src_pos))
-                            })
-                        }
+                        MaskMode::Filtered => filter_block.as_ref().is_some_and(|f| {
+                            f.test(state_id, || world.get_block_entity_nbt(&src_pos))
+                        }),
                     };
 
                     if should_clone {

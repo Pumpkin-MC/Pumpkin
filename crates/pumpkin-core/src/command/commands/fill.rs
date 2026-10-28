@@ -143,7 +143,9 @@ fn fill_blocks(
                                     }
                                     _ => {
                                         if let Some(f) = filter
-                                            && !f.test(current_state_id, || world.get_block_entity_nbt(&pos))
+                                            && !f.test(current_state_id, || {
+                                                world.get_block_entity_nbt(&pos)
+                                            })
                                         {
                                             continue;
                                         }
