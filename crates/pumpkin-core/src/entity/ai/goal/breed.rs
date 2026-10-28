@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use pumpkin_data::entity::EntityStatus;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use rand::RngExt;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
@@ -107,7 +108,11 @@ impl BreedGoal {
         let world_full = entity.world.load_full();
         world_full.spawn_entity(baby);
 
-        world_full.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+        world_full.send_entity_status(
+            entity,
+            EntityStatus::InLoveHearts,
+            ActorEventID::InLoveHearts,
+        );
         // TODO: gate on the `animalBreedingDropsXp` game rule once it exists.
         ExperienceOrbEntity::spawn(&world_full, parent_pos, mob.get_random().random_range(1..8));
     }

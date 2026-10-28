@@ -161,13 +161,13 @@ impl Mob for OcelotEntity {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TrustingSucceeded,
-                    Some(ActorEventID::TamingSucceeded),
+                    ActorEventID::TamingSucceeded,
                 );
             } else {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TrustingFailed,
-                    Some(ActorEventID::TamingFailed),
+                    ActorEventID::TamingFailed,
                 );
             }
 

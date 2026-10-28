@@ -747,6 +747,7 @@ impl LivingEntity {
 
     /// Sends the Hand animation to all others, used when Eating for example
     pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        let is_blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
         self.item_use_time.store(duration, Ordering::Relaxed);
         *self
             .item_in_use
@@ -762,6 +763,9 @@ impl LivingEntity {
             .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
+        if is_blocking {
+            self.set_bedrock_blocking(true);
+        }
     }
 
     fn set_living_flag(&self, flag: u8, value: bool) {
@@ -804,6 +808,31 @@ impl LivingEntity {
         }
     }
 
+    pub fn set_bedrock_blocking(&self, blocking: bool) {
+        let flag = pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
+        let index = (flag - 64) as u8;
+        let mask = 1i64 << index;
+        if blocking {
+            self.entity
+                .bedrock_flags_two
+                .fetch_or(mask, Ordering::Relaxed);
+        } else {
+            self.entity
+                .bedrock_flags_two
+                .fetch_and(!mask, Ordering::Relaxed);
+        }
+
+        let mut meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+        meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS_TWO,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
+                self.entity.bedrock_flags_two.load(Ordering::Relaxed),
+            ),
+        );
+        self.entity.send_bedrock_actor_data(&meta);
+    }
+
     pub fn clear_active_hand(&self) {
         *self
             .item_in_use
@@ -820,6 +849,7 @@ impl LivingEntity {
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
+        self.set_bedrock_blocking(false);
     }
 
     pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
@@ -2255,7 +2285,7 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
-            world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
+            world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
                 if let Some(player) = cause_ent
@@ -2651,7 +2681,7 @@ impl LivingEntity {
                 self.entity.world.load().send_entity_status(
                     &self.entity,
                     EntityStatus::ProtectedFromDeath,
-                    Some(ActorEventID::InstantDeath),
+                    ActorEventID::InstantDeath,
                 );
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -2742,7 +2772,7 @@ impl LivingEntity {
                         world.send_entity_status(
                             &self.entity,
                             super::equipment_break_status(&slot),
-                            None,
+                            ActorEventID::None,
                         );
                     }
                     equipment_updates.push((slot.clone(), stack.clone()));
@@ -3333,6 +3363,7 @@ impl LivingEntity {
 
             if source_to_player.dot(&look_vec) < 0.0 {
                 world.play_sound(Sound::ItemShieldBlock, SoundCategory::Players, &player_pos);
+                world.play_bedrock_level_sound("item.shield.block", &player_pos, 0);
 
                 if let Some(player) = caller.get_player() {
                     player.increment_stat(
@@ -3348,17 +3379,18 @@ impl LivingEntity {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if let Some(hand) = active_hand {
                     let slot = if hand == Hand::Left {
-                        EquipmentSlot::MAIN_HAND
-                    } else {
                         EquipmentSlot::OFF_HAND
+                    } else {
+                        EquipmentSlot::MAIN_HAND
                     };
 
                     let mut blocking_item_key = None;
                     let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                     if let Some(player) = caller.get_player() {
-                        let hand_slot = match &slot {
-                            EquipmentSlot::OffHand(_) => Hand::Left,
-                            _ => Hand::Right,
+                        let hand_slot = if slot == EquipmentSlot::OFF_HAND {
+                            Hand::Left
+                        } else {
+                            Hand::Right
                         };
                         let stack_before = player.inventory.get_stack_in_hand(hand_slot);
                         if !stack_before.is_empty() {
@@ -3388,7 +3420,7 @@ impl LivingEntity {
                                 world.send_entity_status(
                                     &self.entity,
                                     crate::entity::equipment_break_status(&slot),
-                                    None,
+                                    ActorEventID::None,
                                 );
                                 *stack = ItemStack::EMPTY.clone();
                                 let broken_stack = stack.clone();
@@ -3435,6 +3467,7 @@ impl LivingEntity {
                                 SoundCategory::Players,
                                 &player_pos,
                             );
+                            world.play_bedrock_level_sound("item.shield.break", &player_pos, 0);
                         }
                     }
                 }
@@ -3969,10 +4002,11 @@ impl EntityBase for LivingEntity {
             // broadcast in `on_death`. Sending it again here would restart the
             // client-side death animation.
             if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity
-                    .world
-                    .load()
-                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    EntityStatus::Poof,
+                    ActorEventID::GroundDust,
+                );
                 self.entity.remove();
             }
         }
@@ -4098,7 +4132,11 @@ impl LivingEntity {
                     if destination != center {
                         self.fall_distance.store(0.0);
                         // Vanilla broadcasts entity event 46 (teleport particles) on success.
-                        world.send_entity_status(&self.entity, EntityStatus::Teleport, None);
+                        world.send_entity_status(
+                            &self.entity,
+                            EntityStatus::Teleport,
+                            ActorEventID::None,
+                        );
                         world.emit_game_event("teleport", center);
                         world.play_sound(
                             Sound::ItemChorusFruitTeleport,

@@ -11,6 +11,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::{
     Hand,
     math::{position::BlockPos, vector3::Vector3},
@@ -364,7 +365,11 @@ impl AllayEntity {
             && stack.item.has_tag(&tag::Item::MINECRAFT_DUPLICATES_ALLAYS)
         {
             self.duplicate_allay();
-            world.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::InLoveHearts,
+                ActorEventID::InLoveHearts,
+            );
             sound = Sound::BlockAmethystBlockChime;
             stack.decrement_unless_creative(player.gamemode.load(), 1);
         } else if self.sample().is_empty() && !stack.is_empty() {

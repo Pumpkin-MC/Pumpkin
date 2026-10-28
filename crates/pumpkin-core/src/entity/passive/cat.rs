@@ -420,13 +420,13 @@ impl Mob for CatEntity {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TamingSucceeded,
-                    Some(ActorEventID::TamingSucceeded),
+                    ActorEventID::TamingSucceeded,
                 );
             } else {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TamingFailed,
-                    Some(ActorEventID::TamingFailed),
+                    ActorEventID::TamingFailed,
                 );
             }
 

@@ -171,6 +171,28 @@ impl dyn EntityBase + '_ {
     }
 }
 
+/// Maps Java entity types to Bedrock runtime entity identifiers where the naming differs.
+#[must_use]
+pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'static str {
+    if entity_type.id == EntityType::EXPERIENCE_ORB.id {
+        "minecraft:xp_orb"
+    } else if entity_type.id == EntityType::FISHING_BOBBER.id {
+        "minecraft:fishing_hook"
+    } else if entity_type.id == EntityType::EVOKER_FANGS.id {
+        "minecraft:evocation_fang"
+    } else if entity_type.id == EntityType::TRIDENT.id {
+        "minecraft:thrown_trident"
+    } else if entity_type.id == EntityType::FIREWORK_ROCKET.id {
+        "minecraft:fireworks_rocket"
+    } else if entity_type.id == EntityType::EYE_OF_ENDER.id {
+        "minecraft:eye_of_ender_signal"
+    } else if entity_type.id == EntityType::ZOMBIE_VILLAGER.id {
+        "minecraft:zombie_villager_v2"
+    } else {
+        entity_type.resource_name
+    }
+}
+
 pub trait EntityBase: Send + Sync + std::any::Any {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.get_entity().write_nbt(nbt);
@@ -316,6 +338,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_gravity(&self) -> f64 {
         0.0
+    }
+
+    /// Extra metadata to accompany this entity when spawned for Bedrock clients (e.g. falling block variant, TNT fuse).
+    fn entity_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
+        None
     }
 
     /// Bedrock network Y above the feet. Endstone `getBaseOffset`.
@@ -536,9 +563,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let identifier = self
             .get_mob()
             .and_then(mob::Mob::mob_bedrock_identifier)
-            .unwrap_or(entity.entity_type.resource_name);
-        // TODO: non-mob spawn metadata hook like `mob_bedrock_spawn_metadata` (falling block, TNT).
+            .unwrap_or_else(|| entity_type_to_bedrock_identifier(entity.entity_type));
         let mut metadata = entity.bedrock_metadata();
+        if let Some(extra_meta) = self.entity_bedrock_spawn_metadata() {
+            metadata.0.extend(extra_meta.0);
+        }
         if let Some(mob) = self.get_mob()
             && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
         {
@@ -4733,5 +4762,38 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn entity_type_bedrock_identifier_mappings() {
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EXPERIENCE_ORB),
+            "minecraft:xp_orb"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FISHING_BOBBER),
+            "minecraft:fishing_hook"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EVOKER_FANGS),
+            "minecraft:evocation_fang"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::TRIDENT),
+            "minecraft:thrown_trident"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FIREWORK_ROCKET),
+            "minecraft:fireworks_rocket"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EYE_OF_ENDER),
+            "minecraft:eye_of_ender_signal"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::ZOMBIE_VILLAGER),
+            "minecraft:zombie_villager_v2"
+        );
+        assert_eq!(entity_type_to_bedrock_identifier(&EntityType::COW), "cow");
     }
 }
