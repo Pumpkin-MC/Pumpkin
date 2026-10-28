@@ -97,6 +97,10 @@ macro_rules! impl_event_getter_setter {
 }
 
 impl pumpkin::plugin::event::HostEvent for PluginHostState {
+    fn drop(&mut self, rep: Resource<WasmEvent>) -> wasmtime::Result<()> {
+        self.drop(rep)
+    }
+
     impl_event_getter_setter!(
         pumpkin_core::plugin::events::player::PlayerJoinEvent,
         get_player_join,
