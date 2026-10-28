@@ -1,17 +1,21 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, BlockStateId,
+    block_properties::CandleCakeProperties,
+    game_event::GameEvent,
+    item::Item,
+    item_stack::ItemStack,
+    sound::{Sound, SoundCategory},
+};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnScheduledTickArgs, PathComputationType, UseWithItemArgs,
+        BlockBehaviour, CanPlaceAtArgs, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
+        NormalUseArgs, PathComputationType, UseWithItemArgs,
         blocks::cake::{CakeBlock, FULL_CAKE_SIGNAL},
         registry::BlockActionResult,
     },
@@ -63,57 +67,64 @@ impl CandleCakeBlock {
         location: &BlockPos,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if !player.can_eat(false) {
-            return BlockActionResult::Pass;
-        }
-
-        let candle_item = candle_from_cake(block);
-
-        let item_stack = ItemStack::new(1, candle_item);
-
-        world.drop_stack(location, item_stack);
-
-        world.set_block_state(
+        let result = CakeBlock::consume_if_hungry(
+            world,
+            player,
+            &Block::CAKE,
             location,
             Block::CAKE.default_state.id,
-            BlockFlags::NOTIFY_ALL,
         );
-
-        let (block, state) = world.get_block_and_state_id(location);
-
-        CakeBlock::consume_if_hungry(world, player, block, location, state)
+        if result.consumes_action() {
+            let candle_item = candle_from_cake(block);
+            world.drop_stack(location, ItemStack::new(1, candle_item));
+        }
+        result
     }
 }
 
 impl BlockBehaviour for CandleCakeBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item_id = args.item_stack.item.id;
-        match item_id {
-            id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
-                BlockActionResult::Pass
-            } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
-            _ => BlockActionResult::PassToDefaultBlockAction,
+        if item_id == Item::FIRE_CHARGE.id || item_id == Item::FLINT_AND_STEEL.id {
+            return BlockActionResult::Pass;
         }
+        let state_id = args.world.get_block_state_id(args.position);
+        let mut properties = CandleCakeProperties::from_state_id(state_id);
+        if args.hit.cursor_pos.y > 0.5 && args.item_stack.is_empty() && properties.lit {
+            properties.lit = false;
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+            args.world.play_sound(
+                Sound::BlockCandleExtinguish,
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+            );
+            args.world.emit_game_event(
+                GameEvent::BlockChange.name(),
+                args.position.to_centered_f64(),
+            );
+            return BlockActionResult::Success;
+        }
+        BlockActionResult::PassToDefaultBlockAction
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
     }
 
-    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.position) {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
-        }
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.position) {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        if args.direction == BlockDirection::Down && !can_place_at(args.world, args.position) {
+            return Block::AIR.default_state.id;
         }
         args.state_id
     }

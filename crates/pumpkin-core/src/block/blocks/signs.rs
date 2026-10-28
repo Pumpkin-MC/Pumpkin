@@ -365,20 +365,57 @@ impl BlockBehaviour for SignBlock {
         if let Some(block_entity) = args.world.get_block_entity(args.position)
             && let Some(sign) = SignEntityRef::from_block_entity(&*block_entity)
         {
-            open_text_edit(
-                args.player,
-                sign.currently_editing_player(),
-                args.position,
-                true,
-            );
+            args.world.update_block_entity(&block_entity);
+            if !sign.is_waxed() && has_editable_text(sign.front_text()) {
+                open_text_edit(
+                    args.player,
+                    sign.currently_editing_player(),
+                    args.position,
+                    true,
+                );
+            }
             return;
         }
-        args.player
-            .try_send_client_packet(&COpenSignEditor::new(*args.position, true));
+        args.player.try_enqueue_packet_editioned(
+            &COpenSignEditor::new(*args.position, true),
+            &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*args.position, true),
+        );
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let is_hanging = args.block.name.contains("hanging");
+        let is_wall_sign = args.block.name.contains("wall");
+
+        if args.player.is_none() {
+            let support_dir = if is_wall_sign {
+                get_wall_support_direction(args.block, args.state.id)
+            } else if is_hanging {
+                Some(BlockDirection::Up)
+            } else {
+                Some(BlockDirection::Down)
+            };
+            let Some(dir) = support_dir else {
+                return false;
+            };
+            let support_pos = args.position.offset(dir.to_offset());
+            let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
+            if !is_hanging {
+                return state.is_solid();
+            }
+            let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+                || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS);
+            return match dir {
+                BlockDirection::Up => {
+                    crate::block::can_support_center(
+                        args.block_accessor,
+                        &support_pos,
+                        BlockDirection::Down,
+                    ) || is_permissive
+                }
+                _ => state.is_side_solid(dir.opposite()) || is_permissive,
+            };
+        }
+
         let clicked_face = args
             .use_item_on
             .and_then(|u| pumpkin_data::BlockDirection::try_from(u.face.0).ok())
@@ -391,7 +428,7 @@ impl BlockBehaviour for SignBlock {
                 let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
                 if state.is_side_solid(d.opposite().to_block_direction())
                     || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
+                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS)
                 {
                     return true;
                 }
@@ -407,14 +444,19 @@ impl BlockBehaviour for SignBlock {
 
         let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
         let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_ALL_SIGNS);
 
         match clicked_face {
             // Standing signs need a legacy-solid block below,
             // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
             BlockDirection::Up => !is_hanging && state.is_solid(),
             BlockDirection::Down => {
-                is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
+                is_hanging
+                    && (crate::block::can_support_center(
+                        args.block_accessor,
+                        &support_pos,
+                        BlockDirection::Down,
+                    ) || is_permissive)
             }
             _ => {
                 if is_hanging {
@@ -436,6 +478,15 @@ impl BlockBehaviour for SignBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        if args.state_id.is_waterlogged() {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+
         let is_hanging = args.block.name.contains("hanging");
         let is_wall_sign = args.block.name.contains("wall");
 
@@ -451,7 +502,9 @@ impl BlockBehaviour for SignBlock {
             Some(BlockDirection::Down)
         };
 
-        if let Some(dir) = support_dir {
+        if let Some(dir) = support_dir
+            && args.direction == dir
+        {
             let support_pos = args.position.offset(dir.to_offset());
             let support_state = args.world.get_block_state(&support_pos);
 
@@ -467,7 +520,9 @@ impl BlockBehaviour for SignBlock {
 
             let is_valid = match dir {
                 BlockDirection::Up => {
-                    support_state.is_center_solid(BlockDirection::Down) || is_leaf || is_sign
+                    crate::block::can_support_center(args.world, &support_pos, BlockDirection::Down)
+                        || is_leaf
+                        || is_sign
                 }
                 // Standing signs survive on a legacy-solid block,
                 // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
@@ -486,17 +541,6 @@ impl BlockBehaviour for SignBlock {
             if !is_valid {
                 return BlockStateId::AIR;
             }
-        }
-
-        // A surviving waterlogged sign keeps the water around it flowing,
-        // mirroring the `scheduleTick` in `SignBlock::updateShape`.
-        if args.state_id.is_waterlogged() {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
         }
 
         args.state_id
@@ -590,27 +634,17 @@ impl BlockBehaviour for SignBlock {
                 is_facing_front_text(args.world, args.position, args.block, args.player);
             let text = sign_entity.get_text(is_front_text);
 
-            let result = if let Some(honeycomb_item) =
-                pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
-            {
-                honeycomb_item.apply_to_sign(&args, &block_entity, &sign_entity)
-            } else if let Some(g_ink_sac_item) =
-                pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
-            {
-                g_ink_sac_item.apply_to_sign(&args, &block_entity, text)
-            } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
-                ink_sac_item.apply_to_sign(&args, &block_entity, text)
-            } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
-                let color_name = args
-                    .item_stack
-                    .item
-                    .registry_key
-                    .strip_suffix("_dye")
-                    .unwrap_or(args.item_stack.item.registry_key);
-                dye.apply_to_sign(&args, &block_entity, text, color_name)
-            } else {
-                BlockActionResult::PassToDefaultBlockAction
-            };
+            let any_item = pumpkin_item.as_any();
+            let mut result = BlockActionResult::PassToDefaultBlockAction;
+            if let Some(honeycomb_item) = any_item.downcast_ref::<HoneyCombItem>() {
+                result = honeycomb_item.apply_to_sign(&args, &block_entity, &sign_entity);
+            } else if let Some(g_ink_sac_item) = any_item.downcast_ref::<GlowingInkSacItem>() {
+                result = g_ink_sac_item.apply_to_sign(&args, &block_entity, text);
+            } else if let Some(ink_sac_item) = any_item.downcast_ref::<InkSacItem>() {
+                result = ink_sac_item.apply_to_sign(&args, &block_entity, text);
+            } else if let Some(dye) = any_item.downcast_ref::<DyeItem>() {
+                result = dye.apply_to_sign(&args, &block_entity, text);
+            }
 
             if result == BlockActionResult::Success {
                 execute_click_commands_if_present(args.world, args.player, args.position, text);
@@ -640,7 +674,10 @@ fn open_text_edit(
     *currently_editing_player
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(player.gameprofile.id);
-    player.try_send_client_packet(&COpenSignEditor::new(*position, is_front_text));
+    player.try_enqueue_packet_editioned(
+        &COpenSignEditor::new(*position, is_front_text),
+        &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(*position, is_front_text),
+    );
 }
 
 /// Checks if another player is actively editing the sign within reach.

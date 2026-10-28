@@ -47,13 +47,7 @@
 
             src = lib.cleanSource ./.;
 
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-              outputHashes = {
-                "cranelift-assembler-x64-0.136.0-dev" =
-                  "sha256-TZkmQ4+wWzb9x8UukZYQs1j05llI8ZmuMyHFXaDwcL0=";
-              };
-            };
+            cargoLock.lockFile = ./Cargo.lock;
 
             nativeBuildInputs = [
               pkgs.rustfmt

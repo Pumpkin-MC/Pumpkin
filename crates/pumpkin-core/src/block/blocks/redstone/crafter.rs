@@ -117,12 +117,13 @@ impl CrafterBlock {
 
         let recipe = match_crafting_recipe(crafter, None);
         if let Some(recipe_result) = recipe
-            && let Some(item) = Item::from_registry_key(
+            && Item::from_registry_key(
                 recipe_result
                     .item_id
                     .strip_prefix("minecraft:")
                     .unwrap_or(&recipe_result.item_id),
             )
+            .is_some()
             && recipe_result.count > 0
         {
             let state = world.get_block_state(pos);
@@ -132,7 +133,7 @@ impl CrafterBlock {
             props.crafting = true;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
-            let mut result_stack = ItemStack::new(recipe_result.count, item);
+            let mut result_stack = recipe_result.to_item_stack();
             if let Some(server) = world.server.upgrade() {
                 let mut event =
                     crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
@@ -147,6 +148,19 @@ impl CrafterBlock {
                 result_stack = event.result;
             }
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
+
+            let recipe_id = format!("minecraft:{}", result_stack.item.registry_key);
+            let check_pos = pos.to_f64();
+            let players = world.players.load();
+            for player in players.iter() {
+                if player.position().squared_distance_to_vec(&check_pos) <= 25.0 {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::CrafterRecipeCrafted {
+                            recipe_id: recipe_id.clone(),
+                        },
+                    );
+                }
+            }
 
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);

@@ -8,7 +8,7 @@ use pumpkin_core::server::Server;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::bot::HeadlessBot;
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
 pub async fn run_login_and_movement_tests(
     server: &Arc<Server>,
@@ -23,11 +23,18 @@ pub async fn run_login_and_movement_tests(
     let mut bot1 = bot1_res?;
     let bot2 = bot2_res?;
 
-    server.tick();
-    tokio::task::yield_now().await;
+    let mut bots_joined = false;
+    for _ in 0..MAX_POLL_TICKS {
+        server.tick();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        if server.get_player_count() == 2 {
+            bots_joined = true;
+            break;
+        }
+    }
 
-    let player_count = server.get_player_count();
-    if player_count != 2 {
+    if !bots_joined {
+        let player_count = server.get_player_count();
         return Err(format!(
             "Expected 2 connected bots on server, found {player_count}"
         ));
@@ -47,7 +54,7 @@ pub async fn run_login_and_movement_tests(
 
     let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
     let mut bot_moved = false;
-    for _ in 0..25 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
         if let Some(player1) = world.get_player_by_name("TestBot1") {
