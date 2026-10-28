@@ -223,6 +223,15 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs grindstone experience drop and plays grindstone sound events.
     fn use_grindstone(&self, _xp_amount: i32) {}
+
+    /// Called when the player successfully enchants an item in an enchanting table.
+    fn on_enchanted_item(&self, _levels: i32) {}
+
+    /// Called when the player takes a crafted item from a crafting result slot.
+    fn on_recipe_crafted(&self, _item: &ItemStack) {}
+
+    /// Called when the player takes a brewed potion from a brewing stand potion slot.
+    fn on_brewed_potion(&self) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.

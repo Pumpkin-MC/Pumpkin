@@ -86,6 +86,10 @@ impl AgeableMob for StriderEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::STRIDER_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for StriderEntity {

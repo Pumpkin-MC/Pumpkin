@@ -354,7 +354,7 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
         // Kill credit on death.
         for attacker in [
             living.last_hurt_by_player_id.load(Relaxed),
-            living.last_hurt_by_mob_id.load(Relaxed),
+            living.get_last_hurt_by_mob_id().unwrap_or(0),
         ] {
             if attacker != 0 {
                 links.push(attacker);

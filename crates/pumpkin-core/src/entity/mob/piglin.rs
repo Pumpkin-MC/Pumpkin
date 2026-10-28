@@ -221,11 +221,11 @@ impl PiglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        if baby {
-            entity.entity_dimension.store(Self::BABY_DIMENSIONS);
+        entity.set_default_dimensions(if baby {
+            Self::BABY_DIMENSIONS
         } else {
-            entity.entity_dimension.store(Self::ADULT_DIMENSIONS);
-        }
+            Self::ADULT_DIMENSIONS
+        });
     }
 
     #[must_use]
@@ -812,6 +812,27 @@ impl PiglinEntity {
         }
 
         if PiglinAi::is_loved_item(&taken) {
+            if let Some(thrower_uuid) = item.get_thrower()
+                && let Some(thrower_player) = self
+                    .mob_entity
+                    .living_entity
+                    .entity
+                    .world
+                    .load()
+                    .get_player_by_uuid(thrower_uuid)
+            {
+                let is_baby = self.is_baby();
+                let player_wearing_safe_armor =
+                    PiglinAi::is_wearing_safe_armor(&thrower_player.living_entity);
+                thrower_player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
+                        entity_type: "minecraft:piglin".to_string(),
+                        item_id: taken.item.registry_key.to_string(),
+                        is_baby,
+                        player_wearing_safe_armor,
+                    },
+                );
+            }
             self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
             self.hold_in_off_hand(taken);
             self.admire_gold_item();

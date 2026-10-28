@@ -266,6 +266,13 @@ fn unpack_chest_loot(
         && let Some(table) = get_loot_table(&loot_key)
         && let Some(inventory) = entity.clone().get_inventory()
     {
+        if let Some(player) = player {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                    loot_table_id: loot_key.clone(),
+                },
+            );
+        }
         fill_chest_inventory_handle(
             &inventory,
             &crate::world::loot::LootTableHandle::Static(table),

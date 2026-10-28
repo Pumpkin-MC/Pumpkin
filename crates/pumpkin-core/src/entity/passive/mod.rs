@@ -1,5 +1,6 @@
 pub mod abstract_fish;
 pub mod abstract_schooling_fish;
+pub mod ageable_water_creature;
 pub mod allay;
 pub mod animal;
 pub mod armadillo;
