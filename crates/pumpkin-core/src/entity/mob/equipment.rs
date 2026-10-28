@@ -35,7 +35,6 @@ use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-use crate::entity::EntityBase;
 use crate::entity::mob::{Mob, MobEntity};
 
 // ══════════════════════════════════════════════════════════════════
@@ -811,21 +810,18 @@ fn equip_mob_from_def(
 
 /// Equips a mob with weapons/armor/enchantments when it spawns.
 ///
-/// Called from the blanket `EntityBase::init_data_tracker` implementation for
-/// all mob types. Looks up the mob's equipment definition in
+/// Called once from `MobEntity::finalize_spawn_base` (vanilla `finalizeSpawn`),
+/// never for a mob loaded from disk. Looks up the mob's equipment definition in
 /// [`EQUIPMENT_REGISTRY`], computes [`RegionalDifficulty`] at the mob's
 /// position, generates equipment, stores it in the entity's equipment slots,
 /// and broadcasts the changes to nearby players.
 ///
 /// Mobs not listed in the registry silently receive no equipment.
-pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>) {
-    let entity_type = mob.get_entity().entity_type;
-    let pos = mob.get_entity().pos.load();
+pub fn equip_mob_on_spawn(mob: &MobEntity, world: &Arc<crate::world::World>) {
+    let living = &mob.living_entity;
+    let entity_type = living.entity.entity_type;
+    let pos = living.entity.pos.load();
     let difficulty = RegionalDifficulty::at(world, pos);
-
-    let Some(living) = mob.get_living_entity() else {
-        return;
-    };
 
     let entity_name = entity_type.resource_name;
 
