@@ -30,7 +30,7 @@ fn entity_predicates_do_not_match_a_missing_entity() {
 use crate::entity::{
     Entity,
     ai::test_support::world,
-    mob::magma_cube::MagmaCubeEntity,
+    mob::{Mob, magma_cube::MagmaCubeEntity},
     passive::{
         chicken::ChickenEntity,
         frog::FrogEntity,
@@ -119,6 +119,33 @@ async fn component_predicates_select_chicken_and_mooshroom_variants() {
             &[(item, 1); 5],
         );
     }
+}
+
+#[tokio::test]
+async fn chicken_variant_set_and_nbt_roundtrip() {
+    let folder = tempfile::tempdir().unwrap();
+    let world = world(&folder);
+    let chicken = ChickenEntity::new(Entity::new(
+        world.clone(),
+        Vector3::default(),
+        &EntityType::CHICKEN,
+    ));
+    chicken.mob_set_variant_name("warm");
+    assert_eq!(
+        chicken.variant.load(std::sync::atomic::Ordering::Relaxed),
+        ChickenVariant::Warm.id()
+    );
+
+    let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+    chicken.mob_write_nbt(&mut nbt);
+    assert_eq!(nbt.get_string("variant"), Some("minecraft:warm"));
+
+    let chicken2 = ChickenEntity::new(Entity::new(world, Vector3::default(), &EntityType::CHICKEN));
+    chicken2.mob_read_nbt(&nbt);
+    assert_eq!(
+        chicken2.variant.load(std::sync::atomic::Ordering::Relaxed),
+        ChickenVariant::Warm.id()
+    );
 }
 
 #[tokio::test]
@@ -757,4 +784,201 @@ fn empty_location_and_state_predicates_preserve_their_context_requirements() {
         .item,
         &Item::DIAMOND
     );
+}
+
+#[tokio::test]
+async fn random_chance_with_looting_respects_level_and_multiplier() {
+    use pumpkin_data::{Enchantment, data_component_impl::EquipmentSlot};
+
+    let folder = tempfile::tempdir().unwrap();
+    let world = world(&folder);
+    let attacker = SheepEntity::new(Entity::new(world, Vector3::default(), &EntityType::SHEEP));
+    let mut sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
+    sword.add_enchantment(&Enchantment::LOOTING, 2);
+    attacker
+        .mob_entity
+        .living_entity
+        .entity_equipment
+        .lock()
+        .unwrap()
+        .put(&EquipmentSlot::MAIN_HAND, sword);
+
+    let json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:random_chance_with_looting","chance":0.0,"looting_multiplier":0.5}]}]}]}"#;
+    let table = parse_loot_table(json).unwrap();
+
+    let no_looting_params = LootContextParameters::default();
+    let drops = generate_dynamic_loot_with_context(&table, 0, &no_looting_params);
+    assert!(drops.is_empty());
+
+    let looting_params = LootContextParameters {
+        killer_entity: Some(attacker.as_ref()),
+        ..Default::default()
+    };
+    let drops = generate_dynamic_loot_with_context(&table, 0, &looting_params);
+    assert_eq!(drops.len(), 1);
+    assert_eq!(drops[0].item, &Item::DIAMOND);
+}
+
+#[test]
+fn survives_explosion_and_decay_at_or_below_one_radius_preserves_drops() {
+    let json_condition = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:survives_explosion"}]}]}]}"#;
+    let table_condition = parse_loot_table(json_condition).unwrap();
+
+    let json_decay = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","functions":[{"function":"minecraft:set_count","count":10},{"function":"minecraft:explosion_decay"}]}]}]}"#;
+    let table_decay = parse_loot_table(json_decay).unwrap();
+
+    for radius in [None, Some(0.5), Some(1.0)] {
+        let params = LootContextParameters {
+            explosion_radius: radius,
+            ..Default::default()
+        };
+        for seed in 0..10 {
+            let drops_cond = generate_dynamic_loot_with_context(&table_condition, seed, &params);
+            assert_eq!(drops_cond.len(), 1, "radius {radius:?}, seed {seed}");
+            assert_eq!(drops_cond[0].item, &Item::DIAMOND);
+
+            let drops_decay = generate_dynamic_loot_with_context(&table_decay, seed, &params);
+            assert_eq!(drops_decay.len(), 1, "radius {radius:?}, seed {seed}");
+            assert_eq!(drops_decay[0].item_count, 10);
+        }
+    }
+}
+
+#[tokio::test]
+async fn entity_properties_evaluates_flags_distance_and_type_specific() {
+    use std::sync::atomic::Ordering;
+
+    let folder = tempfile::tempdir().unwrap();
+    let world = world(&folder);
+    let sheep = SheepEntity::new(Entity::new(
+        world.clone(),
+        Vector3::default(),
+        &EntityType::SHEEP,
+    ));
+    let cube = MagmaCubeEntity::new(Entity::new(
+        world,
+        Vector3::new(10.0, 0.0, 0.0),
+        &EntityType::MAGMA_CUBE,
+    ));
+    cube.slime.set_size(4, false);
+
+    // Test flags: is_sneaking
+    sheep
+        .mob_entity
+        .living_entity
+        .entity
+        .sneaking
+        .store(true, Ordering::Relaxed);
+    let sneaking_json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:entity_properties","entity":"this","predicate":{"flags":{"is_sneaking":true}}}]}]}]}"#;
+    let table_sneaking = parse_loot_table(sneaking_json).unwrap();
+    let params_sheep = LootContextParameters {
+        this_entity: Some(sheep.as_ref()),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_dynamic_loot_with_context(&table_sneaking, 0, &params_sheep).len(),
+        1
+    );
+
+    sheep
+        .mob_entity
+        .living_entity
+        .entity
+        .sneaking
+        .store(false, Ordering::Relaxed);
+    assert!(generate_dynamic_loot_with_context(&table_sneaking, 0, &params_sheep).is_empty());
+
+    // Test distance: horizontal
+    let dist_json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:entity_properties","entity":"this","predicate":{"distance":{"horizontal":{"min":9.0,"max":11.0}}}}]}]}]}"#;
+    let table_dist = parse_loot_table(dist_json).unwrap();
+    let params_cube = LootContextParameters {
+        this_entity: Some(cube.as_ref()),
+        position: Some(Vector3::default()),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_dynamic_loot_with_context(&table_dist, 0, &params_cube).len(),
+        1
+    );
+
+    // Test type_specific: cube_mob size
+    let size_json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:entity_properties","entity":"this","predicate":{"type_specific":{"type":"minecraft:slime","size":4}}}]}]}]}"#;
+    let table_size = parse_loot_table(size_json).unwrap();
+    assert_eq!(
+        generate_dynamic_loot_with_context(&table_size, 0, &params_cube).len(),
+        1
+    );
+
+    cube.slime.set_size(1, false);
+    assert!(generate_dynamic_loot_with_context(&table_size, 0, &params_cube).is_empty());
+}
+
+#[test]
+fn match_tool_evaluates_damage_durability_and_enchantments() {
+    use pumpkin_data::Enchantment;
+
+    let mut pickaxe = ItemStack::new(1, &Item::DIAMOND_PICKAXE);
+    pickaxe.add_enchantment(&Enchantment::SILK_TOUCH, 1);
+    pickaxe.set_damage(100);
+
+    let json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:diamond_pickaxe","predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}],"minecraft:damage":{"damage":{"min":50,"max":150}}}}}]}]}]}"#;
+    let table = parse_loot_table(json).unwrap();
+
+    let params_matching = LootContextParameters {
+        tool: Some(pickaxe),
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_dynamic_loot_with_context(&table, 0, &params_matching).len(),
+        1
+    );
+
+    let mut no_silk = ItemStack::new(1, &Item::DIAMOND_PICKAXE);
+    no_silk.set_damage(100);
+    let params_no_silk = LootContextParameters {
+        tool: Some(no_silk),
+        ..Default::default()
+    };
+    assert!(generate_dynamic_loot_with_context(&table, 0, &params_no_silk).is_empty());
+}
+
+#[test]
+fn time_check_and_predicate_reference_evaluation() {
+    let time_json = r#"{"pools":[{"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:time_check","period":24000,"value":{"min":6000,"max":18000}}]}]}]}"#;
+    let table_time = parse_loot_table(time_json).unwrap();
+
+    let day_params = LootContextParameters {
+        world_time: 12000,
+        ..Default::default()
+    };
+    assert_eq!(
+        generate_dynamic_loot_with_context(&table_time, 0, &day_params).len(),
+        1
+    );
+
+    let night_params = LootContextParameters {
+        world_time: 20000,
+        ..Default::default()
+    };
+    assert!(generate_dynamic_loot_with_context(&table_time, 0, &night_params).is_empty());
+
+    let shears = ItemStack::new(1, &Item::SHEARS);
+    let params_shears = LootContextParameters {
+        tool: Some(shears),
+        ..Default::default()
+    };
+    assert!(evaluate_predicate(
+        "minecraft:tool/can_shear",
+        &params_shears
+    ));
+
+    let stick = ItemStack::new(1, &Item::STICK);
+    let params_stick = LootContextParameters {
+        tool: Some(stick),
+        ..Default::default()
+    };
+    assert!(!evaluate_predicate(
+        "minecraft:tool/can_shear",
+        &params_stick
+    ));
 }

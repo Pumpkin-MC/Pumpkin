@@ -17,9 +17,10 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         try_find_water::TryFindWaterGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     player::Player,
 };
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SLIME_BALL];
 
@@ -69,6 +70,10 @@ impl AgeableMob for TadpoleEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn ageable_interact(&self, _player: &Arc<Player>, _stack: &mut ItemStack) -> bool {
+        false
+    }
 }
 
 impl Mob for TadpoleEntity {
@@ -86,6 +91,31 @@ impl Mob for TadpoleEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        self.mob_entity.finalize_spawn_base();
+        group_data
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity
+            .world
+            .load()
+            .level_info
+            .load()
+            .game_rules
+            .mob_drops
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        false
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

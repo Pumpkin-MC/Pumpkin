@@ -80,7 +80,7 @@ impl TemptGoal {
         world.get_nearest_player(
             mob_entity.living_entity.entity.pos.load(),
             range,
-            |player| player.living_entity.is_part_of_game() && self.is_holding_tempt_item(player),
+            |player| player.can_be_seen_by_anyone() && self.is_holding_tempt_item(player),
         )
     }
 
