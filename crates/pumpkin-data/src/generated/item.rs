@@ -109038,7 +109038,43 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
-            (DeathProtection, &DeathProtectionImpl),
+            (
+                DeathProtection,
+                &DeathProtectionImpl {
+                    death_effects: Cow::Borrowed(&[
+                        ConsumeEffect::ClearAllEffects,
+                        ConsumeEffect::ApplyEffects((
+                            Cow::Borrowed(&[
+                                StatusEffectInstance {
+                                    effect_id: Cow::Borrowed("minecraft:regeneration"),
+                                    amplifier: 1i32,
+                                    duration: 900i32,
+                                    ambient: false,
+                                    show_particles: true,
+                                    show_icon: true,
+                                },
+                                StatusEffectInstance {
+                                    effect_id: Cow::Borrowed("minecraft:absorption"),
+                                    amplifier: 1i32,
+                                    duration: 100i32,
+                                    ambient: false,
+                                    show_particles: true,
+                                    show_icon: true,
+                                },
+                                StatusEffectInstance {
+                                    effect_id: Cow::Borrowed("minecraft:fire_resistance"),
+                                    amplifier: 0i32,
+                                    duration: 800i32,
+                                    ambient: false,
+                                    show_particles: true,
+                                    show_icon: true,
+                                },
+                            ]),
+                            1f32,
+                        )),
+                    ]),
+                },
+            ),
             (
                 BreakSound,
                 &BreakSoundImpl {

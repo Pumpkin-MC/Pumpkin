@@ -4,6 +4,7 @@ use crate::Enchantment;
 use crate::attributes::Attributes;
 use crate::damage::DamageType;
 use crate::data_component_impl::basic::SoundEvent;
+use crate::data_component_impl::food::ConsumeEffect;
 use crate::data_component_impl::{
     DataComponentImpl, EquipmentSlot, IDSet, IdOr, get_f32_hash, get_i32_hash, get_idor,
     get_idor_hash, get_idset_hash, get_str_hash, put_idor,
@@ -794,14 +795,36 @@ impl DataComponentImpl for GliderImpl {
     default_impl!(Glider);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DeathProtectionImpl;
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct DeathProtectionImpl {
+    pub death_effects: Cow<'static, [ConsumeEffect]>,
+}
 impl DeathProtectionImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let death_effects = data
+            .extract_compound()
+            .and_then(|compound| compound.get_list("death_effects"))
+            .map(|effects| {
+                effects
+                    .iter()
+                    .filter_map(ConsumeEffect::read_data)
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some(Self { death_effects })
     }
 }
 impl DataComponentImpl for DeathProtectionImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        let effects = self
+            .death_effects
+            .iter()
+            .map(ConsumeEffect::as_nbt)
+            .collect();
+        compound.put_list("death_effects", effects);
+        NbtTag::Compound(compound)
+    }
     default_impl!(DeathProtection);
 }
 

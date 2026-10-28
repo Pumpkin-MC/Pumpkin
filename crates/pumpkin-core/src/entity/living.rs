@@ -2599,95 +2599,72 @@ impl LivingEntity {
         }
     }
 
-    /// Tries to use a totem of undying from the entity's hands. If successful, applies the totem effects and returns true.
-    #[allow(dead_code)]
-    async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
-        for hand in Hand::all() {
-            let mut stack = self.get_stack_in_hand(caller, hand);
-
-            // Clear the stack and use the totem of undying
-            if stack.get_data_component::<DeathProtectionImpl>().is_some() {
-                let mut resurrect_event =
-                    crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
-                        self.entity.entity_id,
-                    );
-                if let Some(server) = self.entity.world.load().server.upgrade() {
-                    server
-                        .plugin_manager
-                        .fire(&server, &mut resurrect_event)
-                        .await;
-                }
-                if resurrect_event.cancelled {
-                    return false;
-                }
-
-                let item_key = stack.item.registry_key.to_string();
-                stack.clear();
-                let slot = match hand {
-                    Hand::Right => EquipmentSlot::MAIN_HAND,
-                    Hand::Left => EquipmentSlot::OFF_HAND,
-                };
-                if let Some(player) = caller.get_player() {
-                    player.trigger_advancement(
-                        crate::entity::player::advancement::trigger::AdvancementTrigger::UsedTotem {
-                            item_id: item_key,
-                        },
-                    );
-                    player
-                        .inventory()
-                        .entity_equipment
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .equipment
-                        .insert(slot, stack);
-                } else {
-                    self.entity_equipment
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .equipment
-                        .insert(slot, stack);
-                }
-                self.set_health(1.0);
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::ProtectedFromDeath,
-                    Some(ActorEventID::InstantDeath),
-                );
-
-                // Set Absorption, Regeneration, and Fire Resistance effects
-                self.add_effect(Effect {
-                    effect_type: &StatusEffect::ABSORPTION,
-                    duration: 100,
-                    amplifier: 1,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
-                self.add_effect(Effect {
-                    effect_type: &StatusEffect::REGENERATION,
-                    duration: 900,
-                    amplifier: 1,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
-                self.add_effect(Effect {
-                    effect_type: &StatusEffect::FIRE_RESISTANCE,
-                    duration: 800,
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
-
-                return true;
-            }
+    /// Vanilla: `LivingEntity.checkTotemDeathProtection`.
+    fn check_totem_death_protection(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: DamageType,
+    ) -> bool {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY) {
+            return false;
         }
 
-        false
+        let Some((hand, mut stack, protection)) = Hand::all().into_iter().find_map(|hand| {
+            let stack = self.get_stack_in_hand(caller, hand);
+            let protection = stack.get_data_component::<DeathProtectionImpl>()?.clone();
+            Some((hand, stack, protection))
+        }) else {
+            return false;
+        };
+
+        let mut resurrect_event =
+            crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
+                self.entity.entity_id,
+            );
+        let world = self.entity.world.load();
+        if let Some(server) = world.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut resurrect_event);
+        }
+        if resurrect_event.cancelled {
+            return false;
+        }
+
+        let protection_item = stack.split(1);
+        if let Some(player) = caller.get_player() {
+            player.inventory.set_stack_in_hand(hand, stack);
+            player.increment_stat(
+                StatisticCategory::Used,
+                i32::from(protection_item.item.id),
+                1,
+            );
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::UsedTotem {
+                    item_id: format!("minecraft:{}", protection_item.item.registry_key),
+                },
+            );
+        } else {
+            let slot = match hand {
+                Hand::Right => EquipmentSlot::MAIN_HAND,
+                Hand::Left => EquipmentSlot::OFF_HAND,
+            };
+            self.entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .put(&slot, stack.clone());
+            self.send_equipment_changes(&[(slot, stack)]);
+        }
+
+        self.set_health(1.0);
+        self.apply_consume_effects(caller, &protection.death_effects);
+        world.send_entity_status(
+            &self.entity,
+            EntityStatus::ProtectedFromDeath,
+            Some(ActorEventID::TalismanActivate),
+        );
+
+        true
     }
 
     #[allow(dead_code)]
@@ -3636,7 +3613,7 @@ impl LivingEntity {
             }
         }
 
-        if new_health <= 0.0 {
+        if new_health <= 0.0 && !self.check_totem_death_protection(caller, damage_type) {
             let mut death_event =
                 crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
                     self.entity.entity_id,
@@ -4030,8 +4007,12 @@ impl LivingEntity {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
+        self.apply_consume_effects(caller, &consumable.effects);
+    }
 
-        for consume_effect in consumable.effects.iter() {
+    /// Vanilla: `ConsumeEffect.apply` for each effect in the list.
+    fn apply_consume_effects(&self, caller: &dyn EntityBase, effects: &[ConsumeEffect]) {
+        for consume_effect in effects {
             match consume_effect {
                 ConsumeEffect::ApplyEffects((effects, probability)) => {
                     if !consume_effect_probability_applies(*probability, rand::random()) {
