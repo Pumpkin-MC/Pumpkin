@@ -419,6 +419,21 @@ impl LootTableHandle {
     }
 }
 
+thread_local! {
+    static ACTIVE_PREDICATES: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+struct PredicateGuard(String);
+
+impl Drop for PredicateGuard {
+    fn drop(&mut self) {
+        ACTIVE_PREDICATES.with(|set| {
+            set.borrow_mut().remove(&self.0);
+        });
+    }
+}
+
 #[must_use]
 pub fn evaluate_predicate(predicate_name: &str, params: &LootContextParameters<'_>) -> bool {
     let full_key = if predicate_name.contains(':') {
@@ -426,6 +441,22 @@ pub fn evaluate_predicate(predicate_name: &str, params: &LootContextParameters<'
     } else {
         format!("minecraft:{predicate_name}")
     };
+    let inserted = ACTIVE_PREDICATES.with(|set| set.borrow_mut().insert(full_key.clone()));
+    if !inserted {
+        tracing::warn!("Recursive loot predicate evaluation detected for '{full_key}'");
+        return false;
+    }
+    let _guard = PredicateGuard(full_key.clone());
+
+    if let Some(world) = params.world
+        && let Some(server) = world.server.upgrade()
+        && let Some(val) = server
+            .datapack_manager
+            .get_predicate(&full_key)
+            .or_else(|| server.datapack_manager.get_predicate(predicate_name))
+    {
+        return evaluate_predicate_value(&val, params);
+    }
     pumpkin_data::loot_table::get_loot_predicate(&full_key)
         .or_else(|| pumpkin_data::loot_table::get_loot_predicate(predicate_name))
         .is_some_and(|val| evaluate_predicate_value(val, params))

@@ -11,7 +11,7 @@ use crate::{
         palette::has_random_ticking_fluid,
     },
     generation::get_world_gen_with_all_settings,
-    tick::{OrderedTick, ScheduledTick, TickPriority, order},
+    tick::{OrderedTick, ScheduledTick, TickPriority, drain_containers, order},
     world::WorldPortalExt,
 };
 use arc_swap::ArcSwap;
@@ -611,16 +611,14 @@ impl Level {
             .iter()
             .map(|p| *p)
             .collect();
+        let mut block_containers = Vec::new();
+        let mut fluid_containers = Vec::new();
         for pos in scheduled_chunk_pos {
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let run_ticks = active_chunks.contains(&pos);
                 let chunk = chunk.value();
-                ticks
-                    .block_ticks
-                    .append(&mut chunk.block_ticks.step_tick(run_ticks));
-                ticks
-                    .fluid_ticks
-                    .append(&mut chunk.fluid_ticks.step_tick(run_ticks));
+                block_containers.push(chunk.block_ticks.step_tick(run_ticks));
+                fluid_containers.push(chunk.fluid_ticks.step_tick(run_ticks));
 
                 // Remove from set if it no longer has ticks
                 if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
@@ -631,8 +629,8 @@ impl Level {
             }
         }
 
-        ticks.block_ticks.sort_unstable();
-        ticks.fluid_ticks.sort_unstable();
+        ticks.block_ticks = drain_containers(block_containers);
+        ticks.fluid_ticks = drain_containers(fluid_containers);
 
         ticks
     }
@@ -1118,6 +1116,57 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn overdue_ticks_preserve_chunk_deadline_order() {
+        let temp_dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let active = FxHashSet::from_iter([Vector2::new(0, 0), Vector2::new(1, 0)]);
+        for pos in &active {
+            level
+                .loaded_chunks
+                .insert(*pos, ChunkData::empty_sync(pos.x, pos.y));
+        }
+        for (x, delay, priority) in [
+            (0, 5, TickPriority::Normal),
+            (1, 2, TickPriority::Normal),
+            (2, 2, TickPriority::High),
+            (16, 4, TickPriority::Normal),
+        ] {
+            let pos = BlockPos::new(x, 64, 0);
+            level.schedule_block_tick(&Block::STONE, pos, delay, priority);
+            level.schedule_fluid_tick(&Fluid::WATER, pos, delay, priority);
+        }
+        for _ in 0..5 {
+            let ticks = level.get_tick_data(&FxHashSet::default(), 0);
+            assert!(ticks.block_ticks.is_empty());
+            assert!(ticks.fluid_ticks.is_empty());
+        }
+
+        let ticks = level.get_tick_data(&active, 0);
+        // The other chunk competes with each head, not with ticks behind an earlier deadline.
+        assert_eq!(
+            ticks
+                .block_ticks
+                .iter()
+                .map(|tick| tick.position.0.x)
+                .collect::<Vec<_>>(),
+            [2, 1, 0, 16]
+        );
+        assert_eq!(
+            ticks
+                .fluid_ticks
+                .iter()
+                .map(|tick| tick.position.0.x)
+                .collect::<Vec<_>>(),
+            [2, 1, 0, 16]
+        );
     }
 
     #[tokio::test]

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{cmp::Reverse, collections::BinaryHeap, str::FromStr};
 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -107,6 +107,30 @@ impl<T> Ord for OrderedTick<T> {
     }
 }
 
+/// Drains chunk queues by comparing only their next due ticks, like vanilla's `LevelTicks`.
+/// Each queue is in deadline order, with priority and sub-tick order breaking ties.
+#[must_use]
+pub(crate) fn drain_containers<T>(containers: Vec<Vec<OrderedTick<T>>>) -> Vec<OrderedTick<T>> {
+    let mut containers: Vec<_> = containers.into_iter().map(Vec::into_iter).collect();
+    let mut heads: BinaryHeap<_> = containers
+        .iter_mut()
+        .enumerate()
+        .filter_map(|(index, ticks)| ticks.next().map(|tick| Reverse((tick, index))))
+        .collect();
+    let mut drained = Vec::new();
+    while let Some(Reverse((tick, index))) = heads.pop() {
+        drained.push(tick);
+        for next in containers[index].by_ref() {
+            if heads.peek().is_some_and(|Reverse((head, _))| next > *head) {
+                heads.push(Reverse((next, index)));
+                break;
+            }
+            drained.push(next);
+        }
+    }
+    drained
+}
+
 impl<T> ScheduledTick<T>
 where
     T: ToResourceLocation,
@@ -145,5 +169,27 @@ where
             position: BlockPos::new(x, y, z),
             value,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equal_chunk_heads_continue_draining_the_current_chunk() {
+        let waiting = OrderedTick::new(BlockPos::new(0, 64, 0), ());
+        let mut urgent = OrderedTick::new(BlockPos::new(16, 64, 0), ());
+        urgent.priority = TickPriority::High;
+        let following = OrderedTick::new(BlockPos::new(17, 64, 0), ());
+
+        let drained = drain_containers(vec![vec![waiting], vec![urgent, following]]);
+        assert_eq!(
+            drained
+                .iter()
+                .map(|tick| tick.position.0.x)
+                .collect::<Vec<_>>(),
+            [16, 17, 0]
+        );
     }
 }

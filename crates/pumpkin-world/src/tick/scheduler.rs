@@ -36,6 +36,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         };
 
         // Deadlines keep advancing in loaded chunks outside simulation distance.
+        inner.tick_queue[current_offset].sort_unstable();
         inner
             .overdue_ticks
             .append(&mut inner.tick_queue[current_offset]);
