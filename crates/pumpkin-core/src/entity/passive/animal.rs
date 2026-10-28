@@ -83,7 +83,7 @@ pub trait Animal: Mob {
                 world.send_entity_status(
                     entity,
                     pumpkin_data::entity::EntityStatus::InLoveHearts,
-                    Some(ActorEventID::InLoveHearts),
+                    ActorEventID::InLoveHearts,
                 );
 
                 world.spawn_particle(

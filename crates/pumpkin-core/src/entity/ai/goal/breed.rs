@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use pumpkin_data::entity::EntityStatus;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use rand::RngExt;
 
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
@@ -117,7 +118,11 @@ impl BreedGoal {
         baby.get_entity().set_age(-24000);
         world_full.spawn_entity(baby);
 
-        world_full.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+        world_full.send_entity_status(
+            entity,
+            EntityStatus::InLoveHearts,
+            ActorEventID::InLoveHearts,
+        );
         if world.level_info.load().game_rules.mob_drops
             && let Ok(experience) = u32::try_from(experience)
             && experience > 0

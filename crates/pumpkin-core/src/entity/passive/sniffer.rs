@@ -9,6 +9,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -186,7 +187,11 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
             VarInt(drop_tick),
         );
-        world.send_entity_status(entity, EntityStatus::SnifferDiggingSound, None);
+        world.send_entity_status(
+            entity,
+            EntityStatus::SnifferDiggingSound,
+            ActorEventID::None,
+        );
     }
 
     pub fn on_digging_complete(&self, success: bool) {

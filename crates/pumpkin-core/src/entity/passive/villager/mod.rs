@@ -1273,7 +1273,7 @@ impl VillagerEntity {
                 world.send_entity_status(
                     self.get_entity(),
                     pumpkin_data::entity::EntityStatus::VillagerHappy,
-                    Some(ActorEventID::VillagerHappy),
+                    ActorEventID::VillagerHappy,
                 );
                 self.job_site_pending.store(false, Ordering::Relaxed);
                 if profession == VillagerProfession::None {
@@ -1295,7 +1295,7 @@ impl VillagerEntity {
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
-            Some(ActorEventID::VillagerAngry),
+            ActorEventID::VillagerAngry,
         );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
@@ -1586,7 +1586,7 @@ impl VillagerEntity {
             world.send_entity_status(
                 self.get_entity(),
                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                Some(ActorEventID::VillagerHappy),
+                ActorEventID::VillagerHappy,
             );
         }
 
@@ -1838,7 +1838,7 @@ impl VillagerEntity {
                             world.send_entity_status(
                                 self.get_entity(),
                                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                                Some(ActorEventID::VillagerHappy),
+                                ActorEventID::VillagerHappy,
                             );
                         }
                     }
