@@ -7,6 +7,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::function::FunctionArgumentType;
 use crate::command::argument_types::time::TimeArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
@@ -69,7 +70,7 @@ impl SuggestionProvider for ScheduleSuggestionProvider {
 }
 
 fn execute_schedule(context: &CommandContext, replace: bool) -> Result<i32, CommandSyntaxError> {
-    let function_name = StringArgumentType::get(context, "function")?.to_string();
+    let function_name = FunctionArgumentType::get(context, "function")?.to_string();
     let time = TimeArgumentType::get(context, "time")?;
 
     if time == 0 {
@@ -171,7 +172,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .requires(PERMISSION)
             .then(
                 literal("function").then(
-                    argument("function", StringArgumentType::SingleWord)
+                    argument("function", FunctionArgumentType)
                         .suggests(FunctionSuggestionProvider)
                         .then(
                             argument("time", TimeArgumentType::any())

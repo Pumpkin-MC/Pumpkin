@@ -7,6 +7,10 @@ use crate::string_reader::StringReader;
 use crate::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::translation;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
+
+use crate::snbt::SnbtParser;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 
@@ -17,16 +21,33 @@ pub const ERROR_UNKNOWN_PARTICLE: CommandErrorType<1> = CommandErrorType::new(
 
 pub struct ParticleArgumentType;
 
+/// A parsed particle argument: the particle type and its optional SNBT options.
+#[derive(Clone, Debug)]
+pub struct ParticleWithOptions {
+    pub particle: Particle,
+    pub options: Option<NbtCompound>,
+}
+
 impl<S: crate::source::CommandSource> ArgumentType<S> for ParticleArgumentType {
-    type Item = Particle;
+    type Item = ParticleWithOptions;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let identifier = Identifier::from_reader(reader)?;
-        Particle::from_name(identifier.path())
+        let particle = Particle::from_name(identifier.path())
             .or_else(|| Particle::from_name(&identifier.to_string()))
             .ok_or_else(|| {
                 ERROR_UNKNOWN_PARTICLE.create(reader, TextComponent::text(identifier.to_string()))
-            })
+            })?;
+        // Vanilla reads the particle options as an SNBT compound right after the id.
+        let options = if reader.peek() == Some('{') {
+            match SnbtParser::parse_for_commands(reader)? {
+                NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        Ok(ParticleWithOptions { particle, options })
     }
 
     fn client_side_parser(&self) -> JavaClientArgumentType {
@@ -59,6 +80,14 @@ impl ParticleArgumentType {
         context: &CommandContext<S>,
         name: &str,
     ) -> Result<Particle, CommandSyntaxError> {
-        Ok(*context.get_argument::<Particle>(name)?)
+        Ok(context.get_argument::<ParticleWithOptions>(name)?.particle)
+    }
+
+    /// Returns the particle together with its SNBT options (`dust{color:...}`).
+    pub fn get_with_options<S: crate::source::CommandSource>(
+        context: &CommandContext<S>,
+        name: &str,
+    ) -> Result<ParticleWithOptions, CommandSyntaxError> {
+        Ok(context.get_argument::<ParticleWithOptions>(name)?.clone())
     }
 }

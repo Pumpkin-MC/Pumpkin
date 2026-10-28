@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use crate::command::text_resolve::resolve_component;
 use pumpkin_protocol::java::client::play::CClearTitle;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -61,6 +64,8 @@ impl CommandExecutor for TitleExecutor {
         let mode = self.0;
 
         for target in &targets {
+            let entity: Arc<dyn EntityBase> = target.clone();
+            let text = resolve_component(&text, &context.source, Some(&entity));
             target.show_title(&text, &mode);
         }
 

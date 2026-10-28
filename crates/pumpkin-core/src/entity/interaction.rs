@@ -178,8 +178,10 @@ impl EntityBase for InteractionEntity {
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
-        let width = nbt.get_float("width").unwrap_or(1.0);
-        let height = nbt.get_float("height").unwrap_or(1.0);
+        // Vanilla's float codec accepts any numeric tag, so `width:0.5` (a double) is valid.
+        let numeric = |key| nbt.get(key).and_then(NbtTag::as_numeric_float);
+        let width = numeric("width").unwrap_or(1.0);
+        let height = numeric("height").unwrap_or(1.0);
         let response = nbt.get_bool("response").unwrap_or(false);
 
         *self

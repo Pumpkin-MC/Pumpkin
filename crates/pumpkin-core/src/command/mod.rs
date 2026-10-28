@@ -31,6 +31,7 @@ pub mod client_suggestions;
 pub mod commands;
 pub mod context;
 pub mod node;
+pub mod text_resolve;
 
 pub mod dispatcher {
     pub use pumpkin_command::dispatcher::*;
@@ -353,7 +354,10 @@ impl CommandSender {
                 player.world(),
                 Some(player.clone()),
                 player.position(),
-                player.rotation().into(),
+                {
+                    let (yaw, pitch) = player.rotation();
+                    Vector2::new(pitch, yaw)
+                },
                 player.get_display_name().get_text(),
                 player.get_display_name(),
                 server.clone(),

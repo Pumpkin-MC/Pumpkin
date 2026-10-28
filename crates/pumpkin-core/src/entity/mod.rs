@@ -3491,6 +3491,8 @@ impl Entity {
         }
         // Update cache so we don't send rubberbanding deltas
         self.last_sent_pos.store(position);
+        // Vanilla `teleportTo` carries the passengers along (`teleportPassengers`).
+        self.position_riders();
         // TODO: use `pumpkin_util::math::pack_degrees`.
         if let Some(yaw) = yaw {
             self.last_sent_yaw
@@ -3755,6 +3757,30 @@ impl Entity {
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
+    }
+
+    /// Mirrors vanilla `Entity.positionRider` with the default attachments: each non-player
+    /// passenger sits at the vehicle's position raised by the vehicle's height. Players stay
+    /// client authoritative.
+    pub fn position_riders(&self) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if passengers.is_empty() {
+            return;
+        }
+        let pos = self.pos.load();
+        let height = f64::from(self.entity_dimension.load().height);
+        let riding_pos = Vector3::new(pos.x, pos.y + height, pos.z);
+        for passenger in passengers {
+            let passenger_entity = passenger.get_entity();
+            if passenger.get_player().is_none() {
+                passenger_entity.set_pos(riding_pos);
+            }
+            passenger_entity.position_riders();
+        }
     }
 
     pub fn has_passengers(&self) -> bool {
@@ -4393,8 +4419,9 @@ impl Entity {
             let y = position[1].extract_double().unwrap_or(0.0);
             let z = position[2].extract_double().unwrap_or(0.0);
             let pos = Vector3::new(x, y, z);
+            // Sync state is left alone, like vanilla `Entity.load`, so the tracker sends
+            // changes made by `data modify entity`. A new tracker resets it on its own.
             self.set_pos(pos);
-            self.last_sent_pos.store(pos);
         }
         if let Some(velocity) = nbt.get_list("Motion")
             && velocity.len() >= 3
@@ -4410,13 +4437,7 @@ impl Entity {
             let yaw = rotation[0].extract_float().unwrap_or(0.0);
             let pitch = rotation[1].extract_float().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
-            // TODO: use `pumpkin_util::math::pack_degrees`.
-            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            self.last_sent_yaw.store(yaw_byte, Relaxed);
-            self.last_sent_pitch.store(pitch_byte, Relaxed);
             self.head_yaw.store(yaw);
-            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
         }
         // Only keys present are applied, so partial NBT leaves the rest untouched.
         if let Some(fire) = nbt.get_short("Fire") {

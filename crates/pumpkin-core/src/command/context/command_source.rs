@@ -472,7 +472,7 @@ impl pumpkin_command::source::CommandSource for CommandSource {
         self.send_error(error);
     }
 
-    fn call_result(&self, result: ReturnValue) {
+    fn call_result(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
         if result.success_value()
             && let crate::command::CommandSender::CommandBlock(block_entity, _) = &self.output
         {
@@ -480,7 +480,7 @@ impl pumpkin_command::source::CommandSource for CommandSource {
                 .success_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
-        self.command_result_taker.call(result);
+        self.command_result_taker.call(result)
     }
 
     fn has_permission(&self, permission: &str) -> bool {

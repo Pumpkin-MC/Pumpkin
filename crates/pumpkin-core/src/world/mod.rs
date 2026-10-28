@@ -1065,6 +1065,7 @@ impl World {
                 translate,
                 bedrock_translate,
                 with,
+                ..
             } => {
                 let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
                 let parameters = with
@@ -1714,6 +1715,12 @@ impl World {
                 tick_entity(index);
             }
             order::set_entity_order(None);
+        }
+        // Vanilla `rideTick` moves each passenger onto its vehicle after the vehicle ticks.
+        for (entity, _) in &tickable {
+            if !entity.get_entity().has_vehicle() {
+                entity.get_entity().position_riders();
+            }
         }
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();

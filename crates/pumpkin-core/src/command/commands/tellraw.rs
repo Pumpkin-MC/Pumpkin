@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use crate::command::text_resolve::resolve_component;
+use crate::entity::EntityBase;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 
@@ -19,6 +23,8 @@ impl CommandExecutor for TellRawExecutor {
         let text = ComponentArgumentType::get(context, "message")?;
 
         for target in &targets {
+            let entity: Arc<dyn EntityBase> = target.clone();
+            let text = resolve_component(&text, &context.source, Some(&entity));
             target.send_system_message(&text);
         }
 

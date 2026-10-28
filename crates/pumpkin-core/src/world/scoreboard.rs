@@ -243,15 +243,20 @@ impl Scoreboard {
     pub fn update_objective(
         &mut self,
         target: &impl ScoreboardTarget,
-        objective: ScoreboardObjective,
+        mut objective: ScoreboardObjective,
     ) {
-        if !self.objectives.contains_key(&objective.name) {
+        let Some(identity) = self
+            .objectives
+            .get(&objective.name)
+            .map(|existing| existing.identity.clone())
+        else {
             warn!(
                 "Tried to update an objective which does not exist: {}",
                 &objective.name
             );
             return;
-        }
+        };
+        objective.identity = identity;
 
         let je_update = CUpdateObjectives::new(
             objective.name.clone(),
@@ -722,6 +727,8 @@ pub struct ScoreboardObjective {
     pub render_type: RenderType,
     pub number_format: Option<NumberFormat>,
     pub criterion: String,
+    // Clones retain identity; recreating an objective with the same name gets a new token.
+    identity: std::sync::Arc<()>,
 }
 
 impl ScoreboardObjective {
@@ -739,7 +746,13 @@ impl ScoreboardObjective {
             render_type,
             number_format,
             criterion: criterion.into(),
+            identity: std::sync::Arc::new(()),
         }
+    }
+
+    /// Returns whether both values refer to the same objective instance.
+    pub(crate) fn is_same(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.identity, &other.identity)
     }
 }
 

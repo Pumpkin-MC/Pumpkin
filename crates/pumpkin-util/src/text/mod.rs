@@ -136,6 +136,29 @@ impl TextComponentBase {
                     compound.put_string("separator", sep.to_string());
                 }
             }
+            TextContent::Score { score } => {
+                let mut inner = pumpkin_nbt::NbtCompound::new();
+                inner.put_string("name", score.name.to_string());
+                inner.put_string("objective", score.objective.to_string());
+                compound.put_compound("score", inner);
+            }
+            TextContent::Nbt {
+                nbt,
+                interpret,
+                storage,
+                entity,
+                block,
+            } => {
+                compound.put_string("nbt", nbt.to_string());
+                if *interpret {
+                    compound.put_bool("interpret", true);
+                }
+                for (key, value) in [("storage", storage), ("entity", entity), ("block", block)] {
+                    if let Some(value) = value {
+                        compound.put_string(key, value.to_string());
+                    }
+                }
+            }
             TextContent::Keybind { keybind } => {
                 compound.put_string("keybind", keybind.to_string());
             }
@@ -477,6 +500,35 @@ impl TextComponentBase {
                         "separator".to_string(),
                         serde_json::Value::String(sep.to_string()),
                     );
+                }
+            }
+            TextContent::Score { score } => {
+                map.insert(
+                    "score".to_string(),
+                    serde_json::json!({ "name": score.name, "objective": score.objective }),
+                );
+            }
+            TextContent::Nbt {
+                nbt,
+                interpret,
+                storage,
+                entity,
+                block,
+            } => {
+                map.insert(
+                    "nbt".to_string(),
+                    serde_json::Value::String(nbt.to_string()),
+                );
+                if *interpret {
+                    map.insert("interpret".to_string(), serde_json::Value::Bool(true));
+                }
+                for (key, value) in [("storage", storage), ("entity", entity), ("block", block)] {
+                    if let Some(value) = value {
+                        map.insert(
+                            key.to_string(),
+                            serde_json::Value::String(value.to_string()),
+                        );
+                    }
                 }
             }
             TextContent::Keybind { keybind } => {
@@ -993,6 +1045,7 @@ impl TextComponentBase {
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
+            TextContent::Score { .. } | TextContent::Nbt { .. } => String::new(),
             TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
             TextContent::PlayerSprite { ref profile, .. } => profile
                 .0
@@ -1040,13 +1093,14 @@ impl TextComponentBase {
             TextContent::Translate {
                 translate,
                 bedrock_translate,
-                with: _,
+                ..
             } => {
                 let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
                 let _ = write!(text, "%{key}");
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
+            TextContent::Score { .. } | TextContent::Nbt { .. } => {}
             TextContent::Custom { key, .. } => {
                 let _ = write!(text, "%{key}");
             }
@@ -1106,12 +1160,14 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                ..
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(translate);
                 text.push_str(&get_translation_text(key.to_string(), locale, with.clone()));
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
             TextContent::Keybind { keybind } => text.push_str(keybind),
+            TextContent::Score { .. } | TextContent::Nbt { .. } => {}
             TextContent::Custom { key, with, .. } => {
                 text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
             }
@@ -1148,6 +1204,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                ..
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(&translate);
                 get_translation_text(format!("minecraft:{key}"), locale, with)
@@ -1157,6 +1214,7 @@ impl TextComponentBase {
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
+            TextContent::Score { .. } | TextContent::Nbt { .. } => String::new(),
             TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
             TextContent::PlayerSprite { profile, .. } => profile
                 .0
@@ -1225,6 +1283,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                fallback,
             } => {
                 let mut translated_with = vec![];
                 for w in with {
@@ -1235,6 +1294,7 @@ impl TextComponentBase {
                         translate,
                         bedrock_translate,
                         with: translated_with,
+                        fallback,
                     }),
                     style: self.style,
                     extra: self.extra,
@@ -1360,6 +1420,7 @@ impl TextComponent {
                 translate: key.into(),
                 bedrock_translate: None,
                 with: with.into().into_iter().map(|x| x.0).collect(),
+                fallback: None,
             }),
             style: Box::new(Style::default()),
             extra: vec![],
@@ -1394,6 +1455,7 @@ impl TextComponent {
                 translate: java_key.into(),
                 bedrock_translate: Some(bedrock_key.into()),
                 with: with.into().into_iter().map(|x| x.0).collect(),
+                fallback: None,
             }),
             style: Box::new(Style::default()),
             extra: vec![],
@@ -2007,6 +2069,13 @@ impl std::hash::Hash for ProfileNbt {
     }
 }
 
+/// The target of a `score` text component: a score holder name or selector and an objective.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ScoreContent {
+    pub name: Cow<'static, str>,
+    pub objective: Cow<'static, str>,
+}
+
 /// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -2023,6 +2092,9 @@ pub enum TextContent {
         /// Substitution parameters for the translation.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         with: Vec<TextComponentBase>,
+        /// Text the client shows when it has no translation for `translate`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fallback: Option<Cow<'static, str>>,
     },
     /// Displays the name of one or more entities found by a selector.
     EntityNames {
@@ -2038,6 +2110,21 @@ pub enum TextContent {
     Keybind {
         /// The keybind identifier (e.g., "key.forward").
         keybind: Cow<'static, str>,
+    },
+    /// A scoreboard value, resolved on the server before sending (vanilla `ScoreContents`).
+    Score { score: ScoreContent },
+    /// NBT read from a storage, entity or block, resolved on the server before
+    /// sending (vanilla `NbtContents`).
+    Nbt {
+        nbt: Cow<'static, str>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        interpret: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        storage: Option<Cow<'static, str>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        entity: Option<Cow<'static, str>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        block: Option<Cow<'static, str>>,
     },
     /// A custom translation key for modded content.
     ///

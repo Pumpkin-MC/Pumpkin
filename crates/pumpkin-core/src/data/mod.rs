@@ -13,6 +13,7 @@ pub mod banned_ip;
 pub mod banned_player;
 pub mod datapack;
 pub mod player_server;
+pub mod predicate;
 pub mod usercache;
 pub mod whitelist;
 

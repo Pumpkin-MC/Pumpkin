@@ -1,3 +1,4 @@
+pub mod advancement;
 pub mod context_provider_loader;
 pub mod damage_type_loader;
 pub mod dynamic_registry_loader;
@@ -82,6 +83,7 @@ pub struct DatapackManager {
     loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
     dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
     trade_registry: RwLock<TradeRegistry>,
+    pub advancements: advancement::DatapackAdvancements,
 }
 
 fn share_function_bodies(
@@ -113,6 +115,7 @@ impl DatapackManager {
             loot_tables: RwLock::new(HashMap::new()),
             dynamic_registries: RwLock::new(HashMap::new()),
             trade_registry: RwLock::new(TradeRegistry::new()),
+            advancements: advancement::DatapackAdvancements::default(),
         }
     }
 
@@ -175,6 +178,15 @@ impl DatapackManager {
         );
 
         let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
+
+        let mut all_advancements = HashMap::new();
+        for pack in &loaded_packs_vec {
+            advancement::load_advancements_from_pack(&pack.root_path, &mut all_advancements);
+        }
+        if !all_advancements.is_empty() {
+            info!("Loaded {} datapack advancement(s)", all_advancements.len());
+        }
+        self.advancements.set(all_advancements);
 
         recipe_manager.set_recipes(all_recipes);
         *self
@@ -737,19 +749,79 @@ impl DatapackManager {
         source: &CommandSource,
         name: &str,
     ) -> Result<usize, String> {
-        self.visit_function_lines(name, |line| {
-            server
-                .command_dispatcher
-                .load()
-                .handle_command(source, line);
-        })
+        self.execute_function_with(server, source, name, None)
+            .map(|result| result.executed)
     }
 
+    /// Runs a function (or function tag), substituting macro lines with `arguments`.
+    ///
+    /// Each function runs in its own frame so `return` only stops that function.
+    pub fn execute_function_with(
+        &self,
+        server: &Arc<Server>,
+        source: &CommandSource,
+        name: &str,
+        arguments: Option<&NbtCompound>,
+    ) -> Result<FunctionResult, String> {
+        let functions = self.resolve_functions(name)?;
+        let dispatcher = server.command_dispatcher.load();
+        // Vanilla runs function bodies with suppressed output (`withSuppressedOutput`).
+        let source = &source.clone().with_silent();
+        let mut result = FunctionResult::default();
+        for lines in functions {
+            if lines.iter().any(|line| line.starts_with('$')) && arguments.is_none() {
+                return Err(format!("Function {name} is a macro and needs arguments"));
+            }
+            let mut substituted = Vec::with_capacity(lines.len());
+            for line in lines.iter() {
+                match (line.strip_prefix('$'), arguments) {
+                    (Some(template), Some(arguments)) => {
+                        substituted.push(substitute_macro(template, arguments)?);
+                    }
+                    _ => substituted.push(line.clone()),
+                }
+            }
+
+            FUNCTION_FRAMES.with_borrow_mut(|frames| frames.push(FunctionFrame::default()));
+            for line in &substituted {
+                let line_result = dispatcher.execute_input(line, source);
+                result.executed += 1;
+                let returned = FUNCTION_FRAMES.with_borrow_mut(|frames| {
+                    let frame = frames.last_mut()?;
+                    if frame.return_run {
+                        frame.return_run = false;
+                        frame.returned = Some(*line_result.as_ref().unwrap_or(&0));
+                    }
+                    frame.returned
+                });
+                if let Some(value) = returned {
+                    result.returned = Some(result.returned.unwrap_or(0) + value);
+                    break;
+                }
+            }
+            FUNCTION_FRAMES.with_borrow_mut(Vec::pop);
+        }
+        Ok(result)
+    }
+
+    #[cfg(test)]
     fn visit_function_lines(
         &self,
         name: &str,
         mut visit: impl FnMut(&str),
     ) -> Result<usize, String> {
+        let mut total_executed = 0;
+        for lines in self.resolve_functions(name)? {
+            for line in lines.iter() {
+                visit(line);
+                total_executed += 1;
+            }
+        }
+
+        Ok(total_executed)
+    }
+
+    fn resolve_functions(&self, name: &str) -> Result<Vec<Arc<[String]>>, String> {
         let (functions_to_run, is_tag) = if let Some(tag_name) = name.strip_prefix('#') {
             let tags = self
                 .function_tags
@@ -781,15 +853,7 @@ impl DatapackManager {
             functions
         };
 
-        let mut total_executed = 0;
-        for lines in functions {
-            for line in lines.iter() {
-                visit(line);
-                total_executed += 1;
-            }
-        }
-
-        Ok(total_executed)
+        Ok(functions)
     }
 
     #[must_use]
@@ -1133,6 +1197,86 @@ impl DatapackManager {
             .datapack_manager
             .execute_function(server, &source, name)
     }
+}
+
+/// Outcome of running a function or function tag.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FunctionResult {
+    /// Number of command lines that ran.
+    pub executed: usize,
+    /// Sum of the values passed to `return`, if any function returned.
+    pub returned: Option<i32>,
+}
+
+#[derive(Default)]
+struct FunctionFrame {
+    returned: Option<i32>,
+    return_run: bool,
+}
+
+thread_local! {
+    // Functions run synchronously on the calling thread, nested calls included.
+    static FUNCTION_FRAMES: std::cell::RefCell<Vec<FunctionFrame>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Makes the innermost running function stop after the current line with `value`.
+pub fn return_from_function(value: i32) {
+    FUNCTION_FRAMES.with_borrow_mut(|frames| {
+        if let Some(frame) = frames.last_mut() {
+            frame.returned = Some(value);
+        }
+    });
+}
+
+/// Makes the innermost running function return the result of the current line.
+pub fn return_run_from_function() {
+    FUNCTION_FRAMES.with_borrow_mut(|frames| {
+        if let Some(frame) = frames.last_mut() {
+            frame.return_run = true;
+        }
+    });
+}
+
+/// Mirrors `MacroFunction.stringify`.
+fn stringify_macro_argument(tag: &NbtTag) -> String {
+    fn decimal(value: f64) -> String {
+        let text = format!("{value:.15}");
+        let text = text.trim_end_matches('0').trim_end_matches('.');
+        if text == "-0" {
+            "-0".to_string()
+        } else {
+            text.to_string()
+        }
+    }
+    match tag {
+        NbtTag::Float(v) => decimal(f64::from(*v)),
+        NbtTag::Double(v) => decimal(*v),
+        NbtTag::Byte(v) => v.to_string(),
+        NbtTag::Short(v) => v.to_string(),
+        NbtTag::Long(v) => v.to_string(),
+        NbtTag::String(v) => v.to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn substitute_macro(template: &str, arguments: &NbtCompound) -> Result<String, String> {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find("$(") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        let Some(end) = after.find(')') else {
+            return Err(format!("Unterminated macro argument in: {template}"));
+        };
+        let key = &after[..end];
+        let Some(value) = arguments.get(key) else {
+            return Err(format!("Missing macro argument '{key}'"));
+        };
+        out.push_str(&stringify_macro_argument(value));
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
 }
 
 fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &str), String> {

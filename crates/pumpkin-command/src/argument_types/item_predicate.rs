@@ -1,8 +1,14 @@
+use pumpkin_data::data_component_impl::CustomDataImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_data::translation;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+
+use crate::argument_types::nbt_path::compare_nbt;
+use crate::snbt::SnbtParser;
 
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::context::command_context::CommandContext;
@@ -26,6 +32,42 @@ pub enum ItemPredicate {
     Item(&'static Item),
     Tag(Vec<u16>),
     Any,
+    /// A base predicate narrowed by `[component=value]` tests.
+    Filtered(Box<Self>, Vec<ComponentTest>),
+}
+
+/// One `[...]` entry of an item predicate. Only `custom_data` is checked; other
+/// components are accepted so unsupported filters don't reject every item.
+#[derive(Clone)]
+pub struct ComponentTest {
+    negated: bool,
+    key: String,
+    /// `None` checks for presence, `Some((partial, value))` compares the value.
+    value: Option<(bool, NbtTag)>,
+}
+
+impl ComponentTest {
+    fn test(&self, stack: &ItemStack) -> bool {
+        let key = self.key.strip_prefix("minecraft:").unwrap_or(&self.key);
+        let result = match key {
+            "custom_data" => {
+                let have = stack
+                    .get_data_component::<CustomDataImpl>()
+                    .map(|data| NbtTag::Compound(data.data.clone()));
+                match (&self.value, have) {
+                    (None, have) => have.is_some(),
+                    (Some((true, want)), have) => compare_nbt(
+                        want,
+                        &have.unwrap_or_else(|| NbtTag::Compound(NbtCompound::new())),
+                    ),
+                    (Some((false, want)), Some(have)) => *want == have,
+                    (Some((false, _)), None) => false,
+                }
+            }
+            _ => return true,
+        };
+        result != self.negated
+    }
 }
 
 impl ItemPredicate {
@@ -35,6 +77,9 @@ impl ItemPredicate {
             Self::Any => true,
             Self::Item(item) => stack.get_item().id == item.id,
             Self::Tag(tag) => tag.contains(&stack.get_item().id),
+            Self::Filtered(base, tests) => {
+                base.test(stack) && tests.iter().all(|test| test.test(stack))
+            }
         }
     }
 }
@@ -73,9 +118,7 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemPredicateArgumentT
                 }
             };
 
-            skip_components_and_nbt(reader);
-
-            Ok(ItemPredicate::Tag(items))
+            Ok(with_components(ItemPredicate::Tag(items), reader))
         } else {
             let start = reader.cursor();
             while let Some(c) = reader.peek() {
@@ -94,7 +137,7 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemPredicateArgumentT
             }
             let item_str = &reader.string()[start..reader.cursor()];
             if item_str == "*" {
-                return Ok(ItemPredicate::Any);
+                return Ok(with_components(ItemPredicate::Any, reader));
             }
 
             let normalized = if item_str.contains(':') {
@@ -110,9 +153,7 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemPredicateArgumentT
                     ERROR_UNKNOWN_ITEM.create(reader, TextComponent::text(normalized))
                 })?;
 
-            skip_components_and_nbt(reader);
-
-            Ok(ItemPredicate::Item(item))
+            Ok(with_components(ItemPredicate::Item(item), reader))
         }
     }
 
@@ -135,6 +176,77 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ItemPredicateArgumentT
         builder: SuggestionsBuilder,
     ) -> Suggestions {
         builder.build()
+    }
+}
+
+/// Parses an optional `[...]` component filter after the base predicate. Falls
+/// back to ignoring the filter (the old behaviour) if it can't be understood.
+fn with_components(base: ItemPredicate, reader: &mut StringReader) -> ItemPredicate {
+    if reader.peek() != Some('[') {
+        skip_components_and_nbt(reader);
+        return base;
+    }
+    let start = reader.cursor();
+    if let Some(tests) = parse_component_tests(reader) {
+        skip_components_and_nbt(reader);
+        return if tests.is_empty() {
+            base
+        } else {
+            ItemPredicate::Filtered(Box::new(base), tests)
+        };
+    }
+    reader.set_cursor(start);
+    skip_components_and_nbt(reader);
+    base
+}
+
+fn parse_component_tests(reader: &mut StringReader) -> Option<Vec<ComponentTest>> {
+    reader.skip();
+    let mut tests = Vec::new();
+    loop {
+        reader.skip_whitespace();
+        if reader.peek() == Some(']') {
+            reader.skip();
+            return Some(tests);
+        }
+        let negated = reader.peek() == Some('!');
+        if negated {
+            reader.skip();
+        }
+        let key_start = reader.cursor();
+        while let Some(c) = reader.peek() {
+            if c.is_alphanumeric() || matches!(c, '_' | ':' | '/' | '.' | '-') {
+                reader.skip();
+            } else {
+                break;
+            }
+        }
+        let key = reader.string()[key_start..reader.cursor()].to_string();
+        if key.is_empty() {
+            return None;
+        }
+        reader.skip_whitespace();
+        let value = match reader.peek() {
+            Some(op @ ('=' | '~')) => {
+                reader.skip();
+                reader.skip_whitespace();
+                let tag = SnbtParser::parse_for_commands(reader).ok()?;
+                Some((op == '~', tag))
+            }
+            _ => None,
+        };
+        tests.push(ComponentTest {
+            negated,
+            key,
+            value,
+        });
+        reader.skip_whitespace();
+        match reader.read() {
+            Some(',') => {}
+            Some(']') => return Some(tests),
+            // `|` alternatives are not supported.
+            _ => return None,
+        }
     }
 }
 
