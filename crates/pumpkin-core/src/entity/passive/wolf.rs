@@ -256,17 +256,22 @@ impl Mob for WolfEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = self.variant.load(Ordering::Relaxed);
-        let variant_str = WolfVariant::all()
-            .get(variant_id as usize)
-            .map_or("minecraft:pale", WolfVariant::asset_id);
-        nbt.put_string("variant", variant_str.to_string());
-        let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        nbt.put_string(
-            "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
-        );
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:wolf_variant", variant_id, |id| {
+                WolfVariant::all()
+                    .get(id as usize)
+                    .map_or("minecraft:pale", WolfVariant::asset_id)
+                    .to_string()
+            });
+        nbt.put_string("variant", variant_str);
+        let sound_variant_id = u32::from(self.sound_variant.load(Ordering::Relaxed));
+        let sound_variant_str =
+            self.resolve_dynamic_entry_id("minecraft:wolf_sound_variant", sound_variant_id, |id| {
+                let sound_variant = WolfSoundVariant::from_id(id as u8).unwrap_or_default();
+                format!("minecraft:{}", sound_variant.to_name())
+            });
+        nbt.put_string("sound_variant", sound_variant_str);
         nbt.put_byte(
             "CollarColor",
             self.collar_color.load(Ordering::Relaxed) as i8,
@@ -274,16 +279,21 @@ impl Mob for WolfEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            let variant =
-                WolfVariant::from_name(variant_str).map_or(WolfVariant::Pale.id(), |v| v.id());
-            self.variant.store(variant, Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:wolf_variant", variant_str, |n| {
+                    WolfVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+        {
+            self.set_variant_id(id as u8);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
-            && let Some(sound_variant) = WolfSoundVariant::from_name(sound_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:wolf_sound_variant", sound_str, |n| {
+                    WolfSoundVariant::from_name(n).map(|v| v as u32)
+                })
         {
-            self.sound_variant
-                .store(sound_variant as u8, Ordering::Relaxed);
+            self.set_sound_variant_id(id as u8);
         }
         if let Some(collar) = nbt.get_byte("CollarColor") {
             self.collar_color.store(collar as u8, Ordering::Relaxed);
@@ -301,13 +311,18 @@ impl Mob for WolfEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = WolfVariant::from_name(name).map_or(WolfVariant::Pale.id(), |v| v.id());
-        self.variant.store(variant, Ordering::Relaxed);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:wolf_variant", name, |n| {
+            WolfVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) {
+            self.set_variant_id(id as u8);
+        }
     }
 
     fn mob_set_sound_variant_name(&self, name: &str) {
-        if let Some(v) = WolfSoundVariant::from_name(name) {
-            self.set_sound_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:wolf_sound_variant", name, |n| {
+            WolfSoundVariant::from_name(n).map(|v| v as u32)
+        }) {
+            self.set_sound_variant_id(id as u8);
         }
     }
 
@@ -356,6 +371,15 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
+                if item == &Item::SHEARS {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerShearedEquipment {
+                            entity_type: "minecraft:wolf".to_string(),
+                            item_id: "minecraft:wolf_armor".to_string(),
+                        },
+                    );
+                }
+
                 if let Some(dye) =
                     item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
                     && dye.color.id() != self.get_collar_color()
@@ -420,21 +444,28 @@ impl WolfEntity {
     }
 
     pub fn set_variant(&self, variant: WolfVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 
     pub fn set_sound_variant(&self, sound_variant: WolfSoundVariant) {
-        self.sound_variant
-            .store(sound_variant as u8, Ordering::Relaxed);
+        self.set_sound_variant_id(sound_variant as u8);
+    }
+
+    pub fn set_sound_variant_id(&self, raw_id: u8) {
+        self.sound_variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::wolf::DATA_SOUND_VARIANT_ID,
-            VarInt(sound_variant as u8 as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 }

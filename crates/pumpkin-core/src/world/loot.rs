@@ -40,16 +40,25 @@ pub struct LootContextParameters<'a> {
 }
 
 fn attacker_enchantment_level(params: &LootContextParameters<'_>, name: &str) -> i32 {
-    pumpkin_data::Enchantment::from_name(name)
-        .and_then(|enchantment| {
-            params.killer_entity.map(|entity| {
-                crate::enchantment::helper::EnchantmentHelper::get_enchantment_level(
-                    enchantment,
-                    entity,
-                )
-            })
-        })
-        .unwrap_or(0)
+    let enchantment = pumpkin_data::Enchantment::from_name(name);
+    let Some(enchantment) = enchantment else {
+        return 0;
+    };
+    let entity_level = params
+        .killer_entity
+        .or(params.direct_killer_entity)
+        .map_or(0, |entity| {
+            crate::enchantment::helper::EnchantmentHelper::get_enchantment_level(
+                enchantment,
+                entity,
+            )
+        });
+    let weapon_level = params
+        .direct_attacker_weapon
+        .as_ref()
+        .filter(|weapon| !weapon.is_empty())
+        .map_or(0, |weapon| weapon.get_enchantment_level(enchantment));
+    entity_level.max(weapon_level)
 }
 
 fn tool_enchantment_level(params: &LootContextParameters<'_>, name: &str) -> i32 {
@@ -150,7 +159,7 @@ fn check_dynamic_condition(
         DynamicLootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
         DynamicLootCondition::SurvivesExplosion => params
             .explosion_radius
-            .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
+            .is_none_or(|radius| radius <= 1.0 || rng.next_f32() <= 1.0 / radius),
         DynamicLootCondition::RandomChance { chance } => rng.next_f32() < *chance,
         DynamicLootCondition::RandomChanceWithEnchantedBonus {
             enchantment,
@@ -164,6 +173,14 @@ fn check_dynamic_condition(
             } else {
                 *unenchanted_chance
             };
+            rng.next_f32() < chance
+        }
+        DynamicLootCondition::RandomChanceWithLooting {
+            chance,
+            looting_multiplier,
+        } => {
+            let level = attacker_enchantment_level(params, "minecraft:looting");
+            let chance = *chance + (level as f32) * (*looting_multiplier);
             rng.next_f32() < chance
         }
         DynamicLootCondition::TableBonus {
@@ -193,6 +210,16 @@ fn check_dynamic_condition(
         DynamicLootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
         }
+        DynamicLootCondition::DamageSourceProperties(predicate) => {
+            predicates::matches_damage_source(predicate, params)
+        }
+        DynamicLootCondition::TimeCheck { value, period } => {
+            predicates::matches_time(value, *period, params)
+        }
+        DynamicLootCondition::ValueCheck { value, range } => {
+            predicates::matches_value(*value, range, params, rng)
+        }
+        DynamicLootCondition::Reference(name) => evaluate_predicate(name, params),
     }
 }
 
@@ -232,7 +259,7 @@ fn check_condition(
         LootCondition::KilledByPlayer => params.killed_by_player.unwrap_or(false),
         LootCondition::SurvivesExplosion => params
             .explosion_radius
-            .is_none_or(|radius| rng.next_f32() <= 1.0 / radius),
+            .is_none_or(|radius| radius <= 1.0 || rng.next_f32() <= 1.0 / radius),
         LootCondition::RandomChance { chance } => rng.next_f32() < chance,
         LootCondition::RandomChanceWithEnchantedBonus {
             enchantment,
@@ -246,6 +273,14 @@ fn check_condition(
             } else {
                 unenchanted_chance
             };
+            rng.next_f32() < chance
+        }
+        LootCondition::RandomChanceWithLooting {
+            chance,
+            looting_multiplier,
+        } => {
+            let level = attacker_enchantment_level(params, "minecraft:looting");
+            let chance = chance + (level as f32) * looting_multiplier;
             rng.next_f32() < chance
         }
         LootCondition::TableBonus {
@@ -272,6 +307,16 @@ fn check_condition(
         LootCondition::DirectAttackerWeaponEnchantment(tag) => {
             direct_attacker_weapon_has_enchantment(params, tag)
         }
+        LootCondition::DamageSourceProperties(predicate) => {
+            predicates::matches_damage_source(predicate, params)
+        }
+        LootCondition::TimeCheck { value, period } => {
+            predicates::matches_time(value, period, params)
+        }
+        LootCondition::ValueCheck { value, range } => {
+            predicates::matches_value(value, range, params, rng)
+        }
+        LootCondition::Reference(name) => evaluate_predicate(name, params),
     }
 }
 
@@ -372,6 +417,79 @@ impl LootTableHandle {
     ) -> Vec<ItemStack> {
         generate_loot_from_handle(self, seed, params)
     }
+}
+
+thread_local! {
+    static ACTIVE_PREDICATES: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+struct PredicateGuard(String);
+
+impl Drop for PredicateGuard {
+    fn drop(&mut self) {
+        ACTIVE_PREDICATES.with(|set| {
+            set.borrow_mut().remove(&self.0);
+        });
+    }
+}
+
+#[must_use]
+pub fn evaluate_predicate(predicate_name: &str, params: &LootContextParameters<'_>) -> bool {
+    let full_key = if predicate_name.contains(':') {
+        predicate_name.to_string()
+    } else {
+        format!("minecraft:{predicate_name}")
+    };
+    let inserted = ACTIVE_PREDICATES.with(|set| set.borrow_mut().insert(full_key.clone()));
+    if !inserted {
+        tracing::warn!("Recursive loot predicate evaluation detected for '{full_key}'");
+        return false;
+    }
+    let _guard = PredicateGuard(full_key.clone());
+
+    if let Some(world) = params.world
+        && let Some(server) = world.server.upgrade()
+        && let Some(val) = server
+            .datapack_manager
+            .get_predicate(&full_key)
+            .or_else(|| server.datapack_manager.get_predicate(predicate_name))
+    {
+        return evaluate_predicate_value(&val, params);
+    }
+    pumpkin_data::loot_table::get_loot_predicate(&full_key)
+        .or_else(|| pumpkin_data::loot_table::get_loot_predicate(predicate_name))
+        .is_some_and(|val| evaluate_predicate_value(val, params))
+}
+
+#[must_use]
+pub fn evaluate_predicate_value(
+    value: &serde_json::Value,
+    params: &LootContextParameters<'_>,
+) -> bool {
+    pumpkin_util::loot_table::parser::parse_condition_with_predicates(value, &|name| {
+        pumpkin_data::loot_table::get_loot_predicate(name).cloned()
+    })
+    .map_or_else(
+        || {
+            if value.is_object() && params.this_entity.is_some() {
+                predicates::matches_entity(LootEntityTarget::This, value, params)
+            } else {
+                false
+            }
+        },
+        |cond| {
+            let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
+                tool.get_enchantment_level(&pumpkin_data::Enchantment::SILK_TOUCH) > 0
+            });
+            let has_shears = params
+                .tool
+                .as_ref()
+                .is_some_and(|tool| tool.item.id == pumpkin_data::item::Item::SHEARS.id);
+            let mut rng = Xoroshiro::from_seed(rand::random());
+            check_dynamic_condition(&cond, has_silk_touch, has_shears, params, &mut rng)
+        },
+    )
 }
 
 #[must_use]

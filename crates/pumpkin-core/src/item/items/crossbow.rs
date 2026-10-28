@@ -257,6 +257,12 @@ impl CrossbowItem {
                     is_creative,
                 );
 
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::ShotCrossbow {
+                        item_id: held.item.registry_key.to_string(),
+                    },
+                );
+
                 let durability_use: i32 = projectiles
                     .iter()
                     .map(|p| {

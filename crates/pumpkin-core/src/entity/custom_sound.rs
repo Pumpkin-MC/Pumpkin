@@ -13,8 +13,6 @@ pub trait CustomSound: Mob {
         SoundCategory::Players
     }
 
-    fn on_hurt_sound(&self) {}
-
     fn voice_pitch(&self) -> f32 {
         self.get_mob_entity().living_entity.get_pitch()
     }

@@ -8,7 +8,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
-    block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs},
+    block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs, PlayerPlacedArgs},
     entity::{
         Entity, EntityBase,
         passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity},
@@ -123,6 +123,18 @@ impl BlockBehaviour for CarvedPumpkinBlock {
         }
         if let Some(pattern) = find_golem_pattern(args.world, args.position) {
             spawn_golem(args.world, &pattern);
+        }
+    }
+
+    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        if let Some(pattern) = find_golem_pattern(args.world, args.position)
+            && pattern.entity_type == &EntityType::IRON_GOLEM
+        {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SummonedEntity {
+                    entity_type: "minecraft:iron_golem".to_string(),
+                },
+            );
         }
     }
 }

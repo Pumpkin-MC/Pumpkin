@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicI8, AtomicI32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicI8, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -27,7 +27,6 @@ pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
     flags: AtomicI8,
-    ambient_sound_time: AtomicI32,
 }
 
 impl BatEntity {
@@ -37,7 +36,6 @@ impl BatEntity {
             mob_entity,
             hanging_position: Mutex::new(None),
             flags: AtomicI8::new(ROOSTING_FLAG),
-            ambient_sound_time: AtomicI32::new(0),
         };
         Arc::new(bat)
     }
@@ -79,28 +77,6 @@ impl BatEntity {
             .living_entity
             .entity
             .set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
-    }
-
-    fn tick_ambient_sound(&self, world: &World, pos: &Vector3<f64>) {
-        let entity = self.get_entity();
-        if !entity.is_alive() || self.mob_entity.living_entity.is_dead_or_dying() {
-            return;
-        }
-        let roll = rand::random_range(0..1000);
-        let time = self.ambient_sound_time.fetch_add(1, Relaxed);
-        if roll < time {
-            self.ambient_sound_time
-                .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
-            if (!self.is_roosting() || rand::random_range(0..4) == 0) && !entity.is_silent() {
-                world.play_sound_fine(
-                    Sound::EntityBatAmbient,
-                    SoundCategory::Neutral,
-                    pos,
-                    self.sound_volume(),
-                    self.voice_pitch(),
-                );
-            }
-        }
     }
 
     fn tick_roosting(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
@@ -219,6 +195,23 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn get_ambient_sound_interval(&self) -> i32 {
+        AMBIENT_SOUND_INTERVAL
+    }
+
+    fn play_ambient_sound(&self) {
+        let entity = self.get_entity();
+        if (!self.is_roosting() || rand::random_range(0..4) == 0) && !entity.is_silent() {
+            entity.world.load().play_sound_fine(
+                Sound::EntityBatAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                self.sound_volume(),
+                self.voice_pitch(),
+            );
+        }
+    }
+
     fn should_check_fall_damage(&self) -> bool {
         false
     }
@@ -266,11 +259,6 @@ impl Mob for BatEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn base_tick(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-        self.tick_ambient_sound(&entity.world.load(), &entity.pos.load());
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
@@ -336,11 +324,6 @@ impl CustomSound for BatEntity {
 
     fn voice_pitch(&self) -> f32 {
         self.mob_entity.living_entity.get_pitch() * 0.95
-    }
-
-    fn on_hurt_sound(&self) {
-        self.ambient_sound_time
-            .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
     }
 }
 
