@@ -1,4 +1,6 @@
+use pumpkin_data::attributes::Attributes;
 use rustc_hash::FxHashMap;
+use std::sync::atomic::Ordering;
 
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -6,6 +8,8 @@ use crate::entity::ai::pathfinder::{
     node::{Node, PATH_TYPE_COUNT, PathType, Target},
     pathfinding_context::PathfindingContext,
 };
+use crate::entity::living::LivingEntity;
+use crate::world::World;
 
 pub trait NodeEvaluator {
     fn prepare(&mut self, context: PathfindingContext, mob_data: MobData);
@@ -49,6 +53,22 @@ pub struct MobData {
 }
 
 impl MobData {
+    #[must_use]
+    pub fn from_entity(entity: &LivingEntity, world: &World) -> Self {
+        let dimensions = entity.entity.entity_dimension.load();
+        let mut data = Self::new(
+            entity.entity.pos.load(),
+            dimensions.width,
+            dimensions.height,
+            entity.get_attribute_value(&Attributes::STEP_HEIGHT) as f32,
+        );
+        data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        data.is_in_water = entity.is_in_water();
+        data.min_y = world.get_bottom_y();
+        data.sea_level = world.sea_level;
+        data
+    }
+
     #[must_use]
     pub const fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
         let mut data = Self {
@@ -175,6 +195,11 @@ impl BaseNodeEvaluator {
             self.nodes.insert(pos.0, node);
             node
         }
+    }
+
+    pub fn update_node(&mut self, node: Node) -> Node {
+        self.nodes.insert(node.pos.0, node);
+        node
     }
 
     pub fn reset(&mut self) {

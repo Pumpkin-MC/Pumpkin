@@ -2,12 +2,12 @@ use rustc_hash::FxHashSet;
 
 use crate::block::{
     BlockBehaviour, BlockIsReplacing, BlockMetadata, BonemealArgs, CanPlaceAtArgs, CanUpdateAtArgs,
-    GetStateForNeighborUpdateArgs, OnPlaceArgs, UseWithItemArgs, registry::BlockActionResult,
+    GetStateForNeighborUpdateArgs, OnPlaceArgs,
 };
 use crate::entity::{EntityBase, player::Player};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{
-    Block, BlockDirection, BlockId, BlockStateId, FacingExt,
+    Block, BlockDirection, BlockId, BlockState, BlockStateId, FacingExt,
     block_properties::GlowLichenLikeProperties,
 };
 use pumpkin_util::math::position::BlockPos;
@@ -42,7 +42,6 @@ impl BlockBehaviour for MultifaceBlock {
             };
             let mut props = GlowLichenLikeProperties::from_state_id(state_id);
             set_face(&mut props, direction);
-            props.waterlogged = args.replacing.water_source();
             return props.to_state_id(args.block);
         }
         let (Some(direction), _) = get_attach_direction(
@@ -102,10 +101,8 @@ impl BlockBehaviour for MultifaceBlock {
         }
 
         let mut new_directions = active_directions(old_props);
-        let support = args
-            .world
-            .get_block(&args.position.offset(args.direction.to_offset()));
-        if !is_solid_face(support) {
+        let support_state = BlockState::from_id(args.neighbor_state_id);
+        if !can_attach_to(support_state, args.direction) {
             new_directions.remove(&args.direction);
         }
 
@@ -118,33 +115,6 @@ impl BlockBehaviour for MultifaceBlock {
         }
         new_props.waterlogged = old_props.waterlogged;
         new_props.to_state_id(args.block)
-    }
-
-    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if args.item_stack.item.id != args.block.id.as_u16() {
-            return BlockActionResult::Pass;
-        }
-        let state = args.world.get_block_state(args.position);
-        let mut props = GlowLichenLikeProperties::from_state_id(state.id);
-
-        let (Some(accurate_dir), _) = get_attach_direction(
-            args.world.as_ref(),
-            args.position,
-            args.block,
-            Some(args.player),
-            *args.hit.face,
-            true,
-        ) else {
-            return BlockActionResult::Fail;
-        };
-        set_face(&mut props, accurate_dir);
-
-        args.world.set_block_state(
-            args.position,
-            props.to_state_id(args.block),
-            BlockFlags::NOTIFY_ALL,
-        );
-        BlockActionResult::Consume
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
@@ -162,8 +132,10 @@ impl BlockBehaviour for MultifaceBlock {
         }
         let mut props = GlowLichenLikeProperties::from_state_id(args.state_id);
         for dir in BlockDirection::all() {
-            let support = args.world.get_block(&args.position.offset(dir.to_offset()));
-            if is_solid_face(support) {
+            let support_state = args
+                .world
+                .get_block_state(&args.position.offset(dir.to_offset()));
+            if can_attach_to(support_state, dir) {
                 set_face(&mut props, dir);
             }
         }
@@ -183,13 +155,14 @@ fn get_attach_direction(
     click_direction: BlockDirection,
     replacing: bool,
 ) -> (Option<BlockDirection>, bool) {
-    let clicked_block = block_accessor.get_block(&block_pos.offset(click_direction.to_offset()));
+    let (clicked_block, clicked_state) =
+        block_accessor.get_block_and_state(&block_pos.offset(click_direction.to_offset()));
 
     if !replacing && clicked_block == target_block {
         return (None, false);
     }
 
-    if is_solid_face(clicked_block) {
+    if can_attach_to(clicked_state, click_direction) {
         return (Some(click_direction), false);
     }
 
@@ -214,8 +187,9 @@ fn get_attach_direction(
         ];
         for dir in directions {
             if !already_active.contains(&dir) {
-                let support = block_accessor.get_block(&block_pos.offset(dir.to_offset()));
-                if is_solid_face(support) {
+                let support_state =
+                    block_accessor.get_block_state(&block_pos.offset(dir.to_offset()));
+                if can_attach_to(support_state, dir) {
                     return (Some(dir), false);
                 }
             }
@@ -224,8 +198,8 @@ fn get_attach_direction(
     (None, false)
 }
 
-const fn is_solid_face(block: &Block) -> bool {
-    block.default_state.is_full_cube()
+const fn can_attach_to(support_state: &BlockState, direction: BlockDirection) -> bool {
+    support_state.is_side_solid(direction.opposite())
 }
 
 fn active_directions(props: GlowLichenLikeProperties) -> FxHashSet<BlockDirection> {

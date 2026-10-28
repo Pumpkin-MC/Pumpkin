@@ -997,22 +997,16 @@ fn execute_on_attacker_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let mut sources = Vec::new();
     if let Some(ref entity) = context.source.entity {
-        if let Some(living) = entity.get_living_entity() {
-            let attacker_id = living
-                .last_attacker_id
-                .load(std::sync::atomic::Ordering::Relaxed);
-            if attacker_id != 0 {
-                let world = context.source.world();
-                if let Some(attacker) = world.get_entity_by_id(attacker_id) {
-                    let mut source = context.source.as_ref().clone();
-                    let name = attacker.get_name().get_text();
-                    let display_name = attacker.get_display_name();
-                    source.entity = Some(attacker);
-                    source.name = name;
-                    source.display_name = display_name;
-                    sources.push(Arc::new(source));
-                }
-            }
+        if let Some(living) = entity.get_living_entity()
+            && let Some(attacker) = living.get_last_hurt_by_mob()
+        {
+            let mut source = context.source.as_ref().clone();
+            let name = attacker.get_name().get_text();
+            let display_name = attacker.get_display_name();
+            source.entity = Some(attacker);
+            source.name = name;
+            source.display_name = display_name;
+            sources.push(Arc::new(source));
         }
     }
     Ok(sources)

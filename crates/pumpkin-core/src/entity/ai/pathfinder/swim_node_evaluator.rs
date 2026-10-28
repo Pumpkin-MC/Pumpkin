@@ -23,6 +23,11 @@ impl SwimNodeEvaluator {
         }
     }
 
+    #[must_use]
+    pub const fn allow_breaching(&self) -> bool {
+        self.allow_breaching
+    }
+
     pub fn get_cached_block_type(&mut self, pos: Vector3<i32>) -> PathType {
         if let Some(&cached) = self.path_types_cache.get(&pos) {
             return cached;
@@ -53,7 +58,7 @@ impl SwimNodeEvaluator {
                 {
                     best.cost_malus += 8.0;
                 }
-                best
+                self.base.update_node(best)
             })
         } else {
             None
@@ -84,6 +89,7 @@ impl SwimNodeEvaluator {
 
 impl NodeEvaluator for SwimNodeEvaluator {
     fn prepare(&mut self, context: PathfindingContext, mob_data: MobData) {
+        self.base.nodes.clear();
         self.base.entity_width = mob_data.get_bb_width();
         self.base.entity_height = mob_data.get_bb_height();
         self.base.entity_depth = mob_data.get_bb_width();
@@ -108,7 +114,7 @@ impl NodeEvaluator for SwimNodeEvaluator {
         let mut node = self.base.get_node(BlockPos::new(min_x, min_y, min_z));
         node.path_type = self.get_cached_block_type(Vector3::new(min_x, min_y, min_z));
         node.cost_malus = self.get_mob_penalty(node.path_type);
-        Some(node)
+        Some(self.base.update_node(node))
     }
 
     fn get_target(&mut self, pos: BlockPos) -> Target {

@@ -58,7 +58,11 @@ impl Clone for Box<dyn DataComponentImpl> {
 
 #[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
-    value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &*(std::ptr::from_ref::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
@@ -66,26 +70,36 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     let name = value.get_self_enum().to_name();
     let val_type = std::any::type_name_of_val(value);
-    value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &mut *(std::ptr::from_mut::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {name} ({val_type}) to {} ({})",
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            if other.get_self_enum() == Self::get_enum() {
+                let other = unsafe {
+                    &*(std::ptr::from_ref::<dyn crate::data_component_impl::DataComponentImpl>(
+                        other,
+                    )
+                    .cast::<Self>())
+                };
                 self == other
             } else {
                 false
@@ -708,7 +722,16 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
         DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
         DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::InteractAnimation => Some(InteractAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlockTransformer => Some(BlockTransformerImpl::read_data(data)?.to_dyn()),
+        DataComponent::VillagerFood => Some(VillagerFoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Some(ProvidesPotteryPatternImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Some(SignTextFrontImpl::read_data(data)?.to_dyn()),
+        DataComponent::SignTextBack => Some(SignTextBackImpl::read_data(data)?.to_dyn()),
+        DataComponent::CushionColor => Some(CushionColorImpl::read_data(data)?.to_dyn()),
     }
 }
 

@@ -2,6 +2,7 @@ use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::Taggable;
 
 /// Utilities for reading potion contents from an `ItemStack` and applying effects.
 pub struct PotionContents;
@@ -147,13 +148,19 @@ impl PotionContents {
             if is_instant {
                 // Instant potency scaling
                 let instant_scale = source.instant_scale(scale);
+                let is_inverted = target
+                    .get_entity()
+                    .entity_type
+                    .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM);
+                let is_harm =
+                    effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
 
                 // Apply instant effects logic directly as they don't tick
-                if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = 4.0 * (1 << amplifier) as f32 * instant_scale;
+                if is_harm == is_inverted {
+                    let amount = (instant_scale * (4 << amplifier) as f32 + 0.5) as i32 as f32;
                     target.heal(amount);
-                } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
-                    let amount = 6.0 * (1 << amplifier) as f32 * instant_scale;
+                } else {
+                    let amount = (instant_scale * (6 << amplifier) as f32 + 0.5) as i32 as f32;
 
                     let _ = target.damage(
                         target.get_entity(),
@@ -168,7 +175,11 @@ impl PotionContents {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
 
-                let dur = ((duration as f32) * duration_scale).max(1.0) as i32;
+                let dur = if duration == -1 {
+                    -1
+                } else {
+                    ((duration as f32) * duration_scale).max(1.0) as i32
+                };
                 let eff = pumpkin_data::potion::Effect {
                     effect_type,
                     duration: dur,

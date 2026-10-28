@@ -731,10 +731,8 @@ impl EntityBase for ArrowEntity {
                 closest_t = t;
 
                 // Map back to block pos
-                let mut curr = 0;
                 for (len, pos) in &block_positions {
-                    curr += len;
-                    if idx < curr {
+                    if idx < *len {
                         let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
                         hit = Some(ProjectileHit::Block {
                             pos: *pos,
@@ -1061,7 +1059,9 @@ impl ArrowEntity {
         }
 
         // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if Some(other_ent.entity_id) == self.owner_id
+            && self_ent.tick_count.load(Ordering::Relaxed) < 5
+        {
             return true;
         }
 

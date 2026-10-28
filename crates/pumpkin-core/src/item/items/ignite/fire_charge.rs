@@ -1,4 +1,5 @@
 use pumpkin_data::BlockDirection;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
@@ -70,6 +71,12 @@ impl ItemBehaviour for FireChargeItem {
                     1.0,
                     pitch,
                 );
+                let event = if pos == location {
+                    GameEvent::BlockChange
+                } else {
+                    GameEvent::BlockPlace
+                };
+                world.emit_game_event(event.name(), pos.to_f64());
             },
             &world,
             location,

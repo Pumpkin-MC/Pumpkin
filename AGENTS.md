@@ -27,6 +27,8 @@ Some directories have their own `AGENTS.md` with details for that area. Read it 
 
 A gameplay change is correct when it behaves like the official server, not when it compiles and looks plausible. Reviewers compare PRs against the decompiled vanilla source, so work from that source too, not from memory or the wiki. Both are often wrong about the details that matter here: tick order, rounding, which side effects happen and when.
 
+Vanilla defines observable behavior and outcomes, not a required internal algorithm. A different implementation is acceptable when it preserves the relevant ordering, side effects and results.
+
 ### Getting the source
 
 1. Get the version list from `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json`, open the JSON for the target version, and download `downloads.server.url`.
@@ -77,6 +79,19 @@ Things that aren't obvious from the code:
 - `#[pumpkin_block(...)]` generates `BlockMetadata`. Mobs get `EntityBase` and `NBTStorage` through blanket impls, so mob NBT goes in `mob_write_nbt` / `mob_read_nbt`.
 - A block entity's `write_internal()` already writes `id`, `x`, `y` and `z`. `write_nbt()` only writes its own fields.
 
+## Mob AI and entity islands
+
+Read [Mob AI in CONTRIBUTING.md](CONTRIBUTING.md#mob-ai) before changing goals, Brain behavior, navigation, controls or a mob's custom tick. Entity islands use reach reports to decide which entities can tick in parallel. An incomplete report can change interaction order.
+
+- Trace the target vanilla version's full behavior, including superclass and navigation/control overrides. Preserve goal priorities, control flags, interruption, lifecycle callbacks, tick cadence, cooldowns, target ordering and random decisions. Do not add a separate AI scheduler or movement loop.
+- Keep gameplay changes in the synchronous tick. Respect navigator lock ownership and use the supplied `BrainTick` state in Brain callbacks rather than relocking the brain. Do not launch background tasks that mutate AI state after its turn.
+- When implementing `Goal::tick_reach`, cover every callback path possible in the upcoming tick, including an inactive goal starting and an active one stopping. Entity/player searches and reads count as dependencies. Report entity and player ranges, maximum navigation speed, possible block changes and retained remote references through `GoalReach`.
+- Reach reporting must not consume randomness, select targets, update timers, invoke gameplay callbacks or mutate the world. An unaudited goal must return `None`. An empty report means no additional access, not unknown access.
+- Set `Mob::has_audited_tick()` to true only after auditing the species' own tick, custom AI and Brain behavior against `MobEntity::audited_reach`. Include movement, block access, spawns and remote effects. Revisit the audit when any of those change. A stopped goal may leave a faster route active; do not cancel it to simplify the bound unless vanilla does so.
+- Neither narrow reach nor the finite conservative margins cover arbitrary new effects automatically. Extend the whole-mob model or use explicit dependency/global reach handling for effects outside those bounds. `changes_blocks` alone does not cover arbitrary distant writes.
+- Preserve entity-query filtering, player inclusion and order. Use existing position, pose, size and index-aware bounds APIs so the spatial index stays current.
+- Validate lifecycle transitions and reach boundaries with focused regressions that catch real bugs. Follow the contributor guide's real-client and comparable performance checks; state any unverified behavior instead of claiming full parity from compilation or unit tests.
+
 ## Plugin API
 
 This section covers changes to the plugin API inside this repo. How to write a plugin is documented in `pumpkin-plugin-api`, not here.
@@ -93,7 +108,7 @@ Maintainers and CodeRabbit read every diff line by line, and they read ports nex
 ### Fit in with the code around you
 
 - Copy the closest existing code in the same area: how it's registered, how it implements its traits, how it reaches world and entity APIs, how it handles errors and lays out imports. A second pattern for the same job is harder to maintain than a slightly imperfect one used everywhere.
-- Mirror the vanilla shape. Where vanilla has one named method, write one named helper and put it on the Pumpkin type that matches vanilla's class. Don't inline the math. Reviewers put the two side by side, and matching structure is how they check it.
+- Keep vanilla names and recognizable method boundaries where they help source review. Prefer a named helper on the matching Pumpkin type to inlining ported math. A different internal design is acceptable when the observable behavior remains equivalent.
 - Names say what the thing is. Keep vanilla's names for ported concepts so they can be searched for in the Java.
 
 ### Don't repeat yourself

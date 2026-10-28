@@ -26,10 +26,9 @@ use pumpkin_protocol::bedrock::{
     server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
+use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::player::Player;
 use crate::entity::{
@@ -437,11 +436,7 @@ impl VillagerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
@@ -521,14 +516,18 @@ impl VillagerEntity {
     }
 
     pub fn count_food_points_in_inventory(&self) -> i32 {
+        use pumpkin_data::data_component_impl::VillagerFoodImpl;
+
         let inventory = self
             .inventory
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut total = 0;
         for stack in inventory.iter() {
-            if !stack.is_empty() {
-                total += get_food_points(stack.get_item()) * stack.item_count as i32;
+            if !stack.is_empty()
+                && let Some(food) = stack.get_data_component::<VillagerFoodImpl>()
+            {
+                total += food.nutrition * i32::from(stack.item_count);
             }
         }
         total
@@ -545,6 +544,8 @@ impl VillagerEntity {
     }
 
     pub fn eat_until_full(&self) {
+        use pumpkin_data::data_component_impl::VillagerFoodImpl;
+
         if self.food_level.load(Ordering::Relaxed) >= BREEDING_FOOD_THRESHOLD {
             return;
         }
@@ -554,7 +555,9 @@ impl VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for stack in inventory.iter_mut() {
             if !stack.is_empty() {
-                let points = get_food_points(stack.get_item());
+                let points = stack
+                    .get_data_component::<VillagerFoodImpl>()
+                    .map_or(0, |food| food.nutrition);
                 if points > 0 {
                     while stack.item_count > 0
                         && self.food_level.load(Ordering::Relaxed) < BREEDING_FOOD_THRESHOLD
@@ -1649,7 +1652,7 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().age.load(Ordering::Relaxed);
+        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
         if age % 20 != 0 {
             return;
         }
@@ -2181,32 +2184,17 @@ impl Mob for VillagerEntity {
         Some("minecraft:villager_v2")
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let xp = self.xp.load(Ordering::Relaxed);
+        let mut meta = crate::entity::mob::MobMetadata::new().villager_data(data, xp);
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
         }
-        let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::villager::VILLAGER_DATA,
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
-        .write(&mut metadata, &version)
-        .ok()?;
-        metadata.push(255);
-        Some(metadata.into_boxed_slice())
-    }
-
-    fn mob_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
-        Some(Self::bedrock_metadata(
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            self.xp.load(Ordering::Relaxed),
-        ))
+        Some(meta)
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -2374,6 +2362,7 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
+    use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;

@@ -109,6 +109,37 @@ impl BlockEntity for CommandBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let conditional =
+            pumpkin_data::block_properties::CommandBlockProperties::from_state_id(state_id)
+                .conditional;
+        let command = self
+            .command
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let last_output = self
+            .last_output
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        Some(crate::block::entities::bedrock::build_command_block_actor(
+            self.position,
+            &command,
+            None,
+            self.auto.load(Ordering::Relaxed),
+            self.condition_met.load(Ordering::Relaxed),
+            conditional,
+            self.powered.load(Ordering::Relaxed),
+            self.success_count.load(Ordering::Relaxed),
+            self.track_output.load(Ordering::Relaxed),
+            &last_output,
+        ))
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }

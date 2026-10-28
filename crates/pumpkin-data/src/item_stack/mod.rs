@@ -341,6 +341,13 @@ impl ItemStack {
         self.get_max_damage().unwrap_or(0) > 0
     }
 
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        self.is_damageable()
+            && !self.is_unbreakable()
+            && self.get_damage() >= self.get_max_damage().unwrap_or(0) - 1
+    }
+
     pub fn repair_item(&mut self, amount: i32) -> i32 {
         if amount <= 0 {
             return 0;
@@ -1591,7 +1598,7 @@ mod tests {
         // Add a transient component and a persistent component
         stack.patch.push((
             DataComponent::AdditionalTradeCost,
-            Some(crate::data_component_impl::AdditionalTradeCostImpl.to_dyn()),
+            Some(crate::data_component_impl::AdditionalTradeCostImpl { cost: 0 }.to_dyn()),
         ));
         stack.patch.push((
             DataComponent::Damage,

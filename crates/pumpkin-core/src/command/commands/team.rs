@@ -682,7 +682,7 @@ impl CommandExecutor for TeamModifyFriendlyFireExecutor {
         };
 
         let mut team = team.clone();
-        let is_enabled = (team.options & 0x01) != 0;
+        let is_enabled = team.is_allow_friendly_fire();
         if value == is_enabled {
             if value {
                 return Err(FRIENDLY_FIRE_ALREADY_ENABLED_ERROR.create_without_context());
@@ -691,9 +691,9 @@ impl CommandExecutor for TeamModifyFriendlyFireExecutor {
         }
 
         if value {
-            team.options |= 0x01;
+            team.options |= Team::ALLOW_FRIENDLY_FIRE;
         } else {
-            team.options &= !0x01;
+            team.options &= !Team::ALLOW_FRIENDLY_FIRE;
         }
 
         let team_display_name = team.display_name.clone();

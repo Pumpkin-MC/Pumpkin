@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
@@ -14,6 +14,7 @@ use pumpkin_inventory::{Clearable, Inventory};
 /// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {
     position: BlockPos,
+    world: OnceLock<Weak<World>>,
     /// The record item stored in the jukebox (`RecordItem` in NBT)
     record_stack: Arc<Mutex<ItemStack>>,
     /// Ticks since the current song started playing
@@ -50,6 +51,7 @@ impl BlockEntity for JukeboxBlockEntity {
 
         Self {
             position,
+            world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(record_stack)),
             ticks_since_song_started: AtomicU64::new(ticks_since_song_started),
             song_length_ticks: AtomicU64::new(0), // Will be set when playing starts
@@ -75,8 +77,9 @@ impl BlockEntity for JukeboxBlockEntity {
         }
     }
 
-    fn tick(&self, _world: &Arc<World>) {
+    fn tick(&self, world: &Arc<World>) {
         // Increment ticks if we're playing
+        self.world.get_or_init(|| Arc::downgrade(world));
         let song_length = self.song_length_ticks.load(Ordering::Relaxed);
         if song_length > 0 {
             let ticks = self
@@ -87,6 +90,11 @@ impl BlockEntity for JukeboxBlockEntity {
                 self.stop_playing();
                 // TODO: Update block state to has_record = false? Or just stop redstone?
                 // In vanilla, the disc stays but music stops and redstone turns off
+            } else if ticks.is_multiple_of(20) {
+                world.emit_game_event(
+                    pumpkin_data::game_event::GameEvent::JukeboxPlay.name(),
+                    self.position.to_centered_f64(),
+                );
             }
         }
     }
@@ -119,6 +127,19 @@ impl BlockEntity for JukeboxBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let record_guard = self.record_stack.lock().ok();
+        let record = record_guard.as_deref();
+        Some(crate::block::entities::bedrock::build_jukebox_actor(
+            self.position,
+            record,
+            self.ticks_since_song_started.load(Ordering::Relaxed),
+        ))
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -135,6 +156,7 @@ impl JukeboxBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
+            world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             ticks_since_song_started: AtomicU64::new(0),
             song_length_ticks: AtomicU64::new(0),
@@ -185,7 +207,13 @@ impl JukeboxBlockEntity {
     /// Stop playing the current song
     pub fn stop_playing(&self) {
         self.ticks_since_song_started.store(0, Ordering::Relaxed);
-        self.song_length_ticks.store(0, Ordering::Relaxed);
+        let playing = self.song_length_ticks.swap(0, Ordering::Relaxed) != 0;
+        if playing && let Some(world) = self.world.get().and_then(Weak::upgrade) {
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::JukeboxStopPlay.name(),
+                self.position.to_centered_f64(),
+            );
+        }
         self.mark_dirty();
     }
 
@@ -268,5 +296,38 @@ impl Clearable for JukeboxBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
         self.mark_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{Entity, ai::test_support::world, passive::allay::AllayEntity};
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+
+    #[tokio::test]
+    async fn removing_the_record_through_inventory_stops_allay_dancing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let allay = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.5, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(allay.clone());
+        let jukebox = JukeboxBlockEntity::new(BlockPos::new(0, 64, 0));
+        jukebox.start_playing(100);
+        jukebox.tick(&world);
+        assert!(allay.is_dancing());
+        jukebox.remove_stack(0);
+        assert!(!allay.is_dancing());
+        world.level.shutdown().await;
+        Ok(())
     }
 }

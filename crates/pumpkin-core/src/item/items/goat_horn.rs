@@ -2,10 +2,13 @@ use std::any::Any;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use pumpkin_data::data_component_impl::CustomDataImpl;
+use pumpkin_data::data_component_impl::{CustomDataImpl, InstrumentImpl};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::instrument::Instrument;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_util::Hand;
 
 pub struct GoatHornItem;
 
@@ -16,29 +19,53 @@ impl ItemMetadata for GoatHornItem {
 }
 
 impl ItemBehaviour for GoatHornItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
-        let stack = player.inventory().held_item();
-        let instrument = stack
-            .get_data_component::<CustomDataImpl>()
-            .and_then(|custom| {
-                custom
-                    .data
-                    .get_string("instrument")
-                    .or_else(|| custom.data.get_string("Instrument"))
-            })
-            .and_then(Instrument::from_name)
-            .unwrap_or(Instrument::PonderGoatHorn);
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
 
-        player.world().play_sound(
-            instrument.sound(),
-            SoundCategory::Players,
-            &player.position(),
+    fn normal_use_with_hand(
+        &self,
+        item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
+        let stack = player.inventory().get_stack_in_hand(hand);
+        let Some(instrument) = stack
+            .get_data_component::<InstrumentImpl>()
+            .and_then(|inst| Instrument::from_name(&inst.instrument))
+            .or_else(|| {
+                stack
+                    .get_data_component::<CustomDataImpl>()
+                    .and_then(|custom| {
+                        custom
+                            .data
+                            .get_string("instrument")
+                            .or_else(|| custom.data.get_string("Instrument"))
+                    })
+                    .and_then(Instrument::from_name)
+            })
+        else {
+            return;
+        };
+
+        let duration = instrument.use_duration_ticks() as i32;
+        let volume = instrument.range() / 16.0;
+        let world = player.world();
+        let pos = player.position();
+
+        player.living_entity.set_active_hand(hand, stack, duration);
+        world.play_sound_raw(
+            instrument.sound() as u16,
+            SoundCategory::Records,
+            &pos,
+            volume,
+            1.0,
         );
-        player.living_entity.set_active_hand(
-            pumpkin_util::Hand::Right,
-            stack,
-            instrument.use_duration_ticks() as i32,
-        );
+        world.emit_game_event(GameEvent::InstrumentPlay.name(), pos);
+        player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
     fn get_use_duration(&self) -> i32 {

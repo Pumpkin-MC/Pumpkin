@@ -109,6 +109,7 @@ use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
+use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
@@ -251,6 +252,9 @@ pub fn from_type(
         id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity)),
         id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),
         id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
+        id if id == EntityType::EXPERIENCE_BOTTLE.id => {
+            Arc::new(ExperienceBottleEntity::new(entity))
+        }
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
         id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
@@ -616,10 +620,7 @@ pub fn check_spawn_rules(
         let valid_water = world
             .get_fluid(&pos.down())
             .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
-            && (world.get_block(&pos.up()) == &pumpkin_data::Block::WATER
-                || world
-                    .get_fluid(&pos.up())
-                    .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER));
+            && world.get_block(&pos.up()) == &pumpkin_data::Block::WATER;
         if !valid_water {
             return false;
         }
@@ -636,11 +637,8 @@ pub fn check_spawn_rules(
     if id == EntityType::GLOW_SQUID.id {
         let sea_level = world.sea_level;
         return pos.0.y <= sea_level - 33
-            && world.get_max_local_raw_brightness(pos) == 0
-            && (world.get_block(pos) == &pumpkin_data::Block::WATER
-                || world
-                    .get_fluid(pos)
-                    .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER));
+            && world.get_raw_brightness(pos, 0) == 0
+            && world.get_block(pos) == &pumpkin_data::Block::WATER;
     }
     if id == EntityType::NAUTILUS.id {
         let sea_level = world.sea_level;

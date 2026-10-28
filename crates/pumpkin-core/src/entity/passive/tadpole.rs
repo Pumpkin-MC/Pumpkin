@@ -17,9 +17,10 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         try_find_water::TryFindWaterGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     player::Player,
 };
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SLIME_BALL];
 
@@ -42,11 +43,7 @@ impl TadpoleEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
@@ -73,6 +70,10 @@ impl AgeableMob for TadpoleEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn ageable_interact(&self, _player: &Arc<Player>, _stack: &mut ItemStack) -> bool {
+        false
+    }
 }
 
 impl Mob for TadpoleEntity {
@@ -92,8 +93,29 @@ impl Mob for TadpoleEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        self.mob_entity.finalize_spawn_base();
+        group_data
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity
+            .world
+            .load()
+            .level_info
+            .load()
+            .game_rules
+            .mob_drops
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        false
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

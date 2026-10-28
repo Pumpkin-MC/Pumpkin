@@ -150,7 +150,7 @@ impl FireballEntity {
     }
 
     pub fn should_render_at_sqr_distance(&self, distance_sqr: f64) -> bool {
-        if self.get_entity().age.load(Ordering::Relaxed) < 2
+        if self.get_entity().tick_count.load(Ordering::Relaxed) < 2
             && distance_sqr < f64::from(MIN_CAMERA_DISTANCE_SQUARED)
         {
             false

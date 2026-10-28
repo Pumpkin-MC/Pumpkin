@@ -197,8 +197,11 @@ impl GlobalStructureCache {
             return cached.value().clone();
         }
         let computed = compute();
-        cache.insert((key, chunk_x, chunk_z), computed.clone());
-        computed
+        cache
+            .entry((key, chunk_x, chunk_z))
+            .or_insert(computed)
+            .value()
+            .clone()
     }
 
     /// Calculates the 128 ring positions matching vanilla Minecraft's

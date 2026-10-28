@@ -50,6 +50,9 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_in_sitting_pose(&self) -> bool {
@@ -70,6 +73,9 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_ordered_to_sit(&self) -> bool {
@@ -115,6 +121,16 @@ pub trait TamableAnimal: Animal {
     fn tame(&self, player_id: Uuid) {
         self.set_tame(true);
         self.set_owner(Some(player_id));
+        let mob_entity = self.get_mob_entity();
+        let entity = &mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        if let Some(player) = world.get_player_by_uuid(player_id) {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::TameAnimal {
+                    entity_type: format!("minecraft:{}", entity.entity_type.resource_name),
+                },
+            );
+        }
     }
 
     fn spawn_taming_particles(&self, success: bool) {

@@ -5,6 +5,7 @@ use crate::item::ItemMetadata;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockStateId};
@@ -59,7 +60,22 @@ impl ItemBehaviour for FlintAndSteelItem {
 
         let ignited = Ignition::ignite_block(
             |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| {
+                let pitch = rand::RngExt::random::<f32>(&mut rand::rng()).mul_add(0.4, 0.8);
+                world.play_sound_raw_expect(
+                    player,
+                    pumpkin_data::sound::Sound::ItemFlintandsteelUse as u16,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    1.0,
+                    pitch,
+                );
                 world.set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL);
+                let event = if pos == location {
+                    GameEvent::BlockChange
+                } else {
+                    GameEvent::BlockPlace
+                };
+                world.emit_game_event(event.name(), pos.to_f64());
             },
             &world,
             location,

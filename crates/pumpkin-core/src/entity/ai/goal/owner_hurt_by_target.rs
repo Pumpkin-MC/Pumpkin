@@ -4,7 +4,6 @@ use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use std::sync::Arc;
-use std::sync::atomic::Ordering::Relaxed;
 
 pub struct OwnerHurtByTargetGoal {
     track_target_goal: TrackTargetGoal,
@@ -40,17 +39,13 @@ impl Goal for OwnerHurtByTargetGoal {
             return false;
         };
 
-        let timestamp = owner.living_entity.last_attacked_time.load(Relaxed);
+        let other = owner.living_entity.get_last_hurt_by_mob();
+        let timestamp = owner.living_entity.get_last_hurt_by_mob_timestamp();
         if timestamp == self.timestamp {
             return false;
         }
 
-        let other_id = owner.living_entity.last_attacker_id.load(Relaxed);
-        if other_id == 0 {
-            return false;
-        }
-
-        let Some(other) = world.get_entity_by_id(other_id) else {
+        let Some(other) = other else {
             return false;
         };
 
@@ -76,7 +71,7 @@ impl Goal for OwnerHurtByTargetGoal {
         if let Some(owner_uuid) = mob.get_owner_uuid() {
             let world = mob.get_mob_entity().living_entity.entity.world.load_full();
             if let Some(owner) = world.get_player_by_uuid(owner_uuid) {
-                self.timestamp = owner.living_entity.last_attacked_time.load(Relaxed);
+                self.timestamp = owner.living_entity.get_last_hurt_by_mob_timestamp();
             }
         }
 

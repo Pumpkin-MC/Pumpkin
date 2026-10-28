@@ -30,6 +30,24 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&position);
 
                     if let Some(server_arc) = world.server.upgrade() {
+                        let mut interact_event = PlayerInteractEvent::new(
+                            player,
+                            InteractAction::LeftClickBlock,
+                            block,
+                            Some(position),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut interact_event);
+                        if interact_event.cancelled {
+                            player.try_send_client_packet(&CBlockUpdate::new(
+                                position,
+                                VarInt(i32::from(state.id.as_u16())),
+                            ));
+                            self.update_sequence(player_action.sequence.0);
+                            return;
+                        }
+
                         let mut event =
                             crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
                                 player.clone(),
@@ -48,7 +66,18 @@ impl JavaClient {
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
-                    if !server.item_registry.can_mine(held.item, player) {
+                    let gamemode = player.gamemode.load();
+                    let cannot_mine = !server.item_registry.can_mine(held.item, player)
+                        || gamemode == GameMode::Spectator
+                        || (gamemode == GameMode::Creative
+                            && held
+                                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+                                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+                        || (gamemode == GameMode::Adventure
+                            && !held
+                                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                                .is_some_and(|c| c.matches_block(block)));
+                    if cannot_mine {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
@@ -59,7 +88,7 @@ impl JavaClient {
 
                     // TODO: do validation
                     // TODO: Config
-                    if player.gamemode.load() == GameMode::Creative {
+                    if gamemode == GameMode::Creative {
                         // Block break & play sound
                         let new_state = world.break_block(
                             &position,

@@ -92,11 +92,7 @@ impl SnifferEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, BreedGoal::new(1.0));
@@ -351,7 +347,6 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
         let state = self.get_state();
         match state {
             SnifferState::Searching => {

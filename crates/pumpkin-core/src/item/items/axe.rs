@@ -2,8 +2,11 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::{DoubleBlockHalf, OakDoorLikeProperties};
-use pumpkin_data::block_transformer::AXE;
+use pumpkin_data::block_properties::{
+    ChestLikeProperties, ChestType, DoubleBlockHalf, OakDoorLikeProperties,
+};
+use pumpkin_data::data_component_impl::BlockTransformerImpl;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -32,6 +35,13 @@ impl ItemBehaviour for AxeItem {
         block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
+        let Some(transformer) = item
+            .get_data_component::<BlockTransformerImpl>()
+            .and_then(BlockTransformerImpl::get_transformer)
+        else {
+            return BlockActionResult::Pass;
+        };
+
         let world = player.world();
         let get_block = |dx: i8, dy: i8, dz: i8| {
             let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
@@ -40,7 +50,7 @@ impl ItemBehaviour for AxeItem {
 
         let current_state_id = world.get_block_state_id(&location);
 
-        if let Some(result) = AXE.transform(block, current_state_id, face, &get_block) {
+        if let Some(result) = transformer.transform(block, current_state_id, face, &get_block) {
             if let Some(sound) = result.entry.sound {
                 world.play_sound(sound, SoundCategory::Blocks, &location.to_f64());
             }
@@ -70,12 +80,44 @@ impl ItemBehaviour for AxeItem {
                     world.set_block_state(
                         &other_half_pos,
                         other_new_state_id,
-                        BlockFlags::NOTIFY_ALL,
+                        BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                     );
+                }
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+                let chest_props = ChestLikeProperties::from_state_id(current_state_id);
+                if chest_props.r#type != ChestType::Single {
+                    let neighbor_dir = match chest_props.r#type {
+                        ChestType::Left => chest_props.facing.rotate_clockwise(),
+                        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                        ChestType::Single => chest_props.facing,
+                    };
+                    let neighbor_pos = location.offset(neighbor_dir.to_offset());
+                    let (neighbor_block, neighbor_state_id) =
+                        world.get_block_and_state_id(&neighbor_pos);
+                    if neighbor_block == block {
+                        let neighbor_new_state_id = neighbor_block
+                            .properties(neighbor_state_id)
+                            .map_or(result.target_block.default_state.id, |neighbor_props| {
+                                let props = neighbor_props.to_props();
+                                result
+                                    .target_block
+                                    .from_properties(&props)
+                                    .to_state_id(result.target_block)
+                            });
+                        world.set_block_state(
+                            &neighbor_pos,
+                            neighbor_new_state_id,
+                            BlockFlags::NOTIFY_LISTENERS,
+                        );
+                        if let Some(particle) = result.entry.particle {
+                            world.sync_world_event(particle, neighbor_pos, 0);
+                        }
+                    }
                 }
             }
 
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
+            world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
 
             if player.gamemode.load() != GameMode::Creative {
                 let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));

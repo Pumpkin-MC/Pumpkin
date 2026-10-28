@@ -7,6 +7,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -49,19 +50,23 @@ impl ItemBehaviour for CushionItem {
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
-        _cursor_pos: Vector3<f32>,
+        cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
-        if face == BlockDirection::Down {
+        if face != BlockDirection::Up {
             return BlockActionResult::Fail;
         }
 
         let world = player.world();
-        let target_pos = location.offset(face.to_offset());
+        let target_pos = if world.get_block_state(&location).replaceable() {
+            location
+        } else {
+            location.offset(face.to_offset())
+        };
         let bottom_center = Vector3::new(
             f64::from(target_pos.0.x) + 0.5,
-            f64::from(target_pos.0.y),
+            f64::from(location.0.y) + f64::from(cursor_pos.y),
             f64::from(target_pos.0.z) + 0.5,
         );
 
@@ -82,24 +87,31 @@ impl ItemBehaviour for CushionItem {
         );
 
         if !world.is_space_empty(bounding_box)
-            || !world.get_entities_at_box(&bounding_box).is_empty()
+            || world
+                .get_entities_at_box(&bounding_box)
+                .iter()
+                .any(|e| e.get_entity().entity_type == &EntityType::CUSHION)
         {
             return BlockActionResult::Fail;
         }
 
         let (player_yaw, _) = player.rotation();
-        let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
+        let rotation = ((wrap_degrees(player_yaw) + 45.0) / 90.0).floor() * 90.0;
         let entity = Entity::new(world.clone(), bottom_center, &EntityType::CUSHION);
         entity.set_rotation(rotation, 0.0);
 
-        world.play_sound(
+        let pos = entity.pos.load();
+        world.play_sound_fine(
             Sound::EntityCushionPlace,
             SoundCategory::Blocks,
-            &entity.pos.load(),
+            &pos,
+            0.75,
+            0.8,
         );
 
-        let cushion = CushionEntity::new(entity, CushionEntity::color_from_item(item.get_item()));
+        let cushion = CushionEntity::new(entity, CushionEntity::color_from_stack(item));
         world.spawn_entity(Arc::new(cushion));
+        world.emit_game_event(GameEvent::EntityPlace.name(), pos);
         item.decrement_unless_creative(player.gamemode.load(), 1);
         BlockActionResult::Success
     }

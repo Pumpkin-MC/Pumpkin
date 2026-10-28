@@ -113,6 +113,13 @@ interface bedrock-packets {
     /// Source context that triggered an arm swing.
     swing-source: option<actor-swing-source>,
   }
+  /// Synchronizes block-actor updates from the client, such as edited sign text.
+  record s-block-actor-data {
+    /// World coordinates of the block entity being updated.
+    block-position: tuple<s32, s32, s32>,
+    /// Network NBT compound containing all properties and state of the block entity.
+    actor-data-tags: nbt-tree,
+  }
   /// Sent by the client when picking a targeted block (middle-click / pick block action).
   record s-block-pick-request {
     /// World position coordinates of the targeted block.
@@ -800,6 +807,13 @@ interface bedrock-packets {
     /// Network protocol version supported by the connecting client.
     /// If unsupported by the server, the connection will be rejected.
     client-network-version: s32,
+  }
+  /// Sent by the client to request a specific chunk of a resource pack being downloaded.
+  record s-resource-pack-chunk-request {
+    /// Identifier of the resource pack being requested (`UUID` or `UUID_version`).
+    pack-id: string,
+    /// Sequential index of the requested chunk (starts at 0).
+    chunk-index: s32,
   }
   /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
   record s-resource-pack-client-response {
@@ -1599,6 +1613,13 @@ interface bedrock-packets {
     /// Fraction of players ticked per frame when throttling is engaged.
     client-throttle-scalar: f32,
   }
+  /// Sent by the server to open the sign text editor on the Bedrock client.
+  record c-open-sign {
+    /// Position of the sign being edited.
+    position: tuple<s32, s32, s32>,
+    /// Whether the front side of the sign is being edited.
+    front-side: bool,
+  }
   /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
   enum c-play-status {
     /// Authentication and login succeeded; client proceeds to resource pack handshake.
@@ -1707,6 +1728,34 @@ interface bedrock-packets {
   record c-remove-objective {
     /// Identifier of the active objective to remove.
     objective-name: string,
+  }
+  /// Sent by the server to transfer a single chunk of compressed resource pack data to the client.
+  record c-resource-pack-chunk-data {
+    /// Identifier of the pack (e.g. `UUID` or `UUID_version`).
+    pack-id: string,
+    /// 0-indexed sequential chunk number.
+    chunk-index: s32,
+    /// Byte offset within the total resource pack archive from which this chunk begins.
+    data-offset: s64,
+    /// Raw byte payload of the chunk.
+    data: list<u8>,
+  }
+  /// Information describing a resource pack to be streamed in chunks to the client.
+  record c-resource-pack-data-info {
+    /// Identifier of the pack (e.g. `UUID` or `UUID_version`).
+    pack-id: string,
+    /// Maximum size of chunks in bytes (typically 1 MB = 1,048,576).
+    max-chunk-size: s32,
+    /// Total number of chunks the resource pack is divided into.
+    chunk-count: s32,
+    /// Total size of the compressed pack archive in bytes.
+    compressed-pack-size: s64,
+    /// SHA-256 hash of the pack archive (32 bytes).
+    file-hash: list<u8>,
+    /// Whether the pack was bought from the Minecraft Marketplace.
+    is-premium: bool,
+    /// Type of the resource pack (e.g. 1 for Addon, 6 for Resources).
+    pack-type: u8,
   }
   /// Identifies a specific pack instance and sub-pack layer in the active resource pack stack.
   record pack-instance-id {
@@ -2377,6 +2426,8 @@ interface bedrock-packets {
     s-actor-event(s-actor-event),
     /// Plays animations (arm swing, critical strike particles, waking up) on an actor.
     s-animate(s-animate),
+    /// Synchronizes block-actor updates from the client, such as edited sign text.
+    s-block-actor-data(s-block-actor-data),
     /// Sent by the client when picking a targeted block (middle-click / pick block action).
     s-block-pick-request(s-block-pick-request),
     /// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
@@ -2419,6 +2470,8 @@ interface bedrock-packets {
     s-request-chunk-radius(s-request-chunk-radius),
     /// Sent by the client to query network settings (such as compression algorithms and thresholds) from the server.
     s-request-network-settings(s-request-network-settings),
+    /// Sent by the client to request a specific chunk of a resource pack being downloaded.
+    s-resource-pack-chunk-request(s-resource-pack-chunk-request),
     /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
     s-resource-pack-client-response(s-resource-pack-client-response),
     /// Bidirectional packet managing player respawning and client spawn readiness.
@@ -2498,6 +2551,8 @@ interface bedrock-packets {
     c-network-chunk-publisher-update(c-network-chunk-publisher-update),
     /// Sent by the server in response to [`SRequestNetworkSettings`](crate::bedrock::server::request_network_settings::SRequestNetworkSettings) to configure packet compression and client throttling.
     c-network-settings(c-network-settings),
+    /// Sent by the server to open the sign text editor on the Bedrock client.
+    c-open-sign(c-open-sign),
     /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
     c-play-status(c-play-status),
     /// Sent by the server to update the active selected hotbar slot of the player.
@@ -2508,6 +2563,10 @@ interface bedrock-packets {
     c-remove-actor(c-remove-actor),
     /// Removes a scoreboard objective, hiding it from the player's screen.
     c-remove-objective(c-remove-objective),
+    /// Sent by the server to transfer a single chunk of compressed resource pack data to the client.
+    c-resource-pack-chunk-data(c-resource-pack-chunk-data),
+    /// Information describing a resource pack to be streamed in chunks to the client.
+    c-resource-pack-data-info(c-resource-pack-data-info),
     /// Sent by the server to define the order in which resource and behavior packs are applied by the client.
     c-resource-pack-stack-packet(c-resource-pack-stack-packet),
     /// Sent by the server to list all resource and behavior packs required or available to download.

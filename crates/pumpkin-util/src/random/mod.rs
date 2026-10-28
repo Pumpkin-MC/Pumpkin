@@ -209,7 +209,7 @@ pub trait RandomImpl {
     fn next_bounded_i32(&mut self, bound: i32) -> i32;
 
     fn next_inbetween_i32(&mut self, min: i32, max: i32) -> i32 {
-        if min >= max {
+        if min > max {
             return min;
         }
         self.next_bounded_i32(max - min + 1) + min

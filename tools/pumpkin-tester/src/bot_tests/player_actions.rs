@@ -7,7 +7,7 @@ use pumpkin_core::server::Server;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_protocol::java::server::play::Action;
 
-use crate::bot::HeadlessBot;
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
 pub async fn run_player_actions_and_disconnect_tests(
     server: &Arc<Server>,
@@ -28,7 +28,7 @@ pub async fn run_player_actions_and_disconnect_tests(
 
     let mut slot_updated = false;
     let mut sprinting_updated = false;
-    for _ in 0..25 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
         if player1.inventory.get_selected_slot() == 4 {
@@ -59,7 +59,7 @@ pub async fn run_player_actions_and_disconnect_tests(
 
     bot1.send_player_command(entity_id, Action::StopSprinting)
         .await?;
-    for _ in 0..20 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
         if !player1
@@ -80,7 +80,7 @@ pub async fn run_player_actions_and_disconnect_tests(
     let disconnect_start = Instant::now();
     drop(bot1);
     drop(bot2);
-    for _ in 0..20 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
         if server.get_player_count() == 0 {

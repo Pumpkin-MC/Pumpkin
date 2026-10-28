@@ -80,6 +80,10 @@ fn is_valid_player_target(target: &dyn EntityBase) -> bool {
 pub trait NeutralMob: Mob {
     fn get_neutral_data(&self) -> &NeutralData;
 
+    fn updates_anger_in_ai_step(&self) -> bool {
+        false
+    }
+
     /// Rolled fresh every time the anger restarts.
     fn anger_duration(&self) -> RangeInclusive<i32> {
         DEFAULT_ANGER_DURATION
@@ -144,11 +148,9 @@ pub trait NeutralMob: Mob {
     }
 
     fn stop_being_angry(&self) {
-        // keeps the revenge goal from re-triggering.
         self.get_mob_entity()
             .living_entity
-            .last_attacker_id
-            .store(0, Relaxed);
+            .set_last_hurt_by_mob(None);
         self.set_persistent_anger_target(None);
         self.set_mob_target(None);
         self.set_anger_end_time(NO_ANGER_END_TIME);

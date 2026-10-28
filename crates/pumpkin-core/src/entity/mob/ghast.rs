@@ -44,11 +44,7 @@ impl GhastEntity {
         let mob_arc = Arc::new(ghast);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Priority 5: Random floating around
             goal_selector.add_goal(
@@ -65,11 +61,7 @@ impl GhastEntity {
                 Box::new(GhastShootFireballGoal::new(Arc::downgrade(&mob_arc))),
             );
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Priority 1: Target nearest player within vertical proximity
             target_selector.add_goal(

@@ -300,8 +300,101 @@ impl BlockEntity for SignBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_sign_actor(
+            self.position,
+            false,
+            &self.front_text,
+            &self.back_text,
+            self.is_waxed.load(Ordering::Relaxed),
+        ))
+    }
+
+    fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        collect_sign_item_components(&self.front_text, &self.back_text, &self.is_waxed, stack);
+    }
+
+    fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
+        apply_sign_item_components(&self.front_text, &self.back_text, &self.is_waxed, stack);
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+pub(crate) fn apply_sign_item_components(
+    front_text: &SignText,
+    back_text: &SignText,
+    is_waxed: &AtomicBool,
+    stack: &pumpkin_data::item_stack::ItemStack,
+) {
+    use pumpkin_data::data_component_impl::{SignTextBackImpl, SignTextFrontImpl, WaxedImpl};
+
+    if let Some(front) = stack.get_data_component::<SignTextFrontImpl>() {
+        front_text.set_color(front.color);
+        front_text.set_has_glowing_text(front.has_glowing_text);
+        for (i, msg) in front.messages.iter().enumerate() {
+            let filtered = front
+                .filtered_messages
+                .as_ref()
+                .map(|f| Box::<str>::from(f[i].as_ref()));
+            front_text.set_message(i, Box::<str>::from(msg.as_ref()), filtered);
+        }
+    }
+    if let Some(back) = stack.get_data_component::<SignTextBackImpl>() {
+        back_text.set_color(back.color);
+        back_text.set_has_glowing_text(back.has_glowing_text);
+        for (i, msg) in back.messages.iter().enumerate() {
+            let filtered = back
+                .filtered_messages
+                .as_ref()
+                .map(|f| Box::<str>::from(f[i].as_ref()));
+            back_text.set_message(i, Box::<str>::from(msg.as_ref()), filtered);
+        }
+    }
+    is_waxed.store(
+        stack.get_data_component::<WaxedImpl>().is_some(),
+        Ordering::Relaxed,
+    );
+}
+
+pub(crate) fn collect_sign_item_components(
+    front_text: &SignText,
+    back_text: &SignText,
+    is_waxed: &AtomicBool,
+    stack: &mut pumpkin_data::item_stack::ItemStack,
+) {
+    use pumpkin_data::data_component_impl::{SignTextBackImpl, SignTextFrontImpl, WaxedImpl};
+    use std::borrow::Cow;
+
+    let to_cow_lines = |lines: [Box<str>; 4]| -> [Cow<'static, str>; 4] {
+        lines.map(|line| Cow::Owned(line.into_string()))
+    };
+
+    let front_msgs = front_text.get_messages(false);
+    let front_filtered = front_text.get_messages(true);
+    stack.set_data_component(SignTextFrontImpl {
+        filtered_messages: (front_filtered != front_msgs).then(|| to_cow_lines(front_filtered)),
+        messages: to_cow_lines(front_msgs),
+        color: front_text.get_color(),
+        has_glowing_text: front_text.has_glowing_text(),
+    });
+
+    let back_msgs = back_text.get_messages(false);
+    let back_filtered = back_text.get_messages(true);
+    stack.set_data_component(SignTextBackImpl {
+        filtered_messages: (back_filtered != back_msgs).then(|| to_cow_lines(back_filtered)),
+        messages: to_cow_lines(back_msgs),
+        color: back_text.get_color(),
+        has_glowing_text: back_text.has_glowing_text(),
+    });
+
+    if is_waxed.load(Ordering::Relaxed) {
+        stack.set_data_component(WaxedImpl);
     }
 }
 

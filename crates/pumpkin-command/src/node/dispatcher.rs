@@ -629,7 +629,14 @@ impl<S: CommandSource> CommandDispatcher<S> {
 
         let truncated_input = &full_input[0..cursor.min(full_input.len())];
 
-        let children = self.tree.get_children(parent);
+        // Alias nodes only redirect to their target and have no children of their own,
+        // so when the cursor sits right after an alias (e.g. `/alias `), suggest the
+        // children of the node it redirects to.
+        let suggestion_parent = self.tree[parent]
+            .redirect()
+            .and_then(|redirect| self.tree.resolve(redirect))
+            .unwrap_or(parent);
+        let children = self.tree.get_children(suggestion_parent);
         let context = context.build(truncated_input);
         let mut suggestions = Vec::with_capacity(children.len());
 

@@ -185,12 +185,13 @@ impl TreeGrower {
     }
 
     fn remove_saplings(world: &Arc<World>, saplings: &[(BlockPos, BlockStateId)]) {
-        for (pos, _) in saplings {
-            world.set_block_state(
-                pos,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_LISTENERS,
-            );
+        for (pos, state_id) in saplings {
+            let new_state = if state_id.is_waterlogged() {
+                Block::WATER.default_state.id
+            } else {
+                Block::AIR.default_state.id
+            };
+            world.set_block_state(pos, new_state, BlockFlags::NOTIFY_LISTENERS);
         }
     }
 

@@ -58,16 +58,8 @@ impl CreeperEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
@@ -161,6 +153,21 @@ impl Mob for CreeperEntity {
         &self.mob_entity
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_charged() {
+            meta = meta.charged(true);
+        }
+        if self.is_ignited() {
+            meta = meta.ignited(true);
+        }
+        let fuse = self.fuse_speed.load(Ordering::Relaxed);
+        if fuse != -1 {
+            meta = meta.fuse_speed(fuse);
+        }
+        Some(meta)
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -217,7 +224,9 @@ impl Mob for CreeperEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.item.id != Item::FLINT_AND_STEEL.id {
-            return self.mob_entity.mob_interact(player, item_stack);
+            return self
+                .mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed());
         }
 
         let entity = &self.mob_entity.living_entity.entity;
@@ -252,6 +261,9 @@ impl CreeperEntity {
         self.charged.store(charged, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.set_synced_data(pumpkin_data::tracked_data::creeper::CHARGED, charged);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn is_ignited(&self) -> bool {
@@ -262,6 +274,9 @@ impl CreeperEntity {
         self.ignited.store(ignited, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, ignited);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn get_fuse(&self) -> i32 {

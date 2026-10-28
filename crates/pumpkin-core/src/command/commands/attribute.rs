@@ -260,7 +260,7 @@ impl CommandExecutor for ModifierAddExecutor {
                     amount: value,
                     operation: self.operation,
                 });
-                inst.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                inst.mark_dirty();
                 Ok(())
             }
         };
@@ -327,7 +327,7 @@ impl CommandExecutor for ModifierRemoveExecutor {
                 })?;
 
             inst.modifiers.remove(index);
-            inst.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+            inst.mark_dirty();
             Ok(())
         };
         res?;

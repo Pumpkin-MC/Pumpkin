@@ -339,10 +339,27 @@ fn check_block(
 pub fn clip(accessor: &(impl BlockAccessor + ?Sized), context: &ClipContext) -> BlockHitResult {
     let from = context.from;
     let to = context.to;
+    traverse_blocks(from, to, |block| {
+        check_block(accessor, block, from, to, context)
+    })
+    .unwrap_or_else(|| {
+        let miss_vec = from.sub(&to);
+        let miss_dir = if from == to {
+            BlockDirection::Up
+        } else {
+            BlockDirection::get_nearest(miss_vec.x, miss_vec.y, miss_vec.z)
+        };
+        BlockHitResult::miss(to, miss_dir, BlockPos::floored_v(to))
+    })
+}
 
+pub fn traverse_blocks<T>(
+    from: Vector3<f64>,
+    to: Vector3<f64>,
+    mut visit: impl FnMut(&BlockPos) -> Option<T>,
+) -> Option<T> {
     if from == to {
-        let block_pos = BlockPos::floored(to.x, to.y, to.z);
-        return BlockHitResult::miss(to, BlockDirection::Up, block_pos);
+        return None;
     }
 
     let adjust = -1.0e-7f64;
@@ -351,8 +368,8 @@ pub fn clip(accessor: &(impl BlockAccessor + ?Sized), context: &ClipContext) -> 
 
     let mut block = BlockPos::floored(d_from.x, d_from.y, d_from.z);
 
-    if let Some(hit) = check_block(accessor, &block, from, to, context) {
-        return hit;
+    if let Some(hit) = visit(&block) {
+        return Some(hit);
     }
 
     let difference = d_to.sub(&d_from);
@@ -414,15 +431,12 @@ pub fn clip(accessor: &(impl BlockAccessor + ?Sized), context: &ClipContext) -> 
             next.z += delta.z;
         }
 
-        if let Some(hit) = check_block(accessor, &block, from, to, context) {
-            return hit;
+        if let Some(hit) = visit(&block) {
+            return Some(hit);
         }
     }
 
-    let miss_vec = from.sub(&to);
-    let miss_dir = BlockDirection::get_nearest(miss_vec.x, miss_vec.y, miss_vec.z);
-    let end_block = BlockPos::floored(to.x, to.y, to.z);
-    BlockHitResult::miss(to, miss_dir, end_block)
+    None
 }
 
 #[cfg(test)]

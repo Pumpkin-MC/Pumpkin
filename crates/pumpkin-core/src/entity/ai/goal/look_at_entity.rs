@@ -1,4 +1,4 @@
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
@@ -70,6 +70,21 @@ impl LookAtEntityGoal {
 }
 
 impl Goal for LookAtEntityGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        let range = f64::from(self.range);
+        let looks_at_players = *self.target_type == EntityType::PLAYER;
+        Some(GoalReach {
+            entities: if looks_at_players { 0.0 } else { range },
+            players: if looks_at_players { range } else { 0.0 },
+            links: self
+                .target
+                .iter()
+                .map(|target| target.get_entity().entity_id)
+                .collect(),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if mob.get_random().random::<f32>() >= self.chance {
             return false;

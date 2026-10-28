@@ -69,25 +69,24 @@ impl CushionEntity {
     }
 
     #[must_use]
-    pub const fn color_from_item(item: &Item) -> u8 {
-        match item.id {
-            id if id == Item::WHITE_CUSHION.id => 0,
-            id if id == Item::ORANGE_CUSHION.id => 1,
-            id if id == Item::MAGENTA_CUSHION.id => 2,
-            id if id == Item::LIGHT_BLUE_CUSHION.id => 3,
-            id if id == Item::YELLOW_CUSHION.id => 4,
-            id if id == Item::LIME_CUSHION.id => 5,
-            id if id == Item::PINK_CUSHION.id => 6,
-            id if id == Item::GRAY_CUSHION.id => 7,
-            id if id == Item::LIGHT_GRAY_CUSHION.id => 8,
-            id if id == Item::CYAN_CUSHION.id => 9,
-            id if id == Item::PURPLE_CUSHION.id => 10,
-            id if id == Item::BLUE_CUSHION.id => 11,
-            id if id == Item::BROWN_CUSHION.id => 12,
-            id if id == Item::GREEN_CUSHION.id => 13,
-            id if id == Item::RED_CUSHION.id => 14,
-            _ => 15,
+    pub fn color_from_item(item: &Item) -> u8 {
+        for (id, comp) in item.components {
+            if *id == pumpkin_data::data_component::DataComponent::CushionColor {
+                return pumpkin_data::data_component_impl::get::<
+                    pumpkin_data::data_component_impl::CushionColorImpl,
+                >(*comp)
+                .color
+                .id();
+            }
         }
+        0
+    }
+
+    #[must_use]
+    pub fn color_from_stack(stack: &ItemStack) -> u8 {
+        stack
+            .get_data_component::<pumpkin_data::data_component_impl::CushionColorImpl>()
+            .map_or_else(|| Self::color_from_item(stack.get_item()), |c| c.color.id())
     }
 
     fn drop_and_remove(&self) {
