@@ -1886,21 +1886,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn init_data_tracker(&self) {
         self.mob_init_data_tracker();
-        let world = self.get_mob_entity().living_entity.entity.world.load();
-        crate::entity::mob::equipment::equip_mob_on_spawn(self as &dyn EntityBase, &world);
-
-        let entity_name = self.get_entity().entity_type.resource_name;
-        if let Some(def) = crate::entity::mob::equipment::EQUIPMENT_REGISTRY.get(entity_name)
-            && def.can_pick_up_loot
-        {
-            let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(
-                &world,
-                self.get_entity().pos.load(),
-            );
-            let pickup_chance = 0.55 * difficulty.special_multiplier;
-            self.get_mob_entity()
-                .set_can_pick_up_loot(rand::random::<f32>() < pickup_chance);
-        }
     }
 
     fn set_variant_name(&self, name: &str) {

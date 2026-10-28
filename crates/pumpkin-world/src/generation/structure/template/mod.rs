@@ -257,6 +257,7 @@ pub(crate) fn place_template_entities(
     origin: Vector3<i32>,
     rotation: Rotation,
     chunk_box: &pumpkin_util::math::block_box::BlockBox,
+    finalize_entities: bool,
 ) {
     for entity in &template.entities {
         let block_pos = rotation.transform_pos(entity.block_pos, template.size);
@@ -312,7 +313,7 @@ pub(crate) fn place_template_entities(
             nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
         }
 
-        chunk.add_structure_entity(nbt);
+        chunk.add_structure_entity(nbt, finalize_entities);
     }
 }
 

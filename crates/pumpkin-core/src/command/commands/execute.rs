@@ -45,6 +45,7 @@ use crate::command::node::{
     CommandExecutor, CommandExecutorResult, RedirectModifier, RedirectModifierResult, Redirection,
 };
 use crate::entity::EntityBase;
+use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::r#type::from_type;
 use crate::world::scoreboard::Scoreboard;
 use crate::world::stopwatches::Stopwatches;
@@ -919,6 +920,8 @@ fn execute_summon_modifier(
         context.source.world(),
         Uuid::new_v4(),
     );
+    // Vanilla creates it like `/summon` without NBT: finalized.
+    finalize_spawn(&entity, context.source.world(), None);
     context.source.world().spawn_entity(entity.clone());
     let mut source = context.source.as_ref().clone();
     source.entity = Some(entity);

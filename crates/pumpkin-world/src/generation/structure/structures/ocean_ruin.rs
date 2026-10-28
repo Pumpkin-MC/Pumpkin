@@ -530,7 +530,7 @@ impl StructurePieceBase for OceanRuinPiece {
                                 ],
                             );
                             entity_nbt.put_bool("PersistenceRequired", true);
-                            chunk.add_structure_entity(entity_nbt);
+                            chunk.add_structure_entity(entity_nbt, true);
 
                             let replacement = if world_pos.y > chunk.get_sea_level() {
                                 Block::AIR.default_state

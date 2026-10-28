@@ -418,7 +418,7 @@ impl MansionTemplatePiece {
             );
             nbt.put("Rotation", NbtTag::List(vec![0.0f32.into(), 0.0f32.into()]));
             nbt.put_bool("PersistenceRequired", true);
-            chunk.add_structure_entity(nbt);
+            chunk.add_structure_entity(nbt, true);
         }
     }
 }
