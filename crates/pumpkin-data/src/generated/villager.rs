@@ -6765,6 +6765,51 @@ impl VillagerProfession {
         }
     }
     #[must_use]
+    pub const fn to_name(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Armorer => "armorer",
+            Self::Butcher => "butcher",
+            Self::Cartographer => "cartographer",
+            Self::Cleric => "cleric",
+            Self::Farmer => "farmer",
+            Self::Fisherman => "fisherman",
+            Self::Fletcher => "fletcher",
+            Self::Leatherworker => "leatherworker",
+            Self::Librarian => "librarian",
+            Self::Mason => "mason",
+            Self::Nitwit => "nitwit",
+            Self::Shepherd => "shepherd",
+            Self::Toolsmith => "toolsmith",
+            Self::Weaponsmith => "weaponsmith",
+        }
+    }
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let clean = match name.strip_prefix("minecraft:") {
+            Some(stripped) => stripped,
+            None => name,
+        };
+        match clean {
+            "none" => Some(Self::None),
+            "armorer" => Some(Self::Armorer),
+            "butcher" => Some(Self::Butcher),
+            "cartographer" => Some(Self::Cartographer),
+            "cleric" => Some(Self::Cleric),
+            "farmer" => Some(Self::Farmer),
+            "fisherman" => Some(Self::Fisherman),
+            "fletcher" => Some(Self::Fletcher),
+            "leatherworker" => Some(Self::Leatherworker),
+            "librarian" => Some(Self::Librarian),
+            "mason" => Some(Self::Mason),
+            "nitwit" => Some(Self::Nitwit),
+            "shepherd" => Some(Self::Shepherd),
+            "toolsmith" => Some(Self::Toolsmith),
+            "weaponsmith" => Some(Self::Weaponsmith),
+            _ => None,
+        }
+    }
+    #[must_use]
     #[allow(clippy::too_many_lines, clippy::match_same_arms)]
     pub const fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
         match self {
@@ -7100,6 +7145,35 @@ impl VillagerType {
             4i32 => Some(Self::Snow),
             5i32 => Some(Self::Swamp),
             6i32 => Some(Self::Taiga),
+            _ => None,
+        }
+    }
+    #[must_use]
+    pub const fn to_name(&self) -> &'static str {
+        match self {
+            Self::Desert => "desert",
+            Self::Jungle => "jungle",
+            Self::Plains => "plains",
+            Self::Savanna => "savanna",
+            Self::Snow => "snow",
+            Self::Swamp => "swamp",
+            Self::Taiga => "taiga",
+        }
+    }
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let clean = match name.strip_prefix("minecraft:") {
+            Some(stripped) => stripped,
+            None => name,
+        };
+        match clean {
+            "desert" => Some(Self::Desert),
+            "jungle" => Some(Self::Jungle),
+            "plains" => Some(Self::Plains),
+            "savanna" => Some(Self::Savanna),
+            "snow" => Some(Self::Snow),
+            "swamp" => Some(Self::Swamp),
+            "taiga" => Some(Self::Taiga),
             _ => None,
         }
     }

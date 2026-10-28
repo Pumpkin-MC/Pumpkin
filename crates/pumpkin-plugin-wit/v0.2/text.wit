@@ -1,0 +1,68 @@
+interface text {
+    use common.{named-color, rgb-color, argb-color};
+
+    resource text-component {
+        /// Creates a plain text component.
+        text: static func(plain: string) -> text-component;
+        /// Creates a translation component.
+        translate: static func(key: string, %with: list<text-component>) -> text-component;
+        /// Creates a translation component with a Bedrock-specific fallback key.
+        translate-cross: static func(java-key: string, bedrock-key: string, %with: list<text-component>) -> text-component;
+        /// Creates an entity names / selector text component.
+        entity-names: static func(selector: string, separator: option<string>) -> text-component;
+        /// Creates a keybind text component (e.g., "key.jump").
+        keybind: static func(keybind: string) -> text-component;
+        /// Creates a custom translation component.
+        custom: static func(namespace: string, key: string, locale: string, %with: list<text-component>) -> text-component;
+
+        /// Parses a legacy Minecraft formatted string (using section signs '§' by default) into a text component.
+        from-legacy-string: static func(input: string) -> text-component;
+        /// Parses a legacy formatted string using a custom color code symbol (e.g. '&' or '§').
+        from-legacy-string-with-code: static func(input: string, code-symbol: char) -> text-component;
+
+        /// Parses a standard Minecraft JSON text component.
+        from-json: static func(json: string) -> result<text-component, string>;
+        /// Serializes the text component to JSON format.
+        to-json: func() -> string;
+
+        add-child: func(child: text-component);
+        add-text: func(text: string);
+        get-text: func() -> string;
+        encode: func() -> list<u8>;
+        to-pretty-console: func() -> string;
+
+        // Style
+
+        color-named: func(color: named-color);
+        color-rgb: func(color: rgb-color);
+        gradient-named: func(colors: list<named-color>);
+        gradient: func(colors: list<rgb-color>);
+        rainbow: func();
+        bold: func(value: bool);
+        italic: func(value: bool);
+        underlined: func(value: bool);
+        strikethrough: func(value: bool);
+        obfuscated: func(value: bool);
+        /// Text inserted into chat when shift-clicked
+        insertion: func(text: string);
+        font: func(font: string);
+        shadow-color: func(color: argb-color);
+
+        // Click events
+
+        click-open-url: func(url: string);
+        click-open-file: func(path: string);
+        click-run-command: func(command: string);
+        click-suggest-command: func(command: string);
+        click-change-page: func(page: u32);
+        click-copy-to-clipboard: func(text: string);
+
+        // Hover events
+
+        hover-show-text: func(text: text-component);
+        /// Item data as SNBT string
+        hover-show-item: func(item: string);
+        hover-show-entity: func(entity-type: string, id: string, name: option<text-component>);
+    }
+}
+

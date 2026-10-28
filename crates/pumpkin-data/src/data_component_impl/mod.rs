@@ -6,12 +6,30 @@ use crate::data_component::DataComponent;
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::any::Any;
 use std::borrow::Cow;
+
+/// CRC-32C state for vanilla's data component hashes.
+#[derive(Default)]
+pub struct Digest(u32);
+
+impl Digest {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.0 = crc32c::crc32c_append(self.0, bytes);
+    }
+
+    #[must_use]
+    pub const fn finalize(&self) -> u64 {
+        self.0 as u64
+    }
+}
 
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
@@ -40,7 +58,11 @@ impl Clone for Box<dyn DataComponentImpl> {
 
 #[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
-    value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &*(std::ptr::from_ref::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
@@ -48,26 +70,36 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     let name = value.get_self_enum().to_name();
     let val_type = std::any::type_name_of_val(value);
-    value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &mut *(std::ptr::from_mut::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {name} ({val_type}) to {} ({})",
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            if other.get_self_enum() == Self::get_enum() {
+                let other = unsafe {
+                    &*(std::ptr::from_ref::<dyn crate::data_component_impl::DataComponentImpl>(
+                        other,
+                    )
+                    .cast::<Self>())
+                };
                 self == other
             } else {
                 false
@@ -99,7 +131,7 @@ macro_rules! default_impl {
 }
 
 pub fn get_str_hash(val: &str) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[12u8]);
     digest.update(&(val.len() as u32).to_le_bytes());
     let byte = val.as_bytes();
@@ -110,21 +142,21 @@ pub fn get_str_hash(val: &str) -> u32 {
 }
 
 pub fn get_i32_hash(val: i32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[8u8]);
     digest.update(&val.to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_f32_hash(val: f32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[7u8]);
     digest.update(&val.to_bits().to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_idor_hash(val: &IdOr<basic::SoundEvent>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[6u8]);
     match val {
         IdOr::Id(sound) => {
@@ -179,7 +211,7 @@ pub fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<basic::Sou
 }
 
 pub fn get_idset_hash<T: IDSetContent>(val: &IDSet<T>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     match val {
         IDSet::Tag(tag) => {
             digest.update(&[1u8]);
@@ -690,7 +722,16 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
         DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
         DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::InteractAnimation => Some(InteractAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlockTransformer => Some(BlockTransformerImpl::read_data(data)?.to_dyn()),
+        DataComponent::VillagerFood => Some(VillagerFoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Some(ProvidesPotteryPatternImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Some(SignTextFrontImpl::read_data(data)?.to_dyn()),
+        DataComponent::SignTextBack => Some(SignTextBackImpl::read_data(data)?.to_dyn()),
+        DataComponent::CushionColor => Some(CushionColorImpl::read_data(data)?.to_dyn()),
     }
 }
 
@@ -749,6 +790,14 @@ mod tests {
         nbt.put_string("id", "minecraft:chest".to_string());
         nbt.put_int("x", 12);
         assert_round_trip(BlockEntityDataImpl { nbt }, BlockEntityDataImpl::read_data);
+    }
+
+    #[test]
+    fn entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:iron_golem".to_string());
+        nbt.put_bool("PlayerCreated", true);
+        assert_round_trip(EntityDataImpl { nbt: Some(nbt) }, EntityDataImpl::read_data);
     }
 
     #[test]
