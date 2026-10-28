@@ -652,11 +652,24 @@ impl LivingEntity {
             .entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard
+        let mut equipment: Vec<_> = guard
             .equipment
             .iter()
             .map(|(slot, stack)| (slot.clone(), stack.clone()))
-            .collect()
+            .collect();
+        drop(guard);
+
+        // Cleared inventories omit slots, but their old modifiers still need removal.
+        let modifiers = self
+            .equipment_attribute_modifier_ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for slot in modifiers.keys() {
+            if !equipment.iter().any(|(equipped, _)| equipped == slot) {
+                equipment.push((slot.clone(), ItemStack::EMPTY.clone()));
+            }
+        }
+        equipment
     }
 
     fn apply_equipment_slot_attribute_modifiers(
@@ -4352,6 +4365,62 @@ pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn inventory_clear_on_respawn_removes_equipment_modifiers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::test_support::world;
+        use pumpkin_data::item::Item;
+        use pumpkin_inventory::inventory::Clearable;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PLAYER,
+        ));
+        let inventory = PlayerInventory::new(
+            living.entity_equipment.clone(),
+            living.equipment_slots.clone(),
+        );
+        for notify_clients in [false, true] {
+            living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .put(
+                    &EquipmentSlot::CHEST,
+                    ItemStack::new(1, &Item::DIAMOND_CHESTPLATE),
+                );
+            living.apply_current_equipment_attribute_modifiers();
+            assert_eq!(living.get_attribute_value(&Attributes::ARMOR), 8.0);
+            assert_eq!(
+                living.get_attribute_value(&Attributes::ARMOR_TOUGHNESS),
+                2.0
+            );
+
+            living.health.store(0.0);
+            living.reset_state();
+            inventory.clear();
+            if notify_clients {
+                living.send_current_equipment_attribute_modifiers();
+            } else {
+                living.apply_current_equipment_attribute_modifiers();
+            }
+            assert_eq!(living.get_attribute_value(&Attributes::ARMOR), 0.0);
+            assert_eq!(
+                living.get_attribute_value(&Attributes::ARMOR_TOUGHNESS),
+                0.0
+            );
+            assert_eq!(
+                living.get_damage_after_armor_absorb(10.0, &DamageType::MOB_ATTACK, None),
+                10.0
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     // ── bypasses_armor_durability ─────────────────────────────────────
 
