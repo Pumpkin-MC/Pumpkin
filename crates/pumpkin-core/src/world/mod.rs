@@ -48,7 +48,11 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
+    entity::{
+        Entity, EntityBase, RemovalReason,
+        player::Player,
+        r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
+    },
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     plugin::{
@@ -622,7 +626,7 @@ impl World {
         let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         for entity in entities {
             let base_entity = entity.get_entity();
-            if base_entity.is_removed() {
+            if base_entity.is_removed() || is_saved_as_passenger(entity.as_ref()) {
                 continue;
             }
             let mut nbt = NbtCompound::new();
@@ -4402,37 +4406,24 @@ impl World {
                     );
                     chunk.live.store(true, Relaxed);
                     for entity_nbt in &entity_nbts {
-                        let Some(id) = entity_nbt.get_string("id") else {
-                            debug!("Entity has no ID");
-                            continue;
-                        };
-                        let Some(entity_type) =
-                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+                        let Some(root) =
+                            load_entity_from_nbt(entity_nbt, Vector3::default(), &world)
                         else {
-                            warn!("Entity has no valid Entity Type {id}");
                             continue;
                         };
+                        for entity in self_and_passengers(&root) {
+                            entity.init_data_tracker();
 
-                        // Keep the persisted UUID so the entity keeps its identity
-                        // across reloads (matching vanilla); only fall back to a
-                        // fresh one if it is missing/corrupt.
-                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
-                        // Pos is zero since it will be read from nbt.
-                        let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
-                        entity.read_nbt_non_mut(entity_nbt);
-                        entity.init_data_tracker();
+                            // Clear velocity so the client does not replay the drop
+                            // animation; residual velocity from the original drop is
+                            // stale data.
+                            entity.get_entity().velocity.store(Vector3::default());
 
-                        let base_entity = entity.get_entity();
-                        // Clear velocity so the client does not replay the drop
-                        // animation; residual velocity from the original drop is
-                        // stale data.
-                        base_entity.velocity.store(Vector3::default());
-
-                        // UUID-dedupes if another watcher already loaded this entity.
-                        // Tracker owns pairing (spawn packets + vehicle restore).
-                        world.add_entity_silent(entity.clone());
-                        player.try_restore_vehicle(&entity);
+                            // UUID-dedupes if another watcher already loaded this entity.
+                            // Tracker owns pairing (spawn packets + vehicle restore).
+                            world.add_entity_silent(entity.clone());
+                            player.try_restore_vehicle(&entity);
+                        }
                     }
                 } else {
                     // Already live for other watchers: pair this player now so
@@ -5156,8 +5147,7 @@ impl World {
             entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
-                let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
+                let pos = saved_chunk_pos(entity.as_ref());
                 if chunks_set.contains(&pos) {
                     entities_to_remove.push(entity.clone());
                     false
@@ -7515,25 +7505,11 @@ impl WorldPortalExt for WorldPortal {
     }
 
     fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for nbt in entities {
-            let Some(id) = nbt.get_string("id") else {
-                continue;
-            };
-            let Some(entity_type) =
-                EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-            else {
-                warn!("Unknown structure entity type: {id}");
-                continue;
-            };
-            let entity = from_type(
-                entity_type,
-                Vector3::new(0.0, 0.0, 0.0),
-                &self.0,
-                Uuid::new_v4(),
-            );
-            entity.get_entity().read_nbt_non_mut(&nbt);
-            entity.read_nbt_non_mut(&nbt);
-            self.0.spawn_entity(entity);
+        for mut nbt in entities {
+            nbt.child_tags.remove("UUID");
+            if let Some(entity) = load_static_entity_from_nbt(&nbt, Vector3::default(), &self.0) {
+                self.0.spawn_entity(entity);
+            }
         }
     }
 }
@@ -7612,6 +7588,24 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
     }
 
     y_curve.sample(t)
+}
+
+fn saving_vehicle(entity: &dyn EntityBase) -> Option<Arc<dyn EntityBase>> {
+    entity
+        .get_entity()
+        .get_vehicle()
+        .filter(|vehicle| vehicle.get_player().is_none() && !vehicle.get_entity().is_removed())
+}
+
+fn is_saved_as_passenger(entity: &dyn EntityBase) -> bool {
+    saving_vehicle(entity).is_some()
+}
+
+fn saved_chunk_pos(entity: &dyn EntityBase) -> Vector2<i32> {
+    saving_vehicle(entity).map_or_else(
+        || entity.get_entity().chunk_pos.load(),
+        |vehicle| saved_chunk_pos(vehicle.as_ref()),
+    )
 }
 
 /// A live chunk's records were already spawned, so `fresh` replaces them. Otherwise the

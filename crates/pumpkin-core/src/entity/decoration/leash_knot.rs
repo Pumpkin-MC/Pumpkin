@@ -26,14 +26,11 @@ impl LeashKnotEntity {
         self.pos
     }
 
-    pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
-        if let Some(existing) = Self::get_knot(world, pos) {
-            return existing;
-        }
-        Self::create_knot(world, pos)
+    pub fn get_or_create(world: &Arc<World>, pos: BlockPos) -> Arc<dyn EntityBase> {
+        Self::get_knot(world, pos).unwrap_or_else(|| Self::create_knot(world, pos))
     }
 
-    pub fn get_knot(world: &Arc<World>, pos: BlockPos) -> Option<Arc<Self>> {
+    pub fn get_knot(world: &Arc<World>, pos: BlockPos) -> Option<Arc<dyn EntityBase>> {
         let center = Vector3::new(
             f64::from(pos.0.x) + 0.5,
             f64::from(pos.0.y) + Self::OFFSET_Y,
@@ -47,20 +44,16 @@ impl LeashKnotEntity {
         };
 
         let search_box = BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim);
-        let entities = world.get_entities_at_box(&search_box);
-
-        for entity_base in entities {
-            if entity_base.get_entity().entity_type == &EntityType::LEASH_KNOT
-                && let Some(knot) = entity_base.cast_any().downcast_ref::<Arc<Self>>()
-                && knot.pos == pos
-            {
-                return Some(knot.clone());
-            }
-        }
-        None
+        world
+            .get_entities_at_box(&search_box)
+            .into_iter()
+            .find(|entity| {
+                let entity = entity.get_entity();
+                entity.entity_type == &EntityType::LEASH_KNOT && entity.block_pos.load() == pos
+            })
     }
 
-    pub fn create_knot(world: &Arc<World>, pos: BlockPos) -> Arc<Self> {
+    pub fn create_knot(world: &Arc<World>, pos: BlockPos) -> Arc<dyn EntityBase> {
         let raw_pos = Vector3::new(
             f64::from(pos.0.x) + 0.5,
             f64::from(pos.0.y) + Self::OFFSET_Y,
@@ -68,8 +61,8 @@ impl LeashKnotEntity {
         );
 
         let entity = Entity::new(world.clone(), raw_pos, &EntityType::LEASH_KNOT);
-        let knot = Arc::new(Self::new(entity, pos));
-        world.spawn_entity(knot.clone() as Arc<dyn EntityBase>);
+        let knot: Arc<dyn EntityBase> = Arc::new(Self::new(entity, pos));
+        world.spawn_entity(knot.clone());
 
         world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &raw_pos);
 
@@ -164,7 +157,7 @@ impl EntityBase for LeashKnotEntity {
 
         if let Some(self_knot) = Self::get_knot(&world, self.pos) {
             for mob in player_leashed_mobs {
-                mob.leash_to(self_knot.clone() as Arc<dyn EntityBase>);
+                mob.leash_to(self_knot.clone());
                 attached_mob = true;
             }
         }

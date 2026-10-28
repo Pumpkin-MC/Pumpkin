@@ -255,12 +255,11 @@ impl CommandExecutor for ModifierAddExecutor {
                     target.get_name(),
                 ))
             } else {
-                inst.modifiers.push(crate::entity::attributes::Modifier {
+                inst.add_or_replace_permanent_modifier(crate::entity::attributes::Modifier {
                     id: modifier_id.clone(),
                     amount: value,
                     operation: self.operation,
                 });
-                inst.mark_dirty();
                 Ok(())
             }
         };
@@ -314,10 +313,9 @@ impl CommandExecutor for ModifierRemoveExecutor {
                 )
             })?;
 
-            let index = inst
-                .modifiers
+            inst.modifiers
                 .iter()
-                .position(|m| m.id == modifier_id)
+                .find(|m| m.id == modifier_id)
                 .ok_or_else(|| {
                     NO_MODIFIER_ERROR.create_without_context(
                         TextComponent::translate(attribute_translation_key(&attribute), []),
@@ -326,8 +324,7 @@ impl CommandExecutor for ModifierRemoveExecutor {
                     )
                 })?;
 
-            inst.modifiers.remove(index);
-            inst.mark_dirty();
+            inst.remove_modifier(&modifier_id);
             Ok(())
         };
         res?;
