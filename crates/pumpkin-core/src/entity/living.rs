@@ -2121,6 +2121,19 @@ impl LivingEntity {
         fall_distance: f32,
         damage_per_distance: f32,
     ) {
+        self.cause_fall_damage(caller, fall_distance, damage_per_distance);
+        // Mob overrides of `causeFallDamage` call super first, whatever it did.
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_cause_fall_damage(fall_distance);
+        }
+    }
+
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_per_distance: f32,
+    ) {
         let may_fly = caller.get_player().is_some_and(|player| {
             player
                 .abilities
