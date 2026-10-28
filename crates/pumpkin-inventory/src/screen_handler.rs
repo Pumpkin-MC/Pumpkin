@@ -1160,9 +1160,15 @@ pub trait ScreenHandler: Send + Sync {
                             } else if self.window_type().is_none()
                                 && slot_index == OFF_HAND_SCREEN_SLOT
                             {
+                                // A right click leaves half the stack in the offhand
+                                let remaining = slot.get_cloned_stack();
                                 player.enqueue_equipment_change(
                                     &EquipmentSlot::OFF_HAND,
-                                    ItemStack::EMPTY,
+                                    if remaining.is_empty() {
+                                        ItemStack::EMPTY
+                                    } else {
+                                        &remaining
+                                    },
                                 );
                             }
                         }

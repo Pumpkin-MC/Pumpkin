@@ -205,7 +205,13 @@ impl ScreenHandler for PlayerScreenHandler {
                 let result = self.insert_item(&mut slot_stack, 9, 45, false);
 
                 if result {
-                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY);
+                    // The remainder stays in the offhand, an empty one clears it
+                    let remaining = if slot_stack.is_empty() {
+                        ItemStack::EMPTY
+                    } else {
+                        &slot_stack
+                    };
+                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, remaining);
                 }
                 result
             } else if (9..36).contains(&slot_index) {
