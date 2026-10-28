@@ -864,6 +864,14 @@ impl LivingEntity {
     }
 
     /// Like vanilla, the dead are not healed and a negative amount takes health.
+    ///
+    /// A negative amount can only come from a splash or lingering instant health
+    /// potion with a custom amplifier of 29 mod 32 (`4 << 29` overflows). In vanilla:
+    /// 1. Health is clamped to 0, `die` is never called.
+    /// 2. Mobs then play the death animation and vanish after 20 ticks, without drops.
+    /// 3. A player at 0 health gets the death screen and respawns, without drops.
+    /// Kept for parity, the tick and respawn paths already treat 0 health like vanilla.
+    // TODO: config option to prevent this (clamp the amount or run the real death flow).
     pub fn heal(&self, additional_health: f32) {
         if self.health.load() <= 0.0 || additional_health == 0.0 {
             return;
