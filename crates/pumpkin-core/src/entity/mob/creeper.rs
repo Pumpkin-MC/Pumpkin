@@ -3,7 +3,9 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
@@ -11,6 +13,7 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -23,6 +26,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use crate::world::game_event::GameEventContext;
 
 const DEFAULT_FUSE_TIME: i32 = 30;
 const DEFAULT_EXPLOSION_RADIUS: i32 = 3;
@@ -72,7 +76,7 @@ impl CreeperEntity {
                 Box::new(AvoidEntityGoal::new(&EntityType::CAT, 6.0, 1.0, 1.2)),
             );
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(0.8)));
 
             goal_selector.add_goal(
                 6,
@@ -183,7 +187,7 @@ impl Mob for CreeperEntity {
             .on_lightning_strike(caller, lightning);
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;
@@ -210,6 +214,13 @@ impl Mob for CreeperEntity {
                 1.0,
                 0.5,
             );
+            world.emit_game_event_with_context(
+                GameEvent::PrimeFuse.name(),
+                entity.pos.load(),
+                &GameEventContext {
+                    source_entity: Some(caller),
+                },
+            );
         }
 
         let fuse_time = self.fuse_time.load(Ordering::Relaxed);
@@ -223,32 +234,54 @@ impl Mob for CreeperEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.item.id != Item::FLINT_AND_STEEL.id {
+        if !item_stack
+            .item
+            .has_tag(&tag::Item::MINECRAFT_CREEPER_IGNITERS)
+        {
             return self
                 .mob_entity
                 .mob_interact(player, item_stack, self.can_be_leashed());
         }
 
+        let sound = if item_stack.item.id == Item::FIRE_CHARGE.id {
+            Sound::ItemFirechargeUse
+        } else {
+            Sound::ItemFlintandsteelUse
+        };
         let entity = &self.mob_entity.living_entity.entity;
-        let world = entity.world.load();
-        let pos = entity.pos.load();
-
-        world.play_sound_fine(
-            Sound::ItemFlintandsteelUse,
+        // The interacting client plays the sound itself.
+        entity.world.load().play_sound_raw_expect(
+            player,
+            sound as u16,
             SoundCategory::Hostile,
-            &pos,
+            &entity.pos.load(),
             1.0,
-            rand::random::<f32>() * 0.4 + 0.8,
+            self.get_random().random::<f32>() * 0.4 + 0.8,
         );
 
-        self.ignited.store(true, Ordering::Relaxed);
-        entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, true);
-
-        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            let _ = item_stack.damage_item(1);
+        self.set_ignited(true);
+        if item_stack.is_damageable() {
+            let _ = player.damage_item_stack(item_stack, 1);
+        } else {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
         }
 
         true
+    }
+
+    // Creeper.doHurtTarget: a creeper never deals melee damage, it only swells.
+    fn do_hurt_target(&self, _target: &dyn EntityBase) -> bool {
+        true
+    }
+
+    fn mob_cause_fall_damage(&self, fall_distance: f32) {
+        // Creeper.causeFallDamage: a fall brings it closer to exploding, but never
+        // within 5 ticks of it.
+        let max_swell = self.fuse_time.load(Ordering::Relaxed);
+        let swell = self.current_fuse_time.load(Ordering::Relaxed)
+            + (f64::from(fall_distance) * 1.5) as i32;
+        self.current_fuse_time
+            .store(swell.min(max_swell - 5), Ordering::Relaxed);
     }
 }
 
