@@ -37,7 +37,7 @@ impl BlockBehaviour for TripwireBlock {
     }
 
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        if args.entity.get_entity().is_spectator() || args.entity.is_ignoring_block_triggers() {
+        if args.entity.is_spectator() || args.entity.is_ignoring_block_triggers() {
             return;
         }
         let mut props = TripwireProperties::from_state_id(args.state.id);
