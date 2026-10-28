@@ -68,6 +68,15 @@ pub use recipe::RecipeManager;
 
 use crate::data::advancement_data::AdvancementManager;
 
+/// Saved scoreboard file in `<world>/data/minecraft/`.
+const SCOREBOARD_FILE: &str = "scoreboard.dat";
+/// Prefix of the per-namespace command storage files in `<world>/data/minecraft/`.
+const COMMAND_STORAGE_PREFIX: &str = "command_storage_";
+/// Force-loaded chunks of a dimension, saved under its own folder.
+const FORCED_CHUNKS_FILE: &str = "chunks.dat";
+/// Pending `/schedule` events, saved like vanilla's `TimerQueue`.
+const SCHEDULED_EVENTS_FILE: &str = "scheduled_events.dat";
+
 /// Represents a Minecraft server instance.
 #[repr(C)]
 pub struct Server {
@@ -457,6 +466,7 @@ impl Server {
         }
 
         server.worlds.store(Arc::new(worlds_vec));
+        server.load_persistent_data(&world_path);
 
         info!("All worlds loaded successfully.");
 
@@ -471,6 +481,183 @@ impl Server {
             .execute_function(&server, &source, "#minecraft:load");
 
         Ok(server)
+    }
+
+    /// Loads the scoreboard and command storage that datapacks rely on across restarts.
+    /// Vanilla keeps one scoreboard for the server, so every world starts from the saved copy.
+    /// The overworld's game time, which vanilla uses as the clock for scheduled events.
+    fn overworld_game_time(&self) -> i64 {
+        self.worlds
+            .load()
+            .iter()
+            .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+            .map_or(0, |world| {
+                world
+                    .level_time
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .world_age
+            })
+    }
+
+    fn load_persistent_data(&self, world_path: &std::path::Path) {
+        use pumpkin_world::world_info::data_files::{minecraft_data_dir, read_saved_data};
+
+        if let Some(data) = read_saved_data(world_path, SCOREBOARD_FILE) {
+            for world in self.worlds.load().iter() {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .load_saved_nbt(&data);
+            }
+        }
+
+        if let Some(data) = read_saved_data(world_path, SCHEDULED_EVENTS_FILE) {
+            self.scheduled_functions.load_saved_nbt(
+                &data,
+                self.tick_count.load(Ordering::Relaxed) as u64,
+                self.overworld_game_time(),
+            );
+        }
+
+        for world in self.worlds.load().iter() {
+            let Some(data) =
+                read_saved_data(&world.level.level_folder.dim_folder, FORCED_CHUNKS_FILE)
+            else {
+                continue;
+            };
+            let Some(forced) = data.get_long_array("Forced") else {
+                continue;
+            };
+            let mut forced_chunks = world
+                .forced_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut chunk_loading = world
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut newly_forced = Vec::new();
+            for packed in forced {
+                // Vanilla `ChunkPos.toLong`: x in the low 32 bits, z in the high 32 bits.
+                let x = *packed as i32;
+                let z = (*packed >> 32) as i32;
+                let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+                if forced_chunks.insert(pos) {
+                    chunk_loading.add_force_ticket(pos);
+                    newly_forced.push(pos);
+                }
+            }
+            chunk_loading.send_change();
+            drop(chunk_loading);
+            drop(forced_chunks);
+            world.update_active_chunks();
+            world.load_forced_entity_chunks(newly_forced);
+        }
+
+        let Ok(entries) = std::fs::read_dir(minecraft_data_dir(world_path)) else {
+            return;
+        };
+        let mut storage = self
+            .command_storage
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let Some(namespace) = file_name
+                .to_str()
+                .and_then(|name| name.strip_prefix(COMMAND_STORAGE_PREFIX))
+                .and_then(|name| name.strip_suffix(".dat"))
+            else {
+                continue;
+            };
+            let Some(mut data) = read_saved_data(
+                world_path,
+                &format!("{COMMAND_STORAGE_PREFIX}{namespace}.dat"),
+            ) else {
+                continue;
+            };
+            let Some(pumpkin_nbt::tag::NbtTag::Compound(contents)) =
+                data.child_tags.remove("contents")
+            else {
+                continue;
+            };
+            for (path, tag) in contents.child_tags {
+                if let pumpkin_nbt::tag::NbtTag::Compound(compound) = tag {
+                    storage.insert(format!("{namespace}:{path}"), compound);
+                }
+            }
+        }
+    }
+
+    /// Writes the scoreboard and command storage to `<world>/data/minecraft/`.
+    pub fn save_persistent_data(&self) -> Result<(), String> {
+        use pumpkin_world::world_info::data_files::write_saved_data;
+
+        let world_path = self.basic_config.get_world_path();
+        let data_version = self.level_info.load().data_version;
+
+        if let Some(world) = self.worlds.load().first() {
+            let data = world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .to_saved_nbt();
+            write_saved_data(&world_path, SCOREBOARD_FILE, data_version, data)
+                .map_err(|e| format!("Failed to save {SCOREBOARD_FILE}: {e}"))?;
+        }
+
+        let data = self.scheduled_functions.to_saved_nbt(
+            self.tick_count.load(Ordering::Relaxed) as u64,
+            self.overworld_game_time(),
+        );
+        write_saved_data(&world_path, SCHEDULED_EVENTS_FILE, data_version, data)
+            .map_err(|e| format!("Failed to save {SCHEDULED_EVENTS_FILE}: {e}"))?;
+
+        for world in self.worlds.load().iter() {
+            let forced: Vec<i64> = world
+                .forced_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .map(|pos| i64::from(pos.x as u32) | (i64::from(pos.y as u32) << 32))
+                .collect();
+            let mut data = pumpkin_nbt::compound::NbtCompound::new();
+            data.put("Forced", pumpkin_nbt::tag::NbtTag::LongArray(forced));
+            write_saved_data(
+                &world.level.level_folder.dim_folder,
+                FORCED_CHUNKS_FILE,
+                data_version,
+                data,
+            )
+            .map_err(|e| format!("Failed to save {FORCED_CHUNKS_FILE}: {e}"))?;
+        }
+
+        let mut namespaces: std::collections::HashMap<String, pumpkin_nbt::compound::NbtCompound> =
+            std::collections::HashMap::new();
+        {
+            let storage = self
+                .command_storage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (id, compound) in storage.iter() {
+                let (namespace, path) = id.split_once(':').unwrap_or(("minecraft", id));
+                namespaces
+                    .entry(namespace.to_string())
+                    .or_default()
+                    .put_compound(path, compound.clone());
+            }
+        }
+        for (namespace, contents) in namespaces {
+            let mut data = pumpkin_nbt::compound::NbtCompound::new();
+            data.put_compound("contents", contents);
+            let file_name = format!("{COMMAND_STORAGE_PREFIX}{namespace}.dat");
+            write_saved_data(&world_path, &file_name, data_version, data)
+                .map_err(|e| format!("Failed to save {file_name}: {e}"))?;
+        }
+        Ok(())
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
@@ -636,6 +823,11 @@ impl Server {
         {
             error!("Failed to save player advancements: {err}");
             return Err(format!("Failed to save player advancements: {err}"));
+        }
+
+        if let Err(err) = self.save_persistent_data() {
+            error!("{err}");
+            return Err(err);
         }
 
         for world in self.worlds.load().iter() {
@@ -844,6 +1036,9 @@ impl Server {
         info!("Starting worlds");
         for world in self.worlds.load().iter() {
             world.shutdown().await;
+        }
+        if let Err(err) = self.save_persistent_data() {
+            error!("{err}");
         }
         let level_data = self.level_info.load();
         // then lets save the world info
@@ -1274,6 +1469,34 @@ impl Server {
 
         // Global tasks
         self.player_data_storage.tick(self);
+
+        // Scoreboard and command storage live outside chunks, so they follow the world autosave.
+        if let Some(world) = worlds.first() {
+            let autosave = world.level.autosave_ticks;
+            let tick = u64::try_from(self.tick_count.load(Ordering::Relaxed)).unwrap_or(0);
+            if autosave > 0
+                && tick > 0
+                && tick.is_multiple_of(autosave)
+                && world.level.save_enabled.load(Ordering::Relaxed)
+            {
+                let server = self.clone();
+                self.spawn_task(async move {
+                    // level.dat holds the game time that scheduled_events.dat is relative to,
+                    // so both are saved together; otherwise a crash restores an old time and
+                    // pushes every scheduled function far into the future.
+                    let result = tokio::task::spawn_blocking(move || {
+                        if let Err(err) = server.save_world_info() {
+                            error!("Failed to save level.dat: {err}");
+                        }
+                        server.save_persistent_data()
+                    })
+                    .await;
+                    if let Ok(Err(err)) = result {
+                        error!("{err}");
+                    }
+                });
+            }
+        }
     }
 
     /// Vanilla `tickChildren` "timeSync": every 20 ticks, also while frozen.

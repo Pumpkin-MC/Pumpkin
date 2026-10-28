@@ -124,6 +124,58 @@ pub fn ensure_minecraft_data_dir(level_folder: &Path) -> Result<PathBuf, WorldIn
     Ok(dir)
 }
 
+/// Reads the `data` compound of a saved data file in `<world>/data/minecraft/`.
+/// Returns `None` when the file is missing or unreadable.
+#[must_use]
+pub fn read_saved_data(level_folder: &Path, file_name: &str) -> Option<NbtCompound> {
+    let path = minecraft_data_dir(level_folder).join(file_name);
+    if !path.exists() {
+        return None;
+    }
+    let file = match File::open(&path) {
+        Ok(file) => file,
+        Err(e) => {
+            warn!("Failed to open {}: {e}", path.display());
+            return None;
+        }
+    };
+    match read_gzip_compound_tag(file) {
+        Ok(mut root) => match root.child_tags.remove("data") {
+            Some(NbtTag::Compound(data)) => Some(data),
+            _ => Some(NbtCompound::new()),
+        },
+        Err(e) => {
+            warn!("Failed to read {}: {e}", path.display());
+            None
+        }
+    }
+}
+
+/// Writes `data` as the `data` compound of a saved data file in `<world>/data/minecraft/`,
+/// replacing the file through a temporary file so a crash mid-write keeps the old copy.
+pub fn write_saved_data(
+    level_folder: &Path,
+    file_name: &str,
+    data_version: i32,
+    data: NbtCompound,
+) -> Result<(), WorldInfoError> {
+    let dir = ensure_minecraft_data_dir(level_folder)?;
+    let path = dir.join(file_name);
+    let tmp_path = dir.join(format!("{file_name}.tmp"));
+
+    let mut root = NbtCompound::new();
+    root.put_int("DataVersion", data_version);
+    root.put_compound("data", data);
+
+    let file = File::create(&tmp_path)?;
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, &file)
+        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(&tmp_path, &path)?;
+    Ok(())
+}
+
 pub fn read_weather(level_folder: &Path) -> WeatherData {
     let path = minecraft_data_dir(level_folder).join("weather.dat");
     if !path.exists() {
