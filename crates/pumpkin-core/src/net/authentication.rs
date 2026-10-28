@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
@@ -171,6 +171,34 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
         is_texture_url_valid(&url, config)?;
     }
     Ok(())
+}
+
+/// Removes `textures` properties the config rejects, so an unusable texture costs the
+/// player their skin instead of their login.
+pub fn retain_valid_textures(profile: &mut GameProfile, config: &TextureConfig) {
+    // Only the `textures` property holds base64 encoded texture JSON. Auth servers may add
+    // other properties, e.g. authlib-injector's `uploadableTextures`, whose value is a comma
+    // separated list such as `skin,cape`.
+    let properties = profile.properties.load_full();
+    let valid_properties: Vec<Property> = properties
+        .iter()
+        .filter(|property| {
+            if property.name.as_ref() != "textures" {
+                return true;
+            }
+            match validate_textures(property, config) {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::warn!("Dropping textures of player '{}': {error}", profile.name);
+                    false
+                }
+            }
+        })
+        .cloned()
+        .collect();
+    if valid_properties.len() != properties.len() {
+        profile.properties.store(Arc::new(valid_properties));
+    }
 }
 
 pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), TextureError> {
@@ -402,8 +430,6 @@ pub enum AuthError {
     UnverifiedUsername,
     #[error("You are banned from Authentication servers")]
     Banned,
-    #[error("Texture Error {0}")]
-    TextureError(TextureError),
     #[error("You have disallowed actions from Authentication servers")]
     DisallowedAction,
     #[error("Failed to parse JSON into Game Profile")]
@@ -428,7 +454,59 @@ pub enum TextureError {
 
 #[cfg(test)]
 mod tests {
-    use super::ProfileTextures;
+    use arc_swap::ArcSwap;
+    use std::sync::Arc;
+
+    use super::{
+        Engine, ProfileTextures, Property, TextureConfig, general_purpose, retain_valid_textures,
+    };
+    use crate::net::GameProfile;
+
+    const TEXTURES: &str = r#"{"timestamp":0,"profileId":"069a79f444e94726a5befca90e38aaf5","profileName":"Notch","textures":{"SKIN":{"url":"https://textures.minecraft.net/texture/abc"}}}"#;
+
+    fn profile_with(properties: Vec<Property>) -> GameProfile {
+        GameProfile {
+            id: uuid::Uuid::nil(),
+            name: "Notch".to_string(),
+            properties: ArcSwap::new(Arc::new(properties)),
+            profile_actions: None,
+        }
+    }
+
+    fn property(name: &str, value: &str) -> Property {
+        Property {
+            name: name.into(),
+            value: value.into(),
+            signature: None,
+        }
+    }
+
+    fn encoded_textures(textures: &str) -> Property {
+        property("textures", &general_purpose::STANDARD.encode(textures))
+    }
+
+    // authlib-injector servers add `uploadableTextures`, whose value is a comma separated
+    // list rather than base64 encoded JSON.
+    #[test]
+    fn keeps_properties_that_are_not_textures() {
+        let mut profile = profile_with(vec![
+            property("uploadableTextures", "skin,cape"),
+            encoded_textures(TEXTURES),
+        ]);
+        retain_valid_textures(&mut profile, &TextureConfig::default());
+        let properties = profile.properties.load();
+        let names: Vec<&str> = properties.iter().map(|p| &*p.name).collect();
+        assert_eq!(names, ["uploadableTextures", "textures"]);
+    }
+
+    #[test]
+    fn drops_textures_from_a_disallowed_domain() {
+        let mut profile = profile_with(vec![encoded_textures(
+            &TEXTURES.replace("textures.minecraft.net", "example.com"),
+        )]);
+        retain_valid_textures(&mut profile, &TextureConfig::default());
+        assert!(profile.properties.load().is_empty());
+    }
 
     // Third-party auth servers (drasl, Blessing Skin, littleskin.cn) don't send
     // `signatureRequired`. The profile must still parse. See issue #301.
