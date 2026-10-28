@@ -6370,6 +6370,15 @@ impl World {
             && level_data.difficulty != Difficulty::Peaceful
     }
 
+    /// The saved NBT of the block entity at the position, if any.
+    pub fn get_block_entity_nbt(&self, block_pos: &BlockPos) -> Option<NbtCompound> {
+        self.get_block_entity(block_pos).map(|be| {
+            let mut nbt = NbtCompound::new();
+            be.write_internal(&mut nbt);
+            nbt
+        })
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self

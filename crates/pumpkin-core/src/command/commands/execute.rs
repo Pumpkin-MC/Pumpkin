@@ -289,8 +289,8 @@ fn execute_if_block_modifier(
     let expected = BlockPredicateArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if expected.test(block) {
+        let state_id = world.get_block_state_id(&pos);
+        if expected.test(state_id, || world.get_block_entity_nbt(&pos)) {
             return Ok(vec![context.source.clone()]);
         }
     }
@@ -304,8 +304,8 @@ fn execute_unless_block_modifier(
     let expected = BlockPredicateArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if !expected.test(block) {
+        let state_id = world.get_block_state_id(&pos);
+        if !expected.test(state_id, || world.get_block_entity_nbt(&pos)) {
             return Ok(vec![context.source.clone()]);
         }
     } else {
