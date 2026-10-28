@@ -129,7 +129,7 @@ impl FireworkRocketEntity {
         world.send_entity_status(
             entity,
             EntityStatus::FireworksExplode,
-            Some(ActorEventID::FireworksExplode),
+            ActorEventID::FireworksExplode,
         );
         self.deal_explosion_damage(world);
 

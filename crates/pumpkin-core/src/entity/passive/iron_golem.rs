@@ -8,6 +8,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
@@ -101,10 +102,18 @@ impl IronGolemEntity {
         let world = entity.world.load();
         if offer {
             self.offer_flower_tick.store(400, Ordering::Relaxed);
-            world.send_entity_status(entity, EntityStatus::OfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::OfferFlower,
+                ActorEventID::StartOfferFlower,
+            );
         } else {
             self.offer_flower_tick.store(0, Ordering::Relaxed);
-            world.send_entity_status(entity, EntityStatus::StopOfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::StopOfferFlower,
+                ActorEventID::StopOfferFlower,
+            );
         }
     }
 
@@ -119,7 +128,11 @@ impl IronGolemEntity {
         self.attack_animation_tick.store(10, Ordering::Relaxed);
         let entity = self.get_entity();
         let world = entity.world.load();
-        world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+        world.send_entity_status(
+            entity,
+            EntityStatus::StartAttacking,
+            ActorEventID::StartAttacking,
+        );
     }
 }
 

@@ -5,7 +5,7 @@ impl BedrockClient {
     pub fn handle_player_block_action(
         &self,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &pumpkin_protocol::bedrock::server::player_auth_input::PlayerBlockAction,
     ) {
         self.handle_player_action(

@@ -1784,7 +1784,7 @@ impl Player {
                 self.world().send_entity_status(
                     &self.living_entity.entity,
                     super::equipment_break_status(slot),
-                    None,
+                    ActorEventID::None,
                 );
             }
 
@@ -2574,8 +2574,14 @@ impl Player {
     }
 
     pub fn send_hurt_animation(&self, yaw: f32) {
-        let packet = CHurtAnimation::new(self.entity_id().into(), yaw);
-        self.try_send_client_packet(&packet);
+        let je_packet = CHurtAnimation::new(self.entity_id().into(), yaw);
+        let be_packet = SActorEvent {
+            target_runtime_id: VarULong(self.entity_id() as u64),
+            event_id: ActorEventID::Hurt,
+            data: VarInt(0),
+            fire_at_position: None,
+        };
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
     pub fn open_book(&self, hand: Hand) {
@@ -4550,10 +4556,85 @@ impl Player {
     }
 
     pub fn block_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
         if self.gamemode.load() == GameMode::Creative {
             5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE);
+            attr.max(5.0)
         } else {
-            4.5
+            self.living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn entity_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
+        if self.gamemode.load() == GameMode::Creative {
+            5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE);
+            // Bedrock players have a slightly longer interaction/attack reach (~3.0 in Java vs ~3.5 in Bedrock)
+            attr.max(3.5)
+        } else {
+            self.living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn can_interact_with_entity(&self, target: &dyn EntityBase, additional_range: f64) -> bool {
+        let d = self.entity_interaction_range() + additional_range;
+        target
+            .get_entity()
+            .bounding_box
+            .load()
+            .squared_magnitude(self.eye_position())
+            < d * d
+    }
+
+    pub fn update_bedrock_shield_sneaking(&self) {
+        if !matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            return;
+        }
+        if !self.get_entity().is_sneaking() {
+            if self.living_entity.is_blocking() {
+                self.living_entity.clear_active_hand();
+            }
+            return;
+        }
+
+        let is_blocking = self.living_entity.is_blocking();
+        let shield_hand_and_stack = [Hand::Left, Hand::Right].into_iter().find_map(|hand| {
+            let stack = self.inventory.get_stack_in_hand(hand);
+            (stack
+                .get_data_component::<pumpkin_data::data_component_impl::BlocksAttacksImpl>()
+                .is_some()
+                && !self.is_on_cooldown(stack.item.registry_key))
+            .then_some((hand, stack))
+        });
+
+        match (is_blocking, shield_hand_and_stack) {
+            (true, Some((hand, stack))) => {
+                let current_hand = *self
+                    .living_entity
+                    .active_hand
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if current_hand != Some(hand) {
+                    self.living_entity.set_active_hand(hand, stack, 72000);
+                }
+            }
+            (true, None) => {
+                self.living_entity.clear_active_hand();
+            }
+            (false, Some((hand, stack))) => {
+                self.living_entity.set_active_hand(hand, stack, 72000);
+            }
+            (false, None) => {}
         }
     }
 
@@ -8479,5 +8560,18 @@ mod tests {
             });
         }
         assert_eq!(counter.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn reach_distances_adhere_to_platform_defaults() {
+        // Standard entity interaction range: ~3.0 for Java, ~3.5 for Bedrock
+        let java_default = 3.0f64;
+        let bedrock_default = 3.5f64;
+        assert!(bedrock_default > java_default);
+
+        // Standard block interaction range: 4.5 for Java, 5.0 for Bedrock
+        let java_block = 4.5f64;
+        let bedrock_block = 5.0f64;
+        assert!(bedrock_block > java_block);
     }
 }

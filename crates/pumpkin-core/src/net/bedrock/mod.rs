@@ -41,8 +41,8 @@ use pumpkin_protocol::{
             loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
             modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
-            player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
-            request_chunk_radius::SRequestChunkRadius,
+            player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
+            request_ability::SRequestAbility, request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
@@ -894,6 +894,10 @@ impl BedrockClient {
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;
                 self.handle_mob_equipment(server, player, &packet);
+            }
+            SPlayerHotbar::PACKET_ID => {
+                let packet = SPlayerHotbar::read(reader)?;
+                self.handle_player_hotbar(server, player, &packet);
             }
             SPacketViolationWarning::PACKET_ID => {
                 let warning = SPacketViolationWarning::read(reader)?;

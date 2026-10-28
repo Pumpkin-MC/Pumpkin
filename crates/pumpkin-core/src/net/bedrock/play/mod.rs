@@ -5,8 +5,7 @@ use std::{
 
 use pumpkin_data::{
     data_component_impl::{
-        BlocksAttacksImpl, ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl,
-        FoodImpl,
+        ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl, FoodImpl,
     },
     item_stack::ItemStack,
 };
@@ -219,6 +218,7 @@ pub mod network_stack_latency;
 pub mod player_action;
 pub mod player_auth_input;
 pub mod player_block_action;
+pub mod player_hotbar;
 pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod respawn;

@@ -44,7 +44,11 @@ impl BedrockClient {
         self.client_delta.store(packet.delta.to_f64());
 
         let sneaking = sneaking_from_auth(player, flags);
+        let was_sneaking = entity.is_sneaking();
         player.apply_client_input(server, java_input_from_auth(&packet, sneaking));
+        if entity.is_sneaking() != was_sneaking {
+            player.update_bedrock_shield_sneaking();
+        }
 
         let started_sprint = flags.get(InputData::StartSprinting as usize);
         let stopped_sprint = flags.get(InputData::StopSprinting as usize);
@@ -56,13 +60,21 @@ impl BedrockClient {
 
         if flags.get(InputData::StartSwimming as usize) {
             entity.set_swimming(true);
+            player.update_player_pose();
         } else if flags.get(InputData::StopSwimming as usize) {
             entity.set_swimming(false);
+            player.update_player_pose();
         }
 
         if flags.get(InputData::StartCrawling as usize) {
             entity.set_pose(EntityPose::Swimming);
         } else if flags.get(InputData::StopCrawling as usize) {
+            player.update_player_pose();
+        }
+
+        if flags.get(InputData::StartSpinAttack as usize) {
+            entity.set_pose(EntityPose::SpinAttack);
+        } else if flags.get(InputData::StopSpinAttack as usize) {
             player.update_player_pose();
         }
 
@@ -77,11 +89,8 @@ impl BedrockClient {
             && !flags.get(InputData::StopGliding as usize)
         {
             Self::start_gliding(player, server);
-        } else if flags.get(InputData::StopGliding as usize) && entity.is_fall_flying() {
-            // Java cannot cancel elytra in mid-air, landing / `canGlide` already stops it.
-            // A rejected stop resends GLIDING true, as `StopGliding` expects an answer either way.
-            let stop = (on_ground || !player.can_glide()) && player.glide_stop_allowed();
-            entity.set_fall_flying(!stop);
+        } else if flags.get(InputData::StopGliding as usize) {
+            Self::stop_gliding(player, on_ground);
         }
 
         let new_pos = player.feet_from_bedrock_pos(packet.position.to_f64());
@@ -97,6 +106,20 @@ impl BedrockClient {
             },
         );
 
+        if entity.has_vehicle() {
+            let vehicle = entity
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(vehicle) = vehicle {
+                vehicle.set_paddle_state(
+                    flags.get(InputData::PaddlingLeft as usize),
+                    flags.get(InputData::PaddlingRight as usize),
+                );
+            }
+        }
+
         if let Some(block_actions) = packet.block_actions {
             for action in &block_actions {
                 self.handle_player_block_action(player, server, action);
@@ -108,7 +131,7 @@ impl BedrockClient {
 impl BedrockClient {
     /// The Bedrock client glides straight out of creative flight, which vanilla `canGlide`
     /// forbids, so flight ends first and comes back if the glide is refused.
-    fn start_gliding(player: &Arc<Player>, server: &Arc<Server>) {
+    pub(super) fn start_gliding(player: &Arc<Player>, server: &Arc<Server>) {
         if player.get_entity().is_fall_flying() {
             return;
         }
@@ -132,6 +155,17 @@ impl BedrockClient {
         if was_flying {
             player.send_abilities_update();
         }
+    }
+
+    /// Java cannot cancel elytra in mid-air, landing / `canGlide` already stops it.
+    /// A rejected stop resends GLIDING true, as `StopGliding` expects an answer either way.
+    pub(super) fn stop_gliding(player: &Arc<Player>, on_ground: bool) {
+        let entity = player.get_entity();
+        if !entity.is_fall_flying() {
+            return;
+        }
+        let stop = (on_ground || !player.can_glide()) && player.glide_stop_allowed();
+        entity.set_fall_flying(!stop);
     }
 
     /// Inputs are ignored until the client reaches a pending teleport, so stale
