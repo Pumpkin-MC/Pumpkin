@@ -443,6 +443,8 @@ pub struct Player {
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The village position where Raid Omen was triggered.
     pub raid_omen_position: AtomicCell<Option<BlockPos>>,
+    /// Starting position when riding a vehicle in lava (for advancement tracking).
+    pub entered_lava_pos: AtomicCell<Option<Vector3<f64>>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -740,6 +742,7 @@ impl Player {
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
+            entered_lava_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
@@ -1727,6 +1730,19 @@ impl Player {
         };
 
         let result = stack.damage_item(amount);
+        if result != DamageResult::Untouched {
+            let vehicle_type = self
+                .living_entity
+                .entity
+                .get_vehicle()
+                .map(|v| format!("minecraft:{}", v.get_entity().entity_type.resource_name));
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ItemDurabilityChanged {
+                    item_id: original_item.registry_key.to_string(),
+                    vehicle_type,
+                },
+            );
+        }
         if result == DamageResult::Broken
             && let Some((server, player)) = player_context
         {
@@ -3028,6 +3044,14 @@ impl Player {
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
+        if self.tick_counter.load(Ordering::Relaxed) % 20 == 0 {
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Location,
+            );
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Tick,
+            );
+        }
         if let Ok(mut adv) = self.advancements.try_lock() {
             adv.flush_dirty(self, true);
         }
@@ -4060,6 +4084,58 @@ impl Player {
         } else {
             Some(hit.block_pos)
         }
+    }
+
+    pub fn get_target_entity(
+        &self,
+        world: &Arc<World>,
+        max_distance: f64,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let (yaw, pitch) = (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        );
+        let eye_pos = self.living_entity.entity.get_eye_pos();
+        let yaw_rad = f64::from(yaw + 90.0).to_radians();
+        let pitch_rad = f64::from(-pitch).to_radians();
+        let dir = pumpkin_util::math::vector3::Vector3::new(
+            pitch_rad.cos() * yaw_rad.cos(),
+            pitch_rad.sin(),
+            pitch_rad.cos() * yaw_rad.sin(),
+        );
+        let ray = dir * max_distance;
+        let end_pos = eye_pos + ray;
+        let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.min(end_pos.x),
+                eye_pos.y.min(end_pos.y),
+                eye_pos.z.min(end_pos.z),
+            ),
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.max(end_pos.x),
+                eye_pos.y.max(end_pos.y),
+                eye_pos.z.max(end_pos.z),
+            ),
+        )
+        .expand(1.0, 1.0, 1.0);
+
+        let entities = world.get_entities_at_box(&search_box);
+        let mut closest_t = 1.0f64;
+        let mut closest_entity = None;
+
+        for entity in entities {
+            if entity.get_entity().entity_id == self.entity_id() {
+                continue;
+            }
+            let ebb = entity.get_entity().bounding_box.load();
+            if let Some(t) = ebb.ray_intersection(eye_pos, ray)
+                && t < closest_t
+            {
+                closest_t = t;
+                closest_entity = Some(entity);
+            }
+        }
+        closest_entity
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
@@ -5458,6 +5534,9 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
+        );
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -6395,17 +6474,6 @@ impl Player {
         self.gamemode.load() == GameMode::Creative
     }
 
-    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
-    #[must_use]
-    pub fn can_be_seen_as_enemy(&self) -> bool {
-        !self
-            .abilities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .invulnerable
-            && self.living_entity.can_take_damage()
-    }
-
     /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
     /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
     #[must_use]
@@ -6956,6 +7024,16 @@ impl EntityBase for Player {
 
     fn is_spectator(&self) -> bool {
         self.gamemode.load() == GameMode::Spectator
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && !self.get_entity().invulnerable.load(Ordering::Relaxed)
+            && self.can_be_seen_by_anyone()
     }
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
@@ -8115,6 +8193,37 @@ impl InventoryPlayer for Player {
             }
             world.sync_world_event(pumpkin_data::world::WorldEvent::SoundGrindstoneUsed, pos, 0);
         }
+    }
+
+    fn on_enchanted_item(&self, levels: i32) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EnchantedItem {
+                levels,
+            },
+        );
+    }
+
+    fn on_recipe_crafted(&self, item: &pumpkin_data::item_stack::ItemStack) {
+        let key = item.item.registry_key.to_string();
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeCrafted {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeUnlocked {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+        );
+    }
+
+    fn on_brewed_potion(&self) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
+        );
     }
 }
 

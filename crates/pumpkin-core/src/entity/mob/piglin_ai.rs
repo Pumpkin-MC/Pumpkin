@@ -245,7 +245,7 @@ impl PiglinAi {
     pub fn is_entity_targetable(piglin: &PiglinEntity, target: &Player) -> bool {
         let entity = &piglin.mob_entity.living_entity.entity;
         let target_entity = target.get_entity();
-        if !target.living_entity.is_part_of_game() {
+        if !target.can_be_seen_by_anyone() {
             return false;
         }
 

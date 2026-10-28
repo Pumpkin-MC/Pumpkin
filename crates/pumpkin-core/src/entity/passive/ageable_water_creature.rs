@@ -7,8 +7,8 @@ pub trait AgeableWaterCreature: AgeableMob {
         water_animal::check_spawn_obstruction(self, world)
     }
 
-    fn handle_air_supply(&self, caller: &dyn EntityBase) {
-        water_animal::handle_air_supply(self, caller);
+    fn handle_air_supply(&self, pre_tick_air_supply: i32, caller: &dyn EntityBase) {
+        water_animal::handle_air_supply(self, pre_tick_air_supply, caller);
     }
 
     fn water_creature_experience_reward(&self) -> u32 {

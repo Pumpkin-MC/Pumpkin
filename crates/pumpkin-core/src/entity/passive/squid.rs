@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicI32, Ordering::Relaxed},
-};
+use std::sync::{Arc, atomic::Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
@@ -14,7 +11,7 @@ use pumpkin_data::{
 use pumpkin_util::math::{boundingbox::EntityDimensions, cos, sin, vector3::Vector3};
 use rand::RngExt;
 
-use super::{ageable_water_creature::AgeableWaterCreature, water_animal::AMBIENT_SOUND_INTERVAL};
+use super::ageable_water_creature::AgeableWaterCreature;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
@@ -23,7 +20,6 @@ use crate::entity::{
 };
 
 const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::new(0.5, 0.5, 0.37);
-pub(crate) const BABY_SPAWN_CHANCE: f32 = 0.05;
 const SQUID_FLEE_SPEED: f64 = 3.0;
 const SQUID_FLEE_MIN_DISTANCE: f64 = 5.0;
 const SQUID_FLEE_MAX_DISTANCE: f64 = 10.0;
@@ -47,7 +43,6 @@ pub struct SquidData {
     x_body_rot: AtomicCell<f32>,
     x_body_rot_o: AtomicCell<f32>,
     y_body_rot_o: AtomicCell<f32>,
-    ambient_sound_time: AtomicI32,
 }
 
 impl SquidData {
@@ -65,7 +60,6 @@ impl SquidData {
             x_body_rot: AtomicCell::new(0.0),
             x_body_rot_o: AtomicCell::new(0.0),
             y_body_rot_o: AtomicCell::new(0.0),
-            ambient_sound_time: AtomicI32::new(0),
         });
         mob.goals_selector
             .add_goal(0, Box::new(SquidRandomMovementGoal { data: data.clone() }));
@@ -100,7 +94,6 @@ pub trait Squid: AgeableWaterCreature {
     fn ink_particle(&self) -> Particle;
 
     fn squid_ai_step(&self) {
-        self.tick_age_lock_particle_timer();
         let data = self.squid_data();
         let entity = self.get_entity();
         data.x_body_rot_o.store(data.x_body_rot.load());
@@ -163,33 +156,7 @@ pub trait Squid: AgeableWaterCreature {
         self.squid_data()
             .y_body_rot_o
             .store(self.get_entity().body_yaw.load());
-        if !self.get_mob_entity().living_entity.is_dead_or_dying()
-            && self.get_random().random_range(0..1000)
-                < self.squid_data().ambient_sound_time.fetch_add(1, Relaxed)
-        {
-            self.reset_ambient_sound_time();
-            self.make_sound(self.ambient_sound());
-        }
-        self.handle_air_supply(caller);
-    }
-
-    fn reset_ambient_sound_time(&self) {
-        self.squid_data()
-            .ambient_sound_time
-            .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
-    }
-
-    fn make_sound(&self, sound: Sound) {
-        let entity = self.get_entity();
-        if !entity.is_silent() {
-            entity.world.load().play_sound_raw(
-                sound as u16,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-                SOUND_VOLUME,
-                self.get_mob_entity().living_entity.get_pitch(),
-            );
-        }
+        self.handle_air_supply(self.get_entity().air_supply.load(Relaxed), caller);
     }
 
     fn rotate_vector(&self, vector: Vector3<f64>) -> Vector3<f64> {
@@ -354,6 +321,8 @@ macro_rules! squid_mob_hooks {
         fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity { &self.mob_entity }
         fn as_ageable(&self) -> Option<&dyn $crate::entity::ageable::AgeableMob> { Some(self) }
         fn as_custom_sound(&self) -> Option<&dyn $crate::entity::custom_sound::CustomSound> { Some(self) }
+        fn get_ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> { Some($crate::entity::passive::squid::Squid::ambient_sound(self)) }
+        fn get_ambient_sound_interval(&self) -> i32 { $crate::entity::passive::water_animal::AMBIENT_SOUND_INTERVAL }
         fn base_tick(&self) { $crate::entity::passive::squid::Squid::squid_base_tick(self, self); }
         fn travel(&self, caller: &dyn $crate::entity::EntityBase) -> bool {
             let entity = &self.mob_entity.living_entity.entity;
@@ -362,18 +331,11 @@ macro_rules! squid_mob_hooks {
         }
         fn mob_is_pushed_by_fluids(&self) -> bool { false }
         fn get_mob_gravity(&self) -> f64 { $crate::entity::passive::squid::DEFAULT_GRAVITY }
-        fn mob_interact(&self, player: &std::sync::Arc<$crate::entity::player::Player>, stack: &mut pumpkin_data::item_stack::ItemStack) -> bool {
-            self.mob_entity.mob_interact(player, stack, self.can_be_leashed())
-                || $crate::entity::ageable::AgeableMob::ageable_interact(self, player, stack)
-        }
         fn check_spawn_obstruction(&self, world: &$crate::world::World) -> bool {
             $crate::entity::passive::ageable_water_creature::AgeableWaterCreature::water_creature_spawn_obstruction(self, world)
         }
         fn get_base_experience_reward(&self) -> u32 {
             $crate::entity::passive::ageable_water_creature::AgeableWaterCreature::water_creature_experience_reward(self)
-        }
-        fn finalize_spawn(&self, _world: &std::sync::Arc<$crate::world::World>, group_data: Option<$crate::entity::mob::spawn::SpawnGroupData>) -> Option<$crate::entity::mob::spawn::SpawnGroupData> {
-            $crate::entity::ageable::AgeableMob::finalize_ageable_spawn(self, group_data, $crate::entity::passive::squid::BABY_SPAWN_CHANCE)
         }
     };
 }
@@ -414,14 +376,7 @@ macro_rules! impl_squid {
                 SoundCategory::Neutral
             }
             fn sound_volume(&self) -> f32 {
-                if self.get_entity().is_silent() {
-                    0.0
-                } else {
-                    $crate::entity::passive::squid::SOUND_VOLUME
-                }
-            }
-            fn on_hurt_sound(&self) {
-                self.reset_ambient_sound_time();
+                $crate::entity::passive::squid::SOUND_VOLUME
             }
         }
     };

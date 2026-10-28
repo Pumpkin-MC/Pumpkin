@@ -15,6 +15,17 @@ use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
+const MAX_INITIAL_COLLECTION_SIZE: usize = 65536;
+
+fn read_count(seq: &mut impl NetworkReadExt, max_size: usize) -> Result<usize, ReadingError> {
+    let count = seq.get_var_int()?.0;
+    usize::try_from(count)
+        .ok()
+        .filter(|&count| count <= max_size)
+        .ok_or_else(|| {
+            ReadingError::TooLarge(format!("{count} elements exceeded max size of {max_size}"))
+        })
+}
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -53,7 +64,8 @@ fn deserialize_idset<T: IDSetContent>(
         }
         std::cmp::Ordering::Greater => {
             let len = id_type - 1;
-            let mut content_vec = Vec::with_capacity(len as usize);
+            let mut content_vec =
+                Vec::with_capacity((len as usize).min(MAX_INITIAL_COLLECTION_SIZE));
 
             for _ in 0..len {
                 let varint_id = seq.get_var_int()?.0;
@@ -1568,11 +1580,7 @@ macro_rules! codec_dye_color {
                 seq.write_var_int(&VarInt(i32::from(color.id())))
             }
             fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-                let id = seq.get_var_int()?.0;
-                let color = u8::try_from(id)
-                    .ok()
-                    .and_then(pumpkin_data::dye_color::DyeColor::by_id)
-                    .unwrap_or(pumpkin_data::dye_color::DyeColor::White);
+                let color = pumpkin_data::dye_color::DyeColor::by_id_or_white(seq.get_var_int()?.0);
                 Ok(Self {
                     value: Cow::Borrowed(color.name()),
                 })
@@ -1812,23 +1820,23 @@ impl DataComponentCodec<Self> for CustomModelDataImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let floats_len = seq.get_var_int()?.0 as usize;
-        let mut floats = Vec::with_capacity(floats_len);
+        let floats_len = read_count(seq, usize::MAX)?;
+        let mut floats = Vec::with_capacity(floats_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..floats_len {
             floats.push(seq.get_f32()?);
         }
-        let flags_len = seq.get_var_int()?.0 as usize;
-        let mut flags = Vec::with_capacity(flags_len);
+        let flags_len = read_count(seq, usize::MAX)?;
+        let mut flags = Vec::with_capacity(flags_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..flags_len {
             flags.push(seq.get_bool()?);
         }
-        let strings_len = seq.get_var_int()?.0 as usize;
-        let mut strings = Vec::with_capacity(strings_len);
+        let strings_len = read_count(seq, usize::MAX)?;
+        let mut strings = Vec::with_capacity(strings_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..strings_len {
             strings.push(seq.get_str()?.to_string());
         }
-        let colors_len = seq.get_var_int()?.0 as usize;
-        let mut colors = Vec::with_capacity(colors_len);
+        let colors_len = read_count(seq, usize::MAX)?;
+        let mut colors = Vec::with_capacity(colors_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..colors_len {
             colors.push(seq.get_i32()?);
         }
@@ -1965,8 +1973,8 @@ impl DataComponentCodec<Self> for ToolImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let rules_len = seq.get_var_int()?.0 as usize;
-        let mut rules = Vec::with_capacity(rules_len);
+        let rules_len = read_count(seq, usize::MAX)?;
+        let mut rules = Vec::with_capacity(rules_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..rules_len {
             let blocks = deserialize_idset(seq)?;
             let speed = if seq.get_bool()? {
@@ -2393,7 +2401,8 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PROJECTILES: usize = 1024;
+        let len = read_count(seq, MAX_PROJECTILES)?;
         let mut projectiles = Vec::with_capacity(len);
         for _ in 0..len {
             let _ = deserialize_item_stack_template(seq)?;
@@ -2425,7 +2434,8 @@ impl DataComponentCodec<Self> for WritableBookContentImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PAGES: usize = 100;
+        let len = read_count(seq, MAX_PAGES)?;
         let mut pages = Vec::with_capacity(len);
         for _ in 0..len {
             let raw = seq.get_str()?.to_string();
@@ -2460,8 +2470,8 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         }
         let author = seq.get_str()?.to_string();
         let _generation = seq.get_var_int()?.0;
-        let pages_len = seq.get_var_int()?.0 as usize;
-        let mut pages = Vec::with_capacity(pages_len);
+        let pages_len = read_count(seq, usize::MAX)?;
+        let mut pages = Vec::with_capacity(pages_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..pages_len {
             let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             let comp = tag.as_ref().map_or_else(
@@ -2879,8 +2889,8 @@ impl DataComponentCodec<Self> for BannerPatternsImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut layers = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut layers = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let _pattern = seq.get_var_int()?.0;
             let color_id = seq.get_var_int()?.0 as u8;
@@ -2953,7 +2963,8 @@ impl DataComponentCodec<Self> for ContainerImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_SIZE: usize = 256;
+        let len = read_count(seq, MAX_SIZE)?;
         let mut items = Vec::with_capacity(len);
         for slot in 0..len {
             if seq.get_bool()? {
@@ -2976,8 +2987,8 @@ impl DataComponentCodec<Self> for BlockStateImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut properties = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut properties = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let k = seq.get_str()?.to_string();
             let v = seq.get_str()?.to_string();
@@ -3545,6 +3556,16 @@ mod tests {
                     slice.len()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn oversized_tool_rule_count_is_rejected_without_preallocating() {
+        for count in [
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x07],
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        ] {
+            assert!(ToolImpl::deserialize(&mut count.as_slice()).is_err());
         }
     }
 }

@@ -17,6 +17,7 @@ const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
 pub enum SpawnGroupData {
     Ageable {
         group_size: u32,
+        should_spawn_baby: bool,
         baby_spawn_chance: f32,
     },
     School(std::sync::Weak<dyn EntityBase>),
