@@ -665,6 +665,8 @@ impl MobEntity {
         self.death_loot_table_seed
             .store(nbt.get_long("DeathLootTableSeed").unwrap_or(0), Relaxed);
         self.set_no_ai(nbt.get_bool("NoAI").unwrap_or(false));
+        self.living_entity
+            .apply_current_equipment_attribute_modifiers();
     }
 
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
