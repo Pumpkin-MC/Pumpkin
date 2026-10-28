@@ -2161,8 +2161,6 @@ interface event {
     }
 
     resource event {
-        get-type: func() -> event-type;
-
         get-player-join: func() -> result<player-join-event>;
         set-player-join: func(data: player-join-event) -> result;
 
