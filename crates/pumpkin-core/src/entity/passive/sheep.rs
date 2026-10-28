@@ -5,6 +5,8 @@ use std::sync::{
 
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Hand;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
@@ -20,13 +22,12 @@ use crate::entity::{
     mob::{Mob, MobEntity, spawn::SpawnGroupData},
     passive::animal::{Animal, get_dye_color_from_item},
     player::Player,
+    shearable::{Shearable, shear_by_player, shearing_loot},
 };
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::dye_color::DyeColor;
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable, WorldgenBiome};
@@ -36,6 +37,10 @@ use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+/// The dye color bits in vanilla's `DATA_WOOL_ID` byte.
+const COLOR_MASK: u8 = 0x0F;
+/// The sheared flag in vanilla's `DATA_WOOL_ID` byte.
+const SHEARED_BIT: u8 = 0x10;
 
 #[derive(Clone, Copy)]
 enum SheepColorProvider {
@@ -146,25 +151,31 @@ impl SheepEntity {
     }
 
     pub fn get_color(&self) -> u8 {
-        self.get_packed_byte() & 0x0F
+        self.get_packed_byte() & COLOR_MASK
     }
 
     pub fn is_sheared(&self) -> bool {
-        (self.get_packed_byte() & 0x10) != 0
+        (self.get_packed_byte() & SHEARED_BIT) != 0
     }
 
-    fn set_packed_and_sync(&self, byte: u8) {
-        self.color_and_sheared.store(byte, Ordering::Relaxed);
+    // No races due to atomic byte setters
+    fn sync_packed_byte(&self) {
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::sheep::WOOL_ID,
+            self.get_packed_byte() as i8,
+        );
         if let Some(meta) = self.mob_metadata() {
             entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
         }
     }
 
     pub fn set_color(&self, color: u8) {
-        let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
-        self.set_packed_and_sync(byte);
+        self.color_and_sheared
+            .update(Ordering::Relaxed, Ordering::Relaxed, |byte| {
+                (byte & !COLOR_MASK) | (color & COLOR_MASK)
+            });
+        self.sync_packed_byte();
     }
 
     fn get_random_sheep_color(&self, biome: &Biome) -> DyeColor {
@@ -209,53 +220,65 @@ impl SheepEntity {
         })
     }
 
-    pub fn ready_for_shearing(&self) -> bool {
-        !self.is_sheared() && !self.is_baby()
+    pub fn set_sheared(&self, sheared: bool) {
+        if sheared {
+            self.color_and_sheared
+                .fetch_or(SHEARED_BIT, Ordering::Relaxed);
+        } else {
+            self.color_and_sheared
+                .fetch_and(!SHEARED_BIT, Ordering::Relaxed);
+        }
+        self.sync_packed_byte();
     }
+}
 
-    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+impl Shearable for SheepEntity {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if self
+            .color_and_sheared
+            .fetch_or(SHEARED_BIT, Ordering::Relaxed)
+            & SHEARED_BIT
+            != 0
+        {
+            return false;
+        }
+
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.play_sound(Sound::EntitySheepShear, category, &pos);
-        let color = DyeColor::from(self.get_color());
-        if let Some(table) =
-            world.get_loot_table(&format!("minecraft:shearing/sheep/{}", color.name()))
-        {
-            let params = LootContextParameters {
-                world: Some(&world),
-                position: Some(pos),
-                this_entity: Some(self),
-                tool: Some(tool.clone()),
-                ..Default::default()
-            };
-            let mut rng = self.get_random();
-            for stack in generate_loot_from_handle(&table, rng.random(), &params) {
-                for _ in 0..stack.item_count {
-                    let item_entity = ItemEntity::new(
-                        Entity::new(world.clone(), pos.add_raw(0.0, 1.0, 0.0), &EntityType::ITEM),
-                        stack.copy_with_count(1),
-                    );
-                    let velocity = &item_entity.get_entity().velocity;
-                    velocity.store(velocity.load().add_raw(
-                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
-                        f64::from(rng.random::<f32>() * 0.05),
-                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
-                    ));
-                    world.spawn_entity(Arc::new(item_entity));
-                }
+        world.play_sound(Sound::EntitySheepShear, sound_category, &pos);
+
+        let color = DyeColor::by_id(self.get_color()).unwrap_or(DyeColor::White);
+        let loot_key = format!("minecraft:shearing/sheep/{}", color.name()); // is there a better way to do this
+        let drop_pos = Vector3::new(pos.x, pos.y + 1.0, pos.z);
+        let mut rng = rand::rng();
+        for drop in shearing_loot(entity, &loot_key, tool) {
+            for _ in 0..drop.item_count {
+                let item_entity = ItemEntity::new(
+                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                    drop.copy_with_count(1),
+                );
+                let item_base = item_entity.get_entity();
+                item_base.velocity.store(
+                    item_base.velocity.load()
+                        + Vector3::new(
+                            // magic numbers from vanilla
+                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                            f64::from(rng.random::<f32>() * 0.05),
+                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                        ),
+                );
+                world.spawn_entity(Arc::new(item_entity));
             }
         }
+
+        // Bit is set, send change to clients
         self.set_sheared(true);
+        true
     }
 
-    pub fn set_sheared(&self, sheared: bool) {
-        let byte = if sheared {
-            self.get_packed_byte() | 0x10
-        } else {
-            self.get_packed_byte() & !0x10
-        };
-        self.set_packed_and_sync(byte);
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_sheared() && !self.is_baby()
     }
 }
 
@@ -321,6 +344,10 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
         let mut meta = crate::entity::mob::MobMetadata::new()
             .sheep_wool(DyeColor::from(self.get_color()), self.is_sheared());
@@ -352,7 +379,7 @@ impl Mob for SheepEntity {
             .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
             .unwrap_or(false);
         let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-        let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
+        let byte = (color & COLOR_MASK) | if sheared { SHEARED_BIT } else { 0 };
         self.color_and_sheared.store(byte, Ordering::Relaxed);
     }
 
@@ -384,23 +411,11 @@ impl Mob for SheepEntity {
             if !self.ready_for_shearing() {
                 return true;
             }
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                    player: player.clone(),
-                    entity_id: entity.entity_id,
-                    hand: 0,
-                    cancelled: false,
-                };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return false;
-                }
+            if !shear_by_player(self, player, item_stack) {
+                return false;
             }
-            self.shear(SoundCategory::Players, item_stack);
-            world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-            let _ = player.damage_item_stack(item_stack, 1);
+            // Vanilla returns `SUCCESS_SERVER` here, so the client waits for the server to swing its arm.
+            player.swing_hand(Hand::Right, true);
             return true;
         }
 
