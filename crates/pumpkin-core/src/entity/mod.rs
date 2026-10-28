@@ -184,6 +184,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         self.get_entity().read_nbt_non_mut(nbt);
+        if let Some(cube) = self.get_mob().and_then(|mob| mob.as_cube_mob()) {
+            // AbstractCubeMob reads Size before LivingEntity restores health.
+            cube.read_size(nbt);
+        }
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
         }
@@ -644,6 +648,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn push(&self, entity: &dyn EntityBase) {
+        self.push_away(entity);
+        if let Some(mob) = self.get_mob()
+            && let Some(cube) = mob.as_cube_mob()
+            && entity.get_entity().entity_type == &EntityType::IRON_GOLEM
+        {
+            cube.deal_damage(mob, entity);
+        }
+    }
+
+    fn push_away(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
@@ -2931,7 +2945,9 @@ impl Entity {
 
     #[must_use]
     pub fn is_on_fire(&self) -> bool {
-        self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
+        self.entity_type != &EntityType::MAGMA_CUBE
+            && (self.fire_ticks.load(Ordering::Relaxed) > 0
+                || self.has_visual_fire.load(Ordering::Relaxed))
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {

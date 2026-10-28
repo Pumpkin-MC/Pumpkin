@@ -13,6 +13,8 @@ struct Attributes {
     id: u8,
     /// Default numeric value applied to entities that do not override this attribute.
     default_value: f64,
+    min_value: f64,
+    max_value: f64,
 }
 
 /// Generates the `TokenStream` for the `Attributes` struct and its associated constants.
@@ -33,12 +35,16 @@ pub fn build() -> TokenStream {
 
         let id_lit = LitInt::new(&raw_value.id.to_string(), Span::call_site());
         let default_value_lit = raw_value.default_value;
+        let min_value = raw_value.min_value;
+        let max_value = raw_value.max_value;
         let name_str = format!("minecraft:{raw_name}");
 
         constant_defs.push(quote!(
             pub const #constant_ident: Self = Self {
                 id: #id_lit,
                 default_value: #default_value_lit,
+                min_value: #min_value,
+                max_value: #max_value,
                 name: #name_str,
             };
         ));
@@ -51,6 +57,8 @@ pub fn build() -> TokenStream {
         pub struct Attributes {
             pub id: u8,
             pub default_value: f64,
+            pub min_value: f64,
+            pub max_value: f64,
             pub name: &'static str,
         }
         impl PartialEq for Attributes {
