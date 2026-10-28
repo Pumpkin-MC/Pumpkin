@@ -14,6 +14,7 @@ use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -71,7 +72,11 @@ impl FishingBobberEntity {
                     .multiply(0.1, 0.1, 0.1)
                     .add_raw(0.0, delta.length().sqrt() * 0.08, 0.0);
             hooked.get_entity().add_velocity(motion);
-            world.send_entity_status(&self.entity, EntityStatus::FishingRodReelIn, None);
+            world.send_entity_status(
+                &self.entity,
+                EntityStatus::FishingRodReelIn,
+                ActorEventID::FishhookHookTime,
+            );
             dmg = if hooked.get_entity().entity_type == &EntityType::ITEM {
                 3
             } else {
@@ -272,6 +277,20 @@ impl FishingBobberEntity {
 impl EntityBase for FishingBobberEntity {
     fn get_owner_id(&self) -> Option<i32> {
         Some(self.owner_id)
+    }
+
+    fn entity_bedrock_spawn_metadata(
+        &self,
+    ) -> Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList> {
+        let mut meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+        meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::OWNER,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(i64::from(
+                self.owner_id,
+            )),
+        );
+        Some(meta)
     }
 
     fn get_entity(&self) -> &Entity {

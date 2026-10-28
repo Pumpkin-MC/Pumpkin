@@ -109,11 +109,7 @@ impl EntityBase for LingeringPotionEntity {
             .clone();
 
         // Play impact particles
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
 
