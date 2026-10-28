@@ -1,10 +1,10 @@
-use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
 
 use super::{FoliagePlacer, LeaveValidator};
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -20,19 +20,19 @@ impl CherryFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
+        foliage_positions: &mut Vec<BlockPos>,
         chunk: &mut T,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
         leaf_radius: i32,
         offset: i32,
-        foliage_provider: &BlockState,
-    ) -> Vec<BlockPos> {
-        let mut foliage_positions = Vec::new();
+        foliage_provider: &BlockStateProvider,
+    ) {
         let pos = node.center.up_height(offset);
         let current_radius = leaf_radius + node.foliage_radius - 1;
         FoliagePlacer::generate_square(
-            &mut foliage_positions,
+            foliage_positions,
             self,
             chunk,
             random,
@@ -43,7 +43,7 @@ impl CherryFoliagePlacer {
             foliage_provider,
         );
         FoliagePlacer::generate_square(
-            &mut foliage_positions,
+            foliage_positions,
             self,
             chunk,
             random,
@@ -55,7 +55,7 @@ impl CherryFoliagePlacer {
         );
         for y in (0..=foliage_height - 5).rev() {
             FoliagePlacer::generate_square(
-                &mut foliage_positions,
+                foliage_positions,
                 self,
                 chunk,
                 random,
@@ -68,7 +68,7 @@ impl CherryFoliagePlacer {
         }
 
         FoliagePlacer::generate_square_with_hanging_leaves(
-            &mut foliage_positions,
+            foliage_positions,
             self,
             chunk,
             random,
@@ -82,7 +82,7 @@ impl CherryFoliagePlacer {
         );
 
         FoliagePlacer::generate_square_with_hanging_leaves(
-            &mut foliage_positions,
+            foliage_positions,
             self,
             chunk,
             random,
@@ -94,7 +94,6 @@ impl CherryFoliagePlacer {
             self.hanging_leaves_chance,
             self.hanging_leaves_extension_chance,
         );
-        foliage_positions
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
         self.height.get(random)

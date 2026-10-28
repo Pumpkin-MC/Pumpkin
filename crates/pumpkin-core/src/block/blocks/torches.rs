@@ -1,4 +1,7 @@
-use crate::block::BlockIsReplacing;
+use crate::block::{
+    BlockBehaviour, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs, can_support_center,
+};
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::Facing;
@@ -9,10 +12,6 @@ use pumpkin_world::world::BlockAccessor;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
-
-use crate::block::{
-    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-};
 
 pub struct TorchBlock;
 
@@ -32,11 +31,10 @@ impl BlockMetadata for TorchBlock {
 
 impl BlockBehaviour for TorchBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return args.block.default_state.id;
-            }
+        if args.direction == BlockDirection::Down
+            && can_support_center(args.world, &args.position.down(), BlockDirection::Up)
+        {
+            return args.block.default_state.id;
         }
         let mut directions = args.player.get_entity().get_entity_facing_order();
 
@@ -51,11 +49,10 @@ impl BlockBehaviour for TorchBlock {
                 directions.copy_within(0..i, 1);
                 directions[0] = face;
             }
-        } else if directions[0] == Facing::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return args.block.default_state.id;
-            }
+        } else if directions[0] == Facing::Down
+            && can_support_center(args.world, &args.position.down(), BlockDirection::Up)
+        {
+            return args.block.default_state.id;
         }
 
         for dir in directions {
@@ -80,8 +77,7 @@ impl BlockBehaviour for TorchBlock {
             }
         }
 
-        let support_block = args.world.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
+        if can_support_center(args.world, &args.position.down(), BlockDirection::Up) {
             args.block.default_state.id
         } else {
             BlockStateId::AIR
@@ -89,8 +85,30 @@ impl BlockBehaviour for TorchBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let support_block = args.block_accessor.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
+        if args.player.is_none() {
+            if args.block == &Block::WALL_TORCH
+                || args.block == &Block::SOUL_WALL_TORCH
+                || args.block == &Block::COPPER_WALL_TORCH
+            {
+                let props = WallTorchProps::from_state_id(args.state.id);
+                return can_place_at(
+                    args.block_accessor,
+                    args.position,
+                    props.facing.to_block_direction().opposite(),
+                );
+            }
+            return can_support_center(
+                args.block_accessor,
+                &args.position.down(),
+                BlockDirection::Up,
+            );
+        }
+
+        if can_support_center(
+            args.block_accessor,
+            &args.position.down(),
+            BlockDirection::Up,
+        ) {
             return true;
         }
         for dir in BlockDirection::horizontal() {
@@ -119,11 +137,10 @@ impl BlockBehaviour for TorchBlock {
             {
                 return BlockStateId::AIR;
             }
-        } else if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.position.down());
-            if !support_block.is_center_solid(BlockDirection::Up) {
-                return BlockStateId::AIR;
-            }
+        } else if args.direction == BlockDirection::Down
+            && !can_support_center(args.world, &args.position.down(), BlockDirection::Up)
+        {
+            return BlockStateId::AIR;
         }
         args.state_id
     }

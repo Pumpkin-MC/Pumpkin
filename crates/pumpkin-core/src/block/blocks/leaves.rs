@@ -132,8 +132,10 @@ impl BlockBehaviour for LeavesBlock {
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        let below = args.position.down();
         args.block == &Block::MANGROVE_LEAVES
-            && args.world.get_block_state(&args.position.down()).is_air()
+            && args.world.is_in_build_limit(below)
+            && args.world.get_block_state(&below).is_air()
     }
 
     fn is_bonemeal_success(&self, args: BonemealArgs<'_>) -> bool {

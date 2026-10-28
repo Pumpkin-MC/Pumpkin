@@ -1070,9 +1070,9 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a52aa3fcda4e6302a9f48734f234d35d4721b96f8fe07d073f07ce9df4f0271"
+checksum = "6bb08299a6046833a879ace115697f12fd2bd6c8d3e93c909ffc9e0738e7cae0"
 dependencies = [
  "cpubits",
  "ctutils",
@@ -1314,7 +1314,7 @@ checksum = "6ebaa1a2bf1290ab3bfe5a7b771d050ebffab2711c19a81691c683a5144a25de"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
- "sha2 0.11.0",
+ "sha2 0.11.1",
  "subtle",
 ]
 
@@ -2652,9 +2652,9 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "ordered-float"
-version = "5.4.0"
+version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c860fd3227ca4ac3cc032e2cd20cba3f02ccdf4b610538f8ee6584d56bb62e96"
+checksum = "8c7c9e0d9b23589f26070720bac724174bfec1083e82f7854cdd0267518343c0"
 dependencies = [
  "num-traits",
 ]
@@ -2670,7 +2670,7 @@ dependencies = [
  "fiat-crypto",
  "primefield",
  "primeorder",
- "sha2 0.11.0",
+ "sha2 0.11.1",
 ]
 
 [[package]]
@@ -3035,7 +3035,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "console-subscriber",
  "pumpkin-config",
@@ -3052,7 +3052,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-api-macros"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -3062,7 +3062,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-auth"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "base64 0.23.1",
  "crypto-bigint",
@@ -3074,7 +3074,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "sha2 0.11.0",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "uuid",
  "webpki-root-certs",
@@ -3082,7 +3082,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "serde_json",
  "tracing",
@@ -3110,7 +3110,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-command"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "pumpkin-codecs",
  "pumpkin-data",
@@ -3125,7 +3125,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "pumpkin-util",
  "rand 0.10.3",
@@ -3137,7 +3137,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-core"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "aes 0.9.3",
  "arc-swap",
@@ -3184,7 +3184,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sha1 0.11.0",
- "sha2 0.11.0",
+ "sha2 0.11.1",
  "subtle",
  "sysinfo",
  "tempfile",
@@ -3201,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "crc32c",
  "criterion",
@@ -3219,7 +3219,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-fuzzer"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "clap",
  "colored",
@@ -3229,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-gametest"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "async-trait",
  "pumpkin-data",
@@ -3245,7 +3245,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
@@ -3259,7 +3259,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -3270,7 +3270,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "bytes",
  "cesu8",
@@ -3285,7 +3285,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-api"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "postcard",
  "serde_json",
@@ -3296,7 +3296,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-runtime"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "futures",
  "thiserror 2.0.21",
@@ -3308,7 +3308,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-utils"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "pumpkin-plugin-api",
  "reqwest",
@@ -3323,7 +3323,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "aes 0.9.3",
  "async-compression",
@@ -3347,7 +3347,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-scheduler"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "futures",
  "thiserror 2.0.21",
@@ -3357,7 +3357,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-tester"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "bytes",
  "pumpkin-config",
@@ -3377,7 +3377,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "bytes",
  "colored",
@@ -3399,7 +3399,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-wasm-host"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "pumpkin-core",
  "pumpkin-plugin-runtime",
@@ -3417,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-wasm-host-common"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "ed25519-dalek",
  "hex",
@@ -3445,7 +3445,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-wasm-host-v0_1"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "bytes",
  "pumpkin-config",
@@ -3470,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-wasm-host-v0_2"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "bytes",
  "pumpkin-config",
@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.2.0+26.3-26.51"
+version = "0.2.1+26.3-26.51"
 dependencies = [
  "arc-swap",
  "bitflags 2.13.2",
@@ -3518,7 +3518,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
- "sha2 0.11.0",
+ "sha2 0.11.1",
  "slotmap",
  "tempfile",
  "thiserror 2.0.21",
@@ -4465,9 +4465,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
+checksum = "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
@@ -4678,9 +4678,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.38.4"
+version = "0.39.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ab6a2f8bfe508deb3c6406578252e491d299cbbf3bc0529ecc3313aee4a52f"
+checksum = "d2071df9448915b71c4fe6d25deaf1c22f12bd234f01540b77312bb8e41361e6"
 dependencies = [
  "libc",
  "memchr",

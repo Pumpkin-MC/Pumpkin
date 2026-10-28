@@ -60,7 +60,7 @@ impl Goal for BegGoal {
         let pos = mob_entity.living_entity.entity.pos.load();
 
         let Some(player) = world.get_nearest_player(pos, self.look_distance, |player| {
-            player.living_entity.is_part_of_game()
+            player.can_be_seen_by_anyone()
         }) else {
             return false;
         };

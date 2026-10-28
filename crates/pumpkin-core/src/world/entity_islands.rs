@@ -309,9 +309,12 @@ impl EntityReach {
             TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity
-            .cast_any()
-            .downcast_ref::<TNTEntity>()
-            .is_some_and(TNTEntity::is_about_to_explode);
+            .get_mob()
+            .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+            || entity
+                .cast_any()
+                .downcast_ref::<TNTEntity>()
+                .is_some_and(TNTEntity::is_about_to_explode);
         Self::Conservative(reach)
     }
 }
@@ -337,6 +340,11 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
         }
     }
     links.extend(entity.get_owner_id());
+    if let Some(fish) = entity.get_mob().and_then(|mob| mob.as_schooling_fish())
+        && let Some(leader) = fish.leader()
+    {
+        links.push(leader.get_entity().entity_id);
+    }
     if let Some(mob) = entity.get_mob()
         && let Some(target) = mob.get_mob_entity().get_target()
     {
@@ -346,7 +354,7 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
         // Kill credit on death.
         for attacker in [
             living.last_hurt_by_player_id.load(Relaxed),
-            living.last_hurt_by_mob_id.load(Relaxed),
+            living.get_last_hurt_by_mob_id().unwrap_or(0),
         ] {
             if attacker != 0 {
                 links.push(attacker);

@@ -4,7 +4,10 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use super::tree::{TreeFeature, decorator::TreeDecorator};
+use super::{
+    JavaBlockPosHashSet,
+    tree::{TreeFeature, decorator::TreeDecorator},
+};
 use crate::{
     generation::{block_state_provider::BlockStateProvider, proto_chunk::GenerationCache},
     world::WorldPortalExt,
@@ -118,7 +121,7 @@ impl FallenTreeFeature {
         mut log_start_pos: BlockPos,
         direction: BlockDirection,
     ) {
-        let mut fallen_log = Vec::with_capacity(log_length.max(0) as usize);
+        let mut fallen_log = JavaBlockPosHashSet::new();
         let offset = direction.to_offset();
 
         for _ in 0..log_length {
@@ -129,10 +132,11 @@ impl FallenTreeFeature {
                 log_start_pos,
                 Some(direction),
             );
-            fallen_log.push(placed);
+            fallen_log.insert(placed);
             log_start_pos = log_start_pos.offset(offset);
         }
 
+        let fallen_log = fallen_log.into_vec();
         Self::decorate_logs(
             chunk,
             block_registry,
