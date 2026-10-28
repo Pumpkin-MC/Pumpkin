@@ -13,29 +13,36 @@
     clippy::struct_excessive_bools
 )]
 
+use crate::Server;
 use crate::command::argument_builder::{
-    ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
+    ArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::coordinates::swizzle::SwizzleArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
+use crate::command::argument_types::core::double::DoubleArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::{EntityAnchorArgumentType, EntityAnchorExt};
 use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
-use crate::command::argument_types::objective::ObjectiveArgumentType;
+use crate::command::argument_types::objective::{ObjectiveArgumentType, criterion_is_read_only};
 use crate::command::argument_types::range::{FloatRangeArgumentType, IntRangeArgumentType};
 use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
 use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
 use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
-use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
+use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
+use crate::command::commands::bossbar::{BossbarIdArgumentType, ERROR_UNKNOWN_BOSSBAR};
 use crate::command::commands::data::{
-    BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor,
+    BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor, TargetKind,
+    make_target_arg,
 };
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::{
+    ResultValueTaker, ReturnValue, ReturnValueCallable, ReturnValueCallback,
+};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::attached::{CommandNodeId, NodeId};
@@ -46,7 +53,8 @@ use crate::command::node::{
 };
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
-use crate::world::scoreboard::Scoreboard;
+use crate::world::World;
+use crate::world::scoreboard::{NoTarget, Scoreboard, ScoreboardObjective, ScoreboardTarget};
 use crate::world::stopwatches::Stopwatches;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::tag::{self, RegistryKey};
@@ -58,6 +66,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::hover::HoverEvent;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -460,6 +469,305 @@ fn get_score(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     get_score_value(&scoreboard, target, objective)
+}
+
+const READ_ONLY_SCORE: &str = "Cannot modify read-only score";
+
+const READ_ONLY_STORE_ERROR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_FAILED,
+    translation::java::COMMAND_FAILED,
+);
+
+struct StoreScore {
+    world: Arc<World>,
+    targets: Vec<ResolvedScoreHolder>,
+    objective: ScoreboardObjective,
+    store_result: bool,
+}
+
+impl ReturnValueCallable for StoreScore {
+    fn call(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        let value = stored_amount(result, self.store_result);
+        let mut scoreboard = self
+            .world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        write_stored_score(
+            &mut scoreboard,
+            self.world.as_ref(),
+            &self.targets,
+            &self.objective,
+            value,
+        )
+    }
+}
+
+fn stored_amount(result: ReturnValue, store_result: bool) -> i32 {
+    if store_result {
+        result.result_value()
+    } else {
+        i32::from(result.success_value())
+    }
+}
+
+fn write_stored_score(
+    scoreboard: &mut Scoreboard,
+    target: &impl ScoreboardTarget,
+    targets: &[ResolvedScoreHolder],
+    objective: &ScoreboardObjective,
+    value: i32,
+) -> Result<(), CommandSyntaxError> {
+    let is_active = scoreboard
+        .get_objective(&objective.name)
+        .is_some_and(|active| objective.is_same(active));
+    if criterion_is_read_only(&objective.criterion) {
+        if is_active
+            && let Some(holder) = targets.first()
+            && scoreboard
+                .get_score(&holder.name, &objective.name)
+                .is_none()
+        {
+            scoreboard.set_score_value(&NoTarget, &holder.name, &objective.name, 0);
+        }
+        return Err(read_only_store_error());
+    }
+    if !is_active {
+        // This scoreboard cannot retain vanilla's orphan scores, so ignore a same-name replacement.
+        return Ok(());
+    }
+
+    for holder in targets {
+        scoreboard.set_score_value(target, &holder.name, &objective.name, value);
+    }
+    Ok(())
+}
+
+fn read_only_store_error() -> CommandSyntaxError {
+    #[expect(
+        deprecated,
+        reason = "vanilla reports command.failed and puts this text on the hover"
+    )]
+    let message = TextComponent::translate(translation::java::COMMAND_FAILED, Vec::new())
+        .hover_event(HoverEvent::show_text(TextComponent::text(READ_ONLY_SCORE)));
+    CommandSyntaxError::create_without_context(&READ_ONLY_STORE_ERROR, message)
+}
+
+fn store_score(context: &CommandContext, store_result: bool) -> RedirectModifierResult {
+    let targets = ScoreHolderArgumentType::get_score_holders(context, "targets")?;
+    let objective_name = ObjectiveArgumentType::get(context, "objective")?;
+    let world = context.source.world().clone();
+    let objective = {
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ObjectiveArgumentType::objective_or_error(&scoreboard, objective_name)?.clone()
+    };
+
+    let callback: ReturnValueCallback = Arc::new(StoreScore {
+        world,
+        targets,
+        objective,
+        store_result,
+    });
+    let source = context
+        .source
+        .as_ref()
+        .clone()
+        .merge_command_result_taker(&ResultValueTaker(vec![callback]));
+    Ok(vec![Arc::new(source)])
+}
+
+fn score_store(store_result: bool) -> LiteralArgumentBuilder {
+    literal("score").then(argument("targets", ScoreHolderArgumentType::Multiple).then(
+        argument("objective", ObjectiveArgumentType).redirect_with_modifier(
+            Redirection::Root,
+            RedirectModifier::Custom(Arc::new(move |context| store_score(context, store_result))),
+        ),
+    ))
+}
+
+struct StoreBossbar {
+    server: Arc<Server>,
+    id: String,
+    store_into_value: bool,
+    store_result: bool,
+}
+
+impl ReturnValueCallable for StoreBossbar {
+    fn call(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        let value = stored_amount(result, self.store_result);
+        let mut bossbars = self
+            .server
+            .bossbars
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Vanilla writes into the event it captured, so a removed bossbar or an unchanged value is not an error.
+        let _ = if self.store_into_value {
+            bossbars.update_value(&self.server, self.id.clone(), value)
+        } else {
+            bossbars.update_max(&self.server, self.id.clone(), value)
+        };
+        Ok(())
+    }
+}
+
+fn store_bossbar(
+    context: &CommandContext,
+    store_into_value: bool,
+    store_result: bool,
+) -> RedirectModifierResult {
+    let id = BossbarIdArgumentType::get(context, "id")?;
+    let server = context.source.server().clone();
+    let exists = server
+        .bossbars
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .has_bossbar(&id);
+    if !exists {
+        return Err(ERROR_UNKNOWN_BOSSBAR.create_without_context(TextComponent::text(id)));
+    }
+
+    let callback: ReturnValueCallback = Arc::new(StoreBossbar {
+        server,
+        id,
+        store_into_value,
+        store_result,
+    });
+    let source = context
+        .source
+        .as_ref()
+        .clone()
+        .merge_command_result_taker(&ResultValueTaker(vec![callback]));
+    Ok(vec![Arc::new(source)])
+}
+
+fn bossbar_store(store_result: bool) -> LiteralArgumentBuilder {
+    let target = |store_into_value: bool| {
+        RedirectModifier::Custom(Arc::new(move |context| {
+            store_bossbar(context, store_into_value, store_result)
+        }))
+    };
+    literal("bossbar").then(
+        argument("id", BossbarIdArgumentType)
+            .then(literal("value").redirect_with_modifier(Redirection::Root, target(true)))
+            .then(literal("max").redirect_with_modifier(Redirection::Root, target(false))),
+    )
+}
+
+#[derive(Clone, Copy)]
+enum StoreNumberType {
+    Int,
+    Float,
+    Short,
+    Long,
+    Double,
+    Byte,
+}
+
+impl StoreNumberType {
+    const ALL: [(Self, &'static str); 6] = [
+        (Self::Int, "int"),
+        (Self::Float, "float"),
+        (Self::Short, "short"),
+        (Self::Long, "long"),
+        (Self::Double, "double"),
+        (Self::Byte, "byte"),
+    ];
+
+    /// Mirrors the per-type constructors in vanilla's `ExecuteCommand.wrapStores`.
+    fn create_tag(self, value: i32, scale: f64) -> NbtTag {
+        let scaled = f64::from(value) * scale;
+        match self {
+            Self::Int => NbtTag::Int(scaled as i32),
+            Self::Float => NbtTag::Float(scaled as f32),
+            // Java narrows double to short/byte through int, so these wrap instead of saturating.
+            Self::Short => NbtTag::Short((scaled as i32) as i16),
+            Self::Long => NbtTag::Long(scaled as i64),
+            Self::Double => NbtTag::Double(scaled),
+            Self::Byte => NbtTag::Byte((scaled as i32) as i8),
+        }
+    }
+}
+
+struct StoreData {
+    accessor: Arc<dyn DataAccessor>,
+    path: NbtPath,
+    number_type: StoreNumberType,
+    scale: f64,
+    store_result: bool,
+}
+
+impl ReturnValueCallable for StoreData {
+    fn call(&self, result: ReturnValue) -> Result<(), CommandSyntaxError> {
+        let value = stored_amount(result, self.store_result);
+        // Vanilla swallows every syntax error raised while writing the stored value.
+        let _ = (|| {
+            let mut root = NbtTag::Compound(self.accessor.get_data()?);
+            self.path
+                .set(&mut root, self.number_type.create_tag(value, self.scale))?;
+            if let NbtTag::Compound(data) = root {
+                self.accessor.set_data(&data)?;
+            }
+            Ok::<(), CommandSyntaxError>(())
+        })();
+        Ok(())
+    }
+}
+
+fn store_data(
+    context: &CommandContext,
+    target_kind: TargetKind,
+    number_type: StoreNumberType,
+    store_result: bool,
+) -> RedirectModifierResult {
+    let accessor: Arc<dyn DataAccessor> = Arc::from(target_kind.access(context, "target")?);
+    let path = NbtPathArgumentType::get(context, "path")?.clone();
+    let scale = DoubleArgumentType::get(context, "scale")?;
+
+    let callback: ReturnValueCallback = Arc::new(StoreData {
+        accessor,
+        path,
+        number_type,
+        scale,
+        store_result,
+    });
+    let source = context
+        .source
+        .as_ref()
+        .clone()
+        .merge_command_result_taker(&ResultValueTaker(vec![callback]));
+    Ok(vec![Arc::new(source)])
+}
+
+fn data_store(
+    target_kind: TargetKind,
+    name: &'static str,
+    store_result: bool,
+) -> LiteralArgumentBuilder {
+    let mut path = argument("path", NbtPathArgumentType);
+    for (number_type, type_name) in StoreNumberType::ALL {
+        path = path.then(literal(type_name).then(
+            argument("scale", DoubleArgumentType::any()).redirect_with_modifier(
+                Redirection::Root,
+                RedirectModifier::Custom(Arc::new(move |context| {
+                    store_data(context, target_kind, number_type, store_result)
+                })),
+            ),
+        ));
+    }
+    literal(name).then(make_target_arg(target_kind, "target_target").then(path))
+}
+
+fn store_targets(store_result: bool) -> LiteralArgumentBuilder {
+    let mode = if store_result { "result" } else { "success" };
+    literal(mode)
+        .then(score_store(store_result))
+        .then(bossbar_store(store_result))
+        .then(data_store(TargetKind::Entity, "entity", store_result))
+        .then(data_store(TargetKind::Block, "block", store_result))
+        .then(data_store(TargetKind::Storage, "storage", store_result))
 }
 
 struct ConditionalExecutor(fn(&CommandContext) -> RedirectModifierResult);
@@ -1541,6 +1849,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         ),
                     )),
                 ),
+        )
+        .then(
+            literal("store")
+                .then(store_targets(true))
+                .then(store_targets(false)),
         );
 
     let execute_node_id = dispatcher.register(builder);
@@ -1570,6 +1883,253 @@ mod tests {
     use crate::command::CommandSource;
     use crate::world::scoreboard::{NoTarget, ScoreboardObjective};
     use pumpkin_protocol::java::client::play::RenderType;
+    use pumpkin_protocol::{BClientPacket, ClientPacket};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingTarget(AtomicUsize);
+
+    impl ScoreboardTarget for CountingTarget {
+        fn send_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+            &self,
+            _je_packet: &J,
+            _be_packet: &B,
+        ) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+
+        fn send_je<J: ClientPacket + Sync>(&self, _je_packet: &J) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn objective(name: &str, criterion: &str) -> ScoreboardObjective {
+        ScoreboardObjective::new(
+            name,
+            TextComponent::text(name.to_string()),
+            RenderType::Integer,
+            None,
+            criterion,
+        )
+    }
+
+    fn resolved_holder(name: &str) -> ResolvedScoreHolder {
+        ResolvedScoreHolder {
+            name: name.to_string(),
+            display_name: TextComponent::text(name.to_string()),
+        }
+    }
+
+    #[test]
+    fn store_modes_keep_command_result_separate_from_success() {
+        for (result, expected_result, expected_success) in [
+            (ReturnValue::Success(42), 42, 1),
+            (ReturnValue::Success(0), 0, 1),
+            (ReturnValue::Success(-7), -7, 1),
+            (ReturnValue::Failure, 0, 0),
+        ] {
+            assert_eq!(stored_amount(result, true), expected_result);
+            assert_eq!(stored_amount(result, false), expected_success);
+        }
+    }
+
+    #[test]
+    fn store_score_registers_result_and_success_syntax() {
+        let mut dispatcher = CommandDispatcher::new();
+        let registry = PermissionRegistry::default();
+        register(&mut dispatcher, &registry);
+        crate::command::commands::time::register(&mut dispatcher, &registry);
+        let source = Arc::new(CommandSource::dummy());
+
+        for mode in ["result", "success"] {
+            let input =
+                format!("execute store {mode} score holder objective run time query daytime");
+            let parsed = dispatcher.parse_input(&input, &source);
+            assert!(parsed.errors.is_empty(), "{input}: {:?}", parsed.errors);
+            assert_eq!(parsed.reader.remaining_length(), 0, "{input}");
+            assert!(
+                parsed
+                    .context
+                    .build(&input)
+                    .get_last_child()
+                    .command
+                    .is_some(),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn store_data_and_bossbar_register_every_target_syntax() {
+        let mut dispatcher = CommandDispatcher::new();
+        let registry = PermissionRegistry::default();
+        register(&mut dispatcher, &registry);
+        crate::command::commands::time::register(&mut dispatcher, &registry);
+        let source = Arc::new(CommandSource::dummy());
+
+        for target in [
+            "storage minecraft:test path.to.value int 1",
+            "storage minecraft:test path byte 0.5",
+            "block 0 64 0 Items[0].count short -2.5",
+            "entity @s Health float 1",
+            "bossbar minecraft:test value",
+            "bossbar minecraft:test max",
+        ] {
+            let input = format!("execute store result {target} run time query daytime");
+            let parsed = dispatcher.parse_input(&input, &source);
+            assert!(parsed.errors.is_empty(), "{input}: {:?}", parsed.errors);
+            assert_eq!(parsed.reader.remaining_length(), 0, "{input}");
+        }
+    }
+
+    #[test]
+    fn store_number_types_narrow_like_java_casts() {
+        assert_eq!(
+            StoreNumberType::Short.create_tag(40000, 1.0),
+            NbtTag::Short(-25536)
+        );
+        assert_eq!(
+            StoreNumberType::Byte.create_tag(200, 1.0),
+            NbtTag::Byte(-56)
+        );
+        assert_eq!(StoreNumberType::Int.create_tag(7, 0.5), NbtTag::Int(3));
+        assert_eq!(StoreNumberType::Int.create_tag(-7, 0.5), NbtTag::Int(-3));
+        assert_eq!(
+            StoreNumberType::Double.create_tag(3, 0.1),
+            NbtTag::Double(3.0 * 0.1)
+        );
+        assert_eq!(
+            StoreNumberType::Long.create_tag(i32::MAX, 4.0),
+            NbtTag::Long(i64::from(i32::MAX) * 4)
+        );
+    }
+
+    #[test]
+    fn score_store_writes_result_values_to_every_resolved_holder() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let holders = [resolved_holder("first"), resolved_holder("second")];
+        let objective = scoreboard.get_objective("dummy").unwrap().clone();
+
+        for value in [42, 0, -7] {
+            write_stored_score(&mut scoreboard, &NoTarget, &holders, &objective, value).unwrap();
+            for holder in &holders {
+                assert_eq!(
+                    scoreboard
+                        .get_score(&holder.name, "dummy")
+                        .map(|score| score.value.0),
+                    Some(value)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn readonly_score_store_inserts_only_the_first_missing_zero_and_fails() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("health", "health"));
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let holders = [resolved_holder("missing"), resolved_holder("later")];
+        let target = CountingTarget(AtomicUsize::new(0));
+        let health = scoreboard.get_objective("health").unwrap().clone();
+
+        let error =
+            write_stored_score(&mut scoreboard, &target, &holders, &health, 42).unwrap_err();
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(
+            scoreboard.get_score("missing", "health").map(|s| s.value.0),
+            Some(0)
+        );
+        assert_eq!(scoreboard.get_score("later", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+
+        scoreboard.set_score_value(&NoTarget, "existing", "health", 7);
+        let error = write_stored_score(
+            &mut scoreboard,
+            &target,
+            &[resolved_holder("existing"), resolved_holder("later")],
+            &health,
+            42,
+        )
+        .unwrap_err();
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(
+            scoreboard
+                .get_score("existing", "health")
+                .map(|s| s.value.0),
+            Some(7)
+        );
+        assert_eq!(scoreboard.get_score("later", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn score_store_ignores_removed_and_recreated_objective() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let captured = scoreboard.get_objective("dummy").unwrap().clone();
+        let holders = [resolved_holder("holder")];
+
+        scoreboard.remove_objective(&NoTarget, "dummy");
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let replacement = scoreboard.get_objective("dummy").unwrap();
+        assert!(!captured.is_same(replacement));
+
+        write_stored_score(&mut scoreboard, &NoTarget, &holders, &captured, 42).unwrap();
+        assert_eq!(scoreboard.get_score("holder", "dummy"), None);
+    }
+
+    #[test]
+    fn objective_update_preserves_identity_for_pending_score_store() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("dummy", "dummy"));
+        let captured = scoreboard.get_objective("dummy").unwrap().clone();
+        let updated = ScoreboardObjective::new(
+            "dummy",
+            TextComponent::text("updated"),
+            RenderType::Integer,
+            None,
+            "dummy",
+        );
+
+        scoreboard.update_objective(&NoTarget, updated);
+
+        assert!(captured.is_same(scoreboard.get_objective("dummy").unwrap()));
+        write_stored_score(
+            &mut scoreboard,
+            &NoTarget,
+            &[resolved_holder("holder")],
+            &captured,
+            42,
+        )
+        .unwrap();
+        assert_eq!(
+            scoreboard.get_score("holder", "dummy").map(|s| s.value.0),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn removed_readonly_objective_still_fails_without_touching_replacement() {
+        let mut scoreboard = Scoreboard::new();
+        scoreboard.add_objective(&NoTarget, objective("health", "health"));
+        let captured = scoreboard.get_objective("health").unwrap().clone();
+        scoreboard.remove_objective(&NoTarget, "health");
+        scoreboard.add_objective(&NoTarget, objective("health", "dummy"));
+        let target = CountingTarget(AtomicUsize::new(0));
+
+        let error = write_stored_score(
+            &mut scoreboard,
+            &target,
+            &[resolved_holder("missing")],
+            &captured,
+            42,
+        )
+        .unwrap_err();
+
+        assert!(error.is(&READ_ONLY_STORE_ERROR));
+        assert_eq!(scoreboard.get_score("missing", "health"), None);
+        assert_eq!(target.0.load(Ordering::Relaxed), 0);
+    }
 
     #[test]
     fn score_lookup_distinguishes_missing_objectives_and_scores() {
