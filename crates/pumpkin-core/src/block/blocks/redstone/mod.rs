@@ -1,8 +1,6 @@
-/**
- * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
- * Updated to fit pumpkin by 4lve
- */
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, block_properties::RedstoneWireLikeProperties,
+};
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
@@ -33,6 +31,9 @@ pub mod tripwire_hook;
 // abstract
 pub mod abstract_redstone_gate;
 pub mod dispenser;
+
+/// Strongest redstone signal (`Redstone.SIGNAL_MAX`).
+pub const SIGNAL_MAX: u8 = 15;
 
 pub fn is_emitting_redstone_power(
     block: &Block,
@@ -160,8 +161,12 @@ pub fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: BlockDire
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_state(&input_pos);
     let power: u8 = get_redstone_power(input_block, input_state, world, &input_pos, facing);
-    if power == 0 && input_state.is_solid_block() {
-        return get_max_weak_power(world, &input_pos, true);
+    if power >= 15 {
+        return power;
     }
-    power
+    power.max(if input_block == &Block::REDSTONE_WIRE {
+        RedstoneWireLikeProperties::from_state_id(input_state.id).power
+    } else {
+        0
+    })
 }

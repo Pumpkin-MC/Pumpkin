@@ -13,6 +13,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::CaveVinesLikeProperties;
 use pumpkin_data::block_properties::KelpLikeProperties;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -32,10 +33,10 @@ impl ItemMetadata for ShearsItem {
 impl ItemBehaviour for ShearsItem {
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
-        _face: BlockDirection,
+        face: BlockDirection,
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
@@ -43,15 +44,15 @@ impl ItemBehaviour for ShearsItem {
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
-        if handle_growing_plant(player, &location, block, state_id) {
+        if handle_growing_plant(item, player, &location, block, state_id) {
             return BlockActionResult::Success;
         }
 
-        if handle_beehive(player, &location, block, state_id) {
+        if handle_beehive(item, player, &location, block, state_id) {
             return BlockActionResult::Success;
         }
 
-        if handle_pumpkin(player, &location, block) {
+        if handle_pumpkin(item, player, &location, face, block) {
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass
@@ -64,6 +65,7 @@ impl ItemBehaviour for ShearsItem {
 }
 
 fn handle_growing_plant(
+    item: &mut ItemStack,
     player: &Player,
     location: &BlockPos,
     block: &Block,
@@ -89,16 +91,20 @@ fn handle_growing_plant(
 
     let world = player.world();
     world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
     world.play_sound(
         Sound::BlockGrowingPlantCrop,
         SoundCategory::Blocks,
         &location.to_f64(),
     );
-    player.damage_held_item(1);
+    if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+        let _ = item.damage_item(1);
+    }
     true
 }
 
 fn handle_beehive(
+    item: &mut ItemStack,
     player: &Player,
     location: &BlockPos,
     block: &Block,
@@ -144,22 +150,43 @@ fn handle_beehive(
     );
 
     let drop_pos = location.to_centered_f64();
-    for item in drops {
+    for drop_item in drops {
         let item_entity = Arc::new(ItemEntity::new(
             Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-            item,
+            drop_item,
         ));
         world.spawn_entity(item_entity);
     }
-    player.damage_held_item(1);
+    if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+        let _ = item.damage_item(1);
+    }
     true
 }
 
-fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) -> bool {
+fn handle_pumpkin(
+    item: &mut ItemStack,
+    player: &Player,
+    location: &BlockPos,
+    face: BlockDirection,
+    block: &Block,
+) -> bool {
     if block.id == BlockId::PUMPKIN {
         let world = player.world();
-        let carved_state = Block::CARVED_PUMPKIN.default_state.id;
-        world.set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL);
+        let mut props = pumpkin_data::block_properties::WallTorchLikeProperties::default(
+            &Block::CARVED_PUMPKIN,
+        );
+        props.facing = face.to_horizontal_facing().unwrap_or_else(|| {
+            player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite()
+        });
+        world.set_block_state(
+            location,
+            props.to_state_id(&Block::CARVED_PUMPKIN),
+            BlockFlags::NOTIFY_ALL,
+        );
         world.play_sound(
             Sound::BlockPumpkinCarve,
             SoundCategory::Blocks,
@@ -172,7 +199,9 @@ fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) -> bool {
             ItemStack::new(4, &Item::PUMPKIN_SEEDS),
         ));
         world.spawn_entity(item_entity);
-        player.damage_held_item(1);
+        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+            let _ = item.damage_item(1);
+        }
         true
     } else {
         false

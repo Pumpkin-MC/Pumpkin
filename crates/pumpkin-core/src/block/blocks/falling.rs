@@ -53,12 +53,13 @@ impl FallingBlock {
 
     #[must_use]
     pub fn touches_liquid(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let current = world.get_block_state(pos);
         for dir in BlockDirection::all() {
-            if dir == BlockDirection::Down {
+            if dir == BlockDirection::Down && !Self::can_solidify(current) {
                 continue;
             }
             let neighbor = world.get_block_state(&pos.offset(dir.to_offset()));
-            if Self::can_solidify(neighbor) {
+            if Self::can_solidify(neighbor) && !neighbor.is_side_solid(dir.opposite()) {
                 return true;
             }
         }

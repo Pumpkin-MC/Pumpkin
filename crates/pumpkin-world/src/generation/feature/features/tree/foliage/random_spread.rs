@@ -1,10 +1,10 @@
-use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
 use super::FoliagePlacer;
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -23,7 +23,7 @@ impl RandomSpreadFoliagePlacer {
         foliage_height: i32,
         radius: i32,
         _offset: i32,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         for _ in 0..self.leaf_placement_attempts {
@@ -32,7 +32,7 @@ impl RandomSpreadFoliagePlacer {
                 random.next_bounded_i32(foliage_height) - random.next_bounded_i32(foliage_height),
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
             )));
-            if FoliagePlacer::place_foliage_block(chunk, pos, foliage_provider) {
+            if FoliagePlacer::place_foliage_block(chunk, random, pos, foliage_provider) {
                 foliage_positions.push(pos);
             }
         }

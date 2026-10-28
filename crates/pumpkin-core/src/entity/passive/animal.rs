@@ -4,12 +4,22 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::{mob::Mob, player::Player};
+use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
+
+    fn get_breed_offspring(&self, _partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        from_type(
+            entity.entity_type,
+            entity.pos.load(),
+            &entity.world.load(),
+            uuid::Uuid::new_v4(),
+        )
+    }
 
     /// Animals prefer grass, then bright spots.
     fn animal_walk_target_value(&self, pos: &pumpkin_util::math::position::BlockPos) -> f32 {
@@ -109,31 +119,21 @@ pub trait Animal: Mob {
             }
         }
 
-        mob_entity.mob_interact(player, item_stack)
+        mob_entity.mob_interact(player, item_stack, self.can_be_leashed())
     }
 }
 
 #[must_use]
 pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
-    match item.registry_key {
-        "white_dye" => Some(0),
-        "orange_dye" => Some(1),
-        "magenta_dye" => Some(2),
-        "light_blue_dye" => Some(3),
-        "yellow_dye" => Some(4),
-        "lime_dye" => Some(5),
-        "pink_dye" => Some(6),
-        "gray_dye" => Some(7),
-        "light_gray_dye" => Some(8),
-        "cyan_dye" => Some(9),
-        "purple_dye" => Some(10),
-        "blue_dye" => Some(11),
-        "brown_dye" => Some(12),
-        "green_dye" => Some(13),
-        "red_dye" => Some(14),
-        "black_dye" => Some(15),
-        _ => None,
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{DyeImpl, get};
+
+    for (id, component) in item.components {
+        if *id == DataComponent::Dye {
+            return Some(get::<DyeImpl>(*component).color.id());
+        }
     }
+    None
 }
 
 #[must_use]

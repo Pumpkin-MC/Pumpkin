@@ -23,7 +23,8 @@ pub struct BoatEntity {
 }
 
 impl BoatEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub const fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         Self {
             vehicle: VehicleEntity::new(entity),
             ticks_underwater: AtomicCell::new(0.0),

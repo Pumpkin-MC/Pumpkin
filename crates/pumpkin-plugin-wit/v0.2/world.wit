@@ -11,6 +11,7 @@ interface %world {
     use item-stack.{item-stack};
     use damage-types.{damage-type};
     use game-rules.{game-rule, game-rule-value};
+    use status-effect.{status-effect-instance, status-effect-type};
 
     use uuid.{uuid};
 
@@ -414,7 +415,7 @@ interface %world {
         get-pitch: func() -> f32;
         get-head-yaw: func() -> f32;
 
-        teleport: func(pos: position, world-ref: %world);
+        teleport: async func(pos: position, world-ref: %world);
         set-velocity: func(velocity: position);
         get-velocity: func() -> position;
 
@@ -442,7 +443,7 @@ interface %world {
         is-sprinting: func() -> bool;
         set-sprinting: func(sprinting: bool);
         is-swimming: func() -> bool;
-        set-swimming: func(swimming: bool);
+        set-swimming: async func(swimming: bool);
         is-invisible: func() -> bool;
         set-invisible: func(invisible: bool);
         is-glowing: func() -> bool;
@@ -479,11 +480,11 @@ interface %world {
         get-nearby-entities: func(x: f64, y: f64, z: f64) -> list<entity>;
 
         get-vehicle: func() -> option<entity>;
-        set-vehicle: func(vehicle: option<entity>);
+        set-vehicle: async func(vehicle: option<entity>);
         get-passengers: func() -> list<entity>;
-        add-passenger: func(passenger: entity);
-        remove-passenger: func(passenger: entity);
-        eject-passengers: func();
+        add-passenger: async func(passenger: entity);
+        remove-passenger: async func(passenger: entity);
+        eject-passengers: async func();
 
         get-bounding-box: func() -> bounding-box;
 
@@ -524,6 +525,15 @@ interface %world {
 
         /// Returns whether this entity is an AI-driven mob.
         is-mob: func() -> bool;
+
+        /// If this entity is a dropped item entity, returns a copy of its item stack.
+        get-item-stack: func() -> option<item-stack>;
+        /// If this entity is a dropped item entity, updates its item stack and syncs it to clients.
+        set-item-stack: async func(item: item-stack) -> bool;
+        /// If this entity is a dropped item entity, returns its remaining pickup delay in ticks.
+        get-pickup-delay: func() -> option<u32>;
+        /// If this entity is a dropped item entity, sets its pickup delay in ticks.
+        set-pickup-delay: func(ticks: u8) -> bool;
     }
 
     /// Represents a living entity with health, combat stats, attributes, and equipment (mobs, players, armor stands).
@@ -542,7 +552,7 @@ interface %world {
         set-health: func(health: f32);
         get-max-health: func() -> f32;
         set-max-health: func(max-health: f32);
-        damage: func(amount: f32, damage-type: damage-type);
+        damage: async func(amount: f32, damage-type: damage-type);
         is-dead: func() -> bool;
 
         get-absorption: func() -> f32;
@@ -560,8 +570,18 @@ interface %world {
 
         // Equipment
         get-equipment: func(slot: equipment-slot) -> option<item-stack>;
-        set-equipment: func(slot: equipment-slot, stack: option<item-stack>);
+        set-equipment: async func(slot: equipment-slot, stack: option<item-stack>);
         clear-equipment: func();
+
+        // Status Effects
+        /// Gives a status effect to this living entity.
+        add-effect: async func(effect: status-effect-instance);
+        /// Removes a status effect from this living entity. Returns true if an effect was removed.
+        remove-effect: func(effect: status-effect-type) -> bool;
+        /// Checks if this living entity currently has the specified status effect.
+        has-effect: func(effect: status-effect-type) -> bool;
+        /// Clears all active status effects and resets modified attributes on this living entity.
+        clear-effects: async func();
 
         get-age: func() -> s32;
         set-age: func(age: s32);
@@ -579,7 +599,7 @@ interface %world {
         // Goals & Targeting
         add-ai-goal: func(priority: u8, goal: builtin-ai-goal);
         add-custom-ai-goal: func(priority: u8, goal-id: u32);
-        clear-ai-goals: func();
+        clear-ai-goals: async func();
         set-ai-disabled: func(disabled: bool);
         is-ai-disabled: func() -> bool;
         set-target: func(target: option<entity>);
@@ -800,6 +820,9 @@ interface %world {
         /// Gets the chunk at the specified chunk coordinates.
         get-chunk: func(x: s32, z: s32) -> option<chunk>;
 
+        /// Returns whether the chunk at the specified chunk coordinates is currently loaded.
+        is-chunk-loaded: func(x: s32, z: s32) -> bool;
+
         /// Gets the block state ID at the specified position.
         get-block-state-id: func(pos: block-pos) -> u16;
 
@@ -807,7 +830,10 @@ interface %world {
         get-block-state: func(pos: block-pos) -> block-state;
 
         /// Sets the block state at the specified position.
-        set-block-state: func(pos: block-pos, state: u16, update-flags: block-flags);
+        set-block-state: async func(pos: block-pos, state: u16, update-flags: block-flags);
+
+        /// Breaks the block at the specified position, playing break particles/sounds and optionally dropping its loot.
+        break-block: async func(pos: block-pos, drop-items: bool, update-flags: block-flags) -> bool;
 
         /// Gets the block type at the specified position.
         get-block: func(pos: block-pos) -> block;
@@ -816,14 +842,14 @@ interface %world {
         get-block-id: func(pos: block-pos) -> u16;
 
         /// Sets the block at the specified position using its default state.
-        set-block: func(pos: block-pos, block: block, update-flags: block-flags);
+        set-block: async func(pos: block-pos, block: block, update-flags: block-flags);
 
         /// Sets the block at the specified position by numerical block ID using its default state.
-        set-block-by-id: func(pos: block-pos, block-id: u16, update-flags: block-flags);
+        set-block-by-id: async func(pos: block-pos, block-id: u16, update-flags: block-flags);
 
         /// Sets the block at the specified position by namespaced name using its default state.
         /// Returns true if the block was recognized and set.
-        set-block-by-name: func(pos: block-pos, name: string, update-flags: block-flags) -> bool;
+        set-block-by-name: async func(pos: block-pos, name: string, update-flags: block-flags) -> bool;
 
         /// Returns the current time of day in ticks.
         get-time-of-day: func() -> u64;
@@ -840,6 +866,9 @@ interface %world {
         /// Returns the configured shared spawn location for this world.
         get-spawn-location: func() -> world-spawn-location;
 
+        /// Sets the shared spawn location for this world.
+        set-spawn-location: func(location: world-spawn-location);
+
         /// Gets the highest non-air block Y coordinate at the specified X and Z.
         get-top-block-y: func(x: s32, z: s32) -> s32;
 
@@ -850,13 +879,13 @@ interface %world {
         is-raining: func() -> bool;
 
         /// Sets whether it should be raining or snowing.
-        set-raining: func(raining: bool);
+        set-raining: async func(raining: bool);
 
         /// Returns whether there is currently a thunderstorm.
         is-thundering: func() -> bool;
 
         /// Sets whether there should be a thunderstorm.
-        set-thundering: func(thundering: bool);
+        set-thundering: async func(thundering: bool);
 
         /// Broadcasts a system message to all players in this world.
         broadcast-system-message: func(message: text-component, overlay: bool);
@@ -874,7 +903,7 @@ interface %world {
         spawn-particle: func(particle: particle, pos: position, offset: position, max-speed: f32, count: s32);
 
         /// Creates an explosion at the specified position.
-        create-explosion: func(pos: position, power: f32, create-fire: bool, interaction: explosion-interaction);
+        create-explosion: async func(pos: position, power: f32, create-fire: bool, interaction: explosion-interaction);
 
         /// Returns the sea level of this world.
         get-sea-level: func() -> s32;
@@ -898,13 +927,31 @@ interface %world {
         get-biome: func(pos: block-pos) -> biome;
 
         /// Spawns an entity of the specified type at the given position.
-        spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
+        spawn-entity: async func(entity-type: entity-type, pos: position) -> entity;
+
+        /// Spawns a dropped item entity with the given item stack at the exact position with zero initial velocity.
+        drop-item: async func(pos: position, item: item-stack) -> entity;
+
+        /// Spawns a dropped item entity with natural random block-drop velocity and offset around the given position.
+        drop-item-naturally: async func(pos: position, item: item-stack) -> entity;
+
+        /// Spawns one or more experience orbs totaling `amount` XP at the given position.
+        spawn-experience-orb: async func(pos: position, amount: u32);
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;
 
+        /// Finds an entity in this world by its runtime entity ID.
+        get-entity-by-id: func(id: s32) -> option<entity>;
+
+        /// Finds an entity in this world by its UUID.
+        get-entity-by-uuid: func(id: uuid) -> option<entity>;
+
+        /// Returns all entities (including players) within the axis-aligned bounding box defined by `min` and `max`.
+        get-entities-in-box: func(min: position, max: position) -> list<entity>;
+
         /// Spawns a lightning bolt at the specified position.
-        strike-lightning: func(pos: position, effect-only: bool);
+        strike-lightning: async func(pos: position, effect-only: bool);
 
         /// Performs a raycast from start position to end position to hit blocks.
         ray-trace-blocks: func(start: position, end: position) -> option<position>;
@@ -932,7 +979,7 @@ interface %world {
         get-name: func() -> string;
 
         /// Saves all chunk data, block entities, and entities for this world to disk.
-        save: func() -> result<_, string>;
+        save: async func() -> result<_, string>;
 
         /// Sets a custom chunk generator for this world using a registered generator ID.
         set-chunk-generator: func(generator-id: u32);

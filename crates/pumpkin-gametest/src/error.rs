@@ -3,7 +3,7 @@ use thiserror::Error;
 
 pub type GameTestResult<T> = Result<T, GameTestError>;
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum GameTestError {
     #[error("assertion failed at tick {tick}: {message}")]
     Assertion {

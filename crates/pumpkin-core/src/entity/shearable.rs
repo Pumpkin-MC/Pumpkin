@@ -9,7 +9,7 @@ use crate::entity::Entity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
-use crate::world::loot::LootContextParameters;
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 /// Vanilla `Shearable`: a mob that players and dispensers can shear.
 pub trait Shearable: Mob {
@@ -67,14 +67,16 @@ pub fn shear_by_player(
 /// Vanilla `Entity.dropFromShearingLootTable`
 #[must_use]
 pub fn shearing_loot(entity: &Entity, loot_key: &str, tool: &ItemStack) -> Vec<ItemStack> {
-    let Some(loot_table) = entity.world.load().get_loot_table(loot_key) else {
+    let world = entity.world.load();
+    let Some(loot_table) = world.get_loot_table(loot_key) else {
         return Vec::new();
     };
     let params = LootContextParameters {
-        this_entity: Some(entity.entity_type),
+        world: Some(&world),
+        this_entity: Some(entity),
         position: Some(entity.pos.load()),
         tool: Some(tool.clone()),
         ..Default::default()
     };
-    loot_table.generate_loot_with_context(rand::random(), &params)
+    generate_loot_from_handle(&loot_table, rand::random(), &params)
 }

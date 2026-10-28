@@ -270,6 +270,10 @@ impl BlockBehaviour for DispenserBlock {
             } else {
                 args.world
                     .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
+                args.world.emit_game_event(
+                    GameEvent::BlockActivate.name(),
+                    args.position.to_centered_f64(),
+                );
             }
         }
     }
@@ -737,7 +741,7 @@ impl DispenserBlock {
     }
 
     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let _ = item.split(1);
+        let launched_stack = item.split(1);
         let facing = to_normal(ctx.facing);
         // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
         let position = ctx
@@ -746,7 +750,8 @@ impl DispenserBlock {
             .add(&(facing * (0.7 * 0.5125)))
             .add(&Vector3::new(0.0, 0.08, 0.0));
         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
-        let rocket = FireworkRocketEntity::new(entity);
+        let rocket = FireworkRocketEntity::new_with_stack(entity, launched_stack);
+        rocket.set_shot_at_angle(true);
 
         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
         // `ThrownItemEntity::set_velocity` here.
@@ -1190,8 +1195,12 @@ impl DispenserBlock {
             let Some(living) = entity.get_living_entity() else {
                 continue;
             };
-            if !living.is_part_of_game()
+            if !living.is_alive()
+                || entity.is_spectator()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.can_dispenser_equip_into_slot(slot))
             {
                 continue;
             }

@@ -386,24 +386,18 @@ pub async fn init_plugin(
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
 
-    store
-        .run_concurrent(async |accessor| {
-            legacy_sync_reentry
-                .scope_bootstrap(plugin.call_init_plugin(accessor))
-                .await
-        })
+    legacy_sync_reentry
+        .scope_bootstrap(plugin.call_init_plugin(&mut store))
         .await
-        .map_err(PluginInitError::CallInitPluginFailed)?
         .map_err(PluginInitError::CallInitPluginFailed)?;
 
-    let metadata = store
-        .run_concurrent(async |accessor| {
-            legacy_sync_reentry
-                .scope_bootstrap(plugin.pumpkin_plugin_metadata().call_get_metadata(accessor))
-                .await
-        })
+    let metadata = legacy_sync_reentry
+        .scope_bootstrap(
+            plugin
+                .pumpkin_plugin_metadata()
+                .call_get_metadata(&mut store),
+        )
         .await
-        .map_err(PluginInitError::CallGetMetadataFailed)?
         .map_err(PluginInitError::CallGetMetadataFailed)?;
 
     let metadata = PluginMetadata {
