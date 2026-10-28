@@ -82,12 +82,22 @@ struct CommandBlockRegistry;
 impl WorldPortalExt for CommandBlockRegistry {
     fn can_place_at(
         &self,
-        _block: &pumpkin_data::Block,
-        _state: &pumpkin_data::BlockState,
-        _block_accessor: &dyn BlockAccessor,
-        _block_pos: &BlockPos,
+        block: &pumpkin_data::Block,
+        state: &pumpkin_data::BlockState,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
     ) -> bool {
-        true
+        crate::block::registry::default_registry().can_place_at(
+            None,
+            None,
+            block_accessor,
+            None,
+            block,
+            state,
+            block_pos,
+            None,
+            None,
+        )
     }
 
     fn mirror(

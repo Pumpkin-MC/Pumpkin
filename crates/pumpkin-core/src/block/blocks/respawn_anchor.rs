@@ -20,14 +20,14 @@ pub struct RespawnAnchorBlock;
 impl BlockBehaviour for RespawnAnchorBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.item.id != Item::GLOWSTONE.id {
-            return BlockActionResult::Pass;
+            return BlockActionResult::PassToDefaultBlockAction;
         }
 
         let state_id = args.world.get_block_state_id(args.position);
         let mut props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
-        if props.charges >= 4 {
-            return BlockActionResult::Pass;
+        if props.charges >= MAX_CHARGES {
+            return BlockActionResult::PassToDefaultBlockAction;
         }
 
         props.charges += 1;
@@ -35,6 +35,10 @@ impl BlockBehaviour for RespawnAnchorBlock {
             args.position,
             props.to_state_id(args.block),
             BlockFlags::NOTIFY_ALL,
+        );
+        args.world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
         );
 
         args.item_stack
@@ -53,21 +57,16 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
+        if props.charges == 0 {
+            return BlockActionResult::Pass;
+        }
+
         if !args.world.dimension.respawn_anchor_works {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
             args.world
                 .explode(center_pos, 5.0, crate::world::ExplosionInteraction::Block);
-            return BlockActionResult::SuccessServer;
-        }
-
-        if props.charges == 0 {
-            args.player
-                .send_system_message(&pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
-                    translation::bedrock::TILE_BED_NOSLEEP
-                ));
             return BlockActionResult::SuccessServer;
         }
 
@@ -91,9 +90,10 @@ impl BlockBehaviour for RespawnAnchorBlock {
                 translation::java::BLOCK_MINECRAFT_SET_SPAWN,
                 translation::bedrock::TILE_BED_RESPAWNSET
             ));
+            return BlockActionResult::SuccessServer;
         }
 
-        BlockActionResult::SuccessServer
+        BlockActionResult::Consume
     }
 
     /// Charges scale over the full signal range, so each charge is worth 15 / 4.

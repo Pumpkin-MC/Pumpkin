@@ -161,5 +161,5 @@ bindgen!({
         "pumpkin:plugin/world@0.1.0.[method]living-entity.set-equipment": async | trappable,
         default: trappable,
     },
-    exports: { default: async | store | trappable },
+    exports: { default: async | trappable },
 });

@@ -123,6 +123,13 @@ macro_rules! impl_block_entity_for_chest {
                 Some(nbt)
             }
 
+            fn bedrock_block_actor_data(
+                &self,
+                state_id: pumpkin_data::BlockStateId,
+            ) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                $crate::block::entities::bedrock::build_chest_actor(self.position, state_id, None)
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
@@ -140,6 +147,31 @@ macro_rules! impl_block_entity_for_chest {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .is_some()
+            }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                if let Some(loot) = stack
+                    .get_data_component::<pumpkin_data::data_component_impl::ContainerLootImpl>()
+                {
+                    *self
+                        .loot_table
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some(loot.loot_table.clone());
+                }
+                if let Some(container) =
+                    stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+                {
+                    let mut items = self
+                        .items
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    for (slot, item) in &container.items {
+                        if let Some(target) = items.get_mut(*slot as usize) {
+                            *target = item.clone();
+                        }
+                    }
+                }
             }
         }
     };
