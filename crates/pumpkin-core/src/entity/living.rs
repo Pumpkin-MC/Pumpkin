@@ -2208,7 +2208,9 @@ impl LivingEntity {
         let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
-        let damage = (unsafe_fall_distance * damage_per_distance).floor();
+        let fall_damage_multiplier =
+            self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER) as f32;
+        let damage = (unsafe_fall_distance * damage_per_distance * fall_damage_multiplier).floor();
         if damage > 0.0 {
             self.entity.play_sound(self.fall_sound(damage as i32));
             self.damage(caller, damage, DamageType::FALL);

@@ -1671,6 +1671,20 @@ impl Player {
         }
     }
 
+    /// Broadcasts the equipment behind a changed player screen slot (armor, offhand, held hotbar slot)
+    pub fn sync_screen_slot_equipment(&self, screen_slot: usize, stack: &ItemStack) {
+        if let Some(slot) =
+            pumpkin_inventory::screen_handler::player_screen_equipment_slot(screen_slot)
+        {
+            self.enqueue_equipment_change(&slot, stack);
+        } else if (36..45).contains(&screen_slot)
+            && self.inventory().get_selected_slot() as usize == screen_slot - 36
+        {
+            self.living_entity
+                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack.clone())]);
+        }
+    }
+
     pub fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
         self.try_send_slot_set_packet(&CSetPlayerInventory::new(
             (slot_index as i32).into(),
@@ -3329,18 +3343,19 @@ impl Player {
         {
             return;
         }
-        if horizontal_collision && self.living_entity.entity.is_fall_flying() {
-            self.handle_fall_flying_collision(
-                last_move.horizontal_length(),
-                movement.horizontal_length(),
-            );
-        }
+        // Fall damage comes with the move packet, the glide wall damage with the tick after it
         self.living_entity.fall(
             self,
             movement.y,
             on_ground,
             self.gamemode.load() == GameMode::Creative,
         );
+        if horizontal_collision && self.living_entity.entity.is_fall_flying() {
+            self.handle_fall_flying_collision(
+                last_move.horizontal_length(),
+                movement.horizontal_length(),
+            );
+        }
     }
 
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {

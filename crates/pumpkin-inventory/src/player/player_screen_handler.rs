@@ -194,7 +194,20 @@ impl ScreenHandler for PlayerScreenHandler {
             {
                 // Into empty offhand slot (45)
                 let index = 45;
-                self.insert_item(&mut slot_stack, index, index + 1, false)
+                let result = self.insert_item(&mut slot_stack, index, index + 1, false);
+
+                if result {
+                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &stack_prev);
+                }
+                result
+            } else if slot_index == 45 {
+                // From offhand (45) -> Player Inventory (9-44)
+                let result = self.insert_item(&mut slot_stack, 9, 45, false);
+
+                if result {
+                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY);
+                }
+                result
             } else if (9..36).contains(&slot_index) {
                 // From main inventory (9-35) -> Hotbar (36-44)
                 self.insert_item(&mut slot_stack, 36, 45, false)

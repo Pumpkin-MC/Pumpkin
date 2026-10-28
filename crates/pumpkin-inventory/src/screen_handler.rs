@@ -55,6 +55,22 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::text::TextComponent;
 use std::cmp::max;
+
+/// Offhand slot of the player screen handler
+pub const OFF_HAND_SCREEN_SLOT: i32 = 45;
+
+/// Equipment slot behind a player screen handler slot (armor 5-8, offhand 45)
+#[must_use]
+pub const fn player_screen_equipment_slot(screen_slot: usize) -> Option<EquipmentSlot> {
+    match screen_slot {
+        5 => Some(EquipmentSlot::HEAD),
+        6 => Some(EquipmentSlot::CHEST),
+        7 => Some(EquipmentSlot::LEGS),
+        8 => Some(EquipmentSlot::FEET),
+        45 => Some(EquipmentSlot::OFF_HAND),
+        _ => None,
+    }
+}
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
@@ -1107,6 +1123,10 @@ pub trait ScreenHandler: Send + Sync {
                             && (5..9).contains(&slot_index)
                         {
                             player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
+                        {
+                            player
+                                .enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &cursor_stack);
                         }
 
                         let transfer_count = if click_type == MouseClick::Left {
@@ -1137,6 +1157,13 @@ pub trait ScreenHandler: Send + Sync {
                                         equippable.slot
                                     });
                                 player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
+                            } else if self.window_type().is_none()
+                                && slot_index == OFF_HAND_SCREEN_SLOT
+                            {
+                                player.enqueue_equipment_change(
+                                    &EquipmentSlot::OFF_HAND,
+                                    ItemStack::EMPTY,
+                                );
                             }
                         }
                     } else if can_put && slot.can_insert(&cursor_stack) {
@@ -1149,6 +1176,10 @@ pub trait ScreenHandler: Send + Sync {
                             && (5..9).contains(&slot_index)
                         {
                             player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
+                        {
+                            player
+                                .enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &cursor_stack);
                         }
 
                         if matching_stack {

@@ -102,6 +102,9 @@ fn descriptor_to_stack(desc: &NetworkItemDescriptor) -> ItemStack {
     }
 }
 
+/// The offhand is slot 1 of Bedrock's hand container (`HandSlot::Offhand`) in item stack requests
+pub(crate) const OFF_HAND_BEDROCK_SLOT: u32 = 1;
+
 const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option<usize> {
     match window_id {
         WINDOW_ID_INVENTORY => {
@@ -124,8 +127,8 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
             }
         }
         WINDOW_ID_OFF_HAND => {
-            if slot == 0 {
-                // Offhand: Bedrock 0 -> Screen Handler 45
+            if slot <= OFF_HAND_BEDROCK_SLOT {
+                // Offhand: Bedrock slot 1 of the hand container (Mainhand is 0) -> Screen Handler 45
                 Some(45)
             } else {
                 None
@@ -156,7 +159,11 @@ pub(crate) const fn bedrock_inventory_slot(
             ContainerName::Inventory,
             (player_screen_slot - 36) as u32,
         )),
-        45 => Some((WINDOW_ID_OFF_HAND as u32, ContainerName::Offhand, 0)),
+        45 => Some((
+            WINDOW_ID_OFF_HAND as u32,
+            ContainerName::Offhand,
+            OFF_HAND_BEDROCK_SLOT,
+        )),
         _ => None,
     }
 }
@@ -185,7 +192,23 @@ pub(crate) fn send_bedrock_inventory_slot(
     (container_id, container_name, slot): (u32, ContainerName, u32),
     stack: &ItemStack,
 ) {
-    use pumpkin_protocol::bedrock::client::inventory_slot::CInventorySlot;
+    use pumpkin_protocol::bedrock::client::{
+        inventory_content::CInventoryContent, inventory_slot::CInventorySlot,
+    };
+
+    // Like Geyser, the offhand is always sent as a whole one-item container
+    if container_name == ContainerName::Offhand {
+        bedrock.try_enqueue_client_packet(&CInventoryContent {
+            container_id: VarUInt(container_id),
+            slots: vec![NetworkItemStackDescriptor::from(stack)],
+            full_container_name: FullContainerName {
+                container_name,
+                dynamic_id: None,
+            },
+            storage_item: NetworkItemStackDescriptor::default(),
+        });
+        return;
+    }
 
     bedrock.try_enqueue_client_packet(&CInventorySlot {
         container_id: VarUInt(container_id),
@@ -227,8 +250,8 @@ pub mod set_local_player_as_initialized;
 #[cfg(test)]
 mod tests {
     use super::{
-        ContainerName, WINDOW_ID_ARMOUR, WINDOW_ID_OFF_HAND, bedrock_inventory_slot,
-        bedrock_player_inventory_slot, map_bedrock_slot_to_screen_handler,
+        ContainerName, OFF_HAND_BEDROCK_SLOT, WINDOW_ID_ARMOUR, WINDOW_ID_OFF_HAND,
+        bedrock_inventory_slot, bedrock_player_inventory_slot, map_bedrock_slot_to_screen_handler,
     };
 
     #[test]
@@ -264,7 +287,11 @@ mod tests {
         );
         assert_eq!(
             bedrock_player_inventory_slot(40),
-            Some((WINDOW_ID_OFF_HAND as u32, ContainerName::Offhand, 0))
+            Some((
+                WINDOW_ID_OFF_HAND as u32,
+                ContainerName::Offhand,
+                OFF_HAND_BEDROCK_SLOT
+            ))
         );
     }
 }

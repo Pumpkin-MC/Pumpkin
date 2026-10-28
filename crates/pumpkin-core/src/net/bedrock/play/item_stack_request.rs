@@ -938,7 +938,9 @@ pub(crate) fn map_bedrock_container_slot(
             }
         }
         ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
-        ContainerName::Offhand => (slot_id == 0).then_some(45),
+        ContainerName::Offhand => {
+            (u32::from(slot_id) <= super::OFF_HAND_BEDROCK_SLOT).then_some(45)
+        }
         ContainerName::Cursor => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
@@ -1248,24 +1250,7 @@ fn update_slot_stack(
             let current_stack =
                 screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack();
             if !current_stack.are_items_and_components_equal(&new_stack) {
-                if (5..9).contains(&screen_slot) {
-                    player.enqueue_equipment_change(
-                        &match screen_slot {
-                            5 => EquipmentSlot::HEAD,
-                            6 => EquipmentSlot::CHEST,
-                            7 => EquipmentSlot::LEGS,
-                            8 => EquipmentSlot::FEET,
-                            _ => unreachable!(),
-                        },
-                        &new_stack,
-                    );
-                } else if (36..45).contains(&screen_slot) {
-                    let hotbar_slot = screen_slot - 36;
-                    if player.inventory().get_selected_slot() == hotbar_slot as u8 {
-                        let equipment = &[(EquipmentSlot::MAIN_HAND, new_stack.clone())];
-                        player.living_entity.send_equipment_changes(equipment);
-                    }
-                }
+                player.sync_screen_slot_equipment(screen_slot, &new_stack);
             }
         }
 

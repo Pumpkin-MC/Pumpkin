@@ -120,6 +120,16 @@ impl BedrockClient {
             }
         }
 
+        // Inventory moves can ride inside the input packet, like the standalone request
+        if let Some(request) = packet.item_stack_request {
+            self.handle_item_stack_request(
+                player,
+                pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest {
+                    requests: vec![request],
+                },
+            );
+        }
+
         if let Some(block_actions) = packet.block_actions {
             for action in &block_actions {
                 self.handle_player_block_action(player, server, action);
