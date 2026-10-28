@@ -296,7 +296,8 @@ impl CustomModelDataImpl {
         let compound = data.extract_compound()?;
         let floats = compound
             .get_list("floats")
-            .map(|l| l.iter().filter_map(NbtTag::extract_float).collect())
+            // The float codec accepts any numeric tag, so `floats:[20000]` from a datapack works.
+            .map(|l| l.iter().filter_map(NbtTag::as_numeric_float).collect())
             .unwrap_or_default();
         let flags = compound
             .get_list("flags")

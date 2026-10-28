@@ -611,6 +611,32 @@ impl DisplayEntity {
                 .store((sky << 4) | (block & 0xF), Ordering::Relaxed);
         }
 
+        if let Some(matrix) = nbt
+            .get_list("transformation")
+            .filter(|list| list.len() == 16)
+        {
+            let m: Vec<f32> = matrix
+                .iter()
+                .map(|v| v.extract_float().unwrap_or(0.0))
+                .collect();
+            let (translation, left_rotation, scale) = decompose_affine(&m);
+            *self
+                .translation
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = translation;
+            *self
+                .scale
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = scale;
+            *self
+                .left_rotation
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = left_rotation;
+            *self
+                .right_rotation
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = [0.0, 0.0, 0.0, 1.0];
+        }
         if let Some(transform) = nbt.get_compound("transformation") {
             if let Some(t_list) = transform.get_list("translation")
                 && t_list.len() >= 3
@@ -812,10 +838,27 @@ impl EntityBase for ItemDisplayEntity {
             _ => "none",
         };
         nbt.put_string("item_display", display_mode_str.to_string());
+        let item = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !item.is_empty() {
+            let mut item_compound = NbtCompound::new();
+            item.write_item_stack(&mut item_compound);
+            nbt.put_compound("item", item_compound);
+        }
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.display.read_display_nbt(nbt);
+        if let Some(item_compound) = nbt.get_compound("item")
+            && let Some(stack) = ItemStack::read_item_stack(item_compound)
+        {
+            *self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        }
         if let Some(mode_str) = nbt.get_string("item_display") {
             let mode = match mode_str {
                 "thirdperson_lefthand" => 1,
@@ -1185,4 +1228,63 @@ impl EntityBase for TextDisplayEntity {
     ) -> bool {
         false
     }
+}
+
+/// Splits a row-major 4x4 affine matrix (the list form of vanilla's `transformation`)
+/// into translation, rotation quaternion and per-axis scale. Vanilla runs a full SVD;
+/// this covers rotation-times-scale matrices, including the all-zero "hidden" matrix.
+fn decompose_affine(m: &[f32]) -> (Vector3<f32>, [f32; 4], Vector3<f32>) {
+    let translation = Vector3::new(m[3], m[7], m[11]);
+    let column = |c: usize| [m[c], m[4 + c], m[8 + c]];
+    let mut r = [[0.0f32; 3]; 3];
+    let mut scale = [0.0f32; 3];
+    for c in 0..3 {
+        let col = column(c);
+        let len = (col[0] * col[0] + col[1] * col[1] + col[2] * col[2]).sqrt();
+        scale[c] = len;
+        for row in 0..3 {
+            r[row][c] = if len > f32::EPSILON {
+                col[row] / len
+            } else if row == c {
+                1.0
+            } else {
+                0.0
+            };
+        }
+    }
+    let trace = r[0][0] + r[1][1] + r[2][2];
+    let q = if trace > 0.0 {
+        let s = (trace + 1.0).sqrt() * 2.0;
+        [
+            (r[2][1] - r[1][2]) / s,
+            (r[0][2] - r[2][0]) / s,
+            (r[1][0] - r[0][1]) / s,
+            0.25 * s,
+        ]
+    } else if r[0][0] > r[1][1] && r[0][0] > r[2][2] {
+        let s = (1.0 + r[0][0] - r[1][1] - r[2][2]).sqrt() * 2.0;
+        [
+            0.25 * s,
+            (r[0][1] + r[1][0]) / s,
+            (r[0][2] + r[2][0]) / s,
+            (r[2][1] - r[1][2]) / s,
+        ]
+    } else if r[1][1] > r[2][2] {
+        let s = (1.0 + r[1][1] - r[0][0] - r[2][2]).sqrt() * 2.0;
+        [
+            (r[0][1] + r[1][0]) / s,
+            0.25 * s,
+            (r[1][2] + r[2][1]) / s,
+            (r[0][2] - r[2][0]) / s,
+        ]
+    } else {
+        let s = (1.0 + r[2][2] - r[0][0] - r[1][1]).sqrt() * 2.0;
+        [
+            (r[0][2] + r[2][0]) / s,
+            (r[1][2] + r[2][1]) / s,
+            0.25 * s,
+            (r[1][0] - r[0][1]) / s,
+        ]
+    };
+    (translation, q, Vector3::new(scale[0], scale[1], scale[2]))
 }
