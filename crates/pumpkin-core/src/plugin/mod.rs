@@ -1523,6 +1523,17 @@ impl PluginManager {
         };
         names.extend(inactive_names);
 
+        // Files without a loader are listed by file name, skip the lock if it is busy
+        if let Ok(files) = self.unloaded_files.try_read() {
+            names.extend(
+                files
+                    .iter()
+                    .filter(|path| is_plugin_file(path))
+                    .filter_map(|path| path.file_name())
+                    .map(|name| name.to_string_lossy().into_owned()),
+            );
+        }
+
         names.sort();
         names.dedup();
         names
