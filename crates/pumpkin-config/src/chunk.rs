@@ -30,6 +30,7 @@ pub struct AnvilChunkConfig {
 
 /// Compression settings for chunk data.
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct ChunkCompression {
     /// Compression algorithm to use.
     pub algorithm: Compression,

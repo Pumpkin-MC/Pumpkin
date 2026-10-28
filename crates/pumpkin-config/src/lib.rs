@@ -10,10 +10,14 @@ use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
 use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use toml::{
+    Spanned,
+    de::{DeTable, DeValue, Deserializer},
+};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZero, path::Path};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 /// Fun and experimental configuration options.
 pub mod fun;
@@ -89,6 +93,48 @@ pub struct PumpkinConfig {
 impl LoadConfiguration for PumpkinConfig {
     fn get_path() -> &'static Path {
         Path::new("pumpkin.toml")
+    }
+
+    fn deserialize_toml(value: Spanned<DeTable<'_>>) -> Result<Self, toml::de::Error> {
+        // Read flattened fields and internally tagged enums buffer values
+        // seperately from source locations for diagnostics.
+        #[derive(Deserialize)]
+        struct TelemetrySection {
+            #[serde(default)]
+            telemetry: TelemetryConfig,
+        }
+
+        let basic = BasicConfiguration::deserialize(Deserializer::from(value.clone()))?;
+        if let Some(chunk) = value
+            .get_ref()
+            .get("world")
+            .and_then(|world| world.get_ref().get("chunk"))
+            && chunk
+                .get_ref()
+                .get("type")
+                .and_then(|kind| kind.get_ref().as_str())
+                == Some("anvil")
+        {
+            chunk::AnvilChunkConfig::deserialize(toml::de::ValueDeserializer::from(chunk.clone()))?;
+        }
+        for edition in ["java", "bedrock"] {
+            if let Some(compression) = value
+                .get_ref()
+                .get("networking")
+                .and_then(|network| network.get_ref().get(edition))
+                .and_then(|network| network.get_ref().get("compression"))
+            {
+                networking::compression::CompressionInfo::deserialize(
+                    toml::de::ValueDeserializer::from(compression.clone()),
+                )?;
+            }
+        }
+
+        Ok(Self {
+            basic,
+            advanced: AdvancedConfiguration::deserialize(Deserializer::from(value.clone()))?,
+            telemetry: TelemetrySection::deserialize(Deserializer::from(value))?.telemetry,
+        })
     }
 
     fn validate(&self) {
@@ -277,9 +323,11 @@ pub trait LoadConfiguration {
     ///
     /// Creates the directory if it doesn't exist, reads the TOML file,
     /// merges it with defaults, writes missing fields, and validates the result.
+    /// Reports errors to stderr and replaces invalid settings with defaults while retaining
+    /// valid settings.
     #[must_use]
     // NOTE: Logger may not be ready.
-    #[expect(clippy::print_stdout)]
+    #[expect(clippy::print_stdout, clippy::print_stderr)]
     fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -295,28 +343,48 @@ pub trait LoadConfiguration {
             let file_content = match fs::read_to_string(&path) {
                 Ok(content) => content,
                 Err(err) => {
-                    error!(
-                        "Couldn't read configuration file at {}: {err}",
+                    eprintln!(
+                        "Couldn't read configuration file at {}: {err}\nFalling back to default configuration settings.",
                         path.display()
                     );
                     return Self::default();
                 }
             };
 
-            let parsed_toml_value: toml::Value = match toml::from_str(&file_content) {
-                Ok(val) => val,
-                Err(err) => {
-                    error!(
-                        "Couldn't parse TOML at {}. Reason: {err}. Using default config.",
-                        path.display()
-                    );
-                    return Self::default();
+            let (mut parsed_toml, parse_errors) = DeTable::parse_recoverable(&file_content);
+            let mut had_errors = !parse_errors.is_empty();
+            for err in parse_errors {
+                let field = err
+                    .span()
+                    .and_then(|span| remove_invalid_value(parsed_toml.get_mut(), &span));
+                report_configuration_error(&path, field.as_deref(), &err);
+            }
+
+            let (merged_config, changed) = loop {
+                match Self::merge_with_default_toml(parsed_toml.clone()) {
+                    Ok(merged) => break merged,
+                    Err(mut err) => {
+                        had_errors = true;
+                        err.set_input(Some(&file_content));
+                        let field = err
+                            .span()
+                            .and_then(|span| remove_invalid_value(parsed_toml.get_mut(), &span));
+                        report_configuration_error(&path, field.as_deref(), &err);
+                        if field.is_none() {
+                            eprintln!("Falling back to default configuration settings.");
+                            return Self::default();
+                        }
+                    }
                 }
             };
 
-            let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
+            if had_errors {
+                eprintln!(
+                    "Falling back to default configuration settings for invalid fields. Valid settings have been retained."
+                );
+            }
 
-            if changed {
+            if changed && !had_errors {
                 let file_name = path.file_name().map_or_else(
                     || path.display().to_string(),
                     |f| f.to_string_lossy().into_owned(),
@@ -376,56 +444,58 @@ pub trait LoadConfiguration {
     /// Merge a parsed TOML value with the default configuration.
     ///
     /// Returns the merged configuration and a flag indicating if any values were filled.
-    #[must_use]
-    fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error identifying the invalid field if deserialization fails.
+    fn merge_with_default_toml(
+        parsed_toml: Spanned<DeTable<'_>>,
+    ) -> Result<(Self, bool), toml::de::Error>
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
         let default_config = Self::default();
-
-        let Ok(default_toml_value) = toml::Value::try_from(&default_config) else {
-            return (default_config, false);
+        let Ok(default_toml) = toml::to_string(&default_config) else {
+            return Ok((default_config, false));
         };
-
-        let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
-
-        let config = merged_value.try_into().unwrap_or_else(|_| Self::default());
-
-        (config, changed)
+        let defaults = DeTable::parse(&default_toml)?;
+        let (table, changed) =
+            Self::merge_toml_values(defaults.into_inner(), parsed_toml.into_inner());
+        let merged = Spanned::new(0..0, table);
+        let config = Self::deserialize_toml(merged)?;
+        Ok((config, changed))
     }
 
-    /// Merge two TOML values recursively.
+    /// Deserializes merged configuration values, preserving source locations in errors.
+    fn deserialize_toml(value: Spanned<DeTable<'_>>) -> Result<Self, toml::de::Error>
+    where
+        Self: Sized + DeserializeOwned,
+    {
+        Self::deserialize(Deserializer::from(value))
+    }
+
+    /// Merge two TOML tables recursively, preserving the overlay's source locations.
     ///
     /// Base is treated as default; overlay overwrites values.
     #[must_use]
-    fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
-        match (base, overlay) {
-            (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
-                let mut changed = false;
-
-                for key in base_table.keys() {
-                    if !overlay_table.contains_key(key) {
-                        changed = true;
-                        break;
-                    }
+    fn merge_toml_values<'a>(base: DeTable<'a>, mut overlay: DeTable<'a>) -> (DeTable<'a>, bool) {
+        let mut changed = false;
+        for (key, default_value) in base {
+            if let Some(value) = overlay.get_mut(key.get_ref().as_ref()) {
+                if let (DeValue::Table(default_table), DeValue::Table(table)) =
+                    (default_value.into_inner(), value.get_mut())
+                {
+                    let (merged, table_changed) =
+                        Self::merge_toml_values(default_table, std::mem::take(table));
+                    *table = merged;
+                    changed |= table_changed;
                 }
-
-                for (key, overlay_value) in overlay_table {
-                    if let Some(base_value) = base_table.get(&key).cloned() {
-                        let (merged_value, value_changed) =
-                            Self::merge_toml_values(base_value, overlay_value);
-                        base_table.insert(key, merged_value);
-                        if value_changed {
-                            changed = true;
-                        }
-                    } else {
-                        base_table.insert(key, overlay_value);
-                    }
-                }
-                (toml::Value::Table(base_table), changed)
+            } else {
+                overlay.insert(key, default_value);
+                changed = true;
             }
-            (_, overlay) => (overlay, false),
         }
+        (overlay, changed)
     }
 
     /// Returns the path to the configuration file relative to the config directory.
@@ -433,6 +503,43 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
+}
+
+// Remove the smallest setting covering the error and its default is merged on the next attempt.
+fn remove_invalid_value(
+    table: &mut DeTable<'_>,
+    error_span: &std::ops::Range<usize>,
+) -> Option<String> {
+    let mut invalid_key = None;
+    for (key, value) in table.iter_mut() {
+        if let DeValue::Table(nested) = value.get_mut()
+            && let Some(field) = remove_invalid_value(nested, error_span)
+        {
+            return Some(format!("{}.{field}", key.get_ref()));
+        }
+        let span = value.span();
+        if span.contains(&error_span.start)
+            || span.start == error_span.start
+            || (error_span.is_empty() && span.end == error_span.start)
+        {
+            invalid_key = Some(key.clone());
+            break;
+        }
+    }
+    invalid_key.and_then(|key| {
+        table
+            .remove(key.get_ref().as_ref())
+            .map(|_| key.get_ref().to_string())
+    })
+}
+
+#[expect(clippy::print_stderr)]
+fn report_configuration_error(path: &Path, field: Option<&str>, error: &toml::de::Error) {
+    let setting = field.map_or_else(
+        || "configuration".to_string(),
+        |field| format!("setting `{field}`"),
+    );
+    eprintln!("Invalid {setting} in {}:\n{error}", path.display());
 }
 
 #[cfg(test)]
