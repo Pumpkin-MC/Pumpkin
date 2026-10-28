@@ -212,7 +212,15 @@ impl PendingConnection {
                 return Err(AuthError::Banned);
             }
         }
-        for property in profile.properties.load().iter() {
+        // Only the `textures` property holds base64 encoded texture JSON. Auth servers may
+        // add other properties, e.g. authlib-injector's `uploadableTextures` whose value is
+        // a comma separated list such as `skin,cape`.
+        for property in profile
+            .properties
+            .load()
+            .iter()
+            .filter(|property| property.name.as_ref() == "textures")
+        {
             authentication::validate_textures(
                 property,
                 &server
