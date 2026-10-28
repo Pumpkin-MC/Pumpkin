@@ -190,7 +190,7 @@ impl ChunkSender {
 
     /// Vanilla `ChunkMap.markChunkPendingToSend` -> a held copy stays tracked while re-queued.
     pub fn enqueue_chunk(&mut self, pos: Vector2<i32>) {
-        self.awaiting_delivery.remove(&pos);
+        // A Bedrock dispatch still encoding keeps its marker until it resolves
         self.pending_chunks.insert(pos);
     }
 
@@ -593,6 +593,22 @@ mod tests {
         let delivered = sender.mark_delivered(&[(position, second[0].delivery_token)]);
         assert_eq!(delivered, vec![position]);
         assert!(sender.is_chunk_ready(&position));
+    }
+
+    #[test]
+    fn re_enqueue_during_dispatch_is_not_counted_ready() {
+        let position = Vector2::new(2, 2);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let first = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.enqueue_chunk(position);
+
+        assert_eq!(sender.ready_chunks_count(), 0);
+        assert!(!sender.is_chunk_ready(&position));
+
+        sender.mark_delivered(&[(position, first[0].delivery_token)]);
+        assert_eq!(sender.ready_chunks_count(), 1);
     }
 
     fn batch_for(position: Vector2<i32>, epoch_snapshot: u32) -> PreparedBatch {
