@@ -37,7 +37,8 @@ impl TNTEntity {
     /// Vanilla `PrimedTnt.DEFAULT_EXPLOSION_POWER`.
     pub const DEFAULT_POWER: f32 = 4.0;
 
-    pub const fn new(entity: Entity, power: f32, fuse: u32) -> Self {
+    pub const fn new(mut entity: Entity, power: f32, fuse: u32) -> Self {
+        entity.blocks_building = true;
         Self {
             entity,
             power: AtomicCell::new(power),

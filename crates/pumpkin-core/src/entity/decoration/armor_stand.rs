@@ -231,6 +231,10 @@ impl ArmorStandEntity {
 }
 
 impl EntityBase for ArmorStandEntity {
+    fn can_be_seen_by_anyone(&self) -> bool {
+        !self.is_invisible() && !self.is_marker()
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
         // ...

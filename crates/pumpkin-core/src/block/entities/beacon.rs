@@ -195,6 +195,12 @@ impl BeaconBlockEntity {
                 continue;
             }
 
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ConstructBeacon {
+                    level: levels,
+                },
+            );
+
             if let Some(effect) = primary_effect {
                 player.add_effect(pumpkin_data::potion::Effect {
                     effect_type: effect,
@@ -353,6 +359,20 @@ impl BlockEntity for BeaconBlockEntity {
             nbt.put_string("Lock", lock.clone());
         }
         Some(nbt)
+    }
+
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let name_guard = self.custom_name.lock().ok();
+        let name = name_guard.as_ref().and_then(|n| n.as_deref());
+        Some(crate::block::entities::bedrock::build_beacon_actor(
+            self.position,
+            self.primary_effect.load(Ordering::Relaxed),
+            self.secondary_effect.load(Ordering::Relaxed),
+            name,
+        ))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

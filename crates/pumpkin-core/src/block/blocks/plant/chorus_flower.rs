@@ -17,8 +17,8 @@ use rand::RngExt;
 use super::chorus_plant;
 use crate::{
     block::{
-        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
-        RandomTickArgs,
+        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnProjectileHitArgs,
+        OnScheduledTickArgs, RandomTickArgs,
     },
     world::World,
 };
@@ -56,6 +56,11 @@ impl BlockBehaviour for ChorusFlowerBlock {
             args.world
                 .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        args.world
+            .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {

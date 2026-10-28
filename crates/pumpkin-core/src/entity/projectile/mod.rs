@@ -34,8 +34,8 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
     *entity_type == EntityType::ARROW
         || *entity_type == EntityType::TRIDENT
         || *entity_type == EntityType::EGG
-        || *entity_type == EntityType::SNOWBALL
         || *entity_type == EntityType::EXPERIENCE_BOTTLE
+        || *entity_type == EntityType::SNOWBALL
         || *entity_type == EntityType::FIREWORK_ROCKET
         || *entity_type == EntityType::WIND_CHARGE
         || *entity_type == EntityType::SPLASH_POTION
@@ -195,10 +195,8 @@ impl ThrownItemEntity {
             {
                 closest_t = t;
                 // Map back to block pos
-                let mut curr = 0;
                 for (len, pos) in &block_positions {
-                    curr += len;
-                    if idx < curr {
+                    if idx < *len {
                         let hit_pos = start_pos.add(&delta.multiply(t, t, t));
                         hit = Some(ProjectileHit::Block {
                             pos: *pos,

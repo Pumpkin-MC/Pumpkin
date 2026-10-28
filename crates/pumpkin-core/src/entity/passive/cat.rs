@@ -255,12 +255,34 @@ impl Mob for CatEntity {
         Some(self)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
+        Some(meta)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = self.variant.load(Ordering::Relaxed);
-        let variant_str = CatVariant::all()
-            .get(variant_id as usize)
-            .map_or("minecraft:tabby", CatVariant::asset_id);
-        nbt.put_string("variant", variant_str.to_string());
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:cat_variant", variant_id, |id| {
+                CatVariant::all()
+                    .get(id as usize)
+                    .map_or("minecraft:tabby", CatVariant::asset_id)
+                    .to_string()
+            });
+        nbt.put_string("variant", variant_str);
         let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
         nbt.put_string(
@@ -274,10 +296,14 @@ impl Mob for CatEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            let variant =
-                CatVariant::from_name(variant_str).map_or(CatVariant::Tabby.id(), |v| v.id());
-            self.variant.store(variant, Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:cat_variant", variant_str, |n| {
+                    CatVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant(variant_id);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = CatSoundVariant::from_name(sound_str)
@@ -297,8 +323,12 @@ impl Mob for CatEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = CatVariant::from_name(name).map_or(CatVariant::Tabby.id(), |v| v.id());
-        self.variant.store(variant, Ordering::Relaxed);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:cat_variant", name, |n| {
+            CatVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant(variant_id);
+        }
     }
 
     fn mob_set_sound_variant_name(&self, name: &str) {
@@ -370,7 +400,9 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
+                let parent_interaction =
+                    self.mob_entity
+                        .mob_interact(player, item_stack, self.can_be_leashed());
                 if !parent_interaction {
                     self.set_sitting(!self.is_sitting());
                     return true;
@@ -401,7 +433,8 @@ impl Mob for CatEntity {
             return true;
         }
 
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

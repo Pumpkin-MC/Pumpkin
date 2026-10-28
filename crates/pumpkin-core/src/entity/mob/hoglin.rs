@@ -29,6 +29,7 @@ pub struct HoglinEntity {
 impl HoglinEntity {
     pub const CONVERSION_TIME: i32 = 300;
     pub const XP_REWARD: u32 = 5;
+    pub const BABY_XP_REWARD: u32 = 3;
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -169,6 +170,22 @@ impl Mob for HoglinEntity {
     fn spawn_as_baby(&self) -> bool {
         self.is_baby.store(true, Ordering::Relaxed);
         self.mob_entity.set_baby_by_age();
+        true
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        if self.mob_entity.living_entity.is_baby() {
+            Self::BABY_XP_REWARD
+        } else {
+            Self::XP_REWARD
+        }
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        self.mob_entity.living_entity.should_drop_loot()
+    }
+
+    fn should_drop_experience(&self) -> bool {
         true
     }
 

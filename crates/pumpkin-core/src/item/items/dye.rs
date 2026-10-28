@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::block::entities::{BlockEntity, sign::Text};
 use pumpkin_data::data_component_impl::DyeImpl;
 use pumpkin_data::tag;
-use pumpkin_util::GameMode;
 
 use crate::{
     block::{UseWithItemArgs, registry::BlockActionResult},
@@ -30,37 +29,20 @@ impl ItemBehaviour for DyeItem {
         if let Some(sheep) = entity
             .cast_any()
             .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
+            && entity.get_entity().is_alive()
             && !sheep.is_sheared()
             && color != sheep.get_color()
         {
+            let ent = entity.get_entity();
+            ent.world.load().play_sound_expect(
+                player,
+                pumpkin_data::sound::Sound::ItemDyeUse,
+                pumpkin_data::sound::SoundCategory::Players,
+                &ent.pos.load(),
+            );
             sheep.set_color(color);
-            let ent = entity.get_entity();
-            let world = ent.world.load();
-            world.play_sound(
-                pumpkin_data::sound::Sound::ItemDyeUse,
-                pumpkin_data::sound::SoundCategory::Players,
-                &ent.pos.load(),
-            );
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-        } else if let Some(cushion) = entity
-            .cast_any()
-            .downcast_ref::<crate::entity::decoration::cushion::CushionEntity>(
-        ) && color != cushion.color()
-        {
-            cushion.set_color(color);
-            let ent = entity.get_entity();
-            let world = ent.world.load();
-            world.play_sound(
-                pumpkin_data::sound::Sound::ItemDyeUse,
-                pumpkin_data::sound::SoundCategory::Players,
-                &ent.pos.load(),
-            );
             item.decrement_unless_creative(player.gamemode.load(), 1);
         }
-    }
-
-    fn can_mine(&self, player: &Player) -> bool {
-        player.gamemode.load() != GameMode::Creative
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -75,6 +57,9 @@ impl DyeItem {
         block_entity: &Arc<dyn BlockEntity>,
         text: &Text,
     ) -> BlockActionResult {
+        if !text.has_message(args.player.is_text_filtering_enabled()) {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
         let Some(dye) = args.item_stack.get_data_component::<DyeImpl>() else {
             return BlockActionResult::PassToDefaultBlockAction;
         };

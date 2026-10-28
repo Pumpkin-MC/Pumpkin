@@ -240,7 +240,7 @@ use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
@@ -430,6 +430,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Head position of the bed the player is currently sleeping in.
     pub sleeping_bed_pos: AtomicCell<Option<BlockPos>>,
+    /// Whether the player is ignored when calculating the percentage of sleeping players needed to skip the night.
+    pub sleeping_ignored: AtomicBool,
     /// Manages the player's breath level
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
@@ -440,6 +442,8 @@ pub struct Player {
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The village position where Raid Omen was triggered.
     pub raid_omen_position: AtomicCell<Option<BlockPos>>,
+    /// Starting position when riding a vehicle in lava (for advancement tracking).
+    pub entered_lava_pos: AtomicCell<Option<Vector3<f64>>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -578,8 +582,9 @@ struct SkinMetadata {
 }
 
 impl Player {
-    #[must_use]
-    pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+    pub async fn fetch_skin(
+        properties: &[Property],
+    ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
         let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
         let decoded = BASE64_STANDARD
             .decode(textures_prop.value.as_bytes())
@@ -593,19 +598,8 @@ impl Player {
             .and_then(|m| m.model.as_deref())
             .is_some_and(|model| model == "slim");
 
-        let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            tokio::task::block_in_place(|| {
-                handle.block_on(async {
-                    let client = pumpkin_auth::client();
-                    client.get(&url).send().await.ok()?.bytes().await.ok()
-                })
-            })?
-        } else {
-            tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_auth::client();
-                client.get(&url).send().await.ok()?.bytes().await.ok()
-            })?
-        };
+        let client = pumpkin_auth::client();
+        let bytes = client.get(&url).send().await.ok()?.bytes().await.ok()?;
         let img = image::load_from_memory(&bytes).ok()?;
 
         let width = img.width();
@@ -709,9 +703,7 @@ impl Player {
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
 
-        let properties = gameprofile.properties.load();
-        let mut bedrock_skin = Self::fetch_skin(&properties)
-            .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve);
+        let mut bedrock_skin = pumpkin_protocol::bedrock::client::Skin::steve();
 
         // Standard_Custom is a shared placeholder. Give fallback skins a stable,
         // per-player identity so Bedrock never sees duplicate skin IDs.
@@ -749,6 +741,7 @@ impl Player {
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
+            entered_lava_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
@@ -767,6 +760,7 @@ impl Player {
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
+            sleeping_ignored: AtomicBool::new(false),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
@@ -1700,16 +1694,70 @@ impl Player {
         }
     }
 
-    /// Applies `amount` durability damage to the item in `slot`.
-    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
-    pub fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
+    /// Damages a stack through the player's item events; the caller handles inventory and break updates.
+    pub fn damage_item_stack(&self, stack: &mut ItemStack, amount: i32) -> DamageResult {
         if matches!(
             self.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
-        ) {
-            return false;
+        ) || amount <= 0
+            || !stack.is_damageable()
+            || stack.is_unbreakable()
+        {
+            return DamageResult::Untouched;
         }
 
+        let original_item = stack.item;
+        let world = self.world();
+        let player_context = world
+            .server
+            .upgrade()
+            .zip(world.get_player_by_uuid(self.gameprofile.id));
+        let amount = if let Some((server, player)) = &player_context {
+            let mut event =
+                crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
+                    player.clone(),
+                    original_item.registry_key.to_string(),
+                    amount,
+                );
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if event.cancelled {
+                return DamageResult::Untouched;
+            }
+            event.damage
+        } else {
+            amount
+        };
+
+        let result = stack.damage_item(amount);
+        if result != DamageResult::Untouched {
+            let vehicle_type = self
+                .living_entity
+                .entity
+                .get_vehicle()
+                .map(|v| format!("minecraft:{}", v.get_entity().entity_type.resource_name));
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ItemDurabilityChanged {
+                    item_id: original_item.registry_key.to_string(),
+                    vehicle_type,
+                },
+            );
+        }
+        if result == DamageResult::Broken
+            && let Some((server, player)) = player_context
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
+                    player,
+                    original_item.registry_key.to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        result
+    }
+
+    /// Applies `amount` durability damage to the item in `slot`.
+    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
+    pub fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         // Direct PlayerInventory slot indices (matches build_equipment_slots).
         let slot_index: usize = match slot {
             EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
@@ -1731,32 +1779,12 @@ impl Player {
                 pumpkin_data::data_component_impl::IdOr::Id(s) => Some(s),
                 pumpkin_data::data_component_impl::IdOr::Value(_) => None,
             });
-        let result = stack.damage_item(amount);
-        let updated = (result != pumpkin_data::item_stack::DamageResult::Untouched)
-            .then_some((result, stack.clone()));
+        let result = self.damage_item_stack(&mut stack, amount);
+        let updated = (result != DamageResult::Untouched).then_some((result, stack.clone()));
 
         if let Some((result, updated_stack)) = updated {
             self.inventory.set_slot(slot_index, updated_stack.clone());
-            if let Some(server) = self.world().server.upgrade()
-                && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            {
-                let mut event = crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
-                    player_arc,
-                    original_item.registry_key.to_string(),
-                    amount,
-                );
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if result == pumpkin_data::item_stack::DamageResult::Broken {
-                if let Some(server) = self.world().server.upgrade()
-                    && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-                {
-                    let mut event = crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
-                        player_arc,
-                        original_item.registry_key.to_string(),
-                    );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                }
+            if result == DamageResult::Broken {
                 self.increment_stat(
                     statistics::StatisticCategory::Broken,
                     original_item.id as i32,
@@ -2591,8 +2619,10 @@ impl Player {
                 return;
             }
         }
-        let packet = COpenSignEditor::new(location, is_front_text);
-        self.try_send_client_packet(&packet);
+        self.try_enqueue_packet_editioned(
+            &COpenSignEditor::new(location, is_front_text),
+            &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(location, is_front_text),
+        );
     }
 
     pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
@@ -2721,15 +2751,23 @@ impl Player {
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
-                    let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-                        player_arc.clone(),
-                        packet.id,
-                        packet.payload.clone(),
-                    );
-                    server_arc
+                    let cancelled = if server_arc
                         .plugin_manager
-                        .fire_blocking(&server_arc, &mut event);
-                    if !event.cancelled
+                        .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
+                    ) {
+                        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                            player_arc.clone(),
+                            packet.id,
+                            packet.payload.clone(),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut event);
+                        event.cancelled
+                    } else {
+                        false
+                    };
+                    if !cancelled
                         && let Err(err) =
                             client.handle_play_packet(&player_arc, &server_arc, &packet)
                     {
@@ -3016,6 +3054,14 @@ impl Player {
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
+        if self.tick_counter.load(Ordering::Relaxed) % 20 == 0 {
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Location,
+            );
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Tick,
+            );
+        }
         if let Ok(mut adv) = self.advancements.try_lock() {
             adv.flush_dirty(self, true);
         }
@@ -4022,6 +4068,58 @@ impl Player {
         } else {
             Some(hit.block_pos)
         }
+    }
+
+    pub fn get_target_entity(
+        &self,
+        world: &Arc<World>,
+        max_distance: f64,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let (yaw, pitch) = (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        );
+        let eye_pos = self.living_entity.entity.get_eye_pos();
+        let yaw_rad = f64::from(yaw + 90.0).to_radians();
+        let pitch_rad = f64::from(-pitch).to_radians();
+        let dir = pumpkin_util::math::vector3::Vector3::new(
+            pitch_rad.cos() * yaw_rad.cos(),
+            pitch_rad.sin(),
+            pitch_rad.cos() * yaw_rad.sin(),
+        );
+        let ray = dir * max_distance;
+        let end_pos = eye_pos + ray;
+        let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.min(end_pos.x),
+                eye_pos.y.min(end_pos.y),
+                eye_pos.z.min(end_pos.z),
+            ),
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.max(end_pos.x),
+                eye_pos.y.max(end_pos.y),
+                eye_pos.z.max(end_pos.z),
+            ),
+        )
+        .expand(1.0, 1.0, 1.0);
+
+        let entities = world.get_entities_at_box(&search_box);
+        let mut closest_t = 1.0f64;
+        let mut closest_entity = None;
+
+        for entity in entities {
+            if entity.get_entity().entity_id == self.entity_id() {
+                continue;
+            }
+            let ebb = entity.get_entity().bounding_box.load();
+            if let Some(t) = ebb.ray_intersection(eye_pos, ray)
+                && t < closest_t
+            {
+                closest_t = t;
+                closest_entity = Some(entity);
+            }
+        }
+        closest_entity
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
@@ -5420,6 +5518,9 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
+        );
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -6357,17 +6458,6 @@ impl Player {
         self.gamemode.load() == GameMode::Creative
     }
 
-    /// Vanilla `Player.canBeSeenAsEnemy`: not `abilities.invulnerable`, and alive and not a spectator.
-    #[must_use]
-    pub fn can_be_seen_as_enemy(&self) -> bool {
-        !self
-            .abilities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .invulnerable
-            && self.living_entity.can_take_damage()
-    }
-
     /// Vanilla `NeutralMob.isValidPlayerTarget`: not creative or spectator, and the world is
     /// not Peaceful. `abilities.invulnerable` is left out like vanilla, `can_attack` checks it.
     #[must_use]
@@ -6918,6 +7008,16 @@ impl EntityBase for Player {
 
     fn is_spectator(&self) -> bool {
         self.gamemode.load() == GameMode::Spectator
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        !self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            && !self.get_entity().invulnerable.load(Ordering::Relaxed)
+            && self.can_be_seen_by_anyone()
     }
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
@@ -8077,6 +8177,37 @@ impl InventoryPlayer for Player {
             }
             world.sync_world_event(pumpkin_data::world::WorldEvent::SoundGrindstoneUsed, pos, 0);
         }
+    }
+
+    fn on_enchanted_item(&self, levels: i32) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EnchantedItem {
+                levels,
+            },
+        );
+    }
+
+    fn on_recipe_crafted(&self, item: &pumpkin_data::item_stack::ItemStack) {
+        let key = item.item.registry_key.to_string();
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeCrafted {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeUnlocked {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+        );
+    }
+
+    fn on_brewed_potion(&self) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
+        );
     }
 }
 

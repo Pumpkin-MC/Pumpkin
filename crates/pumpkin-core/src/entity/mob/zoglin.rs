@@ -15,7 +15,7 @@ use crate::entity::{
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     living::LivingEntity,
-    mob::{Mob, MobEntity, hoglin::throw_target},
+    mob::{Mob, MobEntity, MobMetadata, hoglin::throw_target},
 };
 use crate::world::World;
 
@@ -118,7 +118,7 @@ impl ZoglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
         let living = &self.mob_entity.living_entity;
-        living.entity.entity_dimension.store(if baby {
+        living.entity.set_default_dimensions(if baby {
             Self::BABY_DIMENSIONS
         } else {
             Entity::type_dimensions(living.entity.entity_type)
@@ -130,6 +130,10 @@ impl ZoglinEntity {
 }
 
 impl Mob for ZoglinEntity {
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        self.is_baby().then(|| MobMetadata::new().baby(true))
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

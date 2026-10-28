@@ -148,11 +148,9 @@ pub trait NeutralMob: Mob {
     }
 
     fn stop_being_angry(&self) {
-        // keeps the revenge goal from re-triggering.
         self.get_mob_entity()
             .living_entity
-            .last_attacker_id
-            .store(0, Relaxed);
+            .set_last_hurt_by_mob(None);
         self.set_persistent_anger_target(None);
         self.set_mob_target(None);
         self.set_anger_end_time(NO_ANGER_END_TIME);
