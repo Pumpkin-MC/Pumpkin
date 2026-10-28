@@ -21,6 +21,13 @@ pub(crate) const OBJECTIVE_READ_ONLY_ERROR: CommandErrorType<1> = CommandErrorTy
     translation::java::ARGUMENTS_OBJECTIVE_READONLY,
 );
 
+pub(crate) fn criterion_is_read_only(criterion: &str) -> bool {
+    matches!(
+        criterion,
+        "health" | "food" | "air" | "armor" | "xp" | "level"
+    )
+}
+
 /// Represents an argument type parsing a scoreboard objective name.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectiveArgumentType;
@@ -83,11 +90,7 @@ impl ObjectiveArgumentType {
     ) -> Result<&'a ScoreboardObjective, CommandSyntaxError> {
         let objective = Self::objective_or_error(scoreboard, name)?;
         // These are the six criteria registered as read-only by vanilla ObjectiveCriteria.
-        let read_only = matches!(
-            objective.criterion.as_str(),
-            "health" | "food" | "air" | "armor" | "xp" | "level"
-        );
-        if read_only {
+        if criterion_is_read_only(&objective.criterion) {
             return Err(OBJECTIVE_READ_ONLY_ERROR
                 .create_without_context(TextComponent::text(name.to_string())));
         }

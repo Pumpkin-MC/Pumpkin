@@ -807,7 +807,7 @@ impl CommandExecutor for ModifyExecutor {
 
 // ---------------- REGISTRATION ----------------
 
-fn make_target_arg(
+pub fn make_target_arg(
     kind: TargetKind,
     name: &'static str,
 ) -> crate::command::argument_builder::RequiredArgumentBuilder {
