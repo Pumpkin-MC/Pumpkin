@@ -413,10 +413,17 @@ impl DispenserBlock {
         }
     }
 
+    // Vanilla default `DispenseConfig` position: 0.7 blocks out, 0.1 up.
     fn projectile_spawn_position(ctx: &DispenseContext<'_>) -> Vector3<f64> {
         ctx.position
             .to_centered_f64()
             .add(&(to_normal(ctx.facing) * 0.7))
+            .add(&Vector3::new(0.0, 0.1, 0.0))
+    }
+
+    // Fire charge and wind charge `DispenseConfig` position: 1 block out.
+    fn charge_spawn_position(ctx: &DispenseContext<'_>) -> Vector3<f64> {
+        ctx.position.to_centered_f64().add(&to_normal(ctx.facing))
     }
 
     fn launch_thrown(
@@ -426,7 +433,7 @@ impl DispenserBlock {
         uncertainty: f64,
     ) {
         let facing = to_normal(ctx.facing);
-        thrown.set_velocity(facing.x, facing.y + 0.1, facing.z, power, uncertainty);
+        thrown.set_velocity(facing.x, facing.y, facing.z, power, uncertainty);
     }
 
     fn finish_projectile_launch(
@@ -462,7 +469,7 @@ impl DispenserBlock {
 
         arrow.set_velocity(
             facing.x,
-            facing.y + 0.1,
+            facing.y,
             facing.z,
             Self::DEFAULT_PROJECTILE_POWER,
             Self::DEFAULT_PROJECTILE_UNCERTAINTY,
@@ -696,7 +703,7 @@ impl DispenserBlock {
         let _ = item.split(1);
         let entity = Entity::new(
             ctx.world.clone(),
-            Self::projectile_spawn_position(ctx),
+            Self::charge_spawn_position(ctx),
             &EntityType::SMALL_FIREBALL,
         );
         let fireball = SmallFireballEntity::new(entity);
@@ -720,7 +727,7 @@ impl DispenserBlock {
         let _ = item.split(1);
         let entity = Entity::new(
             ctx.world.clone(),
-            Self::projectile_spawn_position(ctx),
+            Self::charge_spawn_position(ctx),
             &EntityType::WIND_CHARGE,
         );
         let thrown = ThrownItemEntity {
@@ -746,12 +753,11 @@ impl DispenserBlock {
     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
         let launched_stack = item.split(1);
         let facing = to_normal(ctx.facing);
-        // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
+        // Vanilla `getEntityJustOutsideOfBlockPos`.
         let position = ctx
             .position
             .to_centered_f64()
-            .add(&(facing * (0.7 * 0.5125)))
-            .add(&Vector3::new(0.0, 0.08, 0.0));
+            .add(&(facing * 0.500_009_999_999_747_4));
         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
         let rocket = FireworkRocketEntity::new_with_stack(entity, launched_stack);
         rocket.set_shot_at_angle(true);
@@ -759,7 +765,7 @@ impl DispenserBlock {
         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
         // `ThrownItemEntity::set_velocity` here.
         let deviation = 0.017_227_5 * Self::FIREWORK_PROJECTILE_UNCERTAINTY;
-        let velocity = Vector3::new(facing.x, facing.y + 0.1, facing.z)
+        let velocity = Vector3::new(facing.x, facing.y, facing.z)
             .normalize()
             .add_raw(
                 triangle(&mut rng(), 0.0, deviation),
