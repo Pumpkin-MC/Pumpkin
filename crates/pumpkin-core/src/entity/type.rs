@@ -253,9 +253,6 @@ pub fn from_type(
         id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity)),
         id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),
         id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
-        id if id == EntityType::EXPERIENCE_BOTTLE.id => {
-            Arc::new(ExperienceBottleEntity::new(entity))
-        }
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
         id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
@@ -315,6 +312,9 @@ pub fn from_type(
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
+        id if id == EntityType::EXPERIENCE_BOTTLE.id => {
+            Arc::new(ExperienceBottleEntity::new(entity))
+        }
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
         id if id == EntityType::LLAMA_SPIT.id => Arc::new(LlamaSpitEntity::new(entity)),
         id if id == EntityType::EYE_OF_ENDER.id => Arc::new(EyeOfEnder::new(entity)),

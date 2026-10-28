@@ -192,11 +192,13 @@ pub(crate) fn build() -> TokenStream {
             pub entries: &'static [StaticRegistryEntry],
         }
 
+        #[derive(Clone, Debug, PartialEq, Eq)]
         pub struct RegistryEntryData {
             pub entry_id: ResourceLocation,
             pub data: Option<Box<[u8]>>,
         }
 
+        #[derive(Clone, Debug, PartialEq, Eq)]
         pub struct Registry {
             pub registry_id: ResourceLocation,
             pub registry_entries: Vec<RegistryEntryData>,
