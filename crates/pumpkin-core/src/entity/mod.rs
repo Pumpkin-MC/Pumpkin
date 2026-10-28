@@ -214,6 +214,34 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    #[must_use]
+    fn resolve_dynamic_raw_id(
+        &self,
+        registry: &str,
+        name: &str,
+        static_fallback: impl FnOnce(&str) -> Option<u32>,
+    ) -> Option<u32>
+    where
+        Self: Sized,
+    {
+        self.get_entity()
+            .resolve_dynamic_raw_id(registry, name, static_fallback)
+    }
+
+    #[must_use]
+    fn resolve_dynamic_entry_id(
+        &self,
+        registry: &str,
+        raw_id: u32,
+        static_fallback: impl FnOnce(u32) -> String,
+    ) -> String
+    where
+        Self: Sized,
+    {
+        self.get_entity()
+            .resolve_dynamic_entry_id(registry, raw_id, static_fallback)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any
     where
         Self: Sized,
@@ -1154,6 +1182,41 @@ impl EntityBoundingBox {
 }
 
 impl Entity {
+    #[must_use]
+    pub fn get_server(&self) -> Option<std::sync::Arc<Server>> {
+        self.world.load().server.upgrade()
+    }
+
+    #[must_use]
+    pub fn resolve_dynamic_raw_id(
+        &self,
+        registry: &str,
+        name: &str,
+        static_fallback: impl FnOnce(&str) -> Option<u32>,
+    ) -> Option<u32> {
+        self.get_server()
+            .and_then(|s| {
+                s.datapack_manager
+                    .get_dynamic_registry_raw_id(registry, name)
+            })
+            .or_else(|| static_fallback(name))
+    }
+
+    #[must_use]
+    pub fn resolve_dynamic_entry_id(
+        &self,
+        registry: &str,
+        raw_id: u32,
+        static_fallback: impl FnOnce(u32) -> String,
+    ) -> String {
+        self.get_server()
+            .and_then(|s| {
+                s.datapack_manager
+                    .get_dynamic_registry_entry_id(registry, raw_id)
+            })
+            .unwrap_or_else(|| static_fallback(raw_id))
+    }
+
     pub fn new(
         world: Arc<World>,
         position: Vector3<f64>,
@@ -3827,6 +3890,36 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        if let Some(player) = passenger.get_player() {
+            let other_passenger_type = passengers
+                .first()
+                .map(|p| format!("minecraft:{}", p.get_entity().entity_type.resource_name));
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                    vehicle_type: Some(format!("minecraft:{}", self.entity_type.resource_name)),
+                    passenger_type: other_passenger_type,
+                },
+            );
+        } else {
+            for p in passengers.iter() {
+                if let Some(player) = p.get_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                            vehicle_type: Some(format!(
+                                "minecraft:{}",
+                                self.entity_type.resource_name
+                            )),
+                            passenger_type: Some(format!(
+                                "minecraft:{}",
+                                passenger_entity.entity_type.resource_name
+                            )),
+                        },
+                    );
+                }
+            }
+        }
+
         passengers.push(passenger);
 
         let passenger_ids: Vec<VarInt> = passengers

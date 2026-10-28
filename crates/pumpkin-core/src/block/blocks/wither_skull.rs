@@ -12,7 +12,7 @@ use crate::block::entities::skull::SkullBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
-        PlacedArgs, blocks::skull_block::SkullBlock,
+        PlacedArgs, PlayerPlacedArgs, blocks::skull_block::SkullBlock,
     },
     entity::{Entity, boss::wither::WitherEntity},
     world::World,
@@ -126,6 +126,16 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
 
         if let Some(pattern) = find_wither_pattern(args.world, args.position) {
             spawn_wither(args.world, &pattern);
+        }
+    }
+
+    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        if find_wither_pattern(args.world, args.position).is_some() {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SummonedEntity {
+                    entity_type: "minecraft:wither".to_string(),
+                },
+            );
         }
     }
 

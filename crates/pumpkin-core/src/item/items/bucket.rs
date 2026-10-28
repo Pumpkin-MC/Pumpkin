@@ -22,7 +22,7 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
-    GameMode, Hand,
+    Hand,
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::world::BlockFlags;
@@ -112,6 +112,11 @@ fn give_filled_bucket_stack(
     mut filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
+    player.trigger_advancement(
+        crate::entity::player::advancement::trigger::AdvancementTrigger::FilledBucket {
+            item_id: filled.item.registry_key.to_string(),
+        },
+    );
     if limit_creative_stack_size && player.has_infinite_materials() {
         let has_item = {
             let inv = player
@@ -626,7 +631,7 @@ impl ItemBehaviour for FilledBucketItem {
 
         player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
 
-        if player.gamemode.load() != GameMode::Creative {
+        if !player.has_infinite_materials() {
             let mut updated_stack = bucket_stack;
             give_filled_bucket_stack(
                 &mut updated_stack,
