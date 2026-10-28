@@ -8,7 +8,7 @@ use pumpkin_data::{Block, dimension::Dimension, item::Item};
 use pumpkin_gametest::GameTestRunner;
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 
-use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS, PACKET_TIMEOUT};
 
 pub async fn run_commands_and_gamemode_tests(
     server: &Arc<Server>,
@@ -34,7 +34,17 @@ pub async fn run_commands_and_gamemode_tests(
         (bot1.position.y.floor() as i32) + 10,
         bot1.position.z.floor() as i32,
     );
-    let _ = world.get_block(&marker_pos);
+    // `/setblock` rejects unloaded chunks, and on a slow runner the spawn chunk can still be loading.
+    let load_start = Instant::now();
+    while !world.is_loaded(&marker_pos) && load_start.elapsed() < PACKET_TIMEOUT {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        server.tick();
+    }
+    if !world.is_loaded(&marker_pos) {
+        return Err(format!(
+            "Chunk at {marker_pos:?} did not load for `/setblock`"
+        ));
+    }
     bot1.send_command(&format!(
         "setblock {} {} {} minecraft:emerald_block",
         marker_pos.0.x, marker_pos.0.y, marker_pos.0.z
