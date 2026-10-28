@@ -25,6 +25,12 @@ impl JavaClient {
                 'after: {
                     if event.is_flying {
                         player.living_entity.fall_distance.store(0.0);
+                        // Creative/spectator flight and elytra gliding are mutually exclusive in
+                        // vanilla; a client that (however it got there) is both mid-glide and
+                        // now enabling flight shouldn't end up stuck in the glide pose/motion.
+                        if player.get_entity().is_fall_flying() {
+                            player.get_entity().set_fall_flying(false);
+                        }
                     }
                     player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = event.is_flying;
                 }

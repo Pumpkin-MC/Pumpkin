@@ -43,7 +43,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, GliderImpl, UseRemainderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -1359,6 +1359,38 @@ impl LivingEntity {
     // Check if the entity is in water
     pub fn is_in_water(&self) -> bool {
         self.entity.touching_water.load(Ordering::Relaxed)
+    }
+
+    /// Mirrors vanilla's elytra-eligibility gate (`LivingEntity.tryToStartFallFlying`, minus the
+    /// actual state transition): flight requires a non-broken item with the `glider` data
+    /// component equipped in some slot, and is blocked while underwater or under Levitation.
+    /// The caller is still responsible for checking that the entity is airborne.
+    pub fn can_glide(&self) -> bool {
+        if self.is_in_water() || self.has_effect(&StatusEffect::LEVITATION) {
+            return false;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment.equipment.values().any(|stack| {
+            stack.get_data_component::<GliderImpl>().is_some()
+                && stack
+                    .get_max_damage()
+                    .is_none_or(|max| max.saturating_sub(stack.get_damage()) > 1)
+        })
+    }
+
+    /// Whether a glider item (of any durability) is equipped in some slot. An already-active
+    /// glide continues until it's removed, even at 1 durability; `can_glide` additionally
+    /// requires a non-broken one to *start* one.
+    pub fn has_elytra_equipped(&self) -> bool {
+        self.entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .values()
+            .any(|stack| stack.get_data_component::<GliderImpl>().is_some())
     }
 
     // Check if the entity is in powder snow
