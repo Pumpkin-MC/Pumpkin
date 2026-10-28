@@ -18,6 +18,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::mob::raider::create_ominous_banner;
+use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::world::raid::RaidStatus;
@@ -241,6 +242,7 @@ impl CommandExecutor for SpawnLeaderExecutor {
             living.send_equipment_changes(&[(EquipmentSlot::HEAD, banner)]);
         }
 
+        finalize_spawn(&raider_entity, &world, None);
         world.spawn_entity(raider_entity);
         context
             .source

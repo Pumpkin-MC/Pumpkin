@@ -16,7 +16,7 @@ use crate::{
         BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnStateReplacedArgs,
         RandomTickArgs,
     },
-    entity::{EntityBase, r#type::from_type},
+    entity::{EntityBase, mob::spawn::finalize_spawn, r#type::from_type},
     world::{World, portal::nether::NetherPortal},
 };
 
@@ -113,6 +113,8 @@ impl BlockBehaviour for NetherPortalBlock {
                 args.world,
                 Uuid::new_v4(),
             );
+            // Vanilla spawns it through `EntityType.spawn`, which finalizes the spawn.
+            finalize_spawn(&mob, args.world, None);
             mob.get_entity()
                 .portal_cooldown
                 .store(300, Ordering::Relaxed);

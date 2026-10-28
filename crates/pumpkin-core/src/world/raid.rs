@@ -14,6 +14,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::raider::create_ominous_banner;
+use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
@@ -354,6 +355,8 @@ impl Raid {
                     }
                     raider.set_wave(group_number);
                     raider.set_can_join_raid(true);
+                    // Vanilla `Raid.joinRaid` finalizes the spawn before the raid buffs.
+                    finalize_spawn(&entity_base, world, None);
                     raider.apply_raid_buffs(group_number, false);
                 }
 
@@ -381,6 +384,7 @@ impl Raid {
                         {
                             raider.set_wave(group_number);
                             raider.set_can_join_raid(true);
+                            finalize_spawn(&rider_base, world, None);
                             raider.apply_raid_buffs(group_number, false);
                         }
                         self.join_raid(group_number, rider_uuid, &rider_base);
