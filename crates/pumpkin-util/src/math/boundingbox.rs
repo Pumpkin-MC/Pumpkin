@@ -474,6 +474,34 @@ impl BoundingBox {
 
         super::squared_magnitude(d, e, f)
     }
+
+    /// Checks for a ray intersection between a line segment `(start, start + dir)` and this box.
+    /// Returns the normalized intersection time `t` in `[0.0, 1.0]` if any intersection occurs.
+    #[must_use]
+    pub fn ray_intersection(&self, start: Vector3<f64>, dir: Vector3<f64>) -> Option<f64> {
+        let mut t_min = 0.0f64;
+        let mut t_max = 1.0f64;
+
+        let b_min = [self.min.x, self.min.y, self.min.z];
+        let b_max = [self.max.x, self.max.y, self.max.z];
+        let s = [start.x, start.y, start.z];
+        let d = [dir.x, dir.y, dir.z];
+
+        for i in 0..3 {
+            if d[i].abs() < 1e-9 {
+                if s[i] < b_min[i] || s[i] > b_max[i] {
+                    return None;
+                }
+            } else {
+                let t1 = (b_min[i] - s[i]) / d[i];
+                let t2 = (b_max[i] - s[i]) / d[i];
+                t_min = t_min.max(t1.min(t2));
+                t_max = t_max.min(t1.max(t2));
+            }
+        }
+
+        (t_min <= t_max && (0.0..=1.0).contains(&t_min)).then_some(t_min)
+    }
 }
 
 /// Represents the dimensions of an entity.
@@ -501,5 +529,27 @@ impl EntityDimensions {
             height,
             eye_height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ray_intersection_hits_and_misses() {
+        let bb = BoundingBox::new(Vector3::new(-1.0, -1.0, -1.0), Vector3::new(1.0, 1.0, 1.0));
+        let start = Vector3::new(-5.0, 0.0, 0.0);
+        let dir_hit = Vector3::new(10.0, 0.0, 0.0);
+        let hit = bb.ray_intersection(start, dir_hit);
+        assert!(hit.is_some());
+        let t = hit.unwrap();
+        assert!((t - 0.4).abs() < 1e-6);
+
+        let dir_miss = Vector3::new(0.0, 10.0, 0.0);
+        assert!(bb.ray_intersection(start, dir_miss).is_none());
+
+        let dir_short = Vector3::new(2.0, 0.0, 0.0);
+        assert!(bb.ray_intersection(start, dir_short).is_none());
     }
 }

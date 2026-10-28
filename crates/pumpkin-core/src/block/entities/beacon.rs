@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pumpkin_data::Block;
-use pumpkin_data::advancement::Advancement;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -24,6 +23,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::world::World;
 
 const MAX_LEVELS: i32 = 4;
@@ -181,13 +181,7 @@ impl BeaconBlockEntity {
             {
                 continue;
             }
-            player.trigger_advancement_criterion(Advancement::NETHER_CREATE_BEACON, "beacon");
-            if levels >= MAX_LEVELS {
-                player.trigger_advancement_criterion(
-                    Advancement::NETHER_CREATE_FULL_BEACON,
-                    "beacon",
-                );
-            }
+            player.trigger_advancement(AdvancementTrigger::ConstructBeacon { level: levels });
         }
     }
 

@@ -168,6 +168,10 @@ impl ItemEntity {
         self.thrower.store(Some(uuid));
     }
 
+    pub fn get_thrower(&self) -> Option<uuid::Uuid> {
+        self.thrower.load()
+    }
+
     pub fn get_pickup_delay(&self) -> u8 {
         self.pickup_delay.load(Ordering::Relaxed)
     }

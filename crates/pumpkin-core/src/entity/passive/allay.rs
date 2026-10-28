@@ -232,7 +232,24 @@ impl AllayEntity {
                 .get_item_stack()
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let item_key = ground.item.registry_key.to_string();
             self.add_item(&mut ground);
+            if let Some(thrower_uuid) = item.get_thrower()
+                && let Some(thrower_player) = self
+                    .get_entity()
+                    .world
+                    .load()
+                    .get_player_by_uuid(thrower_uuid)
+            {
+                thrower_player.trigger_advancement(
+                    AdvancementTrigger::ThrownItemPickedUpByEntity {
+                        entity_type: "minecraft:allay".to_string(),
+                        item_id: item_key,
+                        is_baby: false,
+                        player_wearing_safe_armor: false,
+                    },
+                );
+            }
             let empty = ground.is_empty();
             drop(ground);
             if empty {

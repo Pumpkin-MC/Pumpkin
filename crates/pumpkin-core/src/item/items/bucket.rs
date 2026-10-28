@@ -110,6 +110,11 @@ fn give_filled_bucket_stack(
     mut filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
+    player.trigger_advancement(
+        crate::entity::player::advancement::trigger::AdvancementTrigger::FilledBucket {
+            item_id: filled.item.registry_key.to_string(),
+        },
+    );
     if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player

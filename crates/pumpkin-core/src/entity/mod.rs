@@ -3827,6 +3827,36 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        if let Some(player) = passenger.get_player() {
+            let other_passenger_type = passengers
+                .first()
+                .map(|p| format!("minecraft:{}", p.get_entity().entity_type.resource_name));
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                    vehicle_type: Some(format!("minecraft:{}", self.entity_type.resource_name)),
+                    passenger_type: other_passenger_type,
+                },
+            );
+        } else {
+            for p in passengers.iter() {
+                if let Some(player) = p.get_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                            vehicle_type: Some(format!(
+                                "minecraft:{}",
+                                self.entity_type.resource_name
+                            )),
+                            passenger_type: Some(format!(
+                                "minecraft:{}",
+                                passenger_entity.entity_type.resource_name
+                            )),
+                        },
+                    );
+                }
+            }
+        }
+
         passengers.push(passenger);
 
         let passenger_ids: Vec<VarInt> = passengers
