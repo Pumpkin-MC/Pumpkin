@@ -1548,26 +1548,28 @@ impl PluginManager {
 
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
-        // on_load runs inside the library, so it must finish before the library is released
-        self.wait_for_initialization(name).await;
-
         // State goes in the same section as the record, or a load reserving the freed name
         // would lose its Loading state to this unload
-        let mut plugin = {
+        let mut plugin = loop {
+            // on_load runs inside the library, so it must finish before the library is released
+            self.wait_for_initialization(name).await;
+
             let mut states = self.plugin_states.write().await;
-            let plugin = {
-                let mut plugins = self
-                    .plugins
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let index = plugins
-                    .iter()
-                    .position(|p| p.metadata.name == name)
-                    .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
-                plugins.remove(index)
-            };
+            // A load can reserve the name between the wait and the lock
+            if matches!(states.get(name), Some(PluginState::Loading)) {
+                continue;
+            }
+            let mut plugins = self
+                .plugins
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let index = plugins
+                .iter()
+                .position(|p| p.metadata.name == name)
+                .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
+            let plugin = plugins.remove(index);
             states.remove(name);
-            plugin
+            break plugin;
         };
 
         self.unregister_handlers(name);
