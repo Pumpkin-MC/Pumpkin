@@ -4,6 +4,11 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 use crate::entity::mob::Mob;
 
 pub const BABY_START_AGE: i32 = -24000;
+pub const DEFAULT_BABY_SPAWN_CHANCE: f32 = 0.05;
+pub const ABSTRACT_HORSE_BABY_SPAWN_CHANCE: f32 = 0.2;
+pub const PANDA_BABY_SPAWN_CHANCE: f32 = 0.2;
+pub const POLAR_BEAR_BABY_SPAWN_CHANCE: f32 = 1.0;
+pub const STRIDER_BABY_SPAWN_CHANCE: f32 = 0.5;
 pub const FORCED_AGE_PARTICLE_TICKS: i32 = 40;
 pub const AGE_LOCK_COOLDOWN_TICKS: i32 = 40;
 
@@ -33,11 +38,13 @@ pub trait AgeableMob: Mob {
     }
 
     fn is_baby(&self) -> bool {
-        self.get_mob_entity().living_entity.entity.age.load(Relaxed) < 0
+        self.can_be_a_baby() && self.get_mob_entity().living_entity.is_baby()
     }
 
     fn set_baby(&self, baby: bool) {
-        self.set_age(if baby { self.get_baby_start_age() } else { 0 });
+        if self.can_be_a_baby() {
+            self.set_age(if baby { self.get_baby_start_age() } else { 0 });
+        }
     }
 
     fn get_age(&self) -> i32 {
@@ -61,27 +68,43 @@ pub trait AgeableMob: Mob {
 
     fn age_boundary_reached(&self) {}
 
+    fn default_should_spawn_baby(&self) -> bool {
+        true
+    }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        DEFAULT_BABY_SPAWN_CHANCE
+    }
+
     fn finalize_ageable_spawn(
         &self,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
-        baby_spawn_chance: f32,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         use crate::entity::mob::spawn::SpawnGroupData;
         use rand::RngExt;
 
-        let (group_size, baby_spawn_chance) = match group_data {
+        let (group_size, should_spawn_baby, baby_spawn_chance) = match group_data {
             Some(SpawnGroupData::Ageable {
                 group_size,
+                should_spawn_baby,
                 baby_spawn_chance,
-            }) => (group_size, baby_spawn_chance),
-            _ => (0, baby_spawn_chance),
+            }) => (group_size, should_spawn_baby, baby_spawn_chance),
+            _ => (
+                0,
+                self.default_should_spawn_baby(),
+                self.default_baby_spawn_chance(),
+            ),
         };
-        if group_size > 0 && self.get_random().random::<f32>() <= baby_spawn_chance {
+        if should_spawn_baby
+            && group_size > 0
+            && self.get_random().random::<f32>() <= baby_spawn_chance
+        {
             self.set_baby(true);
         }
         self.get_mob_entity().finalize_spawn_base();
         Some(SpawnGroupData::Ageable {
             group_size: group_size + 1,
+            should_spawn_baby,
             baby_spawn_chance,
         })
     }
@@ -213,6 +236,7 @@ pub trait AgeableMob: Mob {
     }
 
     fn ageable_ai_step(&self) {
+        self.tick_age_lock_particle_timer();
         if self.can_age_up() {
             let age = self.get_age() + 1;
             self.set_age(age);

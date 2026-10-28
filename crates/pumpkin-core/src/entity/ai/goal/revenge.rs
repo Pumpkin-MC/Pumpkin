@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering::Relaxed;
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
@@ -19,7 +18,7 @@ pub type MobFilter = fn(&dyn Mob) -> bool;
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
-    last_attacked_time: i32,
+    timestamp: i32,
     target_predicate: TargetPredicate,
     ignore_damage_from: Option<EntityTypeFilter>,
     alert_others: bool,
@@ -39,7 +38,7 @@ impl RevengeGoal {
         Self {
             track_target_goal: TrackTargetGoal::with_default(check_visibility),
             target: None,
-            last_attacked_time: 0,
+            timestamp: 0,
             target_predicate,
             ignore_damage_from: None,
             alert_others: false,
@@ -137,20 +136,15 @@ impl Goal for RevengeGoal {
         let mob_entity = mob.get_mob_entity();
         let living = &mob_entity.living_entity;
 
-        let attacked_time = living.last_attacked_time.load(Relaxed);
-        if attacked_time == self.last_attacked_time {
+        let timestamp = living.get_last_hurt_by_mob_timestamp();
+        let Some(attacker) = living.get_last_hurt_by_mob() else {
             return false;
-        }
-
-        let attacker_id = living.last_attacker_id.load(Relaxed);
-        if attacker_id == 0 {
+        };
+        if timestamp == self.timestamp {
             return false;
         }
 
         let world = living.entity.world.load();
-        let Some(attacker) = world.get_entity_by_id(attacker_id) else {
-            return false;
-        };
 
         // Universal anger is handled by its own goal instead.
         if attacker.get_entity().entity_type == &EntityType::PLAYER
@@ -187,7 +181,7 @@ impl Goal for RevengeGoal {
 
         let mob_entity = mob.get_mob_entity();
         self.track_target_goal.set_target_mob(self.target.clone());
-        self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
+        self.timestamp = mob_entity.living_entity.get_last_hurt_by_mob_timestamp();
         self.track_target_goal.max_time_without_visibility = 300;
 
         let alarm = self.alarm_when.is_some_and(|filter| filter(mob));

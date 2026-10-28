@@ -74,18 +74,23 @@ impl FrogEntity {
     }
 
     pub fn set_variant(&self, variant: FrogVariant) {
-        self.variant.store(variant.id() as i32, Ordering::Relaxed);
+        self.set_variant_id(variant.id() as i32);
+    }
+
+    pub fn set_variant_id(&self, raw_id: i32) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(variant.id() as i32),
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::frog::VARIANT, VarInt(raw_id));
     }
 }
 
 impl AgeableMob for FrogEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
+    }
+
+    fn can_be_a_baby(&self) -> bool {
+        false
     }
 }
 
@@ -119,12 +124,22 @@ impl Mob for FrogEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("variant", self.get_variant().asset_id().to_string());
+        let variant_id = self.variant.load(Ordering::Relaxed) as u32;
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:frog_variant", variant_id, |_id| {
+                self.get_variant().asset_id().to_string()
+            });
+        nbt.put_string("variant", variant_str);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            self.set_variant(FrogVariant::from_name(variant_str).unwrap_or_default());
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:frog_variant", variant_str, |n| {
+                    FrogVariant::from_name(n).map(|v| v.id())
+                })
+        {
+            self.set_variant_id(id as i32);
         }
     }
 
@@ -133,7 +148,11 @@ impl Mob for FrogEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        self.set_variant(FrogVariant::from_name(name).unwrap_or_default());
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:frog_variant", name, |n| {
+            FrogVariant::from_name(n).map(|v| v.id())
+        }) {
+            self.set_variant_id(id as i32);
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -144,7 +163,7 @@ impl Mob for FrogEntity {
         }
         entity.set_synced_data(
             pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(self.get_variant().id() as i32),
+            VarInt(self.variant.load(Ordering::Relaxed)),
         );
     }
 
