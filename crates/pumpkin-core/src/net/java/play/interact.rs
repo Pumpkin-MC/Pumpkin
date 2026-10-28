@@ -119,7 +119,26 @@ impl JavaClient {
                             if !interacted {
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, event.target);
+                                    .use_on_entity(&mut stack, player, event.target.clone());
+                            }
+                            if interacted || !stack.are_equal(&before) {
+                                let is_baby =
+                                    event.target.get_entity().age.load(Ordering::Relaxed) < 0;
+                                let player_wearing_safe_armor =
+                                    crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(
+                                        &player.living_entity,
+                                    );
+                                player.trigger_advancement(
+                                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerInteractedWithEntity {
+                                        entity_type: format!(
+                                            "minecraft:{}",
+                                            event.target.get_entity().entity_type.resource_name
+                                        ),
+                                        item_id: before.item.registry_key.to_string(),
+                                        is_baby,
+                                        player_wearing_safe_armor,
+                                    },
+                                );
                             }
                             if native_interaction.is_none() && !stack.are_equal(&before) {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);

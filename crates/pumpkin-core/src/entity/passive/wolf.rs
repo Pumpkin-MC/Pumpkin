@@ -356,6 +356,15 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
+                if item == &Item::SHEARS {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerShearedEquipment {
+                            entity_type: "minecraft:wolf".to_string(),
+                            item_id: "minecraft:wolf_armor".to_string(),
+                        },
+                    );
+                }
+
                 if let Some(dye) =
                     item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
                     && dye.color.id() != self.get_collar_color()
