@@ -25,6 +25,7 @@ use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::{EntityAnchorArgumentType, EntityAnchorExt};
 use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::loot_predicate::{LootPredicate, LootPredicateArgumentType};
 use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
 use crate::command::argument_types::objective::ObjectiveArgumentType;
 use crate::command::argument_types::range::{FloatRangeArgumentType, IntRangeArgumentType};
@@ -187,6 +188,47 @@ fn execute_rotated_as_modifier(
         sources.push(Arc::new(source));
     }
     Ok(sources)
+}
+
+fn test_predicate(context: &CommandContext) -> Result<bool, CommandSyntaxError> {
+    let predicate = LootPredicateArgumentType::get(context, "predicate")?;
+    let this = context.source.entity.as_deref();
+    Ok(match predicate {
+        LootPredicate::Inline(NbtTag::Compound(condition)) => {
+            crate::data::predicate::test_condition(condition, this)
+        }
+        // An inline list behaves like `all_of`.
+        LootPredicate::Inline(NbtTag::List(conditions)) => conditions.iter().all(|condition| {
+            condition
+                .extract_compound()
+                .is_some_and(|condition| crate::data::predicate::test_condition(condition, this))
+        }),
+        LootPredicate::Inline(_) => false,
+        LootPredicate::Reference(id) => {
+            tracing::debug!("Predicate {id} is not loaded");
+            false
+        }
+    })
+}
+
+fn execute_if_predicate_modifier(
+    context: &CommandContext,
+) -> crate::command::node::RedirectModifierResult {
+    Ok(if test_predicate(context)? {
+        vec![context.source.clone()]
+    } else {
+        vec![]
+    })
+}
+
+fn execute_unless_predicate_modifier(
+    context: &CommandContext,
+) -> crate::command::node::RedirectModifierResult {
+    Ok(if test_predicate(context)? {
+        vec![]
+    } else {
+        vec![context.source.clone()]
+    })
 }
 
 fn execute_if_entity_modifier(
@@ -1228,6 +1270,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("if")
+                .then(literal("predicate").then(
+                    argument("predicate", LootPredicateArgumentType).redirect_with_modifier(
+                        Redirection::Root,
+                        RedirectModifier::Custom(Arc::new(execute_if_predicate_modifier)),
+                    ),
+                ))
                 .then(literal("entity").then(
                     argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
                         Redirection::Root,
@@ -1384,6 +1432,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         )
         .then(
             literal("unless")
+                .then(literal("predicate").then(
+                    argument("predicate", LootPredicateArgumentType).redirect_with_modifier(
+                        Redirection::Root,
+                        RedirectModifier::Custom(Arc::new(execute_unless_predicate_modifier)),
+                    ),
+                ))
                 .then(literal("entity").then(
                     argument("targets", EntityArgumentType::Entities).redirect_with_modifier(
                         Redirection::Root,

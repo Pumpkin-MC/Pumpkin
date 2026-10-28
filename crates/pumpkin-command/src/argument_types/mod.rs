@@ -246,6 +246,7 @@ pub mod hex_color;
 pub mod identifier;
 pub mod item;
 pub mod item_predicate;
+pub mod loot_predicate;
 pub mod nbt;
 pub mod nbt_path;
 pub mod particle;
