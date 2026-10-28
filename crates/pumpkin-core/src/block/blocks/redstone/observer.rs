@@ -22,26 +22,6 @@ impl BlockBehaviour for ObserverBlock {
         props.to_state_id(args.block)
     }
 
-    fn placed(&self, args: PlacedArgs<'_>) {
-        // A powered observer arriving without its unpower tick (clone, structure) would stay
-        // powered forever, so vanilla resets it here.
-        let mut props = ObserverLikeProperties::from_state_id(args.state_id);
-        if props.powered
-            && !args
-                .world
-                .is_block_tick_scheduled(args.position, &Block::OBSERVER)
-        {
-            props.powered = false;
-            // Vanilla flag 18 (clients, no shape updates); MOVED is what skips shape updates here.
-            args.world.set_block_state(
-                args.position,
-                props.to_state_id(args.block),
-                BlockFlags::NOTIFY_LISTENERS | BlockFlags::MOVED,
-            );
-            Self::update_neighbors(args.world, args.block, args.position, props);
-        }
-    }
-
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
         let mut props = ObserverLikeProperties::from_state_id(state.id);
@@ -99,6 +79,25 @@ impl BlockBehaviour for ObserverBlock {
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         self.get_weak_redstone_power(args)
+    }
+
+    fn placed(&self, args: PlacedArgs<'_>) {
+        if args.old_state_id != args.state_id {
+            let mut props = ObserverLikeProperties::from_state_id(args.state_id);
+            if props.powered
+                && !args
+                    .world
+                    .is_block_tick_scheduled(args.position, args.block)
+            {
+                props.powered = false;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                );
+                Self::update_neighbors(args.world, args.block, args.position, props);
+            }
+        }
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {

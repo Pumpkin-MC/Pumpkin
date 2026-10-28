@@ -1061,7 +1061,13 @@ impl TrialSpawner {
             && let Some(living) = entity.get_living_entity()
         {
             let seed = rand::random::<i64>();
-            let items = loot_table.generate_loot(seed);
+            let items = loot_table.generate_loot_with_context(
+                seed,
+                &crate::world::loot::LootContextParameters {
+                    world: Some(world),
+                    ..Default::default()
+                },
+            );
             let mut equipment = living
                 .entity_equipment
                 .lock()
@@ -1113,15 +1119,14 @@ impl TrialSpawner {
     }
 
     fn in_line_of_sight(world: &Arc<World>, origin: Vector3<f64>, dest: Vector3<f64>) -> bool {
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            dest,
+            origin,
+            pumpkin_world::clip::ClipBlock::Visual,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
         let origin_block = BlockPos::floored(origin.x, origin.y, origin.z);
-        let hit = world.raycast(dest, origin, |pos, w| {
-            let state = w.get_block_state(pos);
-            !state.is_air() && !state.sided_transparency()
-        });
-        match hit {
-            None => true,
-            Some((hit_pos, _)) => hit_pos == origin_block,
-        }
+        hit.is_miss || hit.block_pos == origin_block
     }
 
     pub fn eject_reward(
@@ -1135,7 +1140,13 @@ impl TrialSpawner {
             && let Some(loot_table) = world.get_loot_table(key)
         {
             let seed = rand::random::<i64>();
-            let items = loot_table.generate_loot(seed);
+            let items = loot_table.generate_loot_with_context(
+                seed,
+                &crate::world::loot::LootContextParameters {
+                    world: Some(world),
+                    ..Default::default()
+                },
+            );
             for stack in items {
                 world.drop_stack(&spawner_pos, stack);
                 dropped_any = true;

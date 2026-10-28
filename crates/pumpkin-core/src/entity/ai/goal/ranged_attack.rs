@@ -89,11 +89,7 @@ impl Goal for RangedAttackGoal {
         self.target = None;
         self.see_time = 0;
         self.attack_time = -1;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -125,11 +121,8 @@ impl Goal for RangedAttackGoal {
         }
 
         {
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             if target_dist_sq <= self.attack_radius_sqr && self.see_time >= 5 {
                 navigator.stop();
             } else {

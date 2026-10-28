@@ -16,10 +16,11 @@ pub struct ChunkTickScheduler<T> {
 struct ChunkTickSchedulerInner<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
     queued_ticks: FxHashSet<(BlockPos, T)>,
+    overdue_ticks: Vec<OrderedTick<T>>,
 }
 
 impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
-    pub fn step_tick(&self) -> Vec<OrderedTick<&'a T>> {
+    pub fn step_tick(&self, run_ticks: bool) -> Vec<OrderedTick<&'a T>> {
         // The offset only changes under `inner`, so `schedule_tick` can't pick a slot that was
         // just drained.
         let mut inner_guard = self
@@ -34,7 +35,14 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             return Vec::new();
         };
 
-        let res = std::mem::take(&mut inner.tick_queue[current_offset]);
+        // Deadlines keep advancing in loaded chunks outside simulation distance.
+        inner
+            .overdue_ticks
+            .append(&mut inner.tick_queue[current_offset]);
+        if !run_ticks {
+            return Vec::new();
+        }
+        let res = std::mem::take(&mut inner.overdue_ticks);
 
         if !res.is_empty() {
             for next_tick in &res {
@@ -58,6 +66,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         let inner = inner_guard.get_or_insert_with(|| {
             Box::new(ChunkTickSchedulerInner {
                 tick_queue: std::array::from_fn(|_| Vec::new()),
+                overdue_ticks: Vec::new(),
                 queued_ticks: FxHashSet::default(),
             })
         });
@@ -102,6 +111,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
                 && position.0.z < max.0.z
         };
 
+        inner.overdue_ticks.retain(|tick| !contains(&tick.position));
         for queue in &mut inner.tick_queue {
             queue.retain(|tick| !contains(&tick.position));
         }
@@ -134,7 +144,16 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             return Vec::new();
         };
 
-        let mut res = Vec::new();
+        let mut res: Vec<_> = inner
+            .overdue_ticks
+            .iter()
+            .map(|tick| ScheduledTick {
+                delay: 0,
+                priority: tick.priority,
+                position: tick.position,
+                value: tick.value,
+            })
+            .collect();
 
         for i in 0..MAX_TICK_DELAY {
             let index = (offset + i) % MAX_TICK_DELAY;
@@ -167,6 +186,7 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
             let inner = inner_guard.get_or_insert_with(|| {
                 Box::new(ChunkTickSchedulerInner {
                     tick_queue: std::array::from_fn(|_| Vec::new()),
+                    overdue_ticks: Vec::new(),
                     queued_ticks: FxHashSet::default(),
                 })
             });
@@ -210,15 +230,42 @@ mod tests {
         // Vanilla: scheduled at game time T with delay 2, it runs at T + 2.
         let scheduler = ChunkTickScheduler::default();
         scheduler.schedule_tick(&tick(2), 0);
-        assert!(scheduler.step_tick().is_empty());
-        assert_eq!(scheduler.step_tick().len(), 1);
+        assert!(scheduler.step_tick(true).is_empty());
+        assert_eq!(scheduler.step_tick(true).len(), 1);
+    }
+
+    #[test]
+    fn overdue_ticks_survive_wraparound_save_and_clear() {
+        let scheduler = ChunkTickScheduler::default();
+        let first = tick(2);
+        let mut second = tick(5);
+        second.position = BlockPos::new(1, 0, 0);
+        scheduler.schedule_tick(&first, 0);
+        scheduler.schedule_tick(&second, 1);
+        for _ in 0..MAX_TICK_DELAY + 5 {
+            assert!(scheduler.step_tick(false).is_empty());
+        }
+        assert!(scheduler.is_scheduled(first.position, first.value));
+        scheduler.schedule_tick(&first, 2);
+        let saved = scheduler.to_vec();
+        assert_eq!(saved.len(), 2);
+        assert!(saved.iter().all(|tick| tick.delay == 0));
+        let restored = ChunkTickScheduler::from_iter(saved);
+        assert_eq!(restored.step_tick(true).len(), 2);
+
+        scheduler.clear_area(&first.position, &BlockPos::new(1, 1, 1));
+        assert!(!scheduler.is_scheduled(first.position, first.value));
+        let due = scheduler.step_tick(true);
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].position, second.position);
+        assert!(!scheduler.has_ticks());
     }
 
     #[test]
     fn saved_delay_round_trips() {
         let scheduler = ChunkTickScheduler::default();
         scheduler.schedule_tick(&tick(5), 0);
-        scheduler.step_tick();
+        scheduler.step_tick(true);
         assert_eq!(scheduler.to_vec()[0].delay, 4);
     }
 }

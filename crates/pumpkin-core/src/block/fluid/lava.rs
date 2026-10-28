@@ -16,7 +16,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
-use std::sync::atomic::Ordering;
 
 pub struct FlowingLava;
 
@@ -181,8 +180,7 @@ impl FluidBehaviour for FlowingLava {
 
     fn on_entity_collision(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        if !base_entity.entity_type.fire_immune && !base_entity.fire_immune.load(Ordering::Relaxed)
-        {
+        if !base_entity.is_fire_immune() {
             entity.set_on_fire_for(15.0);
 
             // Also apply lava damage

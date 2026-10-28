@@ -2,7 +2,7 @@
 
 # Pumpkin
 
-![CI](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml/badge.svg)
+[![CI](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml/badge.svg)](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: GPL](https://img.shields.io/badge/License-GPLv3-yellow.svg)](https://opensource.org/licenses/gpl-3-0)
 
@@ -81,7 +81,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Server
   - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)
   - [x] Query
-  - [x] RCON
+  - [x] [Minecraft Server Management Protocol (MSMP)](https://minecraft.wiki/w/Minecraft_Server_Management_Protocol)
   - [x] Inventories
   - [x] Particles
   - [x] Chat

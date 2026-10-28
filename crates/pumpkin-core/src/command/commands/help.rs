@@ -362,11 +362,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Allow,
     ));
 
-    dispatcher.register_with_aliases(
+    dispatcher.register(
         command("help", DESCRIPTION)
             .requires(PERMISSION)
             .then(argument(ARG, HelpArgumentType).executes(HelpCommandExecutor))
             .executes(HelpCommandExecutor),
-        &["h", "?"],
     );
 }

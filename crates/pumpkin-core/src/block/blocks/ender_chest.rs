@@ -3,11 +3,13 @@ use std::sync::Mutex;
 
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::{
-    BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, registry::BlockActionResult,
+    BlockBehaviour, GetScreenHandlerFactoryArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnPlaceArgs, OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
+    registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::LadderLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockState, BlockStateId, translation};
 use pumpkin_inventory::ViewerCountTracker;
 use pumpkin_inventory::{
@@ -19,6 +21,7 @@ use pumpkin_inventory::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::tick::TickPriority;
 
 pub struct EnderChestScreenFactory {
     pub inventory: Arc<EnderChestInventory>,
@@ -65,6 +68,22 @@ impl BlockBehaviour for EnderChestBlock {
             .opposite();
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = LadderLikeProperties::from_state_id(args.state_id);
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        args.state_id
     }
 
     fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {

@@ -1,12 +1,15 @@
 use crate::entity::EntityBase;
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId, HorizontalFacingExt,
+    Block, BlockDirection, BlockStateId, FacingExt, HorizontalFacingExt,
     block_properties::{AttachFace, HorizontalFacing},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
-use crate::{block::GetStateForNeighborUpdateArgs, entity::player::Player};
+use crate::{
+    block::{BlockIsReplacing, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs},
+    entity::player::Player,
+};
 
 pub trait WallMountedBlock: Send + Sync {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection;
@@ -29,6 +32,49 @@ pub trait WallMountedBlock: Send + Sync {
         };
 
         (face, facing)
+    }
+
+    fn get_placement_face_for_args(
+        &self,
+        args: &OnPlaceArgs<'_>,
+    ) -> (AttachFace, HorizontalFacing) {
+        let mut directions = args.player.get_entity().get_entity_facing_order();
+
+        if args.replacing == BlockIsReplacing::None {
+            let face = args.direction.to_facing();
+            let mut i = 0;
+            while i < directions.len() && directions[i] != face {
+                i += 1;
+            }
+
+            if i > 0 {
+                directions.copy_within(0..i, 1);
+                directions[0] = face;
+            }
+        }
+
+        for dir in directions {
+            let direction = dir.to_block_direction();
+            if self.can_place_at(args.world, args.position, direction) {
+                return self.get_placement_face(args.player, direction);
+            }
+        }
+
+        self.get_placement_face(args.player, args.direction)
+    }
+
+    fn can_place_at_args(&self, args: &CanPlaceAtArgs<'_>) -> bool {
+        if args.player.is_some() {
+            return BlockDirection::all()
+                .iter()
+                .any(|&dir| self.can_place_at(args.block_accessor, args.position, dir));
+        }
+
+        let direction = args
+            .direction
+            .unwrap_or_else(|| self.get_direction(args.state.id, args.block).opposite());
+
+        self.can_place_at(args.block_accessor, args.position, direction)
     }
 
     /// Gets the direction to check for placement validation based on clicked face

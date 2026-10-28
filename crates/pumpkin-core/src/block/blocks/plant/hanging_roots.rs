@@ -15,8 +15,8 @@ impl HangingRootsBlock {
     #[must_use]
     pub fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let above_pos = pos.up();
-        let (above_block, above_state) = world.get_block_and_state(&above_pos);
-        above_state.is_side_solid(BlockDirection::Down) && above_block.is_solid()
+        let above_state = world.get_block_state(&above_pos);
+        above_state.is_side_solid(BlockDirection::Down)
     }
 }
 
@@ -35,7 +35,7 @@ impl BlockBehaviour for HangingRootsBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !Self::can_survive(args.world, args.position) {
+        if args.direction == BlockDirection::Up && !Self::can_survive(args.world, args.position) {
             return Block::AIR.default_state.id;
         }
 

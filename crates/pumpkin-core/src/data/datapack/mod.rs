@@ -1,3 +1,4 @@
+pub mod advancement_loader;
 pub mod context_provider_loader;
 pub mod damage_type_loader;
 pub mod dynamic_registry_loader;
@@ -82,6 +83,7 @@ pub struct DatapackManager {
     loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
     dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
     trade_registry: RwLock<TradeRegistry>,
+    advancements: RwLock<HashMap<String, advancement_loader::DynamicAdvancementDefinition>>,
 }
 
 fn share_function_bodies(
@@ -113,6 +115,7 @@ impl DatapackManager {
             loot_tables: RwLock::new(HashMap::new()),
             dynamic_registries: RwLock::new(HashMap::new()),
             trade_registry: RwLock::new(TradeRegistry::new()),
+            advancements: RwLock::new(HashMap::new()),
         }
     }
 
@@ -153,6 +156,10 @@ impl DatapackManager {
         let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
             HashMap::new();
         let mut all_trade_registry = TradeRegistry::new();
+        let mut all_advancements: HashMap<
+            String,
+            advancement_loader::DynamicAdvancementDefinition,
+        > = HashMap::new();
 
         let mut acc = PackContentAccumulators {
             recipes: &mut all_recipes,
@@ -165,6 +172,7 @@ impl DatapackManager {
             loot_tables: &mut all_loot_tables,
             dynamic_registries: &mut all_dynamic_registries,
             trade_registry: &mut all_trade_registry,
+            advancements: &mut all_advancements,
         };
 
         scan_datapacks_dir(
@@ -218,6 +226,30 @@ impl DatapackManager {
             .trade_registry
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_trade_registry;
+        *self
+            .advancements
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_advancements;
+    }
+
+    pub fn get_advancement(
+        &self,
+        id: &str,
+    ) -> Option<advancement_loader::DynamicAdvancementDefinition> {
+        self.advancements
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    pub fn get_advancement_ids(&self) -> Vec<String> {
+        self.advancements
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keys()
+            .cloned()
+            .collect()
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -703,12 +735,10 @@ impl DatapackManager {
         // Fall back to compile-time embedded structures.
         let structure_id = format!("{namespace}:{path}");
 
-        if let Some(bytes) =
-            pumpkin_world::generation::structure::template::template_bytes(&structure_id)
+        if let Some(template) =
+            pumpkin_world::generation::structure::template::get_template(&structure_id)
         {
-            return read_gzip_compound_tag(std::io::Cursor::new(bytes)).map_err(|error| {
-                format!("Failed to parse embedded structure '{structure_id}': {error}")
-            });
+            return Ok(template.save());
         }
 
         Err(format!(
@@ -1234,6 +1264,7 @@ struct PackContentAccumulators<'a> {
     loot_tables: &'a mut HashMap<String, Arc<DynamicLootTable>>,
     dynamic_registries: &'a mut HashMap<String, HashMap<String, RegistryEntryData>>,
     trade_registry: &'a mut TradeRegistry,
+    advancements: &'a mut HashMap<String, advancement_loader::DynamicAdvancementDefinition>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -1252,6 +1283,7 @@ struct PackContentCounts {
     trade_sets: usize,
     trades: usize,
     trade_tags: usize,
+    advancements: usize,
 }
 
 fn scan_datapacks_dir(
@@ -1294,7 +1326,7 @@ fn scan_datapacks_dir(
         let counts = load_pack_contents(&pack_path, acc);
 
         info!(
-            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s)",
+            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s)",
             counts.recipes,
             counts.functions,
             counts.test_instances,
@@ -1308,6 +1340,7 @@ fn scan_datapacks_dir(
             counts.dynamic_registries,
             counts.trade_sets,
             counts.trades,
+            counts.advancements,
         );
 
         loaded_packs_vec.push(LoadedDatapack {
@@ -1431,6 +1464,18 @@ fn load_pack_contents(
                         &namespace,
                         &lt_dir,
                         acc.loot_tables,
+                    );
+                }
+            }
+
+            // Load advancements
+            for adv_sub in ["advancement", "advancements"] {
+                let adv_dir = ns_path.join(adv_sub);
+                if adv_dir.is_dir() {
+                    counts.advancements += advancement_loader::load_advancements_from_dir(
+                        &namespace,
+                        &adv_dir,
+                        acc.advancements,
                     );
                 }
             }

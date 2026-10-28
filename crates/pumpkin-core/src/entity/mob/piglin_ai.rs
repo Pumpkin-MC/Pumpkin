@@ -245,7 +245,7 @@ impl PiglinAi {
     pub fn is_entity_targetable(piglin: &PiglinEntity, target: &Player) -> bool {
         let entity = &piglin.mob_entity.living_entity.entity;
         let target_entity = target.get_entity();
-        if !target.living_entity.is_part_of_game() {
+        if !target.can_be_seen_by_anyone() {
             return false;
         }
 
@@ -274,49 +274,20 @@ impl PiglinAi {
         entity
             .world
             .load()
-            .raycast(
+            .clip(&pumpkin_world::clip::ClipContext::new(
                 entity.get_eye_pos(),
                 target_entity.get_eye_pos(),
-                |block_pos, w| w.get_block_state(block_pos).is_solid(),
-            )
-            .is_none()
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 
     /// How visible `target` is to a piglin, from 1.0 down to 0.1.
     fn visibility_percent(target: &Player) -> f64 {
-        let target_entity = target.get_entity();
-        let mut percent = 1.0;
-        if target_entity.is_sneaking() {
-            percent *= 0.8;
-        }
-        let head = {
-            let equipment = target
-                .living_entity
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if target_entity
-                .invisible
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                let worn = [
-                    EquipmentSlot::HEAD,
-                    EquipmentSlot::CHEST,
-                    EquipmentSlot::LEGS,
-                    EquipmentSlot::FEET,
-                ]
-                .iter()
-                .filter(|slot| !equipment.get(slot).is_empty())
-                .count();
-                let cover = (worn as f64 / 4.0).max(0.1);
-                percent *= 0.7 * cover;
-            }
-            equipment.get(&EquipmentSlot::HEAD)
-        };
-        if head.item.id == Item::PIGLIN_HEAD.id {
-            percent *= 0.5;
-        }
-        percent
+        target
+            .living_entity
+            .visibility_percent(Some(&EntityType::PIGLIN))
     }
 
     pub fn throw_items(piglin: &PiglinEntity, items: Vec<ItemStack>) {

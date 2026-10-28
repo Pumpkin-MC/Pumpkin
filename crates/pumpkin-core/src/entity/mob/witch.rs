@@ -80,16 +80,8 @@ impl WitchEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(
@@ -219,11 +211,8 @@ impl Mob for WitchEntity {
     }
 
     fn modify_incoming_damage(&self, mut amount: f32, damage_type: DamageType) -> f32 {
-        if damage_type == DamageType::MAGIC
-            || damage_type == DamageType::INDIRECT_MAGIC
-            || damage_type == DamageType::THORNS
-            || damage_type == DamageType::WITHER
-        {
+        // Vanilla `Witch.getDamageAfterMagicAbsorb`.
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_WITCH_RESISTANT_TO) {
             amount *= 0.15;
         }
         amount

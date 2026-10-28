@@ -15,11 +15,12 @@ use crate::block::UpdateEntityMovementAfterFallOnArgs;
 use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PathComputationType, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
+use pumpkin_data::HorizontalFacingExt;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
@@ -77,7 +78,7 @@ impl BlockBehaviour for BedBlock {
                     .get_block_state(&args.position.offset(facing.to_offset()))
                     .replaceable();
         }
-        false
+        true
     }
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
@@ -171,6 +172,30 @@ impl BlockBehaviour for BedBlock {
                 );
             }
         }
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut bed_props = BedProperties::from_state_id(args.state_id);
+        let neighbor_dir = if bed_props.part == BedPart::Foot {
+            bed_props.facing.to_block_direction()
+        } else {
+            bed_props.facing.opposite().to_block_direction()
+        };
+        if args.direction == neighbor_dir {
+            let neighbor_block = args.neighbor_state_id.to_block();
+            if neighbor_block == args.block {
+                let neighbor_props = BedProperties::from_state_id(args.neighbor_state_id);
+                if neighbor_props.part != bed_props.part {
+                    bed_props.occupied = neighbor_props.occupied;
+                    return bed_props.to_state_id(args.block);
+                }
+            }
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

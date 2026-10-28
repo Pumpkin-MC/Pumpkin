@@ -1,3 +1,4 @@
+pub mod predicate;
 pub mod trigger;
 mod visibility_evaluator;
 
@@ -198,6 +199,37 @@ impl AdvancementProgressMap {
     }
 }
 
+/// An active listener for an incomplete advancement criterion.
+#[derive(Clone)]
+pub struct ActiveCriterionListener {
+    pub advancement: &'static Advancement,
+    pub criterion: &'static str,
+    pub conditions: Arc<predicate::CriterionConditions>,
+}
+
+impl std::fmt::Debug for ActiveCriterionListener {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActiveCriterionListener")
+            .field("advancement", &self.advancement.id)
+            .field("criterion", &self.criterion)
+            .field("conditions", &self.conditions)
+            .finish()
+    }
+}
+
+static VANILLA_CONDITIONS_CACHE: std::sync::LazyLock<
+    HashMap<(&'static Advancement, &'static str), Arc<predicate::CriterionConditions>>,
+> = std::sync::LazyLock::new(|| {
+    let mut map = HashMap::new();
+    for node in &ADVANCEMENT_TREE.nodes_vector {
+        for crit in node.value.criteria_definitions {
+            let parsed = Arc::new(predicate::CriterionConditions::from(crit.conditions));
+            map.insert((node.value, crit.name), parsed);
+        }
+    }
+    map
+});
+
 /// Manages a player's collection of advancements.
 ///
 /// This handles saving, loading, and tracking the state of granted / revoked advancements.
@@ -212,6 +244,8 @@ pub struct PlayerAdvancement {
     pub last_selected_tab: Option<&'static Advancement>,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
+    /// Active criteria listeners keyed by trigger identifier (e.g. `minecraft:inventory_changed`).
+    pub active_listeners: HashMap<&'static str, Vec<ActiveCriterionListener>>,
 }
 
 /// The state changes produced by awarding an advancement criterion.
@@ -252,7 +286,7 @@ impl PlayerAdvancement {
     /// Creates a new instance of `PlayerAdvancement`.
     #[must_use]
     pub fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
-        Self {
+        let mut pa = Self {
             progress: AdvancementProgressMap::default(),
             path: manager.advancement_path.join(format!("{uuid}.json")),
             manager,
@@ -262,12 +296,105 @@ impl PlayerAdvancement {
             visible: HashSet::default(),
             progress_changed: HashSet::default(),
             last_selected_tab: None,
-        }
+            active_listeners: HashMap::default(),
+        };
+        pa.register_all_listeners();
+        pa
     }
 
     /// Associates the `PlayerAdvancement` data with the given player.
     pub fn set_player(&mut self, player: &Arc<Player>) {
         self.player = Arc::downgrade(player);
+    }
+
+    /// Registers active listeners for all incomplete criteria across all advancements.
+    pub fn register_all_listeners(&mut self) {
+        self.active_listeners.clear();
+        for node in &ADVANCEMENT_TREE.nodes_vector {
+            self.register_listeners(node.value);
+        }
+    }
+
+    /// Registers listeners for any incomplete criteria of the given advancement.
+    pub fn register_listeners(&mut self, advancement: &'static Advancement) {
+        if let Some(progress) = self.progress.map.get(advancement) {
+            if !progress.is_done() {
+                for criterion_def in advancement.criteria_definitions {
+                    if !progress.is_criterion_done(criterion_def.name) {
+                        let conditions = VANILLA_CONDITIONS_CACHE
+                            .get(&(advancement, criterion_def.name))
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                Arc::new(predicate::CriterionConditions::from(
+                                    criterion_def.conditions,
+                                ))
+                            });
+                        self.active_listeners
+                            .entry(criterion_def.trigger)
+                            .or_default()
+                            .push(ActiveCriterionListener {
+                                advancement,
+                                criterion: criterion_def.name,
+                                conditions,
+                            });
+                    }
+                }
+            }
+        } else {
+            // Not in progress map means 0 criteria completed: register all criteria
+            for criterion_def in advancement.criteria_definitions {
+                let conditions = VANILLA_CONDITIONS_CACHE
+                    .get(&(advancement, criterion_def.name))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Arc::new(predicate::CriterionConditions::from(
+                            criterion_def.conditions,
+                        ))
+                    });
+                self.active_listeners
+                    .entry(criterion_def.trigger)
+                    .or_default()
+                    .push(ActiveCriterionListener {
+                        advancement,
+                        criterion: criterion_def.name,
+                        conditions,
+                    });
+            }
+        }
+    }
+
+    /// Unregisters listeners for completed criteria or for a completed advancement.
+    pub fn unregister_listeners(&mut self, advancement: &'static Advancement) {
+        let Some(progress) = self.progress.map.get(advancement) else {
+            return;
+        };
+        let adv_done = progress.is_done();
+        for criterion_def in advancement.criteria_definitions {
+            if (adv_done || progress.is_criterion_done(criterion_def.name))
+                && let Some(listeners) = self.active_listeners.get_mut(criterion_def.trigger)
+            {
+                listeners.retain(|l| {
+                    !(l.advancement == advancement && l.criterion == criterion_def.name)
+                });
+            }
+        }
+    }
+
+    /// Unregisters a single criterion listener for the given advancement.
+    pub fn unregister_criterion_listener(
+        &mut self,
+        advancement: &'static Advancement,
+        criterion: &str,
+    ) {
+        if let Some(criterion_def) = advancement.get_criterion(criterion) {
+            if let Some(listeners) = self.active_listeners.get_mut(criterion_def.trigger) {
+                listeners.retain(|l| !(l.advancement == advancement && l.criterion == criterion));
+            }
+        } else {
+            for listeners in self.active_listeners.values_mut() {
+                listeners.retain(|l| !(l.advancement == advancement && l.criterion == criterion));
+            }
+        }
     }
 
     /// Returns whether advancement saving is enabled for this player.
@@ -279,7 +406,7 @@ impl PlayerAdvancement {
 
     ///reload the advancements from the file
     pub fn reload(&mut self) -> Result<(), AdvancementDataError> {
-        //self.stopListening(); TODO
+        self.active_listeners.clear();
         self.progress.clear();
         self.visible.clear();
         self.roots_to_update.clear();
@@ -311,6 +438,7 @@ impl PlayerAdvancement {
     /// Loads the player's advancement progress from disk.
     pub fn load(&mut self) -> Result<(), AdvancementDataError> {
         if !self.path.exists() || !self.is_save_enabled() {
+            self.register_all_listeners();
             return Ok(());
         }
 
@@ -332,6 +460,7 @@ impl PlayerAdvancement {
                 warn!("The Advancement name {} is invalid", advancement_id);
             }
         }
+        self.register_all_listeners();
         Ok(())
     }
 
@@ -375,7 +504,10 @@ impl PlayerAdvancement {
 
     /// Flushes any pending advancement state down to the client.
     pub fn flush_dirty(&mut self, player: &Player, show_advancement: bool) {
-        if self.is_first_packet || !self.roots_to_update.is_empty() {
+        if self.is_first_packet
+            || !self.roots_to_update.is_empty()
+            || !self.progress_changed.is_empty()
+        {
             let mut progress: HashMap<Identifier, &AdvancementProgress> = HashMap::new();
             let mut added: Vec<&Advancement> = Vec::new();
             let mut removed: Vec<Identifier> = Vec::new();
@@ -434,16 +566,24 @@ impl PlayerAdvancement {
         criterion: &str,
     ) -> AdvancementAward {
         let mut result = AdvancementAward::default();
-        let progress = self.progress.get_mut_or_start_progress(advancement);
-        let was_done = progress.is_done();
-        if progress.grant_progress(criterion) {
+        let (granted, now_done) = {
+            let progress = self.progress.get_mut_or_start_progress(advancement);
+            let was_done = progress.is_done();
+            let granted = progress.grant_progress(criterion);
+            let now_done = !was_done && progress.is_done();
+            (granted, now_done)
+        };
+
+        if granted {
+            self.unregister_criterion_listener(advancement, criterion);
             result.awarded = true;
             self.progress_changed.insert(advancement);
-            if !was_done && progress.is_done() {
+            if now_done {
                 result.completed = true;
+                self.unregister_listeners(advancement);
             }
         }
-        if !was_done && progress.is_done() {
+        if now_done {
             self.mark_for_visibility_update(advancement);
         }
         result
@@ -501,15 +641,21 @@ impl PlayerAdvancement {
     /// Revokes a previously awarded advancement, clearing its progress state.
     pub fn revoke(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
         let mut result = false;
-        let progress = self.progress.get_mut_or_start_progress(advancement);
-        let was_done = progress.is_done();
-        if progress.revoke_progress(criterion) {
-            //TODO listener
+        let (revoked, became_incomplete) = {
+            let progress = self.progress.get_mut_or_start_progress(advancement);
+            let was_done = progress.is_done();
+            let revoked = progress.revoke_progress(criterion);
+            let became_incomplete = was_done && !progress.is_done();
+            (revoked, became_incomplete)
+        };
+
+        if revoked {
+            self.register_listeners(advancement);
             self.progress_changed.insert(advancement);
             result = true;
         }
 
-        if was_done && !progress.is_done() {
+        if became_incomplete {
             self.mark_for_visibility_update(advancement);
         }
         result
@@ -840,5 +986,41 @@ mod tests {
             pa.progress.is_empty(),
             "The advancement shouldn't have been loaded"
         );
+    }
+
+    #[test]
+    fn active_listeners_lifecycle() {
+        let temp_dir = tempdir().unwrap();
+        let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
+        let id = Uuid::new_v4();
+        let mut pa = PlayerAdvancement::new(manager, id);
+
+        assert!(!pa.active_listeners.is_empty());
+        assert!(
+            pa.active_listeners
+                .contains_key("minecraft:inventory_changed")
+        );
+
+        // Awarding unregisters listener
+        let _ = pa.award(Advancement::STORY_ROOT, "crafting_table");
+        let listeners = pa
+            .active_listeners
+            .get("minecraft:inventory_changed")
+            .unwrap();
+        let still_has_crafting_table = listeners
+            .iter()
+            .any(|l| l.advancement == Advancement::STORY_ROOT && l.criterion == "crafting_table");
+        assert!(!still_has_crafting_table);
+
+        // Revoking re-registers listener
+        pa.revoke(Advancement::STORY_ROOT, "crafting_table");
+        let listeners = pa
+            .active_listeners
+            .get("minecraft:inventory_changed")
+            .unwrap();
+        let has_crafting_table_again = listeners
+            .iter()
+            .any(|l| l.advancement == Advancement::STORY_ROOT && l.criterion == "crafting_table");
+        assert!(has_crafting_table_again);
     }
 }

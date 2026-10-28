@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
 use crate::block::registry::BlockActionResult;
+use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
@@ -14,6 +14,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -26,15 +27,52 @@ impl ItemMetadata for BrushItem {
         Box::new([Item::BRUSH.id])
     }
 }
-fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> ItemStack {
+fn get_archaeology_loot(
+    is_sand: bool,
+    location: BlockPos,
+    world: &World,
+    player: Option<&Player>,
+) -> ItemStack {
     if let Some(block_entity) = world.get_block_entity(&location)
         && let Some(brushable) = block_entity
             .as_any()
             .downcast_ref::<BrushableBlockBlockEntity>()
-        && let Ok(mut item_guard) = brushable.item.lock()
-        && let Some(item) = item_guard.take()
     {
-        return item;
+        if let Ok(mut item_guard) = brushable.item.lock()
+            && let Some(item) = item_guard.take()
+            && !item.is_empty()
+        {
+            return item;
+        }
+        if let Ok(mut table_guard) = brushable.loot_table.lock()
+            && let Some(loot_key) = table_guard.take()
+        {
+            if let Some(p) = player {
+                p.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                        loot_table_id: loot_key.clone(),
+                    },
+                );
+            }
+            let seed = brushable.loot_table_seed.lock().map_or(0, |g| *g);
+            let actual_seed = if seed == 0 { rand::random() } else { seed };
+            let stripped = loot_key.strip_prefix("minecraft:").unwrap_or(&loot_key);
+            if let Some(table) = world
+                .get_loot_table(&loot_key)
+                .or_else(|| world.get_loot_table(stripped))
+            {
+                let items = table.generate_loot_with_context(
+                    actual_seed,
+                    &crate::world::loot::LootContextParameters {
+                        world: Some(world),
+                        ..Default::default()
+                    },
+                );
+                if let Some(first) = items.into_iter().next() {
+                    return first;
+                }
+            }
+        }
     }
 
     let loot_key = if is_sand {
@@ -43,8 +81,22 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
         "minecraft:archaeology/trail_ruins_common"
     };
 
+    if let Some(p) = player {
+        p.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                loot_table_id: loot_key.to_string(),
+            },
+        );
+    }
+
     if let Some(table) = world.get_loot_table(loot_key) {
-        let items = table.generate_loot(rand::random());
+        let items = table.generate_loot_with_context(
+            rand::random(),
+            &crate::world::loot::LootContextParameters {
+                world: Some(world),
+                ..Default::default()
+            },
+        );
         if let Some(first) = items.into_iter().next() {
             return first;
         }
@@ -54,21 +106,9 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
 }
 
 impl ItemBehaviour for BrushItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
-        player.world().play_sound(
-            Sound::ItemBrushBrushingGeneric,
-            SoundCategory::Players,
-            &player.position(),
-        );
-        let stack = player.inventory().held_item();
-        player
-            .living_entity
-            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
-    }
-
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -87,13 +127,12 @@ impl ItemBehaviour for BrushItem {
                 SoundCategory::Blocks,
                 &block_center,
             );
-            let stack = player.inventory().held_item();
             player.living_entity.set_active_hand(
                 pumpkin_util::Hand::Right,
-                stack,
+                item.clone(),
                 Self::USE_DURATION,
             );
-            return BlockActionResult::Success;
+            return BlockActionResult::Consume;
         }
 
         if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
@@ -103,7 +142,7 @@ impl ItemBehaviour for BrushItem {
                 location,
                 world.clone(),
                 player_arc,
-                player.inventory().held_item(),
+                item.clone(),
             );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
@@ -129,6 +168,12 @@ impl ItemBehaviour for BrushItem {
                 &block_center,
             );
         } else {
+            let loot_item = get_archaeology_loot(is_sand, location, &world, Some(player));
+            world.sync_world_event(
+                WorldEvent::ParticlesAndSoundBrushBlockComplete,
+                location,
+                i32::from(current_state_id.as_u16()),
+            );
             let replacement_state_id = if is_sand {
                 Block::SAND.default_state.id
             } else {
@@ -147,59 +192,31 @@ impl ItemBehaviour for BrushItem {
                 &block_center,
             );
 
-            let loot_item = get_archaeology_loot(is_sand, location, &world);
-            let spawn_pos = Vector3::new(
-                f64::from(location.0.x) + 0.5,
-                f64::from(location.0.y) + 1.0,
-                f64::from(location.0.z) + 0.5,
-            );
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), spawn_pos, &EntityType::ITEM),
-                loot_item,
-            ));
-            world.spawn_entity(item_entity);
+            if !loot_item.is_empty() {
+                let spawn_pos = Vector3::new(
+                    f64::from(location.0.x) + 0.5,
+                    f64::from(location.0.y) + 1.0,
+                    f64::from(location.0.z) + 0.5,
+                );
+                let item_entity = Arc::new(ItemEntity::new(
+                    Entity::new(world.clone(), spawn_pos, &EntityType::ITEM),
+                    loot_item,
+                ));
+                world.spawn_entity(item_entity);
+            }
+
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item.damage_item(1);
+            }
         }
 
-        player.damage_held_item(1);
+        player.living_entity.set_active_hand(
+            pumpkin_util::Hand::Right,
+            item.clone(),
+            Self::USE_DURATION,
+        );
 
-        let stack = player.inventory().held_item();
-        player
-            .living_entity
-            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
-
-        BlockActionResult::Success
-    }
-
-    fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        let ent = entity.get_entity();
-        if ent.entity_type == &EntityType::ARMADILLO {
-            let world = player.world();
-            world.play_sound(
-                Sound::EntityArmadilloBrush,
-                SoundCategory::Neutral,
-                &ent.pos.load(),
-            );
-
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), ent.pos.load(), &EntityType::ITEM),
-                ItemStack::new(1, &Item::ARMADILLO_SCUTE),
-            ));
-            world.spawn_entity(item_entity);
-
-            player.damage_held_item(16);
-        } else {
-            let world = player.world();
-            world.play_sound(
-                Sound::ItemBrushBrushingGeneric,
-                SoundCategory::Neutral,
-                &ent.pos.load(),
-            );
-        }
-
-        let stack = player.inventory().held_item();
-        player
-            .living_entity
-            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
+        BlockActionResult::Consume
     }
 
     fn get_use_duration(&self) -> i32 {
