@@ -12,6 +12,7 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
     OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
+use crate::world::World;
 
 #[pumpkin_block("minecraft:cactus")]
 pub struct CactusBlock;
@@ -33,7 +34,7 @@ impl BlockBehaviour for CactusBlock {
             let mut i = 1;
             while args.world.get_block(&args.position.down_height(i)) == &Block::CACTUS {
                 i += 1;
-                if 1 == 3 && age == 15 {
+                if i == 3 && age == 15 {
                     return;
                 }
             }
@@ -101,8 +102,10 @@ impl BlockBehaviour for CactusBlock {
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     for direction in BlockDirection::horizontal() {
-        let (block, state) = world.get_block_and_state(&block_pos.offset(direction.to_offset()));
-        if state.is_solid() || block == &Block::LAVA {
+        let state = world.get_block_state(&block_pos.offset(direction.to_offset()));
+        if state.is_solid()
+            || World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_LAVA)
+        {
             return false;
         }
     }

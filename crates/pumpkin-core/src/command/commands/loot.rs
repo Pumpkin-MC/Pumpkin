@@ -374,12 +374,13 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,
                         f64::from(pos.0.y) + 0.5,
                         f64::from(pos.0.z) + 0.5,
                     )),
-                    tool: tool_stack,
+                    tool: Some(tool_stack.unwrap_or_else(|| ItemStack::EMPTY.clone())),
                     ..Default::default()
                 };
                 let seed: i64 = rand::random();
@@ -403,6 +404,7 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     position: context.source.as_player().map(|p| p.position()),
                     ..Default::default()
                 };
@@ -417,6 +419,7 @@ impl CommandExecutor for LootExecutor {
                         .get_stack(p.inventory().get_selected_slot() as usize)
                 });
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     killed_by_player: Some(killer.is_some()),
                     tool: killer_tool,
                     position: killer.as_ref().map(|p| p.position()),
@@ -429,6 +432,24 @@ impl CommandExecutor for LootExecutor {
                     let key = format!("minecraft:entities/{resource_name}");
                     if let Some(loot_table) = context.server().datapack_manager.get_loot_table(&key)
                     {
+                        let params = LootContextParameters {
+                            this_entity: Some(entity.as_ref()),
+                            killer_entity: killer
+                                .as_ref()
+                                .map(|player| player.as_ref() as &dyn crate::entity::EntityBase),
+                            direct_killer_entity: killer
+                                .as_ref()
+                                .map(|player| player.as_ref() as &dyn crate::entity::EntityBase),
+                            position: Some(entity.get_entity().pos.load()),
+                            is_on_fire: Some(
+                                entity
+                                    .get_entity()
+                                    .fire_ticks
+                                    .load(std::sync::atomic::Ordering::Relaxed)
+                                    > 0,
+                            ),
+                            ..params.clone()
+                        };
                         let seed: i64 = rand::random();
                         drops.extend(crate::world::loot::generate_loot_from_handle(
                             &loot_table,
@@ -453,12 +474,15 @@ impl CommandExecutor for LootExecutor {
                 let world = context.world();
                 let block_state = world.get_block_state(&pos);
                 let block = world.get_block(&pos);
-                let key = format!("minecraft:blocks/{}", block.name);
+                let key = block.loot_table.ok_or_else(|| {
+                    ERROR_NO_BLOCK_LOOT_TABLE
+                        .create_without_context(TextComponent::text(block.name.to_string()))
+                })?;
 
                 let loot_table = context
                     .server()
                     .datapack_manager
-                    .get_loot_table(&key)
+                    .get_loot_table(key)
                     .ok_or_else(|| {
                         ERROR_NO_BLOCK_LOOT_TABLE
                             .create_without_context(TextComponent::text(block.name.to_string()))
@@ -472,8 +496,9 @@ impl CommandExecutor for LootExecutor {
                 };
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     block_state: Some(block_state),
-                    tool: tool_stack,
+                    tool: Some(tool_stack.unwrap_or_else(|| ItemStack::EMPTY.clone())),
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,
                         f64::from(pos.0.y) + 0.5,
@@ -483,7 +508,7 @@ impl CommandExecutor for LootExecutor {
                 };
                 let seed: i64 = rand::random();
                 drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
-                table_id_for_callback = Some(key);
+                table_id_for_callback = Some(key.to_string());
             }
         }
 

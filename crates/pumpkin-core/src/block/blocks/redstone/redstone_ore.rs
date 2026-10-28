@@ -1,10 +1,13 @@
 use crate::block::{
-    BlockBehaviour, BlockMetadata, NormalUseArgs, OnEntityCollisionArgs, OnEntityStepArgs,
-    RandomTickArgs, registry::BlockActionResult,
+    AttackArgs, BlockBehaviour, BlockMetadata, OnEntityStepArgs, RandomTickArgs, UseWithItemArgs,
+    registry::BlockActionResult,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::RedstoneOreLikeProperties;
-use pumpkin_data::{Block, BlockId, BlockState};
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::{Block, BlockId};
+use pumpkin_protocol::VarInt;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
@@ -18,7 +21,8 @@ impl BlockMetadata for RedstoneOreBlock {
 }
 
 impl RedstoneOreBlock {
-    fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block, state: &BlockState) {
+    fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block) {
+        let state = world.get_block_state(pos);
         let mut props = RedstoneOreLikeProperties::from_state_id(state.id);
         if !props.lit {
             props.lit = true;
@@ -28,20 +32,51 @@ impl RedstoneOreBlock {
 }
 
 impl BlockBehaviour for RedstoneOreBlock {
-    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
-        BlockActionResult::Success
+    fn attack(&self, args: AttackArgs<'_>) {
+        Self::light_up(args.world, args.position, args.block);
     }
 
-    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        Self::light_up(args.world, args.position, args.block);
+        if args.item_stack.is_empty() {
+            return BlockActionResult::Success;
+        }
+        let Some(placed_block) = Block::from_item_id(args.item_stack.item.id) else {
+            return BlockActionResult::Success;
+        };
+        // Vanilla only passes a block item on when BlockPlaceContext.canPlace() holds; otherwise the use is consumed.
+        let use_item_on = SUseItemOn {
+            hand: VarInt(i32::from(*args.equipment_slot == EquipmentSlot::OFF_HAND)),
+            position: *args.position,
+            face: VarInt(i32::from(args.hit.face.to_index())),
+            cursor_pos: *args.hit.cursor_pos,
+            inside_block: false,
+            is_against_world_border: false,
+            sequence: VarInt(0),
+        };
+        if args
+            .server
+            .block_registry
+            .placement_target(
+                args.world,
+                args.player,
+                placed_block,
+                &use_item_on,
+                *args.position,
+                *args.hit.face,
+            )
+            .is_some()
+        {
+            BlockActionResult::Pass
+        } else {
+            BlockActionResult::Success
+        }
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
-        let state = args.world.get_block_state(args.position);
-        Self::light_up(args.world, args.position, args.block, state);
+        if !args.entity.get_entity().is_sneaking() {
+            Self::light_up(args.world, args.position, args.block);
+        }
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {

@@ -59,8 +59,8 @@ impl FancyTrunkPlacer {
             }
 
             for _o in 0..l {
-                let g = (1.0f32 * f * (random.next_f32() + 0.328f32)) as f64;
-                let h = (random.next_f32() * 2.0f32 * f32::consts::PI) as f64;
+                let g = 1.0f64 * f64::from(f) * (f64::from(random.next_f32()) + 0.328f64);
+                let h = f64::from(random.next_f32() * 2.0f32) * std::f64::consts::PI;
                 let p = g * h.sin() + 0.5f64;
                 let q = g * h.cos() + 0.5f64;
 
@@ -217,14 +217,13 @@ impl FancyTrunkPlacer {
         }
         let f = (tree_height as f32) / 2.0f32;
         let g = f - (height as f32);
-        let h = (f * f - g * g).sqrt();
+        let mut h = (f * f - g * g).sqrt();
         if g == 0.0f32 {
-            h
+            h = f;
         } else if g.abs() >= f {
-            0.0f32
-        } else {
-            h * 0.5f32
+            return 0.0f32;
         }
+        h * 0.5f32
     }
 
     fn get_longest_side(offset: Vector3<i32>) -> i32 {

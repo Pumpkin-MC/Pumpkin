@@ -3237,6 +3237,19 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::COpenSign(data) => {
+            let p = pumpkin_protocol::bedrock::client::COpenSign {
+                position: pumpkin_util::math::position::BlockPos::new(
+                    data.position.0,
+                    data.position.1,
+                    data.position.2,
+                ),
+                front_side: data.front_side.try_into().unwrap(),
+            };
+            let mut buf = Vec::new();
+            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CPlayStatus(data) => {
             let p = match data {
                 crate::pumpkin::plugin::bedrock_packets::CPlayStatus::LoginSuccess => pumpkin_protocol::bedrock::client::CPlayStatus::LoginSuccess,
@@ -3458,6 +3471,14 @@ pub fn deserialize_bedrock_serverbound_packet(
                 client_network_version: p.client_network_version.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SResourcePackChunkRequest as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SResourcePackChunkRequest as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SResourcePackChunkRequest(crate::pumpkin::plugin::bedrock_packets::SResourcePackChunkRequest {
+                pack_id: p.pack_id.into(),
+                chunk_index: p.chunk_index.try_into().unwrap(),
+            }))
+        }
         id if id == <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
@@ -3659,6 +3680,15 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CNetworkSett
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::COpenSign {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::COpenSign(crate::pumpkin::plugin::bedrock_packets::COpenSign {
+            position: (self.position.0.x, self.position.0.y, self.position.0.z),
+            front_side: self.front_side.try_into().unwrap(),
+        })
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CPlayStatus {
     fn to_wit(&self) -> BClientboundPacket {
         match self {
@@ -3857,6 +3887,9 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CNetworkSettings>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::COpenSign>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CPlayStatus>() {

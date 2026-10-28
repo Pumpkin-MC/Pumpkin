@@ -49,8 +49,10 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
+pub mod builtin_game_tests;
 mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
@@ -67,6 +69,7 @@ pub use recipe::RecipeManager;
 use crate::data::advancement_data::AdvancementManager;
 
 /// Represents a Minecraft server instance.
+#[repr(C)]
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
@@ -147,7 +150,17 @@ pub struct Server {
     pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
     pub runtime: tokio::runtime::Handle,
+    /// Dedicated Rayon thread pool for synchronous world and entity simulation (ticks).
+    pub simulation_pool: Arc<rayon::ThreadPool>,
+    /// Dedicated Rayon thread pool for background CPU computation (RSA, Bedrock crypto, compression).
+    pub compute_pool: Arc<rayon::ThreadPool>,
     pub management_hub: Arc<crate::net::management::hub::ManagementHub>,
+    /// Cancelled when this server should stop. A child of [`crate::STOP_INTERRUPT`], so a
+    /// process-wide stop reaches it, while an integrated server can stop without ending the
+    /// process.
+    pub stop_token: CancellationToken,
+    /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
+    admission_closed: std::sync::RwLock<bool>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -211,7 +224,7 @@ impl Server {
                 error!("Failed to load world info!");
                 error!("{error}");
                 error!("Unsupported world version! See the logs for more info.");
-                std::process::exit(1);
+                return Err(error);
             }
             Err(error) => {
                 error!("Failed to load the world data in {}!", world_path.display());
@@ -220,7 +233,7 @@ impl Server {
                     "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
                 );
                 error!("Failed to load the world data! See the logs for more info.");
-                std::process::exit(1);
+                return Err(error);
             }
         };
 
@@ -276,6 +289,23 @@ impl Server {
             management_settings,
         ));
 
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let simulation_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(cpus)
+                .thread_name(|i| format!("Simulation-{i}"))
+                .build()
+                .map_err(|e| WorldInfoError::IoError(std::io::Error::other(e)))?,
+        );
+        let compute_threads = (cpus / 2).clamp(2, 8);
+        let compute_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(compute_threads)
+                .thread_name(|i| format!("Compute-{i}"))
+                .build()
+                .map_err(|e| WorldInfoError::IoError(std::io::Error::other(e)))?,
+        );
+
         let server = Self {
             basic_config,
             advanced_config,
@@ -314,7 +344,11 @@ impl Server {
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
+            stop_token: crate::STOP_INTERRUPT.child_token(),
+            admission_closed: std::sync::RwLock::new(false),
             runtime: tokio::runtime::Handle::current(),
+            simulation_pool,
+            compute_pool,
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
@@ -687,6 +721,18 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        let player_clone = player.clone();
+        self.spawn_task(async move {
+            let properties = player_clone.gameprofile.properties.load().clone();
+            if let Some(mut skin) = Player::fetch_skin(&properties).await {
+                if skin.skin_id == "Standard_Custom" {
+                    let skin_id = format!("pumpkin:{}", player_clone.gameprofile.id);
+                    skin.skin_id.clone_from(&skin_id);
+                    skin.full_id = skin_id;
+                }
+                player_clone.bedrock_skin.store(Arc::new(skin));
+            }
+        });
         {
             let mut advancements = player
                 .advancements
@@ -703,7 +749,11 @@ impl Server {
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone());
-                world.add_player(&player).is_ok().then(|| {
+                if !self.admit_player(&world, &player) {
+                    player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
+                    return None;
+                }
+                Some({
                     {
                         let mut user_cache = self
                             .data
@@ -758,6 +808,29 @@ impl Server {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove_player(player);
+    }
+
+    /// Adds player to `world` unless shutdown already closed admission.
+    fn admit_player(&self, world: &World, player: &Arc<Player>) -> bool {
+        let closed = self
+            .admission_closed
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !*closed && world.add_player(player).is_ok()
+    }
+
+    /// Refuses all later joins. Returns once every join in progress is in a world
+    pub fn close_admission(&self) {
+        *self
+            .admission_closed
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+    }
+
+    /// Asks this server to stop: the ticker ends and a standalone server stops accepting
+    /// connections and shuts down.
+    pub fn stop(&self) {
+        self.stop_token.cancel();
     }
 
     pub async fn shutdown(&self) {
@@ -1077,7 +1150,7 @@ impl Server {
         self.key_store
             .get_or_init(|| async {
                 let (tx, rx) = tokio::sync::oneshot::channel();
-                rayon::spawn(move || {
+                self.compute_pool.spawn(move || {
                     let _ = tx.send(Arc::new(KeyStore::new()));
                 });
                 rx.await.unwrap_or_else(|_| Arc::new(KeyStore::new()))
@@ -1101,7 +1174,7 @@ impl Server {
         let key_store = self.get_or_init_key_store().await.clone();
         let data = data.to_vec();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        self.compute_pool.spawn(move || {
             let _ = tx.send(key_store.decrypt(&data));
         });
         rx.await.map_err(|_| EncryptionError::FailedDecrypt)?
@@ -1140,17 +1213,19 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
-        // Do not flush mid-tick; `Flush` is `flushChannel`.
-        let suspended = self.suspend_player_flushes();
-        if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
-            self.tick_worlds();
-            // Always run player and network ticking, even when game is frozen
-        } else {
-            self.sync_game_time();
-            self.tick_players_and_network();
-        }
-        self.flush_pending_block_updates();
-        Self::resume_player_flushes(&suspended);
+        self.simulation_pool.install(|| {
+            // Do not flush mid-tick; `Flush` is `flushChannel`.
+            let suspended = self.suspend_player_flushes();
+            if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+                self.tick_worlds();
+                // Always run player and network ticking, even when game is frozen
+            } else {
+                self.sync_game_time();
+                self.tick_players_and_network();
+            }
+            self.flush_pending_block_updates();
+            Self::resume_player_flushes(&suspended);
+        });
     }
 
     fn flush_pending_block_updates(&self) {
@@ -1163,16 +1238,13 @@ impl Server {
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
-        let handle = self.runtime.clone();
 
         for world in worlds.iter() {
             world.flush_block_updates();
             world.flush_synced_block_events();
 
             let players = world.players.load();
-            let player_handle = handle.clone();
             players.par_iter().for_each(|player| {
-                let _guard = player_handle.enter();
                 player.tick(self);
             });
         }
@@ -1196,9 +1268,7 @@ impl Server {
         self.sync_game_time();
 
         let worlds = self.worlds.load();
-        let handle = self.runtime.clone();
         worlds.par_iter().for_each(|world| {
-            let _guard = handle.enter();
             world.tick(self);
         });
 

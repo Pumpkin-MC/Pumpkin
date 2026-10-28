@@ -1,8 +1,8 @@
 package pumpkin:plugin@0.2.0;
 
 interface bedrock-packets {
+  use common.{ inexpressible-host-type, nbt-tree };
   use uuid.{ uuid };
-  use common.{ nbt-tree };
   /// Transmits actor-specific animations, sounds, and state changes (such as hurt, taming, or eating).
   record s-actor-event {
     /// Runtime entity ID of the actor experiencing the event.
@@ -113,6 +113,13 @@ interface bedrock-packets {
     /// Source context that triggered an arm swing.
     swing-source: option<actor-swing-source>,
   }
+  /// Synchronizes block-actor updates from the client, such as edited sign text.
+  record s-block-actor-data {
+    /// World coordinates of the block entity being updated.
+    block-position: tuple<s32, s32, s32>,
+    /// Network NBT compound containing all properties and state of the block entity.
+    actor-data-tags: nbt-tree,
+  }
   /// Sent by the client when picking a targeted block (middle-click / pick block action).
   record s-block-pick-request {
     /// World position coordinates of the targeted block.
@@ -216,8 +223,10 @@ interface bedrock-packets {
     unknown(s32),
   }
   variant transaction-data {
-    normal(string),
-    mismatch(string),
+    /// WARNING: Could not fully translate type `NormalTransactionData` to WIT
+    normal(inexpressible-host-type),
+    /// WARNING: Could not fully translate type `MismatchTransactionData` to WIT
+    mismatch(inexpressible-host-type),
     use-item(use-item-transaction-data),
     use-item-on-entity(use-item-on-entity-transaction-data),
     release-item(release-item-transaction-data),
@@ -293,70 +302,86 @@ interface bedrock-packets {
     block-runtime-id: s32,
     extra-data: list<u8>,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.take` for details.
   record item-stack-request-action-take {
     count: u8,
     source: item-stack-request-slot-info,
     destination: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.place` for details.
   record item-stack-request-action-place {
     count: u8,
     source: item-stack-request-slot-info,
     destination: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.swap` for details.
   record item-stack-request-action-swap {
     slot1: item-stack-request-slot-info,
     slot2: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.drop` for details.
   record item-stack-request-action-drop {
     count: u8,
     source: item-stack-request-slot-info,
     randomly: bool,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.destroy` for details.
   record item-stack-request-action-destroy {
     count: u8,
     source: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.consume` for details.
   record item-stack-request-action-consume {
     count: u8,
     source: item-stack-request-slot-info,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.create` for details.
   record item-stack-request-action-create {
     result-index: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.beacon-payment` for details.
   record item-stack-request-action-beacon-payment {
     primary-effect-id: s32,
     secondary-effect-id: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.mine-block` for details.
   record item-stack-request-action-mine-block {
     hotbar-slot: s32,
     predicted-durability: s32,
     stack-id: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-recipe` for details.
   record item-stack-request-action-craft-recipe {
     recipe-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-recipe-auto` for details.
   record item-stack-request-action-craft-recipe-auto {
     recipe-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-creative` for details.
   record item-stack-request-action-craft-creative {
     creative-item-id: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.optional` for details.
   record item-stack-request-action-optional {
     recipe-id: s32,
     filter-string-index: s32,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.grindstone` for details.
   record item-stack-request-action-grindstone {
     recipe-id: s32,
     repair-cost: s32,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.loom` for details.
   record item-stack-request-action-loom {
     pattern-id: string,
     repetitions: u8,
   }
+  /// Generated; extracted from variant arm. See `item-stack-request-action.craft-results-deprecated` for details.
   record item-stack-request-action-craft-results-deprecated {
     result-items: list<stack-request-item>,
     times-crafted: u8,
@@ -418,7 +443,7 @@ interface bedrock-packets {
     /// Raw client data JWT carrying skin parameters, device details, and locale settings.
     raw-token: list<u8>,
   }
-  record skin-animation {
+  record login-skin-animation {
     frames: f64,
     image: string,
     image-height: s32,
@@ -426,14 +451,14 @@ interface bedrock-packets {
     animation-type: s32,
     animation-expression: s32,
   }
-  record persona-piece {
+  record login-persona-piece {
     is-default: bool,
     pack-id: string,
     piece-id: string,
     piece-type: string,
     product-id: string,
   }
-  record persona-piece-tint-colour {
+  record login-persona-piece-tint-colour {
     colours: list<string>,
     piece-type: string,
   }
@@ -481,10 +506,10 @@ interface bedrock-packets {
     skin-geometry: string,
     skin-geometry-version: string,
     skin-resource-patch: string,
-    animated-image-data: list<skin-animation>,
+    animated-image-data: list<login-skin-animation>,
     skin-animation-data: string,
-    persona-pieces: list<persona-piece>,
-    piece-tint-colours: list<persona-piece-tint-colour>,
+    persona-pieces: list<login-persona-piece>,
+    piece-tint-colours: list<login-persona-piece-tint-colour>,
   }
   /// Sent by the client to update the item held or equipped in a mob or player slot.
   record s-mob-equipment {
@@ -783,6 +808,13 @@ interface bedrock-packets {
     /// If unsupported by the server, the connection will be rejected.
     client-network-version: s32,
   }
+  /// Sent by the client to request a specific chunk of a resource pack being downloaded.
+  record s-resource-pack-chunk-request {
+    /// Identifier of the resource pack being requested (`UUID` or `UUID_version`).
+    pack-id: string,
+    /// Sequential index of the requested chunk (starts at 0).
+    chunk-index: s32,
+  }
   /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
   record s-resource-pack-client-response {
     /// Pack response status (e.g. refused, send packs, have all packs, or completed).
@@ -895,7 +927,9 @@ interface bedrock-packets {
     /// Entity attributes (health, movement speed, follow range).
     attributes-list: list<synced-attribute>,
     /// Metadata dictionary (flags, name tags, scale).
-    actor-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization data.
     synced-properties: property-sync-data,
     /// Entity attachment links (e.g. passenger or leash connections).
@@ -925,7 +959,9 @@ interface bedrock-packets {
     /// Movement velocity vector.
     velocity: tuple<f64, f64, f64>,
     /// Metadata dictionary for the item entity.
-    entity-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     /// Whether the item originated from fishing.
     is-from-fishing: bool,
   }
@@ -952,7 +988,9 @@ interface bedrock-packets {
     /// Game mode of the player.
     player-game-type: game-type,
     /// Entity metadata flags and properties.
-    entity-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    entity-data: inexpressible-host-type,
     /// Dynamic Molang property synchronization.
     synced-properties: property-sync-data,
     /// Permissions and ability layers for this player.
@@ -1232,6 +1270,7 @@ interface bedrock-packets {
     /// Tick number on which the prediction error occurred.
     tick: s64,
   }
+  /// Generated; extracted from variant arm. See `recipe-item-descriptor.item` for details.
   record recipe-item-descriptor-item {
     identifier: string,
     metadata-value: s32,
@@ -1574,6 +1613,13 @@ interface bedrock-packets {
     /// Fraction of players ticked per frame when throttling is engaged.
     client-throttle-scalar: f32,
   }
+  /// Sent by the server to open the sign text editor on the Bedrock client.
+  record c-open-sign {
+    /// Position of the sign being edited.
+    position: tuple<s32, s32, s32>,
+    /// Whether the front side of the sign is being edited.
+    front-side: bool,
+  }
   /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
   enum c-play-status {
     /// Authentication and login succeeded; client proceeds to resource pack handshake.
@@ -1654,6 +1700,21 @@ interface bedrock-packets {
     is-trusted: bool,
     profile-hash: string,
   }
+  record skin-animation {
+    image-width: s32,
+    image-height: s32,
+    image-data: list<u8>,
+    animation-type: s32,
+    frames: f32,
+    expression-type: s32,
+  }
+  record persona-piece {
+    piece-id: string,
+    piece-type: s32,
+    pack-id: uuid,
+    is-default: bool,
+    product-id: string,
+  }
   record piece-tint-color {
     piece-type: string,
     colors: list<s32>,
@@ -1667,6 +1728,34 @@ interface bedrock-packets {
   record c-remove-objective {
     /// Identifier of the active objective to remove.
     objective-name: string,
+  }
+  /// Sent by the server to transfer a single chunk of compressed resource pack data to the client.
+  record c-resource-pack-chunk-data {
+    /// Identifier of the pack (e.g. `UUID` or `UUID_version`).
+    pack-id: string,
+    /// 0-indexed sequential chunk number.
+    chunk-index: s32,
+    /// Byte offset within the total resource pack archive from which this chunk begins.
+    data-offset: s64,
+    /// Raw byte payload of the chunk.
+    data: list<u8>,
+  }
+  /// Information describing a resource pack to be streamed in chunks to the client.
+  record c-resource-pack-data-info {
+    /// Identifier of the pack (e.g. `UUID` or `UUID_version`).
+    pack-id: string,
+    /// Maximum size of chunks in bytes (typically 1 MB = 1,048,576).
+    max-chunk-size: s32,
+    /// Total number of chunks the resource pack is divided into.
+    chunk-count: s32,
+    /// Total size of the compressed pack archive in bytes.
+    compressed-pack-size: s64,
+    /// SHA-256 hash of the pack archive (32 bytes).
+    file-hash: list<u8>,
+    /// Whether the pack was bought from the Minecraft Marketplace.
+    is-premium: bool,
+    /// Type of the resource pack (e.g. 1 for Addon, 6 for Resources).
+    pack-type: u8,
   }
   /// Identifies a specific pack instance and sub-pack layer in the active resource pack stack.
   record pack-instance-id {
@@ -1738,7 +1827,9 @@ interface bedrock-packets {
     /// The unique runtime ID of the entity being updated
     target-runtime-id: s64,
     /// A map of entity metadata properties (e.g., flags, name tags, scale)
-    actor-data: string,
+    /// 
+    /// WARNING: Could not fully translate type `SyncedActorDataList` to WIT
+    actor-data: inexpressible-host-type,
     /// Dynamic properties synced between client and server
     synced-properties: property-sync-data,
     /// The server tick at which this update occurred
@@ -2335,6 +2426,8 @@ interface bedrock-packets {
     s-actor-event(s-actor-event),
     /// Plays animations (arm swing, critical strike particles, waking up) on an actor.
     s-animate(s-animate),
+    /// Synchronizes block-actor updates from the client, such as edited sign text.
+    s-block-actor-data(s-block-actor-data),
     /// Sent by the client when picking a targeted block (middle-click / pick block action).
     s-block-pick-request(s-block-pick-request),
     /// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
@@ -2377,6 +2470,8 @@ interface bedrock-packets {
     s-request-chunk-radius(s-request-chunk-radius),
     /// Sent by the client to query network settings (such as compression algorithms and thresholds) from the server.
     s-request-network-settings(s-request-network-settings),
+    /// Sent by the client to request a specific chunk of a resource pack being downloaded.
+    s-resource-pack-chunk-request(s-resource-pack-chunk-request),
     /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
     s-resource-pack-client-response(s-resource-pack-client-response),
     /// Bidirectional packet managing player respawning and client spawn readiness.
@@ -2456,6 +2551,8 @@ interface bedrock-packets {
     c-network-chunk-publisher-update(c-network-chunk-publisher-update),
     /// Sent by the server in response to [`SRequestNetworkSettings`](crate::bedrock::server::request_network_settings::SRequestNetworkSettings) to configure packet compression and client throttling.
     c-network-settings(c-network-settings),
+    /// Sent by the server to open the sign text editor on the Bedrock client.
+    c-open-sign(c-open-sign),
     /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
     c-play-status(c-play-status),
     /// Sent by the server to update the active selected hotbar slot of the player.
@@ -2466,6 +2563,10 @@ interface bedrock-packets {
     c-remove-actor(c-remove-actor),
     /// Removes a scoreboard objective, hiding it from the player's screen.
     c-remove-objective(c-remove-objective),
+    /// Sent by the server to transfer a single chunk of compressed resource pack data to the client.
+    c-resource-pack-chunk-data(c-resource-pack-chunk-data),
+    /// Information describing a resource pack to be streamed in chunks to the client.
+    c-resource-pack-data-info(c-resource-pack-data-info),
     /// Sent by the server to define the order in which resource and behavior packs are applied by the client.
     c-resource-pack-stack-packet(c-resource-pack-stack-packet),
     /// Sent by the server to list all resource and behavior packs required or available to download.

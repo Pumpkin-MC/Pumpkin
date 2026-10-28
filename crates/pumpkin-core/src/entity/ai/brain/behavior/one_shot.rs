@@ -47,7 +47,7 @@ impl OneShot {
 
 impl OneShot {
     fn fire(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.brain.check_all(&self.conditions) && (self.trigger)(tick)
+        tick.state.check_all(&self.conditions) && (self.trigger)(tick)
     }
 }
 
