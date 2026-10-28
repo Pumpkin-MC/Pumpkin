@@ -209,6 +209,10 @@ impl Mob for NautilusEntity {
         self.is_tame()
     }
 
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        self.owner.load()
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }

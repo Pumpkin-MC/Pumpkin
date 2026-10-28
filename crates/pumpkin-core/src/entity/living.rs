@@ -900,6 +900,7 @@ impl LivingEntity {
     /// 1. Health is clamped to 0, `die` is never called.
     /// 2. Mobs then play the death animation and vanish after 20 ticks, without drops.
     /// 3. A player at 0 health gets the death screen and respawns, without drops.
+    ///
     /// Kept for parity, the tick and respawn paths already treat 0 health like vanilla.
     // TODO: config option to prevent this (clamp the amount or run the real death flow).
     pub fn heal(&self, additional_health: f32) {
