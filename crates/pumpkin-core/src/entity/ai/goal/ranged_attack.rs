@@ -74,22 +74,21 @@ impl Goal for RangedAttackGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if let Some(target) = &self.target {
-            if !target.get_entity().is_alive() {
-                return false;
-            }
-            let current_target = mob.get_mob_entity().get_target().clone();
-            current_target.is_some()
-        } else {
-            false
-        }
+        // Vanilla re-runs `canUse`, which switches to the mob's current target; without one
+        // the goal keeps walking to the old target while it lives and the path is not done.
+        self.can_start(mob)
+            || (self
+                .target
+                .as_ref()
+                .is_some_and(|target| target.get_entity().is_alive())
+                && !mob.get_mob_entity().steered().navigator().is_done())
     }
 
-    fn stop(&mut self, mob: &dyn Mob) {
+    // Vanilla leaves the navigation running.
+    fn stop(&mut self, _mob: &dyn Mob) {
         self.target = None;
         self.see_time = 0;
         self.attack_time = -1;
-        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -156,10 +155,11 @@ impl Goal for RangedAttackGoal {
             let max = self.attack_interval_max as f32;
             self.attack_time = (dist.mul_add(max - min, min)).floor() as i32;
         } else if self.attack_time < 0 {
-            let ratio = (target_dist_sq.sqrt() as f32) / self.attack_radius;
-            let min = self.attack_interval_min as f32;
-            let max = self.attack_interval_max as f32;
-            self.attack_time = (ratio.mul_add(max - min, min)).floor() as i32;
+            // `Mth.lerp` in double precision, unlike the float interval above.
+            let ratio = target_dist_sq.sqrt() / f64::from(self.attack_radius);
+            let min = f64::from(self.attack_interval_min);
+            let max = f64::from(self.attack_interval_max);
+            self.attack_time = ratio.mul_add(max - min, min).floor() as i32;
         }
     }
 }
