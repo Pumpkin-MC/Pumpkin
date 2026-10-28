@@ -20,13 +20,14 @@ use crate::{
     },
 };
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, living::LivingEntity, player::Player, weak_slot::WeakSlot};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
     health: AtomicI32,
     orb_age: AtomicU32,
+    following_player: WeakSlot<Player>,
 }
 
 impl ExperienceOrbEntity {
@@ -40,6 +41,7 @@ impl ExperienceOrbEntity {
             amount,
             health: AtomicI32::new(Self::DEFAULT_HEALTH),
             orb_age: AtomicU32::new(0),
+            following_player: WeakSlot::new(),
         }
     }
 
@@ -121,6 +123,41 @@ impl ExperienceOrbEntity {
             let orb = Arc::new(Self::new_with_direction(world, position, direction, i));
             world.spawn_entity(orb);
         }
+    }
+
+    /// Vanilla `ExperienceOrb.followNearbyPlayer`
+    /// accelerate towards a player within 8 blocks.
+    fn follow_nearby_player(&self) {
+        let entity = &self.entity;
+        let pos = entity.pos.load();
+        let lost = self.following_player.get().is_none_or(|player| {
+            player.is_spectator()
+                || player.get_entity().pos.load().squared_distance_to_vec(&pos) > 64.0
+        });
+        if lost {
+            let nearest = entity.world.load().get_nearest_player(pos, 8.0, |player| {
+                !player.is_spectator() && !player.living_entity.is_dead_or_dying()
+            });
+            match nearest {
+                Some(player) => self.following_player.set(&player),
+                None => self.following_player.clear(),
+            }
+        }
+        let Some(player) = self.following_player.get() else {
+            return;
+        };
+
+        let target = player.get_entity();
+        let target_pos = target
+            .pos
+            .load()
+            .add_raw(0.0, target.get_eye_height() / 2.0, 0.0);
+        let delta = target_pos.sub(&pos);
+        let power = 1.0 - delta.length() / 8.0;
+        entity
+            .velocity
+            .store(entity.velocity.load() + delta.normalize() * (power * power * 0.1));
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     const fn round_to_orb_size(value: u32) -> u32 {
@@ -253,6 +290,8 @@ impl EntityBase for ExperienceOrbEntity {
         }
 
         entity.velocity.store(velo);
+        self.follow_nearby_player();
+        let velo = entity.velocity.load();
 
         entity.move_entity(caller, velo);
 

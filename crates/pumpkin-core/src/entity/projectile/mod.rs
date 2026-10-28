@@ -268,8 +268,13 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Projectiles should pass through lingering clouds
-        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
+        // Not pickable in vanilla: projectiles pass through these
+        // TODO: replace with `!can_hit()` once Player, TNT, falling blocks, end crystals, item
+        // frames, shulker bullets and redirectable projectiles override it like vanilla `isPickable`
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD
+            || *other_ent.entity_type == EntityType::EXPERIENCE_ORB
+            || *other_ent.entity_type == EntityType::ITEM
+        {
             return true;
         }
 
