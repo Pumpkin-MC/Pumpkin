@@ -108,7 +108,7 @@ world plugin {
     /// For nonblocking handlers, the host ignores returned changes
     /// If the returned variant case differs from the dispatched case, the host
     /// treats the result as a handler error and keeps the original event.
-    export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;
+    export handle-event: async func(event-id: u32, server: server-instance, event: borrow<event>);
 
     /// Dispatches a command execution to the plugin.
     export handle-command: async func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;

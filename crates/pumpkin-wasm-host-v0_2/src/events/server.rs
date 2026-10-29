@@ -1,11 +1,14 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, consume_text_component},
+    events::{CleanupEvent, ToFromWasmEvent, consume_text_component},
     generated_packets,
     pumpkin::plugin::event::{
-        ClientboundPacket, Event, MapInitializeEventData, PacketReceivedEventData,
-        PacketSentEventData, ServerBroadcastEventData, ServerCommandEventData,
-        ServerListPingAddress, ServerListPingEventData, ServerLoadEventData, ServerLoadType,
-        ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
+        ClientboundPacket, MapInitializeEvent as MapInitializeEventData,
+        PacketReceivedEvent as PacketReceivedEventData, PacketSentEvent as PacketSentEventData,
+        ServerBroadcastEvent as ServerBroadcastEventData,
+        ServerCommandEvent as ServerCommandEventData, ServerListPingAddress,
+        ServerListPingEvent as ServerListPingEventData, ServerLoadEvent as ServerLoadEventData,
+        ServerLoadType, ServerTickEndEvent as ServerTickEndEventData,
+        ServerTickStartEvent as ServerTickStartEventData, ServerboundPacket,
     },
 };
 use pumpkin_core::net::ClientPlatform;
@@ -22,14 +25,14 @@ use pumpkin_core::plugin::server::{
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = PacketReceivedEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Typed view is 26.3
-            // for older clients only valid after the multiversion plugin ran.
             ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
                 self.packet_id,
                 &self.payload,
@@ -45,39 +48,31 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             }
         };
 
-        Event::PacketReceivedEvent(PacketReceivedEventData {
+        Self::Wit {
             player: player_res,
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketReceivedEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketReceivedEvent(_) => {
-                // TODO: Implement converting from WIT variant back to raw if needed.
-                // For now, we only support cancellation.
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported in this simple implementation.");
     }
 }
 
 impl ToFromWasmEvent for PacketSentEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = PacketSentEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -93,54 +88,49 @@ impl ToFromWasmEvent for PacketSentEvent {
             }
         };
 
-        Event::PacketSentEvent(PacketSentEventData {
+        Self::Wit {
             player: player_res,
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.iter().copied().collect(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketSentEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
-            }
-            _ => panic!("unexpected event type"),
-        }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported.");
     }
 }
 
 impl ToFromWasmEvent for ServerCommandEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerCommandEvent(ServerCommandEventData {
+    type Wit = ServerCommandEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             command: self.command.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerCommandEvent(data) => Self {
-                command: data.command,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            command: data.command,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerBroadcastEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = ServerBroadcastEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let message = state
             .add(self.message.clone())
             .expect("failed to add text-component resource");
@@ -148,32 +138,31 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
             .add(self.sender.clone())
             .expect("failed to add text-component resource");
 
-        Event::ServerBroadcastEvent(ServerBroadcastEventData {
+        Self::Wit {
             message,
             sender,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerBroadcastEvent(data) => Self {
-                message: consume_text_component(state, &data.message),
-                sender: consume_text_component(state, &data.sender),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            message: consume_text_component(state, &data.message),
+            sender: consume_text_component(state, &data.sender),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerListPingEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = ServerListPingEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let motd = state
             .add(self.motd.clone())
             .expect("failed to add text-component resource");
 
-        Event::ServerListPingEvent(ServerListPingEventData {
+        Self::Wit {
             hostname: self.hostname().to_string(),
             address: ServerListPingAddress {
                 host: self.address().host().to_string(),
@@ -183,34 +172,26 @@ impl ToFromWasmEvent for ServerListPingEvent {
             max_players: self.max_players,
             num_players: self.num_players,
             favicon: self.favicon.clone(),
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerListPingEvent(data) => Self {
-                hostname: data.hostname,
-                address:
-                    pumpkin_core::plugin::api::events::server::list_ping::ServerListPingAddress::new(
-                        data.address.host,
-                        data.address.port,
-                    ),
-                motd: consume_text_component(state, &data.motd),
-                max_players: data.max_players,
-                num_players: data.num_players,
-                favicon: data.favicon,
-            },
-            _ => panic!("unexpected event type"),
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        if !matches!(&event, Event::ServerListPingEvent(_)) {
-            cleanup_event(&event, state);
-            panic!("unexpected event type");
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            hostname: data.hostname,
+            address:
+                pumpkin_core::plugin::api::events::server::list_ping::ServerListPingAddress::new(
+                    data.address.host,
+                    data.address.port,
+                ),
+            motd: consume_text_component(state, &data.motd),
+            max_players: data.max_players,
+            num_players: data.num_players,
+            favicon: data.favicon,
         }
+    }
 
-        let returned = Self::from_wasm_event(event, state);
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        let returned = Self::from_wasm_event(data, state);
         self.motd = returned.motd;
         self.max_players = returned.max_players;
         self.num_players = returned.num_players;
@@ -219,73 +200,69 @@ impl ToFromWasmEvent for ServerListPingEvent {
 }
 
 impl ToFromWasmEvent for ServerLoadEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerLoadEvent(ServerLoadEventData {
+    type Wit = ServerLoadEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             load_type: match self.load_type {
                 LoadType::Startup => ServerLoadType::Startup,
                 LoadType::Reload => ServerLoadType::Reload,
             },
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerLoadEvent(data) => Self {
-                load_type: match data.load_type {
-                    ServerLoadType::Startup => LoadType::Startup,
-                    ServerLoadType::Reload => LoadType::Reload,
-                },
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            load_type: match data.load_type {
+                ServerLoadType::Startup => LoadType::Startup,
+                ServerLoadType::Reload => LoadType::Reload,
             },
-            _ => panic!("unexpected event type"),
         }
     }
 }
 
 impl ToFromWasmEvent for ServerTickEndEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickEndEvent(ServerTickEndEventData {
+    type Wit = ServerTickEndEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             tick: self.tick,
             duration_nanos: self.duration_nanos,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickEndEvent(data) => Self {
-                tick: data.tick,
-                duration_nanos: data.duration_nanos,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            tick: data.tick,
+            duration_nanos: data.duration_nanos,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerTickStartEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickStartEvent(ServerTickStartEventData { tick: self.tick })
+    type Wit = ServerTickStartEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit { tick: self.tick }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickStartEvent(data) => Self { tick: data.tick },
-            _ => panic!("unexpected event type"),
-        }
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self { tick: data.tick }
     }
 }
 
 impl ToFromWasmEvent for MapInitializeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::MapInitializeEvent(MapInitializeEventData {
+    type Wit = MapInitializeEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             map_id: self.map_id,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::MapInitializeEvent(data) => Self {
-                map_id: data.map_id,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            map_id: data.map_id,
         }
     }
 }
@@ -315,7 +292,7 @@ mod tests {
             .add(returned_motd.clone())
             .expect("text component resource should be inserted");
         let motd_rep = motd.rep();
-        let returned = Event::ServerListPingEvent(ServerListPingEventData {
+        let returned = ServerListPingEventData {
             hostname: "replacement.example".to_string(),
             address: ServerListPingAddress {
                 host: "192.0.2.1".to_string(),
@@ -325,7 +302,7 @@ mod tests {
             max_players: 40,
             num_players: 2,
             favicon: Some("data:image/png;base64,test".to_string()),
-        });
+        };
 
         event.apply_wasm_event(returned, &mut state);
 

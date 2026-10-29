@@ -32,25 +32,25 @@ interface event {
         lowest,
     }
 
-    record player-join-event-data {
+    record player-join-event {
         player: player,
         join-message: text-component,
         cancelled: bool
     }
 
-    record player-leave-event-data {
+    record player-leave-event {
         player: player,
         leave-message: text-component,
         cancelled: bool
     }
 
-    record player-login-event-data {
+    record player-login-event {
         player: player,
         kick-message: text-component,
         cancelled: bool
     }
 
-    record player-chat-event-data {
+    record player-chat-event {
         player: player,
         message: string,
         recipients: list<player>,
@@ -58,33 +58,33 @@ interface event {
         cancelled: bool
     }
 
-    record player-command-send-event-data {
+    record player-command-send-event {
         player: player,
         command: string,
         cancelled: bool
     }
 
-    record player-permission-check-event-data {
+    record player-permission-check-event {
         player: player,
         permission: string,
         permission-result: bool
     }
 
-    record player-move-event-data {
+    record player-move-event {
         player: player,
         from-position: position,
         to-position: position,
         cancelled: bool
     }
 
-    record player-teleport-event-data {
+    record player-teleport-event {
         player: player,
         from-position: position,
         to-position: position,
         cancelled: bool
     }
 
-    record player-change-world-event-data {
+    record player-change-world-event {
         player: player,
         previous-world: %world,
         new-world: %world,
@@ -94,7 +94,7 @@ interface event {
         cancelled: bool
     }
 
-    record player-respawn-event-data {
+    record player-respawn-event {
         player: player,
         previous-world: %world,
         respawned-world: %world,
@@ -104,31 +104,31 @@ interface event {
         alive: bool
     }
 
-    record player-exp-change-event-data {
+    record player-exp-change-event {
         player: player,
         amount: s32
     }
 
-    record player-item-held-event-data {
+    record player-item-held-event {
         player: player,
         previous-slot: u8,
         new-slot: u8,
         cancelled: bool
     }
 
-    record player-changed-main-hand-event-data {
+    record player-changed-main-hand-event {
         player: player,
         main-hand: hand
     }
 
-    record player-gamemode-change-event-data {
+    record player-gamemode-change-event {
         player: player,
         previous-gamemode: game-mode,
         new-gamemode: game-mode,
         cancelled: bool
     }
 
-    record player-custom-payload-event-data {
+    record player-custom-payload-event {
         player: player,
         channel: string,
         data: list<u8>
@@ -144,7 +144,7 @@ interface event {
         bite,
     }
 
-    record player-fish-event-data {
+    record player-fish-event {
         player: player,
         caught-uuid: option<uuid>,
         caught-type: string,
@@ -155,7 +155,7 @@ interface event {
         cancelled: bool
     }
 
-    record player-egg-throw-event-data {
+    record player-egg-throw-event {
         player: player,
         egg-uuid: uuid,
         hatching: bool,
@@ -177,7 +177,7 @@ interface event {
         right-click-block,
     }
 
-    record player-interact-event-data {
+    record player-interact-event {
         player: player,
         action: interact-action,
         clicked-pos: option<block-pos>,
@@ -185,32 +185,32 @@ interface event {
         cancelled: bool
     }
 
-    record player-toggle-sneak-event-data {
+    record player-toggle-sneak-event {
         player: player,
         is-sneaking: bool,
         cancelled: bool
     }
 
-    record player-toggle-flight-event-data {
+    record player-toggle-flight-event {
         player: player,
         is-flying: bool,
         cancelled: bool
     }
 
-    record player-toggle-sprint-event-data {
+    record player-toggle-sprint-event {
         player: player,
         is-sprinting: bool,
         cancelled: bool
     }
 
-    record player-interact-unknown-entity-event-data {
+    record player-interact-unknown-entity-event {
         player: player,
         entity-id: s32,
         action: entity-interaction-action,
         cancelled: bool
     }
 
-    record inventory-click-event-data {
+    record inventory-click-event {
         player: player,
         window-type: option<screen>,
         click-type: click-type,
@@ -222,12 +222,12 @@ interface event {
         cancelled: bool
     }
 
-    record inventory-close-event-data {
+    record inventory-close-event {
         player: player,
         window-type: option<screen>
     }
 
-    record block-redstone-event-data {
+    record block-redstone-event {
         target-world: %world,
         state-id: u16,
         block-pos: block-pos,
@@ -236,7 +236,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-break-event-data {
+    record block-break-event {
         player: option<player>,
         block: string,
         block-pos: block-pos,
@@ -245,7 +245,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-burn-event-data {
+    record block-burn-event {
         igniting-block: string,
         block: string,
         block-pos: block-pos,
@@ -253,7 +253,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-can-build-event-data {
+    record block-can-build-event {
         block-to-build: string,
         buildable: bool,
         player: player,
@@ -261,7 +261,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-grow-event-data {
+    record block-grow-event {
         target-world: %world,
         old-block: string,
         old-state-id: u16,
@@ -271,7 +271,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-place-event-data {
+    record block-place-event {
         player: player,
         block-placed: string,
         block-placed-against: string,
@@ -280,31 +280,31 @@ interface event {
         cancelled: bool
     }
 
-    record bedrock-form-response-event-data {
+    record bedrock-form-response-event {
         player: player,
         form-id: u32,
         response-data: option<string>,
     }
 
-    record dialog-click-action-event-data {
+    record dialog-click-action-event {
         player: player,
         id: string,
         payload: option<list<u8>>,
         cancelled: bool,
     }
 
-    record dialog-show-event-data {
+    record dialog-show-event {
         player: player,
         dialog: dialog,
         cancelled: bool,
     }
 
-    record dialog-clear-event-data {
+    record dialog-clear-event {
         player: player,
         cancelled: bool,
     }
 
-    record server-command-event-data {
+    record server-command-event {
         command: string,
         cancelled: bool
     }
@@ -314,7 +314,7 @@ interface event {
         port: u16
     }
 
-    record server-list-ping-event-data {
+    record server-list-ping-event {
         hostname: string,
         address: server-list-ping-address,
         motd: text-component,
@@ -328,11 +328,11 @@ interface event {
         reload,
     }
 
-    record server-load-event-data {
+    record server-load-event {
         load-type: server-load-type
     }
 
-    record spawn-change-event-data {
+    record spawn-change-event {
         target-world: %world,
         previous-position: block-pos,
         previous-yaw: f32,
@@ -342,22 +342,22 @@ interface event {
         new-pitch: f32
     }
 
-    record server-broadcast-event-data {
+    record server-broadcast-event {
         message: text-component,
         sender: text-component,
         cancelled: bool
     }
 
-    record server-tick-start-event-data {
+    record server-tick-start-event {
         tick: s32
     }
 
-    record server-tick-end-event-data {
+    record server-tick-end-event {
         tick: s32,
         duration-nanos: s64
     }
 
-    record packet-received-event-data {
+    record packet-received-event {
         player: player,
         packet: serverbound-packet,
         packet-id: s32,
@@ -365,7 +365,7 @@ interface event {
         cancelled: bool
     }
 
-    record packet-sent-event-data {
+    record packet-sent-event {
         player: player,
         packet: clientbound-packet,
         packet-id: s32,
@@ -373,7 +373,7 @@ interface event {
         cancelled: bool
     }
 
-    record player-interact-entity-event-data {
+    record player-interact-entity-event {
         player: player,
         entity-id: s32,
         action: entity-interaction-action,
@@ -381,40 +381,40 @@ interface event {
         cancelled: bool
     }
 
-    record chunk-load-event-data {
+    record chunk-load-event {
         target-world: %world,
         chunk-x: s32,
         chunk-z: s32,
         cancelled: bool
     }
 
-    record chunk-save-event-data {
+    record chunk-save-event {
         target-world: %world,
         chunk-x: s32,
         chunk-z: s32,
         cancelled: bool
     }
 
-    record chunk-send-event-data {
+    record chunk-send-event {
         target-world: %world,
         chunk-x: s32,
         chunk-z: s32,
         cancelled: bool
     }
 
-    record entity-damage-event-data {
+    record entity-damage-event {
         entity-id: s32,
         damage: f32,
         damage-type: damage-type,
         cancelled: bool
     }
 
-    record entity-death-event-data {
+    record entity-death-event {
         entity-id: s32,
         dropped-exp: s32
     }
 
-    record player-death-event-data {
+    record player-death-event {
         player: player,
         death-message: text-component,
         dropped-exp: s32,
@@ -422,7 +422,7 @@ interface event {
         cancelled: bool
     }
 
-    record entity-spawn-event-data {
+    record entity-spawn-event {
         entity-id: s32,
         entity-type: string,
         position: position,
@@ -430,122 +430,122 @@ interface event {
         cancelled: bool
     }
 
-    record entity-combust-event-data {
+    record entity-combust-event {
         entity-id: s32,
         duration-secs: f32,
         cancelled: bool
     }
 
-    record entity-regain-health-event-data {
+    record entity-regain-health-event {
         entity-id: s32,
         amount: f32,
         cancelled: bool
     }
 
-    record entity-air-change-event-data {
+    record entity-air-change-event {
         entity-id: s32,
         amount: s32,
         cancelled: bool
     }
 
-    record entity-breed-event-data {
+    record entity-breed-event {
         father-id: s32,
         mother-id: s32,
         child-id: s32,
         cancelled: bool
     }
 
-    record entity-dismount-event-data {
+    record entity-dismount-event {
         entity-id: s32,
         dismounted-id: s32,
         cancelled: bool
     }
 
-    record entity-dye-event-data {
+    record entity-dye-event {
         entity-id: s32,
         color: string,
         player: option<player>,
         cancelled: bool
     }
 
-    record entity-enter-love-mode-event-data {
+    record entity-enter-love-mode-event {
         entity-id: s32,
         human-entity-id: option<s32>,
         ticks-in-love: s32,
         cancelled: bool
     }
 
-    record entity-explode-event-data {
+    record entity-explode-event {
         entity-id: s32,
         position: position,
         yield-rate: f32,
         cancelled: bool
     }
 
-    record entity-mount-event-data {
+    record entity-mount-event {
         entity-id: s32,
         mounted-id: s32,
         cancelled: bool
     }
 
-    record entity-pickup-item-event-data {
+    record entity-pickup-item-event {
         entity-id: s32,
         item-name: string,
         count: u8,
         cancelled: bool
     }
 
-    record entity-portal-event-data {
+    record entity-portal-event {
         entity-id: s32,
         portal-pos: block-pos,
         cancelled: bool
     }
 
-    record entity-resurrect-event-data {
+    record entity-resurrect-event {
         entity-id: s32,
         cancelled: bool
     }
 
-    record entity-shoot-bow-event-data {
+    record entity-shoot-bow-event {
         entity-id: s32,
         weapon-name: string,
         force: f32,
         cancelled: bool
     }
 
-    record entity-tame-event-data {
+    record entity-tame-event {
         entity-id: s32,
         owner: player,
         cancelled: bool
     }
 
-    record entity-target-event-data {
+    record entity-target-event {
         entity-id: s32,
         target-id: option<s32>,
         cancelled: bool
     }
 
-    record entity-teleport-event-data {
+    record entity-teleport-event {
         entity-id: s32,
         from-position: position,
         to-position: position,
         cancelled: bool
     }
 
-    record entity-toggle-glide-event-data {
+    record entity-toggle-glide-event {
         entity-id: s32,
         is-gliding: bool,
         cancelled: bool
     }
 
-    record entity-transform-event-data {
+    record entity-transform-event {
         entity-id: s32,
         new-entity-id: s32,
         transform-reason: string,
         cancelled: bool
     }
 
-    record creature-spawn-event-data {
+    record creature-spawn-event {
         entity-id: s32,
         entity-type: string,
         position: position,
@@ -555,27 +555,27 @@ interface event {
         cancelled: bool
     }
 
-    record ender-dragon-change-phase-event-data {
+    record ender-dragon-change-phase-event {
         entity-id: s32,
         current-phase: string,
         new-phase: string,
         cancelled: bool
     }
 
-    record entity-break-door-event-data {
+    record entity-break-door-event {
         entity-id: s32,
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record entity-change-block-event-data {
+    record entity-change-block-event {
         entity-id: s32,
         block-pos: block-pos,
         new-block: string,
         cancelled: bool
     }
 
-    record entity-damage-by-block-event-data {
+    record entity-damage-by-block-event {
         entity-id: s32,
         damager-pos: option<block-pos>,
         damage: f32,
@@ -583,7 +583,7 @@ interface event {
         cancelled: bool
     }
 
-    record entity-damage-by-entity-event-data {
+    record entity-damage-by-entity-event {
         entity-id: s32,
         damager-id: s32,
         damage: f32,
@@ -591,52 +591,52 @@ interface event {
         cancelled: bool
     }
 
-    record entity-drop-item-event-data {
+    record entity-drop-item-event {
         entity-id: s32,
         item-name: string,
         count: u8,
         cancelled: bool
     }
 
-    record entity-enter-block-event-data {
+    record entity-enter-block-event {
         entity-id: s32,
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record entity-exhaustion-event-data {
+    record entity-exhaustion-event {
         entity-id: s32,
         exhaustion: f32,
         cancelled: bool
     }
 
-    record entity-interact-event-data {
+    record entity-interact-event {
         entity-id: s32,
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record entity-knockback-event-data {
+    record entity-knockback-event {
         entity-id: s32,
         hit-by-id: option<s32>,
         knockback: position,
         cancelled: bool
     }
 
-    record entity-place-event-data {
+    record entity-place-event {
         entity-id: s32,
         block-pos: block-pos,
         block-name: string,
         cancelled: bool
     }
 
-    record entity-pose-change-event-data {
+    record entity-pose-change-event {
         entity-id: s32,
         pose: string,
         cancelled: bool
     }
 
-    record entity-potion-effect-event-data {
+    record entity-potion-effect-event {
         entity-id: s32,
         effect-name: string,
         duration: s32,
@@ -644,125 +644,125 @@ interface event {
         cancelled: bool
     }
 
-    record entity-spell-cast-event-data {
+    record entity-spell-cast-event {
         entity-id: s32,
         spell: string,
         cancelled: bool
     }
 
-    record entity-target-living-entity-event-data {
+    record entity-target-living-entity-event {
         entity-id: s32,
         target-id: option<s32>,
         reason: string,
         cancelled: bool
     }
 
-    record entity-toggle-swim-event-data {
+    record entity-toggle-swim-event {
         entity-id: s32,
         is-swimming: bool,
         cancelled: bool
     }
 
-    record explosion-prime-event-data {
+    record explosion-prime-event {
         entity-id: s32,
         radius: f32,
         fire: bool,
         cancelled: bool
     }
 
-    record firework-explode-event-data {
+    record firework-explode-event {
         entity-id: s32,
         cancelled: bool
     }
 
-    record food-level-change-event-data {
+    record food-level-change-event {
         entity-id: s32,
         food-level: u8,
         cancelled: bool
     }
 
-    record item-despawn-event-data {
+    record item-despawn-event {
         entity-id: s32,
         cancelled: bool
     }
 
-    record item-merge-event-data {
+    record item-merge-event {
         entity-id: s32,
         target-id: s32,
         cancelled: bool
     }
 
-    record item-spawn-event-data {
+    record item-spawn-event {
         entity-id: s32,
         position: position,
         item-name: string,
         cancelled: bool
     }
 
-    record piglin-barter-event-data {
+    record piglin-barter-event {
         entity-id: s32,
         input-item: item-stack,
         outcome: list<item-stack>,
         cancelled: bool
     }
 
-    record projectile-hit-event-data {
+    record projectile-hit-event {
         entity-id: s32,
         hit-position: position,
         hit-entity-id: option<s32>,
         cancelled: bool
     }
 
-    record projectile-launch-event-data {
+    record projectile-launch-event {
         entity-id: s32,
         shooter-id: option<s32>,
         cancelled: bool
     }
 
-    record sheep-dye-wool-event-data {
+    record sheep-dye-wool-event {
         entity-id: s32,
         dye-color: u8,
         player-id: option<s32>,
         cancelled: bool
     }
 
-    record sheep-regrow-wool-event-data {
+    record sheep-regrow-wool-event {
         entity-id: s32,
         cancelled: bool
     }
 
-    record slime-split-event-data {
+    record slime-split-event {
         entity-id: s32,
         count: s32,
         cancelled: bool
     }
 
-    record strider-temperature-change-event-data {
+    record strider-temperature-change-event {
         entity-id: s32,
         is-shivering: bool,
         cancelled: bool
     }
 
-    record villager-acquire-trade-event-data {
+    record villager-acquire-trade-event {
         entity-id: s32,
         recipe-index: s32,
         cancelled: bool
     }
 
-    record villager-career-change-event-data {
+    record villager-career-change-event {
         entity-id: s32,
         profession: string,
         reason: string,
         cancelled: bool
     }
 
-    record villager-replenish-trade-event-data {
+    record villager-replenish-trade-event {
         entity-id: s32,
         restock-quantity: s32,
         cancelled: bool
     }
 
-    record warden-anger-change-event-data {
+    record warden-anger-change-event {
         entity-id: s32,
         target-id: s32,
         old-anger: s32,
@@ -770,47 +770,47 @@ interface event {
         cancelled: bool
     }
 
-    record area-effect-cloud-apply-event-data {
+    record area-effect-cloud-apply-event {
         entity-id: s32,
         affected-entities: list<s32>,
         cancelled: bool
     }
 
-    record arrow-body-count-change-event-data {
+    record arrow-body-count-change-event {
         entity-id: s32,
         old-amount: u32,
         new-amount: u32,
         cancelled: bool
     }
 
-    record bat-toggle-sleep-event-data {
+    record bat-toggle-sleep-event {
         entity-id: s32,
         is-awake: bool,
         cancelled: bool
     }
 
-    record creeper-power-event-data {
+    record creeper-power-event {
         entity-id: s32,
         lightning-id: option<s32>,
         cause: string,
         cancelled: bool
     }
 
-    record entity-combust-by-block-event-data {
+    record entity-combust-by-block-event {
         entity-id: s32,
         combuster: block-pos,
         duration: f32,
         cancelled: bool
     }
 
-    record entity-combust-by-entity-event-data {
+    record entity-combust-by-entity-event {
         entity-id: s32,
         combuster-id: s32,
         duration: f32,
         cancelled: bool
     }
 
-    record entity-knockback-by-entity-event-data {
+    record entity-knockback-by-entity-event {
         entity-id: s32,
         hit-by-id: s32,
         force: f64,
@@ -819,38 +819,38 @@ interface event {
         cancelled: bool
     }
 
-    record entity-portal-enter-event-data {
+    record entity-portal-enter-event {
         entity-id: s32,
         location: block-pos,
         cancelled: bool
     }
 
-    record entity-portal-exit-event-data {
+    record entity-portal-exit-event {
         entity-id: s32,
         from-pos: block-pos,
         to-pos: option<block-pos>,
         cancelled: bool
     }
 
-    record entity-remove-event-data {
+    record entity-remove-event {
         entity-id: s32,
         cause: string,
         cancelled: bool
     }
 
-    record entity-target-block-event-data {
+    record entity-target-block-event {
         entity-id: s32,
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record entity-unleash-event-data {
+    record entity-unleash-event {
         entity-id: s32,
         reason: string,
         cancelled: bool
     }
 
-    record exp-bottle-event-data {
+    record exp-bottle-event {
         entity-id: s32,
         experience: s32,
         location: block-pos,
@@ -858,34 +858,34 @@ interface event {
         cancelled: bool
     }
 
-    record horse-jump-event-data {
+    record horse-jump-event {
         entity-id: s32,
         power: f32,
         cancelled: bool
     }
 
-    record lingering-potion-splash-event-data {
+    record lingering-potion-splash-event {
         entity-id: s32,
         location: block-pos,
         potion-item: string,
         cancelled: bool
     }
 
-    record pig-zap-event-data {
+    record pig-zap-event {
         entity-id: s32,
         lightning-id: s32,
         pig-zombie-id: s32,
         cancelled: bool
     }
 
-    record pig-zombie-anger-event-data {
+    record pig-zombie-anger-event {
         entity-id: s32,
         target-id: option<s32>,
         new-anger: s32,
         cancelled: bool
     }
 
-    record potion-splash-event-data {
+    record potion-splash-event {
         entity-id: s32,
         location: block-pos,
         potion-item: string,
@@ -893,78 +893,78 @@ interface event {
         cancelled: bool
     }
 
-    record spawner-spawn-event-data {
+    record spawner-spawn-event {
         entity-id: s32,
         spawner-pos: block-pos,
         cancelled: bool
     }
 
-    record trial-spawner-spawn-event-data {
+    record trial-spawner-spawn-event {
         entity-id: s32,
         spawner-pos: block-pos,
         cancelled: bool
     }
 
-    record villager-reputation-change-event-data {
+    record villager-reputation-change-event {
         entity-id: s32,
         target-id: s32,
         reputation-change: s32,
         cancelled: bool
     }
 
-    record player-item-consume-event-data {
+    record player-item-consume-event {
         player: player,
         item-name: string,
         cancelled: bool
     }
 
-    record player-item-damage-event-data {
+    record player-item-damage-event {
         player: player,
         item-name: string,
         damage: s32,
         cancelled: bool
     }
 
-    record player-drop-item-event-data {
+    record player-drop-item-event {
         player: player,
         item-name: string,
         count: u8,
         cancelled: bool
     }
 
-    record player-bed-enter-event-data {
+    record player-bed-enter-event {
         player: player,
         bed-pos: block-pos,
         cancelled: bool
     }
 
-    record player-bed-leave-event-data {
+    record player-bed-leave-event {
         player: player,
         bed-pos: block-pos
     }
 
-    record player-bucket-empty-event-data {
+    record player-bucket-empty-event {
         player: player,
         block-pos: block-pos,
         bucket: string,
         cancelled: bool
     }
 
-    record player-bucket-fill-event-data {
+    record player-bucket-fill-event {
         player: player,
         block-pos: block-pos,
         bucket: string,
         cancelled: bool
     }
 
-    record async-player-chat-event-data {
+    record async-player-chat-event {
         player: player,
         message: string,
         format: text-component,
         cancelled: bool
     }
 
-    record async-player-pre-login-event-data {
+    record async-player-pre-login-event {
         player-name: string,
         player-uuid: string,
         ip-address: string,
@@ -972,52 +972,52 @@ interface event {
         cancelled: bool
     }
 
-    record player-advancement-done-event-data {
+    record player-advancement-done-event {
         player: player,
         advancement-id: string,
         cancelled: bool
     }
 
-    record player-animation-event-data {
+    record player-animation-event {
         player: player,
         animation-type: string,
         cancelled: bool
     }
 
-    record player-armor-stand-manipulate-event-data {
+    record player-armor-stand-manipulate-event {
         player: player,
         armor-stand-id: s32,
         slot: u8,
         cancelled: bool
     }
 
-    record player-bucket-entity-event-data {
+    record player-bucket-entity-event {
         player: player,
         entity-id: s32,
         bucket-item: string,
         cancelled: bool
     }
 
-    record player-changed-world-event-data {
+    record player-changed-world-event {
         player: player,
         from-world: %world,
         to-world: %world,
         cancelled: bool
     }
 
-    record player-channel-event-data {
+    record player-channel-event {
         player: player,
         channel: string,
         cancelled: bool
     }
 
-    record player-command-preprocess-event-data {
+    record player-command-preprocess-event {
         player: player,
         command: string,
         cancelled: bool
     }
 
-    record player-edit-book-event-data {
+    record player-edit-book-event {
         player: player,
         slot: u32,
         pages: list<string>,
@@ -1026,37 +1026,37 @@ interface event {
         cancelled: bool
     }
 
-    record player-elytra-boost-event-data {
+    record player-elytra-boost-event {
         player: player,
         firework-id: s32,
         cancelled: bool
     }
 
-    record player-exp-cooldown-change-event-data {
+    record player-exp-cooldown-change-event {
         player: player,
         new-cooldown: s32,
         cancelled: bool
     }
 
-    record player-harvest-block-event-data {
+    record player-harvest-block-event {
         player: player,
         block-pos: block-pos,
         harvested-items: list<item-stack>,
         cancelled: bool
     }
 
-    record player-hide-entity-event-data {
+    record player-hide-entity-event {
         player: player,
         entity-id: s32,
         cancelled: bool
     }
 
-    record player-item-break-event-data {
+    record player-item-break-event {
         player: player,
         item-name: string
     }
 
-    record player-item-mend-event-data {
+    record player-item-mend-event {
         player: player,
         item-name: string,
         repair-amount: s32,
@@ -1064,53 +1064,53 @@ interface event {
         cancelled: bool
     }
 
-    record player-kick-event-data {
+    record player-kick-event {
         player: player,
         reason: string,
         cancelled: bool
     }
 
-    record player-leash-entity-event-data {
+    record player-leash-entity-event {
         player: player,
         entity-id: s32,
         holder-id: s32,
         cancelled: bool
     }
 
-    record player-level-change-event-data {
+    record player-level-change-event {
         player: player,
         old-level: s32,
         new-level: s32
     }
 
-    record player-locale-change-event-data {
+    record player-locale-change-event {
         player: player,
         new-locale: string,
         cancelled: bool
     }
 
-    record player-name-entity-event-data {
+    record player-name-entity-event {
         player: player,
         entity-id: s32,
         name: text-component,
         cancelled: bool
     }
 
-    record player-open-sign-event-data {
+    record player-open-sign-event {
         player: player,
         block-pos: block-pos,
         is-front: bool,
         cancelled: bool
     }
 
-    record player-portal-event-data {
+    record player-portal-event {
         player: player,
         from-pos: block-pos,
         to-pos: option<block-pos>,
         cancelled: bool
     }
 
-    record player-pre-login-event-data {
+    record player-pre-login-event {
         player-name: string,
         player-uuid: string,
         ip-address: string,
@@ -1118,70 +1118,70 @@ interface event {
         cancelled: bool
     }
 
-    record player-riptide-event-data {
+    record player-riptide-event {
         player: player,
         item-name: string,
         cancelled: bool
     }
 
-    record player-shear-entity-event-data {
+    record player-shear-entity-event {
         player: player,
         entity-id: s32,
         hand: u8,
         cancelled: bool
     }
 
-    record player-show-entity-event-data {
+    record player-show-entity-event {
         player: player,
         entity-id: s32,
         cancelled: bool
     }
 
-    record player-spawn-change-event-data {
+    record player-spawn-change-event {
         player: player,
         new-spawn: option<block-pos>,
         forced: bool,
         cancelled: bool
     }
 
-    record player-statistic-increment-event-data {
+    record player-statistic-increment-event {
         player: player,
         statistic-id: string,
         amount: s32,
         cancelled: bool
     }
 
-    record player-swap-hands-event-data {
+    record player-swap-hands-event {
         player: player,
         cancelled: bool
     }
 
-    record player-take-lectern-book-event-data {
+    record player-take-lectern-book-event {
         player: player,
         block-pos: block-pos,
         book: item-stack,
         cancelled: bool
     }
 
-    record player-unleash-entity-event-data {
+    record player-unleash-entity-event {
         player: player,
         entity-id: s32,
         cancelled: bool
     }
 
-    record player-velocity-event-data {
+    record player-velocity-event {
         player: player,
         velocity: position,
         cancelled: bool
     }
 
-    record player-input-event-data {
+    record player-input-event {
         player: player,
         input: string,
         cancelled: bool
     }
 
-    record player-interact-at-entity-event-data {
+    record player-interact-at-entity-event {
         player: player,
         entity-id: s32,
         clicked-x: f64,
@@ -1191,26 +1191,26 @@ interface event {
         cancelled: bool
     }
 
-    record player-links-send-event-data {
+    record player-links-send-event {
         player: player,
         links: list<string>,
         cancelled: bool
     }
 
-    record player-pickup-arrow-event-data {
+    record player-pickup-arrow-event {
         player: player,
         arrow-id: s32,
         cancelled: bool
     }
 
-    record player-recipe-book-click-event-data {
+    record player-recipe-book-click-event {
         player: player,
         recipe-id: string,
         make-all: bool,
         cancelled: bool
     }
 
-    record player-recipe-book-settings-change-event-data {
+    record player-recipe-book-settings-change-event {
         player: player,
         book-type: string,
         is-open: bool,
@@ -1218,158 +1218,158 @@ interface event {
         cancelled: bool
     }
 
-    record player-recipe-discover-event-data {
+    record player-recipe-discover-event {
         player: player,
         recipe-id: string,
         cancelled: bool
     }
 
-    record player-register-channel-event-data {
+    record player-register-channel-event {
         player: player,
         channel: string,
         cancelled: bool
     }
 
-    record player-resource-pack-status-event-data {
+    record player-resource-pack-status-event {
         player: player,
         pack-id: string,
         status: string,
         cancelled: bool
     }
 
-    record player-spawn-location-event-data {
+    record player-spawn-location-event {
         player: player,
         spawn-pos: position,
         cancelled: bool
     }
 
-    record player-unregister-channel-event-data {
+    record player-unregister-channel-event {
         player: player,
         channel: string,
         cancelled: bool
     }
 
-    record raid-finish-event-data {
+    record raid-finish-event {
         victory: bool,
         cancelled: bool
     }
 
-    record raid-spawn-wave-event-data {
+    record raid-spawn-wave-event {
         wave: u32,
         pos: block-pos,
         cancelled: bool
     }
 
-    record raid-stop-event-data {
+    record raid-stop-event {
         reason: string,
         cancelled: bool
     }
 
-    record raid-trigger-event-data {
+    record raid-trigger-event {
         pos: block-pos,
         cancelled: bool
     }
 
-    record block-damage-event-data {
+    record block-damage-event {
         player: player,
         block-pos: block-pos,
         insta-break: bool,
         cancelled: bool
     }
 
-    record block-ignite-event-data {
+    record block-ignite-event {
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record block-from-to-event-data {
+    record block-from-to-event {
         from-pos: block-pos,
         to-pos: block-pos,
         cancelled: bool
     }
 
-    record block-form-event-data {
+    record block-form-event {
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record block-fade-event-data {
+    record block-fade-event {
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record block-dispense-event-data {
+    record block-dispense-event {
         block-pos: block-pos,
         item-name: string,
         cancelled: bool
     }
 
-    record block-explode-event-data {
+    record block-explode-event {
         block-pos: block-pos,
         yield-rate: f32,
         cancelled: bool
     }
 
-    record block-physics-event-data {
+    record block-physics-event {
         block-pos: block-pos,
         changed-pos: block-pos,
         cancelled: bool
     }
 
-    record block-piston-extend-event-data {
+    record block-piston-extend-event {
         block-pos: block-pos,
         direction: string,
         cancelled: bool
     }
 
-    record block-piston-retract-event-data {
+    record block-piston-retract-event {
         block-pos: block-pos,
         direction: string,
         cancelled: bool
     }
 
-    record note-play-event-data {
+    record note-play-event {
         block-pos: block-pos,
         instrument: string,
         note: u8,
         cancelled: bool
     }
 
-    record sign-change-event-data {
+    record sign-change-event {
         player: player,
         block-pos: block-pos,
         lines: list<string>,
         cancelled: bool
     }
 
-    record sponge-absorb-event-data {
+    record sponge-absorb-event {
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record tnt-prime-event-data {
+    record tnt-prime-event {
         block-pos: block-pos,
         prime-reason: string,
         cancelled: bool
     }
 
-    record map-initialize-event-data {
+    record map-initialize-event {
         map-id: s32
     }
 
-    record hanging-break-event-data {
+    record hanging-break-event {
         entity-id: s32,
         remover-entity-id: option<s32>,
         cancelled: bool
     }
 
-    record hanging-break-by-entity-event-data {
+    record hanging-break-by-entity-event {
         entity-id: s32,
         remover-entity-id: s32,
         cancelled: bool
     }
 
-    record hanging-place-event-data {
+    record hanging-place-event {
         entity-id: s32,
         player: option<player>,
         block-pos: block-pos,
@@ -1377,13 +1377,13 @@ interface event {
         cancelled: bool
     }
 
-    record bell-resonate-event-data {
+    record bell-resonate-event {
         block-pos: block-pos,
         target-world: %world,
         cancelled: bool
     }
 
-    record bell-ring-event-data {
+    record bell-ring-event {
         block-pos: block-pos,
         target-world: %world,
         entity-id: option<s32>,
@@ -1391,7 +1391,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-brush-event-data {
+    record block-brush-event {
         block-pos: block-pos,
         target-world: %world,
         player: player,
@@ -1399,7 +1399,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-cook-event-data {
+    record block-cook-event {
         block-pos: block-pos,
         target-world: %world,
         source: item-stack,
@@ -1407,14 +1407,14 @@ interface event {
         cancelled: bool
     }
 
-    record block-damage-abort-event-data {
+    record block-damage-abort-event {
         player: player,
         block-pos: block-pos,
         target-world: %world,
         item-in-hand: item-stack
     }
 
-    record block-dispense-armor-event-data {
+    record block-dispense-armor-event {
         block-pos: block-pos,
         target-world: %world,
         target-entity-id: s32,
@@ -1422,14 +1422,14 @@ interface event {
         cancelled: bool
     }
 
-    record block-dispense-loot-event-data {
+    record block-dispense-loot-event {
         block-pos: block-pos,
         target-world: %world,
         items: list<item-stack>,
         cancelled: bool
     }
 
-    record block-drop-item-event-data {
+    record block-drop-item-event {
         block-pos: block-pos,
         target-world: %world,
         player: option<player>,
@@ -1437,13 +1437,13 @@ interface event {
         cancelled: bool
     }
 
-    record block-exp-event-data {
+    record block-exp-event {
         block-pos: block-pos,
         target-world: %world,
         exp: s32
     }
 
-    record block-fertilize-event-data {
+    record block-fertilize-event {
         block-pos: block-pos,
         target-world: %world,
         player: option<player>,
@@ -1451,14 +1451,14 @@ interface event {
         cancelled: bool
     }
 
-    record block-multi-place-event-data {
+    record block-multi-place-event {
         player: player,
         target-world: %world,
         placed-blocks: list<tuple<block-pos, u16>>,
         cancelled: bool
     }
 
-    record block-receive-game-event-data {
+    record block-receive-game-event {
         block-pos: block-pos,
         target-world: %world,
         game-event: string,
@@ -1466,7 +1466,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-shear-entity-event-data {
+    record block-shear-entity-event {
         block-pos: block-pos,
         target-world: %world,
         target-entity-id: s32,
@@ -1474,7 +1474,7 @@ interface event {
         cancelled: bool
     }
 
-    record block-spread-event-data {
+    record block-spread-event {
         source-pos: block-pos,
         target-pos: block-pos,
         target-world: %world,
@@ -1482,14 +1482,14 @@ interface event {
         cancelled: bool
     }
 
-    record brewing-start-event-data {
+    record brewing-start-event {
         block-pos: block-pos,
         target-world: %world,
         brewing-time: s32,
         cancelled: bool
     }
 
-    record campfire-start-event-data {
+    record campfire-start-event {
         block-pos: block-pos,
         target-world: %world,
         item: item-stack,
@@ -1498,7 +1498,7 @@ interface event {
         cancelled: bool
     }
 
-    record cauldron-level-change-event-data {
+    record cauldron-level-change-event {
         block-pos: block-pos,
         target-world: %world,
         old-level: s32,
@@ -1508,14 +1508,14 @@ interface event {
         cancelled: bool
     }
 
-    record crafter-craft-event-data {
+    record crafter-craft-event {
         block-pos: block-pos,
         target-world: %world,
         %result: item-stack,
         cancelled: bool
     }
 
-    record entity-block-form-event-data {
+    record entity-block-form-event {
         entity-id: s32,
         block-pos: block-pos,
         target-world: %world,
@@ -1523,187 +1523,187 @@ interface event {
         cancelled: bool
     }
 
-    record fluid-level-change-event-data {
+    record fluid-level-change-event {
         block-pos: block-pos,
         target-world: %world,
         new-state-id: u16,
         cancelled: bool
     }
 
-    record inventory-block-start-event-data {
+    record inventory-block-start-event {
         block-pos: block-pos,
         target-world: %world
     }
 
-    record leaves-decay-event-data {
+    record leaves-decay-event {
         block-pos: block-pos,
         target-world: %world,
         cancelled: bool
     }
 
-    record moisture-change-event-data {
+    record moisture-change-event {
         block-pos: block-pos,
         target-world: %world,
         new-moisture: s32,
         cancelled: bool
     }
 
-    record sculk-bloom-event-data {
+    record sculk-bloom-event {
         block-pos: block-pos,
         target-world: %world,
         charge: s32,
         cancelled: bool
     }
 
-    record vault-display-item-event-data {
+    record vault-display-item-event {
         block-pos: block-pos,
         target-world: %world,
         item: item-stack,
         cancelled: bool
     }
 
-    record weather-change-event-data {
+    record weather-change-event {
         target-world: %world,
         to-weather-state: bool,
         cancelled: bool
     }
 
-    record thunder-change-event-data {
+    record thunder-change-event {
         target-world: %world,
         to-thunder-state: bool,
         cancelled: bool
     }
 
-    record world-load-event-data {
+    record world-load-event {
         target-world: %world
     }
 
-    record world-unload-event-data {
+    record world-unload-event {
         target-world: %world,
         cancelled: bool
     }
 
-    record async-structure-generate-event-data {
+    record async-structure-generate-event {
         world-name: string,
         structure-name: string,
         pos: block-pos,
         cancelled: bool
     }
 
-    record async-structure-spawn-event-data {
+    record async-structure-spawn-event {
         world-name: string,
         structure-name: string,
         pos: block-pos,
         cancelled: bool
     }
 
-    record chunk-populate-event-data {
+    record chunk-populate-event {
         chunk-x: s32,
         chunk-z: s32,
         cancelled: bool
     }
 
-    record chunk-unload-event-data {
+    record chunk-unload-event {
         chunk-x: s32,
         chunk-z: s32,
         cancelled: bool
     }
 
-    record entities-load-event-data {
-        chunk-x: s32,
-        chunk-z: s32,
-        entity-count: u32,
-        cancelled: bool
-    }
-
-    record entities-unload-event-data {
+    record entities-load-event {
         chunk-x: s32,
         chunk-z: s32,
         entity-count: u32,
         cancelled: bool
     }
 
-    record generic-game-event-data {
+    record entities-unload-event {
+        chunk-x: s32,
+        chunk-z: s32,
+        entity-count: u32,
+        cancelled: bool
+    }
+
+    record generic-game-event {
         event-id: string,
         pos: position,
         cancelled: bool
     }
 
-    record loot-generate-event-data {
+    record loot-generate-event {
         loot-table: string,
         cancelled: bool
     }
 
-    record portal-create-event-data {
+    record portal-create-event {
         pos: block-pos,
         portal-type: string,
         cancelled: bool
     }
 
-    record structure-grow-event-data {
+    record structure-grow-event {
         pos: block-pos,
         species: string,
         bone-meal: bool,
         cancelled: bool
     }
 
-    record time-skip-event-data {
+    record time-skip-event {
         skip-amount: s64,
         cancelled: bool
     }
 
-    record world-init-event-data {
+    record world-init-event {
         target-world: %world
     }
 
-    record world-save-event-data {
+    record world-save-event {
         world-name: string,
         cancelled: bool
     }
 
-    record inventory-open-event-data {
+    record inventory-open-event {
         player: player,
         cancelled: bool
     }
 
-    record inventory-drag-event-data {
+    record inventory-drag-event {
         player: player,
         cancelled: bool
     }
 
-    record craft-item-event-data {
+    record craft-item-event {
         player: player,
         recipe-id: string,
         cancelled: bool
     }
 
-    record furnace-smelt-event-data {
+    record furnace-smelt-event {
         block-pos: block-pos,
         source-item: string,
         result-item: string,
         cancelled: bool
     }
 
-    record brew-event-data {
+    record brew-event {
         block-pos: block-pos,
         fuel-level: u8,
         cancelled: bool
     }
 
-    record brewing-stand-fuel-event-data {
+    record brewing-stand-fuel-event {
         block-pos: block-pos,
         fuel-power: u16,
         cancelled: bool
     }
 
-    record furnace-burn-event-data {
+    record furnace-burn-event {
         block-pos: block-pos,
         fuel-item: string,
         burn-time: u32,
         cancelled: bool
     }
 
-    record furnace-extract-event-data {
+    record furnace-extract-event {
         player: player,
         block-pos: block-pos,
         item-id: string,
@@ -1711,20 +1711,20 @@ interface event {
         exp-gained: f32
     }
 
-    record furnace-start-smelt-event-data {
+    record furnace-start-smelt-event {
         block-pos: block-pos,
         source-item: string,
         cooking-time: u32,
         cancelled: bool
     }
 
-    record hopper-inventory-search-event-data {
+    record hopper-inventory-search-event {
         block-pos: block-pos,
         search-pos: block-pos,
         cancelled: bool
     }
 
-    record inventory-creative-event-data {
+    record inventory-creative-event {
         player: player,
         slot: s16,
         item-id: string,
@@ -1732,12 +1732,12 @@ interface event {
         cancelled: bool
     }
 
-    record inventory-interact-event-data {
+    record inventory-interact-event {
         player: player,
         cancelled: bool
     }
 
-    record inventory-move-item-event-data {
+    record inventory-move-item-event {
         source-pos: block-pos,
         target-pos: block-pos,
         item-id: string,
@@ -1745,107 +1745,107 @@ interface event {
         cancelled: bool
     }
 
-    record inventory-pickup-item-event-data {
+    record inventory-pickup-item-event {
         block-pos: block-pos,
         item-entity-id: s32,
         item-id: string,
         cancelled: bool
     }
 
-    record prepare-anvil-event-data {
+    record prepare-anvil-event {
         player: player,
         rename-text: string,
         repair-cost: u32
     }
 
-    record prepare-grindstone-event-data {
+    record prepare-grindstone-event {
         player: player,
         result-item: option<string>
     }
 
-    record prepare-inventory-result-event-data {
+    record prepare-inventory-result-event {
         player: player,
         result-item: option<string>
     }
 
-    record prepare-item-craft-event-data {
+    record prepare-item-craft-event {
         player: player,
         recipe-id: string,
         cancelled: bool
     }
 
-    record prepare-smithing-event-data {
+    record prepare-smithing-event {
         player: player,
         result-item: option<string>
     }
 
-    record smith-item-event-data {
+    record smith-item-event {
         player: player,
         recipe-id: string,
         cancelled: bool
     }
 
-    record trade-select-event-data {
+    record trade-select-event {
         player: player,
         slot-index: u8,
         cancelled: bool
     }
 
-    record vehicle-block-collision-event-data {
+    record vehicle-block-collision-event {
         vehicle-id: s32,
         block-pos: block-pos,
         cancelled: bool
     }
 
-    record vehicle-collision-event-data {
+    record vehicle-collision-event {
         vehicle-id: s32,
         cancelled: bool
     }
 
-    record vehicle-create-event-data {
+    record vehicle-create-event {
         vehicle-id: s32,
         cancelled: bool
     }
 
-    record vehicle-damage-event-data {
+    record vehicle-damage-event {
         vehicle-id: s32,
         damage: f32,
         attacker-id: option<s32>,
         cancelled: bool
     }
 
-    record vehicle-destroy-event-data {
+    record vehicle-destroy-event {
         vehicle-id: s32,
         attacker-id: option<s32>,
         cancelled: bool
     }
 
-    record vehicle-enter-event-data {
+    record vehicle-enter-event {
         vehicle-id: s32,
         entered-id: s32,
         cancelled: bool
     }
 
-    record vehicle-entity-collision-event-data {
+    record vehicle-entity-collision-event {
         vehicle-id: s32,
         collided-entity-id: s32,
         cancelled: bool
     }
 
-    record vehicle-exit-event-data {
+    record vehicle-exit-event {
         vehicle-id: s32,
         exited-id: s32,
         cancelled: bool
     }
 
-    record vehicle-move-event-data {
+    record vehicle-move-event {
         vehicle-id: s32,
         from-position: position,
         to-position: position,
         cancelled: bool
     }
 
-    record vehicle-update-event-data {
+    record vehicle-update-event {
         vehicle-id: s32,
         cancelled: bool
     }
@@ -1856,7 +1856,7 @@ interface event {
         enchantment-level: s32
     }
 
-    record prepare-item-enchant-event-data {
+    record prepare-item-enchant-event {
         player: player,
         item: item-stack,
         offers: list<enchantment-offer>,
@@ -1869,7 +1869,7 @@ interface event {
         level: u32
     }
 
-    record enchant-item-event-data {
+    record enchant-item-event {
         player: player,
         item: item-stack,
         %option: s32,
@@ -1878,561 +1878,1106 @@ interface event {
         cancelled: bool
     }
 
-    record lightning-strike-event-data {
+    record lightning-strike-event {
         position: position,
         is-effect: bool,
         cancelled: bool
     }
 
     enum event-type {
-        player-join-event,
-        player-leave-event,
-        player-login-event,
-        player-chat-event,
-        player-command-send-event,
-        player-permission-check-event,
-        player-move-event,
-        player-teleport-event,
-        player-change-world-event,
-        player-respawn-event,
-        player-exp-change-event,
-        player-item-held-event,
-        player-changed-main-hand-event,
-        player-gamemode-change-event,
-        player-custom-payload-event,
-        player-fish-event,
-        player-egg-throw-event,
-        player-interact-unknown-entity-event,
-        player-interact-entity-event,
-        player-interact-event,
-        player-toggle-sneak-event,
-        player-toggle-flight-event,
-        player-toggle-sprint-event,
-        inventory-click-event,
-        inventory-close-event,
-        block-redstone-event,
-        block-break-event,
-        block-burn-event,
-        block-can-build-event,
-        block-grow-event,
-        block-place-event,
-        bedrock-form-response-event,
-        dialog-click-action-event,
-        dialog-show-event,
-        dialog-clear-event,
-        server-command-event,
-        server-list-ping-event,
-        server-load-event,
-        spawn-change-event,
-        server-broadcast-event,
-        server-tick-start-event,
-        server-tick-end-event,
-        packet-received-event,
-        packet-sent-event,
-        chunk-load-event,
-        chunk-save-event,
-        chunk-send-event,
-        entity-damage-event,
-        entity-death-event,
-        player-death-event,
-        entity-spawn-event,
-        entity-combust-event,
-        entity-regain-health-event,
-        entity-air-change-event,
-        entity-breed-event,
-        entity-dismount-event,
-        entity-dye-event,
-        entity-enter-love-mode-event,
-        entity-explode-event,
-        entity-mount-event,
-        entity-pickup-item-event,
-        entity-portal-event,
-        entity-resurrect-event,
-        entity-shoot-bow-event,
-        entity-tame-event,
-        entity-target-event,
-        entity-teleport-event,
-        entity-toggle-glide-event,
-        entity-transform-event,
-        player-item-consume-event,
-        player-item-damage-event,
-        player-drop-item-event,
-        player-bed-enter-event,
-        player-bed-leave-event,
-        player-bucket-empty-event,
-        player-bucket-fill-event,
-        block-damage-event,
-        block-ignite-event,
-        block-from-to-event,
-        block-form-event,
-        block-fade-event,
-        block-dispense-event,
-        block-explode-event,
-        block-physics-event,
-        block-piston-extend-event,
-        block-piston-retract-event,
-        note-play-event,
-        sign-change-event,
-        sponge-absorb-event,
-        tnt-prime-event,
-        weather-change-event,
-        thunder-change-event,
-        world-load-event,
-        world-unload-event,
-        async-structure-generate-event,
-        async-structure-spawn-event,
-        chunk-populate-event,
-        chunk-unload-event,
-        entities-load-event,
-        entities-unload-event,
-        generic-game-event,
-        loot-generate-event,
-        portal-create-event,
-        structure-grow-event,
-        time-skip-event,
-        world-init-event,
-        world-save-event,
-        inventory-open-event,
-        inventory-drag-event,
-        craft-item-event,
-        furnace-smelt-event,
-        brew-event,
-        brewing-stand-fuel-event,
-        furnace-burn-event,
-        furnace-extract-event,
-        furnace-start-smelt-event,
-        hopper-inventory-search-event,
-        inventory-creative-event,
-        inventory-interact-event,
-        inventory-move-item-event,
-        inventory-pickup-item-event,
-        prepare-anvil-event,
-        prepare-grindstone-event,
-        prepare-inventory-result-event,
-        prepare-item-craft-event,
-        prepare-smithing-event,
-        smith-item-event,
-        trade-select-event,
-        vehicle-block-collision-event,
-        vehicle-collision-event,
-        vehicle-create-event,
-        vehicle-damage-event,
-        vehicle-destroy-event,
-        vehicle-enter-event,
-        vehicle-entity-collision-event,
-        vehicle-exit-event,
-        vehicle-move-event,
-        vehicle-update-event,
-        prepare-item-enchant-event,
-        enchant-item-event,
-        map-initialize-event,
-        hanging-break-event,
-        hanging-break-by-entity-event,
-        hanging-place-event,
-        bell-resonate-event,
-        bell-ring-event,
-        block-brush-event,
-        block-cook-event,
-        block-damage-abort-event,
-        block-dispense-armor-event,
-        block-dispense-loot-event,
-        block-drop-item-event,
-        block-exp-event,
-        block-fertilize-event,
-        block-multi-place-event,
-        block-receive-game-event,
-        block-shear-entity-event,
-        block-spread-event,
-        brewing-start-event,
-        campfire-start-event,
-        cauldron-level-change-event,
-        crafter-craft-event,
-        entity-block-form-event,
-        fluid-level-change-event,
-        inventory-block-start-event,
-        leaves-decay-event,
-        moisture-change-event,
-        sculk-bloom-event,
-        vault-display-item-event,
-        creature-spawn-event,
-        ender-dragon-change-phase-event,
-        entity-break-door-event,
-        entity-change-block-event,
-        entity-damage-by-block-event,
-        entity-damage-by-entity-event,
-        entity-drop-item-event,
-        entity-enter-block-event,
-        entity-exhaustion-event,
-        entity-interact-event,
-        entity-knockback-event,
-        entity-place-event,
-        entity-pose-change-event,
-        entity-potion-effect-event,
-        entity-spell-cast-event,
-        entity-target-living-entity-event,
-        entity-toggle-swim-event,
-        explosion-prime-event,
-        firework-explode-event,
-        food-level-change-event,
-        item-despawn-event,
-        item-merge-event,
-        item-spawn-event,
-        piglin-barter-event,
-        projectile-hit-event,
-        projectile-launch-event,
-        sheep-dye-wool-event,
-        sheep-regrow-wool-event,
-        slime-split-event,
-        strider-temperature-change-event,
-        villager-acquire-trade-event,
-        villager-career-change-event,
-        villager-replenish-trade-event,
-        warden-anger-change-event,
-        area-effect-cloud-apply-event,
-        arrow-body-count-change-event,
-        bat-toggle-sleep-event,
-        creeper-power-event,
-        entity-combust-by-block-event,
-        entity-combust-by-entity-event,
-        entity-knockback-by-entity-event,
-        entity-portal-enter-event,
-        entity-portal-exit-event,
-        entity-remove-event,
-        entity-target-block-event,
-        entity-unleash-event,
-        exp-bottle-event,
-        horse-jump-event,
-        lingering-potion-splash-event,
-        pig-zap-event,
-        pig-zombie-anger-event,
-        potion-splash-event,
-        spawner-spawn-event,
-        trial-spawner-spawn-event,
-        villager-reputation-change-event,
-        async-player-chat-event,
-        async-player-pre-login-event,
-        player-advancement-done-event,
-        player-animation-event,
-        player-armor-stand-manipulate-event,
-        player-bucket-entity-event,
-        player-changed-world-event,
-        player-channel-event,
-        player-command-preprocess-event,
-        player-edit-book-event,
-        player-elytra-boost-event,
-        player-exp-cooldown-change-event,
-        player-harvest-block-event,
-        player-hide-entity-event,
-        player-item-break-event,
-        player-item-mend-event,
-        player-kick-event,
-        player-leash-entity-event,
-        player-level-change-event,
-        player-locale-change-event,
-        player-name-entity-event,
-        player-open-sign-event,
-        player-portal-event,
-        player-pre-login-event,
-        player-riptide-event,
-        player-shear-entity-event,
-        player-show-entity-event,
-        player-spawn-change-event,
-        player-statistic-increment-event,
-        player-swap-hands-event,
-        player-take-lectern-book-event,
-        player-unleash-entity-event,
-        player-velocity-event,
-        player-input-event,
-        player-interact-at-entity-event,
-        player-links-send-event,
-        player-pickup-arrow-event,
-        player-recipe-book-click-event,
-        player-recipe-book-settings-change-event,
-        player-recipe-discover-event,
-        player-register-channel-event,
-        player-resource-pack-status-event,
-        player-spawn-location-event,
-        player-unregister-channel-event,
-        raid-finish-event,
-        raid-spawn-wave-event,
-        raid-stop-event,
-        raid-trigger-event,
-        lightning-strike-event,
+        player-join,
+        player-leave,
+        player-login,
+        player-chat,
+        player-command-send,
+        player-permission-check,
+        player-move,
+        player-teleport,
+        player-change-world,
+        player-respawn,
+        player-exp-change,
+        player-item-held,
+        player-changed-main-hand,
+        player-gamemode-change,
+        player-custom-payload,
+        player-fish,
+        player-egg-throw,
+        player-interact-unknown-entity,
+        player-interact-entity,
+        player-interact,
+        player-toggle-sneak,
+        player-toggle-flight,
+        player-toggle-sprint,
+        inventory-click,
+        inventory-close,
+        block-redstone,
+        block-break,
+        block-burn,
+        block-can-build,
+        block-grow,
+        block-place,
+        bedrock-form-response,
+        dialog-click-action,
+        dialog-show,
+        dialog-clear,
+        server-command,
+        server-list-ping,
+        server-load,
+        spawn-change,
+        server-broadcast,
+        server-tick-start,
+        server-tick-end,
+        packet-received,
+        packet-sent,
+        chunk-load,
+        chunk-save,
+        chunk-send,
+        entity-damage,
+        entity-death,
+        player-death,
+        entity-spawn,
+        entity-combust,
+        entity-regain-health,
+        entity-air-change,
+        entity-breed,
+        entity-dismount,
+        entity-dye,
+        entity-enter-love-mode,
+        entity-explode,
+        entity-mount,
+        entity-pickup-item,
+        entity-portal,
+        entity-resurrect,
+        entity-shoot-bow,
+        entity-tame,
+        entity-target,
+        entity-teleport,
+        entity-toggle-glide,
+        entity-transform,
+        player-item-consume,
+        player-item-damage,
+        player-drop-item,
+        player-bed-enter,
+        player-bed-leave,
+        player-bucket-empty,
+        player-bucket-fill,
+        block-damage,
+        block-ignite,
+        block-from-to,
+        block-form,
+        block-fade,
+        block-dispense,
+        block-explode,
+        block-physics,
+        block-piston-extend,
+        block-piston-retract,
+        note-play,
+        sign-change,
+        sponge-absorb,
+        tnt-prime,
+        weather-change,
+        thunder-change,
+        world-load,
+        world-unload,
+        async-structure-generate,
+        async-structure-spawn,
+        chunk-populate,
+        chunk-unload,
+        entities-load,
+        entities-unload,
+        generic-game,
+        loot-generate,
+        portal-create,
+        structure-grow,
+        time-skip,
+        world-init,
+        world-save,
+        inventory-open,
+        inventory-drag,
+        craft-item,
+        furnace-smelt,
+        brew,
+        brewing-stand-fuel,
+        furnace-burn,
+        furnace-extract,
+        furnace-start-smelt,
+        hopper-inventory-search,
+        inventory-creative,
+        inventory-interact,
+        inventory-move-item,
+        inventory-pickup-item,
+        prepare-anvil,
+        prepare-grindstone,
+        prepare-inventory-result,
+        prepare-item-craft,
+        prepare-smithing,
+        smith-item,
+        trade-select,
+        vehicle-block-collision,
+        vehicle-collision,
+        vehicle-create,
+        vehicle-damage,
+        vehicle-destroy,
+        vehicle-enter,
+        vehicle-entity-collision,
+        vehicle-exit,
+        vehicle-move,
+        vehicle-update,
+        prepare-item-enchant,
+        enchant-item,
+        map-initialize,
+        hanging-break,
+        hanging-break-by-entity,
+        hanging-place,
+        bell-resonate,
+        bell-ring,
+        block-brush,
+        block-cook,
+        block-damage-abort,
+        block-dispense-armor,
+        block-dispense-loot,
+        block-drop-item,
+        block-exp,
+        block-fertilize,
+        block-multi-place,
+        block-receive-game,
+        block-shear-entity,
+        block-spread,
+        brewing-start,
+        campfire-start,
+        cauldron-level-change,
+        crafter-craft,
+        entity-block-form,
+        fluid-level-change,
+        inventory-block-start,
+        leaves-decay,
+        moisture-change,
+        sculk-bloom,
+        vault-display-item,
+        creature-spawn,
+        ender-dragon-change-phase,
+        entity-break-door,
+        entity-change-block,
+        entity-damage-by-block,
+        entity-damage-by-entity,
+        entity-drop-item,
+        entity-enter-block,
+        entity-exhaustion,
+        entity-interact,
+        entity-knockback,
+        entity-place,
+        entity-pose-change,
+        entity-potion-effect,
+        entity-spell-cast,
+        entity-target-living-entity,
+        entity-toggle-swim,
+        explosion-prime,
+        firework-explode,
+        food-level-change,
+        item-despawn,
+        item-merge,
+        item-spawn,
+        piglin-barter,
+        projectile-hit,
+        projectile-launch,
+        sheep-dye-wool,
+        sheep-regrow-wool,
+        slime-split,
+        strider-temperature-change,
+        villager-acquire-trade,
+        villager-career-change,
+        villager-replenish-trade,
+        warden-anger-change,
+        area-effect-cloud-apply,
+        arrow-body-count-change,
+        bat-toggle-sleep,
+        creeper-power,
+        entity-combust-by-block,
+        entity-combust-by-entity,
+        entity-knockback-by-entity,
+        entity-portal-enter,
+        entity-portal-exit,
+        entity-remove,
+        entity-target-block,
+        entity-unleash,
+        exp-bottle,
+        horse-jump,
+        lingering-potion-splash,
+        pig-zap,
+        pig-zombie-anger,
+        potion-splash,
+        spawner-spawn,
+        trial-spawner-spawn,
+        villager-reputation-change,
+        async-player-chat,
+        async-player-pre-login,
+        player-advancement-done,
+        player-animation,
+        player-armor-stand-manipulate,
+        player-bucket-entity,
+        player-changed-world,
+        player-channel,
+        player-command-preprocess,
+        player-edit-book,
+        player-elytra-boost,
+        player-exp-cooldown-change,
+        player-harvest-block,
+        player-hide-entity,
+        player-item-break,
+        player-item-mend,
+        player-kick,
+        player-leash-entity,
+        player-level-change,
+        player-locale-change,
+        player-name-entity,
+        player-open-sign,
+        player-portal,
+        player-pre-login,
+        player-riptide,
+        player-shear-entity,
+        player-show-entity,
+        player-spawn-change,
+        player-statistic-increment,
+        player-swap-hands,
+        player-take-lectern-book,
+        player-unleash-entity,
+        player-velocity,
+        player-input,
+        player-interact-at-entity,
+        player-links-send,
+        player-pickup-arrow,
+        player-recipe-book-click,
+        player-recipe-book-settings-change,
+        player-recipe-discover,
+        player-register-channel,
+        player-resource-pack-status,
+        player-spawn-location,
+        player-unregister-channel,
+        raid-finish,
+        raid-spawn-wave,
+        raid-stop,
+        raid-trigger,
+        lightning-strike,
     }
 
-    variant event {
-        player-join-event(player-join-event-data),
-        player-leave-event(player-leave-event-data),
-        player-login-event(player-login-event-data),
-        player-chat-event(player-chat-event-data),
-        player-command-send-event(player-command-send-event-data),
-        player-permission-check-event(player-permission-check-event-data),
-        player-move-event(player-move-event-data),
-        player-teleport-event(player-teleport-event-data),
-        player-change-world-event(player-change-world-event-data),
-        player-respawn-event(player-respawn-event-data),
-        player-exp-change-event(player-exp-change-event-data),
-        player-item-held-event(player-item-held-event-data),
-        player-changed-main-hand-event(player-changed-main-hand-event-data),
-        player-gamemode-change-event(player-gamemode-change-event-data),
-        player-custom-payload-event(player-custom-payload-event-data),
-        player-fish-event(player-fish-event-data),
-        player-egg-throw-event(player-egg-throw-event-data),
-        player-interact-unknown-entity-event(player-interact-unknown-entity-event-data),
-        player-interact-entity-event(player-interact-entity-event-data),
-        player-interact-event(player-interact-event-data),
-        player-toggle-sneak-event(player-toggle-sneak-event-data),
-        player-toggle-flight-event(player-toggle-flight-event-data),
-        player-toggle-sprint-event(player-toggle-sprint-event-data),
-        inventory-click-event(inventory-click-event-data),
-        inventory-close-event(inventory-close-event-data),
-        block-redstone-event(block-redstone-event-data),
-        block-break-event(block-break-event-data),
-        block-burn-event(block-burn-event-data),
-        block-can-build-event(block-can-build-event-data),
-        block-grow-event(block-grow-event-data),
-        block-place-event(block-place-event-data),
-        dialog-click-action-event(dialog-click-action-event-data),
-        dialog-show-event(dialog-show-event-data),
-        dialog-clear-event(dialog-clear-event-data),
-        bedrock-form-response-event(bedrock-form-response-event-data),
-        server-command-event(server-command-event-data),
-        server-list-ping-event(server-list-ping-event-data),
-        server-load-event(server-load-event-data),
-        spawn-change-event(spawn-change-event-data),
-        server-broadcast-event(server-broadcast-event-data),
-        server-tick-start-event(server-tick-start-event-data),
-        server-tick-end-event(server-tick-end-event-data),
-        packet-received-event(packet-received-event-data),
-        packet-sent-event(packet-sent-event-data),
-        chunk-load-event(chunk-load-event-data),
-        chunk-save-event(chunk-save-event-data),
-        chunk-send-event(chunk-send-event-data),
-        entity-damage-event(entity-damage-event-data),
-        entity-death-event(entity-death-event-data),
-        player-death-event(player-death-event-data),
-        entity-spawn-event(entity-spawn-event-data),
-        entity-combust-event(entity-combust-event-data),
-        entity-regain-health-event(entity-regain-health-event-data),
-        entity-air-change-event(entity-air-change-event-data),
-        entity-breed-event(entity-breed-event-data),
-        entity-dismount-event(entity-dismount-event-data),
-        entity-dye-event(entity-dye-event-data),
-        entity-enter-love-mode-event(entity-enter-love-mode-event-data),
-        entity-explode-event(entity-explode-event-data),
-        entity-mount-event(entity-mount-event-data),
-        entity-pickup-item-event(entity-pickup-item-event-data),
-        entity-portal-event(entity-portal-event-data),
-        entity-resurrect-event(entity-resurrect-event-data),
-        entity-shoot-bow-event(entity-shoot-bow-event-data),
-        entity-tame-event(entity-tame-event-data),
-        entity-target-event(entity-target-event-data),
-        entity-teleport-event(entity-teleport-event-data),
-        entity-toggle-glide-event(entity-toggle-glide-event-data),
-        entity-transform-event(entity-transform-event-data),
-        player-item-consume-event(player-item-consume-event-data),
-        player-item-damage-event(player-item-damage-event-data),
-        player-drop-item-event(player-drop-item-event-data),
-        player-bed-enter-event(player-bed-enter-event-data),
-        player-bed-leave-event(player-bed-leave-event-data),
-        player-bucket-empty-event(player-bucket-empty-event-data),
-        player-bucket-fill-event(player-bucket-fill-event-data),
-        block-damage-event(block-damage-event-data),
-        block-ignite-event(block-ignite-event-data),
-        block-from-to-event(block-from-to-event-data),
-        block-form-event(block-form-event-data),
-        block-fade-event(block-fade-event-data),
-        block-dispense-event(block-dispense-event-data),
-        block-explode-event(block-explode-event-data),
-        block-physics-event(block-physics-event-data),
-        block-piston-extend-event(block-piston-extend-event-data),
-        block-piston-retract-event(block-piston-retract-event-data),
-        note-play-event(note-play-event-data),
-        sign-change-event(sign-change-event-data),
-        sponge-absorb-event(sponge-absorb-event-data),
-        tnt-prime-event(tnt-prime-event-data),
-        weather-change-event(weather-change-event-data),
-        thunder-change-event(thunder-change-event-data),
-        world-load-event(world-load-event-data),
-        world-unload-event(world-unload-event-data),
-        async-structure-generate-event(async-structure-generate-event-data),
-        async-structure-spawn-event(async-structure-spawn-event-data),
-        chunk-populate-event(chunk-populate-event-data),
-        chunk-unload-event(chunk-unload-event-data),
-        entities-load-event(entities-load-event-data),
-        entities-unload-event(entities-unload-event-data),
-        generic-game-event(generic-game-event-data),
-        loot-generate-event(loot-generate-event-data),
-        portal-create-event(portal-create-event-data),
-        structure-grow-event(structure-grow-event-data),
-        time-skip-event(time-skip-event-data),
-        world-init-event(world-init-event-data),
-        world-save-event(world-save-event-data),
-        inventory-open-event(inventory-open-event-data),
-        inventory-drag-event(inventory-drag-event-data),
-        craft-item-event(craft-item-event-data),
-        furnace-smelt-event(furnace-smelt-event-data),
-        brew-event(brew-event-data),
-        brewing-stand-fuel-event(brewing-stand-fuel-event-data),
-        furnace-burn-event(furnace-burn-event-data),
-        furnace-extract-event(furnace-extract-event-data),
-        furnace-start-smelt-event(furnace-start-smelt-event-data),
-        hopper-inventory-search-event(hopper-inventory-search-event-data),
-        inventory-creative-event(inventory-creative-event-data),
-        inventory-interact-event(inventory-interact-event-data),
-        inventory-move-item-event(inventory-move-item-event-data),
-        inventory-pickup-item-event(inventory-pickup-item-event-data),
-        prepare-anvil-event(prepare-anvil-event-data),
-        prepare-grindstone-event(prepare-grindstone-event-data),
-        prepare-inventory-result-event(prepare-inventory-result-event-data),
-        prepare-item-craft-event(prepare-item-craft-event-data),
-        prepare-smithing-event(prepare-smithing-event-data),
-        smith-item-event(smith-item-event-data),
-        trade-select-event(trade-select-event-data),
-        vehicle-block-collision-event(vehicle-block-collision-event-data),
-        vehicle-collision-event(vehicle-collision-event-data),
-        vehicle-create-event(vehicle-create-event-data),
-        vehicle-damage-event(vehicle-damage-event-data),
-        vehicle-destroy-event(vehicle-destroy-event-data),
-        vehicle-enter-event(vehicle-enter-event-data),
-        vehicle-entity-collision-event(vehicle-entity-collision-event-data),
-        vehicle-exit-event(vehicle-exit-event-data),
-        vehicle-move-event(vehicle-move-event-data),
-        vehicle-update-event(vehicle-update-event-data),
-        prepare-item-enchant-event(prepare-item-enchant-event-data),
-        enchant-item-event(enchant-item-event-data),
-        map-initialize-event(map-initialize-event-data),
-        hanging-break-event(hanging-break-event-data),
-        hanging-break-by-entity-event(hanging-break-by-entity-event-data),
-        hanging-place-event(hanging-place-event-data),
-        bell-resonate-event(bell-resonate-event-data),
-        bell-ring-event(bell-ring-event-data),
-        block-brush-event(block-brush-event-data),
-        block-cook-event(block-cook-event-data),
-        block-damage-abort-event(block-damage-abort-event-data),
-        block-dispense-armor-event(block-dispense-armor-event-data),
-        block-dispense-loot-event(block-dispense-loot-event-data),
-        block-drop-item-event(block-drop-item-event-data),
-        block-exp-event(block-exp-event-data),
-        block-fertilize-event(block-fertilize-event-data),
-        block-multi-place-event(block-multi-place-event-data),
-        block-receive-game-event(block-receive-game-event-data),
-        block-shear-entity-event(block-shear-entity-event-data),
-        block-spread-event(block-spread-event-data),
-        brewing-start-event(brewing-start-event-data),
-        campfire-start-event(campfire-start-event-data),
-        cauldron-level-change-event(cauldron-level-change-event-data),
-        crafter-craft-event(crafter-craft-event-data),
-        entity-block-form-event(entity-block-form-event-data),
-        fluid-level-change-event(fluid-level-change-event-data),
-        inventory-block-start-event(inventory-block-start-event-data),
-        leaves-decay-event(leaves-decay-event-data),
-        moisture-change-event(moisture-change-event-data),
-        sculk-bloom-event(sculk-bloom-event-data),
-        vault-display-item-event(vault-display-item-event-data),
-        creature-spawn-event(creature-spawn-event-data),
-        ender-dragon-change-phase-event(ender-dragon-change-phase-event-data),
-        entity-break-door-event(entity-break-door-event-data),
-        entity-change-block-event(entity-change-block-event-data),
-        entity-damage-by-block-event(entity-damage-by-block-event-data),
-        entity-damage-by-entity-event(entity-damage-by-entity-event-data),
-        entity-drop-item-event(entity-drop-item-event-data),
-        entity-enter-block-event(entity-enter-block-event-data),
-        entity-exhaustion-event(entity-exhaustion-event-data),
-        entity-interact-event(entity-interact-event-data),
-        entity-knockback-event(entity-knockback-event-data),
-        entity-place-event(entity-place-event-data),
-        entity-pose-change-event(entity-pose-change-event-data),
-        entity-potion-effect-event(entity-potion-effect-event-data),
-        entity-spell-cast-event(entity-spell-cast-event-data),
-        entity-target-living-entity-event(entity-target-living-entity-event-data),
-        entity-toggle-swim-event(entity-toggle-swim-event-data),
-        explosion-prime-event(explosion-prime-event-data),
-        firework-explode-event(firework-explode-event-data),
-        food-level-change-event(food-level-change-event-data),
-        item-despawn-event(item-despawn-event-data),
-        item-merge-event(item-merge-event-data),
-        item-spawn-event(item-spawn-event-data),
-        piglin-barter-event(piglin-barter-event-data),
-        projectile-hit-event(projectile-hit-event-data),
-        projectile-launch-event(projectile-launch-event-data),
-        sheep-dye-wool-event(sheep-dye-wool-event-data),
-        sheep-regrow-wool-event(sheep-regrow-wool-event-data),
-        slime-split-event(slime-split-event-data),
-        strider-temperature-change-event(strider-temperature-change-event-data),
-        villager-acquire-trade-event(villager-acquire-trade-event-data),
-        villager-career-change-event(villager-career-change-event-data),
-        villager-replenish-trade-event(villager-replenish-trade-event-data),
-        warden-anger-change-event(warden-anger-change-event-data),
-        area-effect-cloud-apply-event(area-effect-cloud-apply-event-data),
-        arrow-body-count-change-event(arrow-body-count-change-event-data),
-        bat-toggle-sleep-event(bat-toggle-sleep-event-data),
-        creeper-power-event(creeper-power-event-data),
-        entity-combust-by-block-event(entity-combust-by-block-event-data),
-        entity-combust-by-entity-event(entity-combust-by-entity-event-data),
-        entity-knockback-by-entity-event(entity-knockback-by-entity-event-data),
-        entity-portal-enter-event(entity-portal-enter-event-data),
-        entity-portal-exit-event(entity-portal-exit-event-data),
-        entity-remove-event(entity-remove-event-data),
-        entity-target-block-event(entity-target-block-event-data),
-        entity-unleash-event(entity-unleash-event-data),
-        exp-bottle-event(exp-bottle-event-data),
-        horse-jump-event(horse-jump-event-data),
-        lingering-potion-splash-event(lingering-potion-splash-event-data),
-        pig-zap-event(pig-zap-event-data),
-        pig-zombie-anger-event(pig-zombie-anger-event-data),
-        potion-splash-event(potion-splash-event-data),
-        spawner-spawn-event(spawner-spawn-event-data),
-        trial-spawner-spawn-event(trial-spawner-spawn-event-data),
-        villager-reputation-change-event(villager-reputation-change-event-data),
-        async-player-chat-event(async-player-chat-event-data),
-        async-player-pre-login-event(async-player-pre-login-event-data),
-        player-advancement-done-event(player-advancement-done-event-data),
-        player-animation-event(player-animation-event-data),
-        player-armor-stand-manipulate-event(player-armor-stand-manipulate-event-data),
-        player-bucket-entity-event(player-bucket-entity-event-data),
-        player-changed-world-event(player-changed-world-event-data),
-        player-channel-event(player-channel-event-data),
-        player-command-preprocess-event(player-command-preprocess-event-data),
-        player-edit-book-event(player-edit-book-event-data),
-        player-elytra-boost-event(player-elytra-boost-event-data),
-        player-exp-cooldown-change-event(player-exp-cooldown-change-event-data),
-        player-harvest-block-event(player-harvest-block-event-data),
-        player-hide-entity-event(player-hide-entity-event-data),
-        player-item-break-event(player-item-break-event-data),
-        player-item-mend-event(player-item-mend-event-data),
-        player-kick-event(player-kick-event-data),
-        player-leash-entity-event(player-leash-entity-event-data),
-        player-level-change-event(player-level-change-event-data),
-        player-locale-change-event(player-locale-change-event-data),
-        player-name-entity-event(player-name-entity-event-data),
-        player-open-sign-event(player-open-sign-event-data),
-        player-portal-event(player-portal-event-data),
-        player-pre-login-event(player-pre-login-event-data),
-        player-riptide-event(player-riptide-event-data),
-        player-shear-entity-event(player-shear-entity-event-data),
-        player-show-entity-event(player-show-entity-event-data),
-        player-spawn-change-event(player-spawn-change-event-data),
-        player-statistic-increment-event(player-statistic-increment-event-data),
-        player-swap-hands-event(player-swap-hands-event-data),
-        player-take-lectern-book-event(player-take-lectern-book-event-data),
-        player-unleash-entity-event(player-unleash-entity-event-data),
-        player-velocity-event(player-velocity-event-data),
-        player-input-event(player-input-event-data),
-        player-interact-at-entity-event(player-interact-at-entity-event-data),
-        player-links-send-event(player-links-send-event-data),
-        player-pickup-arrow-event(player-pickup-arrow-event-data),
-        player-recipe-book-click-event(player-recipe-book-click-event-data),
-        player-recipe-book-settings-change-event(player-recipe-book-settings-change-event-data),
-        player-recipe-discover-event(player-recipe-discover-event-data),
-        player-register-channel-event(player-register-channel-event-data),
-        player-resource-pack-status-event(player-resource-pack-status-event-data),
-        player-spawn-location-event(player-spawn-location-event-data),
-        player-unregister-channel-event(player-unregister-channel-event-data),
-        raid-finish-event(raid-finish-event-data),
-        raid-spawn-wave-event(raid-spawn-wave-event-data),
-        raid-stop-event(raid-stop-event-data),
-        raid-trigger-event(raid-trigger-event-data),
-        lightning-strike-event(lightning-strike-event-data),
+    resource event {
+        get-player-join: func() -> result<player-join-event>;
+        set-player-join: func(data: player-join-event) -> result;
+
+        get-player-leave: func() -> result<player-leave-event>;
+        set-player-leave: func(data: player-leave-event) -> result;
+
+        get-player-login: func() -> result<player-login-event>;
+        set-player-login: func(data: player-login-event) -> result;
+
+        get-player-chat: func() -> result<player-chat-event>;
+        set-player-chat: func(data: player-chat-event) -> result;
+
+        get-player-command-send: func() -> result<player-command-send-event>;
+        set-player-command-send: func(data: player-command-send-event) -> result;
+
+        get-player-permission-check: func() -> result<player-permission-check-event>;
+        set-player-permission-check: func(data: player-permission-check-event) -> result;
+
+        get-player-move: func() -> result<player-move-event>;
+        set-player-move: func(data: player-move-event) -> result;
+
+        get-player-teleport: func() -> result<player-teleport-event>;
+        set-player-teleport: func(data: player-teleport-event) -> result;
+
+        get-player-change-world: func() -> result<player-change-world-event>;
+        set-player-change-world: func(data: player-change-world-event) -> result;
+
+        get-player-respawn: func() -> result<player-respawn-event>;
+        set-player-respawn: func(data: player-respawn-event) -> result;
+
+        get-player-exp-change: func() -> result<player-exp-change-event>;
+        set-player-exp-change: func(data: player-exp-change-event) -> result;
+
+        get-player-item-held: func() -> result<player-item-held-event>;
+        set-player-item-held: func(data: player-item-held-event) -> result;
+
+        get-player-changed-main-hand: func() -> result<player-changed-main-hand-event>;
+        set-player-changed-main-hand: func(data: player-changed-main-hand-event) -> result;
+
+        get-player-gamemode-change: func() -> result<player-gamemode-change-event>;
+        set-player-gamemode-change: func(data: player-gamemode-change-event) -> result;
+
+        get-player-custom-payload: func() -> result<player-custom-payload-event>;
+        set-player-custom-payload: func(data: player-custom-payload-event) -> result;
+
+        get-player-fish: func() -> result<player-fish-event>;
+        set-player-fish: func(data: player-fish-event) -> result;
+
+        get-player-egg-throw: func() -> result<player-egg-throw-event>;
+        set-player-egg-throw: func(data: player-egg-throw-event) -> result;
+
+        get-player-interact-unknown-entity: func() -> result<player-interact-unknown-entity-event>;
+        set-player-interact-unknown-entity: func(data: player-interact-unknown-entity-event) -> result;
+
+        get-player-interact-entity: func() -> result<player-interact-entity-event>;
+        set-player-interact-entity: func(data: player-interact-entity-event) -> result;
+
+        get-player-interact: func() -> result<player-interact-event>;
+        set-player-interact: func(data: player-interact-event) -> result;
+
+        get-player-toggle-sneak: func() -> result<player-toggle-sneak-event>;
+        set-player-toggle-sneak: func(data: player-toggle-sneak-event) -> result;
+
+        get-player-toggle-flight: func() -> result<player-toggle-flight-event>;
+        set-player-toggle-flight: func(data: player-toggle-flight-event) -> result;
+
+        get-player-toggle-sprint: func() -> result<player-toggle-sprint-event>;
+        set-player-toggle-sprint: func(data: player-toggle-sprint-event) -> result;
+
+        get-inventory-click: func() -> result<inventory-click-event>;
+        set-inventory-click: func(data: inventory-click-event) -> result;
+
+        get-inventory-close: func() -> result<inventory-close-event>;
+        set-inventory-close: func(data: inventory-close-event) -> result;
+
+        get-block-redstone: func() -> result<block-redstone-event>;
+        set-block-redstone: func(data: block-redstone-event) -> result;
+
+        get-block-break: func() -> result<block-break-event>;
+        set-block-break: func(data: block-break-event) -> result;
+
+        get-block-burn: func() -> result<block-burn-event>;
+        set-block-burn: func(data: block-burn-event) -> result;
+
+        get-block-can-build: func() -> result<block-can-build-event>;
+        set-block-can-build: func(data: block-can-build-event) -> result;
+
+        get-block-grow: func() -> result<block-grow-event>;
+        set-block-grow: func(data: block-grow-event) -> result;
+
+        get-block-place: func() -> result<block-place-event>;
+        set-block-place: func(data: block-place-event) -> result;
+
+        get-dialog-click-action: func() -> result<dialog-click-action-event>;
+        set-dialog-click-action: func(data: dialog-click-action-event) -> result;
+
+        get-dialog-show: func() -> result<dialog-show-event>;
+        set-dialog-show: func(data: dialog-show-event) -> result;
+
+        get-dialog-clear: func() -> result<dialog-clear-event>;
+        set-dialog-clear: func(data: dialog-clear-event) -> result;
+
+        get-bedrock-form-response: func() -> result<bedrock-form-response-event>;
+        set-bedrock-form-response: func(data: bedrock-form-response-event) -> result;
+
+        get-server-command: func() -> result<server-command-event>;
+        set-server-command: func(data: server-command-event) -> result;
+
+        get-server-list-ping: func() -> result<server-list-ping-event>;
+        set-server-list-ping: func(data: server-list-ping-event) -> result;
+
+        get-server-load: func() -> result<server-load-event>;
+        set-server-load: func(data: server-load-event) -> result;
+
+        get-spawn-change: func() -> result<spawn-change-event>;
+        set-spawn-change: func(data: spawn-change-event) -> result;
+
+        get-server-broadcast: func() -> result<server-broadcast-event>;
+        set-server-broadcast: func(data: server-broadcast-event) -> result;
+
+        get-server-tick-start: func() -> result<server-tick-start-event>;
+        set-server-tick-start: func(data: server-tick-start-event) -> result;
+
+        get-server-tick-end: func() -> result<server-tick-end-event>;
+        set-server-tick-end: func(data: server-tick-end-event) -> result;
+
+        get-packet-received: func() -> result<packet-received-event>;
+        set-packet-received: func(data: packet-received-event) -> result;
+
+        get-packet-sent: func() -> result<packet-sent-event>;
+        set-packet-sent: func(data: packet-sent-event) -> result;
+
+        get-chunk-load: func() -> result<chunk-load-event>;
+        set-chunk-load: func(data: chunk-load-event) -> result;
+
+        get-chunk-save: func() -> result<chunk-save-event>;
+        set-chunk-save: func(data: chunk-save-event) -> result;
+
+        get-chunk-send: func() -> result<chunk-send-event>;
+        set-chunk-send: func(data: chunk-send-event) -> result;
+
+        get-entity-damage: func() -> result<entity-damage-event>;
+        set-entity-damage: func(data: entity-damage-event) -> result;
+
+        get-entity-death: func() -> result<entity-death-event>;
+        set-entity-death: func(data: entity-death-event) -> result;
+
+        get-player-death: func() -> result<player-death-event>;
+        set-player-death: func(data: player-death-event) -> result;
+
+        get-entity-spawn: func() -> result<entity-spawn-event>;
+        set-entity-spawn: func(data: entity-spawn-event) -> result;
+
+        get-entity-combust: func() -> result<entity-combust-event>;
+        set-entity-combust: func(data: entity-combust-event) -> result;
+
+        get-entity-regain-health: func() -> result<entity-regain-health-event>;
+        set-entity-regain-health: func(data: entity-regain-health-event) -> result;
+
+        get-entity-air-change: func() -> result<entity-air-change-event>;
+        set-entity-air-change: func(data: entity-air-change-event) -> result;
+
+        get-entity-breed: func() -> result<entity-breed-event>;
+        set-entity-breed: func(data: entity-breed-event) -> result;
+
+        get-entity-dismount: func() -> result<entity-dismount-event>;
+        set-entity-dismount: func(data: entity-dismount-event) -> result;
+
+        get-entity-dye: func() -> result<entity-dye-event>;
+        set-entity-dye: func(data: entity-dye-event) -> result;
+
+        get-entity-enter-love-mode: func() -> result<entity-enter-love-mode-event>;
+        set-entity-enter-love-mode: func(data: entity-enter-love-mode-event) -> result;
+
+        get-entity-explode: func() -> result<entity-explode-event>;
+        set-entity-explode: func(data: entity-explode-event) -> result;
+
+        get-entity-mount: func() -> result<entity-mount-event>;
+        set-entity-mount: func(data: entity-mount-event) -> result;
+
+        get-entity-pickup-item: func() -> result<entity-pickup-item-event>;
+        set-entity-pickup-item: func(data: entity-pickup-item-event) -> result;
+
+        get-entity-portal: func() -> result<entity-portal-event>;
+        set-entity-portal: func(data: entity-portal-event) -> result;
+
+        get-entity-resurrect: func() -> result<entity-resurrect-event>;
+        set-entity-resurrect: func(data: entity-resurrect-event) -> result;
+
+        get-entity-shoot-bow: func() -> result<entity-shoot-bow-event>;
+        set-entity-shoot-bow: func(data: entity-shoot-bow-event) -> result;
+
+        get-entity-tame: func() -> result<entity-tame-event>;
+        set-entity-tame: func(data: entity-tame-event) -> result;
+
+        get-entity-target: func() -> result<entity-target-event>;
+        set-entity-target: func(data: entity-target-event) -> result;
+
+        get-entity-teleport: func() -> result<entity-teleport-event>;
+        set-entity-teleport: func(data: entity-teleport-event) -> result;
+
+        get-entity-toggle-glide: func() -> result<entity-toggle-glide-event>;
+        set-entity-toggle-glide: func(data: entity-toggle-glide-event) -> result;
+
+        get-entity-transform: func() -> result<entity-transform-event>;
+        set-entity-transform: func(data: entity-transform-event) -> result;
+
+        get-player-item-consume: func() -> result<player-item-consume-event>;
+        set-player-item-consume: func(data: player-item-consume-event) -> result;
+
+        get-player-item-damage: func() -> result<player-item-damage-event>;
+        set-player-item-damage: func(data: player-item-damage-event) -> result;
+
+        get-player-drop-item: func() -> result<player-drop-item-event>;
+        set-player-drop-item: func(data: player-drop-item-event) -> result;
+
+        get-player-bed-enter: func() -> result<player-bed-enter-event>;
+        set-player-bed-enter: func(data: player-bed-enter-event) -> result;
+
+        get-player-bed-leave: func() -> result<player-bed-leave-event>;
+        set-player-bed-leave: func(data: player-bed-leave-event) -> result;
+
+        get-player-bucket-empty: func() -> result<player-bucket-empty-event>;
+        set-player-bucket-empty: func(data: player-bucket-empty-event) -> result;
+
+        get-player-bucket-fill: func() -> result<player-bucket-fill-event>;
+        set-player-bucket-fill: func(data: player-bucket-fill-event) -> result;
+
+        get-block-damage: func() -> result<block-damage-event>;
+        set-block-damage: func(data: block-damage-event) -> result;
+
+        get-block-ignite: func() -> result<block-ignite-event>;
+        set-block-ignite: func(data: block-ignite-event) -> result;
+
+        get-block-from-to: func() -> result<block-from-to-event>;
+        set-block-from-to: func(data: block-from-to-event) -> result;
+
+        get-block-form: func() -> result<block-form-event>;
+        set-block-form: func(data: block-form-event) -> result;
+
+        get-block-fade: func() -> result<block-fade-event>;
+        set-block-fade: func(data: block-fade-event) -> result;
+
+        get-block-dispense: func() -> result<block-dispense-event>;
+        set-block-dispense: func(data: block-dispense-event) -> result;
+
+        get-block-explode: func() -> result<block-explode-event>;
+        set-block-explode: func(data: block-explode-event) -> result;
+
+        get-block-physics: func() -> result<block-physics-event>;
+        set-block-physics: func(data: block-physics-event) -> result;
+
+        get-block-piston-extend: func() -> result<block-piston-extend-event>;
+        set-block-piston-extend: func(data: block-piston-extend-event) -> result;
+
+        get-block-piston-retract: func() -> result<block-piston-retract-event>;
+        set-block-piston-retract: func(data: block-piston-retract-event) -> result;
+
+        get-note-play: func() -> result<note-play-event>;
+        set-note-play: func(data: note-play-event) -> result;
+
+        get-sign-change: func() -> result<sign-change-event>;
+        set-sign-change: func(data: sign-change-event) -> result;
+
+        get-sponge-absorb: func() -> result<sponge-absorb-event>;
+        set-sponge-absorb: func(data: sponge-absorb-event) -> result;
+
+        get-tnt-prime: func() -> result<tnt-prime-event>;
+        set-tnt-prime: func(data: tnt-prime-event) -> result;
+
+        get-weather-change: func() -> result<weather-change-event>;
+        set-weather-change: func(data: weather-change-event) -> result;
+
+        get-thunder-change: func() -> result<thunder-change-event>;
+        set-thunder-change: func(data: thunder-change-event) -> result;
+
+        get-world-load: func() -> result<world-load-event>;
+        set-world-load: func(data: world-load-event) -> result;
+
+        get-world-unload: func() -> result<world-unload-event>;
+        set-world-unload: func(data: world-unload-event) -> result;
+
+        get-async-structure-generate: func() -> result<async-structure-generate-event>;
+        set-async-structure-generate: func(data: async-structure-generate-event) -> result;
+
+        get-async-structure-spawn: func() -> result<async-structure-spawn-event>;
+        set-async-structure-spawn: func(data: async-structure-spawn-event) -> result;
+
+        get-chunk-populate: func() -> result<chunk-populate-event>;
+        set-chunk-populate: func(data: chunk-populate-event) -> result;
+
+        get-chunk-unload: func() -> result<chunk-unload-event>;
+        set-chunk-unload: func(data: chunk-unload-event) -> result;
+
+        get-entities-load: func() -> result<entities-load-event>;
+        set-entities-load: func(data: entities-load-event) -> result;
+
+        get-entities-unload: func() -> result<entities-unload-event>;
+        set-entities-unload: func(data: entities-unload-event) -> result;
+
+        get-generic-game: func() -> result<generic-game-event>;
+        set-generic-game: func(data: generic-game-event) -> result;
+
+        get-loot-generate: func() -> result<loot-generate-event>;
+        set-loot-generate: func(data: loot-generate-event) -> result;
+
+        get-portal-create: func() -> result<portal-create-event>;
+        set-portal-create: func(data: portal-create-event) -> result;
+
+        get-structure-grow: func() -> result<structure-grow-event>;
+        set-structure-grow: func(data: structure-grow-event) -> result;
+
+        get-time-skip: func() -> result<time-skip-event>;
+        set-time-skip: func(data: time-skip-event) -> result;
+
+        get-world-init: func() -> result<world-init-event>;
+        set-world-init: func(data: world-init-event) -> result;
+
+        get-world-save: func() -> result<world-save-event>;
+        set-world-save: func(data: world-save-event) -> result;
+
+        get-inventory-open: func() -> result<inventory-open-event>;
+        set-inventory-open: func(data: inventory-open-event) -> result;
+
+        get-inventory-drag: func() -> result<inventory-drag-event>;
+        set-inventory-drag: func(data: inventory-drag-event) -> result;
+
+        get-craft-item: func() -> result<craft-item-event>;
+        set-craft-item: func(data: craft-item-event) -> result;
+
+        get-furnace-smelt: func() -> result<furnace-smelt-event>;
+        set-furnace-smelt: func(data: furnace-smelt-event) -> result;
+
+        get-brew: func() -> result<brew-event>;
+        set-brew: func(data: brew-event) -> result;
+
+        get-brewing-stand-fuel: func() -> result<brewing-stand-fuel-event>;
+        set-brewing-stand-fuel: func(data: brewing-stand-fuel-event) -> result;
+
+        get-furnace-burn: func() -> result<furnace-burn-event>;
+        set-furnace-burn: func(data: furnace-burn-event) -> result;
+
+        get-furnace-extract: func() -> result<furnace-extract-event>;
+        set-furnace-extract: func(data: furnace-extract-event) -> result;
+
+        get-furnace-start-smelt: func() -> result<furnace-start-smelt-event>;
+        set-furnace-start-smelt: func(data: furnace-start-smelt-event) -> result;
+
+        get-hopper-inventory-search: func() -> result<hopper-inventory-search-event>;
+        set-hopper-inventory-search: func(data: hopper-inventory-search-event) -> result;
+
+        get-inventory-creative: func() -> result<inventory-creative-event>;
+        set-inventory-creative: func(data: inventory-creative-event) -> result;
+
+        get-inventory-interact: func() -> result<inventory-interact-event>;
+        set-inventory-interact: func(data: inventory-interact-event) -> result;
+
+        get-inventory-move-item: func() -> result<inventory-move-item-event>;
+        set-inventory-move-item: func(data: inventory-move-item-event) -> result;
+
+        get-inventory-pickup-item: func() -> result<inventory-pickup-item-event>;
+        set-inventory-pickup-item: func(data: inventory-pickup-item-event) -> result;
+
+        get-prepare-anvil: func() -> result<prepare-anvil-event>;
+        set-prepare-anvil: func(data: prepare-anvil-event) -> result;
+
+        get-prepare-grindstone: func() -> result<prepare-grindstone-event>;
+        set-prepare-grindstone: func(data: prepare-grindstone-event) -> result;
+
+        get-prepare-inventory-result: func() -> result<prepare-inventory-result-event>;
+        set-prepare-inventory-result: func(data: prepare-inventory-result-event) -> result;
+
+        get-prepare-item-craft: func() -> result<prepare-item-craft-event>;
+        set-prepare-item-craft: func(data: prepare-item-craft-event) -> result;
+
+        get-prepare-smithing: func() -> result<prepare-smithing-event>;
+        set-prepare-smithing: func(data: prepare-smithing-event) -> result;
+
+        get-smith-item: func() -> result<smith-item-event>;
+        set-smith-item: func(data: smith-item-event) -> result;
+
+        get-trade-select: func() -> result<trade-select-event>;
+        set-trade-select: func(data: trade-select-event) -> result;
+
+        get-vehicle-block-collision: func() -> result<vehicle-block-collision-event>;
+        set-vehicle-block-collision: func(data: vehicle-block-collision-event) -> result;
+
+        get-vehicle-collision: func() -> result<vehicle-collision-event>;
+        set-vehicle-collision: func(data: vehicle-collision-event) -> result;
+
+        get-vehicle-create: func() -> result<vehicle-create-event>;
+        set-vehicle-create: func(data: vehicle-create-event) -> result;
+
+        get-vehicle-damage: func() -> result<vehicle-damage-event>;
+        set-vehicle-damage: func(data: vehicle-damage-event) -> result;
+
+        get-vehicle-destroy: func() -> result<vehicle-destroy-event>;
+        set-vehicle-destroy: func(data: vehicle-destroy-event) -> result;
+
+        get-vehicle-enter: func() -> result<vehicle-enter-event>;
+        set-vehicle-enter: func(data: vehicle-enter-event) -> result;
+
+        get-vehicle-entity-collision: func() -> result<vehicle-entity-collision-event>;
+        set-vehicle-entity-collision: func(data: vehicle-entity-collision-event) -> result;
+
+        get-vehicle-exit: func() -> result<vehicle-exit-event>;
+        set-vehicle-exit: func(data: vehicle-exit-event) -> result;
+
+        get-vehicle-move: func() -> result<vehicle-move-event>;
+        set-vehicle-move: func(data: vehicle-move-event) -> result;
+
+        get-vehicle-update: func() -> result<vehicle-update-event>;
+        set-vehicle-update: func(data: vehicle-update-event) -> result;
+
+        get-prepare-item-enchant: func() -> result<prepare-item-enchant-event>;
+        set-prepare-item-enchant: func(data: prepare-item-enchant-event) -> result;
+
+        get-enchant-item: func() -> result<enchant-item-event>;
+        set-enchant-item: func(data: enchant-item-event) -> result;
+
+        get-map-initialize: func() -> result<map-initialize-event>;
+        set-map-initialize: func(data: map-initialize-event) -> result;
+
+        get-hanging-break: func() -> result<hanging-break-event>;
+        set-hanging-break: func(data: hanging-break-event) -> result;
+
+        get-hanging-break-by-entity: func() -> result<hanging-break-by-entity-event>;
+        set-hanging-break-by-entity: func(data: hanging-break-by-entity-event) -> result;
+
+        get-hanging-place: func() -> result<hanging-place-event>;
+        set-hanging-place: func(data: hanging-place-event) -> result;
+
+        get-bell-resonate: func() -> result<bell-resonate-event>;
+        set-bell-resonate: func(data: bell-resonate-event) -> result;
+
+        get-bell-ring: func() -> result<bell-ring-event>;
+        set-bell-ring: func(data: bell-ring-event) -> result;
+
+        get-block-brush: func() -> result<block-brush-event>;
+        set-block-brush: func(data: block-brush-event) -> result;
+
+        get-block-cook: func() -> result<block-cook-event>;
+        set-block-cook: func(data: block-cook-event) -> result;
+
+        get-block-damage-abort: func() -> result<block-damage-abort-event>;
+        set-block-damage-abort: func(data: block-damage-abort-event) -> result;
+
+        get-block-dispense-armor: func() -> result<block-dispense-armor-event>;
+        set-block-dispense-armor: func(data: block-dispense-armor-event) -> result;
+
+        get-block-dispense-loot: func() -> result<block-dispense-loot-event>;
+        set-block-dispense-loot: func(data: block-dispense-loot-event) -> result;
+
+        get-block-drop-item: func() -> result<block-drop-item-event>;
+        set-block-drop-item: func(data: block-drop-item-event) -> result;
+
+        get-block-exp: func() -> result<block-exp-event>;
+        set-block-exp: func(data: block-exp-event) -> result;
+
+        get-block-fertilize: func() -> result<block-fertilize-event>;
+        set-block-fertilize: func(data: block-fertilize-event) -> result;
+
+        get-block-multi-place: func() -> result<block-multi-place-event>;
+        set-block-multi-place: func(data: block-multi-place-event) -> result;
+
+        get-block-receive-game: func() -> result<block-receive-game-event>;
+        set-block-receive-game: func(data: block-receive-game-event) -> result;
+
+        get-block-shear-entity: func() -> result<block-shear-entity-event>;
+        set-block-shear-entity: func(data: block-shear-entity-event) -> result;
+
+        get-block-spread: func() -> result<block-spread-event>;
+        set-block-spread: func(data: block-spread-event) -> result;
+
+        get-brewing-start: func() -> result<brewing-start-event>;
+        set-brewing-start: func(data: brewing-start-event) -> result;
+
+        get-campfire-start: func() -> result<campfire-start-event>;
+        set-campfire-start: func(data: campfire-start-event) -> result;
+
+        get-cauldron-level-change: func() -> result<cauldron-level-change-event>;
+        set-cauldron-level-change: func(data: cauldron-level-change-event) -> result;
+
+        get-crafter-craft: func() -> result<crafter-craft-event>;
+        set-crafter-craft: func(data: crafter-craft-event) -> result;
+
+        get-entity-block-form: func() -> result<entity-block-form-event>;
+        set-entity-block-form: func(data: entity-block-form-event) -> result;
+
+        get-fluid-level-change: func() -> result<fluid-level-change-event>;
+        set-fluid-level-change: func(data: fluid-level-change-event) -> result;
+
+        get-inventory-block-start: func() -> result<inventory-block-start-event>;
+        set-inventory-block-start: func(data: inventory-block-start-event) -> result;
+
+        get-leaves-decay: func() -> result<leaves-decay-event>;
+        set-leaves-decay: func(data: leaves-decay-event) -> result;
+
+        get-moisture-change: func() -> result<moisture-change-event>;
+        set-moisture-change: func(data: moisture-change-event) -> result;
+
+        get-sculk-bloom: func() -> result<sculk-bloom-event>;
+        set-sculk-bloom: func(data: sculk-bloom-event) -> result;
+
+        get-vault-display-item: func() -> result<vault-display-item-event>;
+        set-vault-display-item: func(data: vault-display-item-event) -> result;
+
+        get-creature-spawn: func() -> result<creature-spawn-event>;
+        set-creature-spawn: func(data: creature-spawn-event) -> result;
+
+        get-ender-dragon-change-phase: func() -> result<ender-dragon-change-phase-event>;
+        set-ender-dragon-change-phase: func(data: ender-dragon-change-phase-event) -> result;
+
+        get-entity-break-door: func() -> result<entity-break-door-event>;
+        set-entity-break-door: func(data: entity-break-door-event) -> result;
+
+        get-entity-change-block: func() -> result<entity-change-block-event>;
+        set-entity-change-block: func(data: entity-change-block-event) -> result;
+
+        get-entity-damage-by-block: func() -> result<entity-damage-by-block-event>;
+        set-entity-damage-by-block: func(data: entity-damage-by-block-event) -> result;
+
+        get-entity-damage-by-entity: func() -> result<entity-damage-by-entity-event>;
+        set-entity-damage-by-entity: func(data: entity-damage-by-entity-event) -> result;
+
+        get-entity-drop-item: func() -> result<entity-drop-item-event>;
+        set-entity-drop-item: func(data: entity-drop-item-event) -> result;
+
+        get-entity-enter-block: func() -> result<entity-enter-block-event>;
+        set-entity-enter-block: func(data: entity-enter-block-event) -> result;
+
+        get-entity-exhaustion: func() -> result<entity-exhaustion-event>;
+        set-entity-exhaustion: func(data: entity-exhaustion-event) -> result;
+
+        get-entity-interact: func() -> result<entity-interact-event>;
+        set-entity-interact: func(data: entity-interact-event) -> result;
+
+        get-entity-knockback: func() -> result<entity-knockback-event>;
+        set-entity-knockback: func(data: entity-knockback-event) -> result;
+
+        get-entity-place: func() -> result<entity-place-event>;
+        set-entity-place: func(data: entity-place-event) -> result;
+
+        get-entity-pose-change: func() -> result<entity-pose-change-event>;
+        set-entity-pose-change: func(data: entity-pose-change-event) -> result;
+
+        get-entity-potion-effect: func() -> result<entity-potion-effect-event>;
+        set-entity-potion-effect: func(data: entity-potion-effect-event) -> result;
+
+        get-entity-spell-cast: func() -> result<entity-spell-cast-event>;
+        set-entity-spell-cast: func(data: entity-spell-cast-event) -> result;
+
+        get-entity-target-living-entity: func() -> result<entity-target-living-entity-event>;
+        set-entity-target-living-entity: func(data: entity-target-living-entity-event) -> result;
+
+        get-entity-toggle-swim: func() -> result<entity-toggle-swim-event>;
+        set-entity-toggle-swim: func(data: entity-toggle-swim-event) -> result;
+
+        get-explosion-prime: func() -> result<explosion-prime-event>;
+        set-explosion-prime: func(data: explosion-prime-event) -> result;
+
+        get-firework-explode: func() -> result<firework-explode-event>;
+        set-firework-explode: func(data: firework-explode-event) -> result;
+
+        get-food-level-change: func() -> result<food-level-change-event>;
+        set-food-level-change: func(data: food-level-change-event) -> result;
+
+        get-item-despawn: func() -> result<item-despawn-event>;
+        set-item-despawn: func(data: item-despawn-event) -> result;
+
+        get-item-merge: func() -> result<item-merge-event>;
+        set-item-merge: func(data: item-merge-event) -> result;
+
+        get-item-spawn: func() -> result<item-spawn-event>;
+        set-item-spawn: func(data: item-spawn-event) -> result;
+
+        get-piglin-barter: func() -> result<piglin-barter-event>;
+        set-piglin-barter: func(data: piglin-barter-event) -> result;
+
+        get-projectile-hit: func() -> result<projectile-hit-event>;
+        set-projectile-hit: func(data: projectile-hit-event) -> result;
+
+        get-projectile-launch: func() -> result<projectile-launch-event>;
+        set-projectile-launch: func(data: projectile-launch-event) -> result;
+
+        get-sheep-dye-wool: func() -> result<sheep-dye-wool-event>;
+        set-sheep-dye-wool: func(data: sheep-dye-wool-event) -> result;
+
+        get-sheep-regrow-wool: func() -> result<sheep-regrow-wool-event>;
+        set-sheep-regrow-wool: func(data: sheep-regrow-wool-event) -> result;
+
+        get-slime-split: func() -> result<slime-split-event>;
+        set-slime-split: func(data: slime-split-event) -> result;
+
+        get-strider-temperature-change: func() -> result<strider-temperature-change-event>;
+        set-strider-temperature-change: func(data: strider-temperature-change-event) -> result;
+
+        get-villager-acquire-trade: func() -> result<villager-acquire-trade-event>;
+        set-villager-acquire-trade: func(data: villager-acquire-trade-event) -> result;
+
+        get-villager-career-change: func() -> result<villager-career-change-event>;
+        set-villager-career-change: func(data: villager-career-change-event) -> result;
+
+        get-villager-replenish-trade: func() -> result<villager-replenish-trade-event>;
+        set-villager-replenish-trade: func(data: villager-replenish-trade-event) -> result;
+
+        get-warden-anger-change: func() -> result<warden-anger-change-event>;
+        set-warden-anger-change: func(data: warden-anger-change-event) -> result;
+
+        get-area-effect-cloud-apply: func() -> result<area-effect-cloud-apply-event>;
+        set-area-effect-cloud-apply: func(data: area-effect-cloud-apply-event) -> result;
+
+        get-arrow-body-count-change: func() -> result<arrow-body-count-change-event>;
+        set-arrow-body-count-change: func(data: arrow-body-count-change-event) -> result;
+
+        get-bat-toggle-sleep: func() -> result<bat-toggle-sleep-event>;
+        set-bat-toggle-sleep: func(data: bat-toggle-sleep-event) -> result;
+
+        get-creeper-power: func() -> result<creeper-power-event>;
+        set-creeper-power: func(data: creeper-power-event) -> result;
+
+        get-entity-combust-by-block: func() -> result<entity-combust-by-block-event>;
+        set-entity-combust-by-block: func(data: entity-combust-by-block-event) -> result;
+
+        get-entity-combust-by-entity: func() -> result<entity-combust-by-entity-event>;
+        set-entity-combust-by-entity: func(data: entity-combust-by-entity-event) -> result;
+
+        get-entity-knockback-by-entity: func() -> result<entity-knockback-by-entity-event>;
+        set-entity-knockback-by-entity: func(data: entity-knockback-by-entity-event) -> result;
+
+        get-entity-portal-enter: func() -> result<entity-portal-enter-event>;
+        set-entity-portal-enter: func(data: entity-portal-enter-event) -> result;
+
+        get-entity-portal-exit: func() -> result<entity-portal-exit-event>;
+        set-entity-portal-exit: func(data: entity-portal-exit-event) -> result;
+
+        get-entity-remove: func() -> result<entity-remove-event>;
+        set-entity-remove: func(data: entity-remove-event) -> result;
+
+        get-entity-target-block: func() -> result<entity-target-block-event>;
+        set-entity-target-block: func(data: entity-target-block-event) -> result;
+
+        get-entity-unleash: func() -> result<entity-unleash-event>;
+        set-entity-unleash: func(data: entity-unleash-event) -> result;
+
+        get-exp-bottle: func() -> result<exp-bottle-event>;
+        set-exp-bottle: func(data: exp-bottle-event) -> result;
+
+        get-horse-jump: func() -> result<horse-jump-event>;
+        set-horse-jump: func(data: horse-jump-event) -> result;
+
+        get-lingering-potion-splash: func() -> result<lingering-potion-splash-event>;
+        set-lingering-potion-splash: func(data: lingering-potion-splash-event) -> result;
+
+        get-pig-zap: func() -> result<pig-zap-event>;
+        set-pig-zap: func(data: pig-zap-event) -> result;
+
+        get-pig-zombie-anger: func() -> result<pig-zombie-anger-event>;
+        set-pig-zombie-anger: func(data: pig-zombie-anger-event) -> result;
+
+        get-potion-splash: func() -> result<potion-splash-event>;
+        set-potion-splash: func(data: potion-splash-event) -> result;
+
+        get-spawner-spawn: func() -> result<spawner-spawn-event>;
+        set-spawner-spawn: func(data: spawner-spawn-event) -> result;
+
+        get-trial-spawner-spawn: func() -> result<trial-spawner-spawn-event>;
+        set-trial-spawner-spawn: func(data: trial-spawner-spawn-event) -> result;
+
+        get-villager-reputation-change: func() -> result<villager-reputation-change-event>;
+        set-villager-reputation-change: func(data: villager-reputation-change-event) -> result;
+
+        get-async-player-chat: func() -> result<async-player-chat-event>;
+        set-async-player-chat: func(data: async-player-chat-event) -> result;
+
+        get-async-player-pre-login: func() -> result<async-player-pre-login-event>;
+        set-async-player-pre-login: func(data: async-player-pre-login-event) -> result;
+
+        get-player-advancement-done: func() -> result<player-advancement-done-event>;
+        set-player-advancement-done: func(data: player-advancement-done-event) -> result;
+
+        get-player-animation: func() -> result<player-animation-event>;
+        set-player-animation: func(data: player-animation-event) -> result;
+
+        get-player-armor-stand-manipulate: func() -> result<player-armor-stand-manipulate-event>;
+        set-player-armor-stand-manipulate: func(data: player-armor-stand-manipulate-event) -> result;
+
+        get-player-bucket-entity: func() -> result<player-bucket-entity-event>;
+        set-player-bucket-entity: func(data: player-bucket-entity-event) -> result;
+
+        get-player-changed-world: func() -> result<player-changed-world-event>;
+        set-player-changed-world: func(data: player-changed-world-event) -> result;
+
+        get-player-channel: func() -> result<player-channel-event>;
+        set-player-channel: func(data: player-channel-event) -> result;
+
+        get-player-command-preprocess: func() -> result<player-command-preprocess-event>;
+        set-player-command-preprocess: func(data: player-command-preprocess-event) -> result;
+
+        get-player-edit-book: func() -> result<player-edit-book-event>;
+        set-player-edit-book: func(data: player-edit-book-event) -> result;
+
+        get-player-elytra-boost: func() -> result<player-elytra-boost-event>;
+        set-player-elytra-boost: func(data: player-elytra-boost-event) -> result;
+
+        get-player-exp-cooldown-change: func() -> result<player-exp-cooldown-change-event>;
+        set-player-exp-cooldown-change: func(data: player-exp-cooldown-change-event) -> result;
+
+        get-player-harvest-block: func() -> result<player-harvest-block-event>;
+        set-player-harvest-block: func(data: player-harvest-block-event) -> result;
+
+        get-player-hide-entity: func() -> result<player-hide-entity-event>;
+        set-player-hide-entity: func(data: player-hide-entity-event) -> result;
+
+        get-player-item-break: func() -> result<player-item-break-event>;
+        set-player-item-break: func(data: player-item-break-event) -> result;
+
+        get-player-item-mend: func() -> result<player-item-mend-event>;
+        set-player-item-mend: func(data: player-item-mend-event) -> result;
+
+        get-player-kick: func() -> result<player-kick-event>;
+        set-player-kick: func(data: player-kick-event) -> result;
+
+        get-player-leash-entity: func() -> result<player-leash-entity-event>;
+        set-player-leash-entity: func(data: player-leash-entity-event) -> result;
+
+        get-player-level-change: func() -> result<player-level-change-event>;
+        set-player-level-change: func(data: player-level-change-event) -> result;
+
+        get-player-locale-change: func() -> result<player-locale-change-event>;
+        set-player-locale-change: func(data: player-locale-change-event) -> result;
+
+        get-player-name-entity: func() -> result<player-name-entity-event>;
+        set-player-name-entity: func(data: player-name-entity-event) -> result;
+
+        get-player-open-sign: func() -> result<player-open-sign-event>;
+        set-player-open-sign: func(data: player-open-sign-event) -> result;
+
+        get-player-portal: func() -> result<player-portal-event>;
+        set-player-portal: func(data: player-portal-event) -> result;
+
+        get-player-pre-login: func() -> result<player-pre-login-event>;
+        set-player-pre-login: func(data: player-pre-login-event) -> result;
+
+        get-player-riptide: func() -> result<player-riptide-event>;
+        set-player-riptide: func(data: player-riptide-event) -> result;
+
+        get-player-shear-entity: func() -> result<player-shear-entity-event>;
+        set-player-shear-entity: func(data: player-shear-entity-event) -> result;
+
+        get-player-show-entity: func() -> result<player-show-entity-event>;
+        set-player-show-entity: func(data: player-show-entity-event) -> result;
+
+        get-player-spawn-change: func() -> result<player-spawn-change-event>;
+        set-player-spawn-change: func(data: player-spawn-change-event) -> result;
+
+        get-player-statistic-increment: func() -> result<player-statistic-increment-event>;
+        set-player-statistic-increment: func(data: player-statistic-increment-event) -> result;
+
+        get-player-swap-hands: func() -> result<player-swap-hands-event>;
+        set-player-swap-hands: func(data: player-swap-hands-event) -> result;
+
+        get-player-take-lectern-book: func() -> result<player-take-lectern-book-event>;
+        set-player-take-lectern-book: func(data: player-take-lectern-book-event) -> result;
+
+        get-player-unleash-entity: func() -> result<player-unleash-entity-event>;
+        set-player-unleash-entity: func(data: player-unleash-entity-event) -> result;
+
+        get-player-velocity: func() -> result<player-velocity-event>;
+        set-player-velocity: func(data: player-velocity-event) -> result;
+
+        get-player-input: func() -> result<player-input-event>;
+        set-player-input: func(data: player-input-event) -> result;
+
+        get-player-interact-at-entity: func() -> result<player-interact-at-entity-event>;
+        set-player-interact-at-entity: func(data: player-interact-at-entity-event) -> result;
+
+        get-player-links-send: func() -> result<player-links-send-event>;
+        set-player-links-send: func(data: player-links-send-event) -> result;
+
+        get-player-pickup-arrow: func() -> result<player-pickup-arrow-event>;
+        set-player-pickup-arrow: func(data: player-pickup-arrow-event) -> result;
+
+        get-player-recipe-book-click: func() -> result<player-recipe-book-click-event>;
+        set-player-recipe-book-click: func(data: player-recipe-book-click-event) -> result;
+
+        get-player-recipe-book-settings-change: func() -> result<player-recipe-book-settings-change-event>;
+        set-player-recipe-book-settings-change: func(data: player-recipe-book-settings-change-event) -> result;
+
+        get-player-recipe-discover: func() -> result<player-recipe-discover-event>;
+        set-player-recipe-discover: func(data: player-recipe-discover-event) -> result;
+
+        get-player-register-channel: func() -> result<player-register-channel-event>;
+        set-player-register-channel: func(data: player-register-channel-event) -> result;
+
+        get-player-resource-pack-status: func() -> result<player-resource-pack-status-event>;
+        set-player-resource-pack-status: func(data: player-resource-pack-status-event) -> result;
+
+        get-player-spawn-location: func() -> result<player-spawn-location-event>;
+        set-player-spawn-location: func(data: player-spawn-location-event) -> result;
+
+        get-player-unregister-channel: func() -> result<player-unregister-channel-event>;
+        set-player-unregister-channel: func(data: player-unregister-channel-event) -> result;
+
+        get-raid-finish: func() -> result<raid-finish-event>;
+        set-raid-finish: func(data: raid-finish-event) -> result;
+
+        get-raid-spawn-wave: func() -> result<raid-spawn-wave-event>;
+        set-raid-spawn-wave: func(data: raid-spawn-wave-event) -> result;
+
+        get-raid-stop: func() -> result<raid-stop-event>;
+        set-raid-stop: func(data: raid-stop-event) -> result;
+
+        get-raid-trigger: func() -> result<raid-trigger-event>;
+        set-raid-trigger: func(data: raid-trigger-event) -> result;
+
+        get-lightning-strike: func() -> result<lightning-strike-event>;
+        set-lightning-strike: func(data: lightning-strike-event) -> result;
     }
 }

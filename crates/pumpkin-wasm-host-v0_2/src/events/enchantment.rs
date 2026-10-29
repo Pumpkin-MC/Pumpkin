@@ -7,8 +7,9 @@ use crate::{
     events::{ToFromWasmEvent, consume_player},
     item_stack::{from_wit_enchantment, to_wit_enchantment},
     pumpkin::plugin::event::{
-        EnchantItemEventData, EnchantmentOffer, EnchantmentValue as WitEnchantmentValue, Event,
-        PrepareItemEnchantEventData,
+        EnchantItemEvent as EnchantItemEventData, EnchantmentOffer,
+        EnchantmentValue as WitEnchantmentValue,
+        PrepareItemEnchantEvent as PrepareItemEnchantEventData,
     },
 };
 use pumpkin_core::plugin::enchantment::{
@@ -28,7 +29,9 @@ fn consume_item_stack(
 }
 
 impl ToFromWasmEvent for PrepareItemEnchantEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = PrepareItemEnchantEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -44,43 +47,40 @@ impl ToFromWasmEvent for PrepareItemEnchantEvent {
             })
             .collect();
 
-        Event::PrepareItemEnchantEvent(PrepareItemEnchantEventData {
+        Self::Wit {
             player,
             item,
             offers,
             bookshelf_count: self.bookshelf_count,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PrepareItemEnchantEvent(data) => {
-                let mut level_requirements = [0; 3];
-                let mut enchantment_id = [-1; 3];
-                let mut enchantment_level = [-1; 3];
-                for (i, offer) in data.offers.iter().enumerate().take(3) {
-                    level_requirements[i] = offer.cost;
-                    enchantment_id[i] = offer.enchantment_id;
-                    enchantment_level[i] = offer.enchantment_level;
-                }
-                Self {
-                    player: consume_player(state, &data.player),
-                    item: consume_item_stack(state, &data.item),
-                    level_requirements,
-                    enchantment_id,
-                    enchantment_level,
-                    bookshelf_count: data.bookshelf_count,
-                    cancelled: data.cancelled,
-                }
-            }
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        let mut level_requirements = [0; 3];
+        let mut enchantment_id = [-1; 3];
+        let mut enchantment_level = [-1; 3];
+        for (i, offer) in data.offers.iter().enumerate().take(3) {
+            level_requirements[i] = offer.cost;
+            enchantment_id[i] = offer.enchantment_id;
+            enchantment_level[i] = offer.enchantment_level;
+        }
+        Self {
+            player: consume_player(state, &data.player),
+            item: consume_item_stack(state, &data.item),
+            level_requirements,
+            enchantment_id,
+            enchantment_level,
+            bookshelf_count: data.bookshelf_count,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for EnchantItemEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = EnchantItemEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -97,34 +97,29 @@ impl ToFromWasmEvent for EnchantItemEvent {
             })
             .collect();
 
-        Event::EnchantItemEvent(EnchantItemEventData {
+        Self::Wit {
             player,
             item,
             option: self.option,
             cost: self.exp_level_cost,
             enchantments_to_add,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::EnchantItemEvent(data) => {
-                let enchantments_to_add = data
-                    .enchantments_to_add
-                    .into_iter()
-                    .map(|ev| (from_wit_enchantment(ev.enchantment), ev.level as i32))
-                    .collect();
-                Self {
-                    player: consume_player(state, &data.player),
-                    item: consume_item_stack(state, &data.item),
-                    option: data.option,
-                    exp_level_cost: data.cost,
-                    enchantments_to_add,
-                    cancelled: data.cancelled,
-                }
-            }
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        let enchantments_to_add = data
+            .enchantments_to_add
+            .into_iter()
+            .map(|ev| (from_wit_enchantment(ev.enchantment), ev.level as i32))
+            .collect();
+        Self {
+            player: consume_player(state, &data.player),
+            item: consume_item_stack(state, &data.item),
+            option: data.option,
+            exp_level_cost: data.cost,
+            enchantments_to_add,
+            cancelled: data.cancelled,
         }
     }
 }
