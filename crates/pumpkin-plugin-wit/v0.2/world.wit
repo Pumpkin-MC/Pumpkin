@@ -808,7 +808,8 @@ interface %world {
 
     /// Represents a Minecraft world (dimension).
     resource %world {
-        /// Returns the unique identifier of this world.
+        /// Returns the unique identifier of this world, which is its dimension key
+        /// (e.g., \"minecraft:overworld\", \"minecraft:the_nether\", \"minecraft:the_end\").
         get-id: func() -> string;
 
         /// Gets the world border associated with this world (alias for get-world-border).
