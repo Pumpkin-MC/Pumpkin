@@ -1,9 +1,8 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, from_wasm_block_position, to_wasm_block_position},
+    events::{CleanupEvent, ToFromWasmEvent, from_wasm_block_position, to_wasm_block_position},
     pumpkin::plugin::event::{
-        Event, RaidFinishEvent as RaidFinishEventData,
-        RaidSpawnWaveEvent as RaidSpawnWaveEventData, RaidStopEvent as RaidStopEventData,
-        RaidTriggerEvent as RaidTriggerEventData,
+        RaidFinishEvent as RaidFinishEventData, RaidSpawnWaveEvent as RaidSpawnWaveEventData,
+        RaidStopEvent as RaidStopEventData, RaidTriggerEvent as RaidTriggerEventData,
     },
 };
 use pumpkin_core::plugin::raid::{
@@ -22,7 +21,8 @@ impl ToFromWasmEvent for RaidFinishEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -45,7 +45,8 @@ impl ToFromWasmEvent for RaidSpawnWaveEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -68,7 +69,8 @@ impl ToFromWasmEvent for RaidStopEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.reason = data.reason;
     }
@@ -91,7 +93,8 @@ impl ToFromWasmEvent for RaidTriggerEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 

@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     events::{
-        ToFromWasmEvent, cleanup_event, consume_player, consume_text_component, consume_world,
+        CleanupEvent, ToFromWasmEvent, consume_player, consume_text_component, consume_world,
         from_wasm_block_name, from_wasm_block_position, from_wasm_click_type,
         from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
         from_wasm_hand, from_wasm_position, to_wasm_block_position, to_wasm_click_type,
@@ -15,7 +15,7 @@ use crate::{
         event::{
             AsyncPlayerChatEvent as AsyncPlayerChatEventData,
             AsyncPlayerPreLoginEvent as AsyncPlayerPreLoginEventData,
-            BedrockFormResponseEvent as BedrockFormResponseEventData, Event,
+            BedrockFormResponseEvent as BedrockFormResponseEventData,
             InteractAction as WasmInteractAction, InventoryClickEvent as InventoryClickEventData,
             InventoryCloseEvent as InventoryCloseEventData,
             PlayerAdvancementDoneEvent as PlayerAdvancementDoneEventData,
@@ -242,11 +242,6 @@ impl ToFromWasmEvent for InventoryClickEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.hotbar_button = data.hotbar_button;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -444,12 +439,6 @@ impl ToFromWasmEvent for PlayerMoveEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.from = from_wasm_position(data.from_position);
-        self.to = from_wasm_position(data.to_position);
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -474,12 +463,6 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
             to_position: to_wasm_position(self.to),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.from = from_wasm_position(data.from_position);
-        self.to = from_wasm_position(data.to_position);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -515,15 +498,6 @@ impl ToFromWasmEvent for PlayerChangeWorldEvent {
             pitch: self.pitch,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.previous_world = consume_world(state, &data.previous_world);
-        self.new_world = consume_world(state, &data.new_world);
-        self.position = from_wasm_position(data.position);
-        self.yaw = data.yaw;
-        self.pitch = data.pitch;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -564,15 +538,6 @@ impl ToFromWasmEvent for PlayerRespawnEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
-        self.previous_world = consume_world(state, &data.previous_world);
-        self.respawned_world = consume_world(state, &data.respawned_world);
-        self.position = from_wasm_position(data.position);
-        self.yaw = data.yaw;
-        self.pitch = data.pitch;
-        self.alive = data.alive;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -600,10 +565,6 @@ impl ToFromWasmEvent for PlayerExpChangeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.amount = data.amount;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -626,12 +587,6 @@ impl ToFromWasmEvent for PlayerItemHeldEvent {
             new_slot: self.new_slot,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.previous_slot = data.previous_slot;
-        self.new_slot = data.new_slot;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -658,10 +613,6 @@ impl ToFromWasmEvent for PlayerChangedMainHandEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.main_hand = from_wasm_hand(data.main_hand);
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -684,12 +635,6 @@ impl ToFromWasmEvent for PlayerGamemodeChangeEvent {
             new_gamemode: to_wasm_game_mode(self.new_gamemode),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.previous_gamemode = from_wasm_game_mode(data.previous_gamemode);
-        self.new_gamemode = from_wasm_game_mode(data.new_gamemode);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -715,11 +660,6 @@ impl ToFromWasmEvent for PlayerCustomPayloadEvent {
             channel: self.channel.clone(),
             data: self.data.to_vec(),
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.channel = data.channel;
-        self.data = Bytes::from(data.data);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -749,16 +689,6 @@ impl ToFromWasmEvent for PlayerFishEvent {
             exp_to_drop: self.exp_to_drop,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.caught_uuid = data.caught_uuid.map(|id| WitUuid::from_wit(&id));
-        self.caught_type = data.caught_type;
-        self.hook_uuid = WitUuid::from_wit(&data.hook_uuid);
-        self.state = from_wasm_fish_state(data.state);
-        self.hand = from_wasm_hand(data.hand);
-        self.exp_to_drop = data.exp_to_drop;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -793,14 +723,6 @@ impl ToFromWasmEvent for PlayerEggThrowEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.egg_uuid = WitUuid::from_wit(&data.egg_uuid);
-        self.hatching = data.hatching;
-        self.num_hatches = data.num_hatches;
-        self.hatching_type = from_wasm_entity_type(&data.hatching_type);
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -827,12 +749,6 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
             action: to_wasm_entity_interaction_action(self.action),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.entity_id = data.entity_id;
-        self.action = from_wasm_entity_interaction_action(data.action);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -880,13 +796,6 @@ impl ToFromWasmEvent for PlayerInteractEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.action = from_wasm_interact_action(data.action);
-        self.clicked_pos = data.clicked_pos.map(from_wasm_block_position);
-        self.block = from_wasm_block_name(&data.block);
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -913,11 +822,6 @@ impl ToFromWasmEvent for PlayerToggleSneakEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.is_sneaking = data.is_sneaking;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -942,11 +846,6 @@ impl ToFromWasmEvent for PlayerToggleFlightEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.is_flying = data.is_flying;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -969,11 +868,6 @@ impl ToFromWasmEvent for PlayerToggleSprintEvent {
             is_sprinting: self.is_sprinting,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.is_sprinting = data.is_sprinting;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -1026,17 +920,6 @@ impl ToFromWasmEvent for PlayerInteractEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.sneaking = data.sneaking;
-        self.action = from_wasm_entity_interaction_action(data.action);
-        self.target = self
-            .player
-            .world()
-            .get_entity_by_id(data.entity_id)
-            .expect("entity not found");
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         let player = consume_player(state, &data.player);
         let target = player
@@ -1071,11 +954,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.item_name = data.item_name;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -1101,12 +979,6 @@ impl ToFromWasmEvent
             damage: self.damage,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.item_name = data.item_name;
-        self.damage = data.damage;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -1137,12 +1009,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.item_name = data.item_name;
-        self.count = data.count;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -1170,11 +1036,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.bed_pos = from_wasm_block_position(data.bed_pos);
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -1198,10 +1059,6 @@ impl ToFromWasmEvent
             player,
             bed_pos: to_wasm_block_position(self.bed_pos),
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.bed_pos = from_wasm_block_position(data.bed_pos);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -1230,12 +1087,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.block_pos = from_wasm_block_position(data.block_pos);
-        self.bucket = data.bucket;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -1262,12 +1113,6 @@ impl ToFromWasmEvent
             bucket: self.bucket.clone(),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.block_pos = from_wasm_block_position(data.block_pos);
-        self.bucket = data.bucket;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -1364,7 +1209,8 @@ impl ToFromWasmEvent for PlayerAdvancementDoneEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1396,7 +1242,8 @@ impl ToFromWasmEvent for PlayerAnimationEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1428,7 +1275,8 @@ impl ToFromWasmEvent for PlayerArmorStandManipulateEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1457,7 +1305,8 @@ impl ToFromWasmEvent for PlayerBucketEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1492,7 +1341,8 @@ impl ToFromWasmEvent for PlayerChangedWorldEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1520,7 +1370,8 @@ impl ToFromWasmEvent for PlayerChannelEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1547,7 +1398,8 @@ impl ToFromWasmEvent for PlayerCommandPreprocessEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.command = data.command;
     }
@@ -1578,7 +1430,8 @@ impl ToFromWasmEvent for PlayerEditBookEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.pages = data.pages;
         self.title = data.title;
@@ -1610,7 +1463,8 @@ impl ToFromWasmEvent for PlayerElytraBoostEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1637,7 +1491,8 @@ impl ToFromWasmEvent for PlayerExpCooldownChangeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.new_cooldown = data.new_cooldown;
     }
@@ -1675,7 +1530,8 @@ impl ToFromWasmEvent for PlayerHarvestBlockEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1698,7 +1554,8 @@ impl ToFromWasmEvent for PlayerHideEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1748,7 +1605,8 @@ impl ToFromWasmEvent for PlayerItemMendEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.repair_amount = data.repair_amount;
         self.exp_consumed = data.exp_consumed;
@@ -1779,7 +1637,8 @@ impl ToFromWasmEvent for PlayerKickEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.reason = data.reason;
     }
@@ -1808,7 +1667,8 @@ impl ToFromWasmEvent for PlayerLeashEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1859,7 +1719,8 @@ impl ToFromWasmEvent for PlayerLocaleChangeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1921,7 +1782,8 @@ impl ToFromWasmEvent for PlayerOpenSignEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -1950,7 +1812,8 @@ impl ToFromWasmEvent for PlayerPortalEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.to_pos = data.to_pos.map(from_wasm_block_position);
     }
@@ -2014,7 +1877,8 @@ impl ToFromWasmEvent for PlayerRiptideEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2042,7 +1906,8 @@ impl ToFromWasmEvent for PlayerShearEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2070,7 +1935,8 @@ impl ToFromWasmEvent for PlayerShowEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2098,7 +1964,8 @@ impl ToFromWasmEvent for PlayerSpawnChangeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.new_spawn = data.new_spawn.map(from_wasm_block_position);
     }
@@ -2128,7 +1995,8 @@ impl ToFromWasmEvent for PlayerStatisticIncrementEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.amount = data.amount;
     }
@@ -2156,7 +2024,8 @@ impl ToFromWasmEvent for PlayerSwapHandItemsEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2186,7 +2055,8 @@ impl ToFromWasmEvent for PlayerTakeLecternBookEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2209,7 +2079,8 @@ impl ToFromWasmEvent for PlayerUnleashEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2236,7 +2107,8 @@ impl ToFromWasmEvent for PlayerVelocityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.velocity = from_wasm_position(data.velocity);
     }
@@ -2264,7 +2136,8 @@ impl ToFromWasmEvent for PlayerInputEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.input = data.input;
     }
@@ -2296,7 +2169,8 @@ impl ToFromWasmEvent for PlayerInteractAtEntityEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2327,7 +2201,8 @@ impl ToFromWasmEvent for PlayerLinksSendEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.links = data.links;
     }
@@ -2355,7 +2230,8 @@ impl ToFromWasmEvent for PlayerPickupArrowEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 
@@ -2383,7 +2259,8 @@ impl ToFromWasmEvent for PlayerRecipeBookClickEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.recipe_id = data.recipe_id;
         self.make_all = data.make_all;
@@ -2415,7 +2292,8 @@ impl ToFromWasmEvent for PlayerRecipeBookSettingsChangeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.book_type = data.book_type;
         self.is_open = data.is_open;
@@ -2447,7 +2325,8 @@ impl ToFromWasmEvent for PlayerRecipeDiscoverEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.recipe_id = data.recipe_id;
     }
@@ -2475,7 +2354,8 @@ impl ToFromWasmEvent for PlayerRegisterChannelEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.channel = data.channel;
     }
@@ -2504,7 +2384,8 @@ impl ToFromWasmEvent for PlayerResourcePackStatusEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.status = data.status;
     }
@@ -2533,7 +2414,8 @@ impl ToFromWasmEvent for PlayerSpawnLocationEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.spawn_pos = from_wasm_position(data.spawn_pos);
     }
@@ -2561,7 +2443,8 @@ impl ToFromWasmEvent for PlayerUnregisterChannelEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
         self.channel = data.channel;
     }
