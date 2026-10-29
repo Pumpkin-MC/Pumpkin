@@ -234,9 +234,16 @@ impl HopperBlockEntity {
             return false;
         }
 
-        if let Some(entity) = world.get_block_entity(pos_up)
+        let (block, state) = world.get_block_and_state(pos_up);
+        // Vanilla `getContainerAt` checks `hasBlockEntity` first, a miss here would read the chunk.
+        if state.has_block_entity()
+            && let Some(entity) = world.get_block_entity(pos_up)
             && let Some(container) = entity.clone().get_inventory()
         {
+            // An empty container has nothing to take, skip reading every slot.
+            if container.is_empty() {
+                return false;
+            }
             // TODO check WorldlyContainer
             for i in 0..container.size() {
                 let mut item = container.get_stack(i);
@@ -276,7 +283,6 @@ impl HopperBlockEntity {
             }
             return false;
         }
-        let (block, state) = world.get_block_and_state(pos_up);
         if !state.is_full_cube() || block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS) {
             let entities = world.get_entities_at_box(&SUCK_AABB.at_pos(self.position));
             for entity_base in entities {
