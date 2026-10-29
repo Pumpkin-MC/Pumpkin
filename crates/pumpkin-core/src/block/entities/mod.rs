@@ -337,7 +337,6 @@ pub fn create_block_entity(
     block_entity_type_id: u16,
     position: BlockPos,
 ) -> Option<Arc<dyn BlockEntity>> {
-    use pumpkin_data::block_properties::FacingHopper;
     if block_entity_type_id == u16::MAX {
         return None;
     }
@@ -378,10 +377,7 @@ pub fn create_block_entity(
         "daylight_detector" => Some(Arc::new(
             daylight_detector::DaylightDetectorBlockEntity::new(position),
         )),
-        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(
-            position,
-            FacingHopper::Down,
-        ))),
+        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(position))),
         "comparator" => Some(Arc::new(comparator::ComparatorBlockEntity::new(position))),
         "banner" => Some(Arc::new(banner::BannerBlockEntity::new(position))),
         "structure_block" => Some(Arc::new(structure_block::StructureBlockBlockEntity::new(

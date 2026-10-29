@@ -18,9 +18,9 @@ use pumpkin_util::math::vector3::Vector3;
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Vanilla `Hopper.SUCK_AABB`: from the hopper's bowl up to the top of the block above.
 const SUCK_AABB: BoundingBox = BoundingBox::new_array([0.0, 11.0 / 16.0, 0.0], [1.0, 2.0, 1.0]);
@@ -30,7 +30,6 @@ pub struct HopperBlockEntity {
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
-    pub facing: FacingHopper,
     pub cooldown_time: AtomicI32,
     pub ticked_game_time: AtomicI64,
 }
@@ -82,8 +81,10 @@ impl BlockEntity for HopperBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
-            facing: FacingHopper::Down,
-            cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
+            cooldown_time: AtomicI32::from(
+                nbt.get_int("TransferCooldown")
+                    .unwrap_or(Self::NO_COOLDOWN_TIME),
+            ),
             ticked_game_time: AtomicI64::new(0),
         };
 
@@ -109,7 +110,13 @@ impl BlockEntity for HopperBlockEntity {
             return;
         };
         // Vanilla `pushItemsTick`: decrement first, move once the cooldown is down to 0.
-        if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) - 1 <= 0 {
+        // `TransferCooldown` comes from NBT; wraps like vanilla's `cooldownTime--`.
+        if self
+            .cooldown_time
+            .fetch_sub(1, Ordering::Relaxed)
+            .wrapping_sub(1)
+            <= 0
+        {
             self.cooldown_time.store(0, Ordering::Relaxed);
             if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
@@ -130,11 +137,6 @@ impl BlockEntity for HopperBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
-    }
-
-    fn set_block_state(&mut self, block_state: BlockStateId) {
-        // TODO !!!IMPORTANT!!! set block state when loading the chunk
-        self.facing = HopperLikeProperties::from_state_id(block_state).facing;
     }
 
     fn is_comparator_dirty(&self) -> bool {
@@ -184,47 +186,57 @@ impl BlockEntity for HopperBlockEntity {
 impl HopperBlockEntity {
     pub const INVENTORY_SIZE: usize = 5;
     pub const ID: &'static str = "minecraft:hopper";
+    /// Vanilla `HopperBlockEntity.MOVE_ITEM_SPEED`.
+    pub const MOVE_ITEM_SPEED: i32 = 8;
+    /// Vanilla `HopperBlockEntity.NO_COOLDOWN_TIME`.
+    const NO_COOLDOWN_TIME: i32 = -1;
 
     #[must_use]
-    pub fn new(position: BlockPos, facing: FacingHopper) -> Self {
+    pub fn new(position: BlockPos) -> Self {
         Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
-            facing,
-            cooldown_time: AtomicI32::new(-1),
+            cooldown_time: AtomicI32::new(Self::NO_COOLDOWN_TIME),
             ticked_game_time: AtomicI64::new(0),
         }
     }
+
+    fn read_items(&self) -> RwLockReadGuard<'_, [ItemStack; Self::INVENTORY_SIZE]> {
+        self.items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_items(&self) -> RwLockWriteGuard<'_, [ItemStack; Self::INVENTORY_SIZE]> {
+        self.items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     fn try_move_items(&self, state: HopperLikeProperties, world: &Arc<World>) {
         if self.cooldown_time.load(Ordering::Relaxed) <= 0 && state.enabled {
             let mut success = if self.is_empty() {
                 false
             } else {
-                self.eject_items(world)
+                self.eject_items(world, state.facing)
             };
             if !self.inventory_full() {
                 success |= self.suck_in_items(world);
             }
             if success {
-                self.cooldown_time.store(8, Ordering::Relaxed);
+                self.cooldown_time
+                    .store(Self::MOVE_ITEM_SPEED, Ordering::Relaxed);
                 self.mark_dirty();
             }
         }
     }
 
     fn inventory_full(&self) -> bool {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for item in items.iter() {
-            if item.is_empty() || item.item_count != item.get_max_stack_size() {
-                return false;
-            }
-        }
-        true
+        self.read_items()
+            .iter()
+            .all(|item| !item.is_empty() && item.item_count == item.get_max_stack_size())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -323,10 +335,7 @@ impl HopperBlockEntity {
 
     /// Splits one item off `slot` under one lock. `None` when the slot is empty by then.
     fn take_one(&self, slot: usize) -> Option<Extraction> {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         let stack = items.get_mut(slot).filter(|stack| !stack.is_empty())?;
         let snapshot = stack.clone();
         let one_item = stack.split(1);
@@ -345,10 +354,7 @@ impl HopperBlockEntity {
     /// The snapshot only fits a slot nobody wrote to, so it is restored on a match and dropped on
     /// a mismatch, writing it anyway would undo the other write, in either direction.
     fn put_back(&self, slot: usize, extraction: Extraction) -> Option<ItemStack> {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         self.mark_dirty();
         let Some(current) = items.get_mut(slot) else {
             return Some(extraction.one_item);
@@ -370,10 +376,11 @@ impl HopperBlockEntity {
         Some(extraction.one_item)
     }
 
-    fn eject_items(&self, world: &Arc<World>) -> bool {
+    /// `facing` comes from the live block state, the block entity keeps no copy that could go stale.
+    fn eject_items(&self, world: &Arc<World>, facing: FacingHopper) -> bool {
         // TODO getEntityContainer
-
-        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing)))
+        let target_pos = self.position.offset(to_offset(&facing));
+        if let Some(entity) = world.get_block_entity(&target_pos)
             && let Some(container) = entity.get_inventory()
         {
             // TODO check WorldlyContainer
@@ -388,7 +395,6 @@ impl HopperBlockEntity {
             if is_full {
                 return false;
             }
-            let target_pos = self.position.offset(to_offset(&self.facing));
             for slot in 0..Self::INVENTORY_SIZE {
                 let item = self.get_stack(slot);
                 if item.is_empty() {
@@ -457,10 +463,7 @@ impl HopperBlockEntity {
         let to_empty = to.is_empty();
         let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
             // One lock for read and write: a parallel insert would otherwise overwrite a stale copy.
-            let mut items = hopper
-                .items
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut items = hopper.write_items();
             items
                 .get_mut(slot)
                 .is_some_and(|dst| Self::merge_into_slot(dst, stack))
@@ -478,17 +481,17 @@ impl HopperBlockEntity {
 
         if to_empty
             && let Some(hopper) = to.as_any().downcast_ref::<Self>()
-            && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
+            && hopper.cooldown_time.load(Ordering::Relaxed) <= Self::MOVE_ITEM_SPEED
         {
-            // A hopper that already ticked starts at 7, one that hasn't counts 8 down to 7: both move together.
+            // A hopper that already ticked skips one tick, one that hasn't counts it down: both move together.
             let cooldown = match from.and_then(|from| from.as_any().downcast_ref::<Self>()) {
                 Some(from_hopper)
                     if hopper.ticked_game_time.load(Ordering::Relaxed)
                         >= from_hopper.ticked_game_time.load(Ordering::Relaxed) =>
                 {
-                    7
+                    Self::MOVE_ITEM_SPEED - 1
                 }
-                _ => 8,
+                _ => Self::MOVE_ITEM_SPEED,
             };
             hopper.cooldown_time.store(cooldown, Ordering::Relaxed);
         }
@@ -519,18 +522,12 @@ impl Inventory for HopperBlockEntity {
     }
 
     fn is_empty(&self) -> bool {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let items = self.read_items();
         items.iter().all(ItemStack::is_empty)
     }
 
     fn get_stack(&self, slot: usize) -> ItemStack {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let items = self.read_items();
         items
             .get(slot)
             .cloned()
@@ -538,10 +535,7 @@ impl Inventory for HopperBlockEntity {
     }
 
     fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         let Some(slot_item) = items.get_mut(slot) else {
             return ItemStack::EMPTY.clone();
         };
@@ -551,10 +545,7 @@ impl Inventory for HopperBlockEntity {
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         let Some(slot_item) = items.get_mut(slot) else {
             return ItemStack::EMPTY.clone();
         };
@@ -568,10 +559,7 @@ impl Inventory for HopperBlockEntity {
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         if let Some(slot_item) = items.get_mut(slot) {
             *slot_item = stack;
             self.mark_dirty();
@@ -590,10 +578,7 @@ impl Inventory for HopperBlockEntity {
 
 impl Clearable for HopperBlockEntity {
     fn clear(&self) {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut items = self.write_items();
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
     }
@@ -648,7 +633,7 @@ mod tests {
     }
 
     fn hopper_holding(stack: ItemStack) -> HopperBlockEntity {
-        let hopper = HopperBlockEntity::new(BlockPos::new(0, 0, 0), FacingHopper::Down);
+        let hopper = HopperBlockEntity::new(BlockPos::new(0, 0, 0));
         hopper.set_stack(0, stack);
         hopper
     }
