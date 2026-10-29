@@ -1326,6 +1326,14 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_entity().entity_type.sound_source
     }
 
+    /// See [`EntityBase::is_flapping`].
+    fn mob_is_flapping(&self) -> bool {
+        false
+    }
+
+    /// See [`EntityBase::on_flap`].
+    fn mob_on_flap(&self) {}
+
     /// See [`EntityBase::play_step_sound`].
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         self.play_block_step_sound(state);
@@ -1948,6 +1956,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         self.mob_play_step_sound(pos, state);
+    }
+
+    fn is_flapping(&self) -> bool {
+        self.mob_is_flapping()
+    }
+
+    fn on_flap(&self) {
+        self.mob_on_flap();
     }
 
     fn get_swim_sound(&self) -> Option<Sound> {

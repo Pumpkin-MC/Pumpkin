@@ -436,6 +436,10 @@ impl CustomSound for AllayEntity {
 }
 
 impl Mob for AllayEntity {
+    fn mob_is_flapping(&self) -> bool {
+        !self.get_entity().on_ground.load(Ordering::Relaxed)
+    }
+
     /// Vanilla `Allay` steps silently.
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 

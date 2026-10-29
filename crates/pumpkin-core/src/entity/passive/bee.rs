@@ -44,6 +44,9 @@ pub const FLAG_ROLL: u8 = 2;
 pub const FLAG_HAS_STUNG: u8 = 4;
 pub const FLAG_HAS_NECTAR: u8 = 8;
 
+/// Vanilla `Bee.TICKS_PER_FLAP`, `Mth.ceil(1.4959966F)`.
+const TICKS_PER_FLAP: i32 = 2;
+
 fn is_angry(mob: &dyn Mob) -> bool {
     mob.as_neutral().is_some_and(NeutralMob::is_angry)
 }
@@ -247,6 +250,12 @@ impl LookControlTrait for BeeLookControl {
 }
 
 impl Mob for BeeEntity {
+    fn mob_is_flapping(&self) -> bool {
+        let entity = self.get_entity();
+        !entity.on_ground.load(Ordering::Relaxed)
+            && entity.tick_count.load(Ordering::Relaxed) % TICKS_PER_FLAP == 0
+    }
+
     /// Vanilla `Bee` steps silently.
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 
