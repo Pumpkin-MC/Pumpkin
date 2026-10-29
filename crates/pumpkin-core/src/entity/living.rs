@@ -1745,7 +1745,11 @@ impl LivingEntity {
                 .get_player()
                 .map_or(0.02, super::player::Player::get_off_ground_speed)
         };
-        let friction = block_friction * air_drag;
+        let friction = if self.entity.on_ground.load(Relaxed) {
+            block_friction * air_drag
+        } else {
+            air_drag
+        };
 
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -4088,7 +4092,7 @@ impl LivingEntity {
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
-    fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
+    pub fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
