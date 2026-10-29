@@ -517,15 +517,16 @@ mod block_transformer_tests {
     #[test]
     fn hoe_tills_dirt_with_air_above() {
         let get_block = |_: i8, dy: i8, _: i8| if dy == 1 { &Block::AIR } else { &Block::DIRT };
-        let result = HOE
-            .transform(
-                &Block::DIRT,
-                Block::DIRT.default_state.id,
-                BlockDirection::Up,
-                &get_block,
-            )
-            .unwrap();
-        assert_eq!(result.target_block.id, Block::FARMLAND.id);
+        let result = HOE.transform(
+            &Block::DIRT,
+            Block::DIRT.default_state.id,
+            BlockDirection::Up,
+            &get_block,
+        );
+        assert_eq!(
+            result.map(|result| result.target_block.id),
+            Some(Block::FARMLAND.id)
+        );
     }
 }
 

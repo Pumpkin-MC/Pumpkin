@@ -10,6 +10,7 @@ pub mod do_nothing;
 pub mod gate;
 pub mod go_and_give_items_to_target;
 pub mod go_to_wanted_item;
+pub mod interact_with_door;
 pub mod look_at_target_sink;
 pub mod move_to_target_sink;
 pub mod one_shot;
@@ -20,6 +21,7 @@ pub mod shuffling_list;
 pub mod stay_close_to_target;
 pub mod swim;
 pub mod timed;
+pub mod transport_items_between_containers;
 pub mod utils;
 
 pub use animal_panic::AnimalPanic;
