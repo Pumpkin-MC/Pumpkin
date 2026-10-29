@@ -6372,11 +6372,30 @@ impl World {
 
     /// The saved NBT of the block entity at the position, if any.
     pub fn get_block_entity_nbt(&self, block_pos: &BlockPos) -> Option<NbtCompound> {
-        self.get_block_entity(block_pos).map(|be| {
-            let mut nbt = NbtCompound::new();
-            be.write_internal(&mut nbt);
-            nbt
-        })
+        self.get_block_entity(block_pos)
+            .map(|be| block_entity_nbt(be.as_ref()))
+    }
+
+    /// Like [`Self::get_block_entity_nbt`], for a caller already inside `read_chunk_sync`
+    /// of the chunk holding `block_pos`. Reading that chunk again could deadlock.
+    pub fn get_block_entity_nbt_in_chunk(
+        &self,
+        chunk: &ChunkData,
+        block_pos: &BlockPos,
+    ) -> Option<NbtCompound> {
+        if let Some(nbt) = self
+            .block_entities
+            .get(&block_pos.chunk_position())
+            .and_then(|m| m.get(block_pos).map(|be| block_entity_nbt(be.as_ref())))
+        {
+            return Some(nbt);
+        }
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(block_pos)
+            .cloned()
     }
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
@@ -7637,6 +7656,12 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
         }
         data.push(record);
     }
+}
+
+fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    block_entity.write_internal(&mut nbt);
+    nbt
 }
 
 #[cfg(test)]

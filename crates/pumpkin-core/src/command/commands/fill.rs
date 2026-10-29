@@ -144,7 +144,7 @@ fn fill_blocks(
                                     _ => {
                                         if let Some(f) = filter
                                             && !f.test(current_state_id, || {
-                                                world.get_block_entity_nbt(&pos)
+                                                world.get_block_entity_nbt_in_chunk(chunk, &pos)
                                             })
                                         {
                                             continue;
