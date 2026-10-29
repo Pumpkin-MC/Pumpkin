@@ -1387,6 +1387,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_cube_mob(&self) -> Option<&slime::SlimeEntity> {
+        None
+    }
+
     /// turns the mob into a baby. False when it has no baby form.
     fn spawn_as_baby(&self) -> bool {
         self.as_ageable().is_some_and(|ageable| {
