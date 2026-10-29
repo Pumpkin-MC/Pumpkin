@@ -397,7 +397,9 @@ impl World {
 
         let wandering_trader_spawner =
             std::sync::Mutex::new(wandering_trader_spawner::WanderingTraderSpawner::new(
-                level.level_folder.dim_folder.join("data"),
+                pumpkin_world::world_info::data_files::minecraft_data_dir(
+                    &level.level_folder.dim_folder,
+                ),
             ));
 
         Self {
