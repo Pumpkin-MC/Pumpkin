@@ -7098,6 +7098,10 @@ impl EntityBase for Player {
         Some(Sound::EntityPlayerSwim)
     }
 
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        (Sound::EntityPlayerSmallFall, Sound::EntityPlayerBigFall)
+    }
+
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         let entity = self.get_entity();
         if entity.is_in_water() {
