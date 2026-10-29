@@ -21,6 +21,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Enchantment, tag};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -311,7 +312,11 @@ impl SpearItem {
         }
 
         if affected {
-            world.send_entity_status(player.get_entity(), EntityStatus::KineticHit, None);
+            world.send_entity_status(
+                player.get_entity(),
+                EntityStatus::KineticHit,
+                ActorEventID::KineticDamageDealt,
+            );
         }
     }
 

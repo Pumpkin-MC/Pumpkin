@@ -2,7 +2,8 @@ use super::{Controls, Goal, to_goal_ticks};
 
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
-use crate::entity::mob::Mob;
+use crate::entity::mob::{Mob, MobEntity};
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
 use std::sync::Arc;
@@ -19,8 +20,13 @@ pub struct TrackTargetGoal {
     check_can_navigate_cooldown: i32,
     time_without_visibility: i32,
     pub max_time_without_visibility: i32,
+    /// Factor on the follow range, vanilla `getFollowDistance` overrides.
+    pub follow_range_scale: f64,
     /// Fallback target, used while the mob's own target is cleared.
     target_mob: Option<Arc<dyn EntityBase>>,
+    /// A plugin cancelled the target change in `start`, so the goal ends without
+    /// clearing a target it never set.
+    cancelled: bool,
 }
 
 #[expect(dead_code)]
@@ -35,7 +41,9 @@ impl TrackTargetGoal {
             check_can_navigate_cooldown: 0,
             time_without_visibility: 0,
             max_time_without_visibility: 60,
+            follow_range_scale: 1.0,
             target_mob: None,
+            cancelled: false,
         }
     }
 
@@ -46,6 +54,28 @@ impl TrackTargetGoal {
     pub const fn set_unseen_memory_ticks(mut self, ticks: i32) -> Self {
         self.max_time_without_visibility = ticks;
         self
+    }
+
+    pub fn follow_range(&self, mob: &MobEntity) -> f64 {
+        mob.living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE)
+            * self.follow_range_scale
+    }
+
+    /// Sets the mob's target as the owning goal starts. If a plugin cancels the
+    /// change, the goal ends on its next check and the mob keeps its old target.
+    pub fn start_targeting(
+        &mut self,
+        mob: &dyn Mob,
+        target: Option<Arc<dyn EntityBase>>,
+        reason: TargetReason,
+    ) {
+        self.cancelled = !mob.set_mob_target(target, reason);
+    }
+
+    #[must_use]
+    pub const fn was_cancelled(&self) -> bool {
+        self.cancelled
     }
 
     /// Set by goals that already know their target.
@@ -118,6 +148,9 @@ impl TrackTargetGoal {
 
 impl Goal for TrackTargetGoal {
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.cancelled {
+            return false;
+        }
         let mob_entity = mob.get_mob_entity();
         let Some(target_base) = mob_entity.get_target().or_else(|| self.target_mob.clone()) else {
             return false;
@@ -131,8 +164,13 @@ impl Goal for TrackTargetGoal {
             return false;
         }
 
+        // Only a shared scoreboard team here, not the wider ally rules of the targeting test.
         let mob_base: &dyn EntityBase = mob;
-        if mob_base.is_allied_to(target_base.as_ref()) {
+        if mob_base.get_team_name().is_some_and(|team| {
+            target_base
+                .get_team_name()
+                .is_some_and(|other| other == team)
+        }) {
             return false;
         }
 
@@ -143,10 +181,7 @@ impl Goal for TrackTargetGoal {
             .load()
             .squared_distance_to_vec(&target.entity.pos.load());
 
-        // Get follow range attribute value and check if target is within range
-        let follow_range = mob_entity
-            .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+        let follow_range = self.follow_range(mob_entity);
 
         if dist_sq > follow_range * follow_range {
             return false;
@@ -160,7 +195,7 @@ impl Goal for TrackTargetGoal {
             }
         }
 
-        mob.set_mob_target(Some(target_base.clone()));
+        mob.set_mob_target(Some(target_base.clone()), TargetReason::Unknown);
         true
     }
 
@@ -171,8 +206,11 @@ impl Goal for TrackTargetGoal {
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(None);
         self.target_mob = None;
+        if self.cancelled {
+            return;
+        }
+        mob.set_mob_target(None, TargetReason::ForgotTarget);
     }
 
     fn controls(&self) -> Controls {

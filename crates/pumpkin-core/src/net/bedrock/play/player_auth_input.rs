@@ -161,13 +161,35 @@ impl BedrockClient {
 
         if input_data.get(InputData::StartSneaking as usize) {
             entity.set_sneaking(true);
+            player.update_bedrock_shield_sneaking();
         } else if input_data.get(InputData::StopSneaking as usize) {
             entity.set_sneaking(false);
+            player.update_bedrock_shield_sneaking();
         }
 
         if input_data.get(InputData::StartCrawling as usize) {
             entity.set_pose(EntityPose::Swimming);
         } else if input_data.get(InputData::StopCrawling as usize) {
+            player.update_player_pose();
+        }
+
+        if input_data.get(InputData::StartGliding as usize) {
+            player.try_start_fall_flying(server);
+        } else if input_data.get(InputData::StopGliding as usize) {
+            player.stop_fall_flying(server);
+        }
+
+        if input_data.get(InputData::StartSwimming as usize) {
+            entity.set_swimming(true);
+            player.update_player_pose();
+        } else if input_data.get(InputData::StopSwimming as usize) {
+            entity.set_swimming(false);
+            player.update_player_pose();
+        }
+
+        if input_data.get(InputData::StartSpinAttack as usize) {
+            entity.set_pose(EntityPose::SpinAttack);
+        } else if input_data.get(InputData::StopSpinAttack as usize) {
             player.update_player_pose();
         }
 
@@ -217,6 +239,25 @@ impl BedrockClient {
                         player.send_abilities_update();
                     }
                 }}
+            }
+        }
+
+        // The sneak and flight toggles arrive in the same packet as the move, so
+        // apply them first, like Java where they come in earlier packets.
+        if pos_changed {
+            entity.emit_client_movement(player.as_ref(), new_pos - old_pos);
+        }
+
+        if entity.has_vehicle() {
+            let paddling_left = input_data.get(InputData::PaddlingLeft as usize);
+            let paddling_right = input_data.get(InputData::PaddlingRight as usize);
+            let vehicle = entity
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(vehicle) = vehicle {
+                vehicle.set_paddle_state(paddling_left, paddling_right);
             }
         }
 

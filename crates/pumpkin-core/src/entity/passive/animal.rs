@@ -72,7 +72,10 @@ pub trait Animal: Mob {
             if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
 
-                mob_entity.set_love_ticks(600, Some(player.gameprofile.id));
+                let Some(ticks) = self.approve_love(Some(player.entity_id()), 600) else {
+                    return true;
+                };
+                mob_entity.set_love_ticks(ticks, Some(player.gameprofile.id));
                 let entity = &mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.pos.load();
@@ -80,7 +83,7 @@ pub trait Animal: Mob {
                 world.send_entity_status(
                     entity,
                     pumpkin_data::entity::EntityStatus::InLoveHearts,
-                    Some(ActorEventID::InLoveHearts),
+                    ActorEventID::InLoveHearts,
                 );
 
                 world.spawn_particle(

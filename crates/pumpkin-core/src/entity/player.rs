@@ -237,9 +237,11 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
+use pumpkin_data::data_component_impl::{
+    EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
+};
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, MovementEmission};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -301,6 +303,7 @@ use crate::data::SaveJSONConfiguration;
 use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent;
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -1145,6 +1148,7 @@ impl Player {
                 }],
             },
             actor_links: Vec::new(),
+            has_passenger_block_data: false,
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
@@ -1519,6 +1523,7 @@ impl Player {
                 target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
                 data: 0.0,
                 swing_source: None,
+                hand: 0,
             };
             world.broadcast_editioned(&je_packet, &be_packet);
         }
@@ -1800,7 +1805,7 @@ impl Player {
                 self.world().send_entity_status(
                     &self.living_entity.entity,
                     super::equipment_break_status(slot),
-                    None,
+                    ActorEventID::None,
                 );
             }
 
@@ -2271,6 +2276,43 @@ impl Player {
         self.living_entity.set_sprinting(is_sprinting);
     }
 
+    pub fn try_start_fall_flying(&self, server: &Arc<Server>) {
+        let entity = self.get_entity();
+        let has_glider = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .values()
+            .any(|stack| {
+                stack.get_data_component::<GliderImpl>().is_some()
+                    && !stack.next_damage_will_break()
+            });
+        let fall_flying = entity.check_fall_flying() && has_glider;
+        if fall_flying && !entity.is_fall_flying() {
+            let mut event = EntityToggleGlideEvent::new(entity.entity_id, true);
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if !event.cancelled && event.is_gliding {
+                entity.set_fall_flying(true);
+                self.living_entity.fall_distance.store(0.0);
+                self.update_player_pose();
+            }
+        }
+    }
+
+    pub fn stop_fall_flying(&self, server: &Arc<Server>) {
+        let entity = self.get_entity();
+        if entity.is_fall_flying() {
+            let mut event = EntityToggleGlideEvent::new(entity.entity_id, false);
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if !event.cancelled && !event.is_gliding {
+                entity.set_fall_flying(false);
+                self.update_player_pose();
+            }
+        }
+    }
+
     #[must_use]
     pub fn get_block_speed_factor(&self) -> f32 {
         self.living_entity.get_block_speed_factor()
@@ -2590,8 +2632,14 @@ impl Player {
     }
 
     pub fn send_hurt_animation(&self, yaw: f32) {
-        let packet = CHurtAnimation::new(self.entity_id().into(), yaw);
-        self.try_send_client_packet(&packet);
+        let je_packet = CHurtAnimation::new(self.entity_id().into(), yaw);
+        let be_packet = SActorEvent {
+            target_runtime_id: VarULong(self.entity_id() as u64),
+            event_id: ActorEventID::Hurt,
+            data: VarInt(0),
+            fire_at_position: None,
+        };
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
     pub fn open_book(&self, hand: Hand) {
@@ -3162,6 +3210,16 @@ impl Player {
         } else {
             self.add_exhaustion(0.05);
         }
+    }
+
+    /// Vanilla `playMuffledStepSound`: the block under a carpet or under water, quieter and lower.
+    fn play_muffled_step_sound(&self, state: &BlockState) {
+        let sound_type = state.get_sound_type();
+        self.play_entity_sound(
+            sound_type.step_sound,
+            sound_type.volume * 0.05,
+            sound_type.pitch * 0.8,
+        );
     }
 
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
@@ -4362,10 +4420,85 @@ impl Player {
     }
 
     pub fn block_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
         if self.gamemode.load() == GameMode::Creative {
             5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE);
+            attr.max(5.0)
         } else {
-            4.5
+            self.living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn entity_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
+        if self.gamemode.load() == GameMode::Creative {
+            5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE);
+            // Bedrock players have a slightly longer interaction/attack reach (~3.0 in Java vs ~3.5 in Bedrock)
+            attr.max(3.5)
+        } else {
+            self.living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn can_interact_with_entity(&self, target: &dyn EntityBase, additional_range: f64) -> bool {
+        let d = self.entity_interaction_range() + additional_range;
+        target
+            .get_entity()
+            .bounding_box
+            .load()
+            .squared_magnitude(self.eye_position())
+            < d * d
+    }
+
+    pub fn update_bedrock_shield_sneaking(&self) {
+        if !matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            return;
+        }
+        if !self.get_entity().is_sneaking() {
+            if self.living_entity.is_blocking() {
+                self.living_entity.clear_active_hand();
+            }
+            return;
+        }
+
+        let is_blocking = self.living_entity.is_blocking();
+        let shield_hand_and_stack = [Hand::Left, Hand::Right].into_iter().find_map(|hand| {
+            let stack = self.inventory.get_stack_in_hand(hand);
+            (stack
+                .get_data_component::<pumpkin_data::data_component_impl::BlocksAttacksImpl>()
+                .is_some()
+                && !self.is_on_cooldown(stack.item.registry_key))
+            .then_some((hand, stack))
+        });
+
+        match (is_blocking, shield_hand_and_stack) {
+            (true, Some((hand, stack))) => {
+                let current_hand = *self
+                    .living_entity
+                    .active_hand
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if current_hand != Some(hand) {
+                    self.living_entity.set_active_hand(hand, stack, 72000);
+                }
+            }
+            (true, None) => {
+                self.living_entity.clear_active_hand();
+            }
+            (false, Some((hand, stack))) => {
+                self.living_entity.set_active_hand(hand, stack, 72000);
+            }
+            (false, None) => {}
         }
     }
 
@@ -4522,6 +4655,7 @@ impl Player {
         {
             return false;
         }
+        // TODO: Vanilla `Player.hurtServer` difficulty scaling when `scalesWithDifficulty`
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
     }
@@ -6482,6 +6616,7 @@ impl Player {
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
             data: 0.0,
             swing_source: None,
+            hand: u8::from(hand == Hand::Left),
         };
 
         if all {
@@ -6927,6 +7062,71 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn sound_source(&self) -> SoundCategory {
+        SoundCategory::Players
+    }
+
+    /// Vanilla `Player.playSound`: everyone but this player, whose client plays it already.
+    fn play_entity_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        let entity = self.get_entity();
+        if !entity.is_silent() {
+            entity.world.load().play_sound_raw_expect(
+                self,
+                sound as u16,
+                self.sound_source(),
+                &entity.pos.load(),
+                volume,
+                pitch,
+            );
+        }
+    }
+
+    fn movement_emission(&self) -> MovementEmission {
+        let entity = self.get_entity();
+        let flying = self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .flying;
+        if flying || entity.on_ground.load(Ordering::Relaxed) && entity.is_sneaking() {
+            MovementEmission::None
+        } else {
+            MovementEmission::All
+        }
+    }
+
+    fn get_swim_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSwim)
+    }
+
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        (Sound::EntityPlayerSmallFall, Sound::EntityPlayerBigFall)
+    }
+
+    fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        let entity = self.get_entity();
+        if entity.is_in_water() {
+            entity.water_swim_sound(self);
+            self.play_muffled_step_sound(state);
+            return;
+        }
+        let primary_pos = entity.get_primary_step_sound_block_pos(pos);
+        if primary_pos == *pos {
+            self.play_block_step_sound(state);
+            return;
+        }
+        let primary_state = entity.world.load().get_block_state(&primary_pos);
+        self.play_block_step_sound(primary_state);
+        // Vanilla `playCombinationStepSounds` adds the muffled block underneath.
+        if primary_state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            self.play_muffled_step_sound(state);
+        }
+    }
+
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
@@ -8298,5 +8498,18 @@ mod tests {
             });
         }
         assert_eq!(counter.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn reach_distances_adhere_to_platform_defaults() {
+        // Standard entity interaction range: ~3.0 for Java, ~3.5 for Bedrock
+        let java_default = 3.0f64;
+        let bedrock_default = 3.5f64;
+        assert!(bedrock_default > java_default);
+
+        // Standard block interaction range: 4.5 for Java, 5.0 for Bedrock
+        let java_block = 4.5f64;
+        let bedrock_block = 5.0f64;
+        assert!(bedrock_block > java_block);
     }
 }

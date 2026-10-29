@@ -1,11 +1,11 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block_predicate::BlockPredicateArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use pumpkin_data::{Block, BlockStateId, translation};
+use pumpkin_data::{BlockStateId, translation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
@@ -82,7 +82,7 @@ impl CommandExecutor for CloneExecutor {
         let dest = BlockPosArgumentType::get_block_pos(context, ARG_DEST)?;
 
         let filter_block = if self.has_filter {
-            Some(BlockArgumentType::get(context, ARG_FILTER)?)
+            Some(BlockPredicateArgumentType::get(context, ARG_FILTER)?)
         } else {
             None
         };
@@ -171,10 +171,9 @@ impl CommandExecutor for CloneExecutor {
                     let should_clone = match self.mask_mode {
                         MaskMode::Replace => true,
                         MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
-                        MaskMode::Filtered => {
-                            let block = Block::from_state_id(state_id);
-                            filter_block.is_some_and(|f| block.id == f.id)
-                        }
+                        MaskMode::Filtered => filter_block.as_ref().is_some_and(|f| {
+                            f.test(state_id, || world.get_block_entity_nbt(&src_pos))
+                        }),
                     };
 
                     if should_clone {
@@ -318,7 +317,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         )
                         .then(
                             literal("filtered").then(
-                                argument(ARG_FILTER, BlockArgumentType)
+                                argument(ARG_FILTER, BlockPredicateArgumentType)
                                     .executes(CloneExecutor {
                                         mask_mode: MaskMode::Filtered,
                                         clone_mode: CloneMode::Normal,

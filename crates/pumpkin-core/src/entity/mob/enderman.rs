@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::{BlockStateId, attributes::Attributes};
@@ -26,11 +28,10 @@ use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
-            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-            melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
-            place_block::PlaceBlockGoal, reset_universal_anger::ResetUniversalAngerGoal,
-            revenge::RevengeGoal, swim::SwimGoal,
+            chase_player::ChasePlayerGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+            pick_up_block::PickUpBlockGoal, place_block::PlaceBlockGoal,
+            reset_universal_anger::ResetUniversalAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
             teleport_towards_player::TeleportTowardsPlayerGoal, wander_around::WanderAroundGoal,
         },
         pathfinder::node::PathType,
@@ -53,6 +54,12 @@ fn is_projectile_damage(dt: DamageType) -> bool {
     let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
     names.contains(&dt.message_id)
 }
+
+const ENDERMAN_HUNTS: &[Hunt] = &[Hunt::new(
+    3,
+    TargetMatch::Type(&EntityType::ENDERMITE),
+    true,
+)];
 
 pub struct EndermanEntity {
     pub mob_entity: MobEntity,
@@ -107,10 +114,7 @@ impl EndermanEntity {
 
             target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ENDERMITE, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
             target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
         };
 
@@ -410,11 +414,11 @@ impl Mob for EndermanEntity {
             .then(|| crate::entity::mob::MobMetadata::new().screaming(true))
     }
 
-    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        self.set_target(self.as_valid_target(target));
+    fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        self.set_target(target);
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
+    // TODO: sunlight avoidance, carried block drop on death, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {

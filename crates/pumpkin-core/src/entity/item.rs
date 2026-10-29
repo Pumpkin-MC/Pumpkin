@@ -617,13 +617,10 @@ impl EntityBase for ItemEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_DAMPENS_VIBRATIONS)
     }
 
-    fn get_owner_id(&self) -> Option<i32> {
+    /// Vanilla `ItemEntity.getOwner`: the thrower.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.thrower.load()?;
-        self.entity
-            .world
-            .load()
-            .get_entity_by_uuid(uuid)
-            .map(|entity| entity.get_entity().entity_id)
+        self.entity.world.load().get_entity_by_uuid(uuid)
     }
 
     fn audited_reach(&self) -> Option<AuditedReach> {

@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
@@ -24,7 +25,7 @@ impl SnowballEntity {
         // Initialize without owner
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -41,8 +42,8 @@ impl SnowballEntity {
 }
 
 impl EntityBase for SnowballEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -64,11 +65,7 @@ impl EntityBase for SnowballEntity {
         let world = self.get_entity().world.load();
 
         // Always send particle status regardless of what was hit
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         // Handle entity-specific damage
         if let ProjectileHit::Entity { ref entity, .. } = hit {
