@@ -28,16 +28,6 @@ use crate::world::custom_bossbar::BossbarUpdateError;
 const DESCRIPTION: &str = "Creates and modifies boss bars";
 const PERMISSION: &str = "minecraft:command.bossbar";
 
-const ERROR_INVALID_COLOR: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENT_ENUM_INVALID,
-    translation::java::ARGUMENT_ENUM_INVALID,
-);
-
-const ERROR_INVALID_STYLE: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENT_ENUM_INVALID,
-    translation::java::ARGUMENT_ENUM_INVALID,
-);
-
 const ERROR_UNKNOWN_BOSSBAR: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_BOSSBAR_UNKNOWN,
     translation::bedrock::COMMANDS_BOSSBAR_NOTFOUND,
@@ -81,56 +71,10 @@ impl BossbarIdArgumentType {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct BossbarColorArgumentType;
-
+/// The colours `bossbar set <id> color` lists, as literals.
 const COLORS: [&str; 7] = ["blue", "green", "pink", "purple", "red", "white", "yellow"];
 
-impl ArgumentType<CommandSource> for BossbarColorArgumentType {
-    type Item = BossbarColor;
-
-    fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        let start = reader.cursor();
-        let s = reader.read_unquoted_string();
-        match s.to_lowercase().as_str() {
-            "blue" => Ok(BossbarColor::Blue),
-            "green" => Ok(BossbarColor::Green),
-            "pink" => Ok(BossbarColor::Pink),
-            "purple" => Ok(BossbarColor::Purple),
-            "red" => Ok(BossbarColor::Red),
-            "white" => Ok(BossbarColor::White),
-            "yellow" => Ok(BossbarColor::Yellow),
-            _ => {
-                reader.set_cursor(start);
-                Err(ERROR_INVALID_COLOR.create(reader, TextComponent::text(s)))
-            }
-        }
-    }
-
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
-        JavaClientArgumentType::String(
-            pumpkin_protocol::java::client::play::StringProtoArgBehavior::SingleWord,
-        )
-    }
-
-    fn list_suggestions(
-        &self,
-        _context: &CommandContext,
-        builder: SuggestionsBuilder,
-    ) -> Suggestions {
-        builder.filter_and_suggest(&COLORS).build()
-    }
-}
-
-impl BossbarColorArgumentType {
-    pub fn get(context: &CommandContext, name: &str) -> Result<BossbarColor, CommandSyntaxError> {
-        context.get_argument::<BossbarColor>(name).copied()
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct BossbarStyleArgumentType;
-
+/// The styles `bossbar set <id> style` lists, as literals.
 const STYLES: [&str; 5] = [
     "notched_10",
     "notched_12",
@@ -139,47 +83,30 @@ const STYLES: [&str; 5] = [
     "progress",
 ];
 
-impl ArgumentType<CommandSource> for BossbarStyleArgumentType {
-    type Item = BossbarDivisions;
-
-    fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        let start = reader.cursor();
-        let s = reader.read_unquoted_string();
-        match s.to_lowercase().as_str() {
-            "notched_10" => Ok(BossbarDivisions::Notches10),
-            "notched_12" => Ok(BossbarDivisions::Notches12),
-            "notched_20" => Ok(BossbarDivisions::Notches20),
-            "notched_6" => Ok(BossbarDivisions::Notches6),
-            "progress" => Ok(BossbarDivisions::NoDivision),
-            _ => {
-                reader.set_cursor(start);
-                Err(ERROR_INVALID_STYLE.create(reader, TextComponent::text(s)))
-            }
-        }
-    }
-
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
-        JavaClientArgumentType::String(
-            pumpkin_protocol::java::client::play::StringProtoArgBehavior::SingleWord,
-        )
-    }
-
-    fn list_suggestions(
-        &self,
-        _context: &CommandContext,
-        builder: SuggestionsBuilder,
-    ) -> Suggestions {
-        builder.filter_and_suggest(&STYLES).build()
-    }
+/// `BossEvent.BossBarColor` by its name.
+fn parse_color(name: &str) -> Option<BossbarColor> {
+    Some(match name {
+        "blue" => BossbarColor::Blue,
+        "green" => BossbarColor::Green,
+        "pink" => BossbarColor::Pink,
+        "purple" => BossbarColor::Purple,
+        "red" => BossbarColor::Red,
+        "white" => BossbarColor::White,
+        "yellow" => BossbarColor::Yellow,
+        _ => return None,
+    })
 }
 
-impl BossbarStyleArgumentType {
-    pub fn get(
-        context: &CommandContext,
-        name: &str,
-    ) -> Result<BossbarDivisions, CommandSyntaxError> {
-        context.get_argument::<BossbarDivisions>(name).copied()
-    }
+/// `BossEvent.BossBarOverlay` by its name.
+fn parse_style(name: &str) -> Option<BossbarDivisions> {
+    Some(match name {
+        "notched_10" => BossbarDivisions::Notches10,
+        "notched_12" => BossbarDivisions::Notches12,
+        "notched_20" => BossbarDivisions::Notches20,
+        "notched_6" => BossbarDivisions::Notches6,
+        "progress" => BossbarDivisions::NoDivision,
+        _ => return None,
+    })
 }
 
 fn bossbar_prefix(title: TextComponent, namespace: String) -> TextComponent {
@@ -214,11 +141,11 @@ enum CommandValueGet {
 }
 
 enum CommandValueSet {
-    Color,
+    Color(BossbarColor),
     Max,
     Name,
     Players(bool),
-    Style,
+    Style(BossbarDivisions),
     Value,
     Visible,
 }
@@ -467,9 +394,7 @@ impl CommandExecutor for SetExecutor {
         };
 
         match self.0 {
-            CommandValueSet::Color => {
-                let color = BossbarColorArgumentType::get(context, "color")?;
-
+            CommandValueSet::Color(color) => {
                 server
                     .bossbars
                     .lock()
@@ -586,8 +511,7 @@ impl CommandExecutor for SetExecutor {
 
                 Ok(count as i32)
             }
-            CommandValueSet::Style => {
-                let style = BossbarStyleArgumentType::get(context, "style")?;
+            CommandValueSet::Style(style) => {
                 server
                     .bossbars
                     .lock()
@@ -685,12 +609,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     let set_node = literal("set").then(
         argument("id", BossbarIdArgumentType)
-            .then(
-                literal("color").then(
-                    argument("color", BossbarColorArgumentType)
-                        .executes(SetExecutor(CommandValueSet::Color)),
-                ),
-            )
+            // Vanilla lists each colour and style as a literal.
+            .then(COLORS.iter().fold(literal("color"), |node, &name| {
+                let color = parse_color(name).expect("listed colour");
+                node.then(literal(name).executes(SetExecutor(CommandValueSet::Color(color))))
+            }))
             .then(
                 literal("max").then(
                     argument("max", IntegerArgumentType::with_min(1))
@@ -711,12 +634,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                             .executes(SetExecutor(CommandValueSet::Players(true))),
                     ),
             )
-            .then(
-                literal("style").then(
-                    argument("style", BossbarStyleArgumentType)
-                        .executes(SetExecutor(CommandValueSet::Style)),
-                ),
-            )
+            .then(STYLES.iter().fold(literal("style"), |node, &name| {
+                let style = parse_style(name).expect("listed style");
+                node.then(literal(name).executes(SetExecutor(CommandValueSet::Style(style))))
+            }))
             .then(
                 literal("value").then(
                     argument("value", IntegerArgumentType::with_min(0))

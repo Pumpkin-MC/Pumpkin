@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +21,7 @@ use super::{ProjectileHit, calculate_ray_intersection};
 
 pub struct TridentEntity {
     pub entity: Entity,
-    pub owner_id: Option<i32>,
+    pub owner: ProjectileOwner,
     pub item_stack: Arc<Mutex<ItemStack>>,
     pub pickup: ArrowPickup,
     pub in_ground: AtomicBool,
@@ -38,10 +39,10 @@ impl TridentEntity {
     const GRAVITY: f64 = 0.05;
     const DESPAWN_TIME: u32 = 1200;
 
-    pub fn new(entity: Entity, owner_id: Option<i32>) -> Self {
+    pub fn new(entity: Entity, owner: Option<&Entity>) -> Self {
         Self {
             entity,
-            owner_id,
+            owner: ProjectileOwner::new(owner),
             item_stack: Arc::new(Mutex::new(ItemStack::new(1, &Item::TRIDENT))),
             pickup: ArrowPickup::Disallowed,
             in_ground: AtomicBool::new(false),
@@ -66,7 +67,7 @@ impl TridentEntity {
 
         Self {
             entity,
-            owner_id: Some(shooter.entity_id),
+            owner: ProjectileOwner::new(Some(shooter)),
             item_stack: Arc::new(Mutex::new(item_stack)),
             pickup,
             in_ground: AtomicBool::new(false),
@@ -138,8 +139,7 @@ impl TridentEntity {
             return true;
         }
 
-        // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if !self.owner.can_hit(&self_ent.world.load(), other_ent) {
             return true;
         }
 
@@ -157,13 +157,14 @@ impl TridentEntity {
 }
 
 impl EntityBase for TridentEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
+        self.owner.check_left_owner(entity);
 
         // Handle shake time
         let shake = self.shake_time.load(Ordering::Relaxed);
@@ -243,10 +244,8 @@ impl EntityBase for TridentEntity {
                 closest_t = t;
 
                 // Map back to block pos
-                let mut curr = 0;
                 for (len, pos) in &block_positions {
-                    curr += len;
-                    if idx < curr {
+                    if idx < *len {
                         let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
                         hit = Some(ProjectileHit::Block {
                             pos: *pos,

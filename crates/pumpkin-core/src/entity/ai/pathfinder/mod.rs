@@ -1,6 +1,5 @@
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::wrap_degrees;
 
 use crate::entity::living::LivingEntity;
 use crate::world::World;
@@ -10,7 +9,7 @@ use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::fly_node_evaluator::FlyNodeEvaluator;
 use crate::entity::ai::pathfinder::node::Node;
 use crate::entity::ai::pathfinder::node::PathType;
-use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
+use crate::entity::ai::pathfinder::node_evaluator::{BaseNodeEvaluator, MobData, NodeEvaluator};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::swim_node_evaluator::SwimNodeEvaluator;
@@ -31,16 +30,15 @@ pub mod pathfinding_context;
 pub mod swim_node_evaluator;
 pub mod walk_node_evaluator;
 
-const MAX_ITERS: usize = 560;
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 const NODE_REACH_Y: f64 = 1.0;
-const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
+const MAX_TIME_RECOMPUTE: u64 = 20;
+const MAX_VISITED_NODES_MULTIPLIER: f32 = 16.0;
 
 pub struct PathFinder {
     max_visited_nodes: usize,
     open_set: BinaryHeap,
     neighbors_buf: Vec<Node>,
-    all_nodes: FxHashMap<Vector3<i32>, Node>,
 }
 
 impl PathFinder {
@@ -50,7 +48,6 @@ impl PathFinder {
             max_visited_nodes,
             open_set: BinaryHeap::new(),
             neighbors_buf: Vec::with_capacity(32),
-            all_nodes: FxHashMap::default(),
         }
     }
 
@@ -80,7 +77,7 @@ impl PathFinder {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub fn find_path(
         &mut self,
         evaluator: &mut EvaluatorKind,
@@ -89,6 +86,8 @@ impl PathFinder {
         reach_range: i32,
         max_visited_nodes_multiplier: f32,
     ) -> Option<Path> {
+        self.open_set.clear();
+        self.neighbors_buf.clear();
         if targets.is_empty() {
             return None;
         }
@@ -101,9 +100,6 @@ impl PathFinder {
                 .map(|&pos| (evaluator.get_target(pos), pos))
                 .collect();
 
-        self.all_nodes.clear();
-        self.open_set.clear();
-
         from.g = 0.0;
         from.h = Self::get_best_h(&from, &mut target_entries);
         from.f = from.h;
@@ -111,7 +107,7 @@ impl PathFinder {
         from.came_from = None;
         from.closed = false;
 
-        self.all_nodes.insert(from.pos.0, from);
+        evaluator.base_mut().update_node(from);
         self.open_set.insert(from);
 
         let mut count = 0usize;
@@ -129,13 +125,13 @@ impl PathFinder {
                 break;
             };
 
+            current = evaluator.base_mut().get_node(current.pos);
             current.closed = true;
-            self.all_nodes.insert(current.pos.0, current);
+            evaluator.base_mut().update_node(current);
 
             for (idx, (target, _)) in target_entries.iter_mut().enumerate() {
                 if current.distance_manhattan_node(&target.node) <= reach_range as f32 {
                     target.set_reached();
-                    target.update_best(0.0, &current);
                     if !reached_targets.contains(&idx) {
                         reached_targets.push(idx);
                     }
@@ -150,24 +146,23 @@ impl PathFinder {
                 self.neighbors_buf.clear();
                 evaluator.get_neighbors(&current, &mut self.neighbors_buf);
 
-                for mut neighbor in self.neighbors_buf.drain(..) {
+                for neighbor in self.neighbors_buf.drain(..) {
+                    let mut neighbor = evaluator.base_mut().get_node(neighbor.pos);
+                    if neighbor.closed {
+                        continue;
+                    }
                     let distance = current.distance_to_node(&neighbor);
                     neighbor.walked_dist = current.walked_dist + distance;
                     let tentative_g = current.g + distance + neighbor.cost_malus;
 
                     let in_open = self.open_set.contains(&neighbor);
-                    let is_better = if in_open {
-                        self.open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g)
-                    } else {
-                        true
-                    };
+                    let is_better = !in_open || tentative_g < neighbor.g;
 
                     if neighbor.walked_dist < max_path_length && is_better {
                         neighbor.came_from = Some(current.pos.0);
                         neighbor.g = tentative_g;
-                        neighbor.h = Self::get_best_h(&neighbor, &mut target_entries) * 1.5;
+                        neighbor.h = Self::get_best_h(&neighbor, &mut target_entries)
+                            * TARGET_DISTANCE_MULTIPLIER;
                         neighbor.f = neighbor.g + neighbor.h;
 
                         if in_open {
@@ -175,23 +170,22 @@ impl PathFinder {
                         } else {
                             self.open_set.insert(neighbor);
                         }
-                        self.all_nodes.insert(neighbor.pos.0, neighbor);
                     }
+                    evaluator.base_mut().update_node(neighbor);
                 }
             }
         }
 
-        for node in self.open_set.drain() {
-            self.all_nodes.entry(node.pos.0).or_insert(node);
-        }
+        let all_nodes = &evaluator.base_mut().nodes;
 
         if reached_targets.is_empty() {
             target_entries
                 .into_iter()
                 .filter_map(|(target, target_pos)| {
-                    target.get_best_node().map(|best| {
-                        Self::reconstruct_path(&best, target_pos, false, &self.all_nodes)
-                    })
+                    target
+                        .get_best_node()
+                        .and_then(|pos| all_nodes.get(&pos.0))
+                        .map(|best| Self::reconstruct_path(best, target_pos, false, all_nodes))
                 })
                 .min_by(|a, b| {
                     a.get_dist_to_target()
@@ -203,9 +197,10 @@ impl PathFinder {
                 .into_iter()
                 .filter_map(|idx| {
                     let (target, target_pos) = &target_entries[idx];
-                    target.get_best_node().map(|best| {
-                        Self::reconstruct_path(&best, *target_pos, true, &self.all_nodes)
-                    })
+                    target
+                        .get_best_node()
+                        .and_then(|pos| all_nodes.get(&pos.0))
+                        .map(|best| Self::reconstruct_path(best, *target_pos, true, all_nodes))
                 })
                 .min_by_key(Path::get_node_count)
         }
@@ -275,6 +270,11 @@ impl NavigatorGoal {
     }
 }
 
+pub struct NavigationTarget {
+    pub position: Vector3<f64>,
+    pub speed_modifier: f64,
+}
+
 pub enum EvaluatorKind {
     Walk(WalkNodeEvaluator),
     Fly(FlyNodeEvaluator),
@@ -283,6 +283,15 @@ pub enum EvaluatorKind {
 }
 
 impl EvaluatorKind {
+    const fn base_mut(&mut self) -> &mut BaseNodeEvaluator {
+        match self {
+            Self::Walk(e) => &mut e.base,
+            Self::Fly(e) => &mut e.walk.base,
+            Self::Swim(e) => &mut e.base,
+            Self::Amphibious(e) => &mut e.walk.base,
+        }
+    }
+
     pub fn prepare(&mut self, context: PathfindingContext, mob_data: MobData) {
         match self {
             Self::Walk(e) => e.prepare(context, mob_data),
@@ -316,6 +325,15 @@ impl EvaluatorKind {
             Self::Fly(e) => e.get_target(pos),
             Self::Swim(e) => e.get_target(pos),
             Self::Amphibious(e) => e.get_target(pos),
+        }
+    }
+
+    fn get_path_type(&mut self, context: &mut PathfindingContext, pos: BlockPos) -> PathType {
+        match self {
+            Self::Walk(e) => e.get_path_type(context, pos.0),
+            Self::Fly(e) => e.get_path_type(context, pos.0),
+            Self::Swim(e) => e.get_path_type(context, pos.0),
+            Self::Amphibious(e) => e.get_path_type(context, pos.0),
         }
     }
 
@@ -365,9 +383,12 @@ impl EvaluatorKind {
     }
 }
 
+/// Navigation methods run under their owning mob's navigator mutex.
+/// Implementations must not relock it or invoke callbacks that can acquire it.
 pub trait PathNavigationTrait: Send + Sync {
     fn set_progress(&mut self, goal: NavigatorGoal);
     fn set_speed(&mut self, speed: f64);
+    fn get_speed_modifier(&self) -> f64;
     fn stop(&mut self);
     fn is_idle(&self) -> bool;
     fn is_done(&self) -> bool;
@@ -375,16 +396,16 @@ pub trait PathNavigationTrait: Send + Sync {
     fn is_stuck(&self) -> bool;
     fn get_path(&self) -> Option<&Path>;
     fn get_path_mut(&mut self) -> Option<&mut Path>;
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType;
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32);
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32;
-    fn set_mob_dimensions(&mut self, width: f32, height: f32);
     fn can_reach_within(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
         distance: f32,
     ) -> bool;
-    fn tick(&mut self, entity: &LivingEntity);
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget>;
     fn move_to_coords(&mut self, x: f64, y: f64, z: f64, speed: f64, entity: &LivingEntity)
     -> bool;
     fn move_to_pos(&mut self, pos: BlockPos, speed: f64, entity: &LivingEntity) -> bool;
@@ -397,6 +418,7 @@ pub trait PathNavigationTrait: Send + Sync {
         reach_range: i32,
     ) -> Option<Path>;
     fn recompute_path(&mut self, entity: &LivingEntity);
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool;
     fn set_avoid_sun(&mut self, avoid_sun: bool);
     fn set_can_walk_over_fences(&mut self, can_walk: bool);
     fn set_can_open_doors(&mut self, can_open: bool);
@@ -405,11 +427,19 @@ pub trait PathNavigationTrait: Send + Sync {
     fn can_float(&self) -> bool;
     fn can_navigate_ground(&self) -> bool;
     fn set_required_path_length(&mut self, length: f32);
+    /// Furthest a search reaches from the mob.
+    fn max_path_length(&self, entity: &LivingEntity) -> f32;
+    /// Vanilla `updatePathfinderMaxVisitedNodes`, applied before the next search.
+    fn update_pathfinder_max_visited_nodes(&mut self);
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32);
     fn reset_max_visited_nodes_multiplier(&mut self);
     fn get_target_pos(&self) -> Option<BlockPos>;
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
+
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        world.get_block_state(&pos.down()).is_solid_render()
+    }
 }
 
 pub struct PathNavigation {
@@ -432,22 +462,16 @@ pub struct PathNavigation {
     pub max_visited_nodes_multiplier: f32,
     pub is_stuck: bool,
     pub required_path_length: f32,
-    pub ticks_on_current_node: u32,
-    pub last_node_index: usize,
-    pub total_ticks: u32,
-    pub path_start_pos: Option<Vector3<f64>>,
     pub path_type_overrides: FxHashMap<PathType, f32>,
-    pub mob_width: f32,
-    pub mob_height: f32,
-    pub repath_cooldown: u32,
+    has_pending_path: bool,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
     pub can_open_doors: bool,
     pub can_pass_doors: bool,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
-    pub open_set: BinaryHeap,
-    pub neighbors_buf: Vec<Node>,
+    path_finder: Option<PathFinder>,
+    update_pathfinder_max_visited_nodes: bool,
     pub is_idle: AtomicBool,
 }
 
@@ -458,6 +482,14 @@ impl Default for PathNavigation {
 }
 
 impl PathNavigation {
+    const fn waypoint_margin(width: f32) -> f32 {
+        if width > 0.75 {
+            width * 0.5
+        } else {
+            0.75 - width * 0.5
+        }
+    }
+
     #[must_use]
     pub fn new(evaluator: EvaluatorKind) -> Self {
         Self {
@@ -476,26 +508,20 @@ impl PathNavigation {
             has_delayed_recomputation: false,
             time_last_recompute: 0,
             target_pos: None,
-            reach_range: 1,
+            reach_range: 0,
             max_visited_nodes_multiplier: 1.0,
             is_stuck: false,
             required_path_length: 16.0,
-            ticks_on_current_node: 0,
-            last_node_index: 0,
-            total_ticks: 0,
-            path_start_pos: None,
             path_type_overrides: FxHashMap::default(),
-            mob_width: 0.6,
-            mob_height: 1.95,
-            repath_cooldown: 0,
+            has_pending_path: false,
             can_float: false,
             can_walk_over_fences: false,
             can_open_doors: false,
             can_pass_doors: true,
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
-            open_set: BinaryHeap::new(),
-            neighbors_buf: Vec::new(),
+            path_finder: None,
+            update_pathfinder_max_visited_nodes: false,
             is_idle: AtomicBool::new(true),
         }
     }
@@ -505,8 +531,8 @@ impl PathNavigation {
         self.speed_modifier = goal.speed;
         self.last_stuck_check = self.tick_count;
         self.last_stuck_check_pos = goal.current_progress;
+        self.has_pending_path = true;
         self.current_goal = Some(goal);
-        self.path = None;
         self.reset_stuck_timeout();
     }
 
@@ -520,16 +546,40 @@ impl PathNavigation {
     pub fn stop(&mut self) {
         self.is_idle.store(true, Ordering::Relaxed);
         self.current_goal = None;
+        self.has_pending_path = false;
         self.path = None;
-        self.ticks_on_current_node = 0;
-        self.total_ticks = 0;
-        self.path_start_pos = None;
     }
 
-    pub fn finish_navigation(&mut self, entity: &LivingEntity) {
-        self.stop();
-        entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-        entity.jumping.store(false, Ordering::Relaxed);
+    fn install_path(&mut self, mut path: Path, entity: &LivingEntity) {
+        let world = entity.entity.world.load();
+        path.world_change = Some((
+            world.uuid,
+            world.navigation_change_sequence.load(Ordering::Acquire),
+        ));
+        self.target_pos = Some(path.get_target());
+        self.path = Some(path);
+    }
+
+    fn ground_target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        let mut target = self.target(entity)?;
+        let below = BlockPos::floored_v(target.position).down();
+        let state = entity.entity.world.load().get_block_state(&below);
+        if !state.is_air() {
+            target.position.y = f64::from(below.0.y)
+                + state
+                    .get_block_collision_shapes_at(&below)
+                    .map(|shape| shape.max.y)
+                    .fold(0.0, f64::max);
+        }
+        Some(target)
+    }
+
+    fn target(&self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        let path = self.path.as_ref().filter(|path| !path.is_done())?;
+        Some(NavigationTarget {
+            position: path.get_next_entity_pos(entity.entity.width())?,
+            speed_modifier: self.speed_modifier,
+        })
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -542,11 +592,6 @@ impl PathNavigation {
             .get(&path_type)
             .copied()
             .unwrap_or_else(|| path_type.get_malus())
-    }
-
-    pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.mob_width = width;
-        self.mob_height = height;
     }
 
     pub fn can_reach_within(
@@ -564,20 +609,14 @@ impl PathNavigation {
         follow_range.max(self.required_path_length)
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn compute_path(
-        &mut self,
-        entity: &LivingEntity,
-        destination: Vector3<f64>,
-        reach_range: i32,
-    ) -> Option<Path> {
-        let start_pos_f = entity.entity.pos.load();
-        let start_block_vec = BlockPos::floored_v(start_pos_f).0;
-        let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
-
-        let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
-        let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
-        mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+    fn prepare_evaluator(&mut self, entity: &LivingEntity) -> (uuid::Uuid, u64) {
+        let world = entity.entity.world.load_full();
+        let world_change = (
+            world.uuid,
+            world.navigation_change_sequence.load(Ordering::Acquire),
+        );
+        let mut mob_data = MobData::from_entity(entity, &world);
+        let context = PathfindingContext::new(BlockPos::floored_v(mob_data.position).0, world);
         mob_data.can_swim = self.can_float;
 
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
@@ -597,148 +636,150 @@ impl PathNavigation {
             .set_can_walk_over_fences(self.can_walk_over_fences);
         self.evaluator.prepare(context, mob_data);
 
-        let mut start_node = self.evaluator.get_start()?;
-        let mut target = self.evaluator.get_target(BlockPos::floored_v(destination));
-
-        start_node.g = 0.0;
-        let start_dist = start_node.distance(&target);
-        target.update_best(start_dist, &start_node);
-        start_node.h = start_dist;
-        start_node.f = start_node.h;
-        start_node.walked_dist = 0.0;
-        start_node.came_from = None;
-
-        let start_pos = start_node.pos.0;
-        let mut closed_set: FxHashMap<Vector3<i32>, Node> = FxHashMap::default();
-
-        self.open_set.clear();
-        self.open_set.insert(start_node);
-
-        let mut iterations = 0usize;
-        let mut reached = false;
-        let max_iters = ((self.mob_max_follow_range(entity)
-            * 16.0
-            * self.max_visited_nodes_multiplier) as usize)
-            .clamp(100, 2048)
-            .max(MAX_ITERS);
-
-        while !self.open_set.is_empty() {
-            iterations += 1;
-            if iterations >= max_iters {
-                break;
-            }
-
-            let Some(current) = self.open_set.pop() else {
-                break;
-            };
-
-            if current.distance_manhattan(&target) <= reach_range as f32 {
-                target.reached = true;
-                reached = true;
-                target.update_best(0.0, &current);
-                closed_set.insert(current.pos.0, current);
-                break;
-            }
-
-            let dx = (current.pos.0.x - start_pos.x) as f32;
-            let dy = (current.pos.0.y - start_pos.y) as f32;
-            let dz = (current.pos.0.z - start_pos.z) as f32;
-            let euclidean = (dx * dx + dy * dy + dz * dz).sqrt();
-            let follow_range = self.mob_max_follow_range(entity);
-            if euclidean >= follow_range {
-                closed_set.insert(current.pos.0, current);
-                continue;
-            }
-
-            self.neighbors_buf.clear();
-            self.evaluator
-                .get_neighbors(&current, &mut self.neighbors_buf);
-
-            for mut neighbor in self.neighbors_buf.drain(..) {
-                let step_cost = current.distance(&neighbor);
-                neighbor.walked_dist = current.walked_dist + step_cost;
-                let tentative_g = current.g + step_cost + neighbor.cost_malus;
-
-                let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
-                    && (!in_heap
-                        || self
-                            .open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g))
-                {
-                    neighbor.came_from = Some(current.pos.0);
-                    neighbor.g = tentative_g;
-                    let dist_to_target = neighbor.distance(&target);
-                    target.update_best(dist_to_target, &neighbor);
-                    neighbor.h = dist_to_target * TARGET_DISTANCE_MULTIPLIER;
-                    neighbor.f = neighbor.g + neighbor.h;
-
-                    if in_heap {
-                        self.open_set.update_node(&neighbor, neighbor);
-                    } else {
-                        self.open_set.insert(neighbor);
-                    }
-                }
-            }
-
-            closed_set.insert(current.pos.0, current);
-        }
-
-        self.evaluator.done();
-
-        for node in self.open_set.drain() {
-            closed_set.entry(node.pos.0).or_insert(node);
-        }
-
-        if let Some(best_node) = target.best_node {
-            let mut path_nodes: Vec<Node> = Vec::new();
-            let mut current_pos = best_node.pos.0;
-            path_nodes.push(best_node);
-            let mut visited: FxHashSet<Vector3<i32>> = FxHashSet::default();
-            visited.insert(current_pos);
-            while let Some(node) = closed_set.get(&current_pos) {
-                if let Some(prev_pos) = node.came_from {
-                    if prev_pos == current_pos || !visited.insert(prev_pos) {
-                        break;
-                    }
-                    if let Some(&prev_node) = closed_set.get(&prev_pos) {
-                        path_nodes.push(prev_node);
-                        current_pos = prev_pos;
-                    } else {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-            path_nodes.reverse();
-
-            let path_target = target.node.pos;
-            return Some(Path::new(path_nodes, path_target, reached));
-        }
-
-        None
+        world_change
     }
 
-    pub fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
-        if self.path.is_none() {
-            return true;
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.prepare_evaluator(entity);
+        let mut context = PathfindingContext::new(
+            entity.entity.block_pos.load().0,
+            entity.entity.world.load_full(),
+        );
+        let path_type = self.evaluator.get_path_type(&mut context, position);
+        self.evaluator.done();
+        path_type
+    }
+
+    pub fn compute_path(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+    ) -> Option<Path> {
+        let world_change = self.prepare_evaluator(entity);
+
+        let max_path_length = self.mob_max_follow_range(entity);
+        // Vanilla sizes the search from the base follow range until the first update request.
+        let finder = self.path_finder.get_or_insert_with(|| {
+            PathFinder::new(
+                (entity.get_attribute_base(&Attributes::FOLLOW_RANGE)
+                    * f64::from(MAX_VISITED_NODES_MULTIPLIER))
+                .floor() as usize,
+            )
+        });
+        if self.update_pathfinder_max_visited_nodes {
+            finder.set_max_visited_nodes(
+                (max_path_length * MAX_VISITED_NODES_MULTIPLIER).floor() as usize
+            );
+            self.update_pathfinder_max_visited_nodes = false;
         }
-        if self.repath_cooldown > 0 {
+        let mut path = finder.find_path_single(
+            &mut self.evaluator,
+            BlockPos::floored_v(destination),
+            max_path_length,
+            reach_range,
+            self.max_visited_nodes_multiplier,
+        );
+        self.evaluator.done();
+        if let Some(path) = &mut path {
+            path.world_change = Some(world_change);
+        }
+        path
+    }
+
+    fn can_update_path(&self, entity: &LivingEntity) -> bool {
+        let in_liquid = entity.is_in_water() || entity.entity.touching_lava.load(Ordering::Relaxed);
+        match &self.evaluator {
+            EvaluatorKind::Walk(_) => {
+                entity.entity.on_ground.load(Ordering::Relaxed)
+                    || in_liquid
+                    || entity.entity.has_vehicle()
+            }
+            EvaluatorKind::Fly(_) => (self.can_float && in_liquid) || !entity.entity.has_vehicle(),
+            EvaluatorKind::Swim(e) => e.allow_breaching() || in_liquid,
+            EvaluatorKind::Amphibious(_) => true,
+        }
+    }
+
+    fn create_path(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+    ) -> Option<Path> {
+        let world = entity.entity.world.load_full();
+        if entity.entity.pos.load().y < f64::from(world.get_bottom_y())
+            || !self.can_update_path(entity)
+        {
+            return None;
+        }
+        let mut target = BlockPos::floored_v(destination);
+        if matches!(self.evaluator, EvaluatorKind::Walk(_))
+            && !self.can_path_to_targets_below_surface
+        {
+            target = Self::find_surface_position(&world, target);
+        }
+        if self.target_pos == Some(target)
+            && let Some(path) = &self.path
+            && !path.is_done()
+        {
+            return Some(path.clone());
+        }
+        let path = self.compute_path(entity, target.0.to_f64(), reach_range);
+        if let Some(path) = &path {
+            self.target_pos = Some(path.get_target());
+            self.reach_range = reach_range;
+            self.reset_stuck_timeout();
+        }
+        path
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        if self.has_delayed_recomputation {
             return false;
         }
-        self.path.as_ref().is_some_and(|p| {
-            let path_target = p.get_target();
-            let goal_target = BlockPos::floored_v(goal.destination).0;
-            let dx = f64::from(path_target.0.x - goal_target.x);
-            let dy = f64::from(path_target.0.y - goal_target.y);
-            let dz = f64::from(path_target.0.z - goal_target.z);
-            let distance_sq = dx * dx + dy * dy + dz * dz;
-            let remaining = p.get_remaining_distance().clamp(4.0, 16.0);
-            let threshold = remaining * 0.5;
-            distance_sq > f64::from(threshold * threshold)
-        })
+        let Some(path) = self.path.as_ref().filter(|path| !path.is_done()) else {
+            return false;
+        };
+        let Some(end) = path.get_end_node() else {
+            return false;
+        };
+        let middle = (end.pos.0.to_f64() + entity.entity.pos.load()) * 0.5;
+        let radius = (path.get_node_count() - path.get_next_node_index()) as f64;
+        position.dist_to_center_sqr(middle.x, middle.y, middle.z) < radius * radius
+    }
+
+    fn recompute_path(&mut self, entity: &LivingEntity) {
+        let world_age = entity.entity.world.load().get_world_age() as u64;
+        if world_age.saturating_sub(self.time_last_recompute) <= MAX_TIME_RECOMPUTE
+            || !self.can_update_path(entity)
+        {
+            self.has_delayed_recomputation = true;
+        } else if let Some(target) = self.target_pos {
+            self.path = None;
+            self.path = self.create_path(entity, target.0.to_f64(), self.reach_range);
+            self.time_last_recompute = world_age;
+            self.has_delayed_recomputation = false;
+        }
+    }
+
+    fn update_path(&mut self, entity: &LivingEntity) {
+        if self.has_delayed_recomputation {
+            self.recompute_path(entity);
+        }
+        if self.has_pending_path {
+            self.has_pending_path = false;
+            if let Some(goal) = self.current_goal {
+                // Vanilla moveTo(Path): an equivalent route keeps the installed path and its progress.
+                match self.create_path(entity, goal.destination, 1) {
+                    Some(path) if path.same_as(self.path.as_ref()) => {}
+                    path => self.path = path,
+                }
+                if self.path.as_ref().is_some_and(|path| !path.is_done()) {
+                    self.trim_path(entity);
+                }
+            }
+        }
     }
 
     pub fn can_move_directly(
@@ -753,46 +794,35 @@ impl PathNavigation {
             stop_pos.y + f64::from(mob_height) * 0.5,
             stop_pos.z,
         );
-        let diff = to - start_pos;
-        let dist = diff.length();
-        if dist < 1e-5 {
-            return true;
-        }
-        let steps = (dist * 2.0).ceil() as usize;
-        let step_vec = diff / (steps as f64);
-        let mut current = start_pos;
-        for _ in 0..steps {
-            current += step_vec;
-            let bp = BlockPos::new(
-                current.x.floor() as i32,
-                current.y.floor() as i32,
-                current.z.floor() as i32,
-            );
-            let block_state = world.get_block_state(&bp);
-            if !block_state.is_air() {
-                if blocked_by_fluids && block_state.is_liquid() {
-                    return false;
-                }
-                if block_state.is_solid() {
-                    return false;
-                }
-            }
-        }
-        true
+        world
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                start_pos,
+                to,
+                pumpkin_world::clip::ClipBlock::Collider,
+                if blocked_by_fluids {
+                    pumpkin_world::clip::ClipFluid::Any
+                } else {
+                    pumpkin_world::clip::ClipFluid::None
+                },
+            ))
+            .is_miss
     }
 
     pub fn find_surface_position(world: &World, mut pos: BlockPos) -> BlockPos {
         let block_state = world.get_block_state(&pos);
         if block_state.is_air() {
-            let mut column_pos = pos;
-            while column_pos.0.y >= -64 && world.get_block_state(&column_pos).is_air() {
+            let mut column_pos = pos.down();
+            while column_pos.0.y >= world.get_bottom_y()
+                && world.get_block_state(&column_pos).is_air()
+            {
                 column_pos.0.y -= 1;
             }
-            if column_pos.0.y >= -64 {
+            if column_pos.0.y >= world.get_bottom_y() {
                 return BlockPos::new(column_pos.0.x, column_pos.0.y + 1, column_pos.0.z);
             }
             column_pos.0.y = pos.0.y + 1;
-            while column_pos.0.y <= 320 && world.get_block_state(&column_pos).is_air() {
+            while column_pos.0.y <= world.get_top_y() && world.get_block_state(&column_pos).is_air()
+            {
                 column_pos.0.y += 1;
             }
             pos = column_pos;
@@ -800,8 +830,8 @@ impl PathNavigation {
         if !world.get_block_state(&pos).is_solid() {
             return pos;
         }
-        let mut column_pos = pos;
-        while column_pos.0.y <= 320 && world.get_block_state(&column_pos).is_solid() {
+        let mut column_pos = pos.up();
+        while column_pos.0.y <= world.get_top_y() && world.get_block_state(&column_pos).is_solid() {
             column_pos.0.y += 1;
         }
         column_pos
@@ -842,7 +872,7 @@ impl PathNavigation {
     pub fn do_stuck_detection(&mut self, mob_pos: Vector3<f64>, entity: &LivingEntity) {
         let world_age = entity.entity.world.load().get_world_age() as u64;
         if self.tick_count.saturating_sub(self.last_stuck_check) > 100 {
-            let speed = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED) as f32;
+            let speed = entity.get_speed();
             let effective_speed = if speed >= 1.0 { speed } else { speed * speed };
             let threshold_distance = effective_speed * 100.0 * 0.25;
             let dx = mob_pos.x - self.last_stuck_check_pos.x;
@@ -876,9 +906,9 @@ impl PathNavigation {
                     f64::from(pos.0.z) + 0.5,
                 );
                 let dist_to_node = (mob_pos - node_center).length();
-                let speed = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+                let speed = entity.get_speed();
                 self.timeout_limit = if speed > 0.0 {
-                    dist_to_node / speed * 20.0
+                    dist_to_node / f64::from(speed) * 20.0
                 } else {
                     0.0
                 };
@@ -892,8 +922,21 @@ impl PathNavigation {
         }
     }
 
+    /// Vanilla `PathNavigation.canCutCorner`.
     #[must_use]
-    pub fn should_target_next_node_in_direction(mob_pos: Vector3<f64>, path: &Path) -> bool {
+    pub const fn can_cut_corner(path_type: PathType) -> bool {
+        !matches!(
+            path_type,
+            PathType::DangerFire | PathType::DangerOther | PathType::WalkableDoor
+        )
+    }
+
+    #[must_use]
+    pub fn should_target_next_node_in_direction(
+        mob_pos: Vector3<f64>,
+        path: &Path,
+        can_move_directly: impl FnOnce() -> bool,
+    ) -> bool {
         if path.get_next_node_index() + 1 >= path.get_node_count() {
             return false;
         }
@@ -910,6 +953,9 @@ impl PathNavigation {
         let dz = mob_pos.z - current_node.z;
         if dx * dx + dy * dy + dz * dz > 4.0 {
             return false;
+        }
+        if can_move_directly() {
+            return true;
         }
 
         let next_idx = path.get_next_node_index() + 1;
@@ -973,62 +1019,13 @@ impl PathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn tick_ground(&mut self, entity: &LivingEntity) {
+    pub fn tick_ground(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.has_delayed_recomputation
-            && world_age.saturating_sub(self.time_last_recompute) > 20
-            && let Some(target_pos) = self.target_pos
-        {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.path = self.compute_path(entity, target_v, self.reach_range);
-            self.time_last_recompute = world_age;
-            self.has_delayed_recomputation = false;
-        }
-
-        let Some(goal) = self.current_goal.take() else {
-            self.is_idle.store(true, Ordering::Relaxed);
-            entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            return;
-        };
-
-        if goal.current_progress == goal.destination {
-            self.finish_navigation(entity);
-            return;
-        }
-
-        self.total_ticks += 1;
-        if self.repath_cooldown > 0 {
-            self.repath_cooldown -= 1;
-        }
-
-        if self.needs_new_path(&goal) {
-            let mut dest_pos = BlockPos::floored_v(goal.destination);
-            if !self.can_path_to_targets_below_surface {
-                let world = entity.entity.world.load();
-                dest_pos = Self::find_surface_position(&world, dest_pos);
-            }
-            let dest_v = Vector3::new(
-                f64::from(dest_pos.0.x) + 0.5,
-                f64::from(dest_pos.0.y),
-                f64::from(dest_pos.0.z) + 0.5,
-            );
-            self.path = self.compute_path(entity, dest_v, self.reach_range);
-            self.ticks_on_current_node = 0;
-            self.last_node_index = 0;
-            self.path_start_pos = Some(entity.entity.pos.load());
-            self.repath_cooldown = 15;
-            self.time_last_recompute = world_age;
-        }
+        self.update_path(entity);
 
         if self.path.is_none() {
-            self.finish_navigation(entity);
-            return;
+            self.stop();
+            return None;
         }
 
         let surface_y = self.get_surface_y(entity);
@@ -1042,118 +1039,48 @@ impl PathNavigation {
 
         if let Some(path) = &mut self.path {
             if path.is_done() {
-                self.finish_navigation(entity);
-                return;
-            }
-
-            let current_node_index = path.get_next_node_index();
-            if current_node_index == self.last_node_index {
-                self.ticks_on_current_node += 1;
-            } else {
-                self.ticks_on_current_node = 0;
-                self.last_node_index = current_node_index;
-            }
-
-            if self.ticks_on_current_node > 100 {
-                self.finish_navigation(entity);
-                return;
-            }
-
-            if self.total_ticks.is_multiple_of(100) {
-                if let Some(start_pos) = self.path_start_pos {
-                    let current_pos = entity.entity.pos.load();
-                    let dx = current_pos.x - start_pos.x;
-                    let dy = current_pos.y - start_pos.y;
-                    let dz = current_pos.z - start_pos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
-                    if dist_sq < 4.0 {
-                        self.finish_navigation(entity);
-                        return;
-                    }
-                }
-                self.path_start_pos = Some(entity.entity.pos.load());
+                self.stop();
+                return None;
             }
 
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y),
-                    f64::from(next_block.0.z) + 0.5,
-                );
-
                 let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
+                // Vanilla followThePath compares |dx| and |dz| separately
+                let x_distance = (current_pos.x - (f64::from(next_block.0.x) + 0.5)).abs();
+                let y_distance = (current_pos.y - f64::from(next_block.0.y)).abs();
+                let z_distance = (current_pos.z - (f64::from(next_block.0.z) + 0.5)).abs();
+                let dy = f64::from(next_block.0.y) - current_pos.y;
 
-                let horizontal_dist_sq = dx * dx + dz * dz;
-                let horizontal_dist = horizontal_dist_sq.sqrt();
+                let width = entity.entity.width();
+                self.max_distance_to_waypoint = Self::waypoint_margin(width);
+                let reach = f64::from(self.max_distance_to_waypoint);
 
-                self.max_distance_to_waypoint = if self.mob_width > 0.75 {
-                    self.mob_width * 0.5
-                } else {
-                    0.75 - self.mob_width * 0.5
-                };
-
-                if !on_ground
-                    && horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy < -0.5
-                {
+                if !on_ground && x_distance < reach && z_distance < reach && dy < -0.5 {
                     path.advance();
-                    self.current_goal = Some(goal);
-                    return;
+                    return self.ground_target(entity);
                 }
 
-                let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy.abs() < NODE_REACH_Y;
+                let close_enough =
+                    x_distance < reach && z_distance < reach && y_distance < NODE_REACH_Y;
 
-                let corner_cut = path.get_next_node().is_some_and(|n| {
-                    n.path_type != PathType::DangerFire
-                        && n.path_type != PathType::DamageFire
-                        && n.path_type != PathType::WalkableDoor
-                }) && Self::should_target_next_node_in_direction(mob_pos, path);
+                let corner_cut = path
+                    .get_next_node()
+                    .is_some_and(|n| Self::can_cut_corner(n.path_type))
+                    && Self::should_target_next_node_in_direction(mob_pos, path, || false);
 
                 if close_enough || corner_cut {
                     path.advance();
-                    self.current_goal = Some(goal);
-                    return;
-                }
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let current_yaw = entity.entity.yaw.load();
-                let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-                let target_yaw =
-                    current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
-                entity.entity.yaw.store(target_yaw);
-                entity.entity.head_yaw.store(target_yaw);
-                entity.entity.body_yaw.store(target_yaw);
-
-                let mob_speed =
-                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, mob_speed));
-
-                let step_height = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-                let jump_distance = 1.0f64.max(f64::from(self.mob_width));
-
-                if (dy > step_height || f64::from(next_block.0.y) > current_pos.y)
-                    && horizontal_dist_sq < jump_distance * jump_distance
-                {
-                    entity.jumping.store(true, Ordering::SeqCst);
-                } else {
-                    entity.jumping.store(false, Ordering::SeqCst);
+                    return self.ground_target(entity);
                 }
             } else {
-                self.finish_navigation(entity);
-                return;
+                self.stop();
+                return None;
             }
         }
 
-        self.current_goal = Some(goal);
+        self.ground_target(entity)
     }
 }
 
@@ -1185,6 +1112,10 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.set_speed(speed);
     }
 
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.speed_modifier
+    }
+
     fn stop(&mut self) {
         self.inner.stop();
     }
@@ -1213,16 +1144,16 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.path.as_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -1234,8 +1165,8 @@ impl PathNavigationTrait for GroundPathNavigation {
         self.inner.can_reach_within(entity, destination, distance)
     }
 
-    fn tick(&mut self, entity: &LivingEntity) {
-        self.inner.tick_ground(entity);
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        self.inner.tick_ground(entity)
     }
 
     fn move_to_coords(
@@ -1270,8 +1201,10 @@ impl PathNavigationTrait for GroundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -1309,35 +1242,15 @@ impl PathNavigationTrait for GroundPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        let mut dest_pos = BlockPos::floored_v(destination);
-        if !self.inner.can_path_to_targets_below_surface {
-            let world = entity.entity.world.load();
-            dest_pos = PathNavigation::find_surface_position(&world, dest_pos);
-        }
-        let dest_v = Vector3::new(
-            f64::from(dest_pos.0.x) + 0.5,
-            f64::from(dest_pos.0.y),
-            f64::from(dest_pos.0.z) + 0.5,
-        );
-        self.inner.compute_path(entity, dest_v, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1370,6 +1283,15 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -1421,6 +1343,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
         self.inner.set_speed(speed);
     }
 
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.speed_modifier
+    }
+
     fn stop(&mut self) {
         self.inner.stop();
     }
@@ -1449,16 +1375,16 @@ impl PathNavigationTrait for FlyingPathNavigation {
         self.inner.path.as_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -1471,92 +1397,55 @@ impl PathNavigationTrait for FlyingPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.inner.has_delayed_recomputation {
-            self.recompute_path(entity);
-        }
-
-        if let Some(goal) = self.inner.current_goal.take() {
-            if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
-            }
-            self.inner.current_goal = Some(goal);
-        }
+        self.inner.update_path(entity);
 
         let mob_pos = entity.entity.pos.load();
-        self.inner.do_stuck_detection(mob_pos, entity);
-
-        if self.is_done() {
-            self.inner.finish_navigation(entity);
-        } else {
-            if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
-
-                if dist_sq < 0.5 * 0.5 {
-                    path.advance();
-                }
+        let can_update = self.inner.can_update_path(entity);
+        let width = entity.entity.width();
+        self.inner.max_distance_to_waypoint = PathNavigation::waypoint_margin(width);
+        if !self.is_done()
+            && let Some(path) = &mut self.inner.path
+            && let Some(pos) = path.get_next_node_pos()
+        {
+            let reached = if can_update {
+                let margin = f64::from(self.inner.max_distance_to_waypoint);
+                ((mob_pos.x - (f64::from(pos.0.x) + 0.5)).abs() < margin
+                    && (mob_pos.z - (f64::from(pos.0.z) + 0.5)).abs() < margin
+                    && (mob_pos.y - f64::from(pos.0.y)).abs() < NODE_REACH_Y)
+                    || (path
+                        .get_next_node()
+                        .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
+                        && PathNavigation::should_target_next_node_in_direction(
+                            mob_pos,
+                            path,
+                            || {
+                                path.get_next_entity_pos(width).is_some_and(|target| {
+                                    PathNavigation::can_move_directly(
+                                        &entity.entity.world.load(),
+                                        mob_pos,
+                                        target,
+                                        entity.entity.height(),
+                                        true,
+                                    )
+                                })
+                            },
+                        ))
+            } else {
+                path.get_next_entity_pos(width).is_some_and(|target| {
+                    entity.entity.block_pos.load() == BlockPos::floored_v(target)
+                })
+            };
+            if reached {
+                path.advance();
             }
-
-            if !self.is_done()
-                && let Some(path) = &self.inner.path
-                && let Some(next_block) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y) + 0.5,
-                    f64::from(next_block.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let sd = dx.hypot(dz);
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-                entity.entity.pitch.store(desired_pitch);
-
-                let flying_speed = entity.get_attribute_value(&Attributes::FLYING_SPEED);
-                let base_speed = if flying_speed > 0.0 {
-                    flying_speed
-                } else {
-                    entity.get_attribute_value(&Attributes::MOVEMENT_SPEED)
-                };
-                let speed = self.inner.speed_modifier * base_speed;
-                let y_input = if dy.abs() > 0.1 {
-                    if dy > 0.0 { speed } else { -speed }
-                } else {
-                    0.0
-                };
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, y_input, speed));
-                entity.entity.set_has_no_gravity(true);
+            if can_update {
+                self.inner.do_stuck_detection(mob_pos, entity);
             }
         }
+        self.inner.is_idle.store(self.is_done(), Ordering::Relaxed);
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
@@ -1591,8 +1480,10 @@ impl PathNavigationTrait for FlyingPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
@@ -1616,25 +1507,15 @@ impl PathNavigationTrait for FlyingPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1667,6 +1548,15 @@ impl PathNavigationTrait for FlyingPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -1702,6 +1592,8 @@ impl Default for WaterBoundPathNavigation {
 }
 
 impl WaterBoundPathNavigation {
+    const MAX_VERTICAL_DISTANCE_TO_WAYPOINT: f64 = 0.5;
+
     #[must_use]
     pub fn new(allow_breaching: bool) -> Self {
         Self {
@@ -1718,8 +1610,16 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.set_progress(goal);
     }
 
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        !world.get_block_state(pos).is_solid_render()
+    }
+
     fn set_speed(&mut self, speed: f64) {
         self.inner.set_speed(speed);
+    }
+
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.speed_modifier
     }
 
     fn stop(&mut self) {
@@ -1750,16 +1650,16 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.path.as_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -1772,90 +1672,61 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         self.inner.tick_count += 1;
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-
-        if self.inner.has_delayed_recomputation {
-            self.recompute_path(entity);
-        }
-
-        if let Some(goal) = self.inner.current_goal.take() {
-            if self.inner.needs_new_path(&goal) {
-                self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                self.inner.ticks_on_current_node = 0;
-                self.inner.last_node_index = 0;
-                self.inner.path_start_pos = Some(entity.entity.pos.load());
-                self.inner.repath_cooldown = 15;
-                self.inner.time_last_recompute = world_age;
-            }
-            self.inner.current_goal = Some(goal);
-        }
-
-        let mob_pos = Vector3::new(
-            entity.entity.pos.load().x,
-            entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
-            entity.entity.pos.load().z,
-        );
-        self.inner.do_stuck_detection(mob_pos, entity);
-
+        self.inner.update_path(entity);
         if self.is_done() {
-            self.inner.finish_navigation(entity);
-        } else {
-            if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
-
-                if dist_sq < 0.5 * 0.5 {
-                    path.advance();
-                }
-            }
-
-            if !self.is_done()
-                && let Some(path) = &self.inner.path
-                && let Some(next_block) = path.get_next_node_pos()
-            {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y) + 0.5,
-                    f64::from(next_block.0.z) + 0.5,
-                );
-                let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let sd = dx.hypot(dz);
-
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-                entity.entity.pitch.store(desired_pitch);
-
-                let speed = self.inner.speed_modifier
-                    * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                let y_input = if dy.abs() > 0.1 {
-                    if dy > 0.0 { speed } else { -speed }
-                } else {
-                    0.0
-                };
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, y_input, speed));
+            self.inner.stop();
+            return None;
+        }
+        let current_pos = entity.entity.pos.load();
+        let mob_pos = current_pos.add_raw(0.0, f64::from(entity.entity.height()) * 0.5, 0.0);
+        let can_update = self.inner.can_update_path(entity);
+        let width = entity.entity.width();
+        self.inner.max_distance_to_waypoint = PathNavigation::waypoint_margin(width);
+        if let Some(path) = &mut self.inner.path
+            && let Some(pos) = path.get_next_node_pos()
+        {
+            let reached = if can_update {
+                let margin = f64::from(self.inner.max_distance_to_waypoint);
+                ((current_pos.x - (f64::from(pos.0.x) + 0.5)).abs() < margin
+                    && (current_pos.z - (f64::from(pos.0.z) + 0.5)).abs() < margin
+                    && (current_pos.y - f64::from(pos.0.y)).abs()
+                        < Self::MAX_VERTICAL_DISTANCE_TO_WAYPOINT)
+                    || (path
+                        .get_next_node()
+                        .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
+                        && PathNavigation::should_target_next_node_in_direction(
+                            mob_pos,
+                            path,
+                            || {
+                                path.get_next_entity_pos(width).is_some_and(|target| {
+                                    PathNavigation::can_move_directly(
+                                        &entity.entity.world.load(),
+                                        mob_pos,
+                                        target,
+                                        entity.entity.height(),
+                                        false,
+                                    )
+                                })
+                            },
+                        ))
+            } else {
+                path.get_next_entity_pos(width).is_some_and(|target| {
+                    mob_pos.y > target.y
+                        && !entity.entity.on_ground.load(Ordering::Relaxed)
+                        && mob_pos.x.floor() == target.x.floor()
+                        && mob_pos.z.floor() == target.z.floor()
+                })
+            };
+            if reached {
+                path.advance();
             }
         }
+        if can_update {
+            self.inner.do_stuck_detection(mob_pos, entity);
+        }
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
@@ -1890,15 +1761,17 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
             self.inner.speed_modifier = speed;
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.last_stuck_check = self.inner.tick_count;
@@ -1919,25 +1792,15 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -1968,6 +1831,15 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -2022,6 +1894,10 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.set_speed(speed);
     }
 
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.get_speed_modifier()
+    }
+
     fn stop(&mut self) {
         self.path_to_position = None;
         self.inner.stop();
@@ -2051,16 +1927,16 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.get_path_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -2073,9 +1949,12 @@ impl PathNavigationTrait for WallClimberNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
+        if self.inner.inner.has_pending_path {
+            self.inner.inner.update_path(entity);
+        }
         if !self.inner.is_done() {
-            self.inner.tick(entity);
+            return self.inner.tick(entity);
         } else if let Some(target_pos) = self.path_to_position {
             let current_pos = entity.entity.pos.load();
             let bb = entity.entity.bounding_box.load();
@@ -2086,7 +1965,6 @@ impl PathNavigationTrait for WallClimberNavigation {
                 f64::from(target_pos.0.z) + 0.5,
             );
             let dx = target_center.x - current_pos.x;
-            let dy = target_center.y - current_pos.y;
             let dz = target_center.z - current_pos.z;
             let dist_sq = dx * dx + dz * dz;
 
@@ -2096,23 +1974,19 @@ impl PathNavigationTrait for WallClimberNavigation {
 
             if close_enough {
                 self.path_to_position = None;
-                self.inner.inner.finish_navigation(entity);
+                self.inner.inner.stop();
             } else {
-                let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                entity.entity.yaw.store(desired_yaw);
-                entity.entity.head_yaw.store(desired_yaw);
-                entity.entity.body_yaw.store(desired_yaw);
-
-                let speed = self.inner.inner.speed_modifier
-                    * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                entity.movement_input.store(Vector3::new(0.0, 0.0, speed));
-                if dy > 0.0 {
-                    entity.jumping.store(true, Ordering::SeqCst);
-                } else {
-                    entity.jumping.store(false, Ordering::SeqCst);
-                }
+                return Some(NavigationTarget {
+                    position: Vector3::new(
+                        f64::from(target_pos.0.x),
+                        f64::from(target_pos.0.y),
+                        f64::from(target_pos.0.z),
+                    ),
+                    speed_modifier: self.inner.inner.speed_modifier,
+                });
             }
         }
+        None
     }
 
     fn move_to_coords(
@@ -2165,6 +2039,10 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.recompute_path(entity);
     }
 
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
+    }
+
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
         self.inner.set_avoid_sun(avoid_sun);
     }
@@ -2195,6 +2073,14 @@ impl PathNavigationTrait for WallClimberNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.set_required_path_length(length);
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.max_path_length(entity)
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes();
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -2248,6 +2134,10 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.set_speed(speed);
     }
 
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.speed_modifier
+    }
+
     fn stop(&mut self) {
         self.inner.stop();
     }
@@ -2276,16 +2166,16 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.path.as_mut()
     }
 
+    fn get_path_type(&mut self, entity: &LivingEntity, position: BlockPos) -> PathType {
+        self.inner.get_path_type(entity, position)
+    }
+
     fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.inner.set_pathfinding_malus(path_type, malus);
     }
 
     fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
         self.inner.get_pathfinding_malus(path_type)
-    }
-
-    fn set_mob_dimensions(&mut self, width: f32, height: f32) {
-        self.inner.set_mob_dimensions(width, height);
     }
 
     fn can_reach_within(
@@ -2298,94 +2188,42 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn tick(&mut self, entity: &LivingEntity) {
+    fn tick(&mut self, entity: &LivingEntity) -> Option<NavigationTarget> {
         if entity.entity.touching_water.load(Ordering::Relaxed) {
             self.inner.tick_count += 1;
-            let world_age = entity.entity.world.load().get_world_age() as u64;
-
-            if self.inner.has_delayed_recomputation {
-                self.recompute_path(entity);
-            }
-
-            if let Some(goal) = self.inner.current_goal.take() {
-                if self.inner.needs_new_path(&goal) {
-                    self.inner.path = self.inner.compute_path(entity, goal.destination, 1);
-                    self.inner.ticks_on_current_node = 0;
-                    self.inner.last_node_index = 0;
-                    self.inner.path_start_pos = Some(entity.entity.pos.load());
-                    self.inner.repath_cooldown = 15;
-                    self.inner.time_last_recompute = world_age;
-                }
-                self.inner.current_goal = Some(goal);
-            }
+            self.inner.update_path(entity);
 
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.do_stuck_detection(mob_pos, entity);
 
             if self.is_done() {
-                self.inner.finish_navigation(entity);
-            } else {
-                if let Some(path) = &mut self.inner.path
-                    && let Some(pos) = path.get_next_node_pos()
-                {
-                    let target_pos = Vector3::new(
-                        f64::from(pos.0.x) + 0.5,
-                        f64::from(pos.0.y) + 0.5,
-                        f64::from(pos.0.z) + 0.5,
-                    );
-                    let current_pos = entity.entity.pos.load();
-                    let dx = target_pos.x - current_pos.x;
-                    let dy = target_pos.y - current_pos.y;
-                    let dz = target_pos.z - current_pos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
+                self.inner.stop();
+            } else if let Some(path) = &mut self.inner.path
+                && let Some(pos) = path.get_next_node_pos()
+            {
+                let target_pos = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let current_pos = entity.entity.pos.load();
+                let dx = target_pos.x - current_pos.x;
+                let dy = target_pos.y - current_pos.y;
+                let dz = target_pos.z - current_pos.z;
+                let dist_sq = dx * dx + dy * dy + dz * dz;
 
-                    if dist_sq < 0.5 * 0.5 {
-                        path.advance();
-                    }
-                }
-
-                if !self.is_done()
-                    && let Some(path) = &self.inner.path
-                    && let Some(next_block) = path.get_next_node_pos()
-                {
-                    let target_pos = Vector3::new(
-                        f64::from(next_block.0.x) + 0.5,
-                        f64::from(next_block.0.y) + 0.5,
-                        f64::from(next_block.0.z) + 0.5,
-                    );
-                    let current_pos = entity.entity.pos.load();
-                    let dx = target_pos.x - current_pos.x;
-                    let dy = target_pos.y - current_pos.y;
-                    let dz = target_pos.z - current_pos.z;
-                    let sd = dx.hypot(dz);
-
-                    let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-                    let desired_pitch = wrap_degrees(-(dy.atan2(sd) as f32).to_degrees());
-
-                    entity.entity.yaw.store(desired_yaw);
-                    entity.entity.head_yaw.store(desired_yaw);
-                    entity.entity.body_yaw.store(desired_yaw);
-                    entity.entity.pitch.store(desired_pitch);
-
-                    let speed = self.inner.speed_modifier
-                        * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                    let y_input = if dy.abs() > 0.1 {
-                        if dy > 0.0 { speed } else { -speed }
-                    } else {
-                        0.0
-                    };
-                    entity
-                        .movement_input
-                        .store(Vector3::new(0.0, y_input, speed));
+                if dist_sq < 0.5 * 0.5 {
+                    path.advance();
                 }
             }
         } else {
-            self.inner.tick_ground(entity);
+            self.inner.tick_ground(entity)?;
         }
+        self.inner.target(entity)
     }
 
     fn move_to_coords(
@@ -2420,15 +2258,17 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
     }
 
     fn move_to_path(&mut self, path: Option<Path>, speed: f64, entity: &LivingEntity) -> bool {
+        self.inner.has_pending_path = false;
+        self.inner.current_goal = None;
         if let Some(new_path) = path {
-            self.inner.path = Some(new_path);
+            self.inner.install_path(new_path, entity);
             if self.is_done() {
                 return false;
             }
             self.inner.speed_modifier = speed;
             let mob_pos = Vector3::new(
                 entity.entity.pos.load().x,
-                entity.entity.pos.load().y + f64::from(self.inner.mob_height) * 0.5,
+                entity.entity.pos.load().y + f64::from(entity.entity.height()) * 0.5,
                 entity.entity.pos.load().z,
             );
             self.inner.last_stuck_check = self.inner.tick_count;
@@ -2449,25 +2289,15 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.inner.compute_path(entity, destination, reach_range)
+        self.inner.create_path(entity, destination, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
-        let world_age = entity.entity.world.load().get_world_age() as u64;
-        if world_age.saturating_sub(self.inner.time_last_recompute) <= 20 {
-            self.inner.has_delayed_recomputation = true;
-        } else if let Some(target_pos) = self.inner.target_pos {
-            let target_v = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y) + 0.5,
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            self.inner.path = self
-                .inner
-                .compute_path(entity, target_v, self.inner.reach_range);
-            self.inner.time_last_recompute = world_age;
-            self.inner.has_delayed_recomputation = false;
-        }
+        self.inner.recompute_path(entity);
+    }
+
+    fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool {
+        self.inner.should_recompute_path(entity, position)
     }
 
     fn set_avoid_sun(&mut self, avoid_sun: bool) {
@@ -2498,6 +2328,15 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
 
     fn set_required_path_length(&mut self, length: f32) {
         self.inner.required_path_length = length;
+        self.inner.update_pathfinder_max_visited_nodes = true;
+    }
+
+    fn max_path_length(&self, entity: &LivingEntity) -> f32 {
+        self.inner.mob_max_follow_range(entity)
+    }
+
+    fn update_pathfinder_max_visited_nodes(&mut self) {
+        self.inner.update_pathfinder_max_visited_nodes = true;
     }
 
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32) {
@@ -2576,5 +2415,540 @@ impl Deref for Navigator {
 impl DerefMut for Navigator {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.inner
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pumpkin_data::{dimension::Dimension, entity::EntityType};
+    use pumpkin_util::math::boundingbox::EntityDimensions;
+
+    use super::*;
+    use crate::entity::{
+        Entity,
+        ai::test_support::{world, world_in_dimension},
+    };
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn living(world: Arc<World>, entity_type: &'static EntityType) -> LivingEntity {
+        LivingEntity::new(Entity::new(
+            world,
+            Vector3::new(0.5, 64.0, 0.5),
+            entity_type,
+        ))
+    }
+
+    #[tokio::test]
+    async fn water_navigation_finishes_at_the_position_it_steers_toward() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COD);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        let target = BlockPos::new(0, 64, 0);
+        let path = Path::new(vec![Node::new(target)], target, true);
+        let mut navigation = WaterBoundPathNavigation::new(false);
+        navigation.move_to_path(Some(path), 1.0, &living);
+        let steering_target = navigation.tick(&living);
+        world.level.shutdown().await;
+        assert!(steering_target.is_none());
+        assert!(navigation.is_done());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fish_paths_cross_water_plants() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        for z in 0..=4 {
+            chunk.set_block_absolute_y(0, 64, z, pumpkin_data::Block::WATER.default_state.id);
+        }
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            chunk.clone(),
+        );
+        let living = living(world.clone(), &EntityType::COD);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        for plant in [
+            &pumpkin_data::Block::SEAGRASS,
+            &pumpkin_data::Block::TALL_SEAGRASS,
+            &pumpkin_data::Block::KELP,
+            &pumpkin_data::Block::KELP_PLANT,
+        ] {
+            chunk.set_block_absolute_y(0, 64, 2, plant.default_state.id);
+            let mut navigation = WaterBoundPathNavigation::new(false);
+            let path = navigation.create_path(&living, Vector3::new(0.5, 64.0, 4.5), 0);
+            assert!(
+                path.is_some_and(|path| path.can_reach()),
+                "{} blocked the water corridor",
+                plant.name
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn swim_search_starts_at_the_current_mob_footprint() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::IRON_GOLEM);
+        let mut navigation =
+            PathNavigation::new(EvaluatorKind::Swim(SwimNodeEvaluator::new(false)));
+
+        let path = navigation.compute_path(&living, living.entity.pos.load(), 0);
+        world.level.shutdown().await;
+
+        let start = path
+            .as_ref()
+            .and_then(|path| path.get_node(0))
+            .map(|node| node.pos);
+        assert_eq!(start, Some(BlockPos::new(-1, 64, -1)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn floating_search_uses_water_contact_instead_of_falling_to_the_world_floor() -> TestResult
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_can_float(true);
+
+        let floating = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        living.entity.touching_water.store(false, Ordering::Relaxed);
+        let airborne = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            floating.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(64)
+        );
+        assert_eq!(
+            airborne.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(-63)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn search_and_surface_scan_use_the_dimension_height_limits() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world_in_dimension(&folder, Dimension::THE_NETHER.clone());
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+
+        let path = navigation
+            .inner
+            .compute_path(&living, living.entity.pos.load(), 0);
+        let surface = PathNavigation::find_surface_position(&world, BlockPos::new(0, 64, 0));
+        world.level.shutdown().await;
+
+        assert_eq!(
+            path.and_then(|path| path.get_node(0).map(|node| node.pos.0.y)),
+            Some(1)
+        );
+        assert_eq!(surface, BlockPos::new(0, 256, 0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn waypoint_reach_uses_current_dimensions_after_a_size_change() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::IRON_GOLEM);
+        living.entity.pos.store(Vector3::new(-0.1, 64.0, 0.5));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_progress(NavigatorGoal::new(
+            living.entity.pos.load(),
+            Vector3::new(6.5, 64.0, 0.5),
+            1.0,
+        ));
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(BlockPos::new(6, 64, 0)),
+                ],
+                BlockPos::new(6, 64, 0),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+
+        navigation.tick(&living);
+        let first = navigation.get_path().map(Path::get_next_node_index);
+        living
+            .entity
+            .entity_dimension
+            .store(EntityDimensions::new(2.4, 2.7, 2.3));
+        living.entity.pos.store(Vector3::new(2.6, 64.0, 0.5));
+        navigation.tick(&living);
+        let second = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+
+        assert_eq!((first, second), (Some(1), Some(2)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn waypoint_reach_advances_on_a_diagonal_inside_the_axis_box() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::CREEPER);
+        // Width 0.6 → radius 0.45. 0.40 on both axes is inside vanilla's box and
+        // outside a hypot circle of the same radius. Stay on the approach side so
+        // corner-cutting cannot hide a hypot-only reach check.
+        living.entity.pos.store(Vector3::new(0.1, 64.0, 0.1));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(1, 64, 1)),
+                ],
+                BlockPos::new(1, 64, 1),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+
+        navigation.tick(&living);
+        let next = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+
+        assert_eq!(next, Some(1));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn search_closes_nodes_before_evaluating_neighbors_and_resets_between_searches()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let data = MobData::from_entity(&living, &world);
+        let mut evaluator = EvaluatorKind::Fly(FlyNodeEvaluator::new());
+        let mut finder = PathFinder::new(40);
+        let target = BlockPos::new(100, 64, 100);
+        let mut paths = Vec::new();
+        for _ in 0..2 {
+            evaluator.prepare(
+                PathfindingContext::new(BlockPos::floored_v(data.position).0, world.clone()),
+                data,
+            );
+            paths.push(finder.find_path_single(&mut evaluator, target, 5.0, 0, 1.0));
+            let start = evaluator.base_mut().get_node(BlockPos::new(0, 64, 0));
+            assert!(start.closed);
+            assert_eq!(start.came_from, None);
+            let mut neighbors = Vec::new();
+            evaluator.get_neighbors(&Node::new(BlockPos::new(1, 64, 0)), &mut neighbors);
+            assert!(!neighbors.iter().any(|node| node.pos == start.pos));
+            evaluator.done();
+        }
+        world.level.shutdown().await;
+        assert!(
+            paths[0]
+                .as_ref()
+                .is_some_and(|first| first.same_as(paths[1].as_ref()))
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_navigation_advances_from_the_start_node_and_gains_height() -> TestResult {
+        use crate::entity::{ai::control::MoveControlTrait, passive::allay::AllayEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let allay = AllayEntity::new(crate::entity::Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        let living = &allay.mob_entity.living_entity;
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = FlyingPathNavigation::new();
+        let target = BlockPos::new(2, 66, 0);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(1, 65, 0)),
+                    Node::new(target),
+                ],
+                target,
+                true,
+            )),
+            1.0,
+            living,
+        );
+        let next = navigation.tick(living).ok_or("missing flight waypoint")?;
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(1)
+        );
+        assert_eq!(next.position, Vector3::new(1.5, 65.0, 0.5));
+        let mut control =
+            crate::entity::ai::control::flying_move_control::FlyingMoveControl::new(20, true);
+        for _ in 0..80 {
+            if let Some(next) = navigation.tick(living) {
+                control.set_wanted_position(
+                    next.position.x,
+                    next.position.y,
+                    next.position.z,
+                    next.speed_modifier,
+                );
+            }
+            control.tick(allay.as_ref());
+            living.travel_flying(allay.as_ref());
+        }
+        let pos = living.entity.pos.load();
+        world.level.shutdown().await;
+        assert!(pos.y > 65.0, "Allay failed to gain height: {pos:?}");
+        assert!(
+            pos.x > 1.0,
+            "Allay stayed around its starting node: {pos:?}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_navigation_cuts_a_corner_when_the_flight_line_is_clear() -> TestResult {
+        use crate::entity::passive::allay::AllayEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let allay = AllayEntity::new(crate::entity::Entity::new(
+            world.clone(),
+            Vector3::new(1.0, 64.0, 0.5),
+            &EntityType::ALLAY,
+        ));
+        let living = &allay.mob_entity.living_entity;
+        let mut navigation = FlyingPathNavigation::new();
+        let target = BlockPos::new(4, 64, 0);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(2, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(target),
+                ],
+                target,
+                true,
+            )),
+            1.0,
+            living,
+        );
+        navigation.tick(living);
+        let next_index = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+        assert_eq!(next_index, Some(1));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn navigation_respects_a_zero_search_budget() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.set_max_visited_nodes_multiplier(0.0);
+        let path = navigation.create_path(&living, Vector3::new(8.0, 64.0, 0.0), 0);
+        world.level.shutdown().await;
+        assert_eq!(path.as_ref().map(Path::get_node_count), Some(1));
+        assert!(path.is_some_and(|path| !path.can_reach()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn repeated_target_preserves_progress_but_new_target_replaces_the_route() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.move_to_coords(8.0, 64.0, 0.0, 1.0, &living);
+        navigation.tick(&living);
+        let before = navigation.get_path_mut().ok_or("missing initial route")?;
+        before.set_next_node_index(3);
+        navigation.move_to_coords(8.0, 64.0, 0.0, 2.0, &living);
+        navigation.tick(&living);
+        let reused_index = navigation.get_path().map(Path::get_next_node_index);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.tick(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(reused_index, Some(3));
+        assert_eq!(target, Some(BlockPos::new(0, 64, 8)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reachability_query_does_not_retarget_the_installed_route() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        let mut navigation = FlyingPathNavigation::new();
+        let path = navigation.create_path(&living, Vector3::new(8.0, 64.0, 0.0), 0);
+        navigation.move_to_path(path, 1.0, &living);
+        navigation.can_reach_within(&living, Vector3::new(0.0, 64.0, 8.0), 1.0);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        navigation.recompute_path(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(target, Some(BlockPos::new(8, 64, 0)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn explicit_path_and_cancellation_supersede_pending_requests() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        let mut navigation = GroundPathNavigation::new();
+        let destination = BlockPos::new(8, 64, 0);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.move_to_path(
+            Some(Path::new(vec![Node::new(destination)], destination, true)),
+            1.0,
+            &living,
+        );
+        navigation.tick(&living);
+        let installed = navigation.get_path().map(Path::get_target);
+        navigation.move_to_coords(0.0, 64.0, 8.0, 1.0, &living);
+        navigation.move_to_path(None, 1.0, &living);
+        navigation.tick(&living);
+        let cancelled = navigation.get_path().is_none();
+        world.level.shutdown().await;
+        assert_eq!(installed, Some(destination));
+        assert!(cancelled);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn recomputation_waits_past_twenty_ticks_and_until_ground_navigation_is_eligible()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::COW);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_can_path_to_targets_below_surface(true);
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(4, 64, 0)),
+                    Node::new(BlockPos::new(8, 64, 0)),
+                ],
+                BlockPos::new(8, 64, 0),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+        navigation
+            .get_path_mut()
+            .ok_or("missing initial route")?
+            .set_next_node_index(2);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 20;
+        navigation.recompute_path(&living);
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(2)
+        );
+        living.entity.on_ground.store(false, Ordering::Relaxed);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age = 21;
+        navigation.recompute_path(&living);
+        assert_eq!(
+            navigation.get_path().map(Path::get_next_node_index),
+            Some(2)
+        );
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        navigation.tick(&living);
+        let recomputed = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+        assert_eq!(recomputed, Some(1));
+        assert!(!navigation.inner.has_delayed_recomputation);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn wall_climber_resolves_pending_search_before_using_its_fallback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::SPIDER);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = WallClimberNavigation::new();
+        navigation.set_can_path_to_targets_below_surface(true);
+        navigation.move_to_coords(8.0, 64.0, 0.0, 1.0, &living);
+        navigation.tick(&living);
+        let target = navigation.get_path().map(Path::get_target);
+        world.level.shutdown().await;
+        assert_eq!(target, Some(BlockPos::new(8, 64, 0)));
+        Ok(())
+    }
+    #[tokio::test]
+    async fn invalidation_uses_remaining_nodes_and_the_actual_path_end() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::BAT);
+        living.entity.pos.store(Vector3::new(0.0, 65.0, 1.0));
+        let mut navigation = FlyingPathNavigation::new();
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(3, 64, 0)),
+                    Node::new(BlockPos::new(7, 64, 0)),
+                ],
+                BlockPos::new(100, 64, 0),
+                false,
+            )),
+            1.0,
+            &living,
+        );
+        navigation
+            .get_path_mut()
+            .ok_or("missing route")?
+            .set_next_node_index(2);
+        assert!(navigation.should_recompute_path(&living, BlockPos::new(3, 64, 0)));
+        assert!(!navigation.should_recompute_path(&living, BlockPos::new(4, 64, 0)));
+        navigation
+            .get_path_mut()
+            .ok_or("missing route")?
+            .set_next_node_index(1);
+        assert!(navigation.should_recompute_path(&living, BlockPos::new(4, 64, 0)));
+        navigation.recompute_path(&living);
+        assert!(!navigation.should_recompute_path(&living, BlockPos::new(3, 64, 0)));
+        world.level.shutdown().await;
+        Ok(())
     }
 }

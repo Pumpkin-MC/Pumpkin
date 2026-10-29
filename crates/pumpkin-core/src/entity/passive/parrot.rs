@@ -1,10 +1,14 @@
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, atomic::Ordering};
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -25,12 +29,18 @@ const COOKIE_POISON_DURATION: i32 = 900;
 /// Wiki: <https://minecraft.wiki/w/Parrot>
 pub struct ParrotEntity {
     pub mob_entity: MobEntity,
+    flap_speed: AtomicCell<f32>,
+    next_flap: AtomicCell<f32>,
 }
 
 impl ParrotEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let parrot = Self { mob_entity };
+        let parrot = Self {
+            mob_entity,
+            flap_speed: AtomicCell::new(0.0),
+            next_flap: AtomicCell::new(1.0),
+        };
         let mob_arc = Arc::new(parrot);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -38,11 +48,7 @@ impl ParrotEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
@@ -88,6 +94,40 @@ impl ParrotEntity {
 }
 
 impl Mob for ParrotEntity {
+    fn mob_ai_step(&self) {
+        // Vanilla `calculateFlapping`.
+        let entity = self.get_entity();
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let flap_change: f32 = if on_ground || entity.has_vehicle() {
+            -1.0
+        } else {
+            4.0
+        };
+        self.flap_speed.store(
+            flap_change
+                .mul_add(0.3, self.flap_speed.load())
+                .clamp(0.0, 1.0),
+        );
+        let velocity = entity.velocity.load();
+        if !on_ground && velocity.y < 0.0 {
+            entity.set_velocity(velocity.multiply(1.0, 0.6, 1.0));
+        }
+    }
+
+    fn mob_is_flapping(&self) -> bool {
+        self.get_entity().fly_dist.load() > self.next_flap.load()
+    }
+
+    fn mob_on_flap(&self) {
+        self.play_entity_sound(Sound::EntityParrotFly, 0.15, 1.0);
+        self.next_flap
+            .store(self.get_entity().fly_dist.load() + self.flap_speed.load() / 2.0);
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityParrotStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -100,7 +140,9 @@ impl Mob for ParrotEntity {
             .get_item()
             .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
         {
-            return self.mob_entity.mob_interact(player, item_stack);
+            return self
+                .mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed());
         }
 
         self.eat_cookie(player, item_stack);

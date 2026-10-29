@@ -3,6 +3,7 @@ use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 pub struct FollowMobGoal {
     goal_control: Controls,
@@ -29,27 +30,25 @@ impl FollowMobGoal {
 
 impl Goal for FollowMobGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let my_type = mob.get_entity().entity_type;
-        let my_uuid = mob.get_entity().entity_uuid;
-        let pos = mob.get_entity().pos.load();
-        let world = mob.get_entity().world.load();
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let area =
+            entity
+                .bounding_box
+                .load()
+                .expand(self.area_size, self.area_size, self.area_size);
 
-        let nearby = world.get_nearby_entities(pos, self.area_size);
-        for candidate in nearby.values() {
-            let c_entity = candidate.get_entity();
-            if c_entity.entity_uuid == my_uuid {
-                continue;
-            }
-            if c_entity.entity_type == my_type {
-                continue;
-            }
-            if candidate.get_living_entity().is_some() {
-                self.following_mob = Some(candidate.clone());
-                return true;
-            }
-        }
-
-        false
+        // The first visible mob of another type in list order
+        self.following_mob = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .find(|candidate| {
+                let candidate_entity = candidate.get_entity();
+                candidate_entity.entity_type != entity.entity_type
+                    && candidate.get_mob().is_some()
+                    && !candidate_entity.invisible.load(Ordering::Relaxed)
+            });
+        self.following_mob.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {

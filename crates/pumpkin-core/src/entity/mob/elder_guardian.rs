@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
@@ -7,27 +7,27 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_protocol::java::client::play::{CGameEvent, GameEvent};
 
+use crate::entity::ai::behavior::hunting;
+use crate::entity::mob::guardian::GUARDIAN_HUNTS;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
+const EFFECT_INTERVAL: i32 = 1200;
+
 pub struct ElderGuardianEntity {
     pub mob_entity: MobEntity,
-    tick_count: AtomicI32,
 }
 
 impl ElderGuardianEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let guardian = Self {
-            mob_entity,
-            tick_count: AtomicI32::new(0),
-        };
+        let guardian = Self { mob_entity };
         let mob_arc = Arc::new(guardian);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -35,11 +35,7 @@ impl ElderGuardianEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
@@ -49,15 +45,8 @@ impl ElderGuardianEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            let target_selector = &mob_arc.mob_entity.target_selector;
+            hunting::apply(target_selector, &mob_arc.mob_entity, GUARDIAN_HUNTS);
         };
 
         mob_arc
@@ -69,14 +58,13 @@ impl Mob for ElderGuardianEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;
         }
 
-        let ticks = self.tick_count.fetch_add(1, Ordering::Relaxed) + 1;
-        if ticks % 1200 == 0 {
+        if (entity.tick_count.load(Ordering::Relaxed) + entity.entity_id) % EFFECT_INTERVAL == 0 {
             let pos = entity.pos.load();
             let world = entity.world.load();
             let players = world.get_nearby_players(pos, 50.0);

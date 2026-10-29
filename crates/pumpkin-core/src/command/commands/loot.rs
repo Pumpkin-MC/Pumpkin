@@ -15,6 +15,8 @@ use pumpkin_util::text::hover::HoverEvent;
 use crate::command::argument_builder::{
     ArgumentBuilder, LiteralArgumentBuilder, argument, command, literal,
 };
+use crate::command::argument_types::argument_type::JavaClientArgumentType;
+use crate::command::argument_types::client_parsed::{ClientParsed, IdStringArgumentType};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
@@ -293,6 +295,7 @@ fn send_callback(context: &CommandContext, drops: &[ItemStack], table_id: Option
                 .hover_event(HoverEvent::ShowItem {
                     id: item_name.to_string().into(),
                     count: Some(drop.item_count as i32),
+                    components: None,
                 });
             TextComponent::translate_cross(
                 translation::java::COMMANDS_DROP_SUCCESS_SINGLE_WITH_TABLE,
@@ -314,6 +317,7 @@ fn send_callback(context: &CommandContext, drops: &[ItemStack], table_id: Option
                 .hover_event(HoverEvent::ShowItem {
                     id: item_name.to_string().into(),
                     count: Some(drop.item_count as i32),
+                    components: None,
                 });
             TextComponent::translate_cross(
                 translation::java::COMMANDS_DROP_SUCCESS_SINGLE,
@@ -356,7 +360,7 @@ impl CommandExecutor for LootExecutor {
                     format!("minecraft:{loot_table_str}")
                 };
 
-                let pos = BlockPosArgumentType::get_block_pos(context, "fish_pos")?;
+                let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
                 let tool_stack = match tool {
                     ToolSource::None => None,
                     ToolSource::Item => Some(ItemStackArgumentType::get(context, "tool")?),
@@ -374,12 +378,13 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,
                         f64::from(pos.0.y) + 0.5,
                         f64::from(pos.0.z) + 0.5,
                     )),
-                    tool: tool_stack,
+                    tool: Some(tool_stack.unwrap_or_else(|| ItemStack::EMPTY.clone())),
                     ..Default::default()
                 };
                 let seed: i64 = rand::random();
@@ -403,6 +408,7 @@ impl CommandExecutor for LootExecutor {
                     })?;
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     position: context.source.as_player().map(|p| p.position()),
                     ..Default::default()
                 };
@@ -410,13 +416,14 @@ impl CommandExecutor for LootExecutor {
                 drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
             }
             Source::Kill => {
-                let target_entities = EntityArgumentType::get_entities(context, "target_entity")?;
+                let target_entities = EntityArgumentType::get_entities(context, "target")?;
                 let killer = context.source.as_player();
                 let killer_tool = killer.as_ref().map(|p| {
                     p.inventory()
                         .get_stack(p.inventory().get_selected_slot() as usize)
                 });
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     killed_by_player: Some(killer.is_some()),
                     tool: killer_tool,
                     position: killer.as_ref().map(|p| p.position()),
@@ -429,6 +436,24 @@ impl CommandExecutor for LootExecutor {
                     let key = format!("minecraft:entities/{resource_name}");
                     if let Some(loot_table) = context.server().datapack_manager.get_loot_table(&key)
                     {
+                        let params = LootContextParameters {
+                            this_entity: Some(entity.as_ref()),
+                            killer_entity: killer
+                                .as_ref()
+                                .map(|player| player.as_ref() as &dyn crate::entity::EntityBase),
+                            direct_killer_entity: killer
+                                .as_ref()
+                                .map(|player| player.as_ref() as &dyn crate::entity::EntityBase),
+                            position: Some(entity.get_entity().pos.load()),
+                            is_on_fire: Some(
+                                entity
+                                    .get_entity()
+                                    .fire_ticks
+                                    .load(std::sync::atomic::Ordering::Relaxed)
+                                    > 0,
+                            ),
+                            ..params.clone()
+                        };
                         let seed: i64 = rand::random();
                         drops.extend(crate::world::loot::generate_loot_from_handle(
                             &loot_table,
@@ -449,16 +474,19 @@ impl CommandExecutor for LootExecutor {
                 table_id_for_callback = last_key;
             }
             Source::Mine { tool } => {
-                let pos = BlockPosArgumentType::get_block_pos(context, "mine_pos")?;
+                let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
                 let world = context.world();
                 let block_state = world.get_block_state(&pos);
                 let block = world.get_block(&pos);
-                let key = format!("minecraft:blocks/{}", block.name);
+                let key = block.loot_table.ok_or_else(|| {
+                    ERROR_NO_BLOCK_LOOT_TABLE
+                        .create_without_context(TextComponent::text(block.name.to_string()))
+                })?;
 
                 let loot_table = context
                     .server()
                     .datapack_manager
-                    .get_loot_table(&key)
+                    .get_loot_table(key)
                     .ok_or_else(|| {
                         ERROR_NO_BLOCK_LOOT_TABLE
                             .create_without_context(TextComponent::text(block.name.to_string()))
@@ -472,8 +500,9 @@ impl CommandExecutor for LootExecutor {
                 };
 
                 let params = LootContextParameters {
+                    world: Some(context.world()),
                     block_state: Some(block_state),
-                    tool: tool_stack,
+                    tool: Some(tool_stack.unwrap_or_else(|| ItemStack::EMPTY.clone())),
                     position: Some(Vector3::new(
                         f64::from(pos.0.x) + 0.5,
                         f64::from(pos.0.y) + 0.5,
@@ -483,7 +512,7 @@ impl CommandExecutor for LootExecutor {
                 };
                 let seed: i64 = rand::random();
                 drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
-                table_id_for_callback = Some(key);
+                table_id_for_callback = Some(key.to_string());
             }
         }
 
@@ -505,7 +534,7 @@ impl CommandExecutor for LootExecutor {
                 Ok(used_items.len() as i32)
             }
             Target::Spawn => {
-                let pos = Vec3ArgumentType::get_vector3(context, "target_pos")?;
+                let pos = Vec3ArgumentType::get_vector3(context, "targetPos")?;
                 let world = context.world();
                 let block_pos = BlockPos::new(
                     pos.x.floor() as i32,
@@ -519,7 +548,7 @@ impl CommandExecutor for LootExecutor {
                 Ok(drops.len() as i32)
             }
             Target::Insert => {
-                let pos = BlockPosArgumentType::get_block_pos(context, "target_pos")?;
+                let pos = BlockPosArgumentType::get_block_pos(context, "targetPos")?;
                 let world = context.world().clone();
                 let block_entity = world.get_block_entity(&pos).ok_or_else(|| {
                     ERROR_NOT_CONTAINER.create_without_context(
@@ -546,7 +575,7 @@ impl CommandExecutor for LootExecutor {
                 Ok(used_items.len() as i32)
             }
             Target::ReplaceBlock { has_count } => {
-                let pos = BlockPosArgumentType::get_block_pos(context, "target_pos")?;
+                let pos = BlockPosArgumentType::get_block_pos(context, "targetPos")?;
                 let slot = SlotArgumentType::get(context, "slot")?;
                 let count = if has_count {
                     IntegerArgumentType::get(context, "count")? as usize
@@ -620,54 +649,60 @@ impl CommandExecutor for LootExecutor {
 fn add_sources(target: Target) -> Vec<LiteralArgumentBuilder> {
     vec![
         literal("fish").then(
-            argument("loot_table", StringArgumentType::SingleWord)
-                .suggests(LootTableSuggestionProvider)
-                .then(
-                    argument("fish_pos", BlockPosArgumentType)
-                        .executes(LootExecutor {
+            argument(
+                "loot_table",
+                ClientParsed::new(IdStringArgumentType, JavaClientArgumentType::LootTable),
+            )
+            .suggests(LootTableSuggestionProvider)
+            .then(
+                argument("pos", BlockPosArgumentType)
+                    .executes(LootExecutor {
+                        target,
+                        source: Source::Fish {
+                            tool: ToolSource::None,
+                        },
+                    })
+                    .then(
+                        argument("tool", ItemStackArgumentType).executes(LootExecutor {
                             target,
                             source: Source::Fish {
-                                tool: ToolSource::None,
+                                tool: ToolSource::Item,
                             },
-                        })
-                        .then(
-                            argument("tool", ItemStackArgumentType).executes(LootExecutor {
-                                target,
-                                source: Source::Fish {
-                                    tool: ToolSource::Item,
-                                },
-                            }),
-                        )
-                        .then(literal("mainhand").executes(LootExecutor {
-                            target,
-                            source: Source::Fish {
-                                tool: ToolSource::MainHand,
-                            },
-                        }))
-                        .then(literal("offhand").executes(LootExecutor {
-                            target,
-                            source: Source::Fish {
-                                tool: ToolSource::OffHand,
-                            },
-                        })),
-                ),
+                        }),
+                    )
+                    .then(literal("mainhand").executes(LootExecutor {
+                        target,
+                        source: Source::Fish {
+                            tool: ToolSource::MainHand,
+                        },
+                    }))
+                    .then(literal("offhand").executes(LootExecutor {
+                        target,
+                        source: Source::Fish {
+                            tool: ToolSource::OffHand,
+                        },
+                    })),
+            ),
         ),
         literal("loot").then(
-            argument("loot_table", StringArgumentType::SingleWord)
-                .suggests(LootTableSuggestionProvider)
-                .executes(LootExecutor {
-                    target,
-                    source: Source::Loot,
-                }),
-        ),
-        literal("kill").then(
-            argument("target_entity", EntityArgumentType::Entities).executes(LootExecutor {
+            argument(
+                "loot_table",
+                ClientParsed::new(IdStringArgumentType, JavaClientArgumentType::LootTable),
+            )
+            .suggests(LootTableSuggestionProvider)
+            .executes(LootExecutor {
                 target,
-                source: Source::Kill,
+                source: Source::Loot,
             }),
         ),
+        literal("kill").then(argument("target", EntityArgumentType::Entities).executes(
+            LootExecutor {
+                target,
+                source: Source::Kill,
+            },
+        )),
         literal("mine").then(
-            argument("mine_pos", BlockPosArgumentType)
+            argument("pos", BlockPosArgumentType)
                 .executes(LootExecutor {
                     target,
                     source: Source::Mine {
@@ -710,12 +745,12 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         give_arg = give_arg.then(src);
     }
 
-    let mut spawn_arg = argument("target_pos", Vec3ArgumentType::Default);
+    let mut spawn_arg = argument("targetPos", Vec3ArgumentType::Default);
     for src in add_sources(Target::Spawn) {
         spawn_arg = spawn_arg.then(src);
     }
 
-    let mut insert_arg = argument("target_pos", BlockPosArgumentType);
+    let mut insert_arg = argument("targetPos", BlockPosArgumentType);
     for src in add_sources(Target::Insert) {
         insert_arg = insert_arg.then(src);
     }
@@ -748,9 +783,8 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         .then(
             literal("replace")
                 .then(
-                    literal("block").then(
-                        argument("target_pos", BlockPosArgumentType).then(replace_block_slot),
-                    ),
+                    literal("block")
+                        .then(argument("targetPos", BlockPosArgumentType).then(replace_block_slot)),
                 )
                 .then(literal("entity").then(
                     argument("entities", EntityArgumentType::Entities).then(replace_entity_slot),

@@ -33,7 +33,7 @@ impl FollowOwnerGoal {
     }
 
     fn unable_to_move_to_owner(mob: &dyn Mob, owner: Option<&Player>) -> bool {
-        if mob.is_sitting() {
+        if mob.ordered_to_sit() {
             return true;
         }
         let mob_entity = &mob.get_mob_entity().living_entity.entity;

@@ -1,39 +1,124 @@
 use core::f32;
 use std::sync::{
     Arc,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::{
+    boundingbox::BoundingBox,
+    vector3::{Axis, Vector3},
+};
 
-use crate::{server::Server, world::World};
+use crate::{
+    block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION,
+    server::Server,
+    world::{
+        World,
+        entity_islands::{self, AuditedReach},
+    },
+};
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
+    health: AtomicI32,
     orb_age: AtomicU32,
 }
 
 impl ExperienceOrbEntity {
+    const AIR_DRAG: f32 = 0.98;
+    const DEFAULT_HEALTH: i32 = 5;
+
     pub fn new(entity: Entity, amount: u32) -> Self {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
             amount,
+            health: AtomicI32::new(Self::DEFAULT_HEALTH),
             orb_age: AtomicU32::new(0),
         }
     }
 
     pub fn spawn(world: &Arc<World>, position: Vector3<f64>, amount: u32) {
+        Self::spawn_with_direction(world, position, Vector3::new(0.0, 0.0, 0.0), amount);
+    }
+
+    fn new_with_direction(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        direction: Vector3<f64>,
+        amount: u32,
+    ) -> Self {
+        let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_ORB);
+        let orb = Self::new(entity, amount);
+        let mut velocity = Vector3::new(
+            (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+            rand::random::<f64>() * 0.2 * 2.0,
+            (rand::random::<f64>() * 0.2 - 0.1) * 2.0,
+        );
+        if direction.length_squared() > 0.0 && direction.dot(&velocity) < 0.0 {
+            velocity = velocity.multiply(-1.0, -1.0, -1.0);
+        }
+        let size = orb.entity.bounding_box.load().get_average_side_length();
+        let offset = direction.normalize() * (size * 0.5);
+        orb.entity.set_pos(position.add(&offset));
+        orb.entity.set_velocity(velocity);
+        if !world.is_space_empty(orb.entity.bounding_box.load()) {
+            orb.unstuck_if_possible(size);
+        }
+        orb
+    }
+
+    fn unstuck_if_possible(&self, max_distance: f64) {
+        let bounding_box = self.entity.bounding_box.load();
+        let size = bounding_box.max - bounding_box.min;
+        let center = (bounding_box.min + bounding_box.max) * 0.5;
+        let half_distance = Vector3::new(max_distance, max_distance, max_distance) * 0.5;
+        let allowed_centers = BoundingBox {
+            min: center - half_distance,
+            max: center + half_distance,
+        };
+        let world = self.entity.world.load();
+        let (mut collisions, _) =
+            world.get_block_collisions(allowed_centers.expand(size.x, size.y, size.z), self);
+        {
+            let border = world
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let half = border.new_diameter * 0.5;
+            let epsilon = f64::from(1.0e-5f32);
+            collisions.retain(|shape| {
+                shape.min.x >= border.center_x - half
+                    && shape.max.x - epsilon < border.center_x + half
+                    && shape.min.z >= border.center_z - half
+                    && shape.max.z - epsilon < border.center_z + half
+            });
+        };
+        let expanded_collisions = collisions
+            .into_iter()
+            .map(|shape| shape.expand(size.x * 0.5, size.y * 0.5, size.z * 0.5));
+        if let Some(position) = closest_free_center(allowed_centers, center, expanded_collisions) {
+            self.entity
+                .set_pos(position.add_raw(0.0, -size.y * 0.5, 0.0));
+        }
+    }
+
+    pub fn spawn_with_direction(
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        direction: Vector3<f64>,
+        amount: u32,
+    ) {
         let mut amount = amount;
         while amount > 0 {
             let i = Self::round_to_orb_size(amount);
             amount -= i;
-            let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_ORB);
-            let orb = Arc::new(Self::new(entity, i));
+            let orb = Arc::new(Self::new_with_direction(world, position, direction, i));
             world.spawn_entity(orb);
         }
     }
@@ -65,7 +150,91 @@ impl ExperienceOrbEntity {
     }
 }
 
+fn closest_free_center(
+    allowed_centers: BoundingBox,
+    center: Vector3<f64>,
+    collisions: impl Iterator<Item = BoundingBox>,
+) -> Option<Vector3<f64>> {
+    // Subtract expanded collision boxes, matching vanilla's ONLY_FIRST shape operation.
+    let mut free_boxes = vec![allowed_centers];
+    for collision in collisions {
+        let mut remaining = Vec::new();
+        for mut free in free_boxes {
+            if !free.intersects(&collision) {
+                remaining.push(free);
+                continue;
+            }
+            for axis in [Axis::X, Axis::Y, Axis::Z] {
+                if free.min.get_axis(axis) < collision.min.get_axis(axis) {
+                    let mut piece = free;
+                    piece.max.set_axis(axis, collision.min.get_axis(axis));
+                    remaining.push(piece);
+                    free.min.set_axis(axis, collision.min.get_axis(axis));
+                }
+                if free.max.get_axis(axis) > collision.max.get_axis(axis) {
+                    let mut piece = free;
+                    piece.min.set_axis(axis, collision.max.get_axis(axis));
+                    remaining.push(piece);
+                    free.max.set_axis(axis, collision.max.get_axis(axis));
+                }
+            }
+        }
+        free_boxes = remaining;
+    }
+    free_boxes
+        .into_iter()
+        .map(|free| {
+            Vector3::new(
+                center.x.clamp(free.min.x, free.max.x),
+                center.y.clamp(free.min.y, free.max.y),
+                center.z.clamp(free.min.z, free.max.z),
+            )
+        })
+        .min_by(|a, b| {
+            a.squared_distance_to_vec(&center)
+                .total_cmp(&b.squared_distance_to_vec(&center))
+        })
+}
+
 impl EntityBase for ExperienceOrbEntity {
+    /// Vanilla `ExperienceOrb.doWaterSplashEffect` does nothing.
+    fn do_water_splash_effect(&self, _caller: &dyn EntityBase) {}
+
+    fn audited_reach(&self) -> Option<AuditedReach> {
+        let entity = &self.entity;
+        let world = entity.world.load();
+        let fluid_push = super::max_fluid_push_speed(world.dimension.fast_lava);
+        let velocity = entity.velocity.load();
+        let mut reach = AuditedReach {
+            bounding_box: entity.bounding_box.load(),
+            motion: (
+                velocity.x.hypot(velocity.z) + fluid_push,
+                velocity.y.abs() + self.get_gravity() + SURFACE_UPWARD_ACCELERATION + fluid_push,
+            ),
+            entities: 0.0,
+            players: 0.0,
+            block_reads: 1.0,
+            route: None,
+            changes_blocks: false,
+            global: false,
+            links: entity_islands::links_of(self),
+        };
+        reach.scan_contact_blocks(&world);
+        Some(reach)
+    }
+
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_short("Health", self.health.load(Ordering::Relaxed) as i16);
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.health.store(
+            nbt.get_short("Health")
+                .map_or(Self::DEFAULT_HEALTH, i32::from),
+            Ordering::Relaxed,
+        );
+    }
+
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = &self.entity;
         entity.tick(caller, server);
@@ -92,6 +261,19 @@ impl EntityBase for ExperienceOrbEntity {
 
         entity.tick_block_collisions(caller);
 
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let mut friction = Self::AIR_DRAG;
+        if on_ground {
+            let pos = entity.get_pos_with_y_offset(f64::from(0.999_999f32)).0;
+            let block = entity.world.load().get_block(&pos);
+            friction *= block.slipperiness;
+        }
+        let mut velocity = entity.velocity.load() * f64::from(friction);
+        if on_ground && velo.y < -self.get_gravity() {
+            velocity.y = -velo.y * 0.4;
+        }
+        entity.velocity.store(velocity);
+
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
             entity.remove();
@@ -100,6 +282,55 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_entity(&self) -> &Entity {
         &self.entity
+    }
+
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
+
+        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+            self.entity.entity_id,
+            damage_type,
+            amount,
+        );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return false;
+        }
+        if !event.damage.is_finite() || event.damage <= 0.0 {
+            return false;
+        }
+
+        self.entity.velocity_dirty.store(true, Ordering::Relaxed);
+        let mut health = self.health.load(Ordering::Relaxed);
+        loop {
+            let remaining = (health as f32 - event.damage) as i32;
+            match self.health.compare_exchange_weak(
+                health,
+                remaining,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    if remaining <= 0 {
+                        self.entity.remove();
+                    }
+                    return true;
+                }
+                Err(current) => health = current,
+            }
+        }
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
@@ -133,5 +364,35 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unstuck_selects_nearest_free_center_and_leaves_enclosed_orbs_in_place() {
+        let allowed = BoundingBox {
+            min: Vector3::new(0.0, 0.0, 0.0),
+            max: Vector3::new(1.0, 1.0, 1.0),
+        };
+        let center = Vector3::new(0.5, 0.5, 0.5);
+        let wall = BoundingBox {
+            min: Vector3::new(-1.0, -1.0, -1.0),
+            max: Vector3::new(0.75, 2.0, 2.0),
+        };
+        let floor = BoundingBox {
+            min: Vector3::new(-1.0, -1.0, -1.0),
+            max: Vector3::new(2.0, 0.625, 2.0),
+        };
+        assert_eq!(
+            closest_free_center(allowed, center, [wall, floor].into_iter()),
+            Some(Vector3::new(0.75, 0.625, 0.5))
+        );
+        assert_eq!(
+            closest_free_center(allowed, center, [allowed].into_iter()),
+            None
+        );
     }
 }

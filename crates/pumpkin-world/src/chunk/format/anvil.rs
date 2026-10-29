@@ -27,8 +27,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 26.2
-pub const WORLD_DATA_VERSION: i32 = 4903;
+// 26.3
+pub const WORLD_DATA_VERSION: i32 = 5023;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -300,7 +300,7 @@ const HEADER_BYTES: usize = SECTOR_BYTES * 2;
 
 /// Which sectors of a region file are taken, mirroring vanilla's `RegionBitmap`.
 #[derive(Clone, Default)]
-struct SectorBitmap(Vec<u64>);
+pub(super) struct SectorBitmap(Vec<u64>);
 
 impl SectorBitmap {
     fn is_used(&self, sector: u32) -> bool {
@@ -309,7 +309,7 @@ impl SectorBitmap {
             .is_some_and(|word| word & (1 << (sector % 64)) != 0)
     }
 
-    fn set(&mut self, start: u32, count: u32, used: bool) {
+    pub(super) fn set(&mut self, start: u32, count: u32, used: bool) {
         for sector in start..start + count {
             let word = sector as usize / 64;
             if word >= self.0.len() {
@@ -327,7 +327,7 @@ impl SectorBitmap {
     }
 
     /// One past the last used sector.
-    fn end(&self) -> u32 {
+    pub(super) fn end(&self) -> u32 {
         self.0
             .iter()
             .rposition(|word| *word != 0)
@@ -349,7 +349,7 @@ impl SectorBitmap {
         end
     }
 
-    fn free_runs(&self) -> FreeRuns {
+    pub(super) fn free_runs(&self) -> FreeRuns {
         let end = self.end();
         let mut runs = Vec::new();
         let mut sector = 0;
@@ -369,7 +369,7 @@ impl SectorBitmap {
 /// The free runs of a region, for placing the chunks of one flush. Old sectors are only freed
 /// after the header is written, so runs only shrink while a flush is planned and the list
 /// never goes stale.
-struct FreeRuns {
+pub(super) struct FreeRuns {
     /// `(len, start)` of every run, sorted, so the first one that fits is the smallest and
     /// lowest.
     runs: Vec<(u32, u32)>,
@@ -380,7 +380,7 @@ impl FreeRuns {
     /// Takes the lowest of the smallest runs that fit `count` sectors, or appends after the last
     /// used sector. Best fit leaves about half the holes first fit does once chunks keep
     /// changing size.
-    fn allocate(&mut self, count: u32) -> u32 {
+    pub(super) fn allocate(&mut self, count: u32) -> u32 {
         let index = self.runs.partition_point(|(len, _)| *len < count);
         if index == self.runs.len() {
             let start = self.end;
@@ -564,6 +564,16 @@ impl AnvilRegion {
         let mut record_header = [0; 5];
         read_exact_at(file, &mut record_header, start)?;
         Ok(record_header[4] & EXTERNAL_STREAM_FLAG != 0)
+    }
+
+    pub(crate) fn external_chunk_paths(&self) -> Vec<PathBuf> {
+        (0..CHUNK_COUNT)
+            .filter(|&index| {
+                self.is_external_stub(self.locations[index])
+                    .unwrap_or(false)
+            })
+            .map(|index| self.external_path(index))
+            .collect()
     }
 
     /// Gives back sectors freed at the end of the file. Only called once the header no longer
@@ -760,6 +770,9 @@ impl RegionFile for AnvilRegion {
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
+    fn to_pump_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        self.to_bytes()
+    }
     fn position(&self) -> (i32, i32);
 }
 

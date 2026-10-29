@@ -6,15 +6,42 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::ai::behavior::fleeing::Flee;
+use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::Mob;
 use crate::entity::mob::patrol::{PatrolData, PatrollingMonster};
+
+#[must_use]
+pub fn is_raider(entity_type: &'static EntityType) -> bool {
+    entity_type.has_tag(&tag::EntityType::MINECRAFT_RAIDERS)
+}
+
+/// Vanilla `HurtByTargetGoal(this, Raider.class).setAlertOthers()`.
+#[must_use]
+pub fn revenge_goal() -> Box<RevengeGoal> {
+    Box::new(RevengeGoal::new(true).ignoring(is_raider).alerting_others())
+}
+
+/// Illagers keep 8 blocks from a creaking.
+#[must_use]
+pub const fn flee_creaking(priority: u8, walk_speed: f64, sprint_speed: f64) -> Flee {
+    Flee::new(
+        priority,
+        TargetMatch::Type(&EntityType::CREAKING),
+        8.0,
+        walk_speed,
+        sprint_speed,
+    )
+}
 
 #[must_use]
 pub fn create_ominous_banner() -> ItemStack {
@@ -164,11 +191,7 @@ impl Goal for HoldGroundAttackGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
 
         let target = mob.get_mob_entity().get_target().clone();
         if let Some(target) = target {
@@ -266,11 +289,8 @@ impl Goal for ObtainRaidLeaderBannerGoal {
                     cand.get_entity().remove();
                     break;
                 }
-                let mut nav = mob
-                    .get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let steered = mob.get_mob_entity().steered();
+                let mut nav = steered.navigator();
                 nav.set_progress(NavigatorGoal {
                     current_progress: pos,
                     destination: cand_pos,
@@ -364,11 +384,8 @@ impl Goal for RaiderMoveThroughVillageGoal {
     fn tick(&mut self, mob: &dyn Mob) {
         let entity = mob.get_entity();
         let pos = entity.pos.load();
-        let mut nav = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut nav = steered.navigator();
 
         if nav.is_idle() {
             let dx: f64 = (rand::random::<f64>() - 0.5) * 32.0;

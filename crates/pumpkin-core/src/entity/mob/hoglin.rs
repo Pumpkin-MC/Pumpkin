@@ -1,10 +1,12 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -29,6 +31,7 @@ pub struct HoglinEntity {
 impl HoglinEntity {
     pub const CONVERSION_TIME: i32 = 300;
     pub const XP_REWARD: u32 = 5;
+    pub const BABY_XP_REWARD: u32 = 3;
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -75,11 +78,7 @@ impl HoglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -90,11 +89,7 @@ impl HoglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
@@ -170,6 +165,10 @@ impl HoglinEntity {
 }
 
 impl Mob for HoglinEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityHoglinStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -177,6 +176,22 @@ impl Mob for HoglinEntity {
     fn spawn_as_baby(&self) -> bool {
         self.is_baby.store(true, Ordering::Relaxed);
         self.mob_entity.set_baby_by_age();
+        true
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        if self.mob_entity.living_entity.is_baby() {
+            Self::BABY_XP_REWARD
+        } else {
+            Self::XP_REWARD
+        }
+    }
+
+    fn should_drop_loot(&self) -> bool {
+        self.mob_entity.living_entity.should_drop_loot()
+    }
+
+    fn should_drop_experience(&self) -> bool {
         true
     }
 

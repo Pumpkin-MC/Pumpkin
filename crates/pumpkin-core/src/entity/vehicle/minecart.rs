@@ -72,7 +72,8 @@ enum MinecartKind {
 }
 
 impl MinecartEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let kind = match entity.entity_type.id {
             id if id == EntityType::MINECART.id => MinecartKind::Rideable(RideableMinecart),
             id if id == EntityType::CHEST_MINECART.id => MinecartKind::Chest(ChestMinecart::new()),
@@ -742,7 +743,11 @@ impl EntityBase for MinecartEntity {
                 if let Some(container) = self.container()
                     && container.claim_drops()
                 {
-                    container.unpack_loot();
+                    container.unpack_loot(&crate::world::loot::LootContextParameters {
+                        world: Some(&world),
+                        position: Some(self.vehicle.entity.pos.load()),
+                        ..Default::default()
+                    });
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
@@ -758,16 +763,14 @@ impl EntityBase for MinecartEntity {
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         match &self.kind {
             MinecartKind::Chest(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Furnace(minecart) => {
                 minecart.interact(&self.vehicle.entity, player, item_stack)
             }
             MinecartKind::Hopper(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Rideable(_) => RideableMinecart::interact(&self.vehicle.entity, player),

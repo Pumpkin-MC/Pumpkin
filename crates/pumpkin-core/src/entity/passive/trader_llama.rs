@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,17 +12,21 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::passive::llama::LLAMA_HUNTS;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::animal::{Animal, get_carpet_color_from_item},
@@ -75,6 +80,13 @@ impl TraderLlamaVariant {
     }
 }
 
+const TRADER_LLAMA_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::ZOMBIE_LIKE, true).matching(|_hunter, target, _world| {
+        target.entity.entity_type != &EntityType::ZOMBIFIED_PIGLIN
+    }),
+    Hunt::new(2, TargetMatch::ILLAGER, true),
+];
+
 pub struct TraderLlamaEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -92,6 +104,7 @@ impl TraderLlamaEntity {
         let mob_entity = MobEntity::new(entity);
         let mut rng = rand::rng();
         let variant = TraderLlamaVariant::random_variant();
+        // TODO: vanilla rolls 1..=3, and 1..=5 with 4% chance.
         let strength = rng.random_range(1..=5);
 
         let llama = Self {
@@ -116,16 +129,8 @@ impl TraderLlamaEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
@@ -144,10 +149,9 @@ impl TraderLlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WOLF, true),
-            );
+            // TODO: TraderLlamaDefendWanderingTraderGoal at 1.
+            hunting::apply(target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
+            hunting::apply(target_selector, &mob_arc.mob_entity, TRADER_LLAMA_HUNTS);
         };
 
         mob_arc
@@ -264,6 +268,14 @@ impl Animal for TraderLlamaEntity {
 }
 
 impl Mob for TraderLlamaEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityLlamaStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -308,10 +320,6 @@ impl Mob for TraderLlamaEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

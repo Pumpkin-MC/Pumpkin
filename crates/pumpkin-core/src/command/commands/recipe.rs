@@ -1,6 +1,6 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::entity::EntityArgumentType;
-use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::registry_id::RegistryIdArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -25,29 +25,16 @@ static ERROR_RECIPE_NOT_FOUND: CommandErrorType<1> =
     CommandErrorType::new(translation::java::RECIPE_NOTFOUND, "Unknown recipe: %s");
 
 fn get_recipe_id(recipe: &DynamicRecipe) -> String {
-    match recipe {
-        DynamicRecipe::Crafting(crafting) => match crafting {
-            pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped {
-                recipe_id,
-                result,
-                ..
-            }
-            | pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless {
-                recipe_id,
-                result,
-                ..
-            } => recipe_id.clone().unwrap_or_else(|| result.item_id.clone()),
+    recipe.recipe_id().map_or_else(
+        || match recipe {
+            DynamicRecipe::Crafting(
+                pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped { result, .. }
+                | pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless { result, .. },
+            ) => result.item_id.clone(),
+            _ => String::new(),
         },
-        DynamicRecipe::Cooking(cooking) => match cooking {
-            pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Smelting(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Blasting(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Smoking(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::CampfireCooking(r) => {
-                r.recipe_id.clone()
-            }
-        },
-        DynamicRecipe::Brewing(brewing) => brewing.recipe_id.clone(),
-    }
+        str::to_string,
+    )
 }
 
 struct RecipeSuggestionProvider;
@@ -172,14 +159,19 @@ impl CommandExecutor for RecipeTakeExecutor {
 
         let dynamic_recipe_offset = crafting_display_count + RECIPES_COOKING.len();
 
+        let displayable_recipes: Vec<_> = all_recipes
+            .iter()
+            .filter(|r| matches!(r, DynamicRecipe::Crafting(_) | DynamicRecipe::Cooking(_)))
+            .collect();
+
         let is_all = recipe_str == "*";
 
         let recipe_ids_to_remove: Vec<VarInt> = if is_all {
-            (0..(dynamic_recipe_offset + all_recipes.len()))
+            (0..(dynamic_recipe_offset + displayable_recipes.len()))
                 .map(|id| VarInt(id as i32))
                 .collect()
         } else {
-            all_recipes
+            displayable_recipes
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, r)| {
@@ -245,9 +237,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 argument("targets", EntityArgumentType::Players)
                     .then(literal("*").executes(RecipeGiveExecutor { all: true }))
                     .then(
-                        argument("recipe", IdentifierArgumentType)
-                            .suggests(RecipeSuggestionProvider)
-                            .executes(RecipeGiveExecutor { all: false }),
+                        argument(
+                            "recipe",
+                            RegistryIdArgumentType::resource_key(Identifier::vanilla_static(
+                                "recipe",
+                            )),
+                        )
+                        .suggests(RecipeSuggestionProvider)
+                        .executes(RecipeGiveExecutor { all: false }),
                     ),
             ),
         )
@@ -256,9 +253,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 argument("targets", EntityArgumentType::Players)
                     .then(literal("*").executes(RecipeTakeExecutor { all: true }))
                     .then(
-                        argument("recipe", IdentifierArgumentType)
-                            .suggests(RecipeSuggestionProvider)
-                            .executes(RecipeTakeExecutor { all: false }),
+                        argument(
+                            "recipe",
+                            RegistryIdArgumentType::resource_key(Identifier::vanilla_static(
+                                "recipe",
+                            )),
+                        )
+                        .suggests(RecipeSuggestionProvider)
+                        .executes(RecipeTakeExecutor { all: false }),
                     ),
             ),
         );

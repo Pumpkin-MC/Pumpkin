@@ -8,12 +8,14 @@ use pumpkin_util::Difficulty;
 
 use crate::entity::{
     Entity,
+    ai::behavior::fleeing::{self, Flee},
+    ai::behavior::hunting::{self, Hunt},
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        bow_attack::BowAttackGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity, equipment::RegionalDifficulty},
 };
 use crate::world::World;
@@ -25,12 +27,31 @@ pub mod skeleton;
 pub mod stray;
 pub mod wither;
 
+const SKELETON_FLEES: &[Flee] = &[Flee::new(
+    3,
+    TargetMatch::Type(&EntityType::WOLF),
+    6.0,
+    1.0,
+    1.2,
+)];
+
+const SKELETON_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+    hunting::baby_turtles(3, true),
+];
+
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
 }
 
 impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
+        Self::with_hunts(entity, &[])
+    }
+
+    /// `extra` goes first, like vanilla subclasses adding targets before `super`.
+    pub fn with_hunts(entity: Entity, extra: &[Hunt]) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -39,36 +60,32 @@ impl SkeletonEntityBase {
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
-            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.2, false)));
+            // TODO: RestrictSunGoal(2) and FleeSunGoal(3), once both match vanilla.
+            fleeing::apply(goal_selector, SKELETON_FLEES);
+            // Vanilla `reassessWeaponGoal`: the bow or the melee goal at 4, by the held weapon.
+            // TODO: attack interval per type and difficulty (vanilla 40, 20 on hard; bogged and parched 70, 50 on hard).
+            goal_selector.add_goal(4, Box::new(BowAttackGoal::new(1.0, 20, 15.0)));
             goal_selector.add_goal(
-                3,
-                Box::new(AvoidEntityGoal::new(&EntityType::WOLF, 6.0, 1.0, 1.2)),
+                4,
+                Box::new(
+                    MeleeAttackGoal::new(1.2, false)
+                        .gated_by(|mob| !BowAttackGoal::is_holding_bow(mob)),
+                ),
             );
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
-                8,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, extra);
+            hunting::apply(target_selector, &mob_arc.mob_entity, SKELETON_HUNTS);
         };
 
         mob_arc

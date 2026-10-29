@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
 
 const SEARCH_RADIUS: f64 = 8.0;
@@ -30,37 +31,37 @@ impl FollowParentGoal {
         let mob_entity = mob.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
         let pos = entity.pos.load();
-        let my_type = entity.entity_type;
         let world = entity.world.load();
+        let area = SearchArea::from_feet(entity, SEARCH_RADIUS, SEARCH_Y_RANGE);
 
-        let nearby = world.get_nearby_entities(pos, SEARCH_RADIUS);
-        let mut closest: Option<(f64, Arc<dyn EntityBase>)> = None;
-
-        for candidate in nearby.values() {
-            let c_entity = candidate.get_entity();
-            if c_entity.entity_type != my_type {
-                continue;
-            }
-            if c_entity.age.load(Relaxed) < 0 {
-                continue;
-            }
-            let c_pos = c_entity.pos.load();
-            if (pos.y - c_pos.y).abs() > SEARCH_Y_RANGE {
-                continue;
-            }
-            let dist_sq = pos.squared_distance_to_vec(&c_pos);
-            if closest.as_ref().is_none_or(|(d, _)| dist_sq <= *d) {
-                closest = Some((dist_sq, candidate.clone()));
-            }
-        }
+        let parent =
+            TargetMatch::Type(entity.entity_type).find_nearest(&world, &area, |candidate| {
+                candidate.get_entity().age.load(Relaxed) >= 0
+            })?;
 
         // The minimum distance applies to the closest parent only: a nearby parent means "do not
         // follow", not "follow a farther one".
-        closest.and_then(|(dist_sq, parent)| (dist_sq >= MIN_DISTANCE_SQ).then_some(parent))
+        let dist_sq = pos.squared_distance_to_vec(&parent.get_entity().pos.load());
+        (dist_sq >= MIN_DISTANCE_SQ).then_some(parent)
     }
 }
 
 impl Goal for FollowParentGoal {
+    fn tick_reach(&self, mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        let baby = mob.get_mob_entity().living_entity.entity.age.load(Relaxed) < 0;
+        Some(GoalReach {
+            // Adults bail out before searching.
+            entities: if baby { SEARCH_RADIUS } else { 0.0 },
+            speed: if baby { self.speed } else { 0.0 },
+            links: self
+                .parent
+                .iter()
+                .map(|parent| parent.get_entity().entity_id)
+                .collect(),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let age = mob.get_mob_entity().living_entity.entity.age.load(Relaxed);
         if age >= 0 {
@@ -101,11 +102,8 @@ impl Goal for FollowParentGoal {
         if let Some(parent) = &self.parent {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let parent_pos = parent.get_entity().pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(mob_pos, parent_pos, self.speed));
         }
     }

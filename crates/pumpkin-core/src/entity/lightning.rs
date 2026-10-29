@@ -262,6 +262,28 @@ impl EntityBase for LightningBoltEntity {
                     let hit_id = hit_entity.get_entity().entity_id;
                     if hit_guard.insert(hit_id) {
                         hit_entity.on_lightning_strike(hit_entity.as_ref(), self);
+                        if let Some(player) = self.get_cause() {
+                            let type_name = format!(
+                                "minecraft:{}",
+                                hit_entity.get_entity().entity_type.resource_name
+                            );
+                            player.trigger_advancement(
+                                crate::entity::player::advancement::trigger::AdvancementTrigger::ChanneledLightning {
+                                    victim_type: type_name.clone(),
+                                },
+                            );
+                            let distance = (player
+                                .position()
+                                .squared_distance_to_vec(&self.entity.pos.load()))
+                            .sqrt();
+                            player.trigger_advancement(
+                                crate::entity::player::advancement::trigger::AdvancementTrigger::LightningStrike {
+                                    bystander_type: Some(type_name),
+                                    blocks_set_on_fire: self.blocks_set_on_fire.load(Ordering::Relaxed),
+                                    distance,
+                                },
+                            );
+                        }
                     }
                 }
             }
