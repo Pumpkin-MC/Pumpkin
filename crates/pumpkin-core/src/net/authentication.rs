@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::GameProfile;
 
+/// Decoded contents of a player's `textures` profile property.
 #[derive(Deserialize, Clone, Debug)]
 #[expect(dead_code)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +27,7 @@ pub struct ProfileTextures {
     textures: HashMap<String, Texture>,
 }
 
+/// One texture entry, such as `SKIN` or `CAPE`, inside a `textures` property.
 #[derive(Deserialize, Clone, Debug)]
 #[expect(dead_code)]
 pub struct Texture {
@@ -33,11 +35,14 @@ pub struct Texture {
     metadata: Option<HashMap<String, String>>,
 }
 
+/// A single public key as published by an authentication service.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonPublicKey {
     pub public_key: String,
 }
+
+/// Response of an authentication service's public key endpoint.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MojangPublicKeys {
@@ -54,6 +59,7 @@ const MOJANG_PROFILE_BY_NAME_URL: &str =
 const MOJANG_PROFILE_BY_UUID_URL: &str =
     "https://sessionserver.mojang.com/session/minecraft/profile/{uuid}?unsigned=false";
 
+/// Creates an HTTP client using the configured authentication timeouts.
 fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
     pumpkin_auth::client_builder()
         .connect_timeout(std::time::Duration::from_millis(
@@ -66,6 +72,7 @@ fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
         .unwrap_or_default()
 }
 
+/// Fills the `{username}`, `{server_hash}` and `{ip}` placeholders of an auth URL template.
 fn format_auth_url(url_template: &str, username: &str, server_hash: &str, ip: &IpAddr) -> String {
     url_template
         .replace("{username}", username)
@@ -160,6 +167,7 @@ pub async fn authenticate(
     }
 }
 
+/// Checks that a `textures` property decodes and only points at allowed texture URLs.
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
     let from64 = general_purpose::STANDARD
         .decode(property.value.as_bytes())
@@ -201,6 +209,7 @@ pub fn retain_valid_textures(profile: &mut GameProfile, config: &TextureConfig) 
     }
 }
 
+/// Checks a texture URL against the configured schemes and domains.
 pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), TextureError> {
     let scheme = url.scheme();
     if !config
@@ -223,6 +232,7 @@ pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), Tex
     Ok(())
 }
 
+/// Fetches the player certificate keys a services endpoint publishes.
 pub async fn fetch_mojang_public_keys(
     auth_config: &AuthenticationConfig,
 ) -> Result<Vec<RsaPublicKey>, AuthError> {
@@ -269,6 +279,7 @@ struct MojangProfileByNameResponse {
     name: String,
 }
 
+/// Looks a player up by username and returns their UUID and current name.
 pub async fn lookup_profile_by_name(
     name: &str,
     auth_config: &AuthenticationConfig,
@@ -339,6 +350,7 @@ pub async fn lookup_profile_by_name(
     }
 }
 
+/// Runs `lookup_profile_by_name` from synchronous code.
 pub fn lookup_profile_by_name_blocking(
     name: &str,
     auth_config: &AuthenticationConfig,
@@ -356,6 +368,7 @@ pub fn lookup_profile_by_name_blocking(
     }
 }
 
+/// Fetches a full profile, including its properties, for a UUID.
 pub async fn fetch_profile_by_uuid(
     uuid: Uuid,
     auth_config: &AuthenticationConfig,
@@ -422,6 +435,7 @@ pub async fn fetch_profile_by_uuid(
     }
 }
 
+/// Reasons an online mode login can be rejected.
 #[derive(Error, Debug)]
 pub enum AuthError {
     #[error("Authentication servers are down")]
@@ -438,6 +452,7 @@ pub enum AuthError {
     UnknownStatusCode(StatusCode),
 }
 
+/// Reasons a `textures` property is rejected.
 #[derive(Error, Debug)]
 pub enum TextureError {
     #[error("Invalid URL")]
