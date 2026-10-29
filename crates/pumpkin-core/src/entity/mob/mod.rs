@@ -18,11 +18,13 @@ use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crate::world::entity_islands::{self, AuditedReach};
+use crate::world::game_event::notified_area;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -1009,6 +1011,12 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+fn has_game_event_listener(mob: &dyn Mob) -> bool {
+    let mut listens = false;
+    mob.for_each_game_event_listener(&mut |_| listens = true);
+    listens
+}
+
 impl MobEntity {
     /// What this mob can touch next tick, if its species and goals are audited.
     pub fn audited_reach(&self, mob: &dyn Mob) -> Option<AuditedReach> {
@@ -1084,6 +1092,29 @@ impl MobEntity {
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
+        if mob.movement_emission().emits_events() {
+            // Step, swim and flap events reach listeners around wherever the mob ends up.
+            let moved = entity
+                .bounding_box
+                .load()
+                .expand(horizontal, vertical, horizontal);
+            let radius = [GameEvent::Step, GameEvent::Swim, GameEvent::Flap]
+                .into_iter()
+                .map(GameEvent::notification_radius)
+                .max()
+                .unwrap_or(0);
+            let area = BoundingBox::new(
+                notified_area(moved.min, radius).min,
+                notified_area(moved.max, radius).max,
+            );
+            links.extend(
+                world
+                    .entity_index
+                    .query(world.entities.load_full(), area)
+                    .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+                    .map(|other| other.get_entity().entity_id),
+            );
+        }
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (horizontal, vertical),

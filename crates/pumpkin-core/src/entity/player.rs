@@ -7048,6 +7048,10 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn sound_source(&self) -> SoundCategory {
+        SoundCategory::Players
+    }
+
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
