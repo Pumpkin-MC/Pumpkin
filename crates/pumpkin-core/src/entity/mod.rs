@@ -653,6 +653,19 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
+    /// Vanilla `LivingEntity.getFallSounds`: the small and big fall damage sounds.
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        let entity_type = self.get_entity().entity_type;
+        (
+            entity_type
+                .small_fall_sound
+                .unwrap_or(Sound::EntityGenericSmallFall),
+            entity_type
+                .big_fall_sound
+                .unwrap_or(Sound::EntityGenericBigFall),
+        )
+    }
+
     /// Vanilla `isFlapping`: whether moving through the air plays `on_flap` and emits `FLAP`.
     fn is_flapping(&self) -> bool {
         false
@@ -1501,6 +1514,7 @@ impl Entity {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn from_uuid_with_id(
         entity_id: i32,
         entity_uuid: uuid::Uuid,

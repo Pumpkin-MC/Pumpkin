@@ -3321,9 +3321,7 @@ impl Player {
     fn handle_fall_flying_collision(&self, last_speed: f64, new_speed: f64) {
         let damage = (last_speed - new_speed).mul_add(10.0, -3.0) as f32;
         if damage > 0.0 {
-            self.living_entity
-                .entity
-                .play_sound(self.living_entity.fall_sound(damage as i32));
+            self.play_entity_sound(LivingEntity::get_fall_damage_sound(self, damage), 1.0, 1.0);
             self.living_entity
                 .damage(self, damage, DamageType::FLY_INTO_WALL);
         }
@@ -7255,6 +7253,10 @@ impl EntityBase for Player {
 
     fn get_swim_sound(&self) -> Option<Sound> {
         Some(Sound::EntityPlayerSwim)
+    }
+
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        (Sound::EntityPlayerSmallFall, Sound::EntityPlayerBigFall)
     }
 
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {

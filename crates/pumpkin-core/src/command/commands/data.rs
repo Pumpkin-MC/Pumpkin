@@ -484,20 +484,17 @@ impl TargetKind {
     ) -> Result<Box<dyn DataAccessor>, CommandSyntaxError> {
         match self {
             Self::Entity => {
-                let entity = EntityArgumentType::get_entity(context, &format!("{prefix}_target"))?;
+                let entity = EntityArgumentType::get_entity(context, prefix)?;
                 Ok(Box::new(EntityDataAccessor::new(entity)))
             }
             Self::Block => {
-                let pos =
-                    BlockPosArgumentType::get_block_pos(context, &format!("{prefix}_target"))?;
+                let pos = BlockPosArgumentType::get_block_pos(context, prefix)?;
                 let world = context.world().clone();
                 let accessor = BlockDataAccessor::new(pos, world)?;
                 Ok(Box::new(accessor))
             }
             Self::Storage => {
-                let id = context.get_argument::<pumpkin_util::identifier::Identifier>(&format!(
-                    "{prefix}_target"
-                ))?;
+                let id = context.get_argument::<pumpkin_util::identifier::Identifier>(prefix)?;
                 let server = context.server().clone();
                 Ok(Box::new(StorageDataAccessor::new(id.to_string(), server)))
             }
@@ -843,7 +840,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     for &(target_kind, name) in &all_target_kinds {
         // data merge <target> <nbt>
         merge_node = merge_node.then(literal(name).then(
-            make_target_arg(target_kind, "target_target").then(
+            make_target_arg(target_kind, "target").then(
                 argument("nbt", NbtCompoundArgumentType).executes(MergeExecutor { target_kind }),
             ),
         ));
@@ -851,7 +848,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         // data get <target> [<path>] [<scale>]
         get_node = get_node.then(
             literal(name).then(
-                make_target_arg(target_kind, "target_target")
+                make_target_arg(target_kind, "target")
                     .executes(GetExecutor {
                         target_kind,
                         has_path: false,
@@ -877,7 +874,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
         // data remove <target> <path>
         remove_node = remove_node.then(literal(name).then(
-            make_target_arg(target_kind, "target_target").then(
+            make_target_arg(target_kind, "target").then(
                 argument("path", NbtPathArgumentType).executes(RemoveExecutor { target_kind }),
             ),
         ));
@@ -920,7 +917,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 mod_node = mod_node.then(
                     literal("from").then(
                         literal(source_name).then(
-                            make_target_arg(source_kind, "source_target")
+                            make_target_arg(source_kind, "source")
                                 .executes(ModifyExecutor {
                                     target_kind,
                                     modify_mode: mod_mode,
@@ -943,7 +940,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 mod_node = mod_node.then(
                     literal("string").then(
                         literal(source_name).then(
-                            make_target_arg(source_kind, "source_target")
+                            make_target_arg(source_kind, "source")
                                 .executes(ModifyExecutor {
                                     target_kind,
                                     modify_mode: mod_mode,
@@ -1002,8 +999,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         }
 
         modify_node = modify_node.then(
-            literal(target_name)
-                .then(make_target_arg(target_kind, "target_target").then(target_path_arg)),
+            literal(target_name).then(make_target_arg(target_kind, "target").then(target_path_arg)),
         );
     }
     data_cmd = data_cmd.then(modify_node);

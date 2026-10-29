@@ -60,6 +60,7 @@ impl CommandExecutor for GiveExecutor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count.min(99)),
+                            components: None,
                         }),
                     targets[0].as_ref().get_display_name(),
                 ],
@@ -76,6 +77,7 @@ impl CommandExecutor for GiveExecutor {
                         .hover_event(HoverEvent::ShowItem {
                             id: item_name.to_string().into(),
                             count: Some(item_count.min(99)),
+                            components: None,
                         }),
                     TextComponent::text(targets.len().to_string()),
                 ],
