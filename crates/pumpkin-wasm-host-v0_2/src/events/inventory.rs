@@ -2,7 +2,7 @@ use crate::{
     events::{ToFromWasmEvent, consume_player, from_wasm_block_position, to_wasm_block_position},
     pumpkin::plugin::event::{
         BrewEvent as BrewEventData, BrewingStandFuelEvent as BrewingStandFuelEventData,
-        CraftItemEvent as CraftItemEventData, Event, FurnaceBurnEvent as FurnaceBurnEventData,
+        CraftItemEvent as CraftItemEventData, FurnaceBurnEvent as FurnaceBurnEventData,
         FurnaceExtractEvent as FurnaceExtractEventData, FurnaceSmeltEvent as FurnaceSmeltEventData,
         FurnaceStartSmeltEvent as FurnaceStartSmeltEventData,
         HopperInventorySearchEvent as HopperInventorySearchEventData,
@@ -115,12 +115,6 @@ impl ToFromWasmEvent for FurnaceSmeltEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.source_item = data.source_item;
-        self.result_item = data.result_item;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             block_pos: from_wasm_block_position(data.block_pos),
@@ -140,11 +134,6 @@ impl ToFromWasmEvent for BrewEvent {
             fuel_level: self.fuel_level,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.fuel_level = data.fuel_level;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -167,11 +156,6 @@ impl ToFromWasmEvent for BrewingStandFuelEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.fuel_power = data.fuel_power;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             block_pos: from_wasm_block_position(data.block_pos),
@@ -191,12 +175,6 @@ impl ToFromWasmEvent for FurnaceBurnEvent {
             burn_time: self.burn_time,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.fuel_item = data.fuel_item;
-        self.burn_time = data.burn_time;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -249,12 +227,6 @@ impl ToFromWasmEvent for FurnaceStartSmeltEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.source_item = data.source_item;
-        self.cooking_time = data.cooking_time;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             block_pos: from_wasm_block_position(data.block_pos),
@@ -274,10 +246,6 @@ impl ToFromWasmEvent for HopperInventorySearchEvent {
             search_pos: to_wasm_block_position(self.search_pos),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -306,13 +274,6 @@ impl ToFromWasmEvent for InventoryCreativeEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.slot = data.slot;
-        self.item_id = data.item_id;
-        self.item_count = data.item_count;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -338,10 +299,6 @@ impl ToFromWasmEvent for InventoryInteractEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -361,11 +318,6 @@ impl ToFromWasmEvent for InventoryMoveItemEvent {
             item_amount: self.item_amount,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.item_amount = data.item_amount;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -389,10 +341,6 @@ impl ToFromWasmEvent for InventoryPickupItemEvent {
             item_id: self.item_id.clone(),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -488,10 +436,6 @@ impl ToFromWasmEvent for PrepareItemCraftEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -538,10 +482,6 @@ impl ToFromWasmEvent for SmithItemEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             player: consume_player(state, &data.player),
@@ -564,11 +504,6 @@ impl ToFromWasmEvent for TradeSelectEvent {
             slot_index: self.slot_index,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.slot_index = data.slot_index;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {

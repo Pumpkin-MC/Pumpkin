@@ -61,7 +61,13 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     data: E::Wit,
 ) -> wasmtime::Result<Result<(), ()>> {
     let mut handle = {
-        let orig = state.get(&event)?;
+        let orig = match state.get(&event) {
+            Ok(orig) => orig,
+            Err(err) => {
+                data.cleanup_event(state);
+                return Err(err);
+            }
+        };
 
         EventHandle {
             data: orig.data,
@@ -70,6 +76,7 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     };
 
     let Ok(event_inner) = handle.get_mut::<E>() else {
+        data.cleanup_event(state);
         return Ok(Err(()));
     };
 
@@ -1474,7 +1481,7 @@ pub struct WasmPluginEventHandler {
 }
 
 pub trait ToFromWasmEvent {
-    type Wit;
+    type Wit: CleanupEvent;
 
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit;
 

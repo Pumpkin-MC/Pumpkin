@@ -1,7 +1,7 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, from_wasm_block_position, to_wasm_block_position},
+    events::{CleanupEvent, ToFromWasmEvent, from_wasm_block_position, to_wasm_block_position},
     pumpkin::plugin::event::{
-        Event, VehicleBlockCollisionEvent as VehicleBlockCollisionEventData,
+        VehicleBlockCollisionEvent as VehicleBlockCollisionEventData,
         VehicleCollisionEvent as VehicleCollisionEventData,
         VehicleCreateEvent as VehicleCreateEventData, VehicleDamageEvent as VehicleDamageEventData,
         VehicleDestroyEvent as VehicleDestroyEventData, VehicleEnterEvent as VehicleEnterEventData,
@@ -39,7 +39,8 @@ impl ToFromWasmEvent for VehicleBlockCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.block_pos = from_wasm_block_position(data.block_pos);
         self.cancelled = data.cancelled;
     }
@@ -62,7 +63,8 @@ impl ToFromWasmEvent for VehicleCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }
@@ -84,7 +86,8 @@ impl ToFromWasmEvent for VehicleCreateEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }
@@ -110,7 +113,8 @@ impl ToFromWasmEvent for VehicleDamageEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.damage = data.damage;
         self.attacker_id = data.attacker_id;
         self.cancelled = data.cancelled;
@@ -136,7 +140,8 @@ impl ToFromWasmEvent for VehicleDestroyEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.attacker_id = data.attacker_id;
         self.cancelled = data.cancelled;
     }
@@ -161,7 +166,8 @@ impl ToFromWasmEvent for VehicleEnterEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }
@@ -185,7 +191,8 @@ impl ToFromWasmEvent for VehicleEntityCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }
@@ -209,7 +216,8 @@ impl ToFromWasmEvent for VehicleExitEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }
@@ -239,7 +247,8 @@ impl ToFromWasmEvent for VehicleMoveEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.from = Vector3::new(
             data.from_position.0,
             data.from_position.1,
@@ -267,7 +276,8 @@ impl ToFromWasmEvent for VehicleUpdateEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.cancelled = data.cancelled;
     }
 }

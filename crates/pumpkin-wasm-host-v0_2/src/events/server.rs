@@ -1,8 +1,8 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, consume_text_component},
+    events::{CleanupEvent, ToFromWasmEvent, consume_text_component},
     generated_packets,
     pumpkin::plugin::event::{
-        ClientboundPacket, Event, MapInitializeEvent as MapInitializeEventData,
+        ClientboundPacket, MapInitializeEvent as MapInitializeEventData,
         PacketReceivedEvent as PacketReceivedEventData, PacketSentEvent as PacketSentEventData,
         ServerBroadcastEvent as ServerBroadcastEventData,
         ServerCommandEvent as ServerCommandEventData, ServerListPingAddress,
@@ -57,7 +57,8 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.packet_id = data.packet_id;
         self.payload = data.raw_payload.into();
         self.cancelled = data.cancelled;
@@ -96,7 +97,8 @@ impl ToFromWasmEvent for PacketSentEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
         self.packet_id = data.packet_id;
         self.payload = data.raw_payload.into();
         self.cancelled = data.cancelled;
@@ -115,11 +117,6 @@ impl ToFromWasmEvent for ServerCommandEvent {
             command: self.command.clone(),
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.command = data.command;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -146,12 +143,6 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
             sender,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.message = consume_text_component(state, &data.message);
-        self.sender = consume_text_component(state, &data.sender);
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -184,14 +175,6 @@ impl ToFromWasmEvent for ServerListPingEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
-        let returned = Self::from_wasm_event(data, state);
-        self.motd = returned.motd;
-        self.max_players = returned.max_players;
-        self.num_players = returned.num_players;
-        self.favicon = returned.favicon;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             hostname: data.hostname,
@@ -205,6 +188,14 @@ impl ToFromWasmEvent for ServerListPingEvent {
             num_players: data.num_players,
             favicon: data.favicon,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        let returned = Self::from_wasm_event(data, state);
+        self.motd = returned.motd;
+        self.max_players = returned.max_players;
+        self.num_players = returned.num_players;
+        self.favicon = returned.favicon;
     }
 }
 
