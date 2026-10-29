@@ -287,6 +287,12 @@ impl MobEntity {
         self.position_target_range.load(Relaxed) != -1
     }
 
+    /// Vanilla `Mob.setHomeTo`: the centre and radius restriction goals keep the mob inside.
+    pub fn set_home_to(&self, center: BlockPos, radius: i32) {
+        self.position_target.store(center);
+        self.position_target_range.store(radius, Relaxed);
+    }
+
     pub fn is_in_position_target_range(&self) -> bool {
         self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }

@@ -180,6 +180,7 @@ pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
 pub mod scoreboard;
+pub mod wandering_trader_spawner;
 pub mod weather;
 
 pub use environment::EnvironmentAttributes;
@@ -261,6 +262,9 @@ pub struct World {
     pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
+    /// Vanilla `WanderingTraderSpawner`; only ticked in the overworld.
+    pub wandering_trader_spawner:
+        std::sync::Mutex<wandering_trader_spawner::WanderingTraderSpawner>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -391,6 +395,11 @@ impl World {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
 
+        let wandering_trader_spawner =
+            std::sync::Mutex::new(wandering_trader_spawner::WanderingTraderSpawner::new(
+                level.level_folder.dim_folder.join("data"),
+            ));
+
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -419,6 +428,7 @@ impl World {
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
+            wandering_trader_spawner,
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: RwLock::new(Arc::default()),
@@ -2217,6 +2227,14 @@ impl World {
                     chunk.inhabited_time.fetch_add(1, Relaxed);
                 }
             });
+
+        // Vanilla `ServerChunkCache.tickChunks` ticks custom spawners after the chunks.
+        if spawn_mobs && self.dimension == Dimension::OVERWORLD {
+            self.wandering_trader_spawner
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .tick(self);
+        }
     }
 
     pub fn contains_any_liquid(&self, bounding_box: BoundingBox) -> bool {
@@ -5398,7 +5416,7 @@ impl World {
                     .portal_poi
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if villager_poi::profession_for_block(old_block).is_some() {
+                if villager_poi::poi_type_for_block(old_block).is_some() {
                     poi.remove(position);
                 }
                 if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {

@@ -18,11 +18,10 @@ use crate::world_info::{
     DataPacks, MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldVersion,
     data_files::{
-        minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
-        read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
-        write_game_rules, write_random_sequences_stub, write_scheduled_events_stub,
-        write_scoreboard_stub, write_stopwatches_stub, write_wandering_trader, write_weather,
-        write_world_clocks, write_world_gen_settings,
+        minecraft_data_dir, read_game_rules, read_weather, read_world_clocks,
+        read_world_gen_settings, write_custom_boss_events_stub, write_game_rules,
+        write_random_sequences_stub, write_scheduled_events_stub, write_scoreboard_stub,
+        write_stopwatches_stub, write_weather, write_world_clocks, write_world_gen_settings,
     },
     default_data_packs,
 };
@@ -492,13 +491,6 @@ impl WorldInfoWriter for AnvilLevelInfo {
         weather.data_version = data_version;
         if let Err(e) = write_weather(level_folder, &weather) {
             error!("Failed to write weather.dat: {e}");
-        }
-
-        // wandering_trader.dat (stub / load-save)
-        let mut wandering_trader = read_wandering_trader(level_folder);
-        wandering_trader.data_version = data_version;
-        if let Err(e) = write_wandering_trader(level_folder, &wandering_trader) {
-            error!("Failed to write wandering_trader.dat: {e}");
         }
 
         // custom_boss_events.dat
@@ -1076,7 +1068,6 @@ mod test {
             "random_sequences.dat",
             "scoreboard.dat",
             "stopwatches.dat",
-            "wandering_trader.dat",
             "world_clocks.dat",
             "world_gen_settings.dat",
             "scheduled_events.dat",
@@ -1111,10 +1102,22 @@ mod test {
                 .total_ticks,
             24000
         );
+    }
 
-        // Verify wandering_trader.dat read
-        let loaded_wt = crate::world_info::data_files::read_wandering_trader(temp_dir.path());
-        assert_eq!(loaded_wt.spawn_delay, 24000);
-        assert_eq!(loaded_wt.spawn_chance, 25);
+    #[test]
+    fn wandering_trader_data_round_trips() {
+        let temp_dir = TempDir::new().unwrap();
+        let data = crate::world_info::data_files::WanderingTraderData {
+            spawn_delay: 22_800,
+            spawn_chance: 50,
+            data_version: 5023,
+        };
+
+        crate::world_info::data_files::write_wandering_trader(temp_dir.path(), &data).unwrap();
+
+        assert_eq!(
+            crate::world_info::data_files::read_wandering_trader(temp_dir.path()),
+            data
+        );
     }
 }
