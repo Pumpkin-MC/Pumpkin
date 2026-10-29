@@ -77,8 +77,17 @@ impl FallingEntity {
         }
     }
 
+    /// Vanilla `FallingBlockEntity.disableDrop`: land as nothing, neither block nor item.
+    pub fn disable_drop(&self) {
+        self.cancel_drop.store(true, Ordering::Relaxed);
+    }
+
     /// Replaced the current Block and Spawns a new Falling one (synchronous)
-    pub fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
+    pub fn replace_spawn(
+        world: &Arc<World>,
+        position: BlockPos,
+        block_state: BlockStateId,
+    ) -> Option<Arc<Self>> {
         let block = Block::from_state_id(block_state);
         // Vanilla copies the state with `WATERLOGGED` cleared onto the entity.
         // `None` means the state has no water to clear.
@@ -101,14 +110,16 @@ impl FallingEntity {
                 Block::from_state_id(leftover).to_resource_location(),
             )
         }) {
-            return;
+            return None;
         }
 
         world.set_block_state(&position, leftover, BlockFlags::NOTIFY_ALL);
         entity
             .data
             .store(i32::from(falling_state.as_u16()), Ordering::Relaxed);
-        world.spawn_entity_non_save(Arc::new(Self::new(entity, falling_state)));
+        let falling = Arc::new(Self::new(entity, falling_state));
+        world.spawn_entity_non_save(falling.clone());
+        Some(falling)
     }
 
     /// Vanilla merges `TileEntityData` over the landed block's block entity.
