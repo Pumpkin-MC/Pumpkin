@@ -2604,9 +2604,26 @@ impl Entity {
         if self.is_removed() {
             return;
         }
+        self.emit_movement(caller, final_move, &effect_pos, effect_state);
+    }
+
+    /// The emission part of vanilla `Entity.move` for movement the client already resolved,
+    /// which is how players move.
+    pub fn emit_client_movement(&self, caller: &dyn EntityBase, movement: Vector3<f64>) {
+        let (effect_pos, _, effect_state) = self.get_block_with_y_offset(0.2);
+        self.emit_movement(caller, movement, &effect_pos, effect_state);
+    }
+
+    fn emit_movement(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+        effect_pos: &BlockPos,
+        effect_state: &'static BlockState,
+    ) {
         let emission = caller.movement_emission();
         if emission.emits_anything() && !caller.is_passenger() {
-            self.apply_movement_emission(caller, emission, final_move, &effect_pos, effect_state);
+            self.apply_movement_emission(caller, emission, movement, effect_pos, effect_state);
         }
     }
 
@@ -2740,8 +2757,21 @@ impl Entity {
             .store(tick_count, Ordering::Relaxed);
     }
 
+    /// Vanilla `getPrimaryStepSoundBlockPos`: the block above when it sounds from inside, like snow.
+    pub fn get_primary_step_sound_block_pos(&self, affecting_pos: &BlockPos) -> BlockPos {
+        let above_pos = affecting_pos.up();
+        let above = self.world.load().get_block_state(&above_pos).id.to_block();
+        if above.has_tag(&tag::Block::MINECRAFT_INSIDE_STEP_SOUND_BLOCKS)
+            || above.has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            above_pos
+        } else {
+            *affecting_pos
+        }
+    }
+
     /// Vanilla `waterSwimSound`: louder the faster the entity, or its controlling rider, swims.
-    fn water_swim_sound(&self, caller: &dyn EntityBase) {
+    pub fn water_swim_sound(&self, caller: &dyn EntityBase) {
         let rider = caller.get_controlling_passenger();
         let (velocity, volume_modifier) = rider.as_ref().map_or_else(
             || (self.velocity.load(), 0.35),
