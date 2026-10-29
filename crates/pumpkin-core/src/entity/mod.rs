@@ -572,6 +572,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Vanilla `playStepSound`.
     fn play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        self.play_block_step_sound(state);
+    }
+
+    /// The base `Entity.playStepSound`: the step sound of the block walked on.
+    fn play_block_step_sound(&self, state: &BlockState) {
         let sound_type = state.get_sound_type();
         self.play_entity_sound(
             sound_type.step_sound,
@@ -587,6 +592,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Vanilla `playSwimSound`.
     fn play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume);
+    }
+
+    /// The base `Entity.playSwimSound`.
+    fn play_default_swim_sound(&self, volume: f32) {
         if let Some(sound) = self.get_swim_sound() {
             let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
             self.play_entity_sound(sound, volume, pitch);

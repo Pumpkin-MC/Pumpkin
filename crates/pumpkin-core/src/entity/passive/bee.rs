@@ -3,11 +3,13 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -245,6 +247,9 @@ impl LookControlTrait for BeeLookControl {
 }
 
 impl Mob for BeeEntity {
+    /// Vanilla `Bee` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn omnidirectional_air_mover(&self) -> bool {
         true
     }

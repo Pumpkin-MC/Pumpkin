@@ -27,9 +27,10 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -1320,6 +1321,26 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// See [`EntityBase::sound_source`].
+    fn mob_sound_source(&self) -> SoundCategory {
+        self.get_entity().entity_type.sound_source
+    }
+
+    /// See [`EntityBase::play_step_sound`].
+    fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        self.play_block_step_sound(state);
+    }
+
+    /// See [`EntityBase::get_swim_sound`].
+    fn mob_get_swim_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_sound
+    }
+
+    /// See [`EntityBase::play_swim_sound`].
+    fn mob_play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume);
+    }
+
     fn before_mob_ai_step(&self) {}
 
     fn mob_ai_step(&self) {}
@@ -1919,6 +1940,22 @@ pub trait Mob: EntityBase + Send + Sync {
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_pushed_by_fluids(&self) -> bool {
         self.mob_is_pushed_by_fluids()
+    }
+
+    fn sound_source(&self) -> SoundCategory {
+        self.mob_sound_source()
+    }
+
+    fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        self.mob_play_step_sound(pos, state);
+    }
+
+    fn get_swim_sound(&self) -> Option<Sound> {
+        self.mob_get_swim_sound()
+    }
+
+    fn play_swim_sound(&self, volume: f32) {
+        self.mob_play_swim_sound(volume);
     }
 
     fn get_mob(&self) -> Option<&dyn Mob> {

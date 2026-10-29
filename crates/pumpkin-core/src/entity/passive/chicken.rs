@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::chicken_sound_variant::ChickenSoundVariant;
 use pumpkin_data::chicken_variant::ChickenVariant;
 use pumpkin_data::game_event::GameEvent;
@@ -11,6 +12,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::ai::pathfinder::node::PathType;
@@ -200,6 +202,13 @@ impl Animal for ChickenEntity {
 }
 
 impl Mob for ChickenEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,

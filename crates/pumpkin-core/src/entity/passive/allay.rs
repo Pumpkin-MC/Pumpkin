@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EquipmentSlot, PotionContentsImpl};
 use pumpkin_data::entity::{EntityStatus, EntityType};
@@ -435,6 +436,9 @@ impl CustomSound for AllayEntity {
 }
 
 impl Mob for AllayEntity {
+    /// Vanilla `Allay` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
