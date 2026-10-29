@@ -79,12 +79,11 @@ impl RabbitVariant {
 }
 
 const RABBIT_FLEES: &[Flee] = &[
-    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 8.0, 2.2, 2.2),
-    Flee::new(4, TargetMatch::Type(&EntityType::WOLF), 10.0, 2.2, 2.2),
-    Flee::new(4, TargetMatch::Monster, 4.0, 2.2, 2.2),
+    Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 8.0, 2.2, 2.2).when(is_not_evil),
+    Flee::new(4, TargetMatch::Type(&EntityType::WOLF), 10.0, 2.2, 2.2).when(is_not_evil),
+    Flee::new(4, TargetMatch::Monster, 4.0, 2.2, 2.2).when(is_not_evil),
 ];
 
-#[expect(dead_code, reason = "disabled until rabbits hop")]
 fn is_not_evil(mob: &dyn Mob) -> bool {
     mob.cast_any()
         .downcast_ref::<RabbitEntity>()
@@ -152,12 +151,11 @@ impl RabbitEntity {
             VarInt(variant.id()),
         );
 
-        // TODO: call `add_killer_bunny_goals` for `Evil` once rabbits hop
-        // (vanilla RabbitMoveControl/RabbitJumpControl, jump power, hop event 1).
-        // so it acts like other rabbits for now.
+        if variant == RabbitVariant::Evil {
+            self.add_killer_bunny_goals();
+        }
     }
 
-    #[expect(dead_code, reason = "disabled until rabbits hop")]
     fn add_killer_bunny_goals(&self) {
         let goal_selector = &self.mob_entity.goals_selector;
         goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.4, true)));
