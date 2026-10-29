@@ -1020,6 +1020,43 @@ fn has_game_event_listener(mob: &dyn Mob) -> bool {
     listens
 }
 
+/// Links the listener mobs that an entity's game events can reach from anywhere in `moved`:
+/// the splash of entering water, plus step, swim and flap when its movement emits events.
+pub(crate) fn game_event_listener_links(
+    world: &World,
+    emits_movement_events: bool,
+    moved: &BoundingBox,
+    links: &mut Vec<i32>,
+) {
+    let emitted: &[GameEvent] = if emits_movement_events {
+        &[
+            GameEvent::Splash,
+            GameEvent::Step,
+            GameEvent::Swim,
+            GameEvent::Flap,
+        ]
+    } else {
+        &[GameEvent::Splash]
+    };
+    let radius = emitted
+        .iter()
+        .copied()
+        .map(GameEvent::notification_radius)
+        .max()
+        .unwrap_or(0);
+    let area = BoundingBox::new(
+        notified_area(moved.min, radius).min,
+        notified_area(moved.max, radius).max,
+    );
+    links.extend(
+        world
+            .entity_index
+            .query(world.entities.load_full(), area)
+            .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+            .map(|other| other.get_entity().entity_id),
+    );
+}
+
 impl MobEntity {
     /// What this mob can touch next tick, if its species and goals are audited.
     pub fn audited_reach(&self, mob: &dyn Mob) -> Option<AuditedReach> {
@@ -1095,29 +1132,16 @@ impl MobEntity {
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
-        if mob.movement_emission().emits_events() {
-            // Step, swim and flap events reach listeners around wherever the mob ends up.
-            let moved = entity
-                .bounding_box
-                .load()
-                .expand(horizontal, vertical, horizontal);
-            let radius = [GameEvent::Step, GameEvent::Swim, GameEvent::Flap]
-                .into_iter()
-                .map(GameEvent::notification_radius)
-                .max()
-                .unwrap_or(0);
-            let area = BoundingBox::new(
-                notified_area(moved.min, radius).min,
-                notified_area(moved.max, radius).max,
-            );
-            links.extend(
-                world
-                    .entity_index
-                    .query(world.entities.load_full(), area)
-                    .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
-                    .map(|other| other.get_entity().entity_id),
-            );
-        }
+        let moved = entity
+            .bounding_box
+            .load()
+            .expand(horizontal, vertical, horizontal);
+        game_event_listener_links(
+            &world,
+            mob.movement_emission().emits_events(),
+            &moved,
+            &mut links,
+        );
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (horizontal, vertical),

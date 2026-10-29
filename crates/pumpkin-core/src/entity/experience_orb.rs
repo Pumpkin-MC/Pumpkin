@@ -197,6 +197,9 @@ fn closest_free_center(
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    /// Vanilla `ExperienceOrb.doWaterSplashEffect` does nothing.
+    fn do_water_splash_effect(&self, _caller: &dyn EntityBase) {}
+
     fn audited_reach(&self) -> Option<AuditedReach> {
         let entity = &self.entity;
         let world = entity.world.load();

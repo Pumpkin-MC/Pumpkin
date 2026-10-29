@@ -7099,6 +7099,20 @@ impl EntityBase for Player {
         Some(Sound::EntityPlayerSwim)
     }
 
+    fn get_swim_splash_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSplash)
+    }
+
+    fn get_swim_high_speed_splash_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSplashHighSpeed)
+    }
+
+    fn do_water_splash_effect(&self, caller: &dyn EntityBase) {
+        if !self.is_spectator() {
+            self.get_entity().water_splash_effect(caller);
+        }
+    }
+
     fn get_fall_sounds(&self) -> (Sound, Sound) {
         (Sound::EntityPlayerSmallFall, Sound::EntityPlayerBigFall)
     }
