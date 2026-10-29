@@ -842,7 +842,10 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // Vanilla `ItemStack.CODEC`: `count` defaults to 1 and must be within 1..=99.
+        let count = u8::try_from(compound.get_numeric_int("count").unwrap_or(1))
+            .ok()
+            .filter(|count| (1..=99).contains(count))?;
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);

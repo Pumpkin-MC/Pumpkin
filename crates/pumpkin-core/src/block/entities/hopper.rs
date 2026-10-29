@@ -81,7 +81,7 @@ impl BlockEntity for HopperBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             cooldown_time: AtomicI32::from(
-                nbt.get_int("TransferCooldown")
+                nbt.get_numeric_int("TransferCooldown")
                     .unwrap_or(Self::NO_COOLDOWN_TIME),
             ),
             ticked_game_time: AtomicI64::new(0),

@@ -273,7 +273,7 @@ impl EntityBase for FallingEntity {
             .data
             .store(i32::from(state_id.as_u16()), Ordering::Relaxed);
         self.time
-            .store(nbt.get_int("Time").unwrap_or(0), Ordering::Relaxed);
+            .store(nbt.get_numeric_int("Time").unwrap_or(0), Ordering::Relaxed);
         self.drop_item
             .store(nbt.get_bool("DropItem").unwrap_or(true), Ordering::Relaxed);
         self.cancel_drop.store(

@@ -820,6 +820,10 @@ impl EntityBase for ItemEntity {
             }
             let (item_id, count_before) = (stack.item.id, stack.item_count);
             let inserted = player.inventory.insert_stack_anywhere(&mut stack);
+            // Vanilla `Inventory.add`: creative voids whatever did not fit.
+            if player.is_creative() {
+                stack.set_count(0);
+            }
             (
                 item_id,
                 count_before,
@@ -936,16 +940,16 @@ impl EntityBase for ItemEntity {
 
         // Vanilla stores `Age` / `PickupDelay` as shorts, including -32768 and -6000.
         self.item_age.store(
-            i32::from(nbt.get_short("Age").unwrap_or(0)),
+            i32::from(nbt.get_numeric_short("Age").unwrap_or(0)),
             Ordering::Relaxed,
         );
         self.pickup_delay.store(
-            i32::from(nbt.get_short("PickupDelay").unwrap_or(0)),
+            i32::from(nbt.get_numeric_short("PickupDelay").unwrap_or(0)),
             Ordering::Relaxed,
         );
 
         // Vanilla stores Health as a short
-        if let Some(health) = nbt.get_short("Health") {
+        if let Some(health) = nbt.get_numeric_short("Health") {
             self.health.store(health as f32, Relaxed);
         }
     }
