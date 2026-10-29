@@ -898,6 +898,38 @@ mod tests {
         ItemStack::new(1, &Item::IRON_SWORD)
     }
 
+    fn stack_nbt(count: Option<NbtTag>) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:stone".to_string());
+        if let Some(count) = count {
+            nbt.put("count", count);
+        }
+        nbt
+    }
+
+    /// Vanilla `ItemStack.CODEC`: `/summon item ~ ~ ~ {Item:{id:"stone"}}` is one stone.
+    #[test]
+    fn missing_count_reads_as_one() {
+        let stack = ItemStack::read_item_stack(&stack_nbt(None));
+        assert_eq!(stack.map(|stack| stack.item_count), Some(1));
+    }
+
+    #[test]
+    fn count_accepts_any_numeric_tag() {
+        let stack = ItemStack::read_item_stack(&stack_nbt(Some(NbtTag::Byte(5))));
+        assert_eq!(stack.map(|stack| stack.item_count), Some(5));
+    }
+
+    #[test]
+    fn count_outside_one_to_ninety_nine_is_rejected() {
+        for count in [0, 100, 300, -1] {
+            assert!(
+                ItemStack::read_item_stack(&stack_nbt(Some(NbtTag::Int(count)))).is_none(),
+                "count {count} was accepted"
+            );
+        }
+    }
+
     #[test]
     fn items_with_different_components_are_not_equal_in_either_direction() {
         let plain = ItemStack::new(1, &Item::COAL);
