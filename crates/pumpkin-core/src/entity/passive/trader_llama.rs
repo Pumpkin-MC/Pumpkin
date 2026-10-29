@@ -23,16 +23,20 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        Controls, Goal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, tempt::TemptGoal, track_target::TrackTargetGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::target_predicate::TargetPredicate,
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::animal::{Animal, get_carpet_color_from_item},
     player::Player,
     projectile::llama_spit::LlamaSpitEntity,
 };
+
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
 const DEFAULT_DESPAWN_DELAY: i32 = 47_999;
@@ -152,7 +156,7 @@ impl TraderLlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // TODO: TraderLlamaDefendWanderingTraderGoal at 1.
+            target_selector.add_goal(1, Box::new(TraderLlamaDefendWanderingTraderGoal::new()));
             hunting::apply(target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
             hunting::apply(target_selector, &mob_arc.mob_entity, TRADER_LLAMA_HUNTS);
         };
@@ -440,6 +444,10 @@ impl Mob for TraderLlamaEntity {
         }
 
         if !self.is_baby() && !self.is_food(item_stack) {
+            // Vanilla `TraderLlama.doPlayerRide` refuses a llama leashed to its trader.
+            if self.leashing_trader().is_some() {
+                return true;
+            }
             let world = player.world();
             let ent = &self.mob_entity.living_entity.entity;
             if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
@@ -457,5 +465,81 @@ impl Mob for TraderLlamaEntity {
 impl RangedAttackMob for TraderLlamaEntity {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
         self.spit(target);
+    }
+}
+
+/// Vanilla `TraderLlama.TraderLlamaDefendWanderingTraderGoal`.
+struct TraderLlamaDefendWanderingTraderGoal {
+    track_target_goal: TrackTargetGoal,
+    target: Option<Arc<dyn EntityBase>>,
+    timestamp: i32,
+    target_predicate: TargetPredicate,
+}
+
+impl TraderLlamaDefendWanderingTraderGoal {
+    fn new() -> Self {
+        Self {
+            track_target_goal: TrackTargetGoal::with_default(false),
+            target: None,
+            timestamp: 0,
+            target_predicate: TargetPredicate::create_attackable(),
+        }
+    }
+
+    fn leashing_trader(mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+        mob.get_entity()
+            .get_leash_holder()
+            .filter(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
+    }
+}
+
+impl Goal for TraderLlamaDefendWanderingTraderGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(trader) = Self::leashing_trader(mob) else {
+            return false;
+        };
+        let Some(trader_living) = trader.get_living_entity() else {
+            return false;
+        };
+        let timestamp = trader_living.get_last_hurt_by_mob_timestamp();
+        let Some(attacker) = trader_living.get_last_hurt_by_mob() else {
+            return false;
+        };
+        if timestamp == self.timestamp
+            || !self.track_target_goal.can_track(
+                mob,
+                Some(attacker.as_ref()),
+                &self.target_predicate,
+            )
+        {
+            return false;
+        }
+
+        self.target = Some(attacker);
+        true
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(self.target.clone(), TargetReason::TargetAttackedOwner);
+        if let Some(trader) = Self::leashing_trader(mob)
+            && let Some(trader_living) = trader.get_living_entity()
+        {
+            self.timestamp = trader_living.get_last_hurt_by_mob_timestamp();
+        }
+        self.track_target_goal.set_target_mob(self.target.clone());
+        self.track_target_goal.start(mob);
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
+        self.track_target_goal.stop(mob);
+    }
+
+    fn controls(&self) -> Controls {
+        self.track_target_goal.controls()
     }
 }
