@@ -145,29 +145,29 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             return Vec::new();
         };
 
-        let mut res: Vec<_> = inner
-            .overdue_ticks
-            .iter()
-            .map(|tick| ScheduledTick {
-                delay: 0,
-                priority: tick.priority,
-                position: tick.position,
-                value: tick.value,
-            })
-            .collect();
+        let mut ticks: Vec<_> = inner.overdue_ticks.iter().map(|tick| (tick, 0)).collect();
 
         for i in 0..MAX_TICK_DELAY {
             let index = (offset + i) % MAX_TICK_DELAY;
             // Inverse of `schedule_tick`: the queue at `offset` runs next tick, i.e. delay 1.
             // The last slot is never filled because delay is a u8.
-            res.extend(inner.tick_queue[index].iter().map(|x| ScheduledTick {
-                delay: (i + 1) as u8,
-                priority: x.priority,
-                position: x.position,
-                value: x.value,
-            }));
+            ticks.extend(
+                inner.tick_queue[index]
+                    .iter()
+                    .map(|tick| (tick, (i + 1) as u8)),
+            );
         }
-        res
+        // LevelChunkTicks.pack preserves booking order independently of insertion and deadline.
+        ticks.sort_by_key(|(tick, _)| tick.sub_tick_order);
+        ticks
+            .into_iter()
+            .map(|(tick, delay)| ScheduledTick {
+                delay,
+                priority: tick.priority,
+                position: tick.position,
+                value: tick.value,
+            })
+            .collect()
     }
 }
 
@@ -273,9 +273,9 @@ mod tests {
     }
 
     #[test]
-    fn saved_list_order_round_trips_for_equal_priority_ticks() {
+    fn reserved_order_round_trips_despite_out_of_order_insertion() {
         let scheduler = ChunkTickScheduler::default();
-        for (order, x) in [(0, 2), (1, 0), (2, 1)] {
+        for (order, x) in [(2, 1), (0, 2), (1, 0)] {
             let mut pending = tick(2);
             pending.position = BlockPos::new(x, 0, 0);
             scheduler.schedule_tick(&pending, order);
@@ -288,6 +288,36 @@ mod tests {
             [2, 0, 1]
         );
         assert!(due.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn saving_sorts_pending_and_overdue_ticks_without_changing_delays() {
+        let scheduler = ChunkTickScheduler::default();
+        for (order, delay, priority) in [
+            (2, 1, TickPriority::High),
+            (0, 5, TickPriority::Normal),
+            (1, 2, TickPriority::Normal),
+        ] {
+            let mut pending = tick(delay);
+            pending.position = BlockPos::new(order, 0, 0);
+            pending.priority = priority;
+            scheduler.schedule_tick(&pending, i64::from(order));
+        }
+        scheduler.step_tick(false);
+        scheduler.step_tick(false);
+
+        assert_eq!(
+            scheduler
+                .to_vec()
+                .iter()
+                .map(|tick| (tick.position.0.x, tick.delay, tick.priority))
+                .collect::<Vec<_>>(),
+            [
+                (0, 3, TickPriority::Normal),
+                (1, 0, TickPriority::Normal),
+                (2, 0, TickPriority::High),
+            ]
+        );
     }
 
     #[test]
