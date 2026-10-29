@@ -72,7 +72,11 @@ impl Goal for OwnerHurtTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone(), TargetReason::OwnerAttackedTarget);
+        self.track_target_goal.start_targeting(
+            mob,
+            self.target.clone(),
+            TargetReason::OwnerAttackedTarget,
+        );
 
         if let Some(owner_uuid) = mob.get_owner_uuid() {
             let world = mob.get_mob_entity().living_entity.entity.world.load_full();

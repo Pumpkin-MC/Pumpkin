@@ -24,6 +24,9 @@ pub struct TrackTargetGoal {
     pub follow_range_scale: f64,
     /// Fallback target, used while the mob's own target is cleared.
     target_mob: Option<Arc<dyn EntityBase>>,
+    /// A plugin cancelled the target change in `start`, so the goal ends without
+    /// clearing a target it never set.
+    cancelled: bool,
 }
 
 #[expect(dead_code)]
@@ -40,6 +43,7 @@ impl TrackTargetGoal {
             max_time_without_visibility: 60,
             follow_range_scale: 1.0,
             target_mob: None,
+            cancelled: false,
         }
     }
 
@@ -56,6 +60,22 @@ impl TrackTargetGoal {
         mob.living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE)
             * self.follow_range_scale
+    }
+
+    /// Sets the mob's target as the owning goal starts. If a plugin cancels the
+    /// change, the goal ends on its next check and the mob keeps its old target.
+    pub fn start_targeting(
+        &mut self,
+        mob: &dyn Mob,
+        target: Option<Arc<dyn EntityBase>>,
+        reason: TargetReason,
+    ) {
+        self.cancelled = !mob.set_mob_target(target, reason);
+    }
+
+    #[must_use]
+    pub const fn was_cancelled(&self) -> bool {
+        self.cancelled
     }
 
     /// Set by goals that already know their target.
@@ -128,6 +148,9 @@ impl TrackTargetGoal {
 
 impl Goal for TrackTargetGoal {
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.cancelled {
+            return false;
+        }
         let mob_entity = mob.get_mob_entity();
         let Some(target_base) = mob_entity.get_target().or_else(|| self.target_mob.clone()) else {
             return false;
@@ -183,8 +206,11 @@ impl Goal for TrackTargetGoal {
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(None, TargetReason::ForgotTarget);
         self.target_mob = None;
+        if self.cancelled {
+            return;
+        }
+        mob.set_mob_target(None, TargetReason::ForgotTarget);
     }
 
     fn controls(&self) -> Controls {

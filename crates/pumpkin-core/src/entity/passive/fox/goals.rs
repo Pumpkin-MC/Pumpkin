@@ -240,7 +240,11 @@ impl Goal for DefendTrustedTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.attacker.clone(), TargetReason::TargetAttackedOwner);
+        self.track_target_goal.start_targeting(
+            mob,
+            self.attacker.clone(),
+            TargetReason::TargetAttackedOwner,
+        );
         if let Some(living) = self.trusted.as_ref().and_then(|t| t.get_living_entity()) {
             self.timestamp = living.get_last_hurt_by_mob_timestamp();
         }

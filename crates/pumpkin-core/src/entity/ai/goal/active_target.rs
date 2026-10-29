@@ -267,6 +267,9 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.track_target_goal.was_cancelled() {
+            return false;
+        }
         if self.gate.is_some_and(|gate| !gate(mob)) {
             self.target = None;
             return false;
@@ -295,10 +298,8 @@ impl Goal for ActiveTargetGoal {
         } else {
             TargetReason::ClosestEntity
         };
-        if !mob.set_mob_target(self.target.clone(), reason) {
-            // A plugin cancelled the change, so drop the target `should_continue` would keep.
-            self.target = None;
-        }
+        self.track_target_goal
+            .start_targeting(mob, self.target.clone(), reason);
         self.track_target_goal.start(mob);
     }
 
