@@ -18,9 +18,14 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::plugin::api::events::entity::{
+    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
+    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+};
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
+use crate::server::Server;
 use crate::world::World;
 
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
@@ -119,6 +124,17 @@ impl Schedule {
         };
         parallel
     }
+}
+
+/// A plugin listens to an event an entity tick can fire: targeting, breeding, anger, or a
+/// sit order dropped on damage. Its handler may touch anything, so the tick runs in list order.
+#[must_use]
+pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
+    let plugins = &server.plugin_manager;
+    plugins.has_handlers::<EntityTargetEvent>()
+        || plugins.has_handlers::<EntityBreedEvent>()
+        || plugins.has_handlers::<PigZombieAngerEvent>()
+        || plugins.has_handlers::<EntityToggleSitEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -356,7 +372,9 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
                 }),
         );
     }
-    links.extend(entity.get_owner_id());
+    if let Some(owner) = entity.get_owner_entity() {
+        links.push(owner.get_entity().entity_id);
+    }
     if let Some(fish) = entity.get_mob().and_then(|mob| mob.as_schooling_fish())
         && let Some(leader) = fish.leader()
     {

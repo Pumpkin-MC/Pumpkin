@@ -120,6 +120,7 @@ memory_module_types! {
     77 NEAREST_VISIBLE_ADULT_HOGLINS: Vec<Arc<dyn EntityBase>> = "minecraft:nearest_visible_adult_hoglins", None;
     78 NEAREST_VISIBLE_ADULT_PIGLIN: Arc<dyn EntityBase> = "minecraft:nearest_visible_adult_piglin", None;
     79 NEAREST_VISIBLE_ZOMBIFIED: Arc<dyn EntityBase> = "minecraft:nearest_visible_zombified", None;
+    // TODO: nothing fills the counts yet; the outnumbered side should retreat (HoglinAi, PiglinAi).
     80 VISIBLE_ADULT_PIGLIN_COUNT: i32 = "minecraft:visible_adult_piglin_count", None;
     81 VISIBLE_ADULT_HOGLIN_COUNT: i32 = "minecraft:visible_adult_hoglin_count", None;
     82 NEAREST_PLAYER_HOLDING_WANTED_ITEM: Arc<Player> = "minecraft:nearest_player_holding_wanted_item", None;

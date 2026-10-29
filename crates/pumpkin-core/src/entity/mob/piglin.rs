@@ -21,6 +21,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::{MobMetadata, equipment as mob_equipment};
@@ -157,15 +158,7 @@ impl PiglinEntity {
 
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::WITHER_SKELETON,
-                    true,
-                ),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, TargetMatch::WITHER_LIKE, true),
             );
 
             let piglin_clone = mob_arc.clone();

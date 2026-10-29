@@ -34,7 +34,7 @@ use super::villager::{
     apply_potion, apply_random_dye, apply_random_stew_effect, trigger_trade_advancement,
 };
 use crate::entity::ageable::{AgeableData, AgeableMob};
-use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
@@ -42,6 +42,7 @@ use crate::entity::ai::goal::trade_with_player::TradeWithPlayerGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
@@ -120,6 +121,22 @@ fn add_offers_from_trade_set(
     add_offers_from_dynamic_trades(offers, &dynamic_trades, amount, rng);
 }
 
+const TRADER_FLEES: &[Flee] = &[
+    Flee::new(1, TargetMatch::ZOMBIE_LIKE, 8.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::EVOKER), 12.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::VINDICATOR), 8.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::VEX), 8.0, 0.5, 0.5),
+    Flee::new(1, TargetMatch::Type(&EntityType::PILLAGER), 15.0, 0.5, 0.5),
+    Flee::new(
+        1,
+        TargetMatch::Type(&EntityType::ILLUSIONER),
+        12.0,
+        0.5,
+        0.5,
+    ),
+    Flee::new(1, TargetMatch::Type(&EntityType::ZOGLIN), 10.0, 0.5, 0.5),
+];
+
 pub struct WanderingTraderEntity {
     pub mob_entity: MobEntity,
     pub despawn_delay: AtomicI32,
@@ -180,56 +197,7 @@ impl WanderingTraderEntity {
             goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::DROWNED, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::HUSK, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIE_VILLAGER,
-                    8.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::EVOKER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VINDICATOR, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VEX, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::PILLAGER, 15.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ILLUSIONER,
-                    12.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOGLIN, 10.0, 0.5, 0.5)),
-            );
+            fleeing::apply(goal_selector, TRADER_FLEES);
 
             // Priority 1: PanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(0.5));

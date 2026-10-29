@@ -77,6 +77,7 @@ impl HorseEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
+            // TODO: RunAroundLikeCrazyGoal at 1, the only way to tame by riding.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -204,7 +205,12 @@ fn is_wood_sound_type(sound_type: &SoundType) -> bool {
     )
 }
 
+// TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         play_horse_step_sound(self, pos, state, true);
     }

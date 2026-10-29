@@ -124,6 +124,7 @@ impl Animal for CamelEntity {
     }
 }
 
+// TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         let sound = if state

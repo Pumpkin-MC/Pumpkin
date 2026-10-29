@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use pumpkin_data::BlockState;
-use pumpkin_data::entity::{EntityStatus, EntityType, MobCategory};
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -13,14 +13,15 @@ use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        move_towards_target::MoveTowardsTargetGoal, offer_flower::OfferFlowerGoal,
-        revenge::RevengeGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, move_towards_target::MoveTowardsTargetGoal,
+        offer_flower::OfferFlowerGoal, revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -32,6 +33,10 @@ use crate::entity::{
 /// Represents an Iron Golem, a powerful neutral mob that protects villagers and players.
 ///
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
+const IRON_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(3, TargetMatch::Enemy, false)
+    .every(5)
+    .matching(|_hunter, target, _world| target.entity.entity_type != &EntityType::CREEPER)];
+
 pub struct IronGolemEntity {
     pub mob_entity: MobEntity,
     pub neutral_data: NeutralData,
@@ -73,15 +78,7 @@ impl IronGolemEntity {
             // TODO: DefendVillageTargetGoal at 1.
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             apply_targets(target_selector, &mob_arc.mob_entity, 3, 4, false);
-            // Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::predicated(&mob_arc.mob_entity, 5, false, |living, _world| {
-                    let entity_type = living.entity.entity_type;
-                    entity_type.category == &MobCategory::MONSTER
-                        && entity_type != &EntityType::CREEPER
-                }),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, IRON_GOLEM_HUNTS);
         };
 
         mob_arc

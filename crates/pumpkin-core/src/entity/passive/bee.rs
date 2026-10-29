@@ -11,6 +11,8 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
@@ -19,17 +21,10 @@ use crate::entity::{
         look_control::LookControl,
     },
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        breed::BreedGoal,
-        follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal,
-        reset_universal_anger::ResetUniversalAngerGoal,
-        revenge::RevengeGoal,
-        swim::SwimGoal,
-        tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, breed::BreedGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, reset_universal_anger::ResetUniversalAngerGoal,
+        revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::Navigator,
     mob::{
@@ -59,6 +54,10 @@ fn can_sting(mob: &dyn Mob) -> bool {
             .downcast_ref::<BeeEntity>()
             .is_some_and(BeeEntity::has_stung)
 }
+
+const BEE_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)
+    .when(TargetCondition::AngryAt)
+    .gated_by(can_sting)];
 
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
@@ -140,12 +139,7 @@ impl BeeEntity {
                         .continuing_while(is_angry),
                 ),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::AngryAt)
-                    .gated_by(can_sting),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, BEE_HUNTS);
             target_selector.add_goal(3, ResetUniversalAngerGoal::new(true));
         };
 

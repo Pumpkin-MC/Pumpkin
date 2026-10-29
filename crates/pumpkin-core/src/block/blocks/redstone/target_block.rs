@@ -45,8 +45,10 @@ impl BlockBehaviour for TargetBlock {
     }
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
-        if let Some(owner_id) = args.projectile.get_owner_id()
-            && let Some(player) = args.world.get_player_by_id(owner_id)
+        if let Some(player) = args
+            .projectile
+            .get_projectile_owner()
+            .and_then(|owner| owner.get_player(args.world))
         {
             player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
