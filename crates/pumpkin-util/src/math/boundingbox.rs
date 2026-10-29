@@ -268,8 +268,7 @@ impl BoundingBox {
         if max { self.max } else { self.min }
     }
 
-    /// Vanilla `Shapes.collide`: how far this box can move along `axis`, up to `distance`, before
-    /// it touches one of `boxes`. A box overlapped by less than `1e-7` still blocks.
+    /// Vanilla `Shapes.collide`: how far this box moves along `axis` before touching `boxes`. under `1e-7` overlap still blocks.
     ///
     /// # Returns
     /// The allowed distance and the index of the box that limited it, if any.

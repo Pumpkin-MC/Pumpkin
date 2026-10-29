@@ -2006,8 +2006,7 @@ impl Entity {
             return movement;
         }
 
-        // Vanilla `Entity.collideWithShapes`: Y first, then the larger horizontal axis, each
-        // against the box already moved along the resolved axes.
+        // Vanilla `collideWithShapes`: Y, then the larger horizontal axis, on the already moved box.
         let order = if movement.x.abs() < movement.z.abs() {
             [Axis::Y, Axis::Z, Axis::X]
         } else {
@@ -2038,8 +2037,7 @@ impl Entity {
         let on_ground = movement.y < 0.0 && adjusted_movement.y != movement.y;
         self.on_ground.store(on_ground, Ordering::SeqCst);
         if on_ground {
-            // Vanilla `Entity.checkSupportingBlock`: a thin box under the final position, then
-            // under the start X/Z if nothing is there. The swept collisions cover both areas.
+            // Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
             let final_box = bounding_box.shift(adjusted_movement);
             let test_area = BoundingBox::new(
                 Vector3::new(final_box.min.x, final_box.min.y - 1.0e-6, final_box.min.z),
@@ -2632,8 +2630,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        // Vanilla `Entity.move`: the entity keeps its own velocity, a wall stops the axis it hit
-        // (no entity bounciness yet) and the block speed factor only slows X/Z.
+        // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
         let speed_factor = f64::from(caller.get_block_speed_factor());
         let mut velocity = self.velocity.load();
         if (motion.x - final_move.x).abs() >= 1.0e-5 {
@@ -2658,8 +2655,7 @@ impl Entity {
                     .block_registry
                     .update_entity_movement_after_fall_on(effect_block, caller);
             } else {
-                // Vanilla `Entity.restituteMovementAfterCollisions`: block bounciness only
-                // applies to `verticalCollisionBelow` (landing)
+                // Vanilla `restituteMovementAfterCollisions`: block bounciness only applies when landing.
                 stop_vertical_movement_after_fall(caller);
             }
         }

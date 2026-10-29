@@ -4458,8 +4458,7 @@ impl World {
         None
     }
 
-    /// Fires the event built by `event` and returns it, or `None` without building it when no
-    /// plugin listens, so hot paths pay nothing then.
+    /// Fires the event built by `event`, or returns `None` without building it when no plugin listens.
     pub fn plugin_event<E: Payload + 'static>(&self, event: impl FnOnce() -> E) -> Option<E> {
         let server = self.server.upgrade()?;
         if !server.plugin_manager.has_handlers::<E>() {

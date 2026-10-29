@@ -242,8 +242,7 @@ impl HopperBlockEntity {
             for i in 0..container.size() {
                 let mut item = container.get_stack(i);
                 if !item.is_empty() && container.can_transfer_to(self, i, &item) {
-                    // Hoppers tick in parallel: writing back the stale `item` would erase what
-                    // another hopper put into this slot meanwhile -> take and put back instead.
+                    // Parallel hoppers: take and put back, a stale write would erase another hopper's insert.
                     if let Some(source) = container.as_any().downcast_ref::<Self>() {
                         let Some(extraction) = source.take_one(i) else {
                             continue;
@@ -313,8 +312,7 @@ impl HopperBlockEntity {
         false
     }
 
-    /// Splits one item off `slot`. One lock for read and write, so the snapshot is the state the
-    /// removal really happened on and not an older one. `None` when the slot is empty by then.
+    /// Splits one item off `slot` under one lock. `None` when the slot is empty by then.
     fn take_one(&self, slot: usize) -> Option<Extraction> {
         let mut items = self
             .items
@@ -422,8 +420,7 @@ impl HopperBlockEntity {
         Self::add_stack(Some(from), to, item.copy_with_count(1)).is_empty()
     }
 
-    /// Vanilla `HopperBlockEntity.addItem(from, container, stack, null)`: spreads stack inside
-    /// all the slots of `to` and returns what did not fit.
+    /// Vanilla `HopperBlockEntity.addItem(from, container, stack, null)`: returns what did not fit.
     pub fn add_stack(
         from: Option<&dyn Inventory>,
         to: &dyn Inventory,
@@ -450,8 +447,7 @@ impl HopperBlockEntity {
         }
         let to_empty = to.is_empty();
         let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
-            // One lock for read and write: a parallel insert into the same slot would otherwise
-            // overwrite this one with its stale copy, or the reverse.
+            // One lock for read and write: a parallel insert would otherwise overwrite a stale copy.
             let mut items = hopper
                 .items
                 .write()
@@ -473,9 +469,7 @@ impl HopperBlockEntity {
             && let Some(hopper) = to.as_any().downcast_ref::<Self>()
             && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
         {
-            // A hopper that hasn't ticked yet this game tick still counts its 8 down to 7.
-            // One that already ticked misses that count -> it starts at 7 instead, so both move
-            // again on the same game tick, no matter which hopper ticked first.
+            // A hopper that already ticked starts at 7, one that hasn't counts 8 down to 7: both move together.
             let cooldown = match from.and_then(|from| from.as_any().downcast_ref::<Self>()) {
                 Some(from_hopper)
                     if hopper.ticked_game_time.load(Ordering::Relaxed)
@@ -490,8 +484,7 @@ impl HopperBlockEntity {
         to.mark_dirty();
     }
 
-    /// The slot half of vanilla `tryMoveInItem`: fills an empty `dst` with `stack`, or tops
-    /// `dst` up from it. Returns whether anything moved.
+    /// The slot half of vanilla `tryMoveInItem`. Returns whether anything moved.
     fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack) -> bool {
         if dst.is_empty() {
             *dst = std::mem::replace(stack, ItemStack::EMPTY.clone());
@@ -720,8 +713,7 @@ mod tests {
         assert_eq!(hopper.get_stack(0).item_count, max);
     }
 
-    /// A dropped stack goes in whole, like vanilla `addItem(Container, ItemEntity)`, not one item
-    /// per transfer.
+    /// A dropped stack goes in whole, like vanilla `addItem(Container, ItemEntity)`.
     #[test]
     fn add_stack_moves_a_whole_stack_into_one_slot() {
         let hopper = hopper_holding(ItemStack::EMPTY.clone());

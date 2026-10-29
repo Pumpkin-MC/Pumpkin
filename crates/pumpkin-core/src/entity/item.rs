@@ -186,9 +186,7 @@ impl ItemEntity {
         &self.entity
     }
 
-    /// Vanilla `HopperBlockEntity.addItem(Container, ItemEntity)`: `insert` gets a copy of the
-    /// stack and returns the rest. Locked throughout -> a parallel tick never sees the stack
-    /// emptied by an insert that is still running. True once the whole stack moved.
+    /// Vanilla `HopperBlockEntity.addItem(Container, ItemEntity)`, locked throughout. True once the whole stack moved.
     pub fn insert_into(&self, insert: impl FnOnce(ItemStack) -> ItemStack) -> bool {
         let mut stack = self
             .item_stack
@@ -253,8 +251,7 @@ impl ItemEntity {
         {
             return false;
         }
-        // Blocking is safe: no other stack lock is held here, and a skipped check would delay
-        // the merge by up to 40 ticks.
+        // Blocking is safe here, a skipped check would delay the merge by up to 40 ticks.
         let item_stack = self
             .item_stack
             .lock()
@@ -693,8 +690,7 @@ impl EntityBase for ItemEntity {
         world: Arc<World>,
     ) {
         self.entity.teleport(position, yaw, pitch, &world);
-        // Vanilla `ItemEntity.teleport`: merge at the destination right away. Only when the
-        // item lives there: `Entity::teleport` doesn't move it into another world.
+        // Vanilla `ItemEntity.teleport`: merge at the destination, if the item lives in that world.
         if Arc::ptr_eq(&self.entity.world.load(), &world) {
             self.merge_with_neighbours();
         }
@@ -788,8 +784,7 @@ impl EntityBase for ItemEntity {
             return;
         }
 
-        // Inserted in place under the lock, so a parallel merge or destruction can't act on a
-        // stale copy. An empty stack was already destroyed or merged away.
+        // Inserted in place under the lock; an empty stack was already destroyed or merged away.
         let (item_id, count_before, inserted, count_after, is_empty) = {
             let mut stack = self
                 .item_stack

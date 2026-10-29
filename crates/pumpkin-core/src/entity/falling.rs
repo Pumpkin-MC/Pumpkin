@@ -63,7 +63,9 @@ impl EntityBase for FallingEntity {
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
         if entity.on_ground.load(Ordering::Relaxed) {
-            entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+            entity
+                .velocity
+                .store(entity.velocity.load().multiply(0.7, -0.5, 0.7));
             let world = entity.world.load();
             let landing_pos = self.entity.block_pos.load();
             let (current_block, current_state) = world.get_block_and_state(&landing_pos);
@@ -111,7 +113,9 @@ impl EntityBase for FallingEntity {
             }
         }
 
-        entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
+        entity
+            .velocity
+            .store(entity.velocity.load().multiply(0.98, 0.98, 0.98));
     }
 
     fn init_data_tracker(&self) {
