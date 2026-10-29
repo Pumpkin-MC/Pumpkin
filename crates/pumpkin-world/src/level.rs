@@ -994,7 +994,8 @@ impl Level {
         priority: TickPriority,
     ) {
         let tick_order = order::next_entity_order()
-            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed));
+            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed))
+            .cast_signed();
         let scheduled_tick = ScheduledTick {
             delay,
             position: block_pos,
@@ -1022,7 +1023,8 @@ impl Level {
         priority: TickPriority,
     ) {
         let tick_order = order::next_entity_order()
-            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed));
+            .unwrap_or_else(|| self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed))
+            .cast_signed();
         let scheduled_tick = ScheduledTick {
             delay,
             position: block_pos,

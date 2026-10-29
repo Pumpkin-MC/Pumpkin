@@ -68,7 +68,7 @@ pub struct ScheduledTick<T> {
 #[derive(Clone)]
 pub struct OrderedTick<T> {
     pub priority: TickPriority,
-    pub sub_tick_order: u64,
+    pub sub_tick_order: i64,
 
     pub position: BlockPos,
     pub value: T,

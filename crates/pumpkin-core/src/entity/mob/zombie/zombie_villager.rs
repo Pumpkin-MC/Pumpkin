@@ -12,6 +12,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
@@ -123,10 +124,11 @@ impl ZombieVillagerEntity {
             show_icon: true,
             blend: false,
         });
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, EntityStatus::ZombieConverting, None);
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::ZombieConverting,
+            ActorEventID::ZombieConverting,
+        );
     }
 
     /// Vanilla `getConversionProgress`: iron bars and beds nearby speed the cure up.

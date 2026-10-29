@@ -58,7 +58,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         res
     }
 
-    pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
+    pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: i64) {
         let mut inner_guard = self
             .inner
             .lock()
@@ -176,10 +176,10 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 {
     fn from_iter<I: IntoIterator<Item = ScheduledTick<&'a T>>>(iter: I) -> Self {
         let scheduler = Self::default();
-        let iter = iter.into_iter();
+        let ticks: Vec<_> = iter.into_iter().collect();
 
-        let (lower, _) = iter.size_hint();
-        if lower > 0 {
+        let tick_count = ticks.len();
+        if tick_count > 0 {
             let mut inner_guard = scheduler
                 .inner
                 .lock()
@@ -191,11 +191,13 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
                     queued_ticks: FxHashSet::default(),
                 })
             });
-            inner.queued_ticks.reserve(lower);
+            inner.queued_ticks.reserve(tick_count);
         }
 
-        for tick in iter {
-            scheduler.schedule_tick(&tick, 0);
+        // LevelChunkTicks.unpack gives saved ticks orders -N through -1, ahead of live ticks.
+        let sub_tick_base = -(tick_count as u64).cast_signed();
+        for (sub_tick_order, tick) in (sub_tick_base..).zip(ticks) {
+            scheduler.schedule_tick(&tick, sub_tick_order);
         }
         scheduler
     }
@@ -268,5 +270,56 @@ mod tests {
         scheduler.schedule_tick(&tick(5), 0);
         scheduler.step_tick(true);
         assert_eq!(scheduler.to_vec()[0].delay, 4);
+    }
+
+    #[test]
+    fn saved_list_order_round_trips_for_equal_priority_ticks() {
+        let scheduler = ChunkTickScheduler::default();
+        for (order, x) in [(0, 2), (1, 0), (2, 1)] {
+            let mut pending = tick(2);
+            pending.position = BlockPos::new(x, 0, 0);
+            scheduler.schedule_tick(&pending, order);
+        }
+        let restored = ChunkTickScheduler::from_iter(scheduler.to_vec());
+        assert!(restored.step_tick(true).is_empty());
+        let due = restored.step_tick(true);
+        assert_eq!(
+            due.iter().map(|tick| tick.position.0.x).collect::<Vec<_>>(),
+            [2, 0, 1]
+        );
+        assert!(due.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn restored_ticks_precede_live_ticks_across_chunks() {
+        let restored = |positions: &[i32]| {
+            // Count the saved list even when the iterator has no exact size hint.
+            let scheduler = ChunkTickScheduler::from_iter(
+                positions
+                    .iter()
+                    .map(|&x| {
+                        let mut pending = tick(1);
+                        pending.position = BlockPos::new(x, 0, 0);
+                        pending
+                    })
+                    .filter(|_| true),
+            );
+            scheduler.step_tick(true)
+        };
+        let live = ChunkTickScheduler::default();
+        let mut pending = tick(1);
+        pending.position = BlockPos::new(32, 0, 0);
+        live.schedule_tick(&pending, 0);
+
+        let due = crate::tick::drain_containers(vec![
+            live.step_tick(true),
+            restored(&[10]),
+            restored(&[20, 21, 22]),
+        ]);
+        // Vanilla starts each saved list at -len, ahead of the first live order, zero.
+        assert_eq!(
+            due.iter().map(|tick| tick.position.0.x).collect::<Vec<_>>(),
+            [20, 21, 22, 10, 32]
+        );
     }
 }
