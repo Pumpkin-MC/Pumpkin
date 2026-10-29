@@ -31,7 +31,8 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
-    entity::{EntityPose, EntityType},
+    entity::{EntityPose, EntityType, MovementEmission},
+    game_event::GameEvent,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -538,6 +539,81 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             || self.get_entity().get_block_speed_factor(),
             LivingEntity::get_block_speed_factor,
         )
+    }
+
+    /// Vanilla `getSoundSource`.
+    fn sound_source(&self) -> SoundCategory {
+        self.get_entity().entity_type.sound_source
+    }
+
+    /// Vanilla `Entity.playSound`: at the entity, in its sound source, unless it is silent.
+    fn play_entity_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        let entity = self.get_entity();
+        if !entity.is_silent() {
+            entity.world.load().play_sound_fine(
+                sound,
+                self.sound_source(),
+                &entity.pos.load(),
+                volume,
+                pitch,
+            );
+        }
+    }
+
+    /// Vanilla `getMovementEmission`.
+    fn movement_emission(&self) -> MovementEmission {
+        self.get_entity().entity_type.movement_emission
+    }
+
+    /// Vanilla `nextStep`: the `move_dist` at which the next step sound and event happen.
+    fn next_step(&self) -> f32 {
+        (self.get_entity().move_dist.load() as i32 + 1) as f32
+    }
+
+    /// Vanilla `playStepSound`.
+    fn play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        self.play_block_step_sound(state);
+    }
+
+    /// The base `Entity.playStepSound`: the step sound of the block walked on.
+    fn play_block_step_sound(&self, state: &BlockState) {
+        let sound_type = state.get_sound_type();
+        self.play_entity_sound(
+            sound_type.step_sound,
+            sound_type.volume * 0.15,
+            sound_type.pitch,
+        );
+    }
+
+    /// Vanilla `getSwimSound`.
+    fn get_swim_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_sound
+    }
+
+    /// Vanilla `playSwimSound`.
+    fn play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume);
+    }
+
+    /// The base `Entity.playSwimSound`.
+    fn play_default_swim_sound(&self, volume: f32) {
+        if let Some(sound) = self.get_swim_sound() {
+            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
+            self.play_entity_sound(sound, volume, pitch);
+        }
+    }
+
+    /// Vanilla `isFlapping`: whether moving through the air plays `on_flap` and emits `FLAP`.
+    fn is_flapping(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `onFlap`.
+    fn on_flap(&self) {}
+
+    /// Vanilla `isOnRails`: rail-riding entities step even when not on the ground.
+    fn is_on_rails(&self) -> bool {
+        false
     }
 
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
@@ -1140,6 +1216,12 @@ pub struct Entity {
     pub riding_cooldown: AtomicI32,
     /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
     pub tick_count: AtomicI32,
+    /// Vanilla `moveDist`, `flyDist` and `nextStep`, which pace step sounds and movement game events.
+    pub move_dist: AtomicCell<f32>,
+    pub fly_dist: AtomicCell<f32>,
+    pub next_step: AtomicCell<f32>,
+    crystal_sound_intensity: AtomicCell<f32>,
+    last_crystal_sound_play_tick: AtomicI32,
     /// Vanilla `AgeableMob.age`. Negative values indicate a baby.
     pub age: AtomicI32,
 
@@ -1392,6 +1474,11 @@ impl Entity {
 
             riding_cooldown: AtomicI32::new(0),
             tick_count: AtomicI32::new(0),
+            move_dist: AtomicCell::new(0.0),
+            fly_dist: AtomicCell::new(0.0),
+            next_step: AtomicCell::new(1.0),
+            crystal_sound_intensity: AtomicCell::new(0.0),
+            last_crystal_sound_play_tick: AtomicI32::new(0),
             age: AtomicI32::new(0),
             current_biome: ArcSwap::new(Arc::new(current_biome)),
             last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
@@ -2507,13 +2594,206 @@ impl Entity {
             living.fall(caller, final_move.y, on_ground, false);
         }
 
+        let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
         if motion.y != final_move.y {
             let world = self.world.load();
-            let block = self.get_block_with_y_offset(0.2).1;
             world
                 .block_registry
-                .update_entity_movement_after_fall_on(block, caller);
+                .update_entity_movement_after_fall_on(effect_block, caller);
         }
+
+        if self.is_removed() {
+            return;
+        }
+        self.emit_movement(caller, final_move, &effect_pos, effect_state);
+    }
+
+    /// The emission part of vanilla `Entity.move` for movement the client already resolved,
+    /// which is how players move.
+    pub fn emit_client_movement(&self, caller: &dyn EntityBase, movement: Vector3<f64>) {
+        let (effect_pos, _, effect_state) = self.get_block_with_y_offset(0.2);
+        self.emit_movement(caller, movement, &effect_pos, effect_state);
+    }
+
+    fn emit_movement(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+        effect_pos: &BlockPos,
+        effect_state: &'static BlockState,
+    ) {
+        let emission = caller.movement_emission();
+        if emission.emits_anything() && !caller.is_passenger() {
+            self.apply_movement_emission(caller, emission, movement, effect_pos, effect_state);
+        }
+    }
+
+    /// Vanilla `applyMovementEmissionAndPlaySound`.
+    fn apply_movement_emission(
+        &self,
+        caller: &dyn EntityBase,
+        emission: MovementEmission,
+        movement: Vector3<f64>,
+        effect_pos: &BlockPos,
+        effect_state: &'static BlockState,
+    ) {
+        let moved_distance = (movement.length() * 0.6) as f32;
+        let horizontal_moved_distance = (movement.horizontal_length() * 0.6) as f32;
+        let supporting_pos = self.get_pos_with_y_offset(1.0e-5).0;
+        let (supporting_block, supporting_state) =
+            self.world.load().get_block_and_state(&supporting_pos);
+        let climbing = Self::is_state_climbable(supporting_block);
+        self.move_dist.store(
+            self.move_dist.load()
+                + if climbing {
+                    moved_distance
+                } else {
+                    horizontal_moved_distance
+                },
+        );
+        self.fly_dist.store(self.fly_dist.load() + moved_distance);
+
+        if self.move_dist.load() > self.next_step.load() && !supporting_state.is_air() {
+            let only_effect_state = supporting_pos == *effect_pos;
+            let mut produced_side_effects = self.vibration_and_sound_effects_from_block(
+                caller,
+                effect_pos,
+                effect_state,
+                emission.emits_sounds(),
+                only_effect_state,
+                movement,
+            );
+            if !only_effect_state {
+                produced_side_effects |= self.vibration_and_sound_effects_from_block(
+                    caller,
+                    &supporting_pos,
+                    supporting_state,
+                    false,
+                    emission.emits_events(),
+                    movement,
+                );
+            }
+
+            if produced_side_effects {
+                self.next_step.store(caller.next_step());
+            } else if self.is_in_water() {
+                self.next_step.store(caller.next_step());
+                if emission.emits_sounds() {
+                    self.water_swim_sound(caller);
+                }
+                if emission.emits_events() {
+                    self.emit_own_game_event(caller, GameEvent::Swim);
+                }
+            }
+        } else if supporting_state.is_air() && caller.is_flapping() {
+            // Vanilla `processFlappingMovement`.
+            caller.on_flap();
+            if emission.emits_events() {
+                self.emit_own_game_event(caller, GameEvent::Flap);
+            }
+        }
+    }
+
+    /// Vanilla `isStateClimbable`.
+    fn is_state_climbable(block: &Block) -> bool {
+        block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) || block == &Block::POWDER_SNOW
+    }
+
+    /// Vanilla `vibrationAndSoundEffectsFromBlock`.
+    fn vibration_and_sound_effects_from_block(
+        &self,
+        caller: &dyn EntityBase,
+        pos: &BlockPos,
+        state: &'static BlockState,
+        should_sound: bool,
+        should_vibrate: bool,
+        movement: Vector3<f64>,
+    ) -> bool {
+        if state.is_air() {
+            return false;
+        }
+        let climbable = Self::is_state_climbable(state.id.to_block());
+        let crouching = self.pose.load() == EntityPose::Crouching;
+        if !(self.on_ground.load(Ordering::Relaxed)
+            || climbable
+            || crouching && movement.y == 0.0
+            || caller.is_on_rails())
+            || self.is_swimming()
+        {
+            return false;
+        }
+        if should_sound {
+            caller.play_step_sound(pos, state);
+            if self.should_play_amethyst_step_sound(state) {
+                self.play_amethyst_step_sound(caller);
+            }
+        }
+        if should_vibrate {
+            self.emit_own_game_event(caller, GameEvent::Step);
+        }
+        true
+    }
+
+    fn should_play_amethyst_step_sound(&self, state: &BlockState) -> bool {
+        state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_CRYSTAL_SOUND_BLOCKS)
+            && self.tick_count.load(Ordering::Relaxed)
+                >= self.last_crystal_sound_play_tick.load(Ordering::Relaxed) + 20
+    }
+
+    /// Vanilla `playAmethystStepSound`.
+    fn play_amethyst_step_sound(&self, caller: &dyn EntityBase) {
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        let ticks_since = tick_count - self.last_crystal_sound_play_tick.load(Ordering::Relaxed);
+        let intensity = (self.crystal_sound_intensity.load() * 0.997f64.powi(ticks_since) as f32
+            + 0.07)
+            .min(1.0);
+        self.crystal_sound_intensity.store(intensity);
+        let pitch = (intensity * rand::random::<f32>()).mul_add(1.2, 0.5);
+        let volume = intensity.mul_add(1.2, 0.1);
+        caller.play_entity_sound(Sound::BlockAmethystBlockChime, volume, pitch);
+        self.last_crystal_sound_play_tick
+            .store(tick_count, Ordering::Relaxed);
+    }
+
+    /// Vanilla `getPrimaryStepSoundBlockPos`: the block above when it sounds from inside, like snow.
+    pub fn get_primary_step_sound_block_pos(&self, affecting_pos: &BlockPos) -> BlockPos {
+        let above_pos = affecting_pos.up();
+        let above = self.world.load().get_block_state(&above_pos).id.to_block();
+        if above.has_tag(&tag::Block::MINECRAFT_INSIDE_STEP_SOUND_BLOCKS)
+            || above.has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            above_pos
+        } else {
+            *affecting_pos
+        }
+    }
+
+    /// Vanilla `waterSwimSound`: louder the faster the entity, or its controlling rider, swims.
+    pub fn water_swim_sound(&self, caller: &dyn EntityBase) {
+        let rider = caller.get_controlling_passenger();
+        let (velocity, volume_modifier) = rider.as_ref().map_or_else(
+            || (self.velocity.load(), 0.35),
+            |rider| (rider.get_entity().velocity.load(), 0.4),
+        );
+        let speed = (velocity.x * velocity.x * 0.2
+            + velocity.y * velocity.y
+            + velocity.z * velocity.z * 0.2)
+            .sqrt() as f32;
+        caller.play_swim_sound((speed * volume_modifier).min(1.0));
+    }
+
+    /// Vanilla `gameEvent(event)`: at the entity, with itself as the source.
+    fn emit_own_game_event(&self, caller: &dyn EntityBase, event: GameEvent) {
+        self.world.load().emit_game_event_with_context(
+            event.name(),
+            self.pos.load(),
+            &crate::world::game_event::GameEventContext {
+                source_entity: Some(caller),
+            },
+        );
     }
 
     pub fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {

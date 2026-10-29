@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::chicken_sound_variant::ChickenSoundVariant;
 use pumpkin_data::chicken_variant::ChickenVariant;
 use pumpkin_data::game_event::GameEvent;
@@ -11,6 +13,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::ai::pathfinder::node::PathType;
@@ -51,6 +54,8 @@ pub struct ChickenEntity {
     pub sound_variant: AtomicU8,
     egg_lay_time: AtomicI32,
     is_chicken_jockey: AtomicBool,
+    flap_speed: AtomicCell<f32>,
+    next_flap: AtomicCell<f32>,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
@@ -64,6 +69,8 @@ impl ChickenEntity {
             sound_variant: AtomicU8::new(ChickenSoundVariant::Classic as u8),
             egg_lay_time: AtomicI32::new(egg_lay_time),
             is_chicken_jockey: AtomicBool::new(false),
+            flap_speed: AtomicCell::new(0.0),
+            next_flap: AtomicCell::new(1.0),
             ageable_data: crate::entity::ageable::AgeableData::default(),
         };
         let mob_arc = Arc::new(chicken);
@@ -200,6 +207,22 @@ impl Animal for ChickenEntity {
 }
 
 impl Mob for ChickenEntity {
+    fn mob_is_flapping(&self) -> bool {
+        self.get_entity().fly_dist.load() > self.next_flap.load()
+    }
+
+    fn mob_on_flap(&self) {
+        self.next_flap
+            .store(self.get_entity().fly_dist.load() + self.flap_speed.load() / 2.0);
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound_variant =
+            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+                .unwrap_or_default();
+        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,
@@ -349,6 +372,13 @@ impl Mob for ChickenEntity {
     fn mob_ai_step(&self) {
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let flap_change: f32 = if on_ground { -1.0 } else { 4.0 };
+        self.flap_speed.store(
+            flap_change
+                .mul_add(0.3, self.flap_speed.load())
+                .clamp(0.0, 1.0),
+        );
         let velocity = entity.velocity.load();
         if !entity.on_ground.load(Ordering::Relaxed) && velocity.y < 0.0 {
             entity.set_velocity(velocity.multiply(1.0, 0.6, 1.0));

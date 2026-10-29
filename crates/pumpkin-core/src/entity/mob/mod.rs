@@ -18,16 +18,19 @@ use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crate::world::entity_islands::{self, AuditedReach};
+use crate::world::game_event::notified_area;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -1009,6 +1012,12 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+fn has_game_event_listener(mob: &dyn Mob) -> bool {
+    let mut listens = false;
+    mob.for_each_game_event_listener(&mut |_| listens = true);
+    listens
+}
+
 impl MobEntity {
     /// What this mob can touch next tick, if its species and goals are audited.
     pub fn audited_reach(&self, mob: &dyn Mob) -> Option<AuditedReach> {
@@ -1084,6 +1093,29 @@ impl MobEntity {
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
+        if mob.movement_emission().emits_events() {
+            // Step, swim and flap events reach listeners around wherever the mob ends up.
+            let moved = entity
+                .bounding_box
+                .load()
+                .expand(horizontal, vertical, horizontal);
+            let radius = [GameEvent::Step, GameEvent::Swim, GameEvent::Flap]
+                .into_iter()
+                .map(GameEvent::notification_radius)
+                .max()
+                .unwrap_or(0);
+            let area = BoundingBox::new(
+                notified_area(moved.min, radius).min,
+                notified_area(moved.max, radius).max,
+            );
+            links.extend(
+                world
+                    .entity_index
+                    .query(world.entities.load_full(), area)
+                    .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+                    .map(|other| other.get_entity().entity_id),
+            );
+        }
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (horizontal, vertical),
@@ -1287,6 +1319,34 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
+    }
+
+    /// See [`EntityBase::sound_source`].
+    fn mob_sound_source(&self) -> SoundCategory {
+        self.get_entity().entity_type.sound_source
+    }
+
+    /// See [`EntityBase::is_flapping`].
+    fn mob_is_flapping(&self) -> bool {
+        false
+    }
+
+    /// See [`EntityBase::on_flap`].
+    fn mob_on_flap(&self) {}
+
+    /// See [`EntityBase::play_step_sound`].
+    fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        self.play_block_step_sound(state);
+    }
+
+    /// See [`EntityBase::get_swim_sound`].
+    fn mob_get_swim_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_sound
+    }
+
+    /// See [`EntityBase::play_swim_sound`].
+    fn mob_play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume);
     }
 
     fn before_mob_ai_step(&self) {}
@@ -1888,6 +1948,30 @@ pub trait Mob: EntityBase + Send + Sync {
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_pushed_by_fluids(&self) -> bool {
         self.mob_is_pushed_by_fluids()
+    }
+
+    fn sound_source(&self) -> SoundCategory {
+        self.mob_sound_source()
+    }
+
+    fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        self.mob_play_step_sound(pos, state);
+    }
+
+    fn is_flapping(&self) -> bool {
+        self.mob_is_flapping()
+    }
+
+    fn on_flap(&self) {
+        self.mob_on_flap();
+    }
+
+    fn get_swim_sound(&self) -> Option<Sound> {
+        self.mob_get_swim_sound()
+    }
+
+    fn play_swim_sound(&self, volume: f32) {
+        self.mob_play_swim_sound(volume);
     }
 
     fn get_mob(&self) -> Option<&dyn Mob> {
