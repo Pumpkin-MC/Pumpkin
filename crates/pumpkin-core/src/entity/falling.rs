@@ -3,6 +3,7 @@ use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -10,18 +11,28 @@ use pumpkin_protocol::bedrock::client::CUpdateBlock;
 use pumpkin_protocol::java::client::play::CBlockUpdate;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
     block::{blocks::falling::FallingBlock, registry::can_replace_with_other_block},
     entity::{Entity, EntityBase, living::LivingEntity},
+    plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent,
     server::Server,
     world::World,
 };
 
+/// Vanilla `Entity.getAirDrag`.
+const AIR_DRAG: f64 = 0.98;
+/// Vanilla `FallingBlockEntity.tick`: drop after this many ticks while outside the build height.
+const TIME_OUT_OF_WORLD: i32 = 100;
+/// Vanilla `FallingBlockEntity.tick`: drop after this many ticks while still falling.
+const TIME_MAX: i32 = 600;
+
 pub struct FallingEntity {
     entity: Entity,
     block_state_id: BlockStateId,
+    time: AtomicI32,
 }
 
 impl FallingEntity {
@@ -30,36 +41,64 @@ impl FallingEntity {
         Self {
             entity,
             block_state_id,
+            time: AtomicI32::new(0),
         }
     }
 
     /// Replaced the current Block and Spawns a new Falling one (synchronous)
     pub fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
-        // Replace the original block, TODO: use fluid state
-        world.set_block_state(
-            &position,
-            Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
+        let block = Block::from_state_id(block_state);
+        // Vanilla copies the state with `WATERLOGGED` cleared onto the entity.
+        // `None` means the state has no water to clear.
+        let falling_state = block
+            .set_waterlogged(block_state, false)
+            .unwrap_or(block_state);
+        // Vanilla `FallingBlockEntity.fall`: leave `state.getFluidState().createLegacyBlock()`.
+        let leftover = if block.is_waterlogged(block_state) {
+            Fluid::WATER.states[Fluid::WATER.default_state_index as usize].block_state_id
+        } else {
+            Block::AIR.default_state.id
+        };
 
-        let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
-        let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
+        let spawn_pos = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
+        let entity = Entity::new(world.clone(), spawn_pos, &EntityType::FALLING_BLOCK);
+        if world.cancelled_by_plugin(|| {
+            EntityChangeBlockEvent::new(
+                entity.entity_id,
+                position,
+                format!("minecraft:{}", Block::from_state_id(leftover).name),
+            )
+        }) {
+            return;
+        }
+
+        world.set_block_state(&position, leftover, BlockFlags::NOTIFY_ALL);
         entity
             .data
-            .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
-        let entity = Arc::new(Self::new(entity, block_state));
-        world.spawn_entity_non_save(entity);
+            .store(i32::from(falling_state.as_u16()), Ordering::Relaxed);
+        world.spawn_entity_non_save(Arc::new(Self::new(entity, falling_state)));
+    }
+
+    fn drop_as_item(&self) {
+        let world = self.entity.world.load();
+        if world.level_info.load().game_rules.entity_drops
+            && let Some(item) = Item::from_id(Block::from_state_id(self.block_state_id).item_id)
+        {
+            self.entity.spawn_at_location(ItemStack::new(1, item));
+        }
     }
 }
 
 impl EntityBase for FallingEntity {
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
+        let time = self.time.fetch_add(1, Ordering::Relaxed) + 1;
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
 
         entity.velocity.store(velo);
 
+        // TODO: vanilla treats concrete powder in water as still falling (`isStuckInWater`, plus a source-fluid clip above speed 1).
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
         if entity.on_ground.load(Ordering::Relaxed) {
@@ -96,26 +135,55 @@ impl EntityBase for FallingEntity {
                     {
                         state_id = concrete.default_state.id;
                     }
-                    world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
-                    // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
-                    let placed = world.get_block_state_id(&landing_pos);
-                    world.send_to_tracking_players_editioned(
-                        entity,
-                        &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
-                        &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
-                    );
-                } else if world.level_info.load().game_rules.entity_drops
-                    && let Some(item) = Item::from_id(block.item_id)
-                {
-                    entity.spawn_at_location(ItemStack::new(1, item));
+                    let place_block = Block::from_state_id(state_id);
+                    if place_block.is_waterloggable()
+                        && world
+                            .get_fluid(&landing_pos)
+                            .has_tag(&tag::Fluid::MINECRAFT_WATER)
+                        && let Some(waterlogged) = place_block.set_waterlogged(state_id, true)
+                    {
+                        state_id = waterlogged;
+                    }
+                    if world.cancelled_by_plugin(|| {
+                        EntityChangeBlockEvent::new(
+                            entity.entity_id,
+                            landing_pos,
+                            format!("minecraft:{}", Block::from_state_id(state_id).name),
+                        )
+                    }) {
+                        // Vanilla drops the block when `setBlock` refuses.
+                        self.drop_as_item();
+                    } else {
+                        world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+                        // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
+                        let placed = world.get_block_state_id(&landing_pos);
+                        world.send_to_tracking_players_editioned(
+                            entity,
+                            &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
+                            &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
+                        );
+                    }
+                } else {
+                    self.drop_as_item();
                 }
+                self.entity.remove();
+            }
+        } else {
+            let pos = entity.block_pos.load();
+            let world = entity.world.load();
+            let out_of_world = pos.0.y <= world.get_bottom_y() || pos.0.y > world.get_top_y();
+            if (time > TIME_OUT_OF_WORLD && out_of_world) || time > TIME_MAX {
+                self.drop_as_item();
                 self.entity.remove();
             }
         }
 
-        entity
-            .velocity
-            .store(entity.velocity.load().multiply(0.98, 0.98, 0.98));
+        entity.velocity.store(
+            entity
+                .velocity
+                .load()
+                .multiply(AIR_DRAG, AIR_DRAG, AIR_DRAG),
+        );
     }
 
     fn init_data_tracker(&self) {

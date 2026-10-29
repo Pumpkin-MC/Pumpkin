@@ -242,6 +242,16 @@ impl HopperBlockEntity {
             for i in 0..container.size() {
                 let mut item = container.get_stack(i);
                 if !item.is_empty() && container.can_transfer_to(self, i, &item) {
+                    if world.cancelled_by_plugin(|| {
+                        InventoryMoveItemEvent::new(
+                            *pos_up,
+                            self.position,
+                            item.item.registry_key.to_string(),
+                            1,
+                        )
+                    }) {
+                        continue;
+                    }
                     // Parallel hoppers: take and put back, a stale write would erase another hopper's insert.
                     if let Some(source) = container.as_any().downcast_ref::<Self>() {
                         let Some(extraction) = source.take_one(i) else {
@@ -257,7 +267,6 @@ impl HopperBlockEntity {
                         continue;
                     }
                     //TODO WorldlyContainer
-                    let _backup = item.clone();
                     let one_item = item.split(1);
                     if Self::add_one_item(container.as_ref(), self, &one_item) {
                         container.set_stack(i, item);
@@ -522,7 +531,10 @@ impl Inventory for HopperBlockEntity {
             .items
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items[slot].clone()
+        items
+            .get(slot)
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
     fn remove_stack(&self, slot: usize) -> ItemStack {
@@ -530,7 +542,10 @@ impl Inventory for HopperBlockEntity {
             .items
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
+        let Some(slot_item) = items.get_mut(slot) else {
+            return ItemStack::EMPTY.clone();
+        };
+        let removed = std::mem::replace(slot_item, ItemStack::EMPTY.clone());
         self.mark_dirty();
         removed
     }
@@ -540,8 +555,11 @@ impl Inventory for HopperBlockEntity {
             .items
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let res = if !items[slot].is_empty() && amount > 0 {
-            items[slot].split(amount)
+        let Some(slot_item) = items.get_mut(slot) else {
+            return ItemStack::EMPTY.clone();
+        };
+        let res = if !slot_item.is_empty() && amount > 0 {
+            slot_item.split(amount)
         } else {
             ItemStack::EMPTY.clone()
         };
@@ -554,8 +572,10 @@ impl Inventory for HopperBlockEntity {
             .items
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items[slot] = stack;
-        self.mark_dirty();
+        if let Some(slot_item) = items.get_mut(slot) {
+            *slot_item = stack;
+            self.mark_dirty();
+        }
     }
 
     fn mark_dirty(&self) {
@@ -650,6 +670,14 @@ mod tests {
         let hopper = hopper_holding(ItemStack::EMPTY.clone());
 
         assert!(hopper.take_one(0).is_none());
+    }
+
+    #[test]
+    fn take_one_on_a_missing_slot_extracts_nothing() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+
+        assert!(hopper.take_one(HopperBlockEntity::INVENTORY_SIZE).is_none());
+        assert_eq!(hopper.get_stack(0).item_count, 10);
     }
 
     #[test]

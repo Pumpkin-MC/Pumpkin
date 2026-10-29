@@ -311,6 +311,11 @@ impl PlayerInventory {
         -1
     }
 
+    /// Whether `insert_stack_anywhere` would place at least one item of `stack`.
+    pub fn can_hold_any(&self, stack: &ItemStack) -> bool {
+        self.get_occupied_slot_with_room_for_stack(stack) != -1 || self.get_empty_slot() != -1
+    }
+
     /// Inserts a stack into any available slot.
     ///
     /// # Arguments
