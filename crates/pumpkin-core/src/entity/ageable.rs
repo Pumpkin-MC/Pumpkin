@@ -1,5 +1,4 @@
-use pumpkin_data::{particle::Particle, tracked_data};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_data::tracked_data;
 use rand::RngExt;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
@@ -39,22 +38,6 @@ impl Default for AgeableData {
             age_lock_particle_timer: AtomicI32::new(0),
         }
     }
-}
-
-/// One particle at a random horizontal spot in the entity's width, `y` above its feet.
-fn send_random_particle(entity: &Entity, particle: Particle, y: f64) {
-    let mut rng = rand::rng();
-    let width = f64::from(entity.width());
-    let pos = entity.pos.load()
-        + Vector3::new(
-            (rng.random::<f64>() * 2.0 - 1.0) * width,
-            y,
-            (rng.random::<f64>() * 2.0 - 1.0) * width,
-        );
-    entity
-        .world
-        .load()
-        .spawn_particle(pos, Vector3::new(0.0, 0.0, 0.0), 0.0, 1, particle);
 }
 
 pub trait AgeableMob: Mob {
@@ -199,31 +182,14 @@ pub trait AgeableMob: Mob {
         true
     }
 
-    /// Vanilla `makeAgeLockedParticle`: a pause or reset particle above the head every 2 ticks.
+    /// Vanilla `makeAgeLockedParticle`. The particles are spawned by the client itself, so
+    /// the server only counts down.
     fn tick_age_lock_particle_timer(&self) {
         let timer = &self.get_ageable_data().age_lock_particle_timer;
         let ticks = timer.load(Relaxed);
-        if ticks <= 0 {
-            return;
+        if ticks > 0 {
+            timer.store(ticks - 1, Relaxed);
         }
-        if ticks % 2 == 0 {
-            let entity = self.get_entity();
-            let locked = self.is_age_locked();
-            let height = f64::from(entity.height());
-            let y = height * (rand::rng().random::<f64>() * 2.0 - 1.0) * 0.2
-                + height
-                + if locked { 0.2 } else { 0.0 };
-            send_random_particle(
-                entity,
-                if locked {
-                    Particle::PauseMobGrowth
-                } else {
-                    Particle::ResetMobGrowth
-                },
-                y,
-            );
-        }
-        timer.store(ticks - 1, Relaxed);
     }
 
     fn can_age_up(&self) -> bool {
@@ -281,14 +247,10 @@ pub trait AgeableMob: Mob {
     }
 
     fn ageable_ai_step(&self) {
+        // The happy villager particles of a forced age up are spawned by the client itself.
         let data = self.get_ageable_data();
         let forced_timer = data.forced_age_timer.load(Relaxed);
         if forced_timer > 0 {
-            if forced_timer % 4 == 0 {
-                let entity = self.get_entity();
-                let y = rand::rng().random::<f64>() * f64::from(entity.height()) + 0.5;
-                send_random_particle(entity, Particle::HappyVillager, y);
-            }
             data.forced_age_timer.store(forced_timer - 1, Relaxed);
         }
 
