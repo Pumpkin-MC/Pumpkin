@@ -2852,6 +2852,7 @@ impl World {
             editor_world_type: VarInt(0),
             is_created_in_editor: false,
             is_exported_from_editor: false,
+            editor_level_migration_version: 0,
             day_cycle_stop_time: VarInt(-1),
             education_edition_offer: VarUInt(0),
             has_education_features_enabled: false,

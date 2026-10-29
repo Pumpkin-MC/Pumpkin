@@ -115,7 +115,7 @@ unused_async_trait_impl = "allow"
 assert_is_empty = "allow"
 
 [workspace.package]
-version = "0.2.1+26.3-26.51"
+version = "0.2.1+26.3-26.60"
 edition = "2024"
 rust-version = "1.96"
 license = "GPL-3.0"
