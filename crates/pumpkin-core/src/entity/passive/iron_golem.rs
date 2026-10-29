@@ -8,6 +8,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
@@ -54,16 +55,8 @@ impl IronGolemEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(2, Box::new(MoveTowardsTargetGoal::new(0.9, 32.0)));
@@ -77,7 +70,7 @@ impl IronGolemEntity {
 
             // TODO: DefendVillageTargetGoal at 1.
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 4, false);
+            apply_targets(target_selector, &mob_arc.mob_entity, 3, 4, false);
             // Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
             target_selector.add_goal(
                 3,
@@ -109,16 +102,37 @@ impl IronGolemEntity {
         let world = entity.world.load();
         if offer {
             self.offer_flower_tick.store(400, Ordering::Relaxed);
-            world.send_entity_status(entity, EntityStatus::OfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::OfferFlower,
+                ActorEventID::StartOfferFlower,
+            );
         } else {
             self.offer_flower_tick.store(0, Ordering::Relaxed);
-            world.send_entity_status(entity, EntityStatus::StopOfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::StopOfferFlower,
+                ActorEventID::StopOfferFlower,
+            );
         }
     }
 
     #[must_use]
     pub fn get_offer_flower_tick(&self) -> i32 {
         self.offer_flower_tick.load(Ordering::Relaxed)
+    }
+
+    /// Trigger the attack animation for the iron golem.
+    /// This sends `EntityStatus::StartAttacking` to clients and sets the `attack_animation_tick` counter.
+    pub fn trigger_attack_animation(&self) {
+        self.attack_animation_tick.store(10, Ordering::Relaxed);
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        world.send_entity_status(
+            entity,
+            EntityStatus::StartAttacking,
+            ActorEventID::StartAttacking,
+        );
     }
 }
 
@@ -156,6 +170,10 @@ impl Mob for IronGolemEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_iron_golem(&self) -> Option<&crate::entity::passive::iron_golem::IronGolemEntity> {
+        Some(self)
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

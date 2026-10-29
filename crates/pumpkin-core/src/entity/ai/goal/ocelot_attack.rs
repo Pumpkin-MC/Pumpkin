@@ -66,11 +66,8 @@ impl Goal for OcelotAttackGoal {
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 
@@ -104,18 +101,20 @@ impl Goal for OcelotAttackGoal {
             0.8
         };
 
-        let mut navigator = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob_entity.steered();
+        let mut navigator = steered.navigator();
         navigator.set_progress(NavigatorGoal::new(mob_pos, target_pos, speed_modifier));
 
         self.attack_time = (self.attack_time - 1).max(0);
         if dist_sq <= f64::from(melee_radius_sq) && self.attack_time <= 0 {
             self.attack_time = 20;
             mob.get_mob_entity().living_entity.swing_hand();
-            mob.get_mob_entity()
+            let damaged = mob
+                .get_mob_entity()
                 .try_attack(mob.get_entity(), target.as_ref());
+            if damaged {
+                mob.on_attack(target.as_ref());
+            }
         }
     }
 

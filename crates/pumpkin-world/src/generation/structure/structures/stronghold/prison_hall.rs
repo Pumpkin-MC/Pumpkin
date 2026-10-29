@@ -1,4 +1,9 @@
-use pumpkin_data::{Block, BlockState, block_properties::OakFenceLikeProperties};
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{
+        DoubleBlockHalf, HorizontalFacing, OakDoorLikeProperties, OakFenceLikeProperties,
+    },
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -11,10 +16,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -68,31 +70,7 @@ impl StructurePieceBase for PrisonHallPiece {
         &mut self.piece.piece
     }
 
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        // Prison hall usually only has one forward exit
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1,
-            1,
-            pieces_to_process,
-            None,
-        );
-    }
-
+    #[expect(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -212,16 +190,23 @@ impl StructurePieceBase for PrisonHallPiece {
         inner.add_block(chunk, bar_ns, 4, 3, 2, &box_limit);
         inner.add_block(chunk, bar_ns, 4, 3, 8, &box_limit);
 
-        // // 6. Iron Doors (2-block high structure)
-        // let door_bottom = Block::IRON_DOOR.default_state.with("facing", "west").with("half", "lower");
-        // let door_top = Block::IRON_DOOR.default_state.with("facing", "west").with("half", "upper");
+        // 6. Iron Doors (2-block high structure)
+        let mut door_lower_props = OakDoorLikeProperties::default(&Block::IRON_DOOR);
+        door_lower_props.facing = HorizontalFacing::West;
+        door_lower_props.half = DoubleBlockHalf::Lower;
+        let door_bottom = BlockState::from_id(door_lower_props.to_state_id(&Block::IRON_DOOR));
 
-        // // Door 1
-        // inner.add_block(chunk, &door_bottom, 4, 1, 2, &box_limit);
-        // inner.add_block(chunk, &door_top, 4, 2, 2, &box_limit);
+        let mut door_upper_props = OakDoorLikeProperties::default(&Block::IRON_DOOR);
+        door_upper_props.facing = HorizontalFacing::West;
+        door_upper_props.half = DoubleBlockHalf::Upper;
+        let door_top = BlockState::from_id(door_upper_props.to_state_id(&Block::IRON_DOOR));
 
-        // // Door 2
-        // inner.add_block(chunk, &door_bottom, 4, 1, 8, &box_limit);
-        // inner.add_block(chunk, &door_top, 4, 2, 8, &box_limit);
+        // Door 1
+        inner.add_block(chunk, door_bottom, 4, 1, 2, &box_limit);
+        inner.add_block(chunk, door_top, 4, 2, 2, &box_limit);
+
+        // Door 2
+        inner.add_block(chunk, door_bottom, 4, 1, 8, &box_limit);
+        inner.add_block(chunk, door_top, 4, 2, 8, &box_limit);
     }
 }

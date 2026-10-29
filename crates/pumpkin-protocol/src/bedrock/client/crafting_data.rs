@@ -217,9 +217,12 @@ impl PacketWrite for BedrockRecipe {
     }
 }
 
+/// Sent by the server to send all crafting and smelting recipes available in the world.
 #[packet(52)]
 pub struct CCraftingData {
+    /// List of shaped and shapeless crafting recipes.
     pub recipes: Vec<BedrockRecipe>,
+    /// Whether previous recipe entries should be cleared on the client.
     pub clean_recipes: bool,
 }
 

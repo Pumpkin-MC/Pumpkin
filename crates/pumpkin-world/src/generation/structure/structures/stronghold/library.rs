@@ -1,6 +1,8 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{HorizontalFacing, LadderLikeProperties},
+    block_properties::{
+        HorizontalFacing, LadderLikeProperties, OakFenceLikeProperties, WallTorchLikeProperties,
+    },
 };
 use pumpkin_util::{
     BlockDirection,
@@ -128,8 +130,11 @@ impl StructurePieceBase for LibraryPiece {
         // 4. Bookshelves, Pillars, and Wall Torches
         let planks = Block::OAK_PLANKS.default_state;
         let books = Block::BOOKSHELF.default_state;
-        // let torch_e = Block::WALL_TORCH.default_state.with("facing", "east");
-        // let torch_w = Block::WALL_TORCH.default_state.with("facing", "west");
+        let mut torch_props = WallTorchLikeProperties::default(&Block::WALL_TORCH);
+        torch_props.facing = HorizontalFacing::East;
+        let torch_e = BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH));
+        torch_props.facing = HorizontalFacing::West;
+        let torch_w = BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH));
 
         for l in 1..=13 {
             if (l - 1) % 4 == 0 {
@@ -139,8 +144,8 @@ impl StructurePieceBase for LibraryPiece {
                     chunk, &box_limit, false, 12, 1, l, 12, 4, l, planks, planks,
                 );
                 // Torches
-                // inner.add_block(chunk, &torch_e, 2, 3, l, &box_limit);
-                // inner.add_block(chunk, &torch_w, 11, 3, l, &box_limit);
+                inner.add_block(chunk, torch_e, 2, 3, l, &box_limit);
+                inner.add_block(chunk, torch_w, 11, 3, l, &box_limit);
 
                 if self.tall {
                     inner.fill_with_outline(
@@ -187,26 +192,71 @@ impl StructurePieceBase for LibraryPiece {
             inner.add_block(chunk, planks, 9, 5, 10, &box_limit);
 
             // Fences / Railings
-            // let f_ns = Block::OAK_FENCE.default_state.with("north", "true").with("south", "true");
-            // let f_ew = Block::OAK_FENCE.default_state.with("east", "true").with("west", "true");
+            let make_fence =
+                |north: bool, south: bool, east: bool, west: bool| -> &'static BlockState {
+                    let mut props = OakFenceLikeProperties::default(&Block::OAK_FENCE);
+                    props.north = north;
+                    props.south = south;
+                    props.east = east;
+                    props.west = west;
+                    BlockState::from_id(props.to_state_id(&Block::OAK_FENCE))
+                };
 
-            // inner.fill_with_outline(chunk, &box_limit, false, 3, 6, 3, 3, 6, 11, &f_ns, &f_ns);
-            // inner.fill_with_outline(chunk, &box_limit, false, 10, 6, 3, 10, 6, 9, &f_ns, &f_ns);
-            // inner.fill_with_outline(chunk, &box_limit, false, 4, 6, 2, 9, 6, 2, &f_ew, &f_ew);
-            // inner.fill_with_outline(chunk, &box_limit, false, 4, 6, 12, 7, 6, 12, &f_ew, &f_ew);
+            let f_ns = make_fence(true, true, false, false);
+            let f_ew = make_fence(false, false, true, true);
 
-            // // Complex fence junctions (matching the m-loop and specific offsets)
-            // inner.add_block(chunk, &Block::OAK_FENCE.default_state.with("north", "true").with("east", "true"), 3, 6, 2, &box_limit);
-            // inner.add_block(chunk, &Block::OAK_FENCE.default_state.with("south", "true").with("east", "true"), 3, 6, 12, &box_limit);
-            // inner.add_block(chunk, &Block::OAK_FENCE.default_state.with("north", "true").with("west", "true"), 10, 6, 2, &box_limit);
-            // for m in 0..=2 {
-            //     inner.add_block(chunk, &Block::OAK_FENCE.default_state.with("south", "true").with("west", "true"), 8 + m, 6, 12 - m, &box_limit);
-            //     if m != 2 {
-            //         inner.add_block(chunk, &Block::OAK_FENCE.default_state.with("north", "true").with("east", "true"), 8 + m, 6, 11 - m, &box_limit);
-            //     }
-            // }
+            inner.fill_with_outline(chunk, &box_limit, false, 3, 6, 3, 3, 6, 11, f_ns, f_ns);
+            inner.fill_with_outline(chunk, &box_limit, false, 10, 6, 3, 10, 6, 9, f_ns, f_ns);
+            inner.fill_with_outline(chunk, &box_limit, false, 4, 6, 2, 9, 6, 2, f_ew, f_ew);
+            inner.fill_with_outline(chunk, &box_limit, false, 4, 6, 12, 7, 6, 12, f_ew, f_ew);
 
-            // // Ladder
+            // Complex fence junctions (matching the m-loop and specific offsets)
+            inner.add_block(
+                chunk,
+                make_fence(true, false, true, false),
+                3,
+                6,
+                2,
+                &box_limit,
+            );
+            inner.add_block(
+                chunk,
+                make_fence(false, true, true, false),
+                3,
+                6,
+                12,
+                &box_limit,
+            );
+            inner.add_block(
+                chunk,
+                make_fence(true, false, false, true),
+                10,
+                6,
+                2,
+                &box_limit,
+            );
+            for m in 0..=2 {
+                inner.add_block(
+                    chunk,
+                    make_fence(false, true, false, true),
+                    8 + m,
+                    6,
+                    12 - m,
+                    &box_limit,
+                );
+                if m != 2 {
+                    inner.add_block(
+                        chunk,
+                        make_fence(true, false, true, false),
+                        8 + m,
+                        6,
+                        11 - m,
+                        &box_limit,
+                    );
+                }
+            }
+
+            // Ladder
             let mut props = LadderLikeProperties::default(&Block::LADDER);
             props.facing = HorizontalFacing::South;
             let ladder = BlockState::from_id(props.to_state_id(&Block::LADDER));
@@ -214,24 +264,61 @@ impl StructurePieceBase for LibraryPiece {
                 inner.add_block(chunk, ladder, 10, y, 13, &box_limit);
             }
 
-            // // Chandelier (The central structure)
-            // let f_e = Block::OAK_FENCE.default_state.with("east", "true");
-            // let f_w = Block::OAK_FENCE.default_state.with("west", "true");
-            // inner.add_block(chunk, &f_e, 6, 9, 7, &box_limit);
-            // inner.add_block(chunk, &f_w, 7, 9, 7, &box_limit);
-            // inner.add_block(chunk, &f_e, 6, 8, 7, &box_limit);
-            // inner.add_block(chunk, &f_w, 7, 8, 7, &box_limit);
+            // Chandelier (The central structure)
+            let f_e = make_fence(false, false, true, false);
+            let f_w = make_fence(false, false, false, true);
+            inner.add_block(chunk, f_e, 6, 9, 7, &box_limit);
+            inner.add_block(chunk, f_w, 7, 9, 7, &box_limit);
+            inner.add_block(chunk, f_e, 6, 8, 7, &box_limit);
+            inner.add_block(chunk, f_w, 7, 8, 7, &box_limit);
 
-            // let f_full = f_ns.with("west", "true").with("east", "true");
-            // inner.add_block(chunk, &f_full, 6, 7, 7, &box_limit);
-            // inner.add_block(chunk, &f_full, 7, 7, 7, &box_limit);
+            let f_full = make_fence(true, true, true, true);
+            inner.add_block(chunk, f_full, 6, 7, 7, &box_limit);
+            inner.add_block(chunk, f_full, 7, 7, 7, &box_limit);
 
-            // Chandelier Torches
+            inner.add_block(chunk, f_e, 5, 7, 7, &box_limit);
+            inner.add_block(chunk, f_w, 8, 7, 7, &box_limit);
+            inner.add_block(
+                chunk,
+                make_fence(true, false, true, false),
+                6,
+                7,
+                6,
+                &box_limit,
+            );
+            inner.add_block(
+                chunk,
+                make_fence(false, true, true, false),
+                6,
+                7,
+                8,
+                &box_limit,
+            );
+            inner.add_block(
+                chunk,
+                make_fence(true, false, false, true),
+                7,
+                7,
+                6,
+                &box_limit,
+            );
+            inner.add_block(
+                chunk,
+                make_fence(false, true, false, true),
+                7,
+                7,
+                8,
+                &box_limit,
+            );
+
+            // Chandelier Torches (Total 6 standing torches at Y=8)
             let t = Block::TORCH.default_state;
             inner.add_block(chunk, t, 5, 8, 7, &box_limit);
             inner.add_block(chunk, t, 8, 8, 7, &box_limit);
             inner.add_block(chunk, t, 6, 8, 6, &box_limit);
             inner.add_block(chunk, t, 6, 8, 8, &box_limit);
+            inner.add_block(chunk, t, 7, 8, 6, &box_limit);
+            inner.add_block(chunk, t, 7, 8, 8, &box_limit);
         }
 
         // 6. Chests
@@ -256,5 +343,187 @@ impl StructurePieceBase for LibraryPiece {
                 "minecraft:chests/stronghold_library",
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::get_world_gen;
+    use crate::world::{BlockAccessor, WorldPortalExt};
+    use pumpkin_data::BlockId;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::random::legacy_rand::LegacyRand;
+    use pumpkin_util::world_seed::Seed;
+
+    struct DummyPortalExt;
+    impl WorldPortalExt for DummyPortalExt {
+        fn can_place_at(
+            &self,
+            _block: &Block,
+            _state: &BlockState,
+            _block_accessor: &dyn BlockAccessor,
+            _block_pos: &BlockPos,
+        ) -> bool {
+            true
+        }
+
+        fn mirror(
+            &self,
+            _block: &Block,
+            state_id: pumpkin_data::BlockStateId,
+            mirror: pumpkin_data::Mirror,
+        ) -> &'static BlockState {
+            BlockState::from_id(state_id).mirror(mirror)
+        }
+
+        fn rotate(
+            &self,
+            _block: &Block,
+            state_id: pumpkin_data::BlockStateId,
+            rotation: pumpkin_data::Rotation,
+        ) -> &'static BlockState {
+            BlockState::from_id(state_id).rotate(rotation)
+        }
+
+        fn spawn_mobs_for_chunk_generation(
+            &self,
+            _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+            _biome: &'static pumpkin_data::biome::Biome,
+            _chunk_x: i32,
+            _chunk_z: i32,
+        ) {
+        }
+    }
+
+    #[test]
+    fn tall_library_places_torches_and_fences() {
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let chunk_box = BlockBox::new(0, 0, 0, 15, 127, 15);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(12345));
+
+        let mut piece = StrongholdPiece::new(
+            StructurePieceType::StrongholdLibrary,
+            0,
+            BlockBox::new(0, 0, 0, 13, 10, 14),
+        );
+        piece.piece.set_facing(Some(BlockDirection::North));
+        let mut library = LibraryPiece { piece, tall: true };
+
+        library.place(&mut chunk, &DummyPortalExt, &mut random, 0, &chunk_box);
+
+        // Verify pillar wall torches
+        let torch_e = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 2, 3, 1, &chunk_box);
+        assert_eq!(torch_e.id.to_block_id(), BlockId::WALL_TORCH);
+        let props_e = WallTorchLikeProperties::from_state_id(torch_e.id);
+        assert_eq!(props_e.facing, HorizontalFacing::East);
+
+        let torch_w = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 11, 3, 1, &chunk_box);
+        assert_eq!(torch_w.id.to_block_id(), BlockId::WALL_TORCH);
+        let props_w = WallTorchLikeProperties::from_state_id(torch_w.id);
+        assert_eq!(props_w.facing, HorizontalFacing::West);
+
+        // Verify all 6 chandelier torches at Y=8
+        let torch_coords = [
+            (5, 8, 7),
+            (8, 8, 7),
+            (6, 8, 6),
+            (6, 8, 8),
+            (7, 8, 6),
+            (7, 8, 8),
+        ];
+        for (x, y, z) in torch_coords {
+            let torch = library
+                .piece
+                .piece
+                .get_block_at(&chunk, x, y, z, &chunk_box);
+            assert_eq!(
+                torch.id.to_block_id(),
+                BlockId::TORCH,
+                "Expected standing torch at ({x}, {y}, {z})"
+            );
+        }
+
+        // Verify chandelier fences
+        let fence_6_9 = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 6, 9, 7, &chunk_box);
+        assert_eq!(fence_6_9.id.to_block_id(), BlockId::OAK_FENCE);
+        let props = OakFenceLikeProperties::from_state_id(fence_6_9.id);
+        assert!(props.east);
+
+        let fence_7_9 = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 7, 9, 7, &chunk_box);
+        assert_eq!(fence_7_9.id.to_block_id(), BlockId::OAK_FENCE);
+        let props = OakFenceLikeProperties::from_state_id(fence_7_9.id);
+        assert!(props.west);
+
+        let fence_center = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 6, 7, 7, &chunk_box);
+        assert_eq!(fence_center.id.to_block_id(), BlockId::OAK_FENCE);
+        let props = OakFenceLikeProperties::from_state_id(fence_center.id);
+        assert!(props.north && props.south && props.east && props.west);
+    }
+
+    #[test]
+    fn short_library_places_pillar_torches_only() {
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let chunk_box = BlockBox::new(0, 0, 0, 15, 127, 15);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(54321));
+
+        let mut piece = StrongholdPiece::new(
+            StructurePieceType::StrongholdLibrary,
+            0,
+            BlockBox::new(0, 0, 0, 13, 5, 14),
+        );
+        piece.piece.set_facing(Some(BlockDirection::North));
+        let mut library = LibraryPiece { piece, tall: false };
+
+        library.place(&mut chunk, &DummyPortalExt, &mut random, 0, &chunk_box);
+
+        // Pillar wall torches must still be placed
+        let torch_e = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 2, 3, 1, &chunk_box);
+        assert_eq!(torch_e.id.to_block_id(), BlockId::WALL_TORCH);
+        let torch_w = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 11, 3, 1, &chunk_box);
+        assert_eq!(torch_w.id.to_block_id(), BlockId::WALL_TORCH);
+
+        // Chandelier torches at Y=8 must NOT be placed
+        let torch_upper = library
+            .piece
+            .piece
+            .get_block_at(&chunk, 5, 8, 7, &chunk_box);
+        assert_ne!(torch_upper.id.to_block_id(), BlockId::TORCH);
     }
 }

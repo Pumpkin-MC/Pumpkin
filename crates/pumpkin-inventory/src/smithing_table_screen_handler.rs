@@ -2,31 +2,36 @@ use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use crate::crafting::recipe_provider::RecipeProvider;
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{NormalSlot, Slot};
 
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
-use pumpkin_data::data_component_impl::TrimImpl;
+use pumpkin_data::data_component_impl::{ProvidesTrimMaterialImpl, TrimImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::recipes::{
-    get_smithing_transform_recipe, get_smithing_trim_recipe, get_trim_material_for_item,
-};
+use pumpkin_data::recipes::{get_smithing_transform_recipe, get_smithing_trim_recipe};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_protocol::java::server::play::SlotActionType;
 
 pub struct SmithingTableScreenHandler {
     behaviour: ScreenHandlerBehaviour,
     pub input_inventory: Arc<SimpleInventory>,
     pub output_inventory: Arc<SimpleInventory>,
+    pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
 }
 
 impl SmithingTableScreenHandler {
-    pub fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
+    pub fn new(
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    ) -> Self {
         let behaviour = ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Smithing));
         let input_inventory = Arc::new(SimpleInventory::new(3));
         let output_inventory = Arc::new(SimpleInventory::new(1));
@@ -35,6 +40,7 @@ impl SmithingTableScreenHandler {
             behaviour,
             input_inventory,
             output_inventory,
+            recipe_provider,
         };
 
         handler.add_slot(Arc::new(NormalSlot::new(
@@ -61,6 +67,79 @@ impl SmithingTableScreenHandler {
         handler
     }
 
+    fn find_transform_result(
+        &self,
+        template: &ItemStack,
+        base: &ItemStack,
+        addition: &ItemStack,
+    ) -> Option<ItemStack> {
+        if let Some(recipe) = get_smithing_transform_recipe(template.item, base.item, addition.item)
+        {
+            let res_key = recipe
+                .result
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(recipe.result.id);
+            if let Some(target_item) = Item::from_registry_key(res_key) {
+                let mut result = base.clone();
+                result.item = target_item;
+                result.item_count = recipe.result.count;
+                return Some(result);
+            }
+        }
+
+        if let Some(provider) = &self.recipe_provider {
+            for dynamic in provider.get_dynamic_recipes() {
+                if let DynamicRecipe::SmithingTransform(recipe) = dynamic
+                    && recipe.template.match_item(template.item)
+                    && recipe.base.match_item(base.item)
+                    && recipe.addition.match_item(addition.item)
+                {
+                    let res_key = recipe
+                        .result
+                        .item_id
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(&recipe.result.item_id);
+                    if let Some(target_item) = Item::from_registry_key(res_key) {
+                        let mut result = base.clone();
+                        result.item = target_item;
+                        result.item_count = recipe.result.count;
+                        return Some(result);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn find_trim_pattern(
+        &self,
+        template: &ItemStack,
+        base: &ItemStack,
+        addition: &ItemStack,
+    ) -> Option<String> {
+        if let Some(recipe) = get_smithing_trim_recipe(template.item, base.item, addition.item) {
+            return Some(recipe.pattern.to_string());
+        }
+        let provider = self.recipe_provider.as_ref()?;
+        provider.get_dynamic_recipes().iter().find_map(|d| {
+            if let DynamicRecipe::SmithingTrim(recipe) = d
+                && recipe.template.match_item(template.item)
+                && recipe.base.match_item(base.item)
+                && recipe.addition.match_item(addition.item)
+            {
+                let pattern = template
+                    .item
+                    .registry_key
+                    .strip_suffix("_armor_trim_smithing_template")
+                    .unwrap_or(template.item.registry_key);
+                Some(pattern.to_string())
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn update_output(&self) {
         let template_stack = self.input_inventory.get_stack(0);
         let base_stack = self.input_inventory.get_stack(1);
@@ -71,27 +150,17 @@ impl SmithingTableScreenHandler {
             return;
         }
 
-        if let Some(recipe) =
-            get_smithing_transform_recipe(template_stack.item, base_stack.item, addition_stack.item)
+        if let Some(result) =
+            self.find_transform_result(&template_stack, &base_stack, &addition_stack)
         {
-            let res_key = recipe
-                .result
-                .id
-                .strip_prefix("minecraft:")
-                .unwrap_or(recipe.result.id);
-            if let Some(target_item) = Item::from_registry_key(res_key) {
-                let mut result = base_stack.clone();
-                result.item = target_item;
-                result.item_count = recipe.result.count;
-                self.output_inventory.set_stack(0, result);
-                return;
-            }
+            self.output_inventory.set_stack(0, result);
+            return;
         }
 
-        if let Some(recipe) =
-            get_smithing_trim_recipe(template_stack.item, base_stack.item, addition_stack.item)
-            && let Some(material) = get_trim_material_for_item(addition_stack.item)
+        if let Some(pattern) = self.find_trim_pattern(&template_stack, &base_stack, &addition_stack)
+            && let Some(provides) = addition_stack.get_data_component::<ProvidesTrimMaterialImpl>()
         {
+            let material = provides.material.as_ref();
             if let Some(trim) = base_stack.get_data_component::<TrimImpl>() {
                 let curr_mat = match &trim.material {
                     NbtTag::String(s) => s.as_ref(),
@@ -101,17 +170,17 @@ impl SmithingTableScreenHandler {
                     NbtTag::String(s) => s.as_ref(),
                     _ => "",
                 };
-                if curr_mat == material && curr_pat == recipe.pattern {
+                if curr_mat == material && curr_pat == pattern {
                     self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
                     return;
                 }
             }
 
-            let mut result = base_stack.clone();
+            let mut result = base_stack;
             result.item_count = 1;
             result.set_data_component(TrimImpl {
-                material: NbtTag::String(material.into()),
-                pattern: NbtTag::String(recipe.pattern.into()),
+                material: NbtTag::String(material.to_string().into()),
+                pattern: NbtTag::String(pattern.into()),
             });
 
             self.output_inventory.set_stack(0, result);

@@ -1,23 +1,18 @@
 use std::any::Any;
-use std::sync::{LazyLock, Mutex};
-
-use rustc_hash::FxHashMap;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::data_component_impl::DebugStickStateImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, PropertyKey};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
-
-static SELECTED_PROPERTIES: LazyLock<Mutex<FxHashMap<BlockId, &'static str>>> =
-    LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 pub struct DebugStickItem;
 
@@ -30,17 +25,19 @@ impl ItemMetadata for DebugStickItem {
 impl DebugStickItem {
     #[expect(clippy::too_many_lines)]
     fn handle_interaction(
+        item: &mut ItemStack,
         player: &Player,
         pos: &BlockPos,
         block: &Block,
         state_id: BlockStateId,
         cycle: bool,
     ) -> bool {
+        let block_key = format!("minecraft:{}", block.name);
         let Some(props) = block.properties(state_id) else {
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.empty",
-                    [TextComponent::text(block.name)],
+                    [TextComponent::text(block_key)],
                 ),
                 true,
             );
@@ -52,29 +49,32 @@ impl DebugStickItem {
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.empty",
-                    [TextComponent::text(block.name)],
+                    [TextComponent::text(block_key)],
                 ),
                 true,
             );
             return false;
         }
 
-        let prop_names: Vec<&'static str> = prop_list.iter().map(|(k, _)| *k).collect();
-        let mut map = SELECTED_PROPERTIES
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut selected_prop = map.get(&block.id).copied().unwrap_or(prop_names[0]);
-        if !prop_names.contains(&selected_prop) {
-            selected_prop = prop_names[0];
-        }
+        let prop_names: Vec<PropertyKey> = prop_list.iter().map(|p| p.key()).collect();
+        let mut stick_state = item
+            .get_data_component::<DebugStickStateImpl>()
+            .cloned()
+            .unwrap_or_default();
+        let selected_prop = stick_state
+            .properties
+            .iter()
+            .find(|(k, _)| k == &block_key || k == block.name)
+            .and_then(|(_, v)| prop_names.iter().find(|p| p.to_str() == v).copied())
+            .unwrap_or(prop_names[0]);
 
         if cycle {
-            let mut possible_values: Vec<&'static str> = Vec::new();
+            let mut possible_values: Vec<pumpkin_data::Property> = Vec::new();
             for state in block.states {
                 if let Some(state_props) = block.properties(state.id) {
-                    for (k, v) in state_props.to_props() {
-                        if k == selected_prop && !possible_values.contains(&v) {
-                            possible_values.push(v);
+                    for p in state_props.to_props() {
+                        if p.key() == selected_prop && !possible_values.contains(&p) {
+                            possible_values.push(p);
                         }
                     }
                 }
@@ -86,8 +86,9 @@ impl DebugStickItem {
 
             let current_val = prop_list
                 .iter()
-                .find(|(k, _)| *k == selected_prop)
-                .map_or(possible_values[0], |(_, v)| *v);
+                .find(|p| p.key() == selected_prop)
+                .copied()
+                .unwrap_or(possible_values[0]);
             let cur_idx = possible_values
                 .iter()
                 .position(|v| *v == current_val)
@@ -100,23 +101,27 @@ impl DebugStickItem {
             };
             let new_val = possible_values[new_idx];
 
-            let mut new_props = prop_list.clone();
-            for (k, v) in &mut new_props {
-                if *k == selected_prop {
-                    *v = new_val;
+            let mut new_props = prop_list;
+            for p in &mut new_props {
+                if p.key() == selected_prop {
+                    *p = new_val;
                 }
             }
 
             let new_state_id = block.from_properties(&new_props).to_state_id(block);
             let world = player.world();
-            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
+            world.set_block_state(
+                pos,
+                new_state_id,
+                BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+            );
 
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.update",
                     [
-                        TextComponent::text(selected_prop),
-                        TextComponent::text(new_val),
+                        TextComponent::text(selected_prop.to_str()),
+                        TextComponent::text(new_val.value_str()),
                     ],
                 ),
                 true,
@@ -133,18 +138,29 @@ impl DebugStickItem {
                 (cur_idx + 1) % prop_names.len()
             };
             let new_selected_prop = prop_names[new_idx];
-            map.insert(block.id, new_selected_prop);
+            if let Some((_, val)) = stick_state
+                .properties
+                .iter_mut()
+                .find(|(k, _)| k == &block_key || k == block.name)
+            {
+                *val = new_selected_prop.to_str().to_string();
+            } else {
+                stick_state
+                    .properties
+                    .push((block_key, new_selected_prop.to_str().to_string()));
+            }
+            item.set_data_component(stick_state);
 
             let current_val = prop_list
                 .iter()
-                .find(|(k, _)| *k == new_selected_prop)
-                .map_or("", |(_, v)| *v);
+                .find(|p| p.key() == new_selected_prop)
+                .map_or("", |p| p.value_str());
 
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.select",
                     [
-                        TextComponent::text(new_selected_prop),
+                        TextComponent::text(new_selected_prop.to_str()),
                         TextComponent::text(current_val),
                     ],
                 ),
@@ -165,7 +181,11 @@ impl ItemBehaviour for DebugStickItem {
                 world.raycast(start, end, |pos, world| world.get_block(pos) != &Block::AIR)
             {
                 let (block, state) = world.get_block_and_state(&pos);
-                Self::handle_interaction(player, &pos, block, state.id, false);
+                let mut held = player.inventory().held_item();
+                Self::handle_interaction(&mut held, player, &pos, block, state.id, false);
+                player.inventory().set_held_item(held.clone());
+                let slot = player.inventory().get_selected_slot() as usize;
+                player.sync_hand_slot(slot, held);
             }
         }
         false
@@ -173,7 +193,7 @@ impl ItemBehaviour for DebugStickItem {
 
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -184,7 +204,7 @@ impl ItemBehaviour for DebugStickItem {
         if player.can_use_game_master_blocks() {
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
-            if Self::handle_interaction(player, &location, block, state_id, true) {
+            if Self::handle_interaction(item, player, &location, block, state_id, true) {
                 return BlockActionResult::Success;
             }
         }

@@ -15,7 +15,7 @@ use crate::block::{self};
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
-use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
+use crate::entity::player::statistics::StatisticCategory;
 use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
@@ -53,6 +53,7 @@ use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_protocol::bedrock::client::CMovePlayer;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
