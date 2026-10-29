@@ -1559,9 +1559,7 @@ impl ProtoChunk {
             crate::generation::structure::height_sampler::NoiseHeightSampler::new(generator);
 
         for (i, set) in StructureSet::ALL.iter().enumerate() {
-            if let Some(ref enabled) = generator.enabled_structure_sets
-                && !enabled.contains(&i)
-            {
+            if !generator.enabled_structure_sets.contains(&i) {
                 continue;
             }
 
@@ -1697,9 +1695,7 @@ impl ProtoChunk {
         let chunk_height = self.generation_height().min(self.height());
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
-            if let Some(ref enabled) = generator.enabled_structure_sets
-                && !enabled.contains(&set_index)
-            {
+            if !generator.enabled_structure_sets.contains(&set_index) {
                 continue;
             }
 

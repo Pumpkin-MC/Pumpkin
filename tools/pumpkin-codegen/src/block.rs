@@ -1,4 +1,4 @@
-use heck::{ToShoutySnakeCase, ToUpperCamelCase};
+use heck::{ToPascalCase, ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
@@ -643,6 +643,8 @@ pub struct BlockState {
     pub outline_shapes: Vec<u16>,
     /// Opacity value for light propagation, if non-full.
     pub opacity: Option<u8>,
+    /// Index into the global sound type array.
+    pub sound_type: u8,
     /// Associated block-entity type ID, if any.
     pub block_entity_type: Option<u16>,
 }
@@ -787,6 +789,7 @@ impl BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
         let piston_behavior = &self.piston_behavior.to_tokens();
+        let sound_type = LitInt::new(&self.sound_type.to_string(), Span::call_site());
 
         tokens.extend(quote! {
             BlockState {
@@ -800,10 +803,52 @@ impl BlockState {
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
+                sound_type: #sound_type,
                 block_entity_type: #block_entity_type,
             }
         });
         tokens
+    }
+}
+
+/// Vanilla `SoundType` as stored in the `sound_types` table of `blocks.json`.
+#[derive(Deserialize)]
+pub struct SoundType {
+    name: String,
+    volume: f32,
+    pitch: f32,
+    break_sound: String,
+    step_sound: String,
+    place_sound: String,
+    hit_sound: String,
+    fall_sound: String,
+}
+
+impl ToTokens for SoundType {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = &self.name;
+        let volume = self.volume;
+        let pitch = self.pitch;
+        let [break_sound, step_sound, place_sound, hit_sound, fall_sound] = [
+            &self.break_sound,
+            &self.step_sound,
+            &self.place_sound,
+            &self.hit_sound,
+            &self.fall_sound,
+        ]
+        .map(|sound| format_ident!("{}", sound.to_pascal_case()));
+        tokens.extend(quote! {
+            SoundType {
+                name: #name,
+                volume: #volume,
+                pitch: #pitch,
+                break_sound: Sound::#break_sound,
+                step_sound: Sound::#step_sound,
+                place_sound: Sound::#place_sound,
+                hit_sound: Sound::#hit_sound,
+                fall_sound: Sound::#fall_sound,
+            }
+        });
     }
 }
 
@@ -1009,6 +1054,8 @@ pub struct BlockAssets {
     pub blocks: Vec<Block>,
     /// All unique bounding boxes referenced by block states.
     pub shapes: Vec<BoundingBox>,
+    /// All unique sound types referenced by block states.
+    pub sound_types: Vec<SoundType>,
     /// Registry names of all block entity types.
     pub block_entity_types: Vec<String>,
 }
@@ -1527,6 +1574,10 @@ pub fn build() -> TokenStream {
     }
 
     let shapes = blocks_assets.shapes.iter().map(ToTokens::to_token_stream);
+    let sound_types = blocks_assets
+        .sound_types
+        .iter()
+        .map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
     let liquid_state_ids = quote! { #(#liquid_states)|* };
@@ -1585,7 +1636,8 @@ pub fn build() -> TokenStream {
             BlockState, BlockStateId, Block, BlockId,
             blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
         };
-        use crate::block_state::PistonBehavior;
+        use crate::block_state::{PistonBehavior, SoundType};
+        use crate::sound::Sound;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
@@ -1705,6 +1757,10 @@ pub fn build() -> TokenStream {
 
         pub const COLLISION_SHAPES: &[BoundingBox] = &[
             #(#shapes),*
+        ];
+
+        pub const SOUND_TYPES: &[SoundType] = &[
+            #(#sound_types),*
         ];
 
         pub const BLOCK_ENTITY_TYPES: &[&str] = &[

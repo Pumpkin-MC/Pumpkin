@@ -153,6 +153,7 @@ pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
     pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
+    pub hand: HandSlot,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
@@ -164,6 +165,7 @@ pub struct ReleaseItemTransactionData {
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
+    pub hand: HandSlot,
 }
 
 #[derive(Debug)]

@@ -26,6 +26,7 @@ pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, Advanc
     advanced_config.networking.java.online_mode = false;
     advanced_config.networking.java.encryption = false;
     advanced_config.networking.java.compression.enabled = false;
+    advanced_config.networking.java.keep_alive_time = 600;
     advanced_config.networking.bedrock.enabled = false;
     advanced_config.networking.bedrock.online_mode = false;
     advanced_config.networking.bedrock.authentication.enabled = false;
