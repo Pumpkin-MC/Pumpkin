@@ -8,7 +8,7 @@ use crate::{
     item_stack::{from_wit_enchantment, to_wit_enchantment},
     pumpkin::plugin::event::{
         EnchantItemEvent as EnchantItemEventData, EnchantmentOffer,
-        EnchantmentValue as WitEnchantmentValue, Event,
+        EnchantmentValue as WitEnchantmentValue,
         PrepareItemEnchantEvent as PrepareItemEnchantEventData,
     },
 };
