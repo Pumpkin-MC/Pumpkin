@@ -273,6 +273,7 @@ impl HopperBlockEntity {
                         continue;
                     }
                     //TODO WorldlyContainer
+                    // TODO take before offer like the hopper path above, this stale `set_stack` erases a parallel insert into the slot.
                     let one_item = item.split(1);
                     if Self::add_one_item(container.as_ref(), self, &one_item) {
                         // Furnace XP stays stored: vanilla only pays it out to a player or on break.
