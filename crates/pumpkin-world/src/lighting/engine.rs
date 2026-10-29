@@ -1007,7 +1007,12 @@ impl LightEngine {
     }
 
     /// Worldgen pass. Runtime restitch is `DynamicLightEngine`.
-    pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
+    pub fn initialize_light(
+        &mut self,
+        cache: &mut Cache,
+        config: &LightingEngineConfig,
+        has_skylight: bool,
+    ) {
         if *config != LightingEngineConfig::Default {
             return;
         }
@@ -1020,7 +1025,13 @@ impl LightEngine {
             return;
         }
 
-        self.sky_light.convert_light(cache);
+        if has_skylight {
+            self.sky_light.convert_light(cache);
+        } else {
+            for section in &mut cache.get_center_chunk_mut().light.sky_light {
+                *section = LightContainer::new_empty(0);
+            }
+        }
         self.block_light.propagate_light(cache);
 
         self.block_light.clear();
@@ -1203,7 +1214,7 @@ mod tests {
             }
         }
 
-        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default, true);
 
         let Chunk::Level(lit) = &cache.chunks[(2 * 3 + 1) as usize] else {
             panic!("the neighbour at (1, 0) is not a level chunk");
@@ -1278,7 +1289,7 @@ mod tests {
             }
         }
 
-        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default, true);
 
         let Chunk::Level(neighbour) = &cache.chunks[(2 * 3 + 1) as usize] else {
             panic!("the neighbour at (1, 0) is not a level chunk");

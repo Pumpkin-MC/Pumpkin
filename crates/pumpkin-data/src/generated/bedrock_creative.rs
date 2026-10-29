@@ -358,7 +358,7 @@ pub const CREATIVE_GROUPS: &[CreativeGroup; 124usize] = &[
     CreativeGroup {
         category: 3i32,
         name: "itemGroup.name.spear",
-        icon_item_id: 860i16,
+        icon_item_id: 861i16,
         icon_item_aux_value: 0,
     },
     CreativeGroup {
@@ -442,7 +442,7 @@ pub const CREATIVE_GROUPS: &[CreativeGroup; 124usize] = &[
     CreativeGroup {
         category: 3i32,
         name: "itemGroup.name.bundles",
-        icon_item_id: 864i16,
+        icon_item_id: 865i16,
         icon_item_aux_value: 0,
     },
     CreativeGroup {
@@ -4335,7 +4335,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 35u32,
     },
     CreativeEntry {
-        item_id: 882i16,
+        item_id: 883i16,
         item_aux_value: 0u32,
         group_index: 35u32,
     },
@@ -4370,7 +4370,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 35u32,
     },
     CreativeEntry {
-        item_id: 883i16,
+        item_id: 884i16,
         item_aux_value: 0u32,
         group_index: 35u32,
     },
@@ -4440,7 +4440,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 37u32,
     },
     CreativeEntry {
-        item_id: 852i16,
+        item_id: 853i16,
         item_aux_value: 0u32,
         group_index: 37u32,
     },
@@ -5060,7 +5060,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 43u32,
     },
     CreativeEntry {
-        item_id: 853i16,
+        item_id: 854i16,
         item_aux_value: 0u32,
         group_index: 43u32,
     },
@@ -5965,17 +5965,22 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 56u32,
     },
     CreativeEntry {
+        item_id: 861i16,
+        item_aux_value: 0u32,
+        group_index: 57u32,
+    },
+    CreativeEntry {
         item_id: 860i16,
         item_aux_value: 0u32,
         group_index: 57u32,
     },
     CreativeEntry {
-        item_id: 859i16,
+        item_id: 855i16,
         item_aux_value: 0u32,
         group_index: 57u32,
     },
     CreativeEntry {
-        item_id: 854i16,
+        item_id: 858i16,
         item_aux_value: 0u32,
         group_index: 57u32,
     },
@@ -5990,12 +5995,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 57u32,
     },
     CreativeEntry {
-        item_id: 855i16,
-        item_aux_value: 0u32,
-        group_index: 57u32,
-    },
-    CreativeEntry {
-        item_id: 858i16,
+        item_id: 859i16,
         item_aux_value: 0u32,
         group_index: 57u32,
     },
@@ -6545,7 +6545,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 67u32,
     },
     CreativeEntry {
-        item_id: 881i16,
+        item_id: 882i16,
         item_aux_value: 0u32,
         group_index: 67u32,
     },
@@ -6715,42 +6715,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 70u32,
     },
     CreativeEntry {
-        item_id: 864i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 876i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 869i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 866i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 861i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 863i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 875i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 872i16,
+        item_id: 865i16,
         item_aux_value: 0u32,
         group_index: 71u32,
     },
@@ -6770,22 +6735,27 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 71u32,
     },
     CreativeEntry {
-        item_id: 865i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
-        item_id: 868i16,
-        item_aux_value: 0u32,
-        group_index: 71u32,
-    },
-    CreativeEntry {
         item_id: 862i16,
         item_aux_value: 0u32,
         group_index: 71u32,
     },
     CreativeEntry {
-        item_id: 874i16,
+        item_id: 864i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 876i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 873i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 878i16,
         item_aux_value: 0u32,
         group_index: 71u32,
     },
@@ -6795,7 +6765,37 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 71u32,
     },
     CreativeEntry {
-        item_id: 873i16,
+        item_id: 868i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 866i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 869i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 863i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 875i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 872i16,
+        item_aux_value: 0u32,
+        group_index: 71u32,
+    },
+    CreativeEntry {
+        item_id: 874i16,
         item_aux_value: 0u32,
         group_index: 71u32,
     },
@@ -8415,11 +8415,6 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 98u32,
     },
     CreativeEntry {
-        item_id: 832i16,
-        item_aux_value: 0u32,
-        group_index: 98u32,
-    },
-    CreativeEntry {
         item_id: 833i16,
         item_aux_value: 0u32,
         group_index: 98u32,
@@ -8441,6 +8436,11 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
     },
     CreativeEntry {
         item_id: 837i16,
+        item_aux_value: 0u32,
+        group_index: 98u32,
+    },
+    CreativeEntry {
+        item_id: 838i16,
         item_aux_value: 0u32,
         group_index: 98u32,
     },
@@ -8970,7 +8970,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 105u32,
     },
     CreativeEntry {
-        item_id: 878i16,
+        item_id: 879i16,
         item_aux_value: 0u32,
         group_index: 105u32,
     },
@@ -9040,7 +9040,7 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 105u32,
     },
     CreativeEntry {
-        item_id: 851i16,
+        item_id: 852i16,
         item_aux_value: 0u32,
         group_index: 105u32,
     },
@@ -10650,12 +10650,12 @@ pub const CREATIVE_ENTRIES: &[CreativeEntry; 1980usize] = &[
         group_index: 123u32,
     },
     CreativeEntry {
-        item_id: 880i16,
+        item_id: 881i16,
         item_aux_value: 0u32,
         group_index: 123u32,
     },
     CreativeEntry {
-        item_id: 879i16,
+        item_id: 880i16,
         item_aux_value: 0u32,
         group_index: 123u32,
     },

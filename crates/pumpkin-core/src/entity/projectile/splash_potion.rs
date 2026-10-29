@@ -149,7 +149,7 @@ impl EntityBase for SplashPotionEntity {
         world.send_entity_status(
             self.get_entity(),
             pumpkin_data::entity::EntityStatus::Death,
-            Some(pumpkin_protocol::bedrock::server::actor_event::ActorEventID::Death),
+            pumpkin_protocol::bedrock::server::actor_event::ActorEventID::Death,
         );
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);

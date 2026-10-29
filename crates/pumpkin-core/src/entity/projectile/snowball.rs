@@ -64,11 +64,7 @@ impl EntityBase for SnowballEntity {
         let world = self.get_entity().world.load();
 
         // Always send particle status regardless of what was hit
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         // Handle entity-specific damage
         if let ProjectileHit::Entity { ref entity, .. } = hit {

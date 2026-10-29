@@ -673,6 +673,10 @@ impl DynamicLightEngine {
             LightingEngineConfig::Default => {}
         }
 
+        if !cursor.level.world_gen.load().dimension().has_skylight {
+            return;
+        }
+
         // An unloaded chunk keeps the previous behaviour on purpose: dark, and void air
         // for the opacity.
         cursor.counters.bump(Counter::GetSky);

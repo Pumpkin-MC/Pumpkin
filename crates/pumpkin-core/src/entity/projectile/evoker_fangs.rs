@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::sound::Sound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 
 use crate::{
     entity::{Entity, EntityBase},
@@ -80,7 +81,11 @@ impl EntityBase for EvokerFangsEntity {
             }
 
             if !self.sent_spike_event.swap(true, Ordering::SeqCst) {
-                world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::StartAttacking,
+                    ActorEventID::StartAttacking,
+                );
                 if !entity.silent.load(Ordering::Relaxed) {
                     entity.play_sound(Sound::EntityEvokerFangsAttack);
                 }

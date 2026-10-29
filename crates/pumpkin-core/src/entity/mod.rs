@@ -1,5 +1,9 @@
 use crate::{
-    entity::item::ItemEntity,
+    entity::{
+        ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
+        decoration::leash_knot::LeashKnotEntity,
+        item::ItemEntity,
+    },
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
@@ -103,11 +107,23 @@ pub use lightning::LightningBoltEntity;
 pub(crate) mod combat;
 pub mod predicate;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DelayedLeash {
+    Entity(Uuid),
+    Knot(BlockPos),
+}
+
+const LEASH_RESTORE_TIMEOUT: i32 = 100;
+
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
 pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
 /// Push strength per axis in `Entity.push`.
 pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+
+const MAX_LOADED_MOTION: f64 = 10.0;
+const MAX_HORIZONTAL_POSITION: f64 = 3.000_051_2E7;
+const MAX_VERTICAL_POSITION: f64 = 2.0E7;
 
 /// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
 const WATER_PUSH_SPEED: f64 = 0.014;
@@ -171,6 +187,28 @@ impl dyn EntityBase + '_ {
     }
 }
 
+/// Maps Java entity types to Bedrock runtime entity identifiers where the naming differs.
+#[must_use]
+pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'static str {
+    if entity_type.id == EntityType::EXPERIENCE_ORB.id {
+        "minecraft:xp_orb"
+    } else if entity_type.id == EntityType::FISHING_BOBBER.id {
+        "minecraft:fishing_hook"
+    } else if entity_type.id == EntityType::EVOKER_FANGS.id {
+        "minecraft:evocation_fang"
+    } else if entity_type.id == EntityType::TRIDENT.id {
+        "minecraft:thrown_trident"
+    } else if entity_type.id == EntityType::FIREWORK_ROCKET.id {
+        "minecraft:fireworks_rocket"
+    } else if entity_type.id == EntityType::EYE_OF_ENDER.id {
+        "minecraft:eye_of_ender_signal"
+    } else if entity_type.id == EntityType::ZOMBIE_VILLAGER.id {
+        "minecraft:zombie_villager_v2"
+    } else {
+        entity_type.resource_name
+    }
+}
+
 pub trait EntityBase: Send + Sync + std::any::Any {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.get_entity().write_nbt(nbt);
@@ -178,6 +216,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             living.write_living_nbt(nbt);
         }
         self.write_custom_nbt(nbt);
+        self.get_entity().write_passengers(nbt);
     }
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
@@ -316,6 +355,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_gravity(&self) -> f64 {
         0.0
+    }
+
+    /// Extra metadata to accompany this entity when spawned for Bedrock clients (e.g. falling block variant, TNT fuse).
+    fn entity_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
+        None
     }
 
     /// Bedrock network Y above the feet. Endstone `getBaseOffset`.
@@ -536,9 +580,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let identifier = self
             .get_mob()
             .and_then(mob::Mob::mob_bedrock_identifier)
-            .unwrap_or(entity.entity_type.resource_name);
-        // TODO: non-mob spawn metadata hook like `mob_bedrock_spawn_metadata` (falling block, TNT).
+            .unwrap_or_else(|| entity_type_to_bedrock_identifier(entity.entity_type));
         let mut metadata = entity.bedrock_metadata();
+        if let Some(extra_meta) = self.entity_bedrock_spawn_metadata() {
+            metadata.0.extend(extra_meta.0);
+        }
         if let Some(mob) = self.get_mob()
             && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
         {
@@ -562,6 +608,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 float_entries_list: std::collections::HashMap::new(),
             },
             actor_links: Vec::new(),
+            has_passenger_block_data: false,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
             client.try_enqueue_packet(data);
@@ -579,6 +626,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                 client.try_enqueue_packet(meta_data);
+            }
+        }
+        let holder = entity
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|holder| holder.get_entity().entity_id);
+        if let Some(holder_id) = holder {
+            let link_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
+                entity.entity_id,
+                holder_id,
+                true,
+            );
+            if let Ok(link_data) = client.serialize_packet(&link_packet) {
+                client.try_enqueue_packet(link_data);
             }
         }
     }
@@ -1016,6 +1079,8 @@ pub struct Entity {
     pub invisible: AtomicBool,
     /// Indicates whether the entity is glowing
     pub glowing: AtomicBool,
+    pub has_glowing_tag: AtomicBool,
+    pub glowing_from_effect: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -1070,6 +1135,7 @@ pub struct Entity {
     pub vehicle: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    pub delayed_leash: std::sync::Mutex<Option<DelayedLeash>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
@@ -1292,6 +1358,8 @@ impl Entity {
             swimming: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
+            has_glowing_tag: AtomicBool::new(false),
+            glowing_from_effect: AtomicBool::new(false),
             world: ArcSwap::new(world),
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -1320,6 +1388,7 @@ impl Entity {
             passengers: std::sync::Mutex::new(Vec::new()),
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
+            delayed_leash: std::sync::Mutex::new(None),
 
             riding_cooldown: AtomicI32::new(0),
             tick_count: AtomicI32::new(0),
@@ -1484,6 +1553,20 @@ impl Entity {
             visible,
         );
         self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME, Some(name));
+        self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    pub fn clear_custom_name(&self) {
+        if self.custom_name.load().is_none() {
+            return;
+        }
+        self.custom_name.store(Arc::new(None));
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::NAME, MetadataValue::String(String::new()));
+        self.set_synced_data(
+            tracked_data::entity::DATA_CUSTOM_NAME,
+            None::<TextComponent>,
+        );
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
@@ -2976,8 +3059,19 @@ impl Entity {
         }
     }
 
-    /// Sets whether the entity is glowing and sends updated metadata.
     pub fn set_glowing(&self, glowing: bool) {
+        self.has_glowing_tag.store(glowing, Ordering::Relaxed);
+        self.update_glowing_flag();
+    }
+
+    pub fn set_glowing_from_effect(&self, glowing: bool) {
+        self.glowing_from_effect.store(glowing, Ordering::Relaxed);
+        self.update_glowing_flag();
+    }
+
+    fn update_glowing_flag(&self) {
+        let glowing = self.has_glowing_tag.load(Ordering::Relaxed)
+            || self.glowing_from_effect.load(Ordering::Relaxed);
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
             self.set_flag(Flag::Glowing, glowing);
@@ -3681,6 +3775,15 @@ impl Entity {
             }
         }
 
+        self.attach_leash(holder);
+    }
+
+    pub fn attach_leash(&self, holder: Arc<dyn EntityBase>) {
+        let holder_entity_id = holder.get_entity().entity_id;
+        *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         *self
             .leashed_to
             .lock()
@@ -3747,6 +3850,21 @@ impl Entity {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
+        self.send_leash_removed();
+    }
+
+    pub fn remove_leash(&self) {
+        let old_holder = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if old_holder.is_some() {
+            self.send_leash_removed();
+        }
+    }
+
+    fn send_leash_removed(&self) {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
         let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
@@ -3767,7 +3885,82 @@ impl Entity {
         );
     }
 
+    pub fn write_leash_data(&self, nbt: &mut NbtCompound) {
+        let holder = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let leash = match holder {
+            Some(holder) if holder.get_entity().entity_type == &EntityType::LEASH_KNOT => {
+                Some(DelayedLeash::Knot(holder.get_entity().block_pos.load()))
+            }
+            Some(holder) => Some(DelayedLeash::Entity(holder.get_entity().entity_uuid)),
+            None => *self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        };
+        match leash {
+            Some(DelayedLeash::Entity(uuid)) => {
+                let mut tag = NbtCompound::new();
+                tag.put_uuid("UUID", uuid);
+                nbt.put_compound("leash", tag);
+            }
+            Some(DelayedLeash::Knot(pos)) => nbt.put("leash", block_pos_to_tag(pos)),
+            None => {}
+        }
+    }
+
+    pub fn read_leash_data(&self, nbt: &NbtCompound) {
+        let leash = match nbt.get("leash") {
+            Some(NbtTag::Compound(tag)) => tag.get_uuid("UUID").map(DelayedLeash::Entity),
+            Some(pos @ NbtTag::IntArray(_)) => block_pos_from_tag(pos).map(DelayedLeash::Knot),
+            _ => None,
+        };
+        if leash.is_none() {
+            self.remove_leash();
+        }
+        *self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = leash;
+    }
+
+    fn restore_leash_from_save(&self, delayed: DelayedLeash) {
+        let world = self.world.load();
+        let holder = match delayed {
+            DelayedLeash::Entity(uuid) => world.get_entity_by_uuid(uuid).or_else(|| {
+                world
+                    .get_player_by_uuid(uuid)
+                    .map(|p| p as Arc<dyn EntityBase>)
+            }),
+            DelayedLeash::Knot(pos) => Some(LeashKnotEntity::get_or_create(&world, pos)),
+        };
+        if let Some(holder) = holder {
+            self.attach_leash(holder);
+        } else if self.tick_count.load(Relaxed) > LEASH_RESTORE_TIMEOUT {
+            self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+            *self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        }
+    }
+
     pub fn tick_leash(&self) {
+        let delayed = *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(delayed) = delayed {
+            self.restore_leash_from_save(delayed);
+        }
+
         let holder = {
             let Ok(guard) = self.leashed_to.try_lock() else {
                 return;
@@ -3933,6 +4126,44 @@ impl Entity {
             chunk_pos,
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
         );
+    }
+
+    pub fn add_passenger_silently(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) {
+        *passenger
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(vehicle);
+        self.passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(passenger);
+    }
+
+    fn write_passengers(&self, nbt: &mut NbtCompound) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let passengers: Vec<NbtTag> = passengers
+            .iter()
+            .filter(|passenger| {
+                passenger.get_player().is_none() && !passenger.get_entity().is_removed()
+            })
+            .map(|passenger| {
+                let mut tag = NbtCompound::new();
+                passenger.write_nbt(&mut tag);
+                NbtTag::Compound(tag)
+            })
+            .collect();
+        if !passengers.is_empty() {
+            nbt.put_list("Passengers", passengers);
+        }
     }
 
     pub(crate) fn remove_passenger_on_disconnect(&self, passenger_id: i32) {
@@ -4399,13 +4630,15 @@ impl Entity {
             format!("minecraft:{}", self.entity_type.resource_name),
         );
         nbt.put_uuid("UUID", self.entity_uuid);
+        let (x, z) = self
+            .get_vehicle()
+            .map_or((position.x, position.z), |vehicle| {
+                let vehicle_pos = vehicle.get_entity().pos.load();
+                (vehicle_pos.x, vehicle_pos.z)
+            });
         nbt.put(
             "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
+            NbtTag::List(vec![x.into(), position.y.into(), z.into()]),
         );
         let velocity = self.velocity.load();
         nbt.put(
@@ -4427,10 +4660,6 @@ impl Entity {
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
-        if self.has_visual_fire.load(Relaxed) {
-            nbt.put_bool("HasVisualFire", true);
-        }
-        nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
         if let Some(custom_name) = &**self.custom_name.load() {
             let mut tag = custom_name
                 .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3);
@@ -4444,12 +4673,24 @@ impl Entity {
             }
             nbt.put("CustomName", tag);
         }
-        nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+        if self.custom_name_visible.load(Relaxed) {
+            nbt.put_bool("CustomNameVisible", true);
+        }
         if self.is_silent() {
             nbt.put_bool("Silent", true);
         }
         if self.has_no_gravity() {
             nbt.put_bool("NoGravity", true);
+        }
+        if self.has_glowing_tag.load(Relaxed) {
+            nbt.put_bool("Glowing", true);
+        }
+        let frozen_ticks = self.frozen_ticks.load(Relaxed);
+        if frozen_ticks > 0 {
+            nbt.put_int("TicksFrozen", frozen_ticks);
+        }
+        if self.has_visual_fire.load(Relaxed) {
+            nbt.put_bool("HasVisualFire", true);
         }
 
         let tags = self
@@ -4472,29 +4713,38 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !custom_data.is_empty() {
-            nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            nbt.put_compound("data", custom_data.clone());
         }
-
-        // todo more...
     }
 
-    pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+    fn read_placement_nbt(&self, nbt: &NbtCompound) {
         if let Some(position) = nbt.get_list("Pos")
             && position.len() >= 3
         {
             let x = position[0].extract_double().unwrap_or(0.0);
             let y = position[1].extract_double().unwrap_or(0.0);
             let z = position[2].extract_double().unwrap_or(0.0);
-            let pos = Vector3::new(x, y, z);
-            self.set_pos(pos);
-            self.last_sent_pos.store(pos);
+            let pos = Vector3::new(
+                x.clamp(-MAX_HORIZONTAL_POSITION, MAX_HORIZONTAL_POSITION),
+                y.clamp(-MAX_VERTICAL_POSITION, MAX_VERTICAL_POSITION),
+                z.clamp(-MAX_HORIZONTAL_POSITION, MAX_HORIZONTAL_POSITION),
+            );
+            if pos.x.is_finite() && pos.y.is_finite() && pos.z.is_finite() {
+                self.set_pos(pos);
+                self.last_sent_pos.store(pos);
+            }
         }
         if let Some(velocity) = nbt.get_list("Motion")
             && velocity.len() >= 3
         {
-            let x = velocity[0].extract_double().unwrap_or(0.0);
-            let y = velocity[1].extract_double().unwrap_or(0.0);
-            let z = velocity[2].extract_double().unwrap_or(0.0);
+            let [x, y, z] = [0, 1, 2].map(|axis| {
+                let motion = velocity[axis].extract_double().unwrap_or(0.0);
+                if motion.abs() > MAX_LOADED_MOTION {
+                    0.0
+                } else {
+                    motion
+                }
+            });
             self.velocity.store(Vector3::new(x, y, z));
         }
         if let Some(rotation) = nbt.get_list("Rotation")
@@ -4502,41 +4752,39 @@ impl Entity {
         {
             let yaw = rotation[0].extract_float().unwrap_or(0.0);
             let pitch = rotation[1].extract_float().unwrap_or(0.0);
-            self.set_rotation(yaw, pitch);
-            // TODO: use `pumpkin_util::math::pack_degrees`.
-            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            self.last_sent_yaw.store(yaw_byte, Relaxed);
-            self.last_sent_pitch.store(pitch_byte, Relaxed);
-            self.head_yaw.store(yaw);
-            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            if yaw.is_finite() && pitch.is_finite() {
+                self.set_rotation(yaw, pitch);
+                // TODO: use `pumpkin_util::math::pack_degrees`.
+                let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                self.last_sent_yaw.store(yaw_byte, Relaxed);
+                self.last_sent_pitch.store(pitch_byte, Relaxed);
+                self.head_yaw.store(yaw);
+                self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            }
         }
-        // Only keys present are applied, so partial NBT leaves the rest untouched.
-        if let Some(fire) = nbt.get_short("Fire") {
-            self.fire_ticks.store(i32::from(fire), Relaxed);
-        }
-        if let Some(on_ground) = nbt.get_bool("OnGround") {
-            self.on_ground.store(on_ground, Relaxed);
-        }
-        if self.entity_type != &EntityType::PLAYER
-            && let Some(air) = nbt.get_short("Air")
-        {
-            let air = i32::from(air);
+    }
+
+    pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.read_placement_nbt(nbt);
+        self.fire_ticks.store(
+            i32::from(nbt.get_numeric_short("Fire").unwrap_or(0)),
+            Relaxed,
+        );
+        self.on_ground
+            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
+        if self.entity_type != &EntityType::PLAYER {
+            let air = i32::from(
+                nbt.get_numeric_short("Air")
+                    .unwrap_or(breath::MAX_AIR as i16),
+            );
             self.air_supply.store(air, Relaxed);
             self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
-        if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
-            self.invulnerable.store(invulnerable, Relaxed);
-        }
-        if let Some(cooldown) = nbt.get_int("PortalCooldown") {
-            self.portal_cooldown.store(cooldown as u32, Relaxed);
-        }
-        if let Some(visual_fire) = nbt.get_bool("HasVisualFire") {
-            self.has_visual_fire.store(visual_fire, Relaxed);
-        }
-        if let Some(frozen) = nbt.get_int("TicksFrozen") {
-            self.frozen_ticks.store(frozen, Relaxed);
-        }
+        self.invulnerable
+            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+        self.portal_cooldown
+            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
         if let Some(name) = nbt.get("CustomName") {
             // Vanilla stores a text component tag; a string is literal text. Older
             // Pumpkin saves hold a JSON string (same data version, so it can't be told
@@ -4550,39 +4798,78 @@ impl Entity {
             };
             // set_custom_name also updates the synced tracked data
             self.set_custom_name(component);
+        } else {
+            self.clear_custom_name();
         }
-        if let Some(visible) = nbt.get_bool("CustomNameVisible") {
-            self.set_custom_name_visible(visible);
+        let custom_name_visible = nbt.get_bool("CustomNameVisible").unwrap_or(false);
+        if self.custom_name_visible.load(Relaxed) != custom_name_visible {
+            self.set_custom_name_visible(custom_name_visible);
         }
         self.set_silent(nbt.get_bool("Silent").unwrap_or(false));
         self.set_has_no_gravity(nbt.get_bool("NoGravity").unwrap_or(false));
+        self.set_glowing(nbt.get_bool("Glowing").unwrap_or(false));
+        self.frozen_ticks
+            .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
+        self.has_visual_fire
+            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
 
-        if let Some(tag_list) = nbt.get_list("Tags") {
+        let custom_data = nbt
+            .get_compound("data")
+            .or_else(|| nbt.get_compound("PumpkinCustomData"))
+            .or_else(|| nbt.get_compound("BukkitValues"));
+        *self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            custom_data.cloned().unwrap_or_default();
+
+        {
             let mut tags = self
                 .scoreboard_tags
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             tags.clear();
-            tags.extend(
-                tag_list
-                    .iter()
-                    .filter_map(|tag| tag.extract_string().map(str::to_owned))
-                    .take(MAX_SCOREBOARD_TAGS),
+            if let Some(tag_list) = nbt.get_list("Tags") {
+                tags.extend(
+                    tag_list
+                        .iter()
+                        .filter_map(|tag| tag.extract_string().map(str::to_owned))
+                        .take(MAX_SCOREBOARD_TAGS),
+                );
+            }
+        }
+
+        if let Some(team_name) = nbt.get_string("Team") {
+            self.join_team(team_name);
+        }
+    }
+
+    fn join_team(&self, team_name: &str) {
+        if self.entity_type == &EntityType::PLAYER {
+            return;
+        }
+        let world = self.world.load();
+        let scoreboard_name = self.entity_uuid.to_string();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if scoreboard.get_team(team_name).is_none() {
+            tracing::warn!(
+                "Unable to add entity to team \"{team_name}\" (that team probably doesn't exist)"
             );
+            return;
         }
-
-        if let Some(custom_data) = nbt
-            .get_compound("PumpkinCustomData")
-            .or_else(|| nbt.get_compound("BukkitValues"))
+        if let Some(previous_team) = scoreboard
+            .get_entity_team(&scoreboard_name)
+            .map(|team| team.name.clone())
         {
-            let mut data = self
-                .custom_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *data = custom_data.clone();
+            if previous_team == team_name {
+                return;
+            }
+            scoreboard.remove_player_from_team(&*world, &previous_team, &scoreboard_name);
         }
-
-        // todo more...
+        scoreboard.add_player_to_team(&*world, team_name, scoreboard_name);
     }
 }
 
@@ -4733,5 +5020,38 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn entity_type_bedrock_identifier_mappings() {
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EXPERIENCE_ORB),
+            "minecraft:xp_orb"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FISHING_BOBBER),
+            "minecraft:fishing_hook"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EVOKER_FANGS),
+            "minecraft:evocation_fang"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::TRIDENT),
+            "minecraft:thrown_trident"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FIREWORK_ROCKET),
+            "minecraft:fireworks_rocket"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EYE_OF_ENDER),
+            "minecraft:eye_of_ender_signal"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::ZOMBIE_VILLAGER),
+            "minecraft:zombie_villager_v2"
+        );
+        assert_eq!(entity_type_to_bedrock_identifier(&EntityType::COW), "cow");
     }
 }
