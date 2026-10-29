@@ -4426,6 +4426,13 @@ impl Entity {
             .is_some()
     }
 
+    pub fn get_leash_holder(&self) -> Option<Arc<dyn EntityBase>> {
+        self.leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
         let mut mount_event =
             crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(

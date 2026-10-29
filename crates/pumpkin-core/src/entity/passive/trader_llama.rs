@@ -35,6 +35,7 @@ use crate::entity::{
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
+const DEFAULT_DESPAWN_DELAY: i32 = 47_999;
 
 pub const FLAG_TAME: u8 = 2;
 pub const FLAG_BRED: u8 = 8;
@@ -97,6 +98,7 @@ pub struct TraderLlamaEntity {
     pub has_chest: AtomicBool,
     pub temper: AtomicI32,
     pub owner: AtomicCell<Option<Uuid>>,
+    pub despawn_delay: AtomicI32,
 }
 
 impl TraderLlamaEntity {
@@ -117,6 +119,7 @@ impl TraderLlamaEntity {
             has_chest: AtomicBool::new(false),
             temper: AtomicI32::new(0),
             owner: AtomicCell::new(None),
+            despawn_delay: AtomicI32::new(DEFAULT_DESPAWN_DELAY),
         };
         let mob_arc = Arc::new(llama);
         let mob_weak: Weak<dyn Mob> = {
@@ -248,6 +251,56 @@ impl TraderLlamaEntity {
         let spit_arc: Arc<dyn EntityBase> = Arc::new(spit);
         world.spawn_entity(spit_arc);
     }
+
+    fn leashing_trader(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .get_leash_holder()
+            .filter(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
+    }
+
+    fn is_leashed_to_something_other_than_the_wandering_trader(&self) -> bool {
+        let entity = self.get_entity();
+        entity.is_leashed() && self.leashing_trader().is_none()
+    }
+
+    fn has_exactly_one_player_passenger(&self) -> bool {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        passengers.len() == 1 && passengers[0].get_entity().entity_type == &EntityType::PLAYER
+    }
+
+    /// Vanilla `TraderLlama.canDespawn`.
+    fn can_despawn(&self) -> bool {
+        !self.is_tame()
+            && !self.is_leashed_to_something_other_than_the_wandering_trader()
+            && !self.has_exactly_one_player_passenger()
+            && !self.is_age_locked()
+            && !self.mob_entity.persistence_required.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `TraderLlama.maybeDespawn`: mirrors the leashing trader's remaining delay.
+    fn maybe_despawn(&self) {
+        if !self.can_despawn() {
+            return;
+        }
+
+        let trader_delay = self
+            .leashing_trader()
+            .and_then(|trader| trader.get_mob().and_then(Mob::get_despawn_delay));
+        let despawn_delay = trader_delay.map_or_else(
+            || self.despawn_delay.load(Ordering::Relaxed) - 1,
+            |delay| delay - 1,
+        );
+        self.despawn_delay.store(despawn_delay, Ordering::Relaxed);
+
+        if despawn_delay <= 0 {
+            self.get_entity().remove_leash();
+            self.get_entity().remove();
+        }
+    }
 }
 
 impl AgeableMob for TraderLlamaEntity {
@@ -291,6 +344,7 @@ impl Mob for TraderLlamaEntity {
         nbt.put_bool("ChestedHorse", self.has_chest());
         nbt.put_bool("Tame", self.is_tame());
         nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
+        nbt.put_int("DespawnDelay", self.despawn_delay.load(Ordering::Relaxed));
         if let Some(owner) = self.owner.load() {
             nbt.put_uuid("Owner", owner);
         }
@@ -313,9 +367,16 @@ impl Mob for TraderLlamaEntity {
         if let Some(temper) = nbt.get_int("Temper") {
             self.temper.store(temper, Ordering::Relaxed);
         }
+        if let Some(delay) = nbt.get_int("DespawnDelay") {
+            self.despawn_delay.store(delay, Ordering::Relaxed);
+        }
         if let Some(owner) = nbt.get_uuid("Owner") {
             self.owner.store(Some(owner));
         }
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.maybe_despawn();
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

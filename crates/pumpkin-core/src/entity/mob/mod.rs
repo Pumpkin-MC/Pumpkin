@@ -1321,6 +1321,11 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Vanilla `WanderingTrader.getDespawnDelay`, read by leashed trader llamas.
+    fn get_despawn_delay(&self) -> Option<i32> {
+        None
+    }
+
     fn clear_trading_player(&self) {}
 
     fn get_home(&self) -> Option<BlockPos> {
