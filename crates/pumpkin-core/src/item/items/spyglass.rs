@@ -36,6 +36,15 @@ impl ItemBehaviour for SpyglassItem {
             1.0,
         );
         player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
+        let looking_at = player
+            .get_target_entity(&player.world(), 128.0)
+            .map(|e| format!("minecraft:{}", e.get_entity().entity_type.resource_name));
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::UsingItem {
+                item_id: "minecraft:spyglass".to_string(),
+                looking_at,
+            },
+        );
         let stack = player.inventory().get_stack_in_hand(hand);
         player
             .living_entity

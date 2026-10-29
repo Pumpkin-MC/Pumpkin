@@ -161,6 +161,6 @@ impl EntityBase for EnderPearlEntity {
             );
         }
 
-        world.send_entity_status(entity, EntityStatus::Death, Some(ActorEventID::Death));
+        world.send_entity_status(entity, EntityStatus::Death, ActorEventID::Death);
     }
 }

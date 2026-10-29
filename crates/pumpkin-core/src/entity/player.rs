@@ -237,7 +237,9 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
+use pumpkin_data::data_component_impl::{
+    EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
@@ -301,6 +303,7 @@ use crate::data::SaveJSONConfiguration;
 use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent;
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -442,6 +445,8 @@ pub struct Player {
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
     /// The village position where Raid Omen was triggered.
     pub raid_omen_position: AtomicCell<Option<BlockPos>>,
+    /// Starting position when riding a vehicle in lava (for advancement tracking).
+    pub entered_lava_pos: AtomicCell<Option<Vector3<f64>>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -739,6 +744,7 @@ impl Player {
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
+            entered_lava_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
             start_mining_time: AtomicI32::new(0),
             last_input: AtomicI8::new(0),
@@ -1726,6 +1732,19 @@ impl Player {
         };
 
         let result = stack.damage_item(amount);
+        if result != DamageResult::Untouched {
+            let vehicle_type = self
+                .living_entity
+                .entity
+                .get_vehicle()
+                .map(|v| format!("minecraft:{}", v.get_entity().entity_type.resource_name));
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ItemDurabilityChanged {
+                    item_id: original_item.registry_key.to_string(),
+                    vehicle_type,
+                },
+            );
+        }
         if result == DamageResult::Broken
             && let Some((server, player)) = player_context
         {
@@ -1784,7 +1803,7 @@ impl Player {
                 self.world().send_entity_status(
                     &self.living_entity.entity,
                     super::equipment_break_status(slot),
-                    None,
+                    ActorEventID::None,
                 );
             }
 
@@ -2255,6 +2274,43 @@ impl Player {
         self.living_entity.set_sprinting(is_sprinting);
     }
 
+    pub fn try_start_fall_flying(&self, server: &Arc<Server>) {
+        let entity = self.get_entity();
+        let has_glider = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .values()
+            .any(|stack| {
+                stack.get_data_component::<GliderImpl>().is_some()
+                    && !stack.next_damage_will_break()
+            });
+        let fall_flying = entity.check_fall_flying() && has_glider;
+        if fall_flying && !entity.is_fall_flying() {
+            let mut event = EntityToggleGlideEvent::new(entity.entity_id, true);
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if !event.cancelled && event.is_gliding {
+                entity.set_fall_flying(true);
+                self.living_entity.fall_distance.store(0.0);
+                self.update_player_pose();
+            }
+        }
+    }
+
+    pub fn stop_fall_flying(&self, server: &Arc<Server>) {
+        let entity = self.get_entity();
+        if entity.is_fall_flying() {
+            let mut event = EntityToggleGlideEvent::new(entity.entity_id, false);
+            server.plugin_manager.fire_blocking(server, &mut event);
+            if !event.cancelled && !event.is_gliding {
+                entity.set_fall_flying(false);
+                self.update_player_pose();
+            }
+        }
+    }
+
     #[must_use]
     pub fn get_block_speed_factor(&self) -> f32 {
         self.living_entity.get_block_speed_factor()
@@ -2574,8 +2630,14 @@ impl Player {
     }
 
     pub fn send_hurt_animation(&self, yaw: f32) {
-        let packet = CHurtAnimation::new(self.entity_id().into(), yaw);
-        self.try_send_client_packet(&packet);
+        let je_packet = CHurtAnimation::new(self.entity_id().into(), yaw);
+        let be_packet = SActorEvent {
+            target_runtime_id: VarULong(self.entity_id() as u64),
+            event_id: ActorEventID::Hurt,
+            data: VarInt(0),
+            fire_at_position: None,
+        };
+        self.try_enqueue_packet_editioned(&je_packet, &be_packet);
     }
 
     pub fn open_book(&self, hand: Hand) {
@@ -3038,6 +3100,14 @@ impl Player {
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
         self.check_inventory_advancements();
+        if self.tick_counter.load(Ordering::Relaxed) % 20 == 0 {
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Location,
+            );
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::Tick,
+            );
+        }
         if let Ok(mut adv) = self.advancements.try_lock() {
             adv.flush_dirty(self, true);
         }
@@ -4046,6 +4116,58 @@ impl Player {
         }
     }
 
+    pub fn get_target_entity(
+        &self,
+        world: &Arc<World>,
+        max_distance: f64,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let (yaw, pitch) = (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        );
+        let eye_pos = self.living_entity.entity.get_eye_pos();
+        let yaw_rad = f64::from(yaw + 90.0).to_radians();
+        let pitch_rad = f64::from(-pitch).to_radians();
+        let dir = pumpkin_util::math::vector3::Vector3::new(
+            pitch_rad.cos() * yaw_rad.cos(),
+            pitch_rad.sin(),
+            pitch_rad.cos() * yaw_rad.sin(),
+        );
+        let ray = dir * max_distance;
+        let end_pos = eye_pos + ray;
+        let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.min(end_pos.x),
+                eye_pos.y.min(end_pos.y),
+                eye_pos.z.min(end_pos.z),
+            ),
+            pumpkin_util::math::vector3::Vector3::new(
+                eye_pos.x.max(end_pos.x),
+                eye_pos.y.max(end_pos.y),
+                eye_pos.z.max(end_pos.z),
+            ),
+        )
+        .expand(1.0, 1.0, 1.0);
+
+        let entities = world.get_entities_at_box(&search_box);
+        let mut closest_t = 1.0f64;
+        let mut closest_entity = None;
+
+        for entity in entities {
+            if entity.get_entity().entity_id == self.entity_id() {
+                continue;
+            }
+            let ebb = entity.get_entity().bounding_box.load();
+            if let Some(t) = ebb.ray_intersection(eye_pos, ray)
+                && t < closest_t
+            {
+                closest_t = t;
+                closest_entity = Some(entity);
+            }
+        }
+        closest_entity
+    }
+
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
@@ -4286,10 +4408,85 @@ impl Player {
     }
 
     pub fn block_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
         if self.gamemode.load() == GameMode::Creative {
             5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE);
+            attr.max(5.0)
         } else {
-            4.5
+            self.living_entity
+                .get_attribute_value(&Attributes::BLOCK_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn entity_interaction_range(&self) -> f64 {
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
+        if self.gamemode.load() == GameMode::Creative {
+            5.0
+        } else if is_bedrock {
+            let attr = self
+                .living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE);
+            // Bedrock players have a slightly longer interaction/attack reach (~3.0 in Java vs ~3.5 in Bedrock)
+            attr.max(3.5)
+        } else {
+            self.living_entity
+                .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+        }
+    }
+
+    pub fn can_interact_with_entity(&self, target: &dyn EntityBase, additional_range: f64) -> bool {
+        let d = self.entity_interaction_range() + additional_range;
+        target
+            .get_entity()
+            .bounding_box
+            .load()
+            .squared_magnitude(self.eye_position())
+            < d * d
+    }
+
+    pub fn update_bedrock_shield_sneaking(&self) {
+        if !matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            return;
+        }
+        if !self.get_entity().is_sneaking() {
+            if self.living_entity.is_blocking() {
+                self.living_entity.clear_active_hand();
+            }
+            return;
+        }
+
+        let is_blocking = self.living_entity.is_blocking();
+        let shield_hand_and_stack = [Hand::Left, Hand::Right].into_iter().find_map(|hand| {
+            let stack = self.inventory.get_stack_in_hand(hand);
+            (stack
+                .get_data_component::<pumpkin_data::data_component_impl::BlocksAttacksImpl>()
+                .is_some()
+                && !self.is_on_cooldown(stack.item.registry_key))
+            .then_some((hand, stack))
+        });
+
+        match (is_blocking, shield_hand_and_stack) {
+            (true, Some((hand, stack))) => {
+                let current_hand = *self
+                    .living_entity
+                    .active_hand
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if current_hand != Some(hand) {
+                    self.living_entity.set_active_hand(hand, stack, 72000);
+                }
+            }
+            (true, None) => {
+                self.living_entity.clear_active_hand();
+            }
+            (false, Some((hand, stack))) => {
+                self.living_entity.set_active_hand(hand, stack, 72000);
+            }
+            (false, None) => {}
         }
     }
 
@@ -5442,6 +5639,9 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
+        );
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -8099,6 +8299,37 @@ impl InventoryPlayer for Player {
             world.sync_world_event(pumpkin_data::world::WorldEvent::SoundGrindstoneUsed, pos, 0);
         }
     }
+
+    fn on_enchanted_item(&self, levels: i32) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EnchantedItem {
+                levels,
+            },
+        );
+    }
+
+    fn on_recipe_crafted(&self, item: &pumpkin_data::item_stack::ItemStack) {
+        let key = item.item.registry_key.to_string();
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeCrafted {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::RecipeUnlocked {
+                recipe_id: format!("minecraft:{key}"),
+            },
+        );
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::InventoryChanged,
+        );
+    }
+
+    fn on_brewed_potion(&self) {
+        self.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -8188,5 +8419,18 @@ mod tests {
             });
         }
         assert_eq!(counter.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn reach_distances_adhere_to_platform_defaults() {
+        // Standard entity interaction range: ~3.0 for Java, ~3.5 for Bedrock
+        let java_default = 3.0f64;
+        let bedrock_default = 3.5f64;
+        assert!(bedrock_default > java_default);
+
+        // Standard block interaction range: 4.5 for Java, 5.0 for Bedrock
+        let java_block = 4.5f64;
+        let bedrock_block = 5.0f64;
+        assert!(bedrock_block > java_block);
     }
 }

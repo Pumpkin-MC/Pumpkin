@@ -14,6 +14,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -319,10 +320,18 @@ impl Mob for NautilusEntity {
             if rand::random::<u32>().is_multiple_of(3) {
                 self.set_tame(true, Some(player.gameprofile.id));
                 let world = entity.world.load();
-                world.send_entity_status(entity, EntityStatus::TamingSucceeded, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::TamingSucceeded,
+                    ActorEventID::TamingSucceeded,
+                );
             } else {
                 let world = entity.world.load();
-                world.send_entity_status(entity, EntityStatus::TamingFailed, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::TamingFailed,
+                    ActorEventID::TamingFailed,
+                );
             }
             let world = entity.world.load();
             world.play_sound(

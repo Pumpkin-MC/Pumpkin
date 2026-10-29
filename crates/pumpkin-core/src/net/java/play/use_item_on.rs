@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::item::registry::should_try_block_placement;
+use pumpkin_data::block_properties::BlockProperties;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
@@ -75,6 +76,7 @@ impl JavaClient {
         let off_hand_item_empty = off_hand_item.is_empty();
 
         let mut item = inventory.get_stack_in_hand(hand);
+        let before = item.clone();
         let item_id = item.item.id;
         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
@@ -124,7 +126,44 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
-                // TODO: Trigger ANY_BLOCK_USE Criteria
+                let state =
+                    pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
+                        block.id,
+                    )
+                    .then(|| {
+                        let props =
+                            pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
+                                world.get_block_state(&position).id,
+                            );
+                        ("lit".to_string(), props.r#lit.to_string())
+                    });
+
+                let mut is_smokey = false;
+                for dy in 1..=5 {
+                    let check_pos = BlockPos::new(position.0.x, position.0.y - dy, position.0.z);
+                    let b = world.get_block(&check_pos);
+                    if b == &pumpkin_data::Block::CAMPFIRE
+                        || b == &pumpkin_data::Block::SOUL_CAMPFIRE
+                    {
+                        is_smokey = true;
+                        break;
+                    }
+                    if !world.get_block_state(&check_pos).is_air() {
+                        break;
+                    }
+                }
+
+                let biome = Some(world.get_biome(&position).registry_id.to_string());
+
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
+                        block_id: format!("minecraft:{}", block.name),
+                        item_id: before.item.registry_key.to_string(),
+                        state,
+                        smokey: Some(is_smokey),
+                        biome,
+                    },
+                );
 
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
@@ -144,8 +183,6 @@ impl JavaClient {
             // If the hand is empty we stop here
             return Ok(());
         }
-
-        let before = item.clone();
 
         let item_result = server
             .item_registry
@@ -170,6 +207,43 @@ impl JavaClient {
 
         let after = item.clone();
 
+        if item_result.consumes_action() || !item.are_equal(&before) {
+            let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
+                block.id,
+            )
+            .then(|| {
+                let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
+                    world.get_block_state(&position).id,
+                );
+                ("lit".to_string(), props.r#lit.to_string())
+            });
+
+            let mut is_smokey = false;
+            for dy in 1..=5 {
+                let check_pos = BlockPos::new(position.0.x, position.0.y - dy, position.0.z);
+                let b = world.get_block(&check_pos);
+                if b == &pumpkin_data::Block::CAMPFIRE || b == &pumpkin_data::Block::SOUL_CAMPFIRE {
+                    is_smokey = true;
+                    break;
+                }
+                if !world.get_block_state(&check_pos).is_air() {
+                    break;
+                }
+            }
+
+            let biome = Some(world.get_biome(&position).registry_id.to_string());
+
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
+                    block_id: format!("minecraft:{}", block.name),
+                    item_id: before.item.registry_key.to_string(),
+                    state,
+                    smokey: Some(is_smokey),
+                    biome,
+                },
+            );
+        }
+
         if matches!(item_result, BlockActionResult::SuccessServer) {
             player.swing_hand(hand, true);
         }
@@ -188,7 +262,7 @@ impl JavaClient {
             player.world().send_entity_status(
                 player.get_entity(),
                 equipment_break_status(slot),
-                None,
+                ActorEventID::None,
             );
         }
 

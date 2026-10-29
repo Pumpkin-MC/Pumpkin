@@ -13,6 +13,7 @@ use pumpkin_data::{
     tag::{self, Taggable},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
 
 #[derive(Debug, Clone, Copy)]
@@ -389,7 +390,7 @@ impl EntityBase for ArmorStandEntity {
             .query_gametime();
 
         if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
-            world.send_entity_status(entity, EntityStatus::ArmorstandWobble, None);
+            world.send_entity_status(entity, EntityStatus::ArmorstandWobble, ActorEventID::None);
             world.play_sound(
                 Sound::EntityArmorStandHit,
                 SoundCategory::Neutral,
