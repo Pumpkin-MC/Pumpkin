@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -335,6 +336,10 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

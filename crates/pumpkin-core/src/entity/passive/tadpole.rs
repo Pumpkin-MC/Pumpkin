@@ -1,11 +1,13 @@
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -78,6 +80,9 @@ impl AgeableMob for TadpoleEntity {
 }
 
 impl Mob for TadpoleEntity {
+    /// Vanilla `AbstractFish` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

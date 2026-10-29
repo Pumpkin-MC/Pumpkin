@@ -3,11 +3,13 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::world::WorldEvent;
@@ -256,6 +258,10 @@ impl ZombieVillagerEntity {
 }
 
 impl Mob for ZombieVillagerEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityZombieVillagerStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity.mob_entity
     }

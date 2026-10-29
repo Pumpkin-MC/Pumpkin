@@ -22,6 +22,7 @@ impl BedrockClient {
             target_actor_runtime_id: VarULong(entity.entity_id as u64),
             data: 0.0,
             swing_source: None,
+            hand: packet.hand,
         };
 
         if let Some(animation) = java_animation {

@@ -1,7 +1,7 @@
 //! Splits a tick's entities into islands that touch disjoint state. Each island ticks in list
 //! order on its own thread, which gives the same result as ticking the whole list in order.
 
-use std::{collections::VecDeque, sync::atomic::Ordering::Relaxed};
+use std::collections::VecDeque;
 
 #[cfg(debug_assertions)]
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
@@ -339,6 +339,23 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
             links.push(other.get_entity().entity_id);
         }
     }
+    if let Some(DelayedLeash::Entity(uuid)) = *base
+        .delayed_leash
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        let world = base.world.load();
+        links.extend(
+            world
+                .get_entity_by_uuid(uuid)
+                .map(|holder| holder.get_entity().entity_id)
+                .or_else(|| {
+                    world
+                        .get_player_by_uuid(uuid)
+                        .map(|player| player.entity_id())
+                }),
+        );
+    }
     links.extend(entity.get_owner_id());
     if let Some(fish) = entity.get_mob().and_then(|mob| mob.as_schooling_fish())
         && let Some(leader) = fish.leader()
@@ -352,14 +369,12 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     }
     if let Some(living) = entity.get_living_entity() {
         // Kill credit on death.
-        for attacker in [
-            living.last_hurt_by_player_id.load(Relaxed),
-            living.get_last_hurt_by_mob_id().unwrap_or(0),
-        ] {
-            if attacker != 0 {
-                links.push(attacker);
-            }
-        }
+        links.extend(
+            living
+                .get_last_hurt_by_player()
+                .map(|player| player.entity_id()),
+        );
+        links.extend(living.get_last_hurt_by_mob_id().filter(|id| *id != 0));
     }
     links
 }

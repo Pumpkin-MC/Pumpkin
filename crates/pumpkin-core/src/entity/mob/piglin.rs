@@ -5,6 +5,7 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::CampfireLikeProperties;
@@ -979,6 +980,10 @@ impl Mob for PiglinEntity {
         {
             Self::make_sound(self, sound);
         }
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityPiglinStep, 0.15, 1.0);
     }
 
     fn mob_metadata(&self) -> Option<MobMetadata> {

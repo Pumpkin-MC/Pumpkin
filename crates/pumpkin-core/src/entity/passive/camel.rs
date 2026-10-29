@@ -3,12 +3,14 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -128,6 +130,19 @@ impl Animal for CamelEntity {
 
 // TODO: Vanilla seats a second rider behind and moves the seats with the body animation.
 impl Mob for CamelEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        let sound = if state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_CAMEL_SAND_STEP_SOUND_BLOCKS)
+        {
+            Sound::EntityCamelStepSand
+        } else {
+            Sound::EntityCamelStep
+        };
+        self.play_entity_sound(sound, 1.0, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

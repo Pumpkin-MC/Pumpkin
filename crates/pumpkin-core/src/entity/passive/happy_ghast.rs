@@ -3,12 +3,14 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -128,6 +130,8 @@ impl Mob for HappyGhastEntity {
     fn on_climbable(&self) -> bool {
         false
     }
+    /// Vanilla `HappyGhast` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)

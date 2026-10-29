@@ -4,11 +4,13 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -123,6 +125,10 @@ impl Animal for ZombieHorseEntity {
 impl Mob for ZombieHorseEntity {
     fn on_climbable(&self) -> bool {
         false
+    }
+
+    fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        super::horse::play_horse_step_sound(self, pos, state, true);
     }
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {

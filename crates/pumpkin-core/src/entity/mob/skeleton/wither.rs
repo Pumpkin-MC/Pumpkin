@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
+use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -22,6 +25,10 @@ impl WitherSkeletonEntity {
 }
 
 impl Mob for WitherSkeletonEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityWitherSkeletonStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }
