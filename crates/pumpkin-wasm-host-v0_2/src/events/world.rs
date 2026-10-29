@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     events::{
-        ToFromWasmEvent, cleanup_event, consume_world, from_wasm_block_position,
+        CleanupEvent, ToFromWasmEvent, consume_world, from_wasm_block_position,
         to_wasm_block_position,
     },
     pumpkin::plugin::event::{
         ChunkLoadEvent as ChunkLoadEventData, ChunkSaveEvent as ChunkSaveEventData,
-        ChunkSendEvent as ChunkSendEventData, Event, SpawnChangeEvent as SpawnChangeEventData,
+        ChunkSendEvent as ChunkSendEventData, SpawnChangeEvent as SpawnChangeEventData,
         ThunderChangeEvent as ThunderChangeEventData, WeatherChangeEvent as WeatherChangeEventData,
         WorldLoadEvent as WorldLoadEventData, WorldUnloadEvent as WorldUnloadEventData,
     },
@@ -71,10 +71,6 @@ impl ToFromWasmEvent for ChunkLoad {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         let world = consume_world(state, &data.target_world);
         let chunk_data = pumpkin_world::chunk::ChunkData {
@@ -123,10 +119,6 @@ impl ToFromWasmEvent for ChunkSave {
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         let world = consume_world(state, &data.target_world);
         let chunk_data = pumpkin_world::chunk::ChunkData {
@@ -168,10 +160,6 @@ impl ToFromWasmEvent for ChunkSend {
             chunk_z: self.chunk.z,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -218,11 +206,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.to_weather_state = data.to_weather_state;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             world: consume_world(state, &data.target_world),
@@ -247,11 +230,6 @@ impl ToFromWasmEvent
             to_thunder_state: self.to_thunder_state,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.to_thunder_state = data.to_thunder_state;
     }
 
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
@@ -295,10 +273,6 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::world_load::W
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-    }
-
     fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
         Self {
             world: consume_world(state, &data.target_world),
@@ -321,13 +295,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.world_name = data.world_name;
-        self.structure_name = data.structure_name;
-        self.pos = from_wasm_block_position(data.pos);
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             world_name: data.world_name,
@@ -335,6 +302,11 @@ impl ToFromWasmEvent
             pos: from_wasm_block_position(data.pos),
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -352,13 +324,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.world_name = data.world_name;
-        self.structure_name = data.structure_name;
-        self.pos = from_wasm_block_position(data.pos);
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             world_name: data.world_name,
@@ -366,6 +331,11 @@ impl ToFromWasmEvent
             pos: from_wasm_block_position(data.pos),
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -382,16 +352,16 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.chunk_pos = pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z);
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             chunk_pos: pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z),
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -406,16 +376,16 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::chunk_unload:
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.chunk_pos = pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z);
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             chunk_pos: pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z),
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -433,18 +403,17 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.chunk_pos = pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z);
-        self.entity_count = data.entity_count as usize;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             chunk_pos: pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z),
             entity_count: data.entity_count as usize,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -462,18 +431,17 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.chunk_pos = pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z);
-        self.entity_count = data.entity_count as usize;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             chunk_pos: pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z),
             entity_count: data.entity_count as usize,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -488,19 +456,17 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::generic_game:
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.event_key = data.event_id;
-        self.position =
-            pumpkin_util::math::vector3::Vector3::new(data.pos.0, data.pos.1, data.pos.2);
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             event_key: data.event_id,
             position: pumpkin_util::math::vector3::Vector3::new(data.pos.0, data.pos.1, data.pos.2),
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -516,16 +482,16 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.loot_table = data.loot_table;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             loot_table: data.loot_table,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -542,16 +508,6 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.block_pos = from_wasm_block_position(data.pos);
-        self.portal_type = match data.portal_type.as_str() {
-            "Nether" => pumpkin_core::plugin::api::events::world::portal_create::PortalType::Nether,
-            "End" => pumpkin_core::plugin::api::events::world::portal_create::PortalType::End,
-            _ => pumpkin_core::plugin::api::events::world::portal_create::PortalType::Custom,
-        };
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             block_pos: from_wasm_block_position(data.pos),
@@ -564,6 +520,11 @@ impl ToFromWasmEvent
             },
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -579,12 +540,6 @@ impl ToFromWasmEvent
             bone_meal: self.bone_meal,
             cancelled: self.cancelled,
         }
-    }
-
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.block_pos = from_wasm_block_position(data.pos);
-        self.bone_meal = data.bone_meal;
     }
 
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
@@ -617,6 +572,11 @@ impl ToFromWasmEvent
             cancelled: data.cancelled,
         }
     }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
 }
 
 impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::time_skip::TimeSkipEvent {
@@ -629,16 +589,16 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::time_skip::Ti
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.skip_amount = data.skip_amount;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             skip_amount: data.skip_amount,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -670,16 +630,16 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::world_save::W
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.world_name = data.world_name;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             world_name: data.world_name,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
 
@@ -696,17 +656,16 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, data: Self::Wit, _state: &mut PluginHostState) {
-        self.cancelled = data.cancelled;
-        self.position = crate::events::from_wasm_position(data.position);
-        self.is_effect = data.is_effect;
-    }
-
     fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
         Self {
             position: crate::events::from_wasm_position(data.position),
             is_effect: data.is_effect,
             cancelled: data.cancelled,
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
     }
 }
