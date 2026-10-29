@@ -1,5 +1,4 @@
 use crate::block::entities::BlockEntity;
-use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent;
 use crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent;
 use crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent;
@@ -9,7 +8,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockId, BlockStateId};
-use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -155,18 +154,6 @@ impl BlockEntity for HopperBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
-    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
-        let mut nbt = NbtCompound::new();
-        nbt.put(
-            "TransferCooldown",
-            NbtTag::Int(self.cooldown_time.load(Ordering::Relaxed)),
-        );
-        if let Ok(items) = self.items.try_read() {
-            sync_write_items_to_nbt(items.as_slice(), &mut nbt);
-        }
-        Some(nbt)
-    }
-
     fn bedrock_block_actor_data(
         &self,
         _state_id: pumpkin_data::BlockStateId,
@@ -281,19 +268,8 @@ impl HopperBlockEntity {
                     //TODO WorldlyContainer
                     let one_item = item.split(1);
                     if Self::add_one_item(container.as_ref(), self, &one_item) {
+                        // Furnace XP stays stored: vanilla only pays it out to a player or on break.
                         container.set_stack(i, item);
-                        // If extracting from furnace output slot (index 2), drop XP as orbs
-                        let furnace_output_slot: usize = 2;
-                        if i == furnace_output_slot
-                            && let Some(experience_container) =
-                                entity.clone().to_experience_container()
-                        {
-                            let xp = experience_container.extract_experience();
-                            if xp > 0 {
-                                let pos = self.position.to_f64();
-                                ExperienceOrbEntity::spawn(world, pos, xp as u32);
-                            }
-                        }
                         return true;
                     }
                 }
