@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_hopper};
@@ -31,6 +31,18 @@ impl MinecartInventory {
             loot_table: Mutex::new(None),
             drops_claimed: AtomicBool::new(false),
         }
+    }
+
+    fn read_items(&self) -> RwLockReadGuard<'_, Vec<ItemStack>> {
+        self.items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_items(&self) -> RwLockWriteGuard<'_, Vec<ItemStack>> {
+        self.items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub(super) fn claim_drops(&self) -> bool {
@@ -118,44 +130,38 @@ impl Inventory for MinecartInventory {
     }
 
     fn is_empty(&self) -> bool {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        items.iter().all(ItemStack::is_empty)
+        self.read_items().iter().all(ItemStack::is_empty)
     }
 
     fn get_stack(&self, slot: usize) -> ItemStack {
-        self.items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)[slot]
-            .clone()
+        self.read_items()
+            .get(slot)
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
     fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
+        self.write_items().get_mut(slot).map_or_else(
+            || ItemStack::EMPTY.clone(),
+            |stack| std::mem::replace(stack, ItemStack::EMPTY.clone()),
+        )
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !items[slot].is_empty() && amount > 0 {
-            items[slot].split(amount)
-        } else {
-            ItemStack::EMPTY.clone()
+        match self.write_items().get_mut(slot) {
+            Some(stack) if !stack.is_empty() && amount > 0 => stack.split(amount),
+            _ => ItemStack::EMPTY.clone(),
         }
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) {
-        self.items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)[slot] = stack;
+        if let Some(slot_stack) = self.write_items().get_mut(slot) {
+            *slot_stack = stack;
+        }
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        self.write_items().get_mut(slot).is_some_and(update)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -165,10 +171,7 @@ impl Inventory for MinecartInventory {
 
 impl Clearable for MinecartInventory {
     fn clear(&self) {
-        self.items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .fill_with(|| ItemStack::EMPTY.clone());
+        self.write_items().fill_with(|| ItemStack::EMPTY.clone());
     }
 }
 
@@ -314,6 +317,34 @@ mod tests {
         inventory.write_nbt(&mut unpacked);
         assert!(unpacked.get_string("LootTable").is_none());
         assert!(unpacked.get_list("Items").is_some());
+    }
+
+    #[test]
+    fn slot_outside_the_inventory_is_ignored() {
+        let inventory = MinecartInventory::new(5);
+        inventory.set_stack(5, ItemStack::new(1, &Item::STONE));
+
+        assert!(inventory.get_stack(5).is_empty());
+        assert!(inventory.remove_stack(5).is_empty());
+        assert!(inventory.remove_stack_specific(5, 1).is_empty());
+        assert!(!inventory.update_stack(5, &mut |_| true));
+        assert!(inventory.is_empty());
+    }
+
+    #[test]
+    fn hopper_insert_tops_up_then_fills_the_next_slot() {
+        let inventory = MinecartInventory::new(5);
+        inventory.set_stack(0, ItemStack::new(60, &Item::STONE));
+
+        let rest = crate::block::entities::hopper::HopperBlockEntity::add_stack(
+            None,
+            &inventory,
+            ItemStack::new(10, &Item::STONE),
+        );
+
+        assert!(rest.is_empty());
+        assert_eq!(inventory.get_stack(0).item_count, 64);
+        assert_eq!(inventory.get_stack(1).item_count, 6);
     }
 
     #[test]

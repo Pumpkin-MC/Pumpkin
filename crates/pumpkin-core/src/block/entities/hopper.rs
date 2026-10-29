@@ -437,21 +437,9 @@ impl HopperBlockEntity {
             return;
         }
         let to_empty = to.is_empty();
-        let success = if let Some(hopper) = to.as_any().downcast_ref::<Self>() {
-            // One lock for read and write: a parallel insert would otherwise overwrite a stale copy.
-            let mut items = hopper.write_items();
-            items
-                .get_mut(slot)
-                .is_some_and(|dst| Self::merge_into_slot(dst, stack))
-        } else {
-            let mut dst = to.get_stack(slot);
-            let success = Self::merge_into_slot(&mut dst, stack);
-            if success {
-                to.set_stack(slot, dst);
-            }
-            success
-        };
-        if !success {
+        // One lock for read and write where the target has one: a parallel write would otherwise
+        // be overwritten by a stale copy.
+        if !to.update_stack(slot, &mut |dst| Self::merge_into_slot(dst, stack)) {
             return;
         }
 
@@ -540,6 +528,14 @@ impl Inventory for HopperBlockEntity {
             *slot_item = stack;
             self.mark_dirty();
         }
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        let changed = self.write_items().get_mut(slot).is_some_and(update);
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     fn mark_dirty(&self) {

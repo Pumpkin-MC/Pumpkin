@@ -20,6 +20,23 @@ pub trait Inventory: Send + Sync + Clearable {
 
     fn set_stack(&self, slot: usize, stack: ItemStack);
 
+    /// Runs `update` on one slot and writes the result back when it returns `true`. `false` for a
+    /// slot outside the inventory.
+    ///
+    /// The default reads and writes separately. Inventories behind a lock override it to hold
+    /// the lock throughout, so a parallel write can't land in between and get overwritten.
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot >= self.size() {
+            return false;
+        }
+        let mut stack = self.get_stack(slot);
+        let changed = update(&mut stack);
+        if changed {
+            self.set_stack(slot, stack);
+        }
+        changed
+    }
+
     fn on_open(&self) {}
     fn on_close(&self) {}
 
