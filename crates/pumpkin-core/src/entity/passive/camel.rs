@@ -129,6 +129,7 @@ impl Animal for CamelEntity {
 }
 
 // TODO: Vanilla seats a second rider behind and moves the seats with the body animation.
+// TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         let sound = if state

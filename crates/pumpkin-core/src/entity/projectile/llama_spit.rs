@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::damage::DamageType;
@@ -23,7 +24,7 @@ impl LlamaSpitEntity {
     pub const fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: LLAMA_SPIT_GRAVITY,
@@ -45,7 +46,7 @@ impl LlamaSpitEntity {
 
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: Some(shooter.entity_id),
+            owner: ProjectileOwner::new(Some(shooter)),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: LLAMA_SPIT_GRAVITY,
@@ -56,8 +57,8 @@ impl LlamaSpitEntity {
 }
 
 impl EntityBase for LlamaSpitEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -88,8 +89,7 @@ impl EntityBase for LlamaSpitEntity {
         } = hit
         {
             let world = self.get_entity().world.load();
-            let owner_id = self.thrown.owner_id;
-            let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
+            let owner = self.thrown.owner.get(&world);
 
             let _ = entity.damage_with_context(
                 entity.as_ref(),

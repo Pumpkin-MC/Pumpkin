@@ -8,6 +8,7 @@ use rand::RngExt;
 
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::mob::MobEntity;
+use crate::entity::passive::fox::FoxVariant;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
@@ -27,6 +28,11 @@ pub enum SpawnGroupData {
     },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
+    Fox {
+        variant: FoxVariant,
+        size: u32,
+    },
 }
 
 impl MobEntity {

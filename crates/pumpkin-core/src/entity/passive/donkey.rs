@@ -159,6 +159,10 @@ impl Mob for DonkeyEntity {
         false
     }
 
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         super::horse::play_horse_step_sound(self, pos, state, false);
     }

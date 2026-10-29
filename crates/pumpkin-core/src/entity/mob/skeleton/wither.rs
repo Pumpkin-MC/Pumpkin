@@ -8,9 +8,13 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
+    ai::behavior::hunting::Hunt,
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
     projectile::arrow::ArrowEntity,
 };
+
+const WITHER_SKELETON_HUNTS: &[Hunt] = &[Hunt::new(3, TargetMatch::PIGLIN_LIKE, true)];
 
 pub struct WitherSkeletonEntity {
     entity: Arc<SkeletonEntityBase>,
@@ -18,7 +22,7 @@ pub struct WitherSkeletonEntity {
 
 impl WitherSkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity);
+        let entity = SkeletonEntityBase::with_hunts(entity, WITHER_SKELETON_HUNTS);
         let skeleton = Self { entity };
         Arc::new(skeleton)
     }

@@ -207,6 +207,14 @@ pub fn snbt_colorful_display(tag: &NbtTag, _depth: usize) -> TextComponent {
 
 pub trait DataAccessor: Send + Sync {
     fn set_data(&self, data: &NbtCompound) -> Result<(), CommandSyntaxError>;
+    /// `data` is the full snapshot without the `removed` top-level keys.
+    fn remove_data(
+        &self,
+        data: &NbtCompound,
+        _removed: &[Box<str>],
+    ) -> Result<(), CommandSyntaxError> {
+        self.set_data(data)
+    }
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError>;
     fn get_modified_success(&self) -> TextComponent;
     fn get_print_success(&self, data: &NbtTag) -> TextComponent;
@@ -230,6 +238,16 @@ impl DataAccessor for EntityDataAccessor {
             return Err(ERROR_ENTITY_INVALID.create_without_context());
         }
         self.entity.read_nbt_non_mut(tag);
+        Ok(())
+    }
+
+    fn remove_data(
+        &self,
+        data: &NbtCompound,
+        removed: &[Box<str>],
+    ) -> Result<(), CommandSyntaxError> {
+        self.set_data(data)?;
+        self.entity.remove_nbt(removed);
         Ok(())
     }
 
@@ -593,16 +611,21 @@ fn execute_merge(context: &CommandContext, target_kind: TargetKind) -> CommandEx
 fn execute_remove(context: &CommandContext, target_kind: TargetKind) -> CommandExecutorResult {
     let accessor = target_kind.access(context, "target")?;
     let path = context.get_argument::<NbtPath>("path")?;
-    let mut data = accessor.get_data()?;
-    let mut root = NbtTag::Compound(data.clone());
+    let old = accessor.get_data()?;
+    let mut root = NbtTag::Compound(old.clone());
     let count = path.remove(&mut root);
     if count == 0 {
         return Err(ERROR_MERGE_UNCHANGED.create_without_context());
     }
-    if let NbtTag::Compound(new_compound) = root {
-        data = new_compound;
-    }
-    accessor.set_data(&data)?;
+    let NbtTag::Compound(data) = root else {
+        return Err(ERROR_MERGE_UNCHANGED.create_without_context());
+    };
+    let removed: Vec<Box<str>> = old
+        .child_tags
+        .into_keys()
+        .filter(|key| !data.has(key))
+        .collect();
+    accessor.remove_data(&data, &removed)?;
     context
         .source
         .send_feedback(accessor.get_modified_success(), true);

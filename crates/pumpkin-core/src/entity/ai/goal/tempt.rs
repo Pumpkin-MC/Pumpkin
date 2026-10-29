@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
@@ -76,11 +77,18 @@ impl TemptGoal {
             .living_entity
             .get_attribute_value(&Attributes::TEMPT_RANGE);
         let world = mob_entity.living_entity.entity.world.load();
+        let conditions = TargetPredicate::create_non_attackable()
+            .ignore_visibility()
+            .set_base_max_distance(range);
 
+        // The conditions scale the range down, so sneaking shortens it.
         world.get_nearest_player(
             mob_entity.living_entity.entity.pos.load(),
             range,
-            |player| player.can_be_seen_by_anyone() && self.is_holding_tempt_item(player),
+            |player| {
+                self.is_holding_tempt_item(player)
+                    && conditions.test(&world, Some(mob), player.as_ref())
+            },
         )
     }
 

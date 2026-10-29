@@ -27,6 +27,11 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SEAGRASS];
 
+/// Turtle is prey for wolves and cats.
+pub fn is_baby_on_land(mob: &dyn Mob) -> bool {
+    mob.as_ageable().is_some_and(AgeableMob::is_baby) && !mob.get_entity().is_in_water()
+}
+
 pub struct TurtleEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,

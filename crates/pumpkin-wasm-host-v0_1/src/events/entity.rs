@@ -276,6 +276,12 @@ impl ToFromWasmEvent
 }
 
 impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed::EntityBreedEvent {
+    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+        if let Event::EntityBreedEvent(data) = event {
+            self.cancelled = data.cancelled;
+        }
+    }
+
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityBreedEvent(EntityBreedEventData {
             father_id: self.father_id,
@@ -291,6 +297,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed
                 father_id: data.father_id,
                 mother_id: data.mother_id,
                 child_id: data.child_id,
+                experience: 0,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -541,6 +548,13 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_tame:
 impl ToFromWasmEvent
     for pumpkin_core::plugin::api::events::entity::entity_target::EntityTargetEvent
 {
+    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+        if let Event::EntityTargetEvent(data) = event {
+            self.target_id = data.target_id;
+            self.cancelled = data.cancelled;
+        }
+    }
+
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityTargetEvent(EntityTargetEventData {
             entity_id: self.entity_id,
@@ -554,6 +568,8 @@ impl ToFromWasmEvent
             Event::EntityTargetEvent(data) => Self {
                 entity_id: data.entity_id,
                 target_id: data.target_id,
+                reason:
+                    pumpkin_core::plugin::api::events::entity::entity_target::TargetReason::Unknown,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
