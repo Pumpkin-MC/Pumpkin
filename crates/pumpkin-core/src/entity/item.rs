@@ -90,6 +90,10 @@ impl Drop for ItemMergeReservation<'_> {
 
 /// Vanilla `ItemEntity.LIFETIME`.
 const LIFETIME: u32 = 6000; // 5 minutes in ticks
+/// Vanilla `ItemEntity.INFINITE_PICKUP_DELAY`.
+const INFINITE_PICKUP_DELAY: i16 = 32767;
+/// Vanilla `ItemEntity.INFINITE_LIFETIME`.
+const INFINITE_LIFETIME: i16 = -32768;
 /// Vanilla `ItemEntity.merge(to, from, 64)`: cap on top of `getMaxStackSize`.
 const MERGE_MAX_COUNT: u8 = 64;
 
@@ -778,6 +782,7 @@ impl EntityBase for ItemEntity {
 
     fn on_player_collision(&self, player: &Arc<Player>) {
         if self.pickup_delay.load(Ordering::Relaxed) > 0
+            || self.never_pickup.load(Ordering::Relaxed)
             || player.living_entity.health.load() <= 0.0
             || player.is_spectator()
         {
@@ -883,11 +888,18 @@ impl EntityBase for ItemEntity {
         item.write_item_stack(&mut item_compound);
         nbt.put_compound("Item", item_compound);
 
-        nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
-        nbt.put_short(
-            "PickupDelay",
-            self.pickup_delay.load(Ordering::Relaxed) as i16,
-        );
+        let age = if self.never_despawn.load(Ordering::Relaxed) {
+            INFINITE_LIFETIME
+        } else {
+            i16::try_from(self.item_age.load(Ordering::Relaxed)).unwrap_or(i16::MAX)
+        };
+        nbt.put_short("Age", age);
+        let pickup_delay = if self.never_pickup.load(Ordering::Relaxed) {
+            INFINITE_PICKUP_DELAY
+        } else {
+            i16::from(self.pickup_delay.load(Ordering::Relaxed))
+        };
+        nbt.put_short("PickupDelay", pickup_delay);
         nbt.put_short("Health", self.health.load(Relaxed) as i16);
         if let Some(thrower) = self.thrower.load() {
             nbt.put_uuid("Thrower", thrower);
@@ -908,13 +920,22 @@ impl EntityBase for ItemEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
         }
 
-        // Vanilla stores Age as a short
+        // Vanilla `Age` is a short; -32768 is the infinite lifetime, other negatives (extended lifetime) start at 0.
+        let age = nbt.get_short("Age").unwrap_or(0);
+        self.never_despawn
+            .store(age == INFINITE_LIFETIME, Ordering::Relaxed);
         self.item_age
-            .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
+            .store(u32::try_from(age).unwrap_or(0), Ordering::Relaxed);
 
-        // Vanilla stores PickupDelay as a short
-        if let Some(delay) = nbt.get_short("PickupDelay") {
-            self.pickup_delay.store(delay as u8, Ordering::Relaxed);
+        // Vanilla `PickupDelay` is a short; 32767 is the infinite delay, ours is capped at `u8::MAX`.
+        let delay = nbt.get_short("PickupDelay").unwrap_or(0);
+        self.never_pickup
+            .store(delay == INFINITE_PICKUP_DELAY, Ordering::Relaxed);
+        if delay != INFINITE_PICKUP_DELAY {
+            self.pickup_delay.store(
+                u8::try_from(delay.max(0)).unwrap_or(u8::MAX),
+                Ordering::Relaxed,
+            );
         }
 
         // Vanilla stores Health as a short

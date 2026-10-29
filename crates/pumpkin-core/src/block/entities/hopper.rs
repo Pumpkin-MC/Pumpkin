@@ -318,12 +318,10 @@ impl HopperBlockEntity {
             .items
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if items[slot].is_empty() {
-            return None;
-        }
-        let snapshot = items[slot].clone();
-        let one_item = items[slot].split(1);
-        let remainder = items[slot].clone();
+        let stack = items.get_mut(slot).filter(|stack| !stack.is_empty())?;
+        let snapshot = stack.clone();
+        let one_item = stack.split(1);
+        let remainder = stack.clone();
         self.mark_dirty();
         Some(Extraction {
             one_item,
@@ -343,7 +341,9 @@ impl HopperBlockEntity {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.mark_dirty();
-        let current = &mut items[slot];
+        let Some(current) = items.get_mut(slot) else {
+            return Some(extraction.one_item);
+        };
         if current.are_equal(&extraction.remainder) {
             *current = extraction.snapshot;
             return None;
@@ -452,7 +452,9 @@ impl HopperBlockEntity {
                 .items
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            Self::merge_into_slot(&mut items[slot], stack)
+            items
+                .get_mut(slot)
+                .is_some_and(|dst| Self::merge_into_slot(dst, stack))
         } else {
             let mut dst = to.get_stack(slot);
             let success = Self::merge_into_slot(&mut dst, stack);
