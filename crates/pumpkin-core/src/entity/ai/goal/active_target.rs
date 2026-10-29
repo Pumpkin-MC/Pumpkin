@@ -295,7 +295,10 @@ impl Goal for ActiveTargetGoal {
         } else {
             TargetReason::ClosestEntity
         };
-        mob.set_mob_target(self.target.clone(), reason);
+        if !mob.set_mob_target(self.target.clone(), reason) {
+            // A plugin cancelled the change, so drop the target `should_continue` would keep.
+            self.target = None;
+        }
         self.track_target_goal.start(mob);
     }
 
