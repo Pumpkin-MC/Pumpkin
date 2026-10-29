@@ -1966,18 +1966,14 @@ impl PathNavigationTrait for WallClimberNavigation {
             let current_pos = entity.entity.pos.load();
             let bb = entity.entity.bounding_box.load();
             let width = bb.max.x - bb.min.x;
-            let target_center = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            let dx = target_center.x - current_pos.x;
-            let dz = target_center.z - current_pos.z;
-            let dist_sq = dx * dx + dz * dz;
+            let width_sq = width * width;
+            let (x, y, z) = (current_pos.x, current_pos.y, current_pos.z);
 
-            let close_enough = dist_sq < width * width
-                && (current_pos.y > f64::from(target_pos.0.y)
-                    || (current_pos.y - f64::from(target_pos.0.y)).abs() < 1.0);
+            let close_enough = target_pos.dist_to_center_sqr(x, y, z) < width_sq
+                || (y > f64::from(target_pos.0.y)
+                    && BlockPos::new(target_pos.0.x, y.floor() as i32, target_pos.0.z)
+                        .dist_to_center_sqr(x, y, z)
+                        < width_sq);
 
             if close_enough {
                 self.path_to_position = None;

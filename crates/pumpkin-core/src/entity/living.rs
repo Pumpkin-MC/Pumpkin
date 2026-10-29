@@ -1101,6 +1101,11 @@ impl LivingEntity {
         {
             return false;
         }
+        if (entity_type == &EntityType::SPIDER || entity_type == &EntityType::CAVE_SPIDER)
+            && effect.effect_type == &StatusEffect::POISON
+        {
+            return false;
+        }
 
         if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_INFESTED) {
             effect.effect_type != &StatusEffect::INFESTED
@@ -1937,6 +1942,11 @@ impl LivingEntity {
     }
 
     fn check_climbing(&self) {
+        let entity_type = self.entity.entity_type;
+        if entity_type == &EntityType::SPIDER || entity_type == &EntityType::CAVE_SPIDER {
+            return;
+        }
+
         // If spectator: return false
 
         // TODO
@@ -4047,7 +4057,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn is_pushable(&self) -> bool {
-        self.health.load() > 0.0 && !self.dead.load(Relaxed)
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && !self.climbing.load(Relaxed)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

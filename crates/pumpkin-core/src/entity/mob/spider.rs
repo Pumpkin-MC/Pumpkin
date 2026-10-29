@@ -1,17 +1,22 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, PoisonError, Weak};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tracked_data::spider::DATA_FLAGS_ID;
+use pumpkin_protocol::bedrock::client::set_actor_data::{
+    MetadataValue, SyncedActorDataList, entity_data_flag, entity_data_key,
+};
 use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase,
+    Entity,
     ai::goal::{
         active_target::{ActiveTargetGoal, TargetCondition},
+        leap_at_target::LeapAtTargetGoal,
         look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal,
         revenge::RevengeGoal,
@@ -19,9 +24,11 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{
-        Mob, MobEntity,
+        Mob, MobEntity, MobMetadata,
         equipment::RegionalDifficulty,
+        metadata::JavaMetadataEntry,
         spawn::{SpawnGroupData, finalize_spawn},
     },
     r#type::from_type,
@@ -30,68 +37,93 @@ use crate::world::World;
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
-    pub is_climbing: AtomicBool,
 }
 
 impl SpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
-        let spider = Self {
-            mob_entity,
-            is_climbing: AtomicBool::new(false),
-        };
+        let mut mob_entity = MobEntity::new(entity);
+        initialize_spider_navigation(&mut mob_entity);
+        let spider = Self { mob_entity };
         let mob_arc = Arc::new(spider);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
 
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-        };
+        register_spider_goals(&mob_arc.mob_entity, mob_weak);
 
         mob_arc
     }
+}
 
-    pub fn is_climbing(&self) -> bool {
-        self.is_climbing.load(Ordering::Relaxed)
-    }
+pub fn initialize_spider_navigation(mob: &mut MobEntity) {
+    *mob.navigator
+        .get_mut()
+        .unwrap_or_else(PoisonError::into_inner) = Navigator::wall_climber();
+}
 
-    pub fn set_climbing(&self, climbing: bool) {
-        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
-            let flags = i8::from(climbing);
-            let entity = &self.mob_entity.living_entity.entity;
-            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
-            if let Some(meta) = self.mob_metadata() {
-                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
-            }
+pub fn is_climbing(mob: &MobEntity) -> bool {
+    mob.living_entity.climbing.load(Ordering::Relaxed)
+}
+
+pub fn set_climbing(mob: &MobEntity, climbing: bool) {
+    if mob.living_entity.climbing.swap(climbing, Ordering::Relaxed) != climbing {
+        let entity = &mob.living_entity.entity;
+        entity.set_synced_data(DATA_FLAGS_ID, i8::from(climbing));
+
+        let mask = 1i64 << entity_data_flag::WALL_CLIMBING;
+        if climbing {
+            entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+        } else {
+            entity.bedrock_flags.fetch_and(!mask, Ordering::Relaxed);
         }
+        let mut meta = SyncedActorDataList::new();
+        meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        entity.send_bedrock_actor_data(&meta);
     }
 }
 
-/// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,
+pub fn spider_metadata(mob: &MobEntity) -> MobMetadata {
+    let meta = MobMetadata::new();
+    if is_climbing(mob) {
+        meta.with_java_entry(JavaMetadataEntry::Byte(DATA_FLAGS_ID, 1))
+    } else {
+        meta
+    }
+}
+
+pub fn register_spider_goals(mob_entity: &MobEntity, mob_weak: Weak<dyn Mob>) {
+    let goal_selector = &mob_entity.goals_selector;
+    let target_selector = &mob_entity.target_selector;
+
+    goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+    // TODO: 2: avoid armadillos that aren't scared
+    goal_selector.add_goal(3, Box::new(LeapAtTargetGoal::new(0.4)));
+    goal_selector.add_goal(4, SpiderAttackGoal::new(1.0, true));
+    goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(0.8)));
+    goal_selector.add_goal(
+        6,
+        LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+    );
+    goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+
+    target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+    target_selector.add_goal(
+        2,
+        ActiveTargetGoal::with_default(mob_entity, &EntityType::PLAYER, true)
+            .when(TargetCondition::NoDaylight),
+    );
+    target_selector.add_goal(
+        3,
+        ActiveTargetGoal::with_default(mob_entity, &EntityType::IRON_GOLEM, true)
+            .when(TargetCondition::NoDaylight),
+    );
+}
+
+/// Vanilla `Spider.finalizeSpawn`: a skeleton jockey,
 /// and on hard difficulty a random effect shared by the whole spawn group.
 pub fn finalize_spider_spawn(
     mob: &MobEntity,
@@ -150,22 +182,15 @@ impl Mob for SpiderEntity {
         &self.mob_entity
     }
 
-    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
-        let mut meta = crate::entity::mob::MobMetadata::new();
-        if self.is_climbing() {
-            meta = meta.spider_climbing(true);
-        }
-        Some(meta)
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        Some(spider_metadata(&self.mob_entity))
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn post_tick(&self) {
         let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let vel = entity.velocity.load();
-        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
-        self.set_climbing(is_colliding_horizontally);
+        set_climbing(
+            &self.mob_entity,
+            entity.horizontal_collision.load(Ordering::SeqCst),
+        );
     }
 }

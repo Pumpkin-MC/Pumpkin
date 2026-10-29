@@ -334,18 +334,6 @@ impl MobMetadata {
         self
     }
 
-    /// Sets spider climbing state.
-    #[must_use]
-    pub fn spider_climbing(mut self, climbing: bool) -> Self {
-        self.bedrock_data
-            .set_actor_flag(entity_data_flag::WALL_CLIMBING, climbing);
-        self.java_entries.push(JavaMetadataEntry::Byte(
-            tracked_data::spider::DATA_FLAGS_ID,
-            i8::from(climbing),
-        ));
-        self
-    }
-
     /// Sets iron golem crackiness level (0 to 3).
     #[must_use]
     pub fn iron_golem_crack(mut self, crack_level: u8) -> Self {
