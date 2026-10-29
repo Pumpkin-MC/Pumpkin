@@ -3131,6 +3131,7 @@ dependencies = [
  "rand 0.10.3",
  "serde",
  "toml",
+ "toml-spanner",
  "tracing",
  "uuid",
 ]
@@ -4915,6 +4916,23 @@ dependencies = [
  "toml_writer",
  "winnow",
 ]
+
+[[package]]
+name = "toml-spanner"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0454309849e01bb15a8591a5032d706694445b393f0b1ac84b5e3b0b07ca8d69"
+dependencies = [
+ "foldhash",
+ "serde",
+ "toml-spanner-macros",
+]
+
+[[package]]
+name = "toml-spanner-macros"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e31f017b6327c4d14f8a90240489076bdb23ea7d1c514ed1a45f72739c717ec"
 
 [[package]]
 name = "toml_datetime"
