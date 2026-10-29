@@ -13,7 +13,7 @@ use crate::{
         event::{
             DialogClearEvent as DialogClearEventData,
             DialogClickActionEvent as DialogClickActionEventData,
-            DialogShowEvent as DialogShowEventData, Event,
+            DialogShowEvent as DialogShowEventData,
         },
         java_dialogs::{
             Action, ActionButton, AfterAction, CustomClickAction, Dialog, DialogBody, DialogInput,
