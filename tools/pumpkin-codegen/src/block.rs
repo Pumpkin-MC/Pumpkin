@@ -814,6 +814,7 @@ impl BlockState {
 /// Vanilla `SoundType` as stored in the `sound_types` table of `blocks.json`.
 #[derive(Deserialize)]
 pub struct SoundType {
+    name: String,
     volume: f32,
     pitch: f32,
     break_sound: String,
@@ -825,6 +826,7 @@ pub struct SoundType {
 
 impl ToTokens for SoundType {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = &self.name;
         let volume = self.volume;
         let pitch = self.pitch;
         let [break_sound, step_sound, place_sound, hit_sound, fall_sound] = [
@@ -837,6 +839,7 @@ impl ToTokens for SoundType {
         .map(|sound| format_ident!("{}", sound.to_pascal_case()));
         tokens.extend(quote! {
             SoundType {
+                name: #name,
                 volume: #volume,
                 pitch: #pitch,
                 break_sound: Sound::#break_sound,

@@ -49,6 +49,8 @@ pub struct BlockStateId(u16);
 /// Vanilla `SoundType`: the sounds a block makes when broken, stepped on, placed, hit or fallen on.
 #[derive(Debug)]
 pub struct SoundType {
+    /// The vanilla `SoundType` constant name, e.g. `WOOD`.
+    pub name: &'static str,
     pub volume: f32,
     pub pitch: f32,
     pub break_sound: Sound,

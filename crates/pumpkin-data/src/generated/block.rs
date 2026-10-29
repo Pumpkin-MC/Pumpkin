@@ -5165,6 +5165,7 @@ pub const COLLISION_SHAPES: &[BoundingBox] = &[
 ];
 pub const SOUND_TYPES: &[SoundType] = &[
     SoundType {
+        name: "STONE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockStoneBreak,
@@ -5174,6 +5175,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockStoneFall,
     },
     SoundType {
+        name: "GRASS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockGrassBreak,
@@ -5183,6 +5185,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGrassFall,
     },
     SoundType {
+        name: "GRAVEL",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockGravelBreak,
@@ -5192,6 +5195,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGravelFall,
     },
     SoundType {
+        name: "WOOD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWoodBreak,
@@ -5201,6 +5205,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWoodFall,
     },
     SoundType {
+        name: "CHERRY_WOOD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCherryWoodBreak,
@@ -5210,6 +5215,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCherryWoodFall,
     },
     SoundType {
+        name: "BAMBOO_WOOD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBambooWoodBreak,
@@ -5219,6 +5225,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBambooWoodFall,
     },
     SoundType {
+        name: "CHERRY_SAPLING",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCherrySaplingBreak,
@@ -5228,6 +5235,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCherrySaplingFall,
     },
     SoundType {
+        name: "EMPTY",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::IntentionallyEmpty,
@@ -5237,6 +5245,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::IntentionallyEmpty,
     },
     SoundType {
+        name: "SAND",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSandBreak,
@@ -5246,6 +5255,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSandFall,
     },
     SoundType {
+        name: "SUSPICIOUS_SAND",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSuspiciousSandBreak,
@@ -5255,6 +5265,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSuspiciousSandFall,
     },
     SoundType {
+        name: "SUSPICIOUS_GRAVEL",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSuspiciousGravelBreak,
@@ -5264,6 +5275,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSuspiciousGravelFall,
     },
     SoundType {
+        name: "DEEPSLATE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDeepslateBreak,
@@ -5273,6 +5285,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDeepslateFall,
     },
     SoundType {
+        name: "NETHER_GOLD_ORE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherGoldOreBreak,
@@ -5282,6 +5295,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherGoldOreFall,
     },
     SoundType {
+        name: "MANGROVE_ROOTS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMangroveRootsBreak,
@@ -5291,6 +5305,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMangroveRootsFall,
     },
     SoundType {
+        name: "MUDDY_MANGROVE_ROOTS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMuddyMangroveRootsBreak,
@@ -5300,6 +5315,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMuddyMangroveRootsFall,
     },
     SoundType {
+        name: "CHERRY_LEAVES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCherryLeavesBreak,
@@ -5309,6 +5325,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCherryLeavesFall,
     },
     SoundType {
+        name: "POPLAR_LEAVES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPoplarLeavesBreak,
@@ -5318,6 +5335,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPoplarLeavesFall,
     },
     SoundType {
+        name: "AZALEA_LEAVES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockAzaleaLeavesBreak,
@@ -5327,6 +5345,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAzaleaLeavesFall,
     },
     SoundType {
+        name: "SPONGE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSpongeBreak,
@@ -5336,6 +5355,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSpongeFall,
     },
     SoundType {
+        name: "WET_SPONGE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWetSpongeBreak,
@@ -5345,6 +5365,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWetSpongeFall,
     },
     SoundType {
+        name: "GLASS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockGlassBreak,
@@ -5354,6 +5375,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGlassFall,
     },
     SoundType {
+        name: "STRAW_BED",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockStrawBedBreak,
@@ -5363,6 +5385,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockStrawBedFall,
     },
     SoundType {
+        name: "METAL",
         volume: 1f32,
         pitch: 1.5f32,
         break_sound: Sound::BlockMetalBreak,
@@ -5372,6 +5395,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMetalFall,
     },
     SoundType {
+        name: "COBWEB",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCobwebBreak,
@@ -5381,6 +5405,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCobwebFall,
     },
     SoundType {
+        name: "RED_SHRUB",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockRedShrubBreak,
@@ -5390,6 +5415,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::IntentionallyEmpty,
     },
     SoundType {
+        name: "WET_GRASS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWetGrassBreak,
@@ -5399,6 +5425,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWetGrassFall,
     },
     SoundType {
+        name: "WOOL",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWoolBreak,
@@ -5408,6 +5435,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWoolFall,
     },
     SoundType {
+        name: "IRON",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockIronBreak,
@@ -5417,6 +5445,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockIronFall,
     },
     SoundType {
+        name: "CHISELED_BOOKSHELF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockChiseledBookshelfBreak,
@@ -5426,6 +5455,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockChiseledBookshelfFall,
     },
     SoundType {
+        name: "SHELF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockShelfBreak,
@@ -5435,6 +5465,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockShelfFall,
     },
     SoundType {
+        name: "SPAWNER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSpawnerBreak,
@@ -5444,6 +5475,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSpawnerFall,
     },
     SoundType {
+        name: "CREAKING_HEART",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCreakingHeartBreak,
@@ -5453,6 +5485,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCreakingHeartFall,
     },
     SoundType {
+        name: "CROP",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCropBreak,
@@ -5462,6 +5495,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGrassFall,
     },
     SoundType {
+        name: "LADDER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockLadderBreak,
@@ -5471,6 +5505,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockLadderFall,
     },
     SoundType {
+        name: "HANGING_SIGN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockHangingSignBreak,
@@ -5480,6 +5515,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockHangingSignFall,
     },
     SoundType {
+        name: "CHERRY_WOOD_HANGING_SIGN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCherryWoodHangingSignBreak,
@@ -5489,6 +5525,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCherryWoodHangingSignFall,
     },
     SoundType {
+        name: "NETHER_WOOD_HANGING_SIGN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherWoodHangingSignBreak,
@@ -5498,6 +5535,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherWoodHangingSignFall,
     },
     SoundType {
+        name: "BAMBOO_WOOD_HANGING_SIGN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBambooWoodHangingSignBreak,
@@ -5507,6 +5545,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBambooWoodHangingSignFall,
     },
     SoundType {
+        name: "SNOW",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSnowBreak,
@@ -5516,6 +5555,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSnowFall,
     },
     SoundType {
+        name: "CACTUS_FLOWER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCactusFlowerBreak,
@@ -5525,6 +5565,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::IntentionallyEmpty,
     },
     SoundType {
+        name: "NETHERRACK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherrackBreak,
@@ -5534,6 +5575,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherrackFall,
     },
     SoundType {
+        name: "SOUL_SAND",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSoulSandBreak,
@@ -5543,6 +5585,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSoulSandFall,
     },
     SoundType {
+        name: "SOUL_SOIL",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSoulSoilBreak,
@@ -5552,6 +5595,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSoulSoilFall,
     },
     SoundType {
+        name: "BASALT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBasaltBreak,
@@ -5561,6 +5605,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBasaltFall,
     },
     SoundType {
+        name: "PACKED_MUD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPackedMudBreak,
@@ -5570,6 +5615,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPackedMudFall,
     },
     SoundType {
+        name: "MUD_BRICKS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMudBricksBreak,
@@ -5579,6 +5625,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMudBricksFall,
     },
     SoundType {
+        name: "COPPER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCopperBreak,
@@ -5588,6 +5635,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCopperFall,
     },
     SoundType {
+        name: "CHAIN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockChainBreak,
@@ -5597,6 +5645,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockChainFall,
     },
     SoundType {
+        name: "HARD_CROP",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWoodBreak,
@@ -5606,6 +5655,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWoodFall,
     },
     SoundType {
+        name: "VINE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockVineBreak,
@@ -5615,6 +5665,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockVineFall,
     },
     SoundType {
+        name: "GLOW_LICHEN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockGrassBreak,
@@ -5624,6 +5675,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGrassFall,
     },
     SoundType {
+        name: "RESIN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockResinBreak,
@@ -5633,6 +5685,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockResinFall,
     },
     SoundType {
+        name: "LILY_PAD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBigDripleafBreak,
@@ -5642,6 +5695,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBigDripleafFall,
     },
     SoundType {
+        name: "RESIN_BRICKS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockResinBricksBreak,
@@ -5651,6 +5705,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockResinBricksFall,
     },
     SoundType {
+        name: "NETHER_BRICKS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherBricksBreak,
@@ -5660,6 +5715,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherBricksFall,
     },
     SoundType {
+        name: "NETHER_WART",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherWartBreak,
@@ -5669,6 +5725,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockStoneFall,
     },
     SoundType {
+        name: "SHELF_MUSHROOM",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockShelfMushroomBreak,
@@ -5678,6 +5735,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockShelfMushroomFall,
     },
     SoundType {
+        name: "ANVIL",
         volume: 0.3f32,
         pitch: 1f32,
         break_sound: Sound::BlockAnvilBreak,
@@ -5687,6 +5745,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAnvilFall,
     },
     SoundType {
+        name: "NETHER_ORE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherOreBreak,
@@ -5696,6 +5755,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherOreFall,
     },
     SoundType {
+        name: "SLIME_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSlimeBlockBreak,
@@ -5705,6 +5765,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSlimeBlockFall,
     },
     SoundType {
+        name: "WART_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWartBlockBreak,
@@ -5714,6 +5775,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWartBlockFall,
     },
     SoundType {
+        name: "BONE_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBoneBlockBreak,
@@ -5723,6 +5785,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBoneBlockFall,
     },
     SoundType {
+        name: "DRIED_GHAST",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDriedGhastBreak,
@@ -5732,6 +5795,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDriedGhastFall,
     },
     SoundType {
+        name: "CORAL_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCoralBlockBreak,
@@ -5741,6 +5805,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCoralBlockFall,
     },
     SoundType {
+        name: "BAMBOO_SAPLING",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBambooSaplingBreak,
@@ -5750,6 +5815,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBambooFall,
     },
     SoundType {
+        name: "BAMBOO",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBambooBreak,
@@ -5759,6 +5825,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBambooFall,
     },
     SoundType {
+        name: "SCAFFOLDING",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockScaffoldingBreak,
@@ -5768,6 +5835,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockScaffoldingFall,
     },
     SoundType {
+        name: "LANTERN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockLanternBreak,
@@ -5777,6 +5845,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockLanternFall,
     },
     SoundType {
+        name: "SWEET_BERRY_BUSH",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSweetBerryBushBreak,
@@ -5786,6 +5855,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGrassFall,
     },
     SoundType {
+        name: "STEM",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockStemBreak,
@@ -5795,6 +5865,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockStemFall,
     },
     SoundType {
+        name: "NYLIUM",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNyliumBreak,
@@ -5804,6 +5875,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNyliumFall,
     },
     SoundType {
+        name: "FUNGUS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockFungusBreak,
@@ -5813,6 +5885,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockFungusFall,
     },
     SoundType {
+        name: "ROOTS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockRootsBreak,
@@ -5822,6 +5895,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockRootsFall,
     },
     SoundType {
+        name: "NETHER_SPROUTS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherSproutsBreak,
@@ -5831,6 +5905,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherSproutsFall,
     },
     SoundType {
+        name: "SHROOMLIGHT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockShroomlightBreak,
@@ -5840,6 +5915,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockShroomlightFall,
     },
     SoundType {
+        name: "WEEPING_VINES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockWeepingVinesBreak,
@@ -5849,6 +5925,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockWeepingVinesFall,
     },
     SoundType {
+        name: "NETHER_WOOD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetherWoodBreak,
@@ -5858,6 +5935,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetherWoodFall,
     },
     SoundType {
+        name: "HONEY_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockHoneyBlockBreak,
@@ -5867,6 +5945,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockHoneyBlockFall,
     },
     SoundType {
+        name: "NETHERITE_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockNetheriteBlockBreak,
@@ -5876,6 +5955,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockNetheriteBlockFall,
     },
     SoundType {
+        name: "ANCIENT_DEBRIS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockAncientDebrisBreak,
@@ -5885,6 +5965,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAncientDebrisFall,
     },
     SoundType {
+        name: "LODESTONE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockLodestoneBreak,
@@ -5894,6 +5975,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockLodestoneFall,
     },
     SoundType {
+        name: "GILDED_BLACKSTONE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockGildedBlackstoneBreak,
@@ -5903,6 +5985,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockGildedBlackstoneFall,
     },
     SoundType {
+        name: "CANDLE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCandleBreak,
@@ -5912,6 +5995,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCandleFall,
     },
     SoundType {
+        name: "AMETHYST",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockAmethystBlockBreak,
@@ -5921,6 +6005,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAmethystBlockFall,
     },
     SoundType {
+        name: "AMETHYST_CLUSTER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockAmethystClusterBreak,
@@ -5930,6 +6015,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAmethystClusterFall,
     },
     SoundType {
+        name: "MEDIUM_AMETHYST_BUD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMediumAmethystBudBreak,
@@ -5939,6 +6025,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAmethystClusterFall,
     },
     SoundType {
+        name: "LARGE_AMETHYST_BUD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockLargeAmethystBudBreak,
@@ -5948,6 +6035,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAmethystClusterFall,
     },
     SoundType {
+        name: "SMALL_AMETHYST_BUD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSmallAmethystBudBreak,
@@ -5957,6 +6045,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAmethystClusterFall,
     },
     SoundType {
+        name: "TUFF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockTuffBreak,
@@ -5966,6 +6055,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockTuffFall,
     },
     SoundType {
+        name: "POLISHED_TUFF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPolishedTuffBreak,
@@ -5975,6 +6065,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPolishedTuffFall,
     },
     SoundType {
+        name: "TUFF_BRICKS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockTuffBricksBreak,
@@ -5984,6 +6075,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockTuffBricksFall,
     },
     SoundType {
+        name: "SULFUR",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSulfurBreak,
@@ -5993,6 +6085,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSulfurFall,
     },
     SoundType {
+        name: "POTENT_SULFUR",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPotentSulfurBreak,
@@ -6002,6 +6095,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPotentSulfurFall,
     },
     SoundType {
+        name: "CINNABAR",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCinnabarBreak,
@@ -6011,6 +6105,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCinnabarFall,
     },
     SoundType {
+        name: "CALCITE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCalciteBreak,
@@ -6020,6 +6115,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCalciteFall,
     },
     SoundType {
+        name: "POWDER_SNOW",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPowderSnowBreak,
@@ -6029,6 +6125,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPowderSnowFall,
     },
     SoundType {
+        name: "SCULK_SENSOR",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSculkSensorBreak,
@@ -6038,6 +6135,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSculkSensorFall,
     },
     SoundType {
+        name: "SCULK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSculkBreak,
@@ -6047,6 +6145,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSculkFall,
     },
     SoundType {
+        name: "SCULK_VEIN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSculkVeinBreak,
@@ -6056,6 +6155,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSculkVeinFall,
     },
     SoundType {
+        name: "SCULK_CATALYST",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSculkCatalystBreak,
@@ -6065,6 +6165,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSculkCatalystFall,
     },
     SoundType {
+        name: "SCULK_SHRIEKER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSculkShriekerBreak,
@@ -6074,6 +6175,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSculkShriekerFall,
     },
     SoundType {
+        name: "COPPER_GRATE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCopperGrateBreak,
@@ -6083,6 +6185,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCopperGrateFall,
     },
     SoundType {
+        name: "COPPER_BULB",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCopperBulbBreak,
@@ -6092,6 +6195,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCopperBulbFall,
     },
     SoundType {
+        name: "COPPER_GOLEM_STATUE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCopperGolemStatueBreak,
@@ -6101,6 +6205,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCopperGolemStatueFall,
     },
     SoundType {
+        name: "DRIPSTONE_BLOCK",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDripstoneBlockBreak,
@@ -6110,6 +6215,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDripstoneBlockFall,
     },
     SoundType {
+        name: "POINTED_DRIPSTONE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPointedDripstoneBreak,
@@ -6119,6 +6225,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPointedDripstoneFall,
     },
     SoundType {
+        name: "SULFUR_SPIKE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSulfurSpikeBreak,
@@ -6128,6 +6235,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSulfurSpikeFall,
     },
     SoundType {
+        name: "CAVE_VINES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockCaveVinesBreak,
@@ -6137,6 +6245,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockCaveVinesFall,
     },
     SoundType {
+        name: "SPORE_BLOSSOM",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSporeBlossomBreak,
@@ -6146,6 +6255,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSporeBlossomFall,
     },
     SoundType {
+        name: "AZALEA",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockAzaleaBreak,
@@ -6155,6 +6265,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockAzaleaFall,
     },
     SoundType {
+        name: "FLOWERING_AZALEA",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockFloweringAzaleaBreak,
@@ -6164,6 +6275,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockFloweringAzaleaFall,
     },
     SoundType {
+        name: "MOSS_CARPET",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMossCarpetBreak,
@@ -6173,6 +6285,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMossCarpetFall,
     },
     SoundType {
+        name: "PINK_PETALS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPinkPetalsBreak,
@@ -6182,6 +6295,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPinkPetalsFall,
     },
     SoundType {
+        name: "LEAF_LITTER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockLeafLitterBreak,
@@ -6191,6 +6305,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockLeafLitterFall,
     },
     SoundType {
+        name: "MOSS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMossBreak,
@@ -6200,6 +6315,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMossFall,
     },
     SoundType {
+        name: "BIG_DRIPLEAF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockBigDripleafBreak,
@@ -6209,6 +6325,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockBigDripleafFall,
     },
     SoundType {
+        name: "SMALL_DRIPLEAF",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockSmallDripleafBreak,
@@ -6218,6 +6335,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockSmallDripleafFall,
     },
     SoundType {
+        name: "HANGING_ROOTS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockHangingRootsBreak,
@@ -6227,6 +6345,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockHangingRootsFall,
     },
     SoundType {
+        name: "ROOTED_DIRT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockRootedDirtBreak,
@@ -6236,6 +6355,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockRootedDirtFall,
     },
     SoundType {
+        name: "MUD",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockMudBreak,
@@ -6245,6 +6365,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockMudFall,
     },
     SoundType {
+        name: "POLISHED_DEEPSLATE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockPolishedDeepslateBreak,
@@ -6254,6 +6375,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockPolishedDeepslateFall,
     },
     SoundType {
+        name: "DEEPSLATE_TILES",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDeepslateTilesBreak,
@@ -6263,6 +6385,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDeepslateTilesFall,
     },
     SoundType {
+        name: "DEEPSLATE_BRICKS",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDeepslateBricksBreak,
@@ -6272,6 +6395,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDeepslateBricksFall,
     },
     SoundType {
+        name: "FROGLIGHT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockFroglightBreak,
@@ -6281,6 +6405,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockFroglightFall,
     },
     SoundType {
+        name: "FROGSPAWN",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockFrogspawnBreak,
@@ -6290,6 +6415,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockFrogspawnFall,
     },
     SoundType {
+        name: "DECORATED_POT_CRACKED",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDecoratedPotShatter,
@@ -6299,6 +6425,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDecoratedPotFall,
     },
     SoundType {
+        name: "DECORATED_POT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockDecoratedPotBreak,
@@ -6308,6 +6435,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockDecoratedPotFall,
     },
     SoundType {
+        name: "TRIAL_SPAWNER",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockTrialSpawnerBreak,
@@ -6317,6 +6445,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockTrialSpawnerFall,
     },
     SoundType {
+        name: "VAULT",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockVaultBreak,
@@ -6326,6 +6455,7 @@ pub const SOUND_TYPES: &[SoundType] = &[
         fall_sound: Sound::BlockVaultFall,
     },
     SoundType {
+        name: "HEAVY_CORE",
         volume: 1f32,
         pitch: 1f32,
         break_sound: Sound::BlockHeavyCoreBreak,
