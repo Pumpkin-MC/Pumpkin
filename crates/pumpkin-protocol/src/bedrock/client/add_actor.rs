@@ -40,6 +40,8 @@ pub struct CAddActor {
     pub synced_properties: PropertySyncData,
     /// Entity attachment links (e.g. passenger or leash connections).
     pub actor_links: Vec<ActorLink>,
+    /// Whether passenger block data is present.
+    pub has_passenger_block_data: bool,
 }
 
 /// Synchronized numeric entity attribute with min, current, and max bounds.

@@ -1148,6 +1148,7 @@ impl Player {
                 }],
             },
             actor_links: Vec::new(),
+            has_passenger_block_data: false,
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
@@ -1522,6 +1523,7 @@ impl Player {
                 target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
                 data: 0.0,
                 swing_source: None,
+                hand: 0,
             };
             world.broadcast_editioned(&je_packet, &be_packet);
         }
@@ -6603,6 +6605,7 @@ impl Player {
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
             data: 0.0,
             swing_source: None,
+            hand: u8::from(hand == Hand::Left),
         };
 
         if all {
