@@ -16,6 +16,14 @@ impl TheEndBiomeSupplier {
     const MIDLANDS_BIOME: Biome = Biome::END_MIDLANDS;
     const SMALL_ISLANDS_BIOME: Biome = Biome::SMALL_END_ISLANDS;
     const BARRENS_BIOME: Biome = Biome::END_BARRENS;
+
+    pub const POSSIBLE_BIOMES: [Biome; 5] = [
+        Self::CENTER_BIOME,
+        Self::HIGHLANDS_BIOME,
+        Self::MIDLANDS_BIOME,
+        Self::SMALL_ISLANDS_BIOME,
+        Self::BARRENS_BIOME,
+    ];
 }
 
 impl BiomeSupplier for TheEndBiomeSupplier {
