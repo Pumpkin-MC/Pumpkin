@@ -7,6 +7,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -180,6 +181,14 @@ impl Animal for RabbitEntity {
 }
 
 impl Mob for RabbitEntity {
+    fn mob_sound_source(&self) -> SoundCategory {
+        if self.get_variant() == RabbitVariant::Evil {
+            SoundCategory::Hostile
+        } else {
+            SoundCategory::Neutral
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

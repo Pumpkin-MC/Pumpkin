@@ -255,6 +255,14 @@ macro_rules! impl_abstract_fish {
 #[macro_export]
 macro_rules! fish_mob_hooks {
     () => {
+        /// Vanilla `AbstractFish` steps silently.
+        fn mob_play_step_sound(
+            &self,
+            _pos: &pumpkin_util::math::position::BlockPos,
+            _state: &pumpkin_data::BlockState,
+        ) {
+        }
+
         fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
             &self.mob_entity
         }

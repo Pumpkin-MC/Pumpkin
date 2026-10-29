@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,6 +12,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -281,6 +283,10 @@ impl Animal for LlamaEntity {
 impl Mob for LlamaEntity {
     fn is_tamed(&self) -> bool {
         self.is_tame()
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityLlamaStep, 0.15, 1.0);
     }
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {

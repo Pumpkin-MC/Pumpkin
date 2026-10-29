@@ -242,6 +242,12 @@ impl BedrockClient {
             }
         }
 
+        // The sneak and flight toggles arrive in the same packet as the move, so
+        // apply them first, like Java where they come in earlier packets.
+        if pos_changed {
+            entity.emit_client_movement(player.as_ref(), new_pos - old_pos);
+        }
+
         if entity.has_vehicle() {
             let paddling_left = input_data.get(InputData::PaddlingLeft as usize);
             let paddling_right = input_data.get(InputData::PaddlingRight as usize);

@@ -241,7 +241,7 @@ use pumpkin_data::data_component_impl::{
     EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
 };
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, MovementEmission};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -3210,6 +3210,16 @@ impl Player {
         } else {
             self.add_exhaustion(0.05);
         }
+    }
+
+    /// Vanilla `playMuffledStepSound`: the block under a carpet or under water, quieter and lower.
+    fn play_muffled_step_sound(&self, state: &BlockState) {
+        let sound_type = state.get_sound_type();
+        self.play_entity_sound(
+            sound_type.step_sound,
+            sound_type.volume * 0.05,
+            sound_type.pitch * 0.8,
+        );
     }
 
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
@@ -7052,6 +7062,67 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn sound_source(&self) -> SoundCategory {
+        SoundCategory::Players
+    }
+
+    /// Vanilla `Player.playSound`: everyone but this player, whose client plays it already.
+    fn play_entity_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        let entity = self.get_entity();
+        if !entity.is_silent() {
+            entity.world.load().play_sound_raw_expect(
+                self,
+                sound as u16,
+                self.sound_source(),
+                &entity.pos.load(),
+                volume,
+                pitch,
+            );
+        }
+    }
+
+    fn movement_emission(&self) -> MovementEmission {
+        let entity = self.get_entity();
+        let flying = self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .flying;
+        if flying || entity.on_ground.load(Ordering::Relaxed) && entity.is_sneaking() {
+            MovementEmission::None
+        } else {
+            MovementEmission::All
+        }
+    }
+
+    fn get_swim_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSwim)
+    }
+
+    fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        let entity = self.get_entity();
+        if entity.is_in_water() {
+            entity.water_swim_sound(self);
+            self.play_muffled_step_sound(state);
+            return;
+        }
+        let primary_pos = entity.get_primary_step_sound_block_pos(pos);
+        if primary_pos == *pos {
+            self.play_block_step_sound(state);
+            return;
+        }
+        let primary_state = entity.world.load().get_block_state(&primary_pos);
+        self.play_block_step_sound(primary_state);
+        // Vanilla `playCombinationStepSounds` adds the muffled block underneath.
+        if primary_state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            self.play_muffled_step_sound(state);
+        }
+    }
+
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
