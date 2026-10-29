@@ -228,7 +228,7 @@ impl HopperBlockEntity {
 
     #[allow(clippy::too_many_lines)]
     fn suck_in_items(&self, world: &Arc<World>) -> bool {
-        // TODO getEntityContainer
+        // TODO vanilla `getEntityContainer`: with no block container above, pull from a random container entity (chest or hopper minecart) there.
         let pos_up = &self.position.up();
         if world.cancelled_by_plugin(|| HopperInventorySearchEvent::new(self.position, *pos_up)) {
             return false;
@@ -360,7 +360,7 @@ impl HopperBlockEntity {
 
     /// `facing` comes from the live block state, the block entity keeps no copy that could go stale.
     fn eject_items(&self, world: &Arc<World>, facing: FacingHopper) -> bool {
-        // TODO getEntityContainer
+        // TODO vanilla `getEntityContainer`: with no block container in front, push into a random container entity (chest or hopper minecart) there.
         let target_pos = self.position.offset(to_offset(&facing));
         if let Some(entity) = world.get_block_entity(&target_pos)
             && let Some(container) = entity.get_inventory()
