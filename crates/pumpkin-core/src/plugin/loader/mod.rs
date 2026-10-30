@@ -29,17 +29,22 @@ pub trait PluginLoader: Send + Sync {
     /// Logs the failed load at ERROR, with technical details at DEBUG.
     fn report_load_error(&self, path: &Path, error: &LoaderError) {
         let file = path.file_name().map_or(path, Path::new).display();
-        let headline = format!("Could not load plugin file \"{file}\"; it was not loaded.");
+        let headline = format!("Could not load plugin file \"{file}\".");
         let text =
             super::error::message(&headline, &super::error::causes(error, None), error.help());
         tracing::error!("{text}");
         super::error::debug_details(&headline, error);
     }
 
-    /// Formats a lifecycle callback's error string for the server log.
-    fn format_lifecycle_error(&self, headline: &str, details: &str) -> String {
+    /// Formats a lifecycle error with the plugin's name and version.
+    fn format_lifecycle_error(
+        &self,
+        metadata: &PluginMetadata,
+        outcome: &str,
+        details: &str,
+    ) -> String {
         super::error::message(
-            headline,
+            &super::error::lifecycle_headline(metadata, outcome),
             &details
                 .lines()
                 .map(super::error::sanitize)

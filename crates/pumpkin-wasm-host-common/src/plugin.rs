@@ -11,11 +11,13 @@ pub enum PluginInitError {
     LinkerSetupFailed(#[source] wasmtime::Error),
     #[error("The plugin has no versioned pumpkin:plugin/metadata export")]
     UnknownApiVersion(),
-    #[error("The plugin targets API {0}; this server supports {1}")]
+    #[error("This server cannot load plugins using Pumpkin plugin API {0}. It supports API {1}.")]
     UnsupportedApiVersion(String, &'static str),
     #[error("Plugin API 0.1 supports WASI 0.2 only, but the plugin imports `{0}`")]
     UnsupportedWasi(String),
-    #[error("The plugin does not match the expected Pumpkin API ({0})")]
+    #[error(
+        "The plugin's interface is incompatible with this server (expected Pumpkin plugin API {0})."
+    )]
     ApiMismatch(PluginApiVersion, #[source] wasmtime::Error),
     #[error("Could not read the plugin file")]
     FileReadFailed(#[source] std::io::Error),
@@ -47,12 +49,9 @@ impl PluginInitError {
     #[must_use]
     pub fn help(&self) -> Option<&'static str> {
         match self {
-            Self::UnsupportedApiVersion(..) => {
-                Some("Install a plugin built for one of the supported Pumpkin API versions.")
-            }
-            Self::ApiMismatch(..) => {
-                Some("Install a plugin release built for this Pumpkin version.")
-            }
+            Self::UnsupportedApiVersion(..) | Self::ApiMismatch(..) => Some(
+                "Check the plugin's supported Pumpkin versions. Update Pumpkin or install a plugin release compatible with your server.",
+            ),
             Self::FileReadFailed(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
                 Some("Check that the server can read the plugin file.")
             }

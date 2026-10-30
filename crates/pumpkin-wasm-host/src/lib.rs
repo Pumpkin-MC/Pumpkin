@@ -17,7 +17,7 @@ use runtime::PluginRuntime;
 use tracing::warn;
 
 use pumpkin_core::plugin::{
-    Context, Plugin, PluginFuture, error,
+    Context, Plugin, PluginFuture, PluginMetadata, error,
     loader::{LoaderError, PluginLoadFuture, PluginLoader, PluginUnloadFuture},
 };
 
@@ -170,7 +170,7 @@ impl PluginLoader for WasmPluginLoader {
             "load"
         };
         let file = path.file_name().map_or(path, Path::new).display();
-        let headline = format!("Could not {operation} plugin file \"{file}\"; it was not loaded.");
+        let headline = format!("Could not {operation} plugin file \"{file}\".");
         let backtrace = init
             .and_then(PluginInitError::wasmtime_error)
             .and_then(pumpkin_wasm_host_common::error::backtrace)
@@ -193,9 +193,14 @@ impl PluginLoader for WasmPluginLoader {
         error::debug_details(&headline, failure);
     }
 
-    fn format_lifecycle_error(&self, headline: &str, details: &str) -> String {
+    fn format_lifecycle_error(
+        &self,
+        metadata: &PluginMetadata,
+        outcome: &str,
+        details: &str,
+    ) -> String {
         // The body is already sanitized. Sanitizing it again would change frame indentation.
-        format!("{}{details}", error::inline(headline))
+        format!("{}{details}", error::lifecycle_headline(metadata, outcome))
     }
 
     fn can_load(&self, path: &Path) -> bool {

@@ -640,11 +640,8 @@ impl PluginManager {
                         warn!(
                             "{}",
                             loader_clone.format_lifecycle_error(
-                                &format!(
-                                    "Plugin \"{}\" ({}) failed during initialization cleanup.",
-                                    error::inline(&plugin_name),
-                                    error::inline(&metadata.version)
-                                ),
+                                &metadata,
+                                "failed during initialization cleanup",
                                 &error,
                             )
                         );
@@ -698,14 +695,7 @@ impl PluginManager {
 
                     error!(
                         "{}",
-                        loader_clone.format_lifecycle_error(
-                            &format!(
-                                "Plugin \"{}\" ({}) could not initialize.",
-                                error::inline(&plugin_name),
-                                error::inline(&metadata.version)
-                            ),
-                            &e,
-                        )
+                        loader_clone.format_lifecycle_error(&metadata, "could not initialize", &e)
                     );
                 }
             }
@@ -1136,11 +1126,8 @@ impl PluginManager {
             warn!(
                 "{}",
                 plugin.loader.format_lifecycle_error(
-                    &format!(
-                        "Plugin \"{}\" ({}) failed during on_unload.",
-                        error::inline(name),
-                        error::inline(&plugin.metadata.version)
-                    ),
+                    &plugin.metadata,
+                    "failed during on_unload",
                     &error,
                 )
             );

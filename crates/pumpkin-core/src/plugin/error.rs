@@ -36,6 +36,17 @@ pub fn inline(text: &str) -> String {
     sanitize(text).replace('\n', " ")
 }
 
+/// Builds a lifecycle headline with sanitized plugin metadata.
+#[must_use]
+pub fn lifecycle_headline(metadata: &super::PluginMetadata, outcome: &str) -> String {
+    inline(&format!(
+        "Plugin \"{}\" ({}) {}.",
+        inline(&metadata.name),
+        inline(&metadata.version),
+        inline(outcome),
+    ))
+}
+
 /// Collects sanitized messages from the outer error through its source chain.
 ///
 /// Consecutive duplicates and any message equal to `backtrace` are omitted.
