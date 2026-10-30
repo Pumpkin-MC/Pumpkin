@@ -454,6 +454,21 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
             Ok((400u32,))
         })
         .expect("schedule task");
+    scheduler
+        .func_wrap(
+            "schedule-repeating-task",
+            |store, (id, delay, period): (u32, u64, u64)| {
+                assert_eq!((delay, period), (20, 40));
+                store
+                    .data()
+                    .ids
+                    .lock()
+                    .expect("ids")
+                    .insert("repeating", id);
+                Ok((401u32,))
+            },
+        )
+        .expect("schedule repeating task");
     let mut server = interface!("server", "server" => ServerResource);
     server
         .func_wrap_concurrent(
@@ -682,7 +697,9 @@ async fn sdk_helpers_and_registered_callbacks_run_in_a_component() {
         let request = Val::Record(vec![("input".into(), Val::String("fixture f".into())), ("cursor".into(), Val::U32(9)), ("start".into(), Val::U32(8)), ("remaining".into(), Val::String("f".into()))]);
         suggest.call_concurrent(accessor, &[Val::U32(id("suggestion")), owned::<SenderResource>(accessor), owned::<ServerResource>(accessor), request], &mut result).await.expect("suggestions");
         assert!(matches!(&result[0], Val::Record(fields) if fields[0].1 == Val::U32(8) && fields[1].1 == Val::U32(1)));
-        task.call_concurrent(accessor, &[Val::U32(id("task")), owned::<ServerResource>(accessor)], &mut []).await.expect("task");
+        for key in ["task", "task", "repeating", "repeating"] {
+            task.call_concurrent(accessor, &[Val::U32(id(key)), owned::<ServerResource>(accessor)], &mut []).await.expect("task");
+        }
         for (index, hook) in ai.iter().enumerate() {
             let params = [Val::U32(0), owned::<ServerResource>(accessor), owned::<EntityResource>(accessor)];
             if index < 2 {
@@ -706,6 +723,8 @@ async fn sdk_helpers_and_registered_callbacks_run_in_a_component() {
             "enchantment",
             "tracing",
             "fixture task ran",
+            "fixture repeating task ran",
+            "fixture repeating task ran",
             "surface"
         ]
     );
