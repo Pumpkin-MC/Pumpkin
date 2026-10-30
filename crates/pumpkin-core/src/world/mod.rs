@@ -48,7 +48,11 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
+    entity::{
+        Entity, EntityBase, RemovalReason,
+        player::Player,
+        r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
+    },
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     plugin::{
@@ -622,7 +626,7 @@ impl World {
         let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         for entity in entities {
             let base_entity = entity.get_entity();
-            if base_entity.is_removed() {
+            if base_entity.is_removed() || is_saved_as_passenger(entity.as_ref()) {
                 continue;
             }
             let mut nbt = NbtCompound::new();
@@ -694,19 +698,19 @@ impl World {
         &self,
         entity: &Entity,
         java_status: EntityStatus,
-        bedrock_status: Option<ActorEventID>,
+        bedrock_status: ActorEventID,
     ) {
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
-        if let Some(be_event) = bedrock_status {
+        if bedrock_status == ActorEventID::None {
+            self.send_to_tracking_players_and_self(entity, &je_packet);
+        } else {
             let be_packet = SActorEvent {
                 target_runtime_id: VarULong(entity.entity_id as u64),
-                event_id: be_event,
+                event_id: bedrock_status,
                 data: VarInt(0),
                 fire_at_position: None,
             };
             self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
-        } else {
-            self.send_to_tracking_players_and_self(entity, &je_packet);
         }
     }
 
@@ -736,7 +740,7 @@ impl World {
         &self,
         entity: &Entity,
         java_status: EntityStatus,
-        bedrock_status: Option<ActorEventID>,
+        bedrock_status: ActorEventID,
     ) {
         self.broadcast_entity_event(entity, java_status, bedrock_status);
     }
@@ -840,6 +844,8 @@ impl World {
     ) {
         if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
             tracked.send_to_tracking_players_and_self_editioned(je_packet, be_packet, self);
+        } else if let Some(player) = self.get_player_by_id(entity.entity_id) {
+            player.try_enqueue_packet_editioned(je_packet, be_packet);
         }
     }
 
@@ -1608,11 +1614,12 @@ impl World {
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
         let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = self
-            .island_schedule
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .should_plan(tickable.len());
+        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
+            && self
+                .island_schedule
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .should_plan(tickable.len());
         let islands = if plan_islands {
             let islands = (|| {
                 let reports: Vec<_> = tickable
@@ -1681,7 +1688,9 @@ impl World {
             let entity_bb = entity_inner.bounding_box.load();
 
             for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                if (player_chunk.x - entity_chunk.x).abs() <= 1
+                if player.living_entity.health.load() > 0.0
+                    && !player.is_spectator()
+                    && (player_chunk.x - entity_chunk.x).abs() <= 1
                     && (player_chunk.y - entity_chunk.y).abs() <= 1
                     && (player_pos.x - entity_pos.x).abs() < 5.0
                     && (player_pos.y - entity_pos.y).abs() < 5.0
@@ -1689,7 +1698,6 @@ impl World {
                     && player_bb.intersects(&entity_bb)
                 {
                     entity.on_player_collision(player);
-                    break;
                 }
             }
         };
@@ -2451,6 +2459,44 @@ impl World {
         (collisions, positions)
     }
 
+    pub fn find_free_position(
+        &self,
+        source: &dyn EntityBase,
+        allowed_centers: &BoundingBox,
+        preferred_center: Vector3<f64>,
+        size: Vector3<f64>,
+    ) -> Option<Vector3<f64>> {
+        let (collisions, _) =
+            self.get_block_collisions(allowed_centers.expand(size.x, size.y, size.z), source);
+        let mut free_spots = vec![*allowed_centers];
+        {
+            let border = self
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for shape in collisions {
+                if !border.contains(shape.min.x, shape.min.z)
+                    || !border.contains(shape.max.x - 1.0E-5, shape.max.z - 1.0E-5)
+                {
+                    continue;
+                }
+                let blocked = shape.expand(size.x / 2.0, size.y / 2.0, size.z / 2.0);
+                free_spots = free_spots
+                    .iter()
+                    .flat_map(|spot| spot.subtract(&blocked))
+                    .collect();
+            }
+        }
+        free_spots
+            .iter()
+            .map(|spot| spot.closest_point_to(preferred_center))
+            .min_by(|a, b| {
+                (*a - preferred_center)
+                    .length_squared()
+                    .total_cmp(&(*b - preferred_center).length_squared())
+            })
+    }
+
     pub fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
         let min = bounding_box.min_block_pos();
         let max = bounding_box.max_block_pos();
@@ -2807,6 +2853,7 @@ impl World {
             editor_world_type: VarInt(0),
             is_created_in_editor: false,
             is_exported_from_editor: false,
+            editor_level_migration_version: 0,
             day_cycle_stop_time: VarInt(-1),
             education_edition_offer: VarUInt(0),
             has_education_features_enabled: false,
@@ -2998,7 +3045,7 @@ impl World {
         }
 
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
-            recipes: crate::net::bedrock::recipe::crafting_data().to_vec(),
+            recipes: crate::net::bedrock::recipe::crafting_data(&server.recipe_manager),
             clean_recipes: false,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
@@ -4363,37 +4410,27 @@ impl World {
                     );
                     chunk.live.store(true, Relaxed);
                     for entity_nbt in &entity_nbts {
-                        let Some(id) = entity_nbt.get_string("id") else {
-                            debug!("Entity has no ID");
-                            continue;
-                        };
-                        let Some(entity_type) =
-                            EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+                        let Some(root) =
+                            load_entity_from_nbt(entity_nbt, Vector3::default(), &world)
                         else {
-                            warn!("Entity has no valid Entity Type {id}");
                             continue;
                         };
+                        for entity in self_and_passengers(&root) {
+                            match entity.get_mob() {
+                                Some(mob) => mob.mob_init_data_tracker(),
+                                None => entity.init_data_tracker(),
+                            }
 
-                        // Keep the persisted UUID so the entity keeps its identity
-                        // across reloads (matching vanilla); only fall back to a
-                        // fresh one if it is missing/corrupt.
-                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
-                        // Pos is zero since it will be read from nbt.
-                        let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
-                        entity.read_nbt_non_mut(entity_nbt);
-                        entity.init_data_tracker();
+                            // Clear velocity so the client does not replay the drop
+                            // animation; residual velocity from the original drop is
+                            // stale data.
+                            entity.get_entity().velocity.store(Vector3::default());
 
-                        let base_entity = entity.get_entity();
-                        // Clear velocity so the client does not replay the drop
-                        // animation; residual velocity from the original drop is
-                        // stale data.
-                        base_entity.velocity.store(Vector3::default());
-
-                        // UUID-dedupes if another watcher already loaded this entity.
-                        // Tracker owns pairing (spawn packets + vehicle restore).
-                        world.add_entity_silent(entity.clone());
-                        player.try_restore_vehicle(&entity);
+                            // UUID-dedupes if another watcher already loaded this entity.
+                            // Tracker owns pairing (spawn packets + vehicle restore).
+                            world.add_entity_silent(entity.clone());
+                            player.try_restore_vehicle(&entity);
+                        }
                     }
                 } else {
                     // Already live for other watchers: pair this player now so
@@ -4516,12 +4553,9 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
+        self.entity_index
+            .by_uuid(&self.entities.load_full(), id)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
-            .cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.
@@ -5117,8 +5151,7 @@ impl World {
             entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
-                let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
+                let pos = saved_chunk_pos(entity.as_ref());
                 if chunks_set.contains(&pos) {
                     entities_to_remove.push(entity.clone());
                     false
@@ -6331,6 +6364,34 @@ impl World {
             && level_data.difficulty != Difficulty::Peaceful
     }
 
+    /// The saved NBT of the block entity at the position, if any.
+    pub fn get_block_entity_nbt(&self, block_pos: &BlockPos) -> Option<NbtCompound> {
+        self.get_block_entity(block_pos)
+            .map(|be| block_entity_nbt(be.as_ref()))
+    }
+
+    /// Like [`Self::get_block_entity_nbt`], for a caller already inside `read_chunk_sync`
+    /// of the chunk holding `block_pos`. Reading that chunk again could deadlock.
+    pub fn get_block_entity_nbt_in_chunk(
+        &self,
+        chunk: &ChunkData,
+        block_pos: &BlockPos,
+    ) -> Option<NbtCompound> {
+        if let Some(nbt) = self
+            .block_entities
+            .get(&block_pos.chunk_position())
+            .and_then(|m| m.get(block_pos).map(|be| block_entity_nbt(be.as_ref())))
+        {
+            return Some(nbt);
+        }
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(block_pos)
+            .cloned()
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self
@@ -7476,25 +7537,11 @@ impl WorldPortalExt for WorldPortal {
     }
 
     fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for nbt in entities {
-            let Some(id) = nbt.get_string("id") else {
-                continue;
-            };
-            let Some(entity_type) =
-                EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
-            else {
-                warn!("Unknown structure entity type: {id}");
-                continue;
-            };
-            let entity = from_type(
-                entity_type,
-                Vector3::new(0.0, 0.0, 0.0),
-                &self.0,
-                Uuid::new_v4(),
-            );
-            entity.get_entity().read_nbt_non_mut(&nbt);
-            entity.read_nbt_non_mut(&nbt);
-            self.0.spawn_entity(entity);
+        for mut nbt in entities {
+            nbt.child_tags.remove("UUID");
+            if let Some(entity) = load_static_entity_from_nbt(&nbt, Vector3::default(), &self.0) {
+                self.0.spawn_entity(entity);
+            }
         }
     }
 }
@@ -7575,6 +7622,24 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
     y_curve.sample(t)
 }
 
+fn saving_vehicle(entity: &dyn EntityBase) -> Option<Arc<dyn EntityBase>> {
+    entity
+        .get_entity()
+        .get_vehicle()
+        .filter(|vehicle| vehicle.get_player().is_none() && !vehicle.get_entity().is_removed())
+}
+
+fn is_saved_as_passenger(entity: &dyn EntityBase) -> bool {
+    saving_vehicle(entity).is_some()
+}
+
+fn saved_chunk_pos(entity: &dyn EntityBase) -> Vector2<i32> {
+    saving_vehicle(entity).map_or_else(
+        || entity.get_entity().chunk_pos.load(),
+        |vehicle| saved_chunk_pos(vehicle.as_ref()),
+    )
+}
+
 /// A live chunk's records were already spawned, so `fresh` replaces them. Otherwise the
 /// records are the only copy of unspawned entities, so they stay and are only replaced by UUID.
 fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtCompound>) {
@@ -7589,6 +7654,12 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
         }
         data.push(record);
     }
+}
+
+fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    block_entity.write_internal(&mut nbt);
+    nbt
 }
 
 #[cfg(test)]

@@ -4,6 +4,8 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
+use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -12,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -206,6 +209,12 @@ impl Animal for MooshroomEntity {
 }
 
 impl Mob for MooshroomEntity {
+    /// Vanilla `AbstractCow.getSoundSet` is the classic cow for mooshrooms.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound = CowSoundVariant::Classic.step_sound(self.is_baby());
+        self.play_entity_sound(sound, 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,

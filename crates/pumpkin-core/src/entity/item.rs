@@ -168,6 +168,10 @@ impl ItemEntity {
         self.thrower.store(Some(uuid));
     }
 
+    pub fn get_thrower(&self) -> Option<uuid::Uuid> {
+        self.thrower.load()
+    }
+
     pub fn get_pickup_delay(&self) -> u8 {
         self.pickup_delay.load(Ordering::Relaxed)
     }
@@ -579,13 +583,10 @@ impl EntityBase for ItemEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_DAMPENS_VIBRATIONS)
     }
 
-    fn get_owner_id(&self) -> Option<i32> {
+    /// Vanilla `ItemEntity.getOwner`: the thrower.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.thrower.load()?;
-        self.entity
-            .world
-            .load()
-            .get_entity_by_uuid(uuid)
-            .map(|entity| entity.get_entity().entity_id)
+        self.entity.world.load().get_entity_by_uuid(uuid)
     }
 
     fn audited_reach(&self) -> Option<AuditedReach> {
@@ -594,19 +595,25 @@ impl EntityBase for ItemEntity {
         let pushes =
             super::MAX_PUSH_OUT_SPEED + super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
+        let horizontal = velocity.x.hypot(velocity.z) + pushes;
+        let vertical = velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION;
+        let mut links = entity_islands::links_of(self);
+        // Entering water splashes, wherever the item ends up.
+        let moved = entity
+            .bounding_box
+            .load()
+            .expand(horizontal, vertical, horizontal);
+        super::mob::game_event_listener_links(&world, false, &moved, &mut links);
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
-            motion: (
-                velocity.x.hypot(velocity.z) + pushes,
-                velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION,
-            ),
+            motion: (horizontal, vertical),
             entities: MERGE_DISTANCE,
             players: 0.0,
             block_reads: 1.0,
             route: None,
             changes_blocks: false,
             global: false,
-            links: entity_islands::links_of(self),
+            links,
         };
         reach.scan_contact_blocks(&world);
         Some(reach)

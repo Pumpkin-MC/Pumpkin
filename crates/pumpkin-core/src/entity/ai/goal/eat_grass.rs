@@ -5,6 +5,7 @@ use pumpkin_data::Block;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::world::WorldEvent;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
@@ -72,10 +73,11 @@ impl Goal for EatGrassGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.timer = self.get_tick_count(MAX_TIMER);
         let entity = &mob.get_mob_entity().living_entity.entity;
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, EntityStatus::EatGrass, None);
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::EatGrass,
+            ActorEventID::EatGrass,
+        );
         let steered = mob.get_mob_entity().steered();
         let mut navigator = steered.navigator();
         navigator.stop();

@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use crate::entity::{
     EntityBase,
@@ -11,18 +11,14 @@ use crate::entity::{
 };
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::{
-    boundingbox::{BoundingBox, EntityDimensions},
-    vector3::Vector3,
-};
+use pumpkin_util::math::{boundingbox::EntityDimensions, vector3::Vector3};
 use rand::RngExt;
 
-use super::water_animal::{AMBIENT_SOUND_INTERVAL, WaterAnimal};
+use super::water_animal::WaterAnimal;
 
 #[derive(Default)]
 pub struct FishData {
     pub from_bucket: AtomicBool,
-    ambient_sound_time: AtomicI32,
 }
 
 const WATER_ACCELERATION: f32 = 0.01;
@@ -44,25 +40,17 @@ pub fn initialize_fish_movement(mob: &mut MobEntity) {
 }
 
 const PANIC_SPEED: f64 = 1.25;
-const AVOID_PLAYER_RANGE: f64 = 8.0;
-const AVOID_PLAYER_WALK_SPEED: f64 = 1.6;
-const AVOID_PLAYER_SPRINT_SPEED: f64 = 1.4;
 const RANDOM_SWIM_SPEED: f64 = 1.0;
 const RANDOM_SWIM_INTERVAL: i32 = 40;
 
 pub fn register_fish_goals(mob: &MobEntity) {
-    use crate::entity::ai::goal::{avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal};
+    use crate::entity::ai::{
+        behavior::fleeing::{self, FISH_FLEES},
+        goal::escape_danger::EscapeDangerGoal,
+    };
     let goals = &mob.goals_selector;
     goals.add_goal(0, EscapeDangerGoal::new(PANIC_SPEED));
-    goals.add_goal(
-        2,
-        Box::new(AvoidEntityGoal::new(
-            &pumpkin_data::entity::EntityType::PLAYER,
-            AVOID_PLAYER_RANGE,
-            AVOID_PLAYER_WALK_SPEED,
-            AVOID_PLAYER_SPRINT_SPEED,
-        )),
-    );
+    fleeing::apply(goals, FISH_FLEES);
     goals.add_goal(4, Box::new(FishSwimGoal::default()));
 }
 
@@ -162,25 +150,6 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
         self.set_from_bucket(nbt.get_bool("FromBucket").unwrap_or(false));
     }
 
-    fn play_ambient_sound(&self) {
-        if let Some(sound) = self.ambient_sound() {
-            self.make_sound(sound);
-        }
-    }
-
-    fn make_sound(&self, sound: Sound) {
-        let entity = self.get_entity();
-        if !entity.is_silent() {
-            entity.world.load().play_sound_raw(
-                sound as u16,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &entity.pos.load(),
-                1.0,
-                self.get_mob_entity().living_entity.get_pitch(),
-            );
-        }
-    }
-
     fn set_dimension_scale(&self, scale: f32) {
         let entity = self.get_entity();
         let dimensions = EntityDimensions::new(
@@ -188,28 +157,11 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
             entity.entity_type.dimension[1] * scale,
             entity.entity_type.eye_height * scale,
         );
-        entity.entity_dimension.store(dimensions);
-        let pos = entity.pos.load();
-        entity
-            .bounding_box
-            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
+        entity.set_default_dimensions(dimensions);
     }
 
     fn fish_base_tick(&self, caller: &dyn crate::entity::EntityBase) {
-        if !self.get_mob_entity().living_entity.is_dead_or_dying()
-            && self.get_random().random_range(0..1000)
-                < self.fish_data().ambient_sound_time.fetch_add(1, Relaxed)
-        {
-            self.reset_ambient_sound_time();
-            self.play_ambient_sound();
-        }
-        self.handle_air_supply(caller);
-    }
-
-    fn reset_ambient_sound_time(&self) {
-        self.fish_data()
-            .ambient_sound_time
-            .store(-AMBIENT_SOUND_INTERVAL, Relaxed);
+        self.handle_air_supply(self.get_entity().air_supply.load(Relaxed), caller);
     }
 
     fn fish_remove_when_far_away(&self) -> bool {
@@ -264,20 +216,8 @@ macro_rules! impl_abstract_fish {
                 $crate::entity::EntityBase::get_entity(self).entity_type.hurt_sound
             }
 
-            fn sound_volume(&self) -> f32 {
-                if $crate::entity::EntityBase::get_entity(self).is_silent() {
-                    0.0
-                } else {
-                    1.0
-                }
-            }
-
             fn sound_category(&self) -> pumpkin_data::sound::SoundCategory {
                 pumpkin_data::sound::SoundCategory::Neutral
-            }
-
-            fn on_hurt_sound(&self) {
-                $crate::entity::passive::abstract_fish::AbstractFish::reset_ambient_sound_time(self);
             }
         }
 
@@ -315,6 +255,14 @@ macro_rules! impl_abstract_fish {
 #[macro_export]
 macro_rules! fish_mob_hooks {
     () => {
+        /// Vanilla `AbstractFish` steps silently.
+        fn mob_play_step_sound(
+            &self,
+            _pos: &pumpkin_util::math::position::BlockPos,
+            _state: &pumpkin_data::BlockState,
+        ) {
+        }
+
         fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
             &self.mob_entity
         }
@@ -329,6 +277,14 @@ macro_rules! fish_mob_hooks {
 
         fn as_custom_sound(&self) -> Option<&dyn $crate::entity::custom_sound::CustomSound> {
             Some(self)
+        }
+
+        fn get_ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+            $crate::entity::passive::abstract_fish::AbstractFish::ambient_sound(self)
+        }
+
+        fn get_ambient_sound_interval(&self) -> i32 {
+            $crate::entity::passive::water_animal::AMBIENT_SOUND_INTERVAL
         }
 
         fn mob_interact_with_hand(

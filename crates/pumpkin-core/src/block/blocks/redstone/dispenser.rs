@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use rand::{Rng, RngExt, rng};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,6 +20,7 @@ use crate::entity::passive::sheep::SheepEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
 use crate::entity::projectile::small_fireball::SmallFireballEntity;
@@ -402,8 +404,11 @@ impl DispenserBlock {
         } else if Self::dispense_equipment(ctx, item) {
             // Armor, elytra, heads, saddles, horse/wolf armor and llama carpets
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else if item.item.id == Item::EXPERIENCE_BOTTLE.id {
+            // Experience bottles (bottles o' enchanting) are thrown like splash potions
+            Self::dispense_experience_bottle(ctx, item);
         } else {
-            // TODO: Bone meal, bottles o' enchanting, chests onto llamas, brushes onto armadillos
+            // TODO: Bone meal, chests onto llamas, brushes onto armadillos
             // Default / Drop
             Self::drop_item(ctx, item);
         }
@@ -721,7 +726,7 @@ impl DispenserBlock {
         );
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: WIND_CHARGE_GRAVITY,
@@ -1083,6 +1088,28 @@ impl DispenserBlock {
         Some(true)
     }
 
+    fn dispense_experience_bottle(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        let projectile = item.split(1);
+        let entity = Entity::new(
+            ctx.world.clone(),
+            Self::projectile_spawn_position(ctx),
+            &EntityType::EXPERIENCE_BOTTLE,
+        );
+        let bottle = ExperienceBottleEntity::new(entity);
+        bottle.set_item_stack(projectile);
+        Self::launch_thrown(
+            ctx,
+            &bottle.thrown,
+            Self::POTION_PROJECTILE_POWER,
+            Self::POTION_PROJECTILE_UNCERTAINTY,
+        );
+        Self::finish_projectile_launch(
+            ctx,
+            Arc::new(bottle),
+            WorldEvent::SoundDispenserProjectileLaunch,
+        );
+    }
+
     fn dispense_mob_head(ctx: &DispenseContext<'_>, item: &mut ItemStack, block: &'static Block) {
         let target = Self::target_position(ctx);
 
@@ -1172,7 +1199,8 @@ impl DispenserBlock {
             let Some(living) = entity.get_living_entity() else {
                 continue;
             };
-            if !living.is_part_of_game()
+            if !living.is_alive()
+                || entity.is_spectator()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
                 || entity
                     .get_mob()

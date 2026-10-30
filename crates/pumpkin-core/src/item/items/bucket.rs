@@ -110,6 +110,11 @@ fn give_filled_bucket_stack(
     mut filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
+    player.trigger_advancement(
+        crate::entity::player::advancement::trigger::AdvancementTrigger::FilledBucket {
+            item_id: filled.item.registry_key.to_string(),
+        },
+    );
     if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
@@ -607,14 +612,6 @@ impl ItemBehaviour for FilledBucketItem {
             let entity_type = entity.get_entity().entity_type;
             let result_item = if entity_type == &EntityType::AXOLOTL {
                 Some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl))
-            } else if entity_type == &EntityType::COD {
-                Some((&Item::COD_BUCKET, Sound::ItemBucketFillFish))
-            } else if entity_type == &EntityType::SALMON {
-                Some((&Item::SALMON_BUCKET, Sound::ItemBucketFillFish))
-            } else if entity_type == &EntityType::TROPICAL_FISH {
-                Some((&Item::TROPICAL_FISH_BUCKET, Sound::ItemBucketFillFish))
-            } else if entity_type == &EntityType::PUFFERFISH {
-                Some((&Item::PUFFERFISH_BUCKET, Sound::ItemBucketFillFish))
             } else if entity_type == &EntityType::TADPOLE {
                 Some((&Item::TADPOLE_BUCKET, Sound::ItemBucketFillTadpole))
             } else {
