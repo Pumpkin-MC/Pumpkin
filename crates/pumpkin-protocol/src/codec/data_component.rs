@@ -1770,8 +1770,9 @@ impl DataComponentCodec<Self> for AttributeModifiersImpl {
         use pumpkin_data::AttributeModifierSlot;
         use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
 
-        let len = seq.get_var_int()?.0 as usize;
-        let mut modifiers = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
+        const MAX_ATTRIBUTE_MODIFIERS: usize = 256;
+        let len = read_count(seq, MAX_ATTRIBUTE_MODIFIERS)?;
+        let mut modifiers = Vec::with_capacity(len);
         for _ in 0..len {
             let attr_id = seq.get_var_int()?.0;
             let id = seq.get_str()?;
