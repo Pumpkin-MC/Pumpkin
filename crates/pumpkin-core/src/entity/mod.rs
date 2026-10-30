@@ -3893,6 +3893,20 @@ impl Entity {
         self.entity_type.fire_immune || self.fire_immune.load(Ordering::Relaxed)
     }
 
+    /// Vanilla `Entity.lavaIgnite`: sets the entity on fire for 15 seconds.
+    pub fn lava_ignite(&self, caller: &dyn EntityBase) {
+        if !self.is_fire_immune() {
+            caller.set_on_fire_for(15.0);
+        }
+    }
+
+    /// Vanilla `Entity.lavaHurt`: deals 4 lava damage.
+    pub fn lava_hurt(&self, caller: &dyn EntityBase) {
+        if !self.is_fire_immune() {
+            self.damage(caller, 4.0, DamageType::LAVA);
+        }
+    }
+
     /// Vanilla `Entity.isInvulnerableToBase`. Driven by the damage type tags, so datapacks
     /// decide what bypasses invulnerability or counts as fire and fall damage.
     /// `cause` is the attacker (vanilla `DamageSource.getEntity`).

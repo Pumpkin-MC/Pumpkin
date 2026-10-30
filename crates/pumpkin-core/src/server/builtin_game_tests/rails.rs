@@ -126,3 +126,54 @@ pub(super) async fn test_detector_rail_minecart(helper: GameTestHelper) -> GameT
     })?;
     Ok(())
 }
+
+pub(super) async fn test_minecart_breaks_in_lava(helper: GameTestHelper) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    for (x, z) in [(1, 2), (3, 2), (2, 1), (2, 3)] {
+        helper
+            .set_block_default(&BlockPos::new(x, 1, z), &Block::STONE)
+            .await?;
+    }
+    helper
+        .set_block_default(&BlockPos::new(2, 1, 2), &Block::LAVA)
+        .await?;
+    helper
+        .spawn_entity_at("minecraft:minecart", Vector3::new(2.5, 1.0, 2.5))
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_execute(
+            |helper| async move { helper.assert_entity_present("minecraft:minecart").await },
+        )
+        .then_wait_until(|helper| async move {
+            helper.assert_entity_not_present("minecraft:minecart").await
+        })
+        .then_succeed();
+    Ok(())
+}
+
+pub(super) async fn test_minecart_breaks_on_cactus(helper: GameTestHelper) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    helper
+        .set_block_default(&BlockPos::new(3, 0, 2), &Block::SAND)
+        .await?;
+    helper
+        .set_block_default(&BlockPos::new(3, 1, 2), &Block::CACTUS)
+        .await?;
+    // Pressed against the cactus side, where its collision box (inset by 1/16) stops the minecart.
+    helper
+        .spawn_entity_at("minecraft:minecart", Vector3::new(2.5725, 1.0, 2.5))
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_execute(
+            |helper| async move { helper.assert_entity_present("minecraft:minecart").await },
+        )
+        .then_wait_until(|helper| async move {
+            helper.assert_entity_not_present("minecraft:minecart").await
+        })
+        .then_succeed();
+    Ok(())
+}

@@ -72,6 +72,8 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
+    "pumpkin:minecart_breaks_in_lava",
+    "pumpkin:minecart_breaks_on_cactus",
     "pumpkin:tripwire_entity_collision",
     "pumpkin:snow_golem_pattern_spawns",
     "pumpkin:iron_golem_pattern_spawns",
@@ -472,6 +474,20 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             rails::test_detector_rail_minecart,
+        );
+        register_function_test(
+            "pumpkin:minecart_breaks_in_lava",
+            "pumpkin:empty_5x4x5",
+            20,
+            0,
+            rails::test_minecart_breaks_in_lava,
+        );
+        register_function_test(
+            "pumpkin:minecart_breaks_on_cactus",
+            "pumpkin:empty_5x4x5",
+            20,
+            0,
+            rails::test_minecart_breaks_on_cactus,
         );
         register_function_test(
             "pumpkin:tripwire_entity_collision",
