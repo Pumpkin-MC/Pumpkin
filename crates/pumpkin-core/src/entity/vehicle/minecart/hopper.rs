@@ -114,13 +114,9 @@ impl HopperMinecart {
         false
     }
 
-    pub(super) fn interact(
-        &self,
-        custom_name: Option<TextComponent>,
-        player: &Arc<Player>,
-    ) -> bool {
+    pub(super) fn interact(&self, entity: &crate::entity::Entity, player: &Arc<Player>) -> bool {
         container::open(
-            custom_name,
+            entity,
             player,
             &self.inventory,
             TextComponent::translate_cross(

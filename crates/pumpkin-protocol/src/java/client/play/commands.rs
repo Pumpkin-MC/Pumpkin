@@ -240,7 +240,12 @@ pub enum ArgumentType {
     LootTable,
     LootPredicate,
     LootModifier,
+    ContextFloatProvider,
+    ContextIntProvider,
+    SlotSource,
     Dialog,
+    Feature,
+    SwingAnimation,
     Uuid,
 }
 
@@ -531,5 +536,25 @@ impl SuggestionProviders {
             Self::AvailableSounds => "minecraft:available_sounds",
             Self::SummonableEntities => "minecraft:summonable_entities",
         }
+    }
+}
+
+#[cfg(test)]
+mod argument_type_id_tests {
+    use super::ArgumentType;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    /// Ids of `ArgumentTypeInfos` in 26.3.
+    #[test]
+    fn ids_follow_vanilla() {
+        let v = JavaMinecraftVersion::V_26_3;
+        assert_eq!(ArgumentType::LootModifier.to_id(&v), 54);
+        assert_eq!(ArgumentType::ContextFloatProvider.to_id(&v), 55);
+        assert_eq!(ArgumentType::ContextIntProvider.to_id(&v), 56);
+        assert_eq!(ArgumentType::SlotSource.to_id(&v), 57);
+        assert_eq!(ArgumentType::Dialog.to_id(&v), 58);
+        assert_eq!(ArgumentType::Feature.to_id(&v), 59);
+        assert_eq!(ArgumentType::SwingAnimation.to_id(&v), 60);
+        assert_eq!(ArgumentType::Uuid.to_id(&v), 61);
     }
 }

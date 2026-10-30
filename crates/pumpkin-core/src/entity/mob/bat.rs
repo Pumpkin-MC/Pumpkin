@@ -207,6 +207,10 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn mob_is_flapping(&self) -> bool {
+        !self.is_roosting() && self.get_entity().tick_count.load(Relaxed) % 10 == 0
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
@@ -222,6 +226,14 @@ impl Mob for BatEntity {
         let flags = u8::try_from(nbt.get_byte("BatFlags").unwrap_or(0)).unwrap_or(0);
         let roosting = (flags & ROOSTING_FLAG) != 0;
         self.set_roosting(roosting);
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_roosting() {
+            meta = meta.bat_roosting(true);
+        }
+        Some(meta)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

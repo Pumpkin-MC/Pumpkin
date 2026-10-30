@@ -1,7 +1,9 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::Redirection;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use pumpkin_data::translation;
@@ -90,13 +92,16 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Allow,
     ));
 
-    // Register /teammsg <message>
-    dispatcher.register(command("teammsg", DESCRIPTION).requires(PERMISSION).then(
-        argument(ARG_MESSAGE, StringArgumentType::GreedyPhrase).executes(TeamMsgCommandExecutor),
-    ));
+    let teammsg = dispatcher.register(
+        command("teammsg", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument(ARG_MESSAGE, MessageArgumentType).executes(TeamMsgCommandExecutor)),
+    );
 
-    // Register alias /tm <message>
-    dispatcher.register(command("tm", DESCRIPTION).requires(PERMISSION).then(
-        argument(ARG_MESSAGE, StringArgumentType::GreedyPhrase).executes(TeamMsgCommandExecutor),
-    ));
+    // `tm` redirects to `teammsg`, as in vanilla's `TeamMsgCommand`.
+    dispatcher.register(
+        command("tm", DESCRIPTION)
+            .requires(PERMISSION)
+            .redirect(Redirection::Local(teammsg.into())),
+    );
 }

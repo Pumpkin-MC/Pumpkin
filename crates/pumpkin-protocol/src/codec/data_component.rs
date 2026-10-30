@@ -15,6 +15,17 @@ use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
+const MAX_INITIAL_COLLECTION_SIZE: usize = 65536;
+
+fn read_count(seq: &mut impl NetworkReadExt, max_size: usize) -> Result<usize, ReadingError> {
+    let count = seq.get_var_int()?.0;
+    usize::try_from(count)
+        .ok()
+        .filter(|&count| count <= max_size)
+        .ok_or_else(|| {
+            ReadingError::TooLarge(format!("{count} elements exceeded max size of {max_size}"))
+        })
+}
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -53,7 +64,8 @@ fn deserialize_idset<T: IDSetContent>(
         }
         std::cmp::Ordering::Greater => {
             let len = id_type - 1;
-            let mut content_vec = Vec::with_capacity(len as usize);
+            let mut content_vec =
+                Vec::with_capacity((len as usize).min(MAX_INITIAL_COLLECTION_SIZE));
 
             for _ in 0..len {
                 let varint_id = seq.get_var_int()?.0;
@@ -1406,51 +1418,183 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
     }
 }
 
-macro_rules! codec_string_variant {
-    ($struct_name:ident) => {
+fn unknown_variant(component: &str, value: &str) -> WritingError {
+    WritingError::Message(format!("unknown {component} value {value}"))
+}
+
+/// Vanilla `ByteBufCodecs.holderRegistry`: the entry's id in the synced registry.
+macro_rules! codec_registry_variant {
+    ($struct_name:ident, $variant:ty) => {
         impl DataComponentCodec<Self> for $struct_name {
             fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-                seq.write_string(&self.value)
+                let variant = <$variant>::from_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                let id = i32::try_from(variant.id())
+                    .map_err(|_| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(id))
             }
             fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-                let value = seq.get_str()?;
+                let id = seq.get_var_int()?.0;
+                let variant = usize::try_from(id)
+                    .ok()
+                    .and_then(|id| <$variant>::all().get(id))
+                    .ok_or_else(|| {
+                        ReadingError::Message(format!(
+                            "unknown {} id {id}",
+                            stringify!($struct_name)
+                        ))
+                    })?;
                 Ok(Self {
-                    value: Cow::Owned(value.into()),
+                    value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
                 })
             }
         }
     };
 }
 
-codec_string_variant!(VillagerVariantImpl);
-codec_string_variant!(WolfVariantImpl);
-codec_string_variant!(WolfSoundVariantImpl);
-codec_string_variant!(WolfCollarImpl);
-codec_string_variant!(FoxVariantImpl);
-codec_string_variant!(SalmonSizeImpl);
-codec_string_variant!(ParrotVariantImpl);
-codec_string_variant!(TropicalFishPatternImpl);
-codec_string_variant!(TropicalFishBaseColorImpl);
-codec_string_variant!(TropicalFishPatternColorImpl);
-codec_string_variant!(MooshroomVariantImpl);
-codec_string_variant!(RabbitVariantImpl);
-codec_string_variant!(PigVariantImpl);
-codec_string_variant!(PigSoundVariantImpl);
-codec_string_variant!(CowVariantImpl);
-codec_string_variant!(CowSoundVariantImpl);
-codec_string_variant!(ChickenVariantImpl);
-codec_string_variant!(ChickenSoundVariantImpl);
-codec_string_variant!(ZombieNautilusVariantImpl);
-codec_string_variant!(FrogVariantImpl);
-codec_string_variant!(HorseVariantImpl);
-codec_string_variant!(PaintingVariantImpl);
-codec_string_variant!(LlamaVariantImpl);
-codec_string_variant!(AxolotlVariantImpl);
-codec_string_variant!(CatVariantImpl);
-codec_string_variant!(CatSoundVariantImpl);
-codec_string_variant!(CatCollarImpl);
-codec_string_variant!(SheepColorImpl);
-codec_string_variant!(ShulkerColorImpl);
+codec_registry_variant!(WolfVariantImpl, pumpkin_data::wolf_variant::WolfVariant);
+codec_registry_variant!(
+    WolfSoundVariantImpl,
+    pumpkin_data::wolf_sound_variant::WolfSoundVariant
+);
+codec_registry_variant!(PigVariantImpl, pumpkin_data::pig_variant::PigVariant);
+codec_registry_variant!(
+    PigSoundVariantImpl,
+    pumpkin_data::pig_sound_variant::PigSoundVariant
+);
+codec_registry_variant!(CowVariantImpl, pumpkin_data::cow_variant::CowVariant);
+codec_registry_variant!(
+    CowSoundVariantImpl,
+    pumpkin_data::cow_sound_variant::CowSoundVariant
+);
+codec_registry_variant!(
+    ChickenVariantImpl,
+    pumpkin_data::chicken_variant::ChickenVariant
+);
+codec_registry_variant!(
+    ChickenSoundVariantImpl,
+    pumpkin_data::chicken_sound_variant::ChickenSoundVariant
+);
+codec_registry_variant!(
+    ZombieNautilusVariantImpl,
+    pumpkin_data::zombie_nautilus_variant::ZombieNautilusVariant
+);
+codec_registry_variant!(FrogVariantImpl, pumpkin_data::frog_variant::FrogVariant);
+codec_registry_variant!(CatVariantImpl, pumpkin_data::cat_variant::CatVariant);
+codec_registry_variant!(
+    CatSoundVariantImpl,
+    pumpkin_data::cat_sound_variant::CatSoundVariant
+);
+
+impl DataComponentCodec<Self> for VillagerVariantImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let variant = pumpkin_data::villager::VillagerType::from_name(&self.value)
+            .ok_or_else(|| unknown_variant("VillagerVariantImpl", &self.value))?;
+        seq.write_var_int(&VarInt(variant as i32))
+    }
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let variant = pumpkin_data::villager::VillagerType::from_i32(id)
+            .ok_or_else(|| ReadingError::Message(format!("unknown VillagerVariantImpl id {id}")))?;
+        Ok(Self {
+            value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
+        })
+    }
+}
+
+/// Vanilla `ByteBufCodecs.holder`: 0 for an inline value, otherwise the registry id plus one.
+impl DataComponentCodec<Self> for PaintingVariantImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let variant = pumpkin_data::painting_variant::PaintingVariant::from_name(&self.value)
+            .ok_or_else(|| unknown_variant("PaintingVariantImpl", &self.value))?;
+        let id = i32::try_from(variant.id())
+            .map_err(|_| unknown_variant("PaintingVariantImpl", &self.value))?;
+        seq.write_var_int(&VarInt(id + 1))
+    }
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let variant = id
+            .checked_sub(1)
+            .and_then(|id| usize::try_from(id).ok())
+            .and_then(|id| pumpkin_data::painting_variant::PaintingVariant::all().get(id))
+            .ok_or_else(|| {
+                ReadingError::Message(format!("unsupported PaintingVariantImpl holder {id}"))
+            })?;
+        Ok(Self {
+            value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
+        })
+    }
+}
+
+/// Vanilla `ByteBufCodecs.idMapper` over a Java enum; unknown ids follow its `ByIdMap` strategy.
+macro_rules! codec_id_mapped_variant {
+    ($struct_name:ident, $variant:ty) => {
+        impl DataComponentCodec<Self> for $struct_name {
+            fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+                let variant = <$variant>::from_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(variant.id()))
+            }
+            fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+                let id = seq.get_var_int()?.0;
+                Ok(Self {
+                    value: Cow::Borrowed(<$variant>::by_id(id).name()),
+                })
+            }
+        }
+    };
+}
+
+codec_id_mapped_variant!(FoxVariantImpl, pumpkin_data::entity_variant::FoxVariant);
+codec_id_mapped_variant!(SalmonSizeImpl, pumpkin_data::entity_variant::SalmonSize);
+codec_id_mapped_variant!(
+    ParrotVariantImpl,
+    pumpkin_data::entity_variant::ParrotVariant
+);
+codec_id_mapped_variant!(
+    TropicalFishPatternImpl,
+    pumpkin_data::entity_variant::TropicalFishPattern
+);
+codec_id_mapped_variant!(
+    MooshroomVariantImpl,
+    pumpkin_data::entity_variant::MooshroomVariant
+);
+codec_id_mapped_variant!(
+    RabbitVariantImpl,
+    pumpkin_data::entity_variant::RabbitVariant
+);
+codec_id_mapped_variant!(HorseVariantImpl, pumpkin_data::entity_variant::HorseVariant);
+codec_id_mapped_variant!(LlamaVariantImpl, pumpkin_data::entity_variant::LlamaVariant);
+codec_id_mapped_variant!(
+    AxolotlVariantImpl,
+    pumpkin_data::entity_variant::AxolotlVariant
+);
+
+/// Vanilla `DyeColor.STREAM_CODEC`: the color id, unknown ids read as white.
+macro_rules! codec_dye_color {
+    ($struct_name:ident) => {
+        impl DataComponentCodec<Self> for $struct_name {
+            fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+                let color = pumpkin_data::dye_color::DyeColor::by_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(i32::from(color.id())))
+            }
+            fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+                let color = pumpkin_data::dye_color::DyeColor::by_id_or_white(seq.get_var_int()?.0);
+                Ok(Self {
+                    value: Cow::Borrowed(color.name()),
+                })
+            }
+        }
+    };
+}
+
+codec_dye_color!(WolfCollarImpl);
+codec_dye_color!(TropicalFishBaseColorImpl);
+codec_dye_color!(TropicalFishPatternColorImpl);
+codec_dye_color!(CatCollarImpl);
+codec_dye_color!(SheepColorImpl);
+codec_dye_color!(ShulkerColorImpl);
 
 impl DataComponentCodec<Self> for MaxDamageImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
@@ -1676,23 +1820,23 @@ impl DataComponentCodec<Self> for CustomModelDataImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let floats_len = seq.get_var_int()?.0 as usize;
-        let mut floats = Vec::with_capacity(floats_len);
+        let floats_len = read_count(seq, usize::MAX)?;
+        let mut floats = Vec::with_capacity(floats_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..floats_len {
             floats.push(seq.get_f32()?);
         }
-        let flags_len = seq.get_var_int()?.0 as usize;
-        let mut flags = Vec::with_capacity(flags_len);
+        let flags_len = read_count(seq, usize::MAX)?;
+        let mut flags = Vec::with_capacity(flags_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..flags_len {
             flags.push(seq.get_bool()?);
         }
-        let strings_len = seq.get_var_int()?.0 as usize;
-        let mut strings = Vec::with_capacity(strings_len);
+        let strings_len = read_count(seq, usize::MAX)?;
+        let mut strings = Vec::with_capacity(strings_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..strings_len {
             strings.push(seq.get_str()?.to_string());
         }
-        let colors_len = seq.get_var_int()?.0 as usize;
-        let mut colors = Vec::with_capacity(colors_len);
+        let colors_len = read_count(seq, usize::MAX)?;
+        let mut colors = Vec::with_capacity(colors_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..colors_len {
             colors.push(seq.get_i32()?);
         }
@@ -1829,8 +1973,8 @@ impl DataComponentCodec<Self> for ToolImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let rules_len = seq.get_var_int()?.0 as usize;
-        let mut rules = Vec::with_capacity(rules_len);
+        let rules_len = read_count(seq, usize::MAX)?;
+        let mut rules = Vec::with_capacity(rules_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..rules_len {
             let blocks = deserialize_idset(seq)?;
             let speed = if seq.get_bool()? {
@@ -2257,7 +2401,8 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PROJECTILES: usize = 1024;
+        let len = read_count(seq, MAX_PROJECTILES)?;
         let mut projectiles = Vec::with_capacity(len);
         for _ in 0..len {
             let _ = deserialize_item_stack_template(seq)?;
@@ -2289,7 +2434,8 @@ impl DataComponentCodec<Self> for WritableBookContentImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PAGES: usize = 100;
+        let len = read_count(seq, MAX_PAGES)?;
         let mut pages = Vec::with_capacity(len);
         for _ in 0..len {
             let raw = seq.get_str()?.to_string();
@@ -2324,8 +2470,8 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         }
         let author = seq.get_str()?.to_string();
         let _generation = seq.get_var_int()?.0;
-        let pages_len = seq.get_var_int()?.0 as usize;
-        let mut pages = Vec::with_capacity(pages_len);
+        let pages_len = read_count(seq, usize::MAX)?;
+        let mut pages = Vec::with_capacity(pages_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..pages_len {
             let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             let comp = tag.as_ref().map_or_else(
@@ -2743,8 +2889,8 @@ impl DataComponentCodec<Self> for BannerPatternsImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut layers = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut layers = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let _pattern = seq.get_var_int()?.0;
             let color_id = seq.get_var_int()?.0 as u8;
@@ -2817,7 +2963,8 @@ impl DataComponentCodec<Self> for ContainerImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_SIZE: usize = 256;
+        let len = read_count(seq, MAX_SIZE)?;
         let mut items = Vec::with_capacity(len);
         for slot in 0..len {
             if seq.get_bool()? {
@@ -2840,8 +2987,8 @@ impl DataComponentCodec<Self> for BlockStateImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut properties = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut properties = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let k = seq.get_str()?.to_string();
             let v = seq.get_str()?.to_string();
@@ -3016,6 +3163,13 @@ impl DataComponentCodec<Self> for MobVisibilityImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let targeting_entity_types = deserialize_idset(seq)?;
         let visibility = seq.get_f32()?;
+        // Like vanilla's validated item stacks, the persistent range applies here too.
+        if !Self::is_valid_visibility(visibility) {
+            return Err(ReadingError::Message(format!(
+                "Mob visibility {visibility} outside 0..={}",
+                Self::MAX_VISIBILITY
+            )));
+        }
         Ok(Self {
             targeting_entity_types,
             visibility,
@@ -3348,6 +3502,39 @@ mod tests {
     }
 
     #[test]
+    fn variant_components_use_vanilla_network_ids() {
+        let mut encoded = Vec::new();
+        SalmonSizeImpl {
+            value: Cow::Borrowed("large"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        TropicalFishPatternImpl {
+            value: Cow::Borrowed("stripey"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        SheepColorImpl {
+            value: Cow::Borrowed("red"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        // Holders send the registry id plus one.
+        PaintingVariantImpl {
+            value: Cow::Borrowed("minecraft:alban"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        assert_eq!(encoded, [2, 0x81, 0x02, 14, 1]);
+
+        let clamped = SalmonSizeImpl::deserialize(&mut [9u8].as_slice()).unwrap();
+        assert_eq!(clamped.value, "large");
+
+        let min_holder = [0x80, 0x80, 0x80, 0x80, 0x08];
+        assert!(PaintingVariantImpl::deserialize(&mut min_holder.as_slice()).is_err());
+    }
+
+    #[test]
     fn all_default_item_components_serialize_and_deserialize() {
         for id in 0..=2000 {
             let Some(item) = pumpkin_data::item::Item::from_id(id) else {
@@ -3376,6 +3563,16 @@ mod tests {
                     slice.len()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn oversized_tool_rule_count_is_rejected_without_preallocating() {
+        for count in [
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x07],
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        ] {
+            assert!(ToolImpl::deserialize(&mut count.as_slice()).is_err());
         }
     }
 }

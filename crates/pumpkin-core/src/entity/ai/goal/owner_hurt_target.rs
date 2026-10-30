@@ -3,6 +3,7 @@ use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -27,7 +28,7 @@ impl OwnerHurtTargetGoal {
 
 impl Goal for OwnerHurtTargetGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !mob.is_tamed() || mob.is_sitting() {
+        if !mob.is_tamed() || mob.ordered_to_sit() {
             return false;
         }
 
@@ -71,7 +72,11 @@ impl Goal for OwnerHurtTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone());
+        self.track_target_goal.start_targeting(
+            mob,
+            self.target.clone(),
+            TargetReason::OwnerAttackedTarget,
+        );
 
         if let Some(owner_uuid) = mob.get_owner_uuid() {
             let world = mob.get_mob_entity().living_entity.entity.world.load_full();

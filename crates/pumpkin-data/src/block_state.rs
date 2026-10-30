@@ -1,7 +1,8 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument, SOUND_TYPES};
 use crate::blocks::SuffocationPredicate;
+use crate::sound::Sound;
 use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
@@ -32,6 +33,8 @@ pub struct BlockState {
     pub outline_shapes: &'static [u16],
     /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
+    /// Index into [`SOUND_TYPES`], see [`Self::get_sound_type`].
+    pub sound_type: u8,
     /// The ID of the block entity associated with this state.
     /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
@@ -42,6 +45,20 @@ pub struct BlockState {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct BlockStateId(u16);
+
+/// Vanilla `SoundType`: the sounds a block makes when broken, stepped on, placed, hit or fallen on.
+#[derive(Debug)]
+pub struct SoundType {
+    /// The vanilla `SoundType` constant name, e.g. `WOOD`.
+    pub name: &'static str,
+    pub volume: f32,
+    pub pitch: f32,
+    pub break_sound: Sound,
+    pub step_sound: Sound,
+    pub place_sound: Sound,
+    pub hit_sound: Sound,
+    pub fall_sound: Sound,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -202,6 +219,11 @@ impl BlockState {
             .to_block()
             .set_waterlogged(self.id, value)
             .map(BlockStateId::to_state)
+    }
+
+    #[must_use]
+    pub fn get_sound_type(&self) -> &'static SoundType {
+        &SOUND_TYPES[self.sound_type as usize]
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {

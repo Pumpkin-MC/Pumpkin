@@ -26,20 +26,19 @@ use pumpkin_protocol::bedrock::{
     server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
+use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
-            trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
-            work_at_job_site::WorkAtJobSiteGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            open_door::OpenDoorGoal, swim::SwimGoal, trade_with_player::TradeWithPlayerGoal,
+            wander_around::WanderAroundGoal, work_at_job_site::WorkAtJobSiteGoal,
         },
         pathfinder::Navigator,
     },
@@ -330,6 +329,26 @@ fn explorer_map_target(
     })
 }
 
+/// Vanilla `VillagerHostilesSensor` distances; panic runs at 0.5 * 1.5.
+const VILLAGER_FLEES: &[Flee] = &[Flee::nearest_of(
+    1,
+    &[
+        (&EntityType::DROWNED, 8.0),
+        (&EntityType::EVOKER, 12.0),
+        (&EntityType::HUSK, 8.0),
+        (&EntityType::ILLUSIONER, 12.0),
+        (&EntityType::PILLAGER, 15.0),
+        (&EntityType::RAVAGER, 12.0),
+        (&EntityType::VEX, 8.0),
+        (&EntityType::VINDICATOR, 10.0),
+        (&EntityType::ZOGLIN, 10.0),
+        (&EntityType::ZOMBIE, 8.0),
+        (&EntityType::ZOMBIE_VILLAGER, 8.0),
+    ],
+    0.75,
+    0.75,
+)];
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -442,52 +461,7 @@ impl VillagerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIE_VILLAGER,
-                    8.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::HUSK, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::DROWNED, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::PILLAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::VINDICATOR,
-                    12.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::EVOKER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::RAVAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
-            );
+            fleeing::apply(goal_selector, VILLAGER_FLEES);
 
             goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
@@ -1299,7 +1273,7 @@ impl VillagerEntity {
                 world.send_entity_status(
                     self.get_entity(),
                     pumpkin_data::entity::EntityStatus::VillagerHappy,
-                    Some(ActorEventID::VillagerHappy),
+                    ActorEventID::VillagerHappy,
                 );
                 self.job_site_pending.store(false, Ordering::Relaxed);
                 if profession == VillagerProfession::None {
@@ -1321,7 +1295,7 @@ impl VillagerEntity {
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
-            Some(ActorEventID::VillagerAngry),
+            ActorEventID::VillagerAngry,
         );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
@@ -1612,7 +1586,7 @@ impl VillagerEntity {
             world.send_entity_status(
                 self.get_entity(),
                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                Some(ActorEventID::VillagerHappy),
+                ActorEventID::VillagerHappy,
             );
         }
 
@@ -1864,7 +1838,7 @@ impl VillagerEntity {
                             world.send_entity_status(
                                 self.get_entity(),
                                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                                Some(ActorEventID::VillagerHappy),
+                                ActorEventID::VillagerHappy,
                             );
                         }
                     }
@@ -2185,32 +2159,17 @@ impl Mob for VillagerEntity {
         Some("minecraft:villager_v2")
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let xp = self.xp.load(Ordering::Relaxed);
+        let mut meta = crate::entity::mob::MobMetadata::new().villager_data(data, xp);
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
         }
-        let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::villager::VILLAGER_DATA,
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
-        .write(&mut metadata, &version)
-        .ok()?;
-        metadata.push(255);
-        Some(metadata.into_boxed_slice())
-    }
-
-    fn mob_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
-        Some(Self::bedrock_metadata(
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            self.xp.load(Ordering::Relaxed),
-        ))
+        Some(meta)
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -2378,6 +2337,7 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
+    use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;

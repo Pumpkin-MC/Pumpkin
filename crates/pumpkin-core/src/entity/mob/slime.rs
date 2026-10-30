@@ -7,20 +7,28 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::control::{Control, MoveControlTrait, move_control::MoveControl},
-    ai::goal::{Goal, active_target::ActiveTargetGoal},
+    ai::goal::Goal,
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
 use pumpkin_util::random::RandomImpl;
 use rand::RngExt;
+
+const SLIME_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::PLAYER), true)
+        .matching(hunting::within_four_blocks_height),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+];
 
 pub struct SlimeEntity {
     entity: Arc<MobEntity>,
@@ -68,14 +76,7 @@ impl SlimeEntity {
             goal_selector.add_goal(3, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
             goal_selector.add_goal(5, Box::new(SlimeKeepOnJumpingGoal::new(mob_arc.clone())));
 
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::IRON_GOLEM, true),
-            );
+            hunting::apply(target_selector, &mob_arc.entity, SLIME_HUNTS);
         };
 
         mob_arc.randomize_size();
@@ -133,11 +134,12 @@ impl SlimeEntity {
             height: entity.entity_type.dimension[1] * actual_size as f32,
             eye_height: entity.entity_type.eye_height * actual_size as f32,
         };
-        entity.entity_dimension.store(scaled_dimensions);
+        entity.set_default_dimensions(scaled_dimensions);
 
-        let pos = entity.pos.load();
-        let new_bb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &scaled_dimensions);
-        entity.bounding_box.store(new_bb);
+        entity.set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, actual_size);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn get_size(&self) -> i32 {
@@ -280,6 +282,10 @@ impl Mob for SlimeEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        Some(crate::entity::mob::MobMetadata::new().slime_size(self.get_size()))
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
