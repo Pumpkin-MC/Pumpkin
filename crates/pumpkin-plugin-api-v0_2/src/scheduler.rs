@@ -10,7 +10,10 @@
 //! * [`schedule_repeating_task`] runs it on a period
 //! * [`cancel_task`] stops future runs
 
-use std::{future::Future, sync::Arc};
+use std::{
+    future::Future,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     Server,
@@ -18,28 +21,40 @@ use crate::{
     registry::{LocalBoxFuture, Registry},
 };
 
-// Tasks are stored as trait objects, and `AsyncFn` is not dyn-compatible while a closure that
-// returns a boxed future is, so callers write `|server| async move { ... }`
-type TaskHandler = dyn Fn(Server) -> LocalBoxFuture<'static, ()> + Send + Sync;
+type DelayedHandler = Box<dyn FnOnce(Server) -> LocalBoxFuture<'static, ()> + Send>;
+type RepeatingHandler = Box<dyn Fn(Server) -> LocalBoxFuture<'static, ()> + Send + Sync>;
+
+enum TaskHandler {
+    Delayed(Mutex<Option<DelayedHandler>>),
+    Repeating(RepeatingHandler),
+}
 
 static TASK_HANDLERS: Registry<TaskHandler> = Registry::new();
 
 pub(crate) async fn dispatch(handler_id: u32, server: Server) {
-    // The registry lock is released before the task runs
-    if let Some(handler) = TASK_HANDLERS.get(handler_id) {
-        handler(server).await;
+    let Some(handler) = TASK_HANDLERS.get(handler_id) else {
+        return;
+    };
+    let future = match &*handler {
+        TaskHandler::Delayed(callback) => {
+            TASK_HANDLERS.take(handler_id);
+            // Another dispatch may already have cloned the entry. Only one may consume it.
+            let callback = callback
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+            callback.map(|callback| callback(server))
+        }
+        TaskHandler::Repeating(callback) => Some(callback(server)),
+    };
+    if let Some(future) = future {
+        future.await;
     }
 }
 
-fn register_handler<F, Fut>(handler: F) -> u32
-where
-    F: Fn(Server) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = ()> + 'static,
-{
-    TASK_HANDLERS.register(Arc::new(move |server| Box::pin(handler(server))))
-}
-
 /// Schedules a task to run once after `delay_ticks` and returns the host's task id
+///
+/// The closure is consumed when the task runs, so it may move captured values into its future.
 ///
 /// There are two unrelated ids in play: the handler id is the key into this crate's table and only
 /// the host's callback uses it, while the returned task id is the host's name for this scheduled
@@ -54,10 +69,12 @@ where
 /// ```
 pub fn schedule_delayed_task<F, Fut>(delay_ticks: u64, handler: F) -> u32
 where
-    F: Fn(Server) -> Fut + Send + Sync + 'static,
+    F: FnOnce(Server) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + 'static,
 {
-    scheduler::schedule_delayed_task(register_handler(handler), delay_ticks)
+    let handler: DelayedHandler = Box::new(move |server| Box::pin(handler(server)));
+    let id = TASK_HANDLERS.register(Arc::new(TaskHandler::Delayed(Mutex::new(Some(handler)))));
+    scheduler::schedule_delayed_task(id, delay_ticks)
 }
 
 /// Schedules a task to run after `delay_ticks` and then every `period_ticks`
@@ -79,7 +96,9 @@ where
     F: Fn(Server) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = ()> + 'static,
 {
-    scheduler::schedule_repeating_task(register_handler(handler), delay_ticks, period_ticks)
+    let handler: RepeatingHandler = Box::new(move |server| Box::pin(handler(server)));
+    let id = TASK_HANDLERS.register(Arc::new(TaskHandler::Repeating(handler)));
+    scheduler::schedule_repeating_task(id, delay_ticks, period_ticks)
 }
 
 /// Cancels a scheduled task by the task id that scheduling returned
