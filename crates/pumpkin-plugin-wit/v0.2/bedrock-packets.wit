@@ -1844,7 +1844,7 @@ interface bedrock-packets {
     tick: s64,
   }
   variant metadata-value {
-    byte(u8),
+    byte(s8),
     short(s32),
     int(s32),
     float(f32),
@@ -2032,9 +2032,9 @@ interface bedrock-packets {
     enable-itemstack-net-manager: bool,
     /// Version string of the server software.
     server-version: string,
-    compound-id: u8,
+    compound-id: s8,
     compound-len: s32,
-    compound-end: u8,
+    compound-end: s8,
     /// CRC64 checksum of the block state registry.
     block-registry-checksum: s64,
     /// UUID of the world template if created from a template.
@@ -2130,7 +2130,7 @@ interface bedrock-packets {
     edu-shared-uri-button-name: string,
     edu-shared-uri-link-uri: string,
     override-force-experimental-gameplay-has-value: bool,
-    chat-restriction-level: u8,
+    chat-restriction-level: s8,
     disable-player-interactions: bool,
     server-editor-connection-policy: s32,
     allow-anonymous-block-drops-in-editor-worlds: bool,
