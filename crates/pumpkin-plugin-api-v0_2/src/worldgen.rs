@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+pub use crate::host::biomes::Biome as PluginBiome;
 pub use crate::host::{biomes::Biome, world::GenerationPhase};
 use crate::{
     host::world::ChunkBuffer,
@@ -88,5 +89,52 @@ pub(crate) async fn dispatch(generator_id: u32, phase: GenerationPhase, chunk: C
     // The registry lock is released before the generator runs
     if let Some(generator) = CHUNK_GENERATORS.get(generator_id) {
         generator.generate(phase, chunk).await;
+    }
+}
+
+/// Registration helpers for custom chunk generators.
+pub struct GeneratorManager;
+
+impl GeneratorManager {
+    /// Registers a generator and returns its host callback ID.
+    pub fn register<G: ChunkGenerator>(generator: G) -> u32 {
+        register_chunk_generator(generator)
+    }
+}
+
+impl ChunkBuffer {
+    /// Returns the chunk X coordinate.
+    #[must_use]
+    pub fn x(&self) -> i32 {
+        self.get_x()
+    }
+
+    /// Returns the chunk Z coordinate.
+    #[must_use]
+    pub fn z(&self) -> i32 {
+        self.get_z()
+    }
+
+    /// Returns the world's minimum Y coordinate.
+    #[must_use]
+    pub fn min_y(&self) -> i32 {
+        self.get_min_y()
+    }
+
+    /// Returns the height of the chunk column.
+    #[must_use]
+    pub fn height(&self) -> u32 {
+        self.get_height()
+    }
+
+    /// Reads a block state at local chunk coordinates.
+    #[must_use]
+    pub fn get_block(&self, x: u8, y: i32, z: u8) -> u16 {
+        self.get_block_state_id(x, y, z)
+    }
+
+    /// Writes a block state at local chunk coordinates.
+    pub fn set_block(&self, x: u8, y: i32, z: u8, state: u16) {
+        self.set_block_state_id(x, y, z, state);
     }
 }

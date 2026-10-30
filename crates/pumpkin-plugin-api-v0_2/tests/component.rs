@@ -174,7 +174,11 @@ fn component_declares_the_mixed_v0_2_world() {
     );
 }
 
+#[derive(Default)]
 struct State {
+    ids: std::sync::Mutex<std::collections::BTreeMap<&'static str, u32>>,
+    calls: std::sync::Mutex<Vec<String>>,
+    custom_data: std::sync::Mutex<Option<Val>>,
     cancelled_tasks: AtomicU32,
     // Signals that the guest entered the host import and is now waiting on it
     entered: Notify,
@@ -229,6 +233,14 @@ async fn instantiate(
         )
         .expect("failed to define send-ipc-message");
 
+    // Recipe builders use HashMap; a deterministic WASI hash seed keeps the fixture reproducible.
+    linker
+        .instance("wasi:random/insecure-seed@0.2.12")
+        .expect("WASI seed")
+        .func_wrap("insecure-seed", |_, (): ()| Ok(((1u64, 2u64),)))
+        .expect("hash seed");
+    install_sdk_host(&mut linker);
+
     linker
         .define_unknown_imports_as_traps(component)
         .expect("failed to stub the remaining imports");
@@ -280,6 +292,7 @@ async fn async_handler_awaits_a_host_import_while_other_calls_proceed() {
             cancelled_tasks: AtomicU32::new(0),
             entered: Notify::new(),
             release: std::sync::Mutex::new(Some(released)),
+            ..State::default()
         },
     )
     .await;
@@ -341,4 +354,414 @@ async fn async_handler_awaits_a_host_import_while_other_calls_proceed() {
 
     // The synchronous import ran once per handled message
     assert_eq!(state.cancelled_tasks.load(Ordering::SeqCst), 2);
+}
+
+struct ContextResource;
+struct ServerResource;
+struct CommandResource;
+struct NodeResource;
+struct SenderResource;
+struct ArgsResource;
+struct EntityResource;
+struct ChunkResource;
+struct ItemResource;
+struct TextResource;
+struct RecipeResource;
+struct EnchantmentResource;
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "fixture host definitions mirror the interfaces exercised by one component"
+)]
+fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
+    macro_rules! interface {
+        ($name:literal, $($resource:literal => $ty:ty),* $(,)?) => {{
+            let mut interface = linker.instance(concat!("pumpkin:plugin/", $name, "@0.2.0")).expect("interface");
+            $(interface.resource($resource, wasmtime::component::ResourceType::host::<$ty>(), |_, _| Ok(())).expect("resource");)*
+            interface
+        }};
+    }
+    use wasmtime::component::Resource;
+    let mut context = interface!("context", "context" => ContextResource);
+    for name in [
+        "[method]context.register-event",
+        "[method]context.register-command",
+    ] {
+        context
+            .func_new(name, |mut store, _, params, _| {
+                release_values(&mut store, params)
+            })
+            .expect("context registration");
+    }
+    context
+        .func_wrap(
+            "[method]context.get-server",
+            |_, (_context,): (Resource<ContextResource>,)| {
+                Ok((Resource::<ServerResource>::new_own(0),))
+            },
+        )
+        .expect("context server");
+    let mut command = interface!("command", "command" => CommandResource, "command-node" => NodeResource,
+        "command-sender" => SenderResource, "consumed-args" => ArgsResource);
+    command
+        .func_wrap(
+            "[constructor]command",
+            |_, (_names, _description): (Vec<String>, String)| {
+                Ok((Resource::<CommandResource>::new_own(0),))
+            },
+        )
+        .expect("command constructor");
+    command
+        .func_wrap("[static]command-node.literal", |_, (_name,): (String,)| {
+            Ok((Resource::<NodeResource>::new_own(0),))
+        })
+        .expect("literal node");
+    for (name, key) in [
+        ("[method]command.execute-with-handler-id", "command"),
+        ("[method]command-node.suggest-with-handler-id", "suggestion"),
+    ] {
+        command
+            .func_new(name, move |mut store, _, params, _| {
+                let Val::U32(id) = params[1] else {
+                    return Err(wasmtime::Error::msg("expected a handler id"));
+                };
+                store.data().ids.lock().expect("ids").insert(key, id);
+                release_values(&mut store, params)
+            })
+            .expect("handler registration");
+    }
+    command
+        .func_new("[method]command.then", |mut store, _, params, _| {
+            release_values(&mut store, params)
+        })
+        .expect("command child");
+    command
+        .func_wrap_concurrent(
+            "[method]command-sender.has-permission",
+            |_, (_sender, permission): (Resource<SenderResource>, String)| {
+                Box::pin(async move {
+                    assert_eq!(permission, "fixture.ping");
+                    Ok((true,))
+                })
+            },
+        )
+        .expect("command permission");
+    let mut scheduler = linker.instance(SCHEDULER_INSTANCE).expect("scheduler");
+    scheduler
+        .func_wrap("schedule-delayed-task", |store, (id, delay): (u32, u64)| {
+            assert_eq!(delay, 20);
+            store.data().ids.lock().expect("ids").insert("task", id);
+            Ok((400u32,))
+        })
+        .expect("schedule task");
+    let mut server = interface!("server", "server" => ServerResource);
+    server
+        .func_wrap_concurrent(
+            "[method]server.broadcast",
+            |accessor: &Accessor<Arc<State>>,
+             (_server, text): (Resource<ServerResource>, String)| {
+                Box::pin(async move {
+                    accessor
+                        .with(|mut store| store.data_mut().calls.lock().expect("calls").push(text));
+                    Ok(())
+                })
+            },
+        )
+        .expect("broadcast");
+    server
+        .func_wrap(
+            "[method]server.get-recipe-manager",
+            |_, (_server,): (Resource<ServerResource>,)| {
+                Ok((Resource::<RecipeResource>::new_own(0),))
+            },
+        )
+        .expect("recipe manager");
+    server
+        .func_wrap(
+            "[method]server.get-enchantment-manager",
+            |_, (_server,): (Resource<ServerResource>,)| {
+                Ok((Resource::<EnchantmentResource>::new_own(0),))
+            },
+        )
+        .expect("enchantment manager");
+    let mut recipes = interface!("recipe", "recipe-manager" => RecipeResource);
+    recipes
+        .func_new_concurrent(
+            "[method]recipe-manager.register-shaped",
+            |accessor, _, params, _| {
+                Box::pin(async move {
+                    assert_eq!(params[1], Val::String("fixture:diamond".into()));
+                    accessor.with(|mut store| {
+                        store
+                            .data_mut()
+                            .calls
+                            .lock()
+                            .expect("calls")
+                            .push("recipe".into());
+                        release_values(&mut store, params)
+                    })
+                })
+            },
+        )
+        .expect("register recipe");
+    let mut enchantments = interface!("enchantments", "enchantment-manager" => EnchantmentResource);
+    enchantments
+        .func_new_concurrent(
+            "[method]enchantment-manager.register-enchantment",
+            |accessor, _, params, results| {
+                Box::pin(async move {
+                    accessor.with(|mut store| {
+                        store
+                            .data_mut()
+                            .calls
+                            .lock()
+                            .expect("calls")
+                            .push("enchantment".into());
+                        release_values(&mut store, params)
+                    })?;
+                    results[0] = Val::Result(Ok(None));
+                    Ok(())
+                })
+            },
+        )
+        .expect("register enchantment");
+    let mut world =
+        interface!("world", "entity" => EntityResource, "chunk-buffer" => ChunkResource);
+    world
+        .func_wrap(
+            "[method]chunk-buffer.get-min-y",
+            |_, (_chunk,): (Resource<ChunkResource>,)| Ok((-64i32,)),
+        )
+        .expect("min y");
+    world
+        .func_wrap(
+            "[method]chunk-buffer.fill-layer",
+            |store, (_chunk, y, block): (Resource<ChunkResource>, i32, u16)| {
+                assert_eq!((y, block), (-64, 1));
+                store
+                    .data()
+                    .calls
+                    .lock()
+                    .expect("calls")
+                    .push("surface".into());
+                Ok(())
+            },
+        )
+        .expect("fill layer");
+    let mut display = linker
+        .instance("pumpkin:plugin/display@0.2.0")
+        .expect("display");
+    for name in [
+        "[static]display-entity.from-entity",
+        "[static]interaction-entity.from-entity",
+    ] {
+        display
+            .func_new(name, |mut store, _, params, results| {
+                results[0] = Val::Option(None);
+                release_values(&mut store, params)
+            })
+            .expect("display cast");
+    }
+    let mut text = interface!("text", "text-component" => TextResource);
+    text.func_wrap("[static]text-component.text", |_, (_text,): (String,)| {
+        Ok((Resource::<TextResource>::new_own(0),))
+    })
+    .expect("text constructor");
+    let mut items = interface!("item-stack", "item-stack" => ItemResource);
+    items
+        .func_wrap(
+            "[constructor]item-stack",
+            |_, (key, count): (String, u8)| {
+                assert_eq!((key.as_str(), count), ("minecraft:diamond", 2));
+                Ok((Resource::<ItemResource>::new_own(0),))
+            },
+        )
+        .expect("item constructor");
+    items
+        .func_wrap_concurrent(
+            "[method]item-stack.get-registry-key",
+            |_, (_item,): (Resource<ItemResource>,)| {
+                Box::pin(async { Ok(("minecraft:diamond".to_string(),)) })
+            },
+        )
+        .expect("item key");
+    items
+        .func_new_concurrent(
+            "[method]item-stack.set-custom-data",
+            |accessor, _, params, _| {
+                Box::pin(async move {
+                    accessor.with(|mut store| {
+                        *store.data_mut().custom_data.lock().expect("custom data") =
+                            Some(params[3].clone());
+                        release_values(&mut store, params)
+                    })
+                })
+            },
+        )
+        .expect("set data");
+    items
+        .func_new_concurrent(
+            "[method]item-stack.get-custom-data",
+            |accessor, _, params, results| {
+                Box::pin(async move {
+                    let data = accessor.with(|mut store| {
+                        store
+                            .data_mut()
+                            .custom_data
+                            .lock()
+                            .expect("custom data")
+                            .clone()
+                    });
+                    results[0] = Val::Option(data.map(Box::new));
+                    accessor.with(|mut store| release_values(&mut store, params))
+                })
+            },
+        )
+        .expect("get data");
+    let mut logging = linker
+        .instance("pumpkin:plugin/logging@0.2.0")
+        .expect("logging");
+    logging
+        .func_wrap("log-tracing", |store, (bytes,): (Vec<u8>,)| {
+            assert!(!bytes.is_empty());
+            store
+                .data()
+                .calls
+                .lock()
+                .expect("calls")
+                .push("tracing".into());
+            Ok(())
+        })
+        .expect("tracing");
+}
+
+fn owned<T: 'static>(accessor: &Accessor<Arc<State>>) -> Val {
+    accessor.with(|mut store| {
+        Val::Resource(
+            wasmtime::component::ResourceAny::try_from_resource(
+                wasmtime::component::Resource::<T>::new_own(0),
+                &mut store,
+            )
+            .expect("host resource"),
+        )
+    })
+}
+
+#[tokio::test]
+async fn sdk_helpers_and_registered_callbacks_run_in_a_component() {
+    let engine = engine();
+    let component = load(&engine);
+    let (mut store, instance) = instantiate(&engine, &component, State::default()).await;
+    let state = Arc::clone(store.data());
+    let init = export_func(&mut store, &instance, "init-plugin");
+    let on_load = export_func(&mut store, &instance, "on-load");
+    let on_unload = export_func(&mut store, &instance, "on-unload");
+    let ipc = export_func(&mut store, &instance, "handle-ipc-message");
+    let command = export_func(&mut store, &instance, "handle-command");
+    let suggest = export_func(&mut store, &instance, "handle-command-suggestion");
+    let task = export_func(&mut store, &instance, "handle-task");
+    let generate = export_func(&mut store, &instance, "handle-generate-phase");
+    let mut ai = Vec::new();
+    for hook in ["can-start", "should-continue", "start", "tick", "stop"] {
+        ai.push(export_func(
+            &mut store,
+            &instance,
+            &format!("handle-ai-goal-{hook}"),
+        ));
+    }
+    store.run_concurrent(async |accessor| {
+        init.call_concurrent(accessor, &[], &mut []).await.expect("init");
+        let mut result = [Val::Bool(false)];
+        ipc.call_concurrent(accessor, &ipc_params("helpers", b""), &mut result).await.expect("helpers");
+        assert_eq!(ipc_reply(&result[0]).as_deref(), Some(&b"helpers passed"[..]));
+        on_load.call_concurrent(accessor, &[owned::<ContextResource>(accessor)], &mut result).await.expect("load");
+        assert!(matches!(&result[0], Val::Result(Ok(None))));
+        let id = |key| *state.ids.lock().expect("ids").get(key).expect("registered id");
+        command.call_concurrent(accessor, &[Val::U32(id("command")), owned::<SenderResource>(accessor), owned::<ServerResource>(accessor), owned::<ArgsResource>(accessor)], &mut result).await.expect("command");
+        assert_eq!(result[0], Val::Result(Ok(Some(Box::new(Val::S32(1))))));
+        let request = Val::Record(vec![("input".into(), Val::String("fixture f".into())), ("cursor".into(), Val::U32(9)), ("start".into(), Val::U32(8)), ("remaining".into(), Val::String("f".into()))]);
+        suggest.call_concurrent(accessor, &[Val::U32(id("suggestion")), owned::<SenderResource>(accessor), owned::<ServerResource>(accessor), request], &mut result).await.expect("suggestions");
+        assert!(matches!(&result[0], Val::Record(fields) if fields[0].1 == Val::U32(8) && fields[1].1 == Val::U32(1)));
+        task.call_concurrent(accessor, &[Val::U32(id("task")), owned::<ServerResource>(accessor)], &mut []).await.expect("task");
+        for (index, hook) in ai.iter().enumerate() {
+            let params = [Val::U32(0), owned::<ServerResource>(accessor), owned::<EntityResource>(accessor)];
+            if index < 2 {
+                hook.call_concurrent(accessor, &params, &mut result).await.expect("AI predicate");
+                assert_eq!(result[0], Val::Bool(index == 0));
+            } else {
+                hook.call_concurrent(accessor, &params, &mut []).await.expect("AI action");
+            }
+        }
+        for phase in ["biomes", "noise", "surface", "features"] {
+            generate.call_concurrent(accessor, &[Val::U32(0), Val::Enum(phase.into()), owned::<ChunkResource>(accessor)], &mut []).await.expect("generation");
+        }
+        on_unload.call_concurrent(accessor, &[owned::<ContextResource>(accessor)], &mut result).await.expect("unload");
+        assert!(matches!(&result[0], Val::Result(Ok(None))));
+    }).await.expect("SDK exercise");
+    assert_eq!(state.cancelled_tasks.load(Ordering::SeqCst), 4);
+    assert_eq!(
+        *state.calls.lock().expect("calls"),
+        [
+            "recipe",
+            "enchantment",
+            "tracing",
+            "fixture task ran",
+            "surface"
+        ]
+    );
+}
+
+// Converting the fixture's stateless host handles releases dynamic borrow-table entries.
+fn release_values(
+    store: &mut impl wasmtime::AsContextMut<Data = Arc<State>>,
+    values: &[Val],
+) -> wasmtime::Result<()> {
+    for value in values {
+        release_value(store, value)?;
+    }
+    Ok(())
+}
+
+fn release_value(
+    store: &mut impl wasmtime::AsContextMut<Data = Arc<State>>,
+    value: &Val,
+) -> wasmtime::Result<()> {
+    match value {
+        Val::Resource(resource) => {
+            macro_rules! release {
+                ($($ty:ty),*) => { $(
+                    if resource.ty() == wasmtime::component::ResourceType::host::<$ty>() {
+                        let _resource = resource.try_into_resource::<$ty>(store)?;
+                        return Ok(());
+                    }
+                )* };
+            }
+            release!(
+                ContextResource,
+                ServerResource,
+                CommandResource,
+                NodeResource,
+                SenderResource,
+                ArgsResource,
+                EntityResource,
+                ChunkResource,
+                ItemResource,
+                TextResource,
+                RecipeResource,
+                EnchantmentResource
+            );
+            Err(wasmtime::Error::msg("unrecognized fixture resource"))
+        }
+        Val::List(values) | Val::Tuple(values) => release_values(store, values),
+        Val::Record(fields) => {
+            for (_, value) in fields {
+                release_value(store, value)?;
+            }
+            Ok(())
+        }
+        Val::Option(Some(value))
+        | Val::Variant(_, Some(value))
+        | Val::Result(Ok(Some(value)) | Err(Some(value))) => release_value(store, value),
+        _ => Ok(()),
+    }
 }

@@ -6,12 +6,15 @@
 use pumpkin_plugin_api_v0_2::{
     Context, EventPriority, Plugin, PluginMetadata, Result, Server,
     ai::{AiGoal, register_ai_goal},
-    commands::CommandHandler,
+    commands::{CommandHandler, CommandSuggestionHandler},
     display::EntityDisplayExt,
     events::{EventData, EventHandler, PlayerChatEvent},
     gametest::{register_async_test, register_entity_predicate, register_void_callback},
     host::{
-        command::{Command, CommandError, CommandSender, ConsumedArgs},
+        command::{
+            Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
+            CommandSuggestions, ConsumedArgs, SuggestionRequest,
+        },
         ipc, scheduler,
         world::{ChunkBuffer, Entity},
     },
@@ -57,12 +60,42 @@ impl CommandHandler for Ping {
     }
 }
 
+struct Suggest;
+
+impl CommandSuggestionHandler for Suggest {
+    async fn suggest(
+        &self,
+        _sender: CommandSender,
+        _server: Server,
+        request: SuggestionRequest,
+    ) -> CommandSuggestions {
+        CommandSuggestions {
+            start: request.start,
+            length: request.remaining.len() as u32,
+            values: vec![CommandSuggestion {
+                value: "fixture".into(),
+                tooltip: None,
+            }],
+        }
+    }
+}
+
 struct NotDisplay;
 
 impl AiGoal for NotDisplay {
     async fn can_start(&self, _server: Server, entity: Entity) -> bool {
         // A failed cast leaves the original entity available for another cast
         entity.as_display().is_none() && entity.as_interaction().is_none()
+    }
+
+    async fn start(&self, _server: Server, _entity: Entity) {
+        scheduler::cancel_task(101);
+    }
+    async fn tick(&self, _server: Server, _entity: Entity) {
+        scheduler::cancel_task(102);
+    }
+    async fn stop(&self, _server: Server, _entity: Entity) {
+        scheduler::cancel_task(103);
     }
 }
 
@@ -97,7 +130,23 @@ impl Plugin for Fixture {
             true,
         );
         let ping = Command::new(&["ping".to_string()], "replies when allowed").execute(Ping);
-        context.register_command(ping, "fixture.ping");
+        let node = CommandNode::literal("complete").suggest(Suggest);
+        context.register_command(ping.then(node), "fixture.ping");
+        use pumpkin_plugin_api_v0_2::{
+            Item, ItemStack, ItemStackExt, TextComponent, enchantment::EnchantmentBuilder,
+            recipe::ShapedRecipeBuilder,
+        };
+        ShapedRecipeBuilder::new("fixture:diamond", ItemStack::of(Item::Diamond, 2))
+            .pattern(["DD"])
+            .key('D', "diamond")
+            .register_to_context(&context)
+            .await
+            .map_err(|error| error.to_string())?;
+        EnchantmentBuilder::new("fixture:test", TextComponent::text("Test"))
+            .register_to_context(&context)
+            .await
+            .map_err(|error| error.to_string())?;
+        tracing::info!("fixture loaded");
         register_ai_goal(NotDisplay);
         register_entity_predicate(Entity::is_on_ground);
         register_chunk_generator(Flat);
@@ -111,11 +160,66 @@ impl Plugin for Fixture {
         Ok(())
     }
 
+    async fn on_unload(&self, _context: Context) -> Result<()> {
+        scheduler::cancel_task(77);
+        Ok(())
+    }
+
     async fn handle_ipc_message(
         &self,
         sender: ipc::PluginId,
         message: ipc::IpcMessage,
     ) -> Result<ipc::IpcMessage> {
+        if sender == "helpers" {
+            use pumpkin_plugin_api_v0_2::{
+                Item, ItemStack, ItemStackExt, PersistentDataHolder, TextComponent,
+                TransformationBuilder,
+                enchantment::EnchantmentBuilder,
+                forms::{FormResponse, SimpleFormBuilder},
+                recipe::{Ingredient, ShapedRecipeBuilder},
+            };
+            let item = ItemStack::of(Item::Diamond, 2);
+            assert_eq!(item.get_item().await, Some(Item::Diamond));
+            assert!(item.matches_item("diamond").await);
+            item.set_string("fixture", "owner", "guest").await;
+            assert_eq!(
+                item.get_string("fixture", "owner").await.as_deref(),
+                Some("guest")
+            );
+            assert!(
+                ShapedRecipeBuilder::new("fixture:invalid", item)
+                    .pattern(["DD"])
+                    .key('D', "minecraft:diamond")
+                    .validate()
+                    .is_ok()
+            );
+            assert_eq!(
+                Ingredient::tag("planks"),
+                Ingredient::Tag("minecraft:planks".into())
+            );
+            assert!(
+                EnchantmentBuilder::new("", TextComponent::text("Invalid"))
+                    .validate()
+                    .is_err()
+            );
+            let _form =
+                SimpleFormBuilder::new(TextComponent::text("Title"), TextComponent::text("Body"))
+                    .button(TextComponent::text("OK"), None)
+                    .build();
+            assert!(matches!(
+                FormResponse::parse(Some("0".into())),
+                FormResponse::Simple(0)
+            ));
+            assert_eq!(
+                TransformationBuilder::new()
+                    .uniform_scale(2.0)
+                    .build()
+                    .scale
+                    .x,
+                2.0
+            );
+            return Ok(b"helpers passed".to_vec());
+        }
         // cancel_task is a synchronous import; the send is an async one and has to be awaited
         scheduler::cancel_task(0);
         ipc::send_ipc_message(sender, message)

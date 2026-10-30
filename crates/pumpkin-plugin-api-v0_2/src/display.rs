@@ -1,51 +1,133 @@
-//! Borrowed views of an entity as a display or interaction entity
-//!
-//! A successful cast returns an owned typed handle to the same host entity
-//! The original entity handle remains usable whether the cast succeeds or fails
+//! Display resources and transformation builders.
 
-use crate::host::{
-    display::{
-        BlockDisplayEntity, DisplayEntity, InteractionEntity, ItemDisplayEntity, TextDisplayEntity,
-    },
-    world::Entity,
+pub use crate::wit::pumpkin::plugin::display::{
+    BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayTransformation, InteractionEntity,
+    ItemDisplayEntity, ItemDisplayMode, Quaternionf, TextAlignment, TextDisplayEntity, Vector3f,
 };
 
-/// Gets a typed display or interaction handle from a borrowed [`Entity`]
-pub trait EntityDisplayExt {
-    /// Returns a [`DisplayEntity`] handle for this entity, or `None` if it is not one
-    fn as_display(&self) -> Option<DisplayEntity>;
+pub use crate::ext::display::{
+    DisplayEntityExt, EntityDisplayExt, ItemDisplayEntityExt, TextDisplayEntityExt,
+};
 
-    /// Returns a [`BlockDisplayEntity`] handle for this entity, or `None` if it is not one
-    fn as_block_display(&self) -> Option<BlockDisplayEntity>;
-
-    /// Returns a [`ItemDisplayEntity`] handle for this entity, or `None` if it is not one
-    fn as_item_display(&self) -> Option<ItemDisplayEntity>;
-
-    /// Returns a [`TextDisplayEntity`] handle for this entity, or `None` if it is not one
-    fn as_text_display(&self) -> Option<TextDisplayEntity>;
-
-    /// Returns a [`InteractionEntity`] handle for this entity, or `None` if it is not one
-    fn as_interaction(&self) -> Option<InteractionEntity>;
+/// Builder for constructing [`DisplayTransformation`].
+#[derive(Clone, Copy, Debug)]
+pub struct TransformationBuilder {
+    translation: Vector3f,
+    scale: Vector3f,
+    left_rotation: Quaternionf,
+    right_rotation: Quaternionf,
 }
 
-impl EntityDisplayExt for Entity {
-    fn as_display(&self) -> Option<DisplayEntity> {
-        DisplayEntity::from_entity(self)
+impl Default for TransformationBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TransformationBuilder {
+    /// Creates a new identity `TransformationBuilder`.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            translation: Vector3f {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            scale: Vector3f {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            left_rotation: Quaternionf {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            },
+            right_rotation: Quaternionf {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            },
+        }
     }
 
-    fn as_block_display(&self) -> Option<BlockDisplayEntity> {
-        BlockDisplayEntity::from_entity(self)
+    /// Sets the translation vector.
+    #[must_use]
+    pub const fn translation(mut self, x: f32, y: f32, z: f32) -> Self {
+        self.translation = Vector3f { x, y, z };
+        self
     }
 
-    fn as_item_display(&self) -> Option<ItemDisplayEntity> {
-        ItemDisplayEntity::from_entity(self)
+    /// Sets the scale vector.
+    #[must_use]
+    pub const fn scale(mut self, x: f32, y: f32, z: f32) -> Self {
+        self.scale = Vector3f { x, y, z };
+        self
     }
 
-    fn as_text_display(&self) -> Option<TextDisplayEntity> {
-        TextDisplayEntity::from_entity(self)
+    /// Sets uniform scale across all axes.
+    #[must_use]
+    pub const fn uniform_scale(mut self, scale: f32) -> Self {
+        self.scale = Vector3f {
+            x: scale,
+            y: scale,
+            z: scale,
+        };
+        self
     }
 
-    fn as_interaction(&self) -> Option<InteractionEntity> {
-        InteractionEntity::from_entity(self)
+    /// Sets the left rotation quaternion.
+    #[must_use]
+    pub const fn left_rotation(mut self, x: f32, y: f32, z: f32, w: f32) -> Self {
+        self.left_rotation = Quaternionf { x, y, z, w };
+        self
+    }
+
+    /// Sets the right rotation quaternion.
+    #[must_use]
+    pub const fn right_rotation(mut self, x: f32, y: f32, z: f32, w: f32) -> Self {
+        self.right_rotation = Quaternionf { x, y, z, w };
+        self
+    }
+
+    /// Builds the [`DisplayTransformation`].
+    #[must_use]
+    pub const fn build(self) -> DisplayTransformation {
+        DisplayTransformation {
+            translation: self.translation,
+            scale: self.scale,
+            left_rotation: self.left_rotation,
+            right_rotation: self.right_rotation,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transformation_builder() {
+        let transform = TransformationBuilder::new()
+            .translation(1.0, 2.0, 3.0)
+            .scale(2.0, 2.0, 2.0)
+            .left_rotation(
+                0.0,
+                std::f32::consts::FRAC_1_SQRT_2,
+                0.0,
+                std::f32::consts::FRAC_1_SQRT_2,
+            )
+            .build();
+
+        assert_eq!(transform.translation.x, 1.0);
+        assert_eq!(transform.translation.y, 2.0);
+        assert_eq!(transform.translation.z, 3.0);
+        assert_eq!(transform.scale.x, 2.0);
+        assert_eq!(transform.scale.y, 2.0);
+        assert_eq!(transform.scale.z, 2.0);
+        assert_eq!(transform.left_rotation.y, std::f32::consts::FRAC_1_SQRT_2);
     }
 }

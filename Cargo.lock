@@ -3298,7 +3298,11 @@ dependencies = [
 name = "pumpkin-plugin-api-v0_2"
 version = "0.2.1+26.3-26.51"
 dependencies = [
+ "postcard",
+ "serde_json",
  "tokio",
+ "tracing",
+ "tracing-serde-structured",
  "wasmtime",
  "wit-bindgen 0.63.0",
 ]
