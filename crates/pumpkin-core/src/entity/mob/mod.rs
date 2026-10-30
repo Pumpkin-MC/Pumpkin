@@ -11,11 +11,13 @@ use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
 use crate::entity::ai::goal::{Controls, GoalReach, goal_selector::GoalSelector};
 use crate::entity::ai::sensing::Sensing;
+use crate::entity::living::prevents_armor_change;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
+use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -24,7 +26,7 @@ use crate::world::game_event::notified_area;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
@@ -493,6 +495,35 @@ impl MobEntity {
     pub fn set_item_slot_and_drop_when_killed(&self, slot: &EquipmentSlot, stack: ItemStack) {
         self.set_item_slot(slot, stack);
         self.set_guaranteed_drop(slot);
+    }
+
+    pub fn first_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.living_entity
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .cloned()
+    }
+
+    pub fn is_slot_empty(&self, slot: &EquipmentSlot) -> bool {
+        self.living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(slot)
+            .is_none_or(ItemStack::is_empty)
+    }
+
+    pub fn read_legacy_saddle(&self, saddled: bool) {
+        if saddled && self.is_slot_empty(&EquipmentSlot::SADDLE) {
+            self.set_item_slot_and_drop_when_killed(
+                &EquipmentSlot::SADDLE,
+                ItemStack::new(1, &Item::SADDLE),
+            );
+        }
     }
 
     fn write_drop_chances(&self, nbt: &mut NbtCompound) {
@@ -1249,17 +1280,31 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
-        if self.get_mob_entity().is_no_ai() {
-            return None;
-        }
-        let first = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .first()
-            .cloned();
-        first.filter(|passenger| passenger.get_mob().is_some() && passenger.can_control_vehicle())
+        let first = self.get_mob_entity().first_passenger()?;
+        self.mob_rider_controller(first)
+    }
+
+    fn saddled_controlling_passenger(
+        &self,
+        steering_item: Option<&Item>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let first = self.get_mob_entity().first_passenger()?;
+        let Some(player) = first.get_player() else {
+            return self.mob_rider_controller(first);
+        };
+        let steers = self.is_saddled()
+            && steering_item.is_none_or(|item| {
+                let inventory = player.inventory();
+                inventory.held_item().item == item || inventory.off_hand_item().item == item
+            });
+        steers.then_some(first)
+    }
+
+    fn mob_rider_controller(&self, first: Arc<dyn EntityBase>) -> Option<Arc<dyn EntityBase>> {
+        (!self.get_mob_entity().is_no_ai()
+            && first.get_mob().is_some()
+            && first.can_control_vehicle())
+        .then_some(first)
     }
 
     fn omnidirectional_air_mover(&self) -> bool {
@@ -1329,15 +1374,94 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn can_use_slot(&self, _slot: &EquipmentSlot) -> bool {
+        true
+    }
+
+    fn is_equippable_in_slot(&self, stack: &ItemStack, slot: &EquipmentSlot) -> bool {
+        equipment::is_equippable_in_slot(self.get_entity().entity_type, stack, slot)
+            && self.can_use_slot(slot)
+    }
+
     fn is_saddled(&self) -> bool {
-        false
+        self.get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::SADDLE)
+            .is_some_and(|saddle| {
+                !saddle.is_empty() && self.is_equippable_in_slot(saddle, &EquipmentSlot::SADDLE)
+            })
     }
 
-    fn can_be_saddled(&self) -> bool {
-        false
+    fn get_equip_sound(&self, _slot: &EquipmentSlot) -> Option<pumpkin_data::sound::Sound> {
+        None
     }
 
-    fn set_saddled(&self, _saddled: bool) {}
+    fn can_shear_equipment(&self, _player: &Player) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
+    fn attempt_to_shear_equipment(&self, player: &Arc<Player>, shears: &mut ItemStack) -> bool {
+        let mob_entity = self.get_mob_entity();
+        let living = &mob_entity.living_entity;
+        let creative = player.gamemode.load() == pumpkin_util::GameMode::Creative;
+        let sheared = {
+            let equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            [
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::OFF_HAND,
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]
+            .into_iter()
+            .find_map(|slot| {
+                let stack = equipment.equipment.get(&slot)?;
+                let shearing_sound = stack
+                    .get_data_component::<EquippableImpl>()
+                    .filter(|equippable| equippable.can_be_sheared)?
+                    .shearing_sound
+                    .clone();
+                (creative || !prevents_armor_change(stack))
+                    .then(|| (slot, stack.clone(), shearing_sound))
+            })
+        };
+        let Some((slot, stack, shearing_sound)) = sheared else {
+            return false;
+        };
+
+        let entity = &living.entity;
+        let world = entity.world.load();
+        if let Some(server) = world.server.upgrade() {
+            let mut event = PlayerShearEntityEvent {
+                player: player.clone(),
+                entity_id: entity.entity_id,
+                hand: 0,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+
+        let _ = player.damage_item_stack(shears, 1);
+        mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
+        world.emit_game_event(GameEvent::Unequip.name(), entity.pos.load());
+        world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
+        entity.spawn_at_location(stack);
+        world.play_sound_event(&shearing_sound, SoundCategory::Neutral, &entity.pos.load());
+        true
+    }
 
     fn check_spawn_obstruction(&self, world: &World) -> bool {
         let bounding_box = self.get_entity().bounding_box.load();
@@ -2208,6 +2332,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::SHEARS
+            && self.can_shear_equipment(player)
+            && !player.get_entity().is_sneaking()
+            && self.attempt_to_shear_equipment(player, item_stack)
+        {
+            return true;
+        }
         self.mob_interact(player, item_stack)
             || self
                 .as_ageable()

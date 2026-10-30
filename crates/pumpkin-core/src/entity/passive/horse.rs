@@ -5,10 +5,11 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_state::SoundType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
@@ -25,7 +26,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::equip_on_target},
     passive::animal::Animal,
     player::Player,
 };
@@ -37,7 +38,6 @@ const TEMPT_ITEMS: &[&Item] = &[
 ];
 
 pub const FLAG_TAME: u8 = 2;
-pub const FLAG_SADDLE: u8 = 4;
 pub const FLAG_BRED: u8 = 8;
 pub const FLAG_EATING: u8 = 16;
 pub const FLAG_STANDING: u8 = 32;
@@ -132,15 +132,6 @@ impl HorseEntity {
     pub fn set_tame(&self, val: bool) {
         self.set_flag(FLAG_TAME, val);
     }
-
-    #[must_use]
-    pub fn is_saddled(&self) -> bool {
-        self.has_flag(FLAG_SADDLE)
-    }
-
-    pub fn set_saddled(&self, val: bool) {
-        self.set_flag(FLAG_SADDLE, val);
-    }
 }
 
 impl AgeableMob for HorseEntity {
@@ -211,6 +202,21 @@ impl Mob for HorseEntity {
         self.is_tame()
     }
 
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.saddled_controlling_passenger(None)
+    }
+
+    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
+        *slot != EquipmentSlot::SADDLE
+            || (self.mob_entity.living_entity.entity.is_alive()
+                && !self.is_baby()
+                && self.is_tame())
+    }
+
+    fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
+        (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityHorseSaddle)
+    }
+
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         play_horse_step_sound(self, pos, state, true);
     }
@@ -270,18 +276,7 @@ impl Mob for HorseEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if self.is_tame() && item == &Item::SADDLE && !self.is_saddled() && !self.is_baby() {
-            self.set_saddled(true);
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityHorseSaddle,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
+        if equip_on_target(self, player, item_stack) {
             return true;
         }
 

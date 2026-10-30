@@ -1570,6 +1570,10 @@ impl LivingEntity {
         if let Some(mob) = caller.get_mob() {
             mob.before_mob_ai_step();
         }
+        let client_controlled = caller.get_mob().is_some()
+            && caller
+                .get_controlling_passenger()
+                .is_some_and(|rider| rider.get_player().is_some());
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -1592,6 +1596,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
         } else if let Some(mob) = caller.get_mob()
             && !mob.get_mob_entity().is_no_ai()
+            && !client_controlled
         {
             // Prepare old motion before controllers produce this tick's inputs.
             mob.get_mob_entity().server_ai_step(mob, caller);
@@ -1642,11 +1647,14 @@ impl LivingEntity {
         // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
         let effective_ai = caller
             .get_mob()
-            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
+            && !client_controlled;
 
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
+        if client_controlled {
+            self.entity.velocity.store(Vector3::default());
+        } else if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
         } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
@@ -2467,7 +2475,11 @@ impl LivingEntity {
 
         let slots_to_drop: Vec<EquipmentSlot> = {
             let mut slots: Vec<_> = self.equipment_slots.values().cloned().collect();
-            slots.push(EquipmentSlot::MAIN_HAND);
+            slots.extend([
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]);
             slots
         };
 
@@ -4485,6 +4497,17 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
         | (1u64 << DamageType::SONIC_BOOM.id)
         | (1u64 << DamageType::OUTSIDE_BORDER.id);
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments
+                .enchantment
+                .iter()
+                .any(|(enchantment, level)| *level > 0 && enchantment.effects.prevent_armor_change)
+        })
 }
 
 pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
