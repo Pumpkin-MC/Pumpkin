@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, BlockStateId, translation};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::argument_types::block::INVALID_BLOCK_ERROR_TYPE;
 use crate::argument_types::nbt::NbtCompoundArgumentType;
+use crate::argument_types::nbt_path::compare_nbt;
 use crate::context::command_context::CommandContext;
 use crate::errors::command_syntax_error::CommandSyntaxError;
 use crate::errors::error_types::CommandErrorType;
@@ -45,14 +47,54 @@ pub enum BlockPredicate {
 }
 
 impl BlockPredicate {
+    /// Tests a block state; `block_entity_nbt` is only called when the predicate has NBT.
     #[must_use]
-    pub fn test(&self, block: &Block) -> bool {
-        match self {
+    pub fn test(
+        &self,
+        state_id: BlockStateId,
+        block_entity_nbt: impl FnOnce() -> Option<NbtCompound>,
+    ) -> bool {
+        let block = Block::from_state_id(state_id);
+        let (matches_block, properties, nbt) = match self {
             Self::Block {
-                block: expected, ..
-            } => block.id == expected.id,
-            Self::Tag { block_ids, .. } => block_ids.contains(&block.id.as_u16()),
+                block: expected,
+                properties,
+                nbt,
+            } => (block.id == expected.id, properties, nbt),
+            Self::Tag {
+                block_ids,
+                properties,
+                nbt,
+                ..
+            } => (block_ids.contains(&block.id.as_u16()), properties, nbt),
+        };
+        if !matches_block {
+            return false;
         }
+
+        if !properties.is_empty() {
+            let Some(state_properties) = block.properties(state_id) else {
+                return false;
+            };
+            let state_properties = state_properties.to_props();
+            let all_match = properties.iter().all(|(key, value)| {
+                state_properties
+                    .iter()
+                    .any(|p| p.key().to_str() == key && p.value_str() == value)
+            });
+            if !all_match {
+                return false;
+            }
+        }
+
+        nbt.as_ref().is_none_or(|expected| {
+            block_entity_nbt().is_some_and(|actual| {
+                compare_nbt(
+                    &NbtTag::Compound(expected.clone()),
+                    &NbtTag::Compound(actual),
+                )
+            })
+        })
     }
 
     #[must_use]

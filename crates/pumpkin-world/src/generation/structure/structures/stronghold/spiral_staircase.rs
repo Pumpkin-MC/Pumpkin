@@ -12,7 +12,7 @@ use crate::{
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
             stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                EntranceType, PendingChild, StoneBrickRandomizer, StrongholdPiece,
                 StrongholdPieceType,
             },
         },
@@ -31,19 +31,35 @@ pub struct SpiralStaircasePiece {
 
 impl SpiralStaircasePiece {
     /// Matches Start(Random random, int i, int j)
-    pub fn new_start(random: &mut impl RandomImpl, x: i32, z: i32) -> Self {
+    pub fn new_start(random: &mut impl RandomImpl, x: i32, z: i32) -> (Self, PendingChild) {
         let orientation = BlockDirection::get_random_horizontal_direction(random);
         let bounding_box = BlockBox::create_box(x, 64, z, orientation.get_axis(), 5, 11, 5);
         let mut piece = StrongholdPiece::new(StructurePieceType::StrongholdStart, 0, bounding_box);
         piece.piece.set_facing(Some(orientation));
-        Self {
-            piece,
+        let child = PendingChild {
+            piece_type: StrongholdPieceType::SpiralStaircase,
+            bbox: bounding_box,
             orientation,
-            is_structure_start: true,
-            last_piece_data_idx: None,
-            portal_room_exists: false,
-            pieces: Vec::new(),
-        }
+            depth: 0,
+            is_source: true,
+            lower_left: false,
+            upper_left: false,
+            lower_right: false,
+            upper_right: false,
+            left_child: false,
+            right_child: false,
+        };
+        (
+            Self {
+                piece,
+                orientation,
+                is_structure_start: true,
+                last_piece_data_idx: None,
+                portal_room_exists: false,
+                pieces: Vec::new(),
+            },
+            child,
+        )
     }
 
     pub fn create(
@@ -97,30 +113,6 @@ impl StructurePieceBase for SpiralStaircasePiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1,
-            1,
-            pieces_to_process,
-            self.is_structure_start
-                .then_some(StrongholdPieceType::FiveWayCrossing),
-        );
     }
 
     fn place(

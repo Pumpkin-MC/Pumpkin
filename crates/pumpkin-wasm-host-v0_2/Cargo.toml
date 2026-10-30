@@ -1,0 +1,34 @@
+[package]
+name = "pumpkin-wasm-host-v0_2"
+version.workspace = true
+description = "Pumpkin WebAssembly plugin host for API v0.2."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+pumpkin-core.workspace = true
+pumpkin-wasm-host-common.workspace = true
+pumpkin-config.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-inventory.workspace = true
+pumpkin-macros.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-protocol = { workspace = true, features = ["default"] }
+pumpkin-util.workspace = true
+pumpkin-world.workspace = true
+bytes.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing.workspace = true
+uuid.workspace = true
+wasmtime = { workspace = true }
+
+[lints]
+workspace = true

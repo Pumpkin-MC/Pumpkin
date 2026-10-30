@@ -5,7 +5,7 @@ mod policy;
 mod spawn;
 
 pub use executor::{
-    LegacyGuestScope, LegacyStore, StoreDataMut, StoreExecutor, StoreFuture, StoreHandle,
+    LegacyGuestScope, LegacyStore, StoreDataMut, StoreExecutor, StoreFuture, StoreHandle, StoreMode,
 };
 pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
@@ -42,7 +42,7 @@ mod tests {
 
     use super::{
         DriverError, DriverState, LegacyStore, LegacySyncReentry, MAX_SYNC_REENTRY_DEPTH,
-        RuntimeSpawner, SpawnError, SpawnFuture,
+        RuntimeSpawner, SpawnError, SpawnFuture, StoreMode,
     };
 
     struct TestHostState;
@@ -123,25 +123,29 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct ConcurrentStore(Arc<LegacyStore<TestHostState>>);
+    struct TestStore(Arc<LegacyStore<TestHostState>>);
 
-    impl ConcurrentStore {
-        async fn new(store: Store<TestHostState>) -> Self {
-            Self::with_policy(store, LegacySyncReentry::new()).await
+    impl TestStore {
+        async fn new(store: Store<TestHostState>, mode: StoreMode) -> Self {
+            Self::with_policy(store, LegacySyncReentry::new(), mode).await
         }
 
-        async fn with_policy(store: Store<TestHostState>, policy: LegacySyncReentry) -> Self {
+        async fn with_policy(
+            store: Store<TestHostState>,
+            policy: LegacySyncReentry,
+            mode: StoreMode,
+        ) -> Self {
             let spawner = Arc::new(TestSpawner {
                 runtime: tokio::runtime::Handle::current(),
             });
-            let executor = LegacyStore::start(store, policy, spawner)
+            let executor = LegacyStore::start(store, policy, spawner, mode)
                 .await
                 .expect("start test Store driver");
             Self(Arc::new(executor))
         }
     }
 
-    impl Deref for ConcurrentStore {
+    impl Deref for TestStore {
         type Target = LegacyStore<TestHostState>;
 
         fn deref(&self) -> &Self::Target {
@@ -149,36 +153,28 @@ mod tests {
         }
     }
 
-    struct BackgroundTask {
-        started: Arc<Notify>,
-        release: Arc<Notify>,
-    }
+    const MODES: [StoreMode; 2] = [StoreMode::Sequential, StoreMode::Concurrent];
 
-    impl wasmtime::component::AccessorTask<TestHostState> for BackgroundTask {
-        async fn run(
-            self,
-            _accessor: &wasmtime::component::Accessor<TestHostState>,
-        ) -> wasmtime::Result<()> {
-            self.started.notify_one();
-            self.release.notified().await;
-            Ok(())
-        }
-    }
-
-    fn test_store() -> Store<TestHostState> {
+    fn test_engine(mode: StoreMode) -> Engine {
         let mut config = Config::new();
         config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
-        Store::new(&engine, TestHostState)
+        if mode == StoreMode::Concurrent {
+            config.wasm_component_model_async(true);
+        }
+        config.concurrency_support(mode == StoreMode::Concurrent);
+        Engine::new(&config).expect("test engine")
+    }
+
+    fn test_store(mode: StoreMode) -> Store<TestHostState> {
+        Store::new(&test_engine(mode), TestHostState)
     }
 
     async fn legacy_store(
         store: Store<TestHostState>,
         policy: &LegacySyncReentry,
-    ) -> ConcurrentStore {
-        ConcurrentStore::with_policy(store, policy.clone()).await
+        mode: StoreMode,
+    ) -> TestStore {
+        TestStore::with_policy(store, policy.clone(), mode).await
     }
 
     fn assert_synchronous_reentry_depth_is_bounded_and_recovers() {
@@ -197,12 +193,12 @@ mod tests {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn root_admission_lifecycle_scenario() {
+    async fn root_admission_lifecycle_scenario(mode: StoreMode) {
         let policy = LegacySyncReentry::new();
-        let holding_store = legacy_store(test_store(), &policy).await;
-        let first_store = legacy_store(test_store(), &policy).await;
-        let second_store = legacy_store(test_store(), &policy).await;
-        let third_store = legacy_store(test_store(), &policy).await;
+        let holding_store = legacy_store(test_store(mode), &policy, mode).await;
+        let first_store = legacy_store(test_store(mode), &policy, mode).await;
+        let second_store = legacy_store(test_store(mode), &policy, mode).await;
+        let third_store = legacy_store(test_store(mode), &policy, mode).await;
         let holding_started = Arc::new(Notify::new());
         let release_holding = Arc::new(Notify::new());
         let holding_completed = Arc::new(Notify::new());
@@ -319,9 +315,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn legacy_root_admission_is_fifo_and_cancellation_safe_across_domains() {
-        timeout(Duration::from_secs(10), root_admission_lifecycle_scenario())
+        for mode in MODES {
+            timeout(
+                Duration::from_secs(10),
+                root_admission_lifecycle_scenario(mode),
+            )
             .await
             .expect("root admission lifecycle scenario timed out");
+        }
     }
 
     fn sync_reentry_component() -> Vec<u8> {
@@ -505,8 +506,8 @@ mod tests {
         component.finish()
     }
 
-    async fn shutdown_drains_accepted_calls_and_rejects_new_work() {
-        let store = ConcurrentStore::new(test_store()).await;
+    async fn shutdown_waits_for_in_flight_guest_call_and_rejects_new_work(mode: StoreMode) {
+        let store = TestStore::new(test_store(mode), mode).await;
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
 
@@ -515,7 +516,7 @@ mod tests {
         let call_release = Arc::clone(&release);
         let active_call = tokio::spawn(async move {
             call_store
-                .call(move |_| {
+                .call_guest(move |_| {
                     Box::pin(async move {
                         call_started.notify_one();
                         call_release.notified().await;
@@ -532,45 +533,47 @@ mod tests {
                 .shutdown(|_| Box::pin(async move { Ok("unloaded") }))
                 .await
         });
-        while matches!(store.state(), DriverState::Accepting) {
+        // Shutdown queues for root admission behind the in-flight guest call.
+        for _ in 0..16 {
             tokio::task::yield_now().await;
         }
-
-        let rejected = store
-            .call(|_| Box::pin(async move { Ok(()) }))
-            .await
-            .expect_err("new work should be rejected during shutdown");
-        assert!(rejected.to_string().contains("shutting down"));
         assert!(!shutdown.is_finished());
 
         release.notify_one();
         assert_eq!(active_call.await.expect("active call task").unwrap(), 7);
         assert_eq!(shutdown.await.expect("shutdown task").unwrap(), "unloaded");
         assert_eq!(store.state(), DriverState::Stopped);
+
+        let rejected = store
+            .call(|_| ())
+            .await
+            .expect_err("new work should be rejected after shutdown");
+        assert!(rejected.to_string().contains("shutting down"));
     }
 
-    async fn shutdown_waits_for_joined_store_background_tasks() {
-        let store = ConcurrentStore::new(test_store()).await;
+    async fn shutdown_waits_for_joined_store_background_tasks(mode: StoreMode) {
+        let store = TestStore::new(test_store(mode), mode).await;
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let task_started = Arc::clone(&started);
         let task_release = Arc::clone(&release);
 
-        let call_store = store.clone();
-        let active_call = tokio::spawn(async move {
-            call_store
-                .call(move |accessor| {
-                    let spawned = accessor.spawn(BackgroundTask {
-                        started: task_started,
-                        release: task_release,
-                    });
-                    Box::pin(async move {
-                        spawned?.await;
-                        Ok(())
-                    })
+        // The guest call returns at once and leaves a task running in the Store's event loop.
+        store
+            .call_guest(move |scope| {
+                let accessor = scope.accessor().expect("concurrent store scope");
+                let spawned = accessor.spawn(async move |_accessor| {
+                    task_started.notify_one();
+                    task_release.notified().await;
+                    Ok(())
+                });
+                Box::pin(async move {
+                    spawned?;
+                    Ok(())
                 })
-                .await
-        });
+            })
+            .await
+            .expect("spawn background task");
         started.notified().await;
 
         let shutdown_store = store.clone();
@@ -579,29 +582,26 @@ mod tests {
                 .shutdown(|_| Box::pin(async move { Ok(()) }))
                 .await
         });
-        while matches!(store.state(), DriverState::Accepting) {
+        for _ in 0..16 {
             tokio::task::yield_now().await;
         }
         assert!(!shutdown.is_finished());
 
         release.notify_one();
-        active_call
-            .await
-            .expect("active call task")
-            .expect("active call result");
         shutdown
             .await
             .expect("shutdown task")
             .expect("shutdown result");
     }
 
-    async fn explicit_discard_drains_accepted_work() {
+    async fn explicit_discard_drains_accepted_work(mode: StoreMode) {
         let spawner = Arc::new(TestSpawner {
             runtime: tokio::runtime::Handle::current(),
         });
-        let executor = LegacyStore::start(test_store(), LegacySyncReentry::new(), spawner)
-            .await
-            .expect("start test Store driver");
+        let executor =
+            LegacyStore::start(test_store(mode), LegacySyncReentry::new(), spawner, mode)
+                .await
+                .expect("start test Store driver");
         let handle = executor.handle();
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
@@ -611,7 +611,7 @@ mod tests {
         let call_release = Arc::clone(&release);
         let accepted = tokio::spawn(async move {
             call_handle
-                .call(move |_| {
+                .call_guest(move |_| {
                     Box::pin(async move {
                         call_started.notify_one();
                         call_release.notified().await;
@@ -624,7 +624,7 @@ mod tests {
 
         executor.discard();
         let rejected = handle
-            .call(|_| Box::pin(async move { Ok(()) }))
+            .call(|_| ())
             .await
             .expect_err("discard should close admission");
         assert!(rejected.to_string().contains("shutting down"));
@@ -639,13 +639,14 @@ mod tests {
         assert_eq!(handle.state(), DriverState::Stopped);
     }
 
-    async fn owner_drop_drains_accepted_work() {
+    async fn owner_drop_drains_accepted_work(mode: StoreMode) {
         let spawner = Arc::new(TestSpawner {
             runtime: tokio::runtime::Handle::current(),
         });
-        let executor = LegacyStore::start(test_store(), LegacySyncReentry::new(), spawner)
-            .await
-            .expect("start test Store driver");
+        let executor =
+            LegacyStore::start(test_store(mode), LegacySyncReentry::new(), spawner, mode)
+                .await
+                .expect("start test Store driver");
         let handle = executor.handle();
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
@@ -655,7 +656,7 @@ mod tests {
         let call_release = Arc::clone(&release);
         let accepted = tokio::spawn(async move {
             call_handle
-                .call(move |_| {
+                .call_guest(move |_| {
                     Box::pin(async move {
                         call_started.notify_one();
                         call_release.notified().await;
@@ -668,7 +669,7 @@ mod tests {
 
         drop(executor);
         let rejected = handle
-            .call(|_| Box::pin(async move { Ok(()) }))
+            .call(|_| ())
             .await
             .expect_err("owner drop should close admission");
         assert!(rejected.to_string().contains("shutting down"));
@@ -687,11 +688,12 @@ mod tests {
         );
 
         let executor = LegacyStore::start(
-            test_store(),
+            test_store(mode),
             LegacySyncReentry::new(),
             Arc::new(TestSpawner {
                 runtime: tokio::runtime::Handle::current(),
             }),
+            mode,
         )
         .await
         .expect("start test Store driver");
@@ -710,15 +712,11 @@ mod tests {
     /// Acceptance test for plain synchronous WIT recursion through the
     /// call-scoped reentry pump.
     async fn sync_lifted_same_instance_reentry_completes() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
 
         let run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
-        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let host_calls = Arc::new(AtomicUsize::new(0));
 
         let mut linker = Linker::<TestHostState>::new(&engine);
@@ -765,7 +763,7 @@ mod tests {
             .expect("run export");
         assert!(run_slot.set(run).is_ok());
 
-        let driver = ConcurrentStore::new(store).await;
+        let driver = TestStore::new(store, StoreMode::Sequential).await;
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         timeout(
@@ -792,15 +790,11 @@ mod tests {
     /// Mirrors synchronous game methods that call `fire_blocking` from a
     /// blocking worker while the host import keeps the active store pumpable.
     async fn blocking_host_operation_propagates_the_reentry_chain() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
 
         let run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
-        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let host_calls = Arc::new(AtomicUsize::new(0));
 
         let mut linker = Linker::<TestHostState>::new(&engine);
@@ -851,7 +845,7 @@ mod tests {
             .expect("run export");
         assert!(run_slot.set(run).is_ok());
 
-        let driver = ConcurrentStore::new(store).await;
+        let driver = TestStore::new(store, StoreMode::Sequential).await;
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         timeout(
@@ -872,14 +866,10 @@ mod tests {
     }
 
     async fn unrelated_guest_call_waits_for_the_active_chain() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
 
-        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let entered = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let unrelated_entered = Arc::new(Notify::new());
@@ -922,7 +912,7 @@ mod tests {
         let run = instance
             .get_typed_func::<(), ()>(&mut store, "run")
             .expect("run export");
-        let driver = ConcurrentStore::new(store).await;
+        let driver = TestStore::new(store, StoreMode::Sequential).await;
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         let outer_driver = driver.clone();
@@ -963,15 +953,11 @@ mod tests {
 
     #[allow(clippy::too_many_lines)]
     async fn shutdown_reentry_scenario() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
 
         let run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
-        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let entered = Arc::new(Notify::new());
         let start_callback = Arc::new(Notify::new());
         let callback_completed = Arc::new(Notify::new());
@@ -1027,7 +1013,7 @@ mod tests {
             .get_typed_func::<(), ()>(&mut store, "run")
             .expect("run export");
         assert!(run_slot.set(run).is_ok());
-        let driver = ConcurrentStore::new(store).await;
+        let driver = TestStore::new(store, StoreMode::Sequential).await;
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         let outer_driver = driver.clone();
@@ -1078,17 +1064,13 @@ mod tests {
 
     #[allow(clippy::too_many_lines)]
     async fn opposing_plugin_roots_scenario() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
 
         let a_run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
         let b_run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
-        let a_driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
-        let b_driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let a_driver_slot = Arc::new(OnceLock::<TestStore>::new());
+        let b_driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let a_calls = Arc::new(AtomicUsize::new(0));
         let b_calls = Arc::new(AtomicUsize::new(0));
         let trace = Arc::new(Mutex::new(Vec::new()));
@@ -1238,8 +1220,8 @@ mod tests {
         assert!(b_run_slot.set(b_run).is_ok());
 
         let policy = LegacySyncReentry::new();
-        let a_driver = legacy_store(a_store, &policy).await;
-        let b_driver = legacy_store(b_store, &policy).await;
+        let a_driver = legacy_store(a_store, &policy, StoreMode::Sequential).await;
+        let b_driver = legacy_store(b_store, &policy, StoreMode::Sequential).await;
         assert!(a_driver_slot.set(a_driver.clone()).is_ok());
         assert!(b_driver_slot.set(b_driver.clone()).is_ok());
 
@@ -1328,24 +1310,136 @@ mod tests {
         .expect("legacy reentry routing scenarios timed out");
     }
 
+    fn nested_active_context_call(
+        driver: TestStore,
+        remaining: usize,
+        blocking: bool,
+    ) -> super::StoreFuture<'static, ()> {
+        Box::pin(async move {
+            let nested_driver = driver.clone();
+            driver
+                .call_guest(move |_| {
+                    Box::pin(async move {
+                        if remaining == 0 {
+                            return Ok(());
+                        }
+                        let child = nested_driver.clone();
+                        if blocking {
+                            let runtime = tokio::runtime::Handle::current();
+                            nested_driver
+                                .spawn_blocking_in_active_context(move || {
+                                    runtime.block_on(nested_active_context_call(
+                                        child,
+                                        remaining - 1,
+                                        blocking,
+                                    ))
+                                })
+                                .await?
+                        } else {
+                            nested_driver
+                                .in_active_context(nested_active_context_call(
+                                    child,
+                                    remaining - 1,
+                                    blocking,
+                                ))
+                                .await?
+                        }
+                    })
+                })
+                .await
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn active_context_recursion_is_bounded_and_releases_admission() {
+        timeout(Duration::from_secs(10), async {
+            let mode = StoreMode::Concurrent;
+            for blocking in [false, true] {
+                {
+                    let policy = LegacySyncReentry::new();
+                    let driver = legacy_store(test_store(mode), &policy, mode).await;
+                    let unrelated = legacy_store(test_store(mode), &policy, mode).await;
+                    nested_active_context_call(driver.clone(), 2, blocking)
+                        .await
+                        .expect("bounded callbacks should complete");
+                    let error = nested_active_context_call(
+                        driver.clone(),
+                        MAX_SYNC_REENTRY_DEPTH + 1,
+                        blocking,
+                    )
+                    .await
+                    .expect_err("recursive callbacks must reach the depth limit");
+                    assert!(error.to_string().contains("maximum depth"));
+                    unrelated
+                        .call_guest(|_| Box::pin(async { Ok(()) }))
+                        .await
+                        .expect("depth failure must release root admission");
+                    for store in [driver, unrelated] {
+                        store
+                            .shutdown(|_| Box::pin(async { Ok(()) }))
+                            .await
+                            .expect("shut down store after depth failure");
+                    }
+                }
+            }
+        })
+        .await
+        .expect("active-context recursion must not strand the Store driver");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_store_rejects_pump_blocking_before_running_the_operation() {
+        let store = TestStore::new(test_store(StoreMode::Concurrent), StoreMode::Concurrent).await;
+        let ran = Arc::new(AtomicBool::new(false));
+        let nested = store.clone();
+        let flag = Arc::clone(&ran);
+
+        // Inside an active guest call, so a missing mode check would get as far as spawning.
+        let error = store
+            .call_guest(move |_| {
+                Box::pin(async move {
+                    let mut pump_store = test_store(StoreMode::Concurrent);
+                    nested
+                        .pump_blocking(&mut pump_store, move || flag.store(true, Ordering::SeqCst))
+                        .await
+                })
+            })
+            .await
+            .expect_err("a concurrent store cannot pump reentrant callbacks");
+        assert!(error.to_string().contains("sequential"), "{error}");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "the rejected operation must not run"
+        );
+        store
+            .shutdown(|_| Box::pin(async { Ok(()) }))
+            .await
+            .expect("shut down store");
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_accepted_work() {
         timeout(Duration::from_secs(10), async {
-            shutdown_drains_accepted_calls_and_rejects_new_work().await;
-            shutdown_waits_for_joined_store_background_tasks().await;
-            explicit_discard_drains_accepted_work().await;
-            owner_drop_drains_accepted_work().await;
+            for mode in MODES {
+                shutdown_waits_for_in_flight_guest_call_and_rejects_new_work(mode).await;
+                explicit_discard_drains_accepted_work(mode).await;
+                owner_drop_drains_accepted_work(mode).await;
+            }
+            shutdown_waits_for_joined_store_background_tasks(StoreMode::Concurrent).await;
             shutdown_reentry_scenario().await;
         })
         .await
         .expect("Store shutdown scenarios timed out");
     }
 
-    async fn startup_task_loss_is_reported() {
+    async fn startup_task_loss_is_reported(mode: StoreMode) {
         let started = LegacyStore::start(
-            test_store(),
+            test_store(mode),
             LegacySyncReentry::new(),
             Arc::new(DroppingSpawner),
+            mode,
         )
         .await;
         let Err(error) = started else {
@@ -1354,15 +1448,16 @@ mod tests {
         assert!(error.to_string().contains("ended without reporting"));
     }
 
-    async fn active_driver_task_loss_is_reported() {
+    async fn active_driver_task_loss_is_reported(mode: StoreMode) {
         let driver_abort = Arc::new(Mutex::new(None));
         let spawner = Arc::new(AbortRecordingSpawner {
             runtime: tokio::runtime::Handle::current(),
             driver_abort: Arc::clone(&driver_abort),
         });
-        let executor = LegacyStore::start(test_store(), LegacySyncReentry::new(), spawner)
-            .await
-            .expect("start test Store driver");
+        let executor =
+            LegacyStore::start(test_store(mode), LegacySyncReentry::new(), spawner, mode)
+                .await
+                .expect("start test Store driver");
         let handle = executor.handle();
         let started = Arc::new(Notify::new());
         let never_release = Arc::new(Notify::new());
@@ -1372,7 +1467,7 @@ mod tests {
         let call_release = Arc::clone(&never_release);
         let active = tokio::spawn(async move {
             call_handle
-                .call(move |_| {
+                .call_guest(move |_| {
                     Box::pin(async move {
                         call_started.notify_one();
                         call_release.notified().await;
@@ -1407,8 +1502,8 @@ mod tests {
         );
     }
 
-    async fn driver_panic_is_reported() {
-        let store = ConcurrentStore::new(test_store()).await;
+    async fn driver_panic_is_reported(mode: StoreMode) {
+        let store = TestStore::new(test_store(mode), mode).await;
         let handle = store.handle();
         let call_error = timeout(
             Duration::from_secs(2),
@@ -1429,7 +1524,7 @@ mod tests {
             retained
         );
         let later_error = handle
-            .call(|_| Box::pin(async move { Ok(()) }))
+            .call(|_| ())
             .await
             .expect_err("later calls should retain the driver failure");
         assert!(later_error.to_string().contains("ended without reporting"));
@@ -1437,14 +1532,10 @@ mod tests {
 
     #[allow(clippy::too_many_lines)]
     async fn caught_reentrant_guest_trap_stops_driver_and_queued_work() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+        let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
         let run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
-        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let driver_slot = Arc::new(OnceLock::<TestStore>::new());
         let host_calls = Arc::new(AtomicUsize::new(0));
         let queued_call_ran = Arc::new(AtomicBool::new(false));
 
@@ -1497,7 +1588,7 @@ mod tests {
             .get_typed_func::<(), ()>(&mut store, "run")
             .expect("run export");
         assert!(run_slot.set(run).is_ok());
-        let driver = ConcurrentStore::new(store).await;
+        let driver = TestStore::new(store, StoreMode::Sequential).await;
         assert!(driver_slot.set(driver.clone()).is_ok());
 
         let error = timeout(
@@ -1517,12 +1608,8 @@ mod tests {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn owned_resource_lifecycle_retires_store_on_trap() {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        config.wasm_component_model_async(true);
-        config.concurrency_support(true);
-        let engine = Engine::new(&config).expect("test engine");
+    async fn owned_resource_lifecycle_retires_store_on_trap(mode: StoreMode) {
+        let engine = test_engine(mode);
         let component =
             Component::new(&engine, owned_resource_component()).expect("test component");
         let resource_drops = Arc::new(AtomicUsize::new(0));
@@ -1574,6 +1661,7 @@ mod tests {
             Arc::new(TestSpawner {
                 runtime: tokio::runtime::Handle::current(),
             }),
+            mode,
         )
         .await
         .expect("start test Store driver");
@@ -1677,7 +1765,7 @@ mod tests {
         assert_eq!(driver.state(), DriverState::Failed(Arc::clone(&retained)));
 
         let later_error = handle
-            .call(|_| Box::pin(async move { Ok(()) }))
+            .call(|_| ())
             .await
             .expect_err("later calls should retain the guest failure");
         assert!(
@@ -1698,14 +1786,22 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn terminal_failure_is_retained() {
-        startup_task_loss_is_reported().await;
-        active_driver_task_loss_is_reported().await;
-        driver_panic_is_reported().await;
-        caught_reentrant_guest_trap_stops_driver_and_queued_work().await;
-        owned_resource_lifecycle_retires_store_on_trap().await;
+        for mode in MODES {
+            terminal_failure_scenario(mode).await;
+        }
+    }
+
+    async fn terminal_failure_scenario(mode: StoreMode) {
+        startup_task_loss_is_reported(mode).await;
+        active_driver_task_loss_is_reported(mode).await;
+        driver_panic_is_reported(mode).await;
+        if mode == StoreMode::Sequential {
+            caught_reentrant_guest_trap_stops_driver_and_queued_work().await;
+        }
+        owned_resource_lifecycle_retires_store_on_trap(mode).await;
         shutdown_does_not_hide_terminal_failure();
 
-        let store = ConcurrentStore::new(test_store()).await;
+        let store = TestStore::new(test_store(mode), mode).await;
         let handle = store.handle();
         let shutdown_error = store
             .shutdown(|_| {
@@ -1726,7 +1822,7 @@ mod tests {
         assert_eq!(joined, retained);
 
         let call_error = handle
-            .call(|_| Box::pin(async move { Ok(()) }))
+            .call(|_| ())
             .await
             .expect_err("future calls should retain the driver failure");
         assert!(call_error.to_string().contains("finalizer failed"));

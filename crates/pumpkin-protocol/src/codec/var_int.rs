@@ -53,12 +53,15 @@ impl VarInt {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i32
     #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // Reject encodings that set payload bits beyond bit 31 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x70 != 0 {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -87,6 +90,10 @@ impl VarInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
+            // Reject encodings that set payload bits beyond bit 31 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x70 != 0 {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -183,6 +190,13 @@ impl PacketRead for VarInt {
         let mut val = 0u32;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(read)?;
+            // Reject encodings that set payload bits beyond bit 31 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x70 != 0 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "VarInt is too big (overflow)",
+                ));
+            }
             val |= u32::from(byte & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(((val >> 1) as i32) ^ -((val & 1) as i32)));
@@ -206,5 +220,46 @@ mod tests {
                 VarInt(value)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod overflow_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_overflowing_final_byte() {
+        // Payload bits above bit 31 must not be silently truncated.
+        assert!(VarInt::decode(&mut &[0x80, 0x80, 0x80, 0x80, 0x10][..]).is_err());
+        assert!(VarInt::decode(&mut &[0xFF, 0xFF, 0xFF, 0xFF, 0x7F][..]).is_err());
+    }
+
+    #[test]
+    fn accepts_boundary_values() {
+        assert_eq!(VarInt::decode(&mut &[0x00][..]).unwrap().0, 0);
+        assert_eq!(
+            VarInt::decode(&mut &[0xFF, 0xFF, 0xFF, 0xFF, 0x0F][..])
+                .unwrap()
+                .0,
+            -1
+        );
+        assert_eq!(
+            VarInt::decode(&mut &[0xFF, 0xFF, 0xFF, 0xFF, 0x07][..])
+                .unwrap()
+                .0,
+            i32::MAX
+        );
+    }
+
+    #[test]
+    fn packet_read_rejects_overflowing_final_byte() {
+        assert!(VarInt::read(&mut &[0x80, 0x80, 0x80, 0x80, 0x10][..]).is_err());
+        assert_eq!(VarInt::read(&mut &[0x01][..]).unwrap().0, -1);
+        assert_eq!(
+            VarInt::read(&mut &[0xFF, 0xFF, 0xFF, 0xFF, 0x0F][..])
+                .unwrap()
+                .0,
+            i32::MIN
+        );
     }
 }

@@ -7,6 +7,7 @@ pub mod biome;
 pub mod block;
 pub mod chunk;
 pub mod chunk_system;
+pub mod clip;
 pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
@@ -19,9 +20,11 @@ pub mod tick;
 pub mod world;
 pub mod world_info;
 
+pub use clip::{BlockHitResult, ClipBlock, ClipContext, ClipFluid};
+
 pub const CURRENT_MC_VERSION: &str = "26.3";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.51";
-pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2193;
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.60";
+pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2225;
 
 #[macro_export]
 macro_rules! global_path {
