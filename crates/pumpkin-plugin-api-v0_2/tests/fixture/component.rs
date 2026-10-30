@@ -19,7 +19,7 @@ use pumpkin_plugin_api_v0_2::{
         world::{ChunkBuffer, Entity},
     },
     register_plugin,
-    scheduler::schedule_delayed_task,
+    scheduler::{schedule_delayed_task, schedule_repeating_task},
     worldgen::{ChunkGenerator, register_chunk_generator},
 };
 
@@ -154,8 +154,14 @@ impl Plugin for Fixture {
         register_async_test(move |test| async move {
             let _ = test.succeed_when(done);
         });
-        schedule_delayed_task(20, |server| async move {
-            server.broadcast("fixture task ran".to_string()).await;
+        let message = std::cell::Cell::new("fixture task ran".to_string());
+        schedule_delayed_task(20, move |server| async move {
+            server.broadcast(message.into_inner()).await;
+        });
+        schedule_repeating_task(20, 40, |server| async move {
+            server
+                .broadcast("fixture repeating task ran".to_string())
+                .await;
         });
         Ok(())
     }
