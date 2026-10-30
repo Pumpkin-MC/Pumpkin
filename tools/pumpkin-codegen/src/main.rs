@@ -234,6 +234,10 @@ pub fn main() {
     // If any arguments are given, treat them as file-stem filters.
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
+    if filters.iter().any(|f| f == "sdk") {
+        sdk::main();
+        return;
+    }
     if filters.iter().any(|f| f == "wit") {
         wit::v0_2::main();
         return;
