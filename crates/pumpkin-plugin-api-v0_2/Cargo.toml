@@ -7,6 +7,11 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 wit-bindgen = { workspace = true, features = ["async"] }
 
+tracing.workspace = true
+postcard.workspace = true
+tracing-serde-structured.workspace = true
+serde_json.workspace = true
+
 # DO NOT BUILD FOR WASM / HOST ONLY
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
@@ -19,3 +24,7 @@ crate-type = ["cdylib"]
 
 [lints]
 workspace = true
+
+[[example]]
+name = "sdk_helpers"
+crate-type = ["cdylib"]

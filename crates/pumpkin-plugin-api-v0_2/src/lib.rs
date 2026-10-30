@@ -1,198 +1,42 @@
-//! Guest SDK for the async `pumpkin:plugin@0.2.0` world, in preview
+//! Rust SDK for plugins targeting `pumpkin:plugin@0.2.0`.
 //!
-//! Depend on this crate when you want plugin handlers that can `.await` host calls
+//! Implement [`Plugin`] and export it with [`register_plugin!`]. Register handlers in
+//! [`Plugin::on_load`]; [`Plugin::new`] and [`Plugin::metadata`] stay synchronous.
+//! The separate `pumpkin-plugin-api` crate targets v0.1.
 //!
-//! It sits next to `pumpkin-plugin-api` instead of replacing it; that crate still targets the
-//! synchronous `pumpkin:plugin@0.1.0` world and keeps working for every v0.1 plugin
+//! Generated imports are available through [`host`]. Their signatures follow the WIT:
+//! await async calls. Constructors and event/task registration remain synchronous.
+//! Recipe and enchantment registration helpers are async, as are the typed methods on
+//! [`PersistentDataHolder`]. Initialization installs the SDK's `tracing` subscriber.
 //!
-//! # Where this fits
+//! A suspended callback may overlap another invocation in the same component. Do not
+//! hold locks or mutable borrows across `.await`. Callback futures need not be `Send`.
+//! Dropping a future does not undo host operations that have already completed.
 //!
-//! A plugin is a WebAssembly component and the server is the host around it; the WIT files in
-//! `crates/pumpkin-plugin-wit/v0.2` are the contract between the two, and this crate is the
-//! guest half of that contract
+//! ## Early Development Warning
+//! This SDK is in preview. Event-resource integration and the complete event catalogue
+//! are still pending. Build components for `wasm32-wasip2` with release mode or at least
+//! optimization level 1; the current event variant fails validation without optimization.
 //!
-//! ```text
-//!  host                                      guest (your plugin)
-//!  ----                                      -------------------
-//!  1. handle-event(7, server, event)  -->    events::dispatch finds handler 7
-//!  2.                                        your handler runs up to its first .await
-//!  3. <-- player.has-permission(node)        an async import, so the guest suspends here
-//!  4. does the work and replies       -->    the handler resumes with the answer
-//!  5. <-- returns the owned event            applied for a blocking handler, ignored otherwise
-//! ```
-//!
-//! The world exports 13 async callbacks (`on-load`, `on-unload`, events, commands, command
-//! suggestions, tasks, IPC messages, five AI goal hooks and chunk generation) plus the synchronous
-//! `init-plugin` and `metadata`; this crate wires each callback to a table you fill from `on_load`
-//!
-//! How the server schedules those calls, which Store they run in and what limits apply is up to
-//! the host, and nothing in this crate depends on it
-//!
-//! # Why a second crate
-//!
-//! A component contains exactly one world, so a plugin is either v0.1 or v0.2 and never both
-//!
-//! A cargo feature was considered and rejected: features are additive across a workspace, so
-//! any dependency that turned on `v0_2` would flip the ABI for everything else in the build
-//!
-//! The host reads the ABI from the WIT package the component imports and exports
-//! (`pumpkin:plugin@0.1.0` or `pumpkin:plugin@0.2.0`) and never from [`PluginMetadata::version`],
-//! which is only the version of your plugin
-//!
-//! # What is async and what is not
-//!
-//! The WIT marks a function `async func` only when the host implementation awaits something (an
-//! async lock, I/O or another plugin), so those are exactly the calls you `.await`
-//!
-//! Everything else stays a plain function: resource constructors, `register_event`, task
-//! registration, the `metadata` snapshot and most `GameTest` callbacks never wait, so wrapping
-//! them in futures would add nothing; the generated bindings follow the WIT one to one, so the
-//! compiler tells you which is which
-//!
-//! A synchronous export cannot suspend, whatever you write inside it, which is why the
-//! synchronous `GameTest` callbacks take plain closures
-//!
-//! # Life of a plugin
-//!
-//! 1. the host instantiates the component and calls `init-plugin`, which runs [`Plugin::new`]
-//! 2. it reads [`Plugin::metadata`], a pure snapshot that must not call the host
-//! 3. it calls [`Plugin::on_load`] with a [`Context`], and this is where you register handlers
-//! 4. as the server runs it calls your handlers by id
-//! 5. it calls [`Plugin::on_unload`] before the plugin goes away
-//!
-//! ```rust,ignore
-//! use pumpkin_plugin_api_v0_2::{
-//!     Context, EventPriority, Plugin, PluginMetadata, Result, Server,
-//!     events::{EventData, EventHandler, PlayerChatEvent},
-//!     register_plugin,
-//! };
-//!
-//! struct ChatGuard;
-//!
-//! impl EventHandler<PlayerChatEvent> for ChatGuard {
-//!     async fn handle(
-//!         &self,
-//!         _server: Server,
-//!         mut event: EventData<PlayerChatEvent>,
-//!     ) -> EventData<PlayerChatEvent> {
-//!         // has_permission is an async import, so this suspends here and resumes with the answer
-//!         if !event.player.has_permission("chat.send".to_string()).await {
-//!             event.cancelled = true;
-//!         }
-//!         event
-//!     }
-//! }
-//!
-//! struct MyPlugin;
-//!
-//! impl Plugin for MyPlugin {
-//!     fn new() -> Self {
-//!         Self
-//!     }
-//!
-//!     fn metadata(&self) -> PluginMetadata {
-//!         PluginMetadata {
-//!             name: "chat-guard".into(),
-//!             version: "0.1.0".into(),
-//!             authors: vec![],
-//!             description: "Cancels chat from players without chat.send".into(),
-//!             dependencies: vec![],
-//!             permissions: vec![],
-//!         }
-//!     }
-//!
-//!     async fn on_load(&self, context: Context) -> Result<()> {
-//!         context.register_event_handler::<PlayerChatEvent, _>(
-//!             ChatGuard,
-//!             EventPriority::Normal,
-//!             true,
-//!         );
-//!         Ok(())
-//!     }
-//! }
-//!
-//! register_plugin!(MyPlugin);
-//! ```
-//!
-//! # How the host finds your handler
-//!
-//! Handlers live in the guest, so the guest picks their ids: registering one stores it in a table
-//! here and tells the host only the number, for example `register-event(7, ...)`
-//!
-//! Later the host calls back with that number and the table finds the handler; there is one table
-//! per kind (events, commands, suggestions, tasks, AI goals, generators and each `GameTest`
-//! callback), so an id only means something inside its own table
-//!
-//! # Suspension and reentry
-//!
-//! A callback only yields at an explicit `.await` on a host import or on a future built from one;
-//! CPU-bound code between awaits never yields, so split long work at awaits or keep it small
-//!
-//! While a callback is suspended the host may start another one in the same component instance,
-//! even for the same handler; that is why handlers take `&self` and shared mutable state needs
-//! interior mutability
-//!
-//! Never keep a `std::sync` guard or a `RefCell` borrow alive across an await: the next callback
-//! can try to take it, and then neither can make progress
-//!
-//! The handler tables follow the same rule, locking only inside short synchronous methods and
-//! handing the dispatcher an owned `Arc`, so no guard exists while a handler runs
-//!
-//! # Ownership
-//!
-//! Callback arguments and results are owned values and resource handles: the event, command
-//! arguments, entity, chunk buffer and server handle all move into the callback and stay valid
-//! across every suspension
-//!
-//! Synchronous display casts and the `GameTest` entity predicate borrow their entity handles
-//! A display cast returns an optional typed handle and leaves the original entity usable
-//!
-//! Passing an owned handle to a host import transfers it, while passing a borrowed handle does
-//! not transfer ownership
-//!
-//! # Cancellation, dropped futures and traps
-//!
-//! The guest cannot cancel host work, and a dropped waiter does not cancel guest work
-//!
-//! - if the host cancels an exported callback while it is suspended, the guest future is dropped
-//!   at that await and its destructors run; nothing after that await executes, and work already
-//!   handed to the host is not undone
-//! - if a guest future awaiting a host import is dropped, the bindings ask the host to cancel that
-//!   import; the request can lose the race with completion, so the import may already have taken
-//!   effect and its result is thrown away
-//! - dropping a future that was created but never polled does nothing; to run work to completion
-//!   whatever its caller does, await it inside the callback
-//! - a trap in a host import ends the component instance: the guest cannot catch it, destructors
-//!   do not run, and the host cannot call into the instance again, so treat it as fatal
-//! - a timeout enforced by the host or by a caller waiting on a plugin only stops the wait, and the
-//!   guest callback keeps running until it finishes or the host cancels it as described above
-//!
-//! # Building and checking a component
-//!
-//! ```text
-//! cargo build --release --target wasm32-wasip2
-//! wasm-tools component wit target/wasm32-wasip2/release/my_plugin.wasm
-//! ```
-//!
-//! The second command prints the world the component really declares, so look for
-//! `package pumpkin:plugin@0.2.0` and `async func` on the exports
-//!
-//! Build with `--release` or at least opt-level 1; an unoptimized build of the lifted `event`
-//! variant goes past the Wasm locals limit and fails validation
-//!
-//! # What is not here yet
-//!
-//! This crate is the foundation and is deliberately small:
-//!
-//! * only a few event markers exist (see [`events`]), and
-//!   [`define_event!`](crate::define_event) defines the rest in one line
-//! * the helper surface of `pumpkin-plugin-api` (permission constants, the logging subscriber,
-//!   item and block builders) is not ported
-//! * ergonomics helpers and a migration guide come later
 
 use std::sync::{Arc, OnceLock};
 
 pub use registry::LocalBoxFuture;
+
+pub mod block;
+pub mod datapack;
+pub mod enchantment;
+mod ext;
+pub mod forms;
+mod generated;
+pub mod inventory;
+pub mod item;
+pub mod logging;
+pub mod mobs;
+pub mod permissions;
+pub mod persistent_data;
+pub mod recipe;
+pub mod team;
 
 pub mod ai;
 pub mod commands;
@@ -228,13 +72,102 @@ pub mod wit {
 /// Host interfaces, with the async and synchronous functions the WIT declares
 pub use wit::pumpkin::plugin as host;
 
+/// Command WIT API re-exports.
+pub mod command {
+    pub use crate::wit::pumpkin::plugin::command::{
+        Arg, ArgumentType, Command, CommandError, CommandNode, CommandSender, CommandSuggestion,
+        CommandSuggestions, ConsumedArgs, StringType, SuggestionRequest,
+    };
+}
+
+pub use wit::pumpkin::plugin::{
+    advancement as advancement_wit, bedrock_packets, block_entity, boss_bar,
+    command as command_wit, common,
+    context::{self, MarketplaceMetadata},
+    damage_types as damage_types_wit, data_components, datapack as datapack_wit,
+    display as display_wit, enchantments as enchantments_wit, entity,
+    entity_statuses as entity_statuses_wit,
+    entity_types::EntityType,
+    event as events_wit, game_events as game_events_wit, gui, i18n, inventory as inventory_wit,
+    ipc, item_stack, java_dialogs, java_packets, particles, permission, player,
+    potions as potions_wit, recipe as recipe_wit, scoreboard, screens as screens_wit, server,
+    statistics as statistics_wit, uuid, world,
+};
+
+// Convenience re-exports of commonly-used plugin types so plugin authors can
+// name them directly (e.g. build an `ItemStack` for a GUI or `/give`).
+pub use block::{BlockStateTypeExt, BlockType, BlockTypeExt, IntoBlockKey};
+pub use damage_types_wit::DamageType;
+pub use datapack::{DatapackInfo, DatapackManager, EnablePosition};
+pub use display::{
+    BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayEntityExt, DisplayTransformation,
+    EntityDisplayExt, InteractionEntity, ItemDisplayEntity, ItemDisplayEntityExt, ItemDisplayMode,
+    Quaternionf, TextAlignment, TextDisplayEntity, TextDisplayEntityExt, TransformationBuilder,
+    Vector3f,
+};
+pub use enchantment::{
+    AttributeModifierSlot, CustomEnchantment, CustomEnchantmentValue, Enchantment,
+    EnchantmentBuilder, EnchantmentError, EnchantmentManager, RegistrableEnchantment,
+};
+pub use entity_statuses_wit::EntityStatus;
+pub use events::{EventHandler, FromIntoEvent};
+pub use ext::player::{PlayerCooldownExt, PlayerEnderChestExt};
+pub use game_events_wit::GameEvent;
+pub use host::game_rules::{GameRule, GameRuleValue};
+pub use host::world::{ChunkBuffer, GenerationPhase};
+pub use inventory::{Inventory, PlayerInventory};
+pub use item::{IntoItemKey, Item, ItemStackExt};
+pub use mobs::{
+    Ageable, AgeableData, Cat, CatData, Creeper, CreeperData, DyeColor, Enderman, EndermanData,
+    EntityCastExt, Fox, FoxData, IronGolem, IronGolemData, MobCast, MobData, Sheep, SheepData,
+    Shulker, ShulkerData, Slime, SlimeData, Villager, VillagerData, VillagerProfession, Wolf,
+    WolfData, Zombie, ZombieData,
+};
+pub use persistent_data::PersistentDataHolder;
+pub use potions_wit::PotionType;
+pub use recipe::{
+    CookingRecipeBuilder, Ingredient, RecipeCategory, RecipeError, RecipeManager,
+    RegistrableRecipe, ShapedRecipeBuilder, ShapelessRecipeBuilder,
+};
+pub use screens_wit::Screen;
+pub use statistics_wit::{CustomStatistic, StatisticCategory};
+pub use team::{PlayerTeamExt, ScoreboardTeamExt, Team, TeamSettingsBuilder};
+pub use wit::pumpkin::plugin::attributes::{Attribute, AttributeModifier, ModifierOperation};
+pub use wit::pumpkin::plugin::item_stack::{ItemAttributeModifier, ItemStack};
+pub use wit::pumpkin::plugin::player::{
+    BedrockMinecraftVersion, BedrockPlayer, JavaMinecraftVersion, JavaPlayer, Player,
+};
+pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
+pub use wit::pumpkin::plugin::server::Dimension;
+pub use wit::pumpkin::plugin::world::{
+    Block, BlockDirection, BlockState, BlockStateInfo, Flammable, LivingEntity, Mob, PathNodeType,
+    RayTraceBlockResult, RayTraceEntityResult, RaycastResult, World, WorldBorder,
+};
+pub use worldgen::{ChunkGenerator, GeneratorManager, register_chunk_generator};
+
+/// Advancement WIT API re-exports.
+pub mod advancement {
+    pub use crate::wit::pumpkin::plugin::advancement::{
+        AdvancementDisplay, AdvancementInfo, AdvancementProgress, FrameType,
+    };
+}
+
+/// Java dialog WIT API re-exports.
+pub mod java_dialog {
+    pub use crate::wit::pumpkin::plugin::java_dialogs::{
+        Action, ActionButton, AfterAction, CustomClickAction, Dialog, DialogBody, DialogInput,
+        DialogInputBool, DialogInputNumberRange, DialogInputSingleOption, DialogInputText,
+        DialogType, Link, LinkLabel, LinkType,
+    };
+}
+
 // The types most plugins name directly
 pub use host::{
     context::Context,
     event::{Event, EventPriority, EventType},
     ipc::{IpcMessage, PluginId},
     server::Server,
-    text,
+    text::{self, TextComponent},
     world::Entity,
 };
 
@@ -398,6 +331,7 @@ pub mod runtime {
     };
 
     pub fn init_plugin<P: Plugin>() {
+        let _ = tracing::subscriber::set_global_default(crate::logging::WitSubscriber::new());
         assert!(
             PLUGIN.set(Arc::new(P::new())).is_ok(),
             "init-plugin must only run once"
