@@ -97,6 +97,7 @@ fn lifecycle_result<T>(
             )
         }),
         Err(failure) => {
+            let stopped = stopped || pumpkin_plugin_runtime::is_guest_call_failure(&failure);
             error::debug_details(headline, pumpkin_plugin_runtime::guest_call_error(&failure));
             Err(pumpkin_wasm_host_common::error::message(
                 "",

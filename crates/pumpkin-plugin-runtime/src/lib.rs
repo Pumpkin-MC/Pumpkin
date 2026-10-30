@@ -6,7 +6,7 @@ mod spawn;
 
 pub use executor::{
     LegacyGuestScope, LegacyStore, StoreDataMut, StoreExecutor, StoreFuture, StoreHandle,
-    StoreMode, guest_call_error,
+    StoreMode, guest_call_error, is_guest_call_failure,
 };
 pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
@@ -1736,6 +1736,7 @@ mod tests {
             call_error.to_string().contains("wasm backtrace"),
             "{call_error}"
         );
+        assert!(super::is_guest_call_failure(&call_error));
 
         let later_call_ran = Arc::new(AtomicBool::new(false));
         let ran = Arc::clone(&later_call_ran);

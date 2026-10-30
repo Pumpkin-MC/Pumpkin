@@ -45,6 +45,16 @@ pub const SUPPORTED_PLUGIN_APIS: [(&str, PluginApiVersion); 2] = [
 ];
 
 impl PluginInitError {
+    /// Classifies preparation errors after selecting the component's engine.
+    #[must_use]
+    pub fn preparation_failed(api_version: PluginApiVersion, error: wasmtime::Error) -> Self {
+        if error.is::<wasmtime::OutOfMemory>() {
+            Self::InstantiationFailed(error)
+        } else {
+            Self::ApiMismatch(api_version, error)
+        }
+    }
+
     /// Returns a hint when the error identifies a specific action.
     #[must_use]
     pub fn help(&self) -> Option<&'static str> {
@@ -189,7 +199,8 @@ impl WasmPlugin {
             error::inline(&self.version),
             error::inline(operation)
         );
-        let stopped = self.store.state().is_terminal();
+        let stopped = self.store.state().is_terminal()
+            || pumpkin_plugin_runtime::is_guest_call_failure(failure);
         let help = crate::error::help(failure)
             .or_else(|| stopped.then_some("Reload the plugin or restart the server to retry."));
         let text = crate::error::message(
@@ -272,6 +283,21 @@ mod tests {
             assert!(error.help().is_none(), "{error}");
         }
     }
+
+    #[test]
+    fn preparation_resource_failures_do_not_suggest_api_changes() {
+        let source = wasmtime::Error::from(wasmtime::OutOfMemory::new(4096));
+        let failure = PluginInitError::preparation_failed(PluginApiVersion::V0_1, source);
+        assert!(matches!(failure, PluginInitError::InstantiationFailed(_)));
+        assert!(failure.help().is_none());
+        assert!(
+            failure
+                .wasmtime_error()
+                .unwrap()
+                .is::<wasmtime::OutOfMemory>()
+        );
+    }
+
     fn component_importing(names: &[&str]) -> Vec<u8> {
         let mut component = ComponentBuilder::default();
         for name in names {

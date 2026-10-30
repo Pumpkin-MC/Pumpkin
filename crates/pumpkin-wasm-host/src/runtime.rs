@@ -168,17 +168,17 @@ impl PluginRuntime {
         let api_version = plugin_api_version(&wasm_bytes)?;
         let engine = self.engine(api_version);
         let component = load_component(engine, &wasm_bytes, &self.cache_dir)?;
-        let api_mismatch = |error| PluginInitError::ApiMismatch(api_version, error);
+        let preparation_error = |error| PluginInitError::preparation_failed(api_version, error);
 
         let (plugin_instance, store, metadata) = match api_version {
             PluginApiVersion::V0_1 => {
                 let instance_pre = self
                     .linker_v0_1
                     .instantiate_pre(&component)
-                    .map_err(api_mismatch)?;
+                    .map_err(preparation_error)?;
 
-                let plugin_pre =
-                    pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
+                let plugin_pre = pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre)
+                    .map_err(preparation_error)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_1::init_plugin(
                     engine,
@@ -195,10 +195,10 @@ impl PluginRuntime {
                 let instance_pre = self
                     .linker_v0_2
                     .instantiate_pre(&component)
-                    .map_err(api_mismatch)?;
+                    .map_err(preparation_error)?;
 
-                let plugin_pre =
-                    pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre).map_err(api_mismatch)?;
+                let plugin_pre = pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre)
+                    .map_err(preparation_error)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_2::init_plugin(
                     engine,
@@ -211,7 +211,7 @@ impl PluginRuntime {
                 (plugin_instance, store, metadata)
             }
             #[cfg(not(feature = "v0_2"))]
-            PluginApiVersion::V0_2 => return Err(api_mismatch(v0_2_disabled())),
+            PluginApiVersion::V0_2 => return Err(preparation_error(v0_2_disabled())),
         };
 
         let store = concurrent_store::start_legacy_store(

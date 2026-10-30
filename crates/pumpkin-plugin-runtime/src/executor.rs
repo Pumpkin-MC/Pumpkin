@@ -178,6 +178,12 @@ impl std::error::Error for SharedGuestCallError {
     }
 }
 
+/// Returns whether an error is a retained failure that stops the store driver.
+#[must_use]
+pub fn is_guest_call_failure(error: &wasmtime::Error) -> bool {
+    error.is::<SharedGuestCallError>()
+}
+
 /// Returns the original error when a guest-call failure is wrapped for sharing.
 #[must_use]
 pub fn guest_call_error(mut error: &wasmtime::Error) -> &wasmtime::Error {
