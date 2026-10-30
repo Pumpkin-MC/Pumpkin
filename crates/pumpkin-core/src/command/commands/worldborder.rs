@@ -36,7 +36,10 @@ const ERROR_TOO_BIG: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
 );
-const ERROR_TOO_FAR_OUT: CommandErrorType<0> = CommandErrorType::new(
+/// Vanilla `WorldBorder.MAX_CENTER_COORDINATE`.
+const MAX_CENTER_COORDINATE: f64 = 2.999_998_4e7;
+
+const ERROR_TOO_FAR_OUT: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_FAR,
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_FAR,
 );
@@ -141,8 +144,10 @@ fn set_center(source: &CommandSource, center: Vector2<f64>) -> Result<i32, Comma
         return Err(ERROR_SAME_CENTER.create_without_context());
     }
 
-    if center.x.abs() > 2.999_998_4e7 || center.y.abs() > 2.999_998_4e7 {
-        return Err(ERROR_TOO_FAR_OUT.create_without_context());
+    if center.x.abs() > MAX_CENTER_COORDINATE || center.y.abs() > MAX_CENTER_COORDINATE {
+        return Err(ERROR_TOO_FAR_OUT.create_without_context(TextComponent::text(format!(
+            "{MAX_CENTER_COORDINATE:.0}"
+        ))));
     }
 
     border.set_center(&world, center.x, center.y);
