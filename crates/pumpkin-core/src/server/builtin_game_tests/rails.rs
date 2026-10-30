@@ -177,3 +177,59 @@ pub(super) async fn test_minecart_breaks_on_cactus(helper: GameTestHelper) -> Ga
         .then_succeed();
     Ok(())
 }
+
+pub(super) async fn test_minecart_breaking_ejects_passenger(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    const RIDING: &str =
+        "execute as @e[type=minecraft:armor_stand,distance=..4] on vehicle if entity @s";
+
+    build_stone_floor(&helper, 5, 5).await?;
+    helper
+        .set_block_default(&BlockPos::new(3, 0, 2), &Block::SAND)
+        .await?;
+    helper
+        .set_block_default(&BlockPos::new(3, 1, 2), &Block::CACTUS)
+        .await?;
+    // The rider sits where the minecart is, pressed against the cactus side.
+    let cart_pos = Vector3::new(2.5725, 1.0, 2.5);
+    helper
+        .spawn_entity_at("minecraft:minecart", cart_pos)
+        .await?;
+    helper
+        .spawn_entity_at("minecraft:armor_stand", cart_pos)
+        .await?;
+    let center = BlockPos::new(2, 1, 2);
+    helper
+        .execute_command(
+            &center,
+            "ride @e[type=minecraft:armor_stand,distance=..4,limit=1] mount @e[type=minecraft:minecart,distance=..4,limit=1]",
+        )
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_execute(move |helper| async move {
+            let riding = helper.execute_command(&center, RIDING).await?;
+            helper.assert_true(riding == 1, "expected the armor stand to ride the minecart")
+        })
+        .then_wait_until(move |helper| async move {
+            helper
+                .assert_entity_not_present("minecraft:minecart")
+                .await?;
+            helper
+                .assert_entity_present("minecraft:armor_stand")
+                .await?;
+            let riding = helper.execute_command(&center, RIDING).await.unwrap_or(0);
+            helper.assert_true(
+                riding == 0,
+                "expected the armor stand to stop riding the destroyed minecart",
+            )?;
+            // A removed vehicle leaves its rider in place instead of a dismount spot next to it.
+            helper
+                .assert_entity_present_at("minecraft:armor_stand", &center)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}

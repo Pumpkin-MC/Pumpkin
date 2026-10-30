@@ -4597,6 +4597,44 @@ impl Entity {
         self.remove_passenger_internal(passenger_id, false);
     }
 
+    /// Vanilla `Entity.ejectPassengers`: every passenger stops riding, last one first.
+    pub fn eject_passengers(&self) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers.iter().rev() {
+            self.remove_passenger(passenger.get_entity().entity_id);
+        }
+    }
+
+    /// Vanilla `LivingEntity.dismountVehicle` for a removed vehicle: the passenger stays where it
+    /// is, moved to a nearby free spot if it would be stuck in a block.
+    fn removed_vehicle_dismount_pos(&self, passenger: &dyn EntityBase) -> Vector3<f64> {
+        let passenger_entity = passenger.get_entity();
+        let pos = passenger_entity.pos.load();
+        let target = Vector3::new(pos.x, pos.y.max(self.pos.load().y), pos.z);
+        let dimensions = passenger_entity.entity_dimension.load();
+        if dimensions.width > 4.0 || dimensions.height > 4.0 {
+            return target;
+        }
+        let width = f64::from(dimensions.width);
+        let half_height = f64::from(dimensions.height) / 2.0;
+        let center = target.add_raw(0.0, half_height, 0.0);
+        let allowed_centers = BoundingBox::of_size(center, width, half_height * 2.0, width);
+        passenger_entity
+            .world
+            .load()
+            .find_free_position(
+                passenger,
+                &allowed_centers,
+                center,
+                Vector3::new(width, half_height * 2.0, width),
+            )
+            .map_or(target, |free| free.add_raw(0.0, -half_height, 0.0))
+    }
+
     #[allow(clippy::too_many_lines)]
     fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
@@ -4775,7 +4813,9 @@ impl Entity {
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
 
-            let dismount_pos = if is_water {
+            let dismount_pos = if self.is_removed() {
+                self.removed_vehicle_dismount_pos(passenger.as_ref())
+            } else if is_water {
                 fallback_pos
             } else {
                 // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
