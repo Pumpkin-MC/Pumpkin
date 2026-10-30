@@ -145,9 +145,8 @@ fn set_center(source: &CommandSource, center: Vector2<f64>) -> Result<i32, Comma
     }
 
     if center.x.abs() > MAX_CENTER_COORDINATE || center.y.abs() > MAX_CENTER_COORDINATE {
-        return Err(ERROR_TOO_FAR_OUT.create_without_context(TextComponent::text(format!(
-            "{MAX_CENTER_COORDINATE:.0}"
-        ))));
+        return Err(ERROR_TOO_FAR_OUT
+            .create_without_context(TextComponent::text(format!("{MAX_CENTER_COORDINATE:.0}"))));
     }
 
     border.set_center(&world, center.x, center.y);
