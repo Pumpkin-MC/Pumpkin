@@ -1136,6 +1136,84 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn attribute_modifiers_survive_player_data_byte_roundtrip() {
+        use crate::AttributeModifierSlot;
+        use crate::attributes::Attributes;
+        use crate::data_component_impl::{AttributeModifiersImpl, Modifier, Operation};
+
+        // A broken tag here makes everything after it in the file unreadable.
+        let mut sword = iron_sword();
+        sword.patch.push((
+            DataComponent::AttributeModifiers,
+            Some(
+                AttributeModifiersImpl {
+                    attribute_modifiers: Cow::Owned(vec![Modifier {
+                        r#type: &Attributes::ATTACK_DAMAGE,
+                        id: Cow::Borrowed("minecraft:base_attack_damage"),
+                        amount: 11.0,
+                        operation: Operation::AddValue,
+                        slot: AttributeModifierSlot::MainHand,
+                    }]),
+                }
+                .to_dyn(),
+            ),
+        ));
+        sword.patch.push((
+            DataComponent::CustomData,
+            Some(
+                CustomDataImpl {
+                    data: NbtCompound::new(),
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        // Shaped like a player file: the inventory, then more fields after it.
+        let mut inventory = Vec::new();
+        for stack in [&sword, &ItemStack::new(3, &Item::COAL)] {
+            let mut compound = NbtCompound::new();
+            stack.write_item_stack(&mut compound);
+            inventory.push(NbtTag::Compound(compound));
+        }
+        let mut player = NbtCompound::new();
+        player.put_list("Inventory", inventory);
+        player.put_int("foodLevel", 17);
+
+        let bytes = Nbt::new(String::new(), player).write();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(bytes.as_ref()));
+        let decoded = Nbt::read(&mut reader)
+            .expect("player data should re-read")
+            .root_tag;
+
+        assert_eq!(
+            decoded.get_int("foodLevel"),
+            Some(17),
+            "fields after the inventory must survive"
+        );
+        let items = decoded
+            .get_list("Inventory")
+            .expect("inventory should survive");
+        assert_eq!(items.len(), 2);
+
+        let loaded = ItemStack::read_item_stack(items[0].extract_compound().unwrap())
+            .expect("sword should load");
+        let modifiers = loaded
+            .get_data_component::<AttributeModifiersImpl>()
+            .expect("modifiers should load");
+        assert_eq!(modifiers.attribute_modifiers.len(), 1);
+        assert_eq!(modifiers.attribute_modifiers[0].amount, 11.0);
+        assert_eq!(
+            modifiers.attribute_modifiers[0].id,
+            "minecraft:base_attack_damage"
+        );
+        assert!(loaded.get_data_component::<CustomDataImpl>().is_some());
+
+        let coal = ItemStack::read_item_stack(items[1].extract_compound().unwrap())
+            .expect("the next item should load");
+        assert_eq!(coal.item_count, 3);
+    }
+
     // ── damage_item ───────────────────────────────────────────────
 
     #[test]

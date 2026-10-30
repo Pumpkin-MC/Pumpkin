@@ -500,6 +500,21 @@ impl NbtTag {
         }
     }
 
+    /// Converts any numeric tag to a double, `NumericTag.doubleValue`.
+    #[must_use]
+    #[expect(clippy::cast_precision_loss)]
+    pub fn as_numeric_double(&self) -> Option<f64> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int.into()),
+            Self::Long(long) => Some(long as f64),
+            Self::Float(float) => Some(float.into()),
+            Self::Double(double) => Some(double),
+            _ => None,
+        }
+    }
+
     /// Returns the contained byte as a boolean, where zero is `false`.
     #[must_use]
     pub fn extract_bool(&self) -> Option<bool> {

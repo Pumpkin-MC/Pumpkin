@@ -604,7 +604,7 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let attr = super::living_entity::from_wit_attribute(modifier.attribute);
         let slot = super::enchantment::to_data_slot(modifier.slot);
         let op = from_wit_item_operation(modifier.modifier.operation);
-        let leaked_id: &'static str = Box::leak(modifier.modifier.id.into_boxed_str());
+        let id = modifier.modifier.id;
 
         let mut current_mods = stack
             .get_data_component::<AttributeModifiersImpl>()
@@ -612,10 +612,10 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
                 comp.attribute_modifiers.clone().into_owned()
             });
 
-        current_mods.retain(|m| !(m.r#type == attr && m.id == leaked_id && m.slot == slot));
+        current_mods.retain(|m| !(m.r#type == attr && m.id == id && m.slot == slot));
         current_mods.push(Modifier {
             r#type: attr,
-            id: leaked_id,
+            id: Cow::Owned(id),
             amount: modifier.modifier.amount,
             operation: op,
             slot,
