@@ -147,6 +147,8 @@ impl JavaClient {
                             self.sync_block_state_to_client(&world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
+                            // A delayed break must not carry over to the new target.
+                            player.delayed_destroy.store(false, Ordering::Relaxed);
                             *player
                                 .mining_pos
                                 .lock()
@@ -202,7 +204,6 @@ impl JavaClient {
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
-                    // TODO: do validation
                     let location = player_action.position;
                     if !player.can_interact_with_block_at(&location, 1.0) {
                         warn!(
@@ -213,14 +214,54 @@ impl JavaClient {
                         return;
                     }
 
-                    // Block break & play sound
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
+                    let (block, state) = world.get_block_and_state(&location);
+
+                    // The client only reports that it finished; like vanilla's
+                    // `handleBlockBreakAction` the server decides if the block breaks.
+                    let can_break = match player.gamemode.load() {
+                        GameMode::Creative => true,
+                        GameMode::Spectator | GameMode::Adventure => false,
+                        GameMode::Survival => {
+                            let speed = block::calc_block_breaking(player, state, block);
+                            let mining_this = player.mining.load(Ordering::Relaxed)
+                                && *player
+                                    .mining_pos
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    == location;
+                            if state.is_air() || state.hardness < 0.0 {
+                                false
+                            } else if speed >= 1.0 {
+                                true
+                            } else if mining_this {
+                                let elapsed = player.tick_counter.load(Ordering::Relaxed)
+                                    - player.start_mining_time.load(Ordering::Relaxed);
+                                if speed * ((elapsed + 1) as f32) < 0.7 {
+                                    // The client got ahead of the server (lag), so
+                                    // the tick finishes the break (`hasDelayedDestroy`).
+                                    player.delayed_destroy.store(true, Ordering::Relaxed);
+                                    self.update_sequence(player_action.sequence.0);
+                                    return;
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    };
 
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, BlockBreakingProgress::Stop);
 
-                    let (block, state) = world.get_block_and_state(&location);
+                    if !can_break {
+                        self.sync_block_state_to_client(&world, location);
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    }
+
+                    // Block break & play sound
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block);
 
