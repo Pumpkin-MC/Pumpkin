@@ -143,6 +143,7 @@ impl ZombieEntityBase {
     }
 }
 
+// TODO: vanilla `Zombie.getBaseExperienceReward` gives babies 2.5x experience.
 impl Mob for ZombieEntityBase {
     fn mob_metadata(&self) -> Option<MobMetadata> {
         self.is_baby().then(|| MobMetadata::new().baby(true))

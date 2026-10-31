@@ -19,6 +19,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
 
+use crate::entity::ageable::AgeableMob;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::passive::villager::VillagerEntity;
@@ -187,9 +188,7 @@ impl ZombieVillagerEntity {
             Ordering::Relaxed,
         );
         if self.is_baby() {
-            villager_entity
-                .age
-                .store(entity.age.load(Ordering::Relaxed), Ordering::Relaxed);
+            AgeableMob::set_baby(villager.as_ref(), true);
         }
         if let Some(custom_name) = &**entity.custom_name.load() {
             villager_entity.set_custom_name(custom_name.clone());

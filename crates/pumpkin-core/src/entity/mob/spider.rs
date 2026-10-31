@@ -1,3 +1,4 @@
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -95,14 +96,45 @@ impl SpiderEntity {
     }
 
     pub fn set_climbing(&self, climbing: bool) {
-        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
-            let flags = i8::from(climbing);
-            let entity = &self.mob_entity.living_entity.entity;
-            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
-            if let Some(meta) = self.mob_metadata() {
-                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
-            }
+        set_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+            climbing,
+        );
+    }
+}
+
+/// Vanilla `Spider.setClimbing`.
+pub fn set_wall_climbing(
+    mob: &dyn Mob,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+    next: bool,
+) {
+    if climbing.swap(next, Ordering::Relaxed) != next {
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        entity.set_synced_data(flags, i8::from(next));
+        if let Some(meta) = mob.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
         }
+    }
+}
+
+/// Vanilla `Spider.tick`: the climb flag follows `horizontalCollision`.
+pub fn tick_wall_climbing(
+    mob: &dyn Mob,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+) {
+    let entity = &mob.get_mob_entity().living_entity.entity;
+    if entity.is_alive() {
+        set_wall_climbing(
+            mob,
+            climbing,
+            flags,
+            entity.horizontal_collision.load(Ordering::Relaxed),
+        );
     }
 }
 
@@ -153,6 +185,15 @@ pub fn finalize_spider_spawn(
 }
 
 impl Mob for SpiderEntity {
+    /// Vanilla `Spider.getVehicleAttachmentPoint`: higher on narrower vehicles.
+    fn mob_vehicle_attachment_point(&self, vehicle: &Entity) -> Vector3<f64> {
+        let entity = self.get_entity();
+        if vehicle.entity_dimension.load().width <= entity.entity_dimension.load().width {
+            return Vector3::new(0.0, 0.3125 * f64::from(entity.scale.load()), 0.0);
+        }
+        crate::entity::attachment::default_vehicle_attachment(entity)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
     }
@@ -169,6 +210,11 @@ impl Mob for SpiderEntity {
         &self.mob_entity
     }
 
+    fn on_climbable(&self) -> bool {
+        // Vanilla `Spider.onClimbable`: the wall-climb flag, not climbable blocks.
+        self.is_climbing()
+    }
+
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
         let mut meta = crate::entity::mob::MobMetadata::new();
         if self.is_climbing() {
@@ -178,13 +224,10 @@ impl Mob for SpiderEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let vel = entity.velocity.load();
-        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
-        self.set_climbing(is_colliding_horizontally);
+        tick_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+        );
     }
 }

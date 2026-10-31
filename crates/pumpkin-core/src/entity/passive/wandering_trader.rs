@@ -145,8 +145,6 @@ pub struct WanderingTraderEntity {
     pub merchant_inventory: Arc<SimpleInventory>,
     pub trading_player: std::sync::Mutex<Option<(Uuid, u8)>>,
     pub is_trading: AtomicBool,
-    pub trade_sound_cooldown: AtomicI32,
-    pub ambient_sound_timer: AtomicI32,
     pub ageable_data: AgeableData,
     self_weak: std::sync::Mutex<Option<Weak<Self>>>,
 }
@@ -164,8 +162,6 @@ impl WanderingTraderEntity {
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             trading_player: std::sync::Mutex::new(None),
             is_trading: AtomicBool::new(false),
-            trade_sound_cooldown: AtomicI32::new(0),
-            ambient_sound_timer: AtomicI32::new(120),
             ageable_data: AgeableData::default(),
             self_weak: std::sync::Mutex::new(None),
         };
@@ -495,7 +491,8 @@ impl WanderingTraderEntity {
 
         self.get_entity()
             .play_sound(Sound::EntityWanderingTraderYes);
-        self.trade_sound_cooldown.store(20, Ordering::Relaxed);
+        // Vanilla `AbstractVillager.notifyTrade`
+        self.reset_ambient_sound_time();
 
         if reward_exp {
             let position = self.get_entity().pos.load().add_raw(0.0, 0.5, 0.0);
@@ -556,11 +553,12 @@ impl ScreenHandlerFactory for WanderingTraderEntity {
             let Some(trader) = update_weak.upgrade() else {
                 return;
             };
-            if trader
-                .trade_sound_cooldown
-                .compare_exchange(0, 20, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok()
+            // Vanilla `AbstractVillager.notifyTradeUpdated`: 20 ticks after the last sound
+            let ambient_sound_time = &trader.mob_entity.ambient_sound_time;
+            if ambient_sound_time.load(Ordering::Relaxed)
+                > -trader.get_ambient_sound_interval() + 20
             {
+                trader.reset_ambient_sound_time();
                 trader.get_entity().play_sound(if has_result {
                     Sound::EntityWanderingTraderYes
                 } else {
@@ -602,12 +600,33 @@ impl AgeableMob for WanderingTraderEntity {
         &self.ageable_data
     }
 
+    // Vanilla `AbstractVillager.finalizeSpawn`
+    fn default_should_spawn_baby(&self) -> bool {
+        false
+    }
+
     fn can_be_a_baby(&self) -> bool {
         false
     }
 }
 
 impl Mob for WanderingTraderEntity {
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.is_trading.load(Ordering::Relaxed) {
+            Sound::EntityWanderingTraderTrade
+        } else {
+            Sound::EntityWanderingTraderAmbient
+        })
+    }
+
+    fn play_ambient_sound(&self) {
+        if let Some(sound) = self.get_ambient_sound() {
+            self.mob_entity
+                .living_entity
+                .make_sound(sound, SoundCategory::Neutral, 1.0);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -824,38 +843,8 @@ impl Mob for WanderingTraderEntity {
                 self.despawn_delay.store(new_delay, Ordering::Relaxed);
                 if new_delay == 0 {
                     self.mob_entity.living_entity.entity.remove();
-                    return;
                 }
             }
-        }
-
-        // Trade sound cooldown
-        let cooldown = self.trade_sound_cooldown.load(Ordering::Relaxed);
-        if cooldown > 0 {
-            self.trade_sound_cooldown
-                .store(cooldown - 1, Ordering::Relaxed);
-        }
-
-        // Ambient sound handling
-        if self.ambient_sound_timer.fetch_sub(1, Ordering::Relaxed) <= 0 {
-            let mut rng = rand::rng();
-            self.ambient_sound_timer
-                .store(rng.random_range(80..=160), Ordering::Relaxed);
-            let sound = if self.is_trading.load(Ordering::Relaxed) {
-                Sound::EntityWanderingTraderTrade
-            } else {
-                Sound::EntityWanderingTraderAmbient
-            };
-            self.mob_entity
-                .living_entity
-                .entity
-                .world
-                .load()
-                .play_sound(
-                    sound,
-                    SoundCategory::Neutral,
-                    &self.mob_entity.living_entity.entity.pos.load(),
-                );
         }
     }
 }

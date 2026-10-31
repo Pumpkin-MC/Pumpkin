@@ -270,7 +270,6 @@ impl Mob for BeeEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("HasNectar", self.has_nectar());
         nbt.put_bool("HasStung", self.has_stung());
         nbt.put_int(
@@ -288,7 +287,6 @@ impl Mob for BeeEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(nectar) = nbt.get_bool("HasNectar") {
             self.set_has_nectar(nectar);
         }

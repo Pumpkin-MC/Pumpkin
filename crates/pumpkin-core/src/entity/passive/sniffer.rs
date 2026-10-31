@@ -12,6 +12,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -123,6 +124,18 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::STATE,
             VarInt(state.id()),
         );
+        // Vanilla `Sniffer.getDefaultDimensions`: 0.4 lower while digging
+        let baby = entity.age.load(Ordering::Relaxed) < 0;
+        let dimensions = if state == SnifferState::Digging {
+            let size = Entity::type_dimensions(&EntityType::SNIFFER);
+            let digging = EntityDimensions::new(size.width, size.height - 0.4, 0.81);
+            if baby { digging.scale(0.5) } else { digging }
+        } else if baby {
+            Entity::baby_dimensions(&EntityType::SNIFFER)
+        } else {
+            Entity::type_dimensions(&EntityType::SNIFFER)
+        };
+        entity.set_default_dimensions(dimensions);
     }
 
     pub fn transition_to(&self, state: SnifferState) {
@@ -345,7 +358,7 @@ impl Mob for SnifferEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(state_id) = nbt.get_int("State") {
-            self.state.store(state_id, Ordering::Relaxed);
+            self.set_state(SnifferState::from_id(state_id));
         }
         if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
             self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);

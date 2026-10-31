@@ -32,7 +32,10 @@ use pumpkin_protocol::{
             emote::SEmote,
             emote_list::SEmoteList,
             interact::{Action, SInteract},
-            inventory_transaction::{SInventoryTransaction, TransactionData},
+            inventory_transaction::{
+                SInventoryTransaction, TransactionData, WINDOW_ID_ARMOUR, WINDOW_ID_INVENTORY,
+                WINDOW_ID_OFF_HAND,
+            },
             mob_equipment::SMobEquipment,
             player_action::{PlayerActionType as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
@@ -68,7 +71,6 @@ use crate::{
         player_command_send::PlayerCommandSendEvent,
         player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
-        player_toggle_flight_event::PlayerToggleFlightEvent,
     },
     server::{Server, seasonal_events},
     world::{BlockBreakingProgress, chunker},
@@ -100,10 +102,12 @@ fn descriptor_to_stack(desc: &NetworkItemDescriptor) -> ItemStack {
     }
 }
 
+/// The offhand is slot 1 of Bedrock's hand container (`HandSlot::Offhand`) in item stack requests
+pub(crate) const OFF_HAND_BEDROCK_SLOT: u32 = 1;
+
 const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option<usize> {
     match window_id {
-        0 => {
-            // WINDOW_ID_INVENTORY
+        WINDOW_ID_INVENTORY => {
             if slot < 9 {
                 // Hotbar: Bedrock 0-8 -> Screen Handler 36-44
                 Some(slot as usize + 36)
@@ -114,8 +118,7 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
                 None
             }
         }
-        120 => {
-            // WINDOW_ID_ARMOUR
+        WINDOW_ID_ARMOUR => {
             if slot < 4 {
                 // Armor: Bedrock 0-3 -> Screen Handler 5-8
                 Some(slot as usize + 5)
@@ -123,10 +126,9 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
                 None
             }
         }
-        119 => {
-            // WINDOW_ID_OFF_HAND
-            if slot == 0 {
-                // Offhand: Bedrock 0 -> Screen Handler 45
+        WINDOW_ID_OFF_HAND => {
+            if slot <= OFF_HAND_BEDROCK_SLOT {
+                // Offhand: Bedrock slot 1 of the hand container (Mainhand is 0) -> Screen Handler 45
                 Some(45)
             } else {
                 None
@@ -134,6 +136,90 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
         }
         _ => None,
     }
+}
+
+/// Bedrock container id, name and slot of a Java player-screen slot, the inverse of
+/// [`map_bedrock_slot_to_screen_handler`]. Like Geyser's `PlayerInventoryTranslator`.
+pub(crate) const fn bedrock_inventory_slot(
+    player_screen_slot: i16,
+) -> Option<(u32, ContainerName, u32)> {
+    match player_screen_slot {
+        5..=8 => Some((
+            WINDOW_ID_ARMOUR as u32,
+            ContainerName::Armor,
+            (player_screen_slot - 5) as u32,
+        )),
+        9..=35 => Some((
+            WINDOW_ID_INVENTORY as u32,
+            ContainerName::Inventory,
+            player_screen_slot as u32,
+        )),
+        36..=44 => Some((
+            WINDOW_ID_INVENTORY as u32,
+            ContainerName::Inventory,
+            (player_screen_slot - 36) as u32,
+        )),
+        45 => Some((
+            WINDOW_ID_OFF_HAND as u32,
+            ContainerName::Offhand,
+            OFF_HAND_BEDROCK_SLOT,
+        )),
+        _ => None,
+    }
+}
+
+/// Same as [`bedrock_inventory_slot`] for a `PlayerInventory` index
+pub(crate) const fn bedrock_player_inventory_slot(
+    index: usize,
+) -> Option<(u32, ContainerName, u32)> {
+    match index {
+        // Hotbar first on both sides
+        0..=35 => Some((
+            WINDOW_ID_INVENTORY as u32,
+            ContainerName::Inventory,
+            index as u32,
+        )),
+        // Feet to head here, head to feet on Bedrock
+        36..=39 => bedrock_inventory_slot((44 - index) as i16),
+        PlayerInventory::OFF_HAND_SLOT => bedrock_inventory_slot(45),
+        _ => None,
+    }
+}
+
+/// Sends one slot of the Bedrock player's own containers
+pub(crate) fn send_bedrock_inventory_slot(
+    bedrock: &BedrockClient,
+    (container_id, container_name, slot): (u32, ContainerName, u32),
+    stack: &ItemStack,
+) {
+    use pumpkin_protocol::bedrock::client::{
+        inventory_content::CInventoryContent, inventory_slot::CInventorySlot,
+    };
+
+    // Like Geyser, the offhand is always sent as a whole one-item container
+    if container_name == ContainerName::Offhand {
+        bedrock.try_enqueue_client_packet(&CInventoryContent {
+            container_id: VarUInt(container_id),
+            slots: vec![NetworkItemStackDescriptor::from(stack)],
+            full_container_name: FullContainerName {
+                container_name,
+                dynamic_id: None,
+            },
+            storage_item: NetworkItemStackDescriptor::default(),
+        });
+        return;
+    }
+
+    bedrock.try_enqueue_client_packet(&CInventorySlot {
+        container_id: VarUInt(container_id),
+        slot: VarUInt(slot),
+        full_container_name: Some(FullContainerName {
+            container_name,
+            dynamic_id: None,
+        }),
+        storage_item: None,
+        item: NetworkItemStackDescriptor::from(stack),
+    });
 }
 
 pub mod actor_event;
@@ -151,6 +237,7 @@ pub mod item_stack_request;
 pub(super) use item_stack_request::record_update;
 pub mod mob_equipment;
 pub mod modal_form_response;
+pub mod network_stack_latency;
 pub mod player_action;
 pub mod player_auth_input;
 pub mod player_block_action;
@@ -159,3 +246,52 @@ pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod respawn;
 pub mod set_local_player_as_initialized;
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ContainerName, OFF_HAND_BEDROCK_SLOT, WINDOW_ID_ARMOUR, WINDOW_ID_OFF_HAND,
+        bedrock_inventory_slot, bedrock_player_inventory_slot, map_bedrock_slot_to_screen_handler,
+    };
+
+    #[test]
+    fn player_screen_slots_round_trip_through_bedrock() {
+        for slot in 0..=45 {
+            let Some((container_id, _, bedrock_slot)) = bedrock_inventory_slot(slot) else {
+                // The crafting grid has no Bedrock inventory slot
+                assert!(slot < 5);
+                continue;
+            };
+            assert_eq!(
+                map_bedrock_slot_to_screen_handler(container_id as i32, bedrock_slot),
+                Some(slot as usize)
+            );
+        }
+    }
+
+    #[test]
+    fn player_inventory_slots_map_to_bedrock_containers() {
+        assert_eq!(
+            bedrock_player_inventory_slot(4),
+            Some((0, ContainerName::Inventory, 4))
+        );
+        // Chest
+        assert_eq!(
+            bedrock_player_inventory_slot(38),
+            Some((WINDOW_ID_ARMOUR as u32, ContainerName::Armor, 1))
+        );
+        // Head
+        assert_eq!(
+            bedrock_player_inventory_slot(39),
+            Some((WINDOW_ID_ARMOUR as u32, ContainerName::Armor, 0))
+        );
+        assert_eq!(
+            bedrock_player_inventory_slot(40),
+            Some((
+                WINDOW_ID_OFF_HAND as u32,
+                ContainerName::Offhand,
+                OFF_HAND_BEDROCK_SLOT
+            ))
+        );
+    }
+}

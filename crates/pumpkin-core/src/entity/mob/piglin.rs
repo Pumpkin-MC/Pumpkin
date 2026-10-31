@@ -18,7 +18,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::target_match::TargetMatch;
@@ -71,25 +70,12 @@ pub struct PiglinEntity {
     pub nearest_visible_player: Mutex<Option<Arc<Player>>>,
     pub near_repellent: AtomicBool,
     pub activity: AtomicCell<PiglinActivity>,
-    pub ambient_sound_time: AtomicI32,
 }
 
 impl PiglinEntity {
     pub const CONVERSION_TIME: i32 = 300;
     pub const INVENTORY_SIZE: usize = 8;
     pub const XP_REWARD: u32 = 5;
-    pub const AMBIENT_SOUND_INTERVAL: i32 = 80;
-
-    pub const ADULT_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.6,
-        height: 1.95,
-        eye_height: 1.79,
-    };
-    pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.49,
-        height: 0.98,
-        eye_height: 0.78,
-    };
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -114,7 +100,6 @@ impl PiglinEntity {
             nearest_visible_player: Mutex::new(None),
             near_repellent: AtomicBool::new(false),
             activity: AtomicCell::new(PiglinActivity::Idle),
-            ambient_sound_time: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(piglin);
         mob_arc.mob_entity.set_can_pick_up_loot(true);
@@ -214,12 +199,6 @@ impl PiglinEntity {
     pub fn set_baby(&self, baby: bool) {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
-        let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Self::ADULT_DIMENSIONS
-        });
     }
 
     #[must_use]
@@ -649,22 +628,6 @@ impl PiglinEntity {
         );
     }
 
-    fn tick_ambient_sound(&self) {
-        let living = &self.mob_entity.living_entity;
-        let alive = living.entity.is_alive() && living.health.load() > 0.0;
-        if alive
-            && rand::random_range(0..1000) < self.ambient_sound_time.fetch_add(1, Ordering::Relaxed)
-        {
-            self.reset_ambient_sound_time();
-            self.make_sound(PiglinAi::get_sound_for_activity(self, self.activity.load()));
-        }
-    }
-
-    fn reset_ambient_sound_time(&self) {
-        self.ambient_sound_time
-            .store(-Self::AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
-    }
-
     fn stop_holding_item_if_no_longer_admiring(&self) {
         if self.is_admiring() {
             return;
@@ -999,6 +962,19 @@ impl PiglinEntity {
 }
 
 impl Mob for PiglinEntity {
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(PiglinAi::get_sound_for_activity(self, self.activity.load()))
+    }
+
+    /// Vanilla `AbstractPiglin.playAmbientSound`: only while idle.
+    fn play_ambient_sound(&self) {
+        if self.activity.load() == PiglinActivity::Idle
+            && let Some(sound) = self.get_ambient_sound()
+        {
+            Self::make_sound(self, sound);
+        }
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityPiglinStep, 0.15, 1.0);
     }
@@ -1169,8 +1145,6 @@ impl Mob for PiglinEntity {
         if !entity.is_alive() {
             return;
         }
-        self.tick_ambient_sound();
-
         let world = entity.world.load();
         if self.is_converting(&world) {
             let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
@@ -1226,7 +1200,6 @@ impl Mob for PiglinEntity {
         _damage_type: pumpkin_data::damage::DamageType,
         source: Option<&dyn EntityBase>,
     ) {
-        self.reset_ambient_sound_time();
         if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
             self.drop_inventory();
         } else if let Some(attacker) = source {

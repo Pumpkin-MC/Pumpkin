@@ -89,6 +89,8 @@ impl AgeableMob for StriderEntity {
         &self.ageable_data
     }
 
+    // TODO: vanilla `Strider.finalizeSpawn` jockeys: 1/30 a zombified piglin rider (if monsters
+    // spawn), else 1/10 a baby strider rider; both drop the group's baby chance to 0.
     fn default_baby_spawn_chance(&self) -> f32 {
         crate::entity::ageable::STRIDER_BABY_SPAWN_CHANCE
     }
@@ -120,12 +122,10 @@ impl Mob for StriderEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("Saddle", self.is_saddled());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(saddle) = nbt.get_bool("Saddle") {
             self.set_saddled(saddle);
         } else if let Some(saddle_byte) = nbt.get_byte("Saddle") {

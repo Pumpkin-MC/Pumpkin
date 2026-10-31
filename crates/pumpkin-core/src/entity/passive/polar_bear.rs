@@ -7,7 +7,6 @@ use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
@@ -145,14 +144,6 @@ impl Mob for PolarBearEntity {
 
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
-    }
-
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

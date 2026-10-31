@@ -115,6 +115,10 @@ impl AgeableMob for CamelEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for CamelEntity {
@@ -124,6 +128,7 @@ impl Animal for CamelEntity {
     }
 }
 
+// TODO: Vanilla seats a second rider behind and moves the seats with the body animation.
 // TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
@@ -148,12 +153,10 @@ impl Mob for CamelEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("Saddle", self.is_saddled());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(saddle) = nbt.get_bool("Saddle") {
             self.set_saddled(saddle);
         }

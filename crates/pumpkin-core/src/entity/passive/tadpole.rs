@@ -7,7 +7,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -68,6 +67,8 @@ impl TadpoleEntity {
     }
 }
 
+// TODO: vanilla tadpoles are no `AgeableMob`; their age counts up from 0 and they turn into a
+// frog at 24000. Feeding should go through that age, not `age.fetch_add`.
 impl AgeableMob for TadpoleEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
@@ -84,14 +85,6 @@ impl Mob for TadpoleEntity {
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
-    }
-
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

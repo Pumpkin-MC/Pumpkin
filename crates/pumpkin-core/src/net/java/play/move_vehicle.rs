@@ -18,6 +18,7 @@ impl JavaClient {
             let vehicle_entity = vehicle.get_entity();
             vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+            vehicle.as_ref().position_rider(player.as_ref());
 
             let world = player.world();
             let vehicle_pos = pos.to_block_pos();
@@ -49,8 +50,7 @@ impl JavaClient {
         } else {
             player.entered_lava_pos.store(None);
         }
-        entity.set_pos(pos);
-        let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+        let distance = last_pos.squared_distance_to_vec(&entity.pos.load()).sqrt();
         let cm = (distance * 100.0).round() as i32;
         if cm > 0 {
             let stat = player.get_movement_statistic();

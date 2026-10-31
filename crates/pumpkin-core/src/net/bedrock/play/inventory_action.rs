@@ -41,11 +41,12 @@ impl BedrockClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for legacy_slot in &packet.legacy_set_item_slots {
-                let mapped_window_id = match legacy_slot.container_id {
-                    28 | 29 => 0,    // HotBar or Inventory
-                    6 | 120 => 120,  // Armor
-                    34 | 119 => 119, // Offhand
-                    other => other as i32,
+                // Legacy slots may name the container instead of its id
+                let mapped_window_id = match i32::from(legacy_slot.container_id) {
+                    28 | 29 => WINDOW_ID_INVENTORY, // HotBar or Inventory
+                    6 | WINDOW_ID_ARMOUR => WINDOW_ID_ARMOUR,
+                    34 | WINDOW_ID_OFF_HAND => WINDOW_ID_OFF_HAND,
+                    other => other,
                 };
                 for &slot_id in &legacy_slot.slots {
                     if let Some(screen_slot) =
@@ -110,24 +111,7 @@ impl BedrockClient {
                         .are_equal(&item_stack);
 
                     if !is_armor_equipped {
-                        if (5..9).contains(&screen_slot) {
-                            player.enqueue_equipment_change(
-                                &match screen_slot {
-                                    5 => EquipmentSlot::HEAD,
-                                    6 => EquipmentSlot::CHEST,
-                                    7 => EquipmentSlot::LEGS,
-                                    8 => EquipmentSlot::FEET,
-                                    _ => unreachable!(),
-                                },
-                                &item_stack,
-                            );
-                        } else if (36..45).contains(&screen_slot) {
-                            let hotbar_slot = screen_slot - 36;
-                            if player.inventory().get_selected_slot() == hotbar_slot as u8 {
-                                let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
-                                player.living_entity.send_equipment_changes(equipment);
-                            }
-                        }
+                        player.sync_screen_slot_equipment(screen_slot, &item_stack);
                     }
 
                     player_screen_handler

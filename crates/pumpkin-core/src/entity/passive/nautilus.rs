@@ -21,6 +21,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
@@ -35,6 +36,7 @@ pub struct NautilusEntity {
     pub dash_cooldown: AtomicI32,
     pub is_saddled: AtomicBool,
     pub inventory: Mutex<Vec<ItemStack>>,
+    pub ageable_data: AgeableData,
 }
 
 impl NautilusEntity {
@@ -48,6 +50,7 @@ impl NautilusEntity {
             dash_cooldown: AtomicI32::new(0),
             is_saddled: AtomicBool::new(false),
             inventory: Mutex::new(vec![ItemStack::new(0, &pumpkin_data::item::Item::AIR); 9]),
+            ageable_data: AgeableData::default(),
         };
 
         Arc::new(nautilus)
@@ -191,7 +194,17 @@ impl CustomSound for NautilusEntity {
     }
 }
 
+impl AgeableMob for NautilusEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for NautilusEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }

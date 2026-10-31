@@ -123,6 +123,10 @@ impl Animal for SkeletonHorseEntity {
 }
 
 impl Mob for SkeletonHorseEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }
@@ -148,7 +152,6 @@ impl Mob for SkeletonHorseEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_bool("Tame", self.is_tame());
         nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
         if let Some(owner) = self.owner.load() {
@@ -157,7 +160,6 @@ impl Mob for SkeletonHorseEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(tame) = nbt.get_bool("Tame") {
             self.set_tame(tame);
         }

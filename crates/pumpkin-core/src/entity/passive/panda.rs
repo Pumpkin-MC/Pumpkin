@@ -269,13 +269,11 @@ impl Mob for PandaEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_string("MainGene", self.get_main_gene().as_str().to_string());
         nbt.put_string("HiddenGene", self.get_hidden_gene().as_str().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(main) = nbt.get_string("MainGene") {
             self.set_main_gene(PandaGene::from_name(main));
         }

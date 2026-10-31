@@ -281,6 +281,10 @@ impl Animal for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }
@@ -298,7 +302,6 @@ impl Mob for LlamaEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_int("Variant", self.get_variant().id());
         nbt.put_int("Strength", self.get_strength());
         nbt.put_bool("ChestedHorse", self.has_chest());
@@ -310,7 +313,6 @@ impl Mob for LlamaEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(variant) = nbt.get_int("Variant") {
             self.set_variant(LlamaVariant::from_id(variant));
         }

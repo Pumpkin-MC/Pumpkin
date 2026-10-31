@@ -28,7 +28,7 @@ use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
+    ageable::{AgeableData, AgeableMob, BABY_START_AGE},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -455,7 +455,7 @@ impl Mob for FoxEntity {
         };
         self.set_variant(variant);
         if size >= 2 {
-            self.get_entity().set_age(-24000);
+            self.set_age(BABY_START_AGE);
         }
         self.set_target_goals();
         self.mob_entity.finalize_spawn_base();

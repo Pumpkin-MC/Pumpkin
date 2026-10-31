@@ -4,7 +4,10 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
-use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
+use crate::entity::{
+    EntityBase, ageable::get_speed_up_seconds_when_feeding, mob::Mob, player::Player,
+    r#type::from_type,
+};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -97,26 +100,11 @@ pub trait Animal: Mob {
                 return true;
             }
 
-            if age < 0 {
+            if let Some(ageable) = self.as_ageable()
+                && ageable.can_age_up()
+            {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-                let speedup = (-age / 10).max(1);
-                mob_entity
-                    .living_entity
-                    .entity
-                    .age
-                    .fetch_add(speedup, std::sync::atomic::Ordering::Relaxed);
-
-                let entity = &mob_entity.living_entity.entity;
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    7,
-                    Particle::HappyVillager,
-                );
+                ageable.age_up(get_speed_up_seconds_when_feeding(-age), true);
                 self.play_eating_sound(ambient_sound);
                 return true;
             }

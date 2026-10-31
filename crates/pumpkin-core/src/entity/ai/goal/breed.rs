@@ -65,6 +65,10 @@ impl BreedGoal {
             || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
             |animal| animal.get_breed_offspring(mate),
         );
+        // Vanilla `getBreedOffspring` returns null without a baby form: no offspring.
+        if !baby.get_mob().is_some_and(Mob::spawn_as_baby) {
+            return;
+        }
         let experience = mob.get_random().random_range(1..8);
         let Some(experience) = mob.approve_breeding(
             mate.get_entity().entity_id,
@@ -115,7 +119,6 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        baby.get_entity().set_age(-24000);
         world_full.spawn_entity(baby);
 
         world_full.send_entity_status(

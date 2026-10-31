@@ -142,6 +142,17 @@ impl SlimeEntity {
         }
     }
 
+    /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
+    /// melee range and in sight
+    pub fn deal_damage(&self, player: &crate::entity::player::Player) {
+        if self.entity.is_in_attack_range(player)
+            && self.has_line_of_sight(player.get_entity())
+            && self.entity.try_attack(self, player)
+        {
+            self.on_attack(player);
+        }
+    }
+
     pub fn get_size(&self) -> i32 {
         self.entity
             .living_entity
@@ -263,6 +274,17 @@ impl CustomSound for SlimeEntity {
 }
 
 impl Mob for SlimeEntity {
+    /// Vanilla `AbstractCubeMob.getPassengerAttachmentPoint`: sunk into the top by size.
+    fn mob_passenger_attachment_point(&self, _passenger: &Entity) -> Vector3<f64> {
+        let entity = self.get_entity();
+        let sink = 0.015_625 * f64::from(self.get_size()) * f64::from(entity.scale.load());
+        Vector3::new(
+            0.0,
+            f64::from(entity.entity_dimension.load().height) - sink,
+            0.0,
+        )
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }
@@ -325,13 +347,13 @@ impl Mob for SlimeEntity {
         self.speed_modifier.store(None);
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
-            // dealDamage
-            let damaged = self.entity.try_attack(self, &**player);
-            if damaged {
-                self.on_attack(&**player);
-            }
+            self.deal_damage(player);
         }
     }
 
@@ -490,9 +512,7 @@ impl SlimeFloatGoal {
 
 impl Goal for SlimeFloatGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.slime.entity.living_entity.entity;
-        entity.touching_water.load(Ordering::Relaxed)
-            || entity.touching_lava.load(Ordering::Relaxed)
+        self.slime.entity.living_entity.entity.is_in_liquid()
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {

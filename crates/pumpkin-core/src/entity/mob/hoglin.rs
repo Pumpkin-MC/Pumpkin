@@ -8,9 +8,12 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
+use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
@@ -25,7 +28,7 @@ pub struct HoglinEntity {
     pub immune_to_zombification: AtomicBool,
     pub time_in_overworld: AtomicI32,
     pub cannot_be_hunted: AtomicBool,
-    pub is_baby: AtomicBool,
+    pub ageable_data: AgeableData,
 }
 
 impl HoglinEntity {
@@ -69,7 +72,7 @@ impl HoglinEntity {
             immune_to_zombification: AtomicBool::new(false),
             time_in_overworld: AtomicI32::new(0),
             cannot_be_hunted: AtomicBool::new(false),
-            is_baby: AtomicBool::new(false),
+            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(hoglin);
         let mob_weak: Weak<dyn Mob> = {
@@ -153,7 +156,7 @@ impl HoglinEntity {
         }
 
         // Vanilla ConversionType.SINGLE keeps the baby state.
-        if self.is_baby.load(Ordering::Relaxed)
+        if self.is_baby()
             && let Some(mob) = zoglin.get_mob()
         {
             mob.spawn_as_baby();
@@ -164,6 +167,20 @@ impl HoglinEntity {
     }
 }
 
+impl AgeableMob for HoglinEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+
+    fn age_boundary_reached(&self) {
+        let damage = if self.is_baby() { 0.5 } else { 6.0 };
+        self.mob_entity
+            .living_entity
+            .set_attribute_base(&Attributes::ATTACK_DAMAGE, damage);
+    }
+}
+
+// TODO: vanilla hoglins are `Animal`s: crimson fungus breeds adults and grows babies.
 impl Mob for HoglinEntity {
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityHoglinStep, 0.15, 1.0);
@@ -173,26 +190,31 @@ impl Mob for HoglinEntity {
         &self.mob_entity
     }
 
-    fn spawn_as_baby(&self) -> bool {
-        self.is_baby.store(true, Ordering::Relaxed);
-        self.mob_entity.set_baby_by_age();
-        true
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
     }
 
-    fn get_base_experience_reward(&self) -> u32 {
-        if self.mob_entity.living_entity.is_baby() {
-            Self::BABY_XP_REWARD
-        } else {
-            Self::XP_REWARD
+    fn finalize_spawn(
+        &self,
+        _world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        if self.get_random().random::<f32>() < 0.2 {
+            self.set_baby(true);
         }
-    }
-
-    fn should_drop_loot(&self) -> bool {
-        self.mob_entity.living_entity.should_drop_loot()
+        self.finalize_spawn_super(group_data)
     }
 
     fn should_drop_experience(&self) -> bool {
         true
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        if self.is_baby() {
+            Self::BABY_XP_REWARD
+        } else {
+            Self::XP_REWARD
+        }
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

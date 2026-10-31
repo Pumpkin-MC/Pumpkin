@@ -18,37 +18,17 @@ impl JavaClient {
 
         let entity = &player.get_entity();
         match command.action {
-            Action::StartSprinting => {
-                if !entity.is_sprinting() {
-                    send_cancellable_blocking! {{
-                        server;
-                        PlayerToggleSprintEvent::new(player.clone(), true);
-                        'after: {
-                            player.set_sprinting(event.is_sprinting);
-                            player.update_player_pose();
-                        }
-                    }}
-                }
-            }
-            Action::StopSprinting => {
-                if entity.is_sprinting() {
-                    send_cancellable_blocking! {{
-                        server;
-                        PlayerToggleSprintEvent::new(player.clone(), false);
-                        'after: {
-                            player.set_sprinting(event.is_sprinting);
-                            player.update_player_pose();
-                        }
-                    }}
-                }
-            }
+            Action::StartSprinting => player.apply_sprint_input(server, true),
+            Action::StopSprinting => player.apply_sprint_input(server, false),
             Action::LeaveBed => player.wake_up(),
 
             Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
                 debug!("todo");
             }
             Action::StartFlyingElytra => {
-                player.try_start_fall_flying(server);
+                if !player.try_to_start_fall_flying(server) {
+                    entity.stop_fall_flying();
+                }
             }
             // <= 1.21.5
             Action::StartSneaking | Action::StopSneaking => {
