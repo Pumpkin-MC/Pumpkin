@@ -2230,14 +2230,14 @@ impl World {
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
 
-        let spawn_list = Arc::new(natural_spawner::get_filtered_spawning_categories(
+        let spawn_list = natural_spawner::get_filtered_spawning_categories(
             &spawn_state,
             spawn_mobs,
             spawn_enemies,
             spawn_passives,
-        ));
+        );
 
-        // 5. Parallel Chunk Spawners via Rayon
+        // 5. Sequential Chunk Spawners (vanilla `tickSpawningChunks`)
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
@@ -2248,15 +2248,9 @@ impl World {
 
             spawning_chunks.shuffle(&mut rng());
 
-            let world = self.clone();
-            spawning_chunks.par_chunks(8).for_each(|batch| {
-                let world = world.clone();
-                let s_list = spawn_list.clone();
-                let s_state = spawn_state.clone();
-                for (pos, chunk) in batch {
-                    world.tick_spawning_chunk(*pos, chunk, &s_list, &s_state);
-                }
-            });
+            for (pos, chunk) in spawning_chunks {
+                self.tick_spawning_chunk(pos, &chunk, &spawn_list, &spawn_state);
+            }
         }
 
         if spawn_mobs && self.dimension == Dimension::OVERWORLD {
