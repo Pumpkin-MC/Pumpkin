@@ -203,7 +203,7 @@ impl CrashReport {
         writeln_output!(
             &mut output,
             "Server compiled with Rust {}",
-            rustc_version_runtime::version()
+            env!("RUSTC_VERSION")
         );
 
         if sysinfo::IS_SUPPORTED_SYSTEM {
