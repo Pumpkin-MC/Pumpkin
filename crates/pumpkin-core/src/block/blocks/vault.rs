@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{LadderLikeProperties, VaultLikeProperties, VaultState};
+use pumpkin_data::block_properties::{VaultLikeProperties, VaultState};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -17,7 +17,7 @@ pub struct VaultBlock;
 
 impl BlockBehaviour for VaultBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = LadderLikeProperties::default(args.block);
+        let mut props = VaultLikeProperties::default(args.block);
         props.facing = args
             .player
             .living_entity
