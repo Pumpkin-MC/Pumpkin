@@ -5113,13 +5113,14 @@ impl Player {
         );
         crate::entity::mob::neutral::tell_neutral_mobs_player_died(self, &self.world());
         let block_pos = self.position().to_block_pos();
-        // Vanilla `ServerPlayer` records this on death for the recovery compass.
+        // Vanilla `ServerPlayer` records the containing (floored) block
+        // position on death for the recovery compass.
         *self
             .last_death_location
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((
             ResourceLocation::from(self.world().dimension.minecraft_name),
-            block_pos,
+            BlockPos::floored_v(self.position()),
         ));
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
