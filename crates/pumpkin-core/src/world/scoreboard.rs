@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
@@ -18,7 +19,10 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use tracing::warn;
 
 use super::World;
-use crate::entity::player::Player;
+use crate::{entity::player::Player, net::bedrock::BedrockClient};
+
+#[cfg(test)]
+mod tests;
 
 pub trait ScoreboardTarget: Send + Sync {
     fn send_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
@@ -873,55 +877,103 @@ pub struct BedrockScoreboard {
     pub scores: FxHashMap<(String, String), i32>,
 }
 
-impl BedrockScoreboard {
-    pub fn add_objective(&mut self, player: &Player, objective: BedrockObjective) {
-        let be_update = BSetDisplayObjective {
-            display_slot_name: "sidebar".to_string(),
-            objective_name: objective.name.clone(),
-            objective_display_name: objective.display_name.clone(),
-            criteria_name: "dummy".to_string(),
-            sort_order: VarInt(match objective.sort_order {
-                BedrockSortOrder::Ascending => 0,
-                BedrockSortOrder::Descending => 1,
-            }),
-        };
-        player.try_enqueue_packet_editioned(
-            &pumpkin_protocol::java::client::play::CUpdateObjectives::new(
-                objective.name.clone(),
-                pumpkin_protocol::java::client::play::Mode::Add,
-                TextComponent::text(objective.display_name.clone()),
-                pumpkin_protocol::java::client::play::RenderType::Integer,
-                None,
-            ),
-            &be_update,
-        );
+fn bedrock_score_entry(entity_name: &str, objective_name: &str, value: i32) -> BScoreEntry {
+    // IDs must survive string reallocations, score changes and scoreboard replay.
+    let mut hasher = DefaultHasher::new();
+    (entity_name, objective_name).hash(&mut hasher);
+    BScoreEntry {
+        scoreboard_id: i64::from_ne_bytes(hasher.finish().to_ne_bytes()),
+        objective_name: objective_name.to_owned(),
+        score: VarInt(value),
+        entry_type: VarInt(3), // Fake player / Literal
+        entity_unique_id: 0,
+        custom_name: entity_name.to_owned(),
+    }
+}
 
-        self.objectives.insert(objective.name.clone(), objective);
+enum BedrockObjectivePacket {
+    Remove(BRemoveObjective),
+    Display(BSetDisplayObjective),
+    Scores(BSetScore),
+}
+
+impl BedrockObjectivePacket {
+    fn send(&self, client: &BedrockClient) {
+        match self {
+            Self::Remove(packet) => client.try_enqueue_client_packet(packet),
+            Self::Display(packet) => client.try_enqueue_client_packet(packet),
+            Self::Scores(packet) => client.try_enqueue_client_packet(packet),
+        }
+    }
+}
+
+impl BedrockScoreboard {
+    fn objective_packets(&self, name: &str) -> Vec<BedrockObjectivePacket> {
+        let objective = self.objectives.get(name);
+        let mut slots: Vec<_> = self
+            .display_slots
+            .iter()
+            .filter(|(_, objective_name)| objective_name.as_str() == name)
+            .map(|(slot, _)| *slot)
+            .collect();
+        if slots.is_empty() {
+            slots.push(BedrockDisplaySlot::Sidebar);
+        }
+
+        // Bedrock objective changes require recreating the display and restoring its rows.
+        let mut packets = vec![BedrockObjectivePacket::Remove(BRemoveObjective {
+            objective_name: name.to_owned(),
+        })];
+        for slot in slots {
+            packets.push(BedrockObjectivePacket::Display(BSetDisplayObjective {
+                display_slot_name: slot.to_str().to_owned(),
+                objective_name: name.to_owned(),
+                objective_display_name: objective.map_or_else(
+                    || name.to_owned(),
+                    |objective| objective.display_name.clone(),
+                ),
+                criteria_name: "dummy".to_owned(),
+                sort_order: VarInt(match objective.map(|objective| objective.sort_order) {
+                    Some(BedrockSortOrder::Descending) => 1,
+                    _ => 0,
+                }),
+            }));
+        }
+        packets.push(BedrockObjectivePacket::Scores(BSetScore {
+            action: VarInt(0),
+            entries: self
+                .scores
+                .iter()
+                .filter(|((_, objective_name), _)| objective_name == name)
+                .map(|((entity, objective), value)| bedrock_score_entry(entity, objective, *value))
+                .collect(),
+        }));
+        packets
+    }
+
+    pub fn add_objective(&mut self, player: &Player, objective: BedrockObjective) {
+        self.set_objective(player, objective, Mode::Add);
     }
 
     pub fn update_objective(&mut self, player: &Player, objective: BedrockObjective) {
-        let be_update = BSetDisplayObjective {
-            display_slot_name: "sidebar".to_string(),
-            objective_name: objective.name.clone(),
-            objective_display_name: objective.display_name.clone(),
-            criteria_name: "dummy".to_string(),
-            sort_order: VarInt(match objective.sort_order {
-                BedrockSortOrder::Ascending => 0,
-                BedrockSortOrder::Descending => 1,
-            }),
-        };
-        player.try_enqueue_packet_editioned(
-            &pumpkin_protocol::java::client::play::CUpdateObjectives::new(
-                objective.name.clone(),
-                pumpkin_protocol::java::client::play::Mode::Update,
-                TextComponent::text(objective.display_name.clone()),
-                pumpkin_protocol::java::client::play::RenderType::Integer,
-                None,
-            ),
-            &be_update,
-        );
+        self.set_objective(player, objective, Mode::Update);
+    }
 
-        self.objectives.insert(objective.name.clone(), objective);
+    fn set_objective(&mut self, player: &Player, objective: BedrockObjective, mode: Mode) {
+        player.try_send_client_packet(&CUpdateObjectives::new(
+            objective.name.clone(),
+            mode,
+            TextComponent::text(objective.display_name.clone()),
+            RenderType::Integer,
+            None,
+        ));
+        let name = objective.name.clone();
+        self.objectives.insert(name.clone(), objective);
+        if let Some(client) = player.client.bedrock() {
+            for packet in self.objective_packets(&name) {
+                packet.send(client);
+            }
+        }
     }
 
     pub fn remove_objective(&mut self, player: &Player, name: &str) {
@@ -949,34 +1001,33 @@ impl BedrockScoreboard {
         slot: BedrockDisplaySlot,
         objective_name: Option<&str>,
     ) {
-        let obj_name_str = objective_name.unwrap_or("");
-        let display_name = objective_name
-            .and_then(|name| self.objectives.get(name))
-            .map_or_else(|| obj_name_str.to_string(), |o| o.display_name.clone());
-
-        let be_display = BSetDisplayObjective {
-            display_slot_name: slot.to_str().to_string(),
-            objective_name: obj_name_str.to_string(),
-            objective_display_name: display_name,
-            criteria_name: "dummy".to_string(),
-            sort_order: VarInt(0),
-        };
-        player.try_enqueue_packet_editioned(
-            &pumpkin_protocol::java::client::play::CDisplayObjective::new(
-                match slot {
-                    BedrockDisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
-                    BedrockDisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
-                    BedrockDisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
-                },
-                obj_name_str.to_string(),
-            ),
-            &be_display,
-        );
+        player.try_send_client_packet(&CDisplayObjective::new(
+            match slot {
+                BedrockDisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
+                BedrockDisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
+                BedrockDisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
+            },
+            objective_name.unwrap_or("").to_owned(),
+        ));
 
         if let Some(name) = objective_name {
-            self.display_slots.insert(slot, name.to_string());
+            self.display_slots.insert(slot, name.to_owned());
+            if let Some(client) = player.client.bedrock() {
+                for packet in self.objective_packets(name) {
+                    packet.send(client);
+                }
+            }
         } else {
             self.display_slots.remove(&slot);
+            if let Some(client) = player.client.bedrock() {
+                client.try_enqueue_client_packet(&BSetDisplayObjective {
+                    display_slot_name: slot.to_str().to_owned(),
+                    objective_name: String::new(),
+                    objective_display_name: String::new(),
+                    criteria_name: "dummy".to_owned(),
+                    sort_order: VarInt(0),
+                });
+            }
         }
     }
 
@@ -1000,7 +1051,7 @@ impl BedrockScoreboard {
         );
         let be_score = BSetScore {
             action: VarInt(0),
-            entries: vec![],
+            entries: vec![bedrock_score_entry(entity_name, objective_name, value)],
         };
         player.try_enqueue_packet_editioned(
             &pumpkin_protocol::java::client::play::CUpdateScore::new(
@@ -1039,7 +1090,7 @@ impl BedrockScoreboard {
     pub fn remove_score(&mut self, player: &Player, entity_name: &str, objective_name: &str) {
         let be_score = BSetScore {
             action: VarInt(1),
-            entries: vec![],
+            entries: vec![bedrock_score_entry(entity_name, objective_name, 0)],
         };
         player.try_enqueue_packet_editioned(
             &pumpkin_protocol::java::client::play::CResetScore::new(
@@ -1055,7 +1106,12 @@ impl BedrockScoreboard {
     pub fn reset_scores_for_entity(&mut self, player: &Player, entity_name: &str) {
         let be_score = BSetScore {
             action: VarInt(1),
-            entries: vec![],
+            entries: self
+                .scores
+                .iter()
+                .filter(|((entity, _), _)| entity == entity_name)
+                .map(|((entity, objective), value)| bedrock_score_entry(entity, objective, *value))
+                .collect(),
         };
         player.try_enqueue_packet_editioned(
             &pumpkin_protocol::java::client::play::CResetScore::new(entity_name.to_string(), None),
@@ -1065,76 +1121,45 @@ impl BedrockScoreboard {
     }
 
     pub fn send_to_player(&self, player: &Player) {
+        if let Some(client) = player.client.bedrock() {
+            let mut names: Vec<_> = self.objectives.keys().collect();
+            // Explicit display slots take precedence over the default sidebar.
+            names.sort_by_key(|name| self.display_slots.values().any(|value| value == *name));
+            for name in names {
+                for packet in self.objective_packets(name) {
+                    packet.send(client);
+                }
+            }
+            return;
+        }
+
         for objective in self.objectives.values() {
-            let be_update = BSetDisplayObjective {
-                display_slot_name: "sidebar".to_string(),
-                objective_name: objective.name.clone(),
-                objective_display_name: objective.display_name.clone(),
-                criteria_name: "dummy".to_string(),
-                sort_order: VarInt(match objective.sort_order {
-                    BedrockSortOrder::Ascending => 0,
-                    BedrockSortOrder::Descending => 1,
-                }),
-            };
-            player.try_enqueue_packet_editioned(
-                &pumpkin_protocol::java::client::play::CUpdateObjectives::new(
-                    objective.name.clone(),
-                    pumpkin_protocol::java::client::play::Mode::Add,
-                    TextComponent::text(objective.display_name.clone()),
-                    pumpkin_protocol::java::client::play::RenderType::Integer,
-                    None,
-                ),
-                &be_update,
-            );
+            player.try_send_client_packet(&CUpdateObjectives::new(
+                objective.name.clone(),
+                Mode::Add,
+                TextComponent::text(objective.display_name.clone()),
+                RenderType::Integer,
+                None,
+            ));
         }
-
         for (slot, objective_name) in &self.display_slots {
-            let display_name = self
-                .objectives
-                .get(objective_name)
-                .map_or_else(|| objective_name.clone(), |o| o.display_name.clone());
-            let be_display = BSetDisplayObjective {
-                display_slot_name: slot.to_str().to_string(),
-                objective_name: objective_name.clone(),
-                objective_display_name: display_name,
-                criteria_name: "dummy".to_string(),
-                sort_order: VarInt(0),
-            };
-            player.try_enqueue_packet_editioned(
-                &pumpkin_protocol::java::client::play::CDisplayObjective::new(
-                    match slot {
-                        BedrockDisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
-                        BedrockDisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
-                        BedrockDisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
-                    },
-                    objective_name.clone(),
-                ),
-                &be_display,
-            );
+            player.try_send_client_packet(&CDisplayObjective::new(
+                match slot {
+                    BedrockDisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
+                    BedrockDisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
+                    BedrockDisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
+                },
+                objective_name.clone(),
+            ));
         }
-
         for ((entity_name, objective_name), value) in &self.scores {
-            let score = ScoreboardScore::new(
+            player.try_send_client_packet(&CUpdateScore::new(
                 entity_name.clone(),
                 objective_name.clone(),
                 VarInt(*value),
                 None,
                 None,
-            );
-            let be_score = BSetScore {
-                action: VarInt(0),
-                entries: vec![],
-            };
-            player.try_enqueue_packet_editioned(
-                &pumpkin_protocol::java::client::play::CUpdateScore::new(
-                    score.entity_name,
-                    score.objective_name,
-                    score.value,
-                    score.display_name,
-                    score.number_format,
-                ),
-                &be_score,
-            );
+            ));
         }
     }
 }
