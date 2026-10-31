@@ -34,6 +34,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_util::HeightMap;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
@@ -61,6 +62,9 @@ pub trait BlockPlacer {
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
     fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState);
     fn add_block_entity(&mut self, nbt: NbtCompound);
+    /// The first free y above the heightmap column, like vanilla `LevelReader.getHeight`, or
+    /// `None` if this placer has no such heightmap.
+    fn get_height(&self, heightmap: HeightMap, x: i32, z: i32) -> Option<i32>;
 }
 
 /// Places a template at a world origin with an un-rotated XZ offset.
@@ -161,18 +165,14 @@ pub fn place_template_with_options(
         let wy = origin.y + local_pos.y;
         let wz = world_z + local_pos.z;
 
+        // The y is checked after the processors, since gravity can move the block.
         if let Some(bbox) = chunk_box
-            && (wx < bbox.min.x
-                || wx > bbox.max.x
-                || wy < bbox.min.y
-                || wy > bbox.max.y
-                || wz < bbox.min.z
-                || wz > bbox.max.z)
+            && (wx < bbox.min.x || wx > bbox.max.x || wz < bbox.min.z || wz > bbox.max.z)
         {
             continue;
         }
 
-        let world_pos = Vector3::new(wx, wy, wz);
+        let mut world_pos = Vector3::new(wx, wy, wz);
 
         if apply_waterlogging
             && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
@@ -195,6 +195,13 @@ pub fn place_template_with_options(
         let mut rng =
             LegacyRand::from_seed(hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64);
         for processor in processors {
+            // Mirrors `GravityProcessor`: the block keeps its template y on top of the column.
+            if let StructureProcessor::Gravity { heightmap, offset } = processor {
+                if let Some(height) = placer.get_height(*heightmap, world_pos.x, world_pos.z) {
+                    world_pos.y = height + offset + block.pos.y;
+                }
+                continue;
+            }
             let Some(processed_state) = processor.process_with_context(
                 placer,
                 world_pos,
@@ -209,7 +216,9 @@ pub fn place_template_with_options(
             };
             state = processed_state;
         }
-        if !should_place {
+        if !should_place
+            || chunk_box.is_some_and(|bbox| world_pos.y < bbox.min.y || world_pos.y > bbox.max.y)
+        {
             continue;
         }
         // Legacy pool elements ignore air after jigsaw replacement and custom processors.
@@ -217,7 +226,7 @@ pub fn place_template_with_options(
             continue;
         }
 
-        placer.set_block_state(&Vector3::new(wx, wy, wz), state);
+        placer.set_block_state(&world_pos, state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
         let final_block = pumpkin_data::Block::from_id(state.id.to_block_id());
@@ -227,9 +236,9 @@ pub fn place_template_with_options(
             let mut placed_nbt = NbtCompound::new();
 
             placed_nbt.put_string("id", fallback_id.to_string());
-            placed_nbt.put_int("x", wx);
-            placed_nbt.put_int("y", wy);
-            placed_nbt.put_int("z", wz);
+            placed_nbt.put_int("x", world_pos.x);
+            placed_nbt.put_int("y", world_pos.y);
+            placed_nbt.put_int("z", world_pos.z);
 
             if let Some(template_nbt) = &block_entity_nbt {
                 for (key, value) in &template_nbt.child_tags {
@@ -242,7 +251,10 @@ pub fn place_template_with_options(
             if placed_nbt.get_string("LootTable").is_some()
                 && placed_nbt.get_long("LootTableSeed").is_none()
             {
-                let mut random = LegacyRand::from_seed(hash_block_pos(wx, wy, wz) as u64);
+                let mut random =
+                    LegacyRand::from_seed(
+                        hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64
+                    );
                 placed_nbt.put_long("LootTableSeed", random.next_i64());
             }
 
@@ -396,6 +408,10 @@ mod tests {
         }
 
         fn add_block_entity(&mut self, _nbt: NbtCompound) {}
+
+        fn get_height(&self, _heightmap: HeightMap, _x: i32, _z: i32) -> Option<i32> {
+            None
+        }
     }
 
     #[test]

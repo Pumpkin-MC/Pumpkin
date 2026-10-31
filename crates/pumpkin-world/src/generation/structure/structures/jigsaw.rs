@@ -5,8 +5,9 @@ use crate::generation::structure::structures::{
     StructureGenerator, StructureGeneratorContext, StructurePieceBase, StructurePosition,
 };
 use crate::generation::structure::template::{
-    BlockMirror, BlockPlacer, BlockRotation, PaletteEntry, StructureTemplate,
+    BlockMirror, BlockPlacer, BlockRotation, PaletteEntry, StructureProcessor, StructureTemplate,
 };
+use pumpkin_util::HeightMap;
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -18,6 +19,20 @@ use std::sync::Arc;
 pub enum JigsawProjection {
     Rigid,
     TerrainMatching,
+}
+
+impl JigsawProjection {
+    /// Mirrors `StructureTemplatePool.Projection.getProcessors`.
+    const fn processors(self) -> &'static [StructureProcessor] {
+        const TERRAIN_MATCHING: &[StructureProcessor] = &[StructureProcessor::Gravity {
+            heightmap: HeightMap::WorldSurfaceWg,
+            offset: -1,
+        }];
+        match self {
+            Self::Rigid => &[],
+            Self::TerrainMatching => TERRAIN_MATCHING,
+        }
+    }
 }
 
 static DYNAMIC_POOLS: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
@@ -449,6 +464,26 @@ impl PoolElementKind {
 }
 
 impl PoolElement {
+    /// The template's processor list followed by the projection's processors, like
+    /// `SinglePoolElement.getSettings`.
+    fn template_processors(&self, processor_list: &ProcessorListRef) -> Arc<[StructureProcessor]> {
+        let processors = match processor_list {
+            ProcessorListRef::Named(name) => {
+                crate::generation::structure::template::processor::load_processor_list(name)
+            }
+            ProcessorListRef::Empty => Arc::from([]),
+        };
+        let projection_processors = self.projection.processors();
+        if projection_processors.is_empty() {
+            return processors;
+        }
+        processors
+            .iter()
+            .chain(projection_processors)
+            .cloned()
+            .collect()
+    }
+
     #[must_use]
     pub const fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
         match self.kind {
@@ -830,12 +865,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
                     origin.y,
                     origin.z + corner.1.min(0),
                 );
-                let processors = match processor_list {
-                    ProcessorListRef::Named(name) => {
-                        crate::generation::structure::template::processor::load_processor_list(name)
-                    }
-                    ProcessorListRef::Empty => Arc::from([]),
-                };
+                let processors = self.element.template_processors(processor_list);
                 crate::generation::structure::template::place_template(
                     chunk,
                     &template,
@@ -891,12 +921,7 @@ pub fn place_pool_element_templates(
                 origin.y,
                 origin.z + corner.1.min(0),
             );
-            let processors = match processor_list {
-                ProcessorListRef::Named(name) => {
-                    crate::generation::structure::template::processor::load_processor_list(name)
-                }
-                ProcessorListRef::Empty => Arc::from([]),
-            };
+            let processors = piece.element.template_processors(processor_list);
             crate::generation::structure::template::place_template_with_options(
                 placer,
                 &template,
