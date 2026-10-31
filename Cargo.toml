@@ -271,6 +271,7 @@ wasmtime-wasi-http = { version = "50.0.0", default-features = false, features = 
 hyper = { version = "^1.12", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
 subtle = { version = "2.6", default-features = false }
+percent-encoding = { version = "2.3", default-features = false, features = ["alloc"] }
 webrtc = { version = "0.21.1" }
 async-trait = "0.1"
 wit-bindgen = { version = "0.63", default-features = false, features = ["macros"] }

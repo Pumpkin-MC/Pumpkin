@@ -70,6 +70,7 @@ hex.workspace = true
 
 # authentication
 reqwest = { workspace = true, features = ["json"] }
+percent-encoding.workspace = true
 rustls.workspace = true
 
 sha1.workspace = true
