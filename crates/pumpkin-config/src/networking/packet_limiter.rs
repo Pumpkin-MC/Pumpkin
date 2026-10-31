@@ -1,20 +1,25 @@
 use serde::{Deserialize, Serialize};
 
 /// Configuration for client packet rate limiting.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct PacketLimiterConfig {
     /// Whether the packet rate limiter is enabled.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Maximum number of incoming packets allowed per second per client.
     /// Values <= 0.0 disable the rate limit.
     #[serde(alias = "max-packet-rate")]
+    #[toml(default = Self::default().max_packet_rate, alias = "max-packet-rate")]
     pub max_packet_rate: f64,
     /// Burst allowance capacity for packet rate limiting.
     #[serde(alias = "burst-capacity")]
+    #[toml(default = Self::default().burst_capacity, alias = "burst-capacity")]
     pub burst_capacity: f64,
     /// Kick message when a client exceeds the packet rate limit.
     #[serde(alias = "kick-message")]
+    #[toml(default = Self::default().kick_message, alias = "kick-message")]
     pub kick_message: String,
 }
 

@@ -7,19 +7,25 @@ use serde::{Deserialize, Serialize};
 ///
 /// Controls how commands are accepted, logged, and which permission
 /// level non-operator players receive by default.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct CommandsConfig {
     /// Whether commands from the console are accepted.
+    #[toml(default = Self::default().use_console)]
     pub use_console: bool,
     /// Whether to use rusty line for tty input.
+    #[toml(default = Self::default().use_tty)]
     pub use_tty: bool,
     /// Whether commands from players are logged in the console.
+    #[toml(default = Self::default().log_console)]
     pub log_console: bool,
     /// Whether console command output is broadcast to online operators.
     /// Corresponds to vanilla's `broadcast-console-to-ops` server property.
+    #[toml(default = Self::default().broadcast_console_to_ops)]
     pub broadcast_console_to_ops: bool,
     /// The `op` permission level of everyone that is not in the `ops` file.
+    #[toml(default = Self::default().default_op_level, with = crate::toml_adapters::serde_value)]
     pub default_op_level: PermissionLvl,
     /// Per-command settings, so you can turn individual commands off or change
     /// who is allowed to use them.
@@ -40,6 +46,7 @@ pub struct CommandsConfig {
     /// [commands.overrides.tp]
     /// enabled = false
     /// ```
+    #[toml(default = Self::default().overrides)]
     pub overrides: HashMap<String, CommandOverride>,
 }
 
@@ -58,14 +65,16 @@ impl Default for CommandsConfig {
 
 /// Settings for a single command, letting a server owner turn it off or change
 /// who is allowed to run it.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct CommandOverride {
     /// Whether this command can be used at all. When set to `false` the command
     /// is hidden completely: it won't run, won't show up in the command list,
     /// and won't appear in tab-completion. Players who try to use it simply get
     /// the normal "unknown command" message. Set to `true` (the default) to
     /// leave the command available.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Who is allowed to use this command, given as a permission level:
     ///
@@ -75,6 +84,7 @@ pub struct CommandOverride {
     /// - `4` = the server owner only (full server management)
     ///
     /// Leave this out to keep the command's normal requirement.
+    #[toml(default = Self::default().permission_level, with = crate::toml_adapters::serde_value)]
     pub permission_level: Option<PermissionLvl>,
 }
 
