@@ -2,6 +2,7 @@
 use super::*;
 
 impl PendingConnection {
+    /// Checks the client's decrypted verify token against the one sent with the request.
     async fn verify_encryption_token(
         &mut self,
         server: &Server,
@@ -19,6 +20,7 @@ impl PendingConnection {
         }
     }
 
+    /// Decrypts the shared secret, enables encryption and authenticates the client.
     pub async fn handle_encryption_response(
         &mut self,
         server: &Arc<Server>,
@@ -118,6 +120,7 @@ impl PendingConnection {
         self.finish_login(server, &profile).await
     }
 
+    /// Tells the client to enable compression and applies it to the connection.
     pub(super) async fn enable_compression(&mut self, server: &Server) {
         let compression = server
             .advanced_config
@@ -133,6 +136,7 @@ impl PendingConnection {
         self.set_compression(&compression);
     }
 
+    /// Fires the pre login event and sends the login success packet.
     pub(super) async fn finish_login(
         &mut self,
         server: &Arc<Server>,
@@ -168,6 +172,7 @@ impl PendingConnection {
         None
     }
 
+    /// Verifies the client with the session server and validates its profile.
     async fn authenticate(
         &self,
         server: &Server,
@@ -176,7 +181,7 @@ impl PendingConnection {
     ) -> Result<GameProfile, AuthError> {
         let hash = server.digest_secret(shared_secret);
         let ip = self.address.ip();
-        let profile = authentication::authenticate(
+        let mut profile = authentication::authenticate(
             username,
             &hash,
             &ip,
@@ -212,18 +217,15 @@ impl PendingConnection {
                 return Err(AuthError::Banned);
             }
         }
-        for property in profile.properties.load().iter() {
-            authentication::validate_textures(
-                property,
-                &server
-                    .advanced_config
-                    .networking
-                    .java
-                    .authentication
-                    .textures,
-            )
-            .map_err(AuthError::TextureError)?;
-        }
+        authentication::retain_valid_textures(
+            &mut profile,
+            &server
+                .advanced_config
+                .networking
+                .java
+                .authentication
+                .textures,
+        );
         Ok(profile)
     }
 }
