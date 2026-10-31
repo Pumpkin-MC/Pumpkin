@@ -82,9 +82,10 @@ impl CommandExecutor for BlockReplaceExecutor {
 
         let item_name = item.registry_key;
         let msg = TextComponent::translate_cross(
-            translation::java::COMMANDS_ITEM_BLOCK_SET_SUCCESS,
-            translation::java::COMMANDS_ITEM_BLOCK_SET_SUCCESS,
+            translation::java::COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS_KNOWN_ITEM,
+            translation::java::COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS_KNOWN_ITEM,
             [
+                TextComponent::text("1"),
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),
                 TextComponent::text(pos.0.z.to_string()),
