@@ -4,9 +4,11 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::node::Redirection;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
@@ -62,13 +64,19 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Zero),
     ));
 
-    for name in NAMES {
+    let [main, aliases @ ..] = NAMES;
+    let msg = dispatcher.register(
+        command(main, DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Players)
+                .then(argument("message", MessageArgumentType).executes(MsgExecutor)),
+        ),
+    );
+    // `tell` and `w` redirect to `msg`, as in vanilla's `MsgCommand`.
+    for alias in aliases {
         dispatcher.register(
-            command(name, DESCRIPTION).requires(PERMISSION).then(
-                argument("targets", EntityArgumentType::Players).then(
-                    argument("message", StringArgumentType::GreedyPhrase).executes(MsgExecutor),
-                ),
-            ),
+            command(alias, DESCRIPTION)
+                .requires(PERMISSION)
+                .redirect(Redirection::Local(msg.into())),
         );
     }
 }

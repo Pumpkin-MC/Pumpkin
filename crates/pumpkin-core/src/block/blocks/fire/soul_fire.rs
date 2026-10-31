@@ -1,7 +1,9 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
@@ -16,6 +18,13 @@ impl SoulFireBlock {
     pub fn is_soul_base(block: &Block) -> bool {
         block.has_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
+
+    #[must_use]
+    pub fn can_survive_at(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let down = pos.down();
+        let (block, state) = block_accessor.get_block_and_state(&down);
+        Self::is_soul_base(block) && state.is_side_solid(BlockDirection::Up)
+    }
 }
 
 impl BlockBehaviour for SoulFireBlock {
@@ -27,7 +36,7 @@ impl BlockBehaviour for SoulFireBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !Self::is_soul_base(args.world.get_block(&args.position.down())) {
+        if !Self::can_survive_at(args.world, args.position) {
             return Block::AIR.default_state.id;
         }
 
@@ -35,7 +44,7 @@ impl BlockBehaviour for SoulFireBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::is_soul_base(args.block_accessor.get_block(&args.position.down()))
+        Self::can_survive_at(args.block_accessor, args.position)
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {

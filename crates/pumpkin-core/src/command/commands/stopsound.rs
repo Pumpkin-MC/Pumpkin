@@ -1,3 +1,4 @@
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -6,7 +7,6 @@ use pumpkin_util::text::TextComponent;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
-use crate::command::argument_types::sound_category::SoundCategoryArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -16,10 +16,25 @@ const PERMISSION: &str = "minecraft:command.stopsound";
 
 enum StopSoundMode {
     All,
-    Category,
+    Category(SoundCategory),
     Sound,
-    CategoryAndSound,
+    CategoryAndSound(SoundCategory),
 }
+
+/// `SoundSource`'s names, which vanilla lists as literals.
+const SOURCES: [(&str, SoundCategory); 11] = [
+    ("ambient", SoundCategory::Ambient),
+    ("block", SoundCategory::Blocks),
+    ("hostile", SoundCategory::Hostile),
+    ("master", SoundCategory::Master),
+    ("music", SoundCategory::Music),
+    ("neutral", SoundCategory::Neutral),
+    ("player", SoundCategory::Players),
+    ("record", SoundCategory::Records),
+    ("ui", SoundCategory::Ui),
+    ("voice", SoundCategory::Voice),
+    ("weather", SoundCategory::Weather),
+];
 
 struct StopSoundExecutor(StopSoundMode);
 
@@ -29,16 +44,12 @@ impl CommandExecutor for StopSoundExecutor {
 
         let (category, sound) = match self.0 {
             StopSoundMode::All => (None, None),
-            StopSoundMode::Category => {
-                let cat = SoundCategoryArgumentType::get(context, "source")?;
-                (Some(cat), None)
-            }
+            StopSoundMode::Category(cat) => (Some(cat), None),
             StopSoundMode::Sound => {
                 let snd = IdentifierArgumentType::get(context, "sound")?;
                 (None, Some(snd.to_string()))
             }
-            StopSoundMode::CategoryAndSound => {
-                let cat = SoundCategoryArgumentType::get(context, "source")?;
+            StopSoundMode::CategoryAndSound(cat) => {
                 let snd = IdentifierArgumentType::get(context, "sound")?;
                 (Some(cat), Some(snd.to_string()))
             }
@@ -88,22 +99,25 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     dispatcher.register(
         command("stopsound", DESCRIPTION).requires(PERMISSION).then(
-            argument("targets", EntityArgumentType::Players)
-                .executes(StopSoundExecutor(StopSoundMode::All))
-                .then(
-                    literal("*").then(
-                        argument("sound", IdentifierArgumentType)
-                            .executes(StopSoundExecutor(StopSoundMode::Sound)),
-                    ),
-                )
-                .then(
-                    argument("source", SoundCategoryArgumentType)
-                        .executes(StopSoundExecutor(StopSoundMode::Category))
-                        .then(
+            SOURCES.iter().fold(
+                argument("targets", EntityArgumentType::Players)
+                    .executes(StopSoundExecutor(StopSoundMode::All))
+                    .then(
+                        literal("*").then(
                             argument("sound", IdentifierArgumentType)
-                                .executes(StopSoundExecutor(StopSoundMode::CategoryAndSound)),
+                                .executes(StopSoundExecutor(StopSoundMode::Sound)),
                         ),
-                ),
+                    ),
+                |targets, &(name, category)| {
+                    targets.then(
+                        literal(name)
+                            .executes(StopSoundExecutor(StopSoundMode::Category(category)))
+                            .then(argument("sound", IdentifierArgumentType).executes(
+                                StopSoundExecutor(StopSoundMode::CategoryAndSound(category)),
+                            )),
+                    )
+                },
+            ),
         ),
     );
 }

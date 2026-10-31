@@ -31,7 +31,7 @@ impl LookControl {
 
     pub fn tick(&mut self, mob: &dyn Mob) {
         let entity = mob.get_entity();
-        if Self::should_stay_horizontal() {
+        if mob.look_resets_pitch() {
             entity.set_pitch(0.0);
         }
 
@@ -60,10 +60,6 @@ impl LookControl {
         }
 
         Self::clamp_head_yaw(mob);
-    }
-
-    const fn should_stay_horizontal() -> bool {
-        true
     }
 
     fn clamp_head_yaw(mob: &dyn Mob) {

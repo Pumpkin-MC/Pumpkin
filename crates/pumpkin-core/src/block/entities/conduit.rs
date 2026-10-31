@@ -47,9 +47,11 @@ impl ConduitBlockEntity {
             return true;
         }
         let world = Arc::clone(world);
-        tokio::runtime::Handle::current().spawn(async move {
-            world.get_block_state_id_async(&pos).await;
-        });
+        if let Some(server) = world.server.upgrade() {
+            server.spawn_task(async move {
+                world.get_block_state_id_async(&pos).await;
+            });
+        }
         false
     }
 

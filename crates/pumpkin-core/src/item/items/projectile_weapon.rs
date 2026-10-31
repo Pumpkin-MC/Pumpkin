@@ -40,7 +40,10 @@ impl ProjectileWeaponItem {
             shooter.pos.load(),
             ArrowEntity::entity_type_for_item(projectile.item),
         );
-        let pickup = if is_creative {
+        let is_intangible = projectile
+            .get_data_component::<pumpkin_data::data_component_impl::IntangibleProjectileImpl>()
+            .is_some();
+        let pickup = if is_creative || is_intangible {
             ArrowPickup::CreativeOnly
         } else {
             ArrowPickup::Allowed

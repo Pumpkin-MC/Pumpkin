@@ -2,7 +2,7 @@
 interface player {
     use common.{hand, position, game-mode, block-pos};
     use item-stack.{item-stack};
-    use %world.{%world, entity, ray-trace-block-result, ray-trace-entity-result};
+    use %world.{%world, entity, ray-trace-block-result, ray-trace-entity-result, equipment-slot};
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
@@ -884,7 +884,19 @@ interface player {
         /// Sets the player's custom tab list name.
         set-tab-list-name: func (name: option<text-component>);
 
-        // Messaging & titles
+        // Messaging, Chat & Commands
+
+        /// Executes a command as this player, checking permissions and returning true if parsed successfully.
+        perform-command: async func (command: string) -> bool;
+        /// Makes the player send a chat message, or executes a command if it begins with '/'.
+        chat: async func (message: string);
+
+        /// Adds custom chat completions to this player's client.
+        add-custom-chat-completions: func (completions: list<string>);
+        /// Removes custom chat completions from this player's client.
+        remove-custom-chat-completions: func (completions: list<string>);
+        /// Overwrites all custom chat completions for this player's client.
+        set-custom-chat-completions: func (completions: list<string>);
 
         /// Sends a system message to the player's chat.
         send-system-message: func (text: text-component, overlay: bool);
@@ -955,6 +967,16 @@ interface player {
         /// Sends a hurt / damage-tilt animation to the player's client (causes screen shake in the given yaw direction).
         send-hurt-animation: func(yaw: f32);
 
+        /// Sends a visual block break stage (0.0 to 1.0) to this player's client.
+        /// Values outside 0.0..1.0 clear the block break overlay.
+        send-block-damage: func(pos: block-pos, progress: f32);
+
+        /// Sends a fake equipment change packet to this player for the specified entity.
+        send-equipment-change: async func(entity-id: u32, slot: equipment-slot, item: option<item-stack>);
+
+        /// Forces the player's camera to look at the specified target position.
+        look-at: func(target: position);
+
         /// Opens a written book interface for the player from the specified hand.
         open-book: func(hand: hand);
         /// Forces the sign text editor to open for the player at the specified sign block position.
@@ -966,6 +988,27 @@ interface player {
         set-velocity: func(velocity: position);
         /// Applies directional knockback impulse to the player.
         apply-knockback: func(strength: f64, x: f64, z: f64);
+
+        /// Returns whether the player is currently sneaking.
+        is-sneaking: func() -> bool;
+        /// Sets whether the player is sneaking.
+        set-sneaking: func(sneaking: bool);
+
+        /// Returns whether the player is currently sprinting.
+        is-sprinting: func() -> bool;
+        /// Sets whether the player is sprinting.
+        set-sprinting: func(sprinting: bool);
+
+        /// Returns whether the player is currently on the ground.
+        is-on-ground: func() -> bool;
+
+        /// Returns whether the player is currently sleeping in a bed.
+        is-sleeping: func() -> bool;
+
+        /// Returns whether this player is ignored when calculating the percentage of sleeping players needed to skip the night.
+        is-sleeping-ignored: func() -> bool;
+        /// Sets whether this player is ignored when calculating the percentage of sleeping players needed to skip the night.
+        set-sleeping-ignored: func(ignored: bool);
 
         // Movement Lock & Freezing
 
@@ -993,6 +1036,15 @@ interface player {
 
         /// Opens a GUI for the player.
         open-gui: async func (gui-ref: gui);
+        /// Closes the player's currently open container or GUI screen.
+        close-inventory: async func ();
+        /// Returns whether the player currently has an external container or GUI screen open.
+        has-open-inventory: func () -> bool;
+        /// Drops the item currently held in the player's main hand into the world.
+        /// If `drop-all` is true, drops the entire stack; otherwise drops a single item.
+        drop-held-item: async func (drop-all: bool);
+        /// Drops the specified item stack from the player's eye position into the world.
+        drop-item: async func (item: item-stack);
 
         /// Bans the player with the specified options.
         ban: async func (options: ban-player-options);
@@ -1016,6 +1068,21 @@ interface player {
         get-effect: func(effect: status-effect-type) -> option<status-effect-instance>;
         /// Returns all status effects currently applied to the player.
         get-active-effects: func() -> list<status-effect-instance>;
+
+        // Post Effects (Shaders)
+
+        /// Returns all active post-processing shader effects on this player.
+        get-post-effects: func () -> list<string>;
+        /// Checks if this player currently has the specified post-processing shader effect.
+        has-post-effect: func (effect: string) -> bool;
+        /// Adds a post-processing shader effect to this player and syncs it to the client. Returns true if added.
+        add-post-effect: async func (effect: string) -> bool;
+        /// Removes a post-processing shader effect from this player and syncs it to the client. Returns true if removed.
+        remove-post-effect: async func (effect: string) -> bool;
+        /// Clears all post-processing shader effects from this player. Returns the number of cleared effects.
+        clear-post-effects: async func () -> u32;
+        /// Resends the current post-processing shader effects to the client.
+        send-post-effects: async func ();
 
         // Health & Damage
 

@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
@@ -13,7 +14,10 @@ use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomImpl, get_seed, legacy_rand::LegacyRand},
 };
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::{
+    tick::TickPriority,
+    world::{BlockAccessor, BlockFlags},
+};
 
 type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperties;
 
@@ -112,12 +116,18 @@ impl BlockBehaviour for SeaPickleBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
-            self,
-            args.world,
-            args.position,
-            args.state_id,
-        )
+        if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position) {
+            return Block::AIR.default_state.id;
+        }
+        if SeaPickleProperties::from_state_id(args.state_id).waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        args.state_id
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

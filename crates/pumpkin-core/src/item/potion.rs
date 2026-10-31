@@ -1,5 +1,4 @@
-use crate::entity::EntityBase;
-use crate::entity::living::LivingEntity;
+use crate::entity::living::{EffectSource, LivingEntity};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
 
@@ -17,11 +16,11 @@ pub enum PotionApplicationSource {
 }
 
 impl PotionApplicationSource {
-    const fn instant_scale(self, scale: f32) -> f32 {
+    const fn instant_scale(self, scale: f32) -> Option<f32> {
         match self {
-            Self::AreaEffectCloud => scale * 0.5,
-            Self::Arrow => 1.0,
-            Self::Normal => scale,
+            Self::AreaEffectCloud => Some(scale * 0.5),
+            Self::Arrow => None,
+            Self::Normal => Some(scale),
         }
     }
 
@@ -137,38 +136,25 @@ impl PotionContents {
         effects: Vec<(&'static StatusEffect, i32, u8, bool, bool, bool)>,
         scale: f32,
         source: PotionApplicationSource,
+        effect_source: Option<EffectSource<'_>>,
     ) {
         for (effect_type, duration, amplifier, ambient, show_particles, show_icon) in effects {
-            // Instant effects should apply immediately
-            let is_instant = effect_type.id
-                == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
-                || effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
-
-            if is_instant {
-                // Instant potency scaling
-                let instant_scale = source.instant_scale(scale);
-
-                // Apply instant effects logic directly as they don't tick
-                if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = 4.0 * (1 << amplifier) as f32 * instant_scale;
-                    target.heal(amount);
-                } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
-                    let amount = 6.0 * (1 << amplifier) as f32 * instant_scale;
-
-                    let _ = target.damage(
-                        target.get_entity(),
-                        amount,
-                        pumpkin_data::damage::DamageType::MAGIC,
-                    );
-                }
-
-                // Like vanilla, instant effects are applied once and never added to the active
-                // effects, where they would linger.
-            } else {
+            // Like vanilla, instant effects are applied once and never added to the active
+            // effects, where they would linger.
+            if !target.apply_instant_effect(
+                effect_type,
+                amplifier,
+                source.instant_scale(scale).map(f64::from),
+                effect_source,
+            ) {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
 
-                let dur = ((duration as f32) * duration_scale).max(1.0) as i32;
+                let dur = if duration == -1 {
+                    -1
+                } else {
+                    ((duration as f32) * duration_scale).max(1.0) as i32
+                };
                 let eff = pumpkin_data::potion::Effect {
                     effect_type,
                     duration: dur,
@@ -204,6 +190,6 @@ mod tests {
             (160.0 * PotionApplicationSource::Arrow.duration_scale(scale)) as i32,
             20
         );
-        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), 1.0);
+        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), None);
     }
 }

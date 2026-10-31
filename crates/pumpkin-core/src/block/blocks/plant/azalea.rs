@@ -1,3 +1,4 @@
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockId, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
@@ -5,6 +6,7 @@ use pumpkin_world::world::BlockAccessor;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::sapling::SaplingBlock;
+use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
     BlockBehaviour, BlockMetadata, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     PathComputationType,
@@ -35,8 +37,10 @@ impl BlockBehaviour for AzaleaBlock {
         )
     }
 
-    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
-        true
+    fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        args.world
+            .is_in_build_limit(args.position.up_height(TreeGrower::AZALEA.min_height() + 2))
+            && *args.world.get_fluid(&args.position.up()) == Fluid::EMPTY
     }
 
     fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
@@ -60,7 +64,6 @@ impl PlantBlockBase for AzaleaBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block_below = block_accessor.get_block(pos);
         block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_AZALEA)
-            || block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
     fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
