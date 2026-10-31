@@ -28,8 +28,10 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::enchantment_provider::EnchantmentProvider;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
@@ -37,6 +39,7 @@ use rand::RngExt;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::player::Player;
 
 // ══════════════════════════════════════════════════════════════════
 // Global constants extracted from vanilla Minecraft 26.2
@@ -876,6 +879,42 @@ pub fn is_equippable_in_slot(
                     })
         },
     )
+}
+
+pub fn equip_on_target(mob: &dyn Mob, player: &Player, stack: &mut ItemStack) -> bool {
+    let Some(equippable) = stack
+        .get_data_component::<EquippableImpl>()
+        .filter(|equippable| equippable.equip_on_interact)
+    else {
+        return false;
+    };
+    let slot = equippable.slot;
+    let equip_sound = equippable.equip_sound.clone();
+    let mob_entity = mob.get_mob_entity();
+    let living = &mob_entity.living_entity;
+    if !mob.is_equippable_in_slot(stack, slot)
+        || !mob_entity.is_slot_empty(slot)
+        || !living.entity.is_alive()
+    {
+        return false;
+    }
+
+    let equipped = stack.split_unless_creative(player.gamemode.load(), 1);
+    mob_entity.set_item_slot_and_drop_when_killed(slot, equipped);
+    let entity = &living.entity;
+    if !entity.is_silent() {
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        match mob.get_equip_sound(slot) {
+            Some(sound) => world.play_sound(sound, SoundCategory::Neutral, &pos),
+            None => world.play_sound_event(&equip_sound, SoundCategory::Neutral, &pos),
+        }
+    }
+    entity
+        .world
+        .load()
+        .emit_game_event(GameEvent::Equip.name(), entity.pos.load());
+    true
 }
 
 #[must_use]

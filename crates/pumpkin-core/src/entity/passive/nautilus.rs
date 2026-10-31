@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use pumpkin_data::BlockState;
 use pumpkin_data::{
+    data_component_impl::EquipmentSlot,
     effect::StatusEffect,
     entity::EntityStatus,
     item_stack::ItemStack,
@@ -22,7 +23,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::entity::{
     Entity, EntityBase,
     custom_sound::CustomSound,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::equip_on_target},
     passive::animal::Animal,
     player::Player,
 };
@@ -33,7 +34,6 @@ pub struct NautilusEntity {
     pub owner: AtomicCell<Option<Uuid>>,
     pub is_dashing: AtomicBool,
     pub dash_cooldown: AtomicI32,
-    pub is_saddled: AtomicBool,
     pub inventory: Mutex<Vec<ItemStack>>,
 }
 
@@ -46,7 +46,6 @@ impl NautilusEntity {
             owner: AtomicCell::new(None),
             is_dashing: AtomicBool::new(false),
             dash_cooldown: AtomicI32::new(0),
-            is_saddled: AtomicBool::new(false),
             inventory: Mutex::new(vec![ItemStack::new(0, &pumpkin_data::item::Item::AIR); 9]),
         };
 
@@ -200,6 +199,10 @@ impl Mob for NautilusEntity {
         self.owner.load()
     }
 
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.saddled_controlling_passenger(None)
+    }
+
     fn mob_get_swim_sound(&self) -> Option<Sound> {
         let is_baby = self
             .mob_entity
@@ -228,7 +231,6 @@ impl Mob for NautilusEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("IsTame", self.is_tame.load(Ordering::Relaxed));
-        nbt.put_bool("Saddled", self.is_saddled.load(Ordering::Relaxed));
         nbt.put_int("DashCooldown", self.dash_cooldown.load(Ordering::Relaxed));
         if let Some(owner) = self.owner.load() {
             nbt.put_uuid("Owner", owner);
@@ -236,11 +238,10 @@ impl Mob for NautilusEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.mob_entity
+            .read_legacy_saddle(nbt.get_bool("Saddled") == Some(true));
         if let Some(is_tame) = nbt.get_bool("IsTame") {
             self.is_tame.store(is_tame, Ordering::Relaxed);
-        }
-        if let Some(saddled) = nbt.get_bool("Saddled") {
-            self.is_saddled.store(saddled, Ordering::Relaxed);
         }
         if let Some(dash) = nbt.get_int("DashCooldown") {
             self.dash_cooldown.store(dash, Ordering::Relaxed);
@@ -361,17 +362,7 @@ impl Mob for NautilusEntity {
         }
 
         if self.is_tame() && !player.get_entity().is_sneaking() {
-            if !self.is_saddled.load(Ordering::Relaxed)
-                && item_stack.item == &pumpkin_data::item::Item::SADDLE
-            {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-                self.is_saddled.store(true, Ordering::Relaxed);
-                let world = entity.world.load();
-                world.play_sound(
-                    Sound::ItemNautilusSaddleEquip,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                );
+            if equip_on_target(self, player, item_stack) {
                 return true;
             }
 
@@ -387,15 +378,21 @@ impl Mob for NautilusEntity {
         self.animal_interact(player, item_stack, self.get_ambient_sound())
     }
 
-    fn is_saddled(&self) -> bool {
-        self.is_saddled.load(Ordering::Relaxed)
+    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
+        (*slot != EquipmentSlot::SADDLE && *slot != EquipmentSlot::BODY)
+            || (self.mob_entity.living_entity.entity.is_alive()
+                && self.get_entity().age.load(Ordering::Relaxed) >= 0
+                && self.is_tame())
     }
 
-    fn can_be_saddled(&self) -> bool {
-        self.mob_entity.living_entity.entity.is_alive()
-    }
-
-    fn set_saddled(&self, saddled: bool) {
-        self.is_saddled.store(saddled, Ordering::Relaxed);
+    fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
+        if *slot != EquipmentSlot::SADDLE {
+            return None;
+        }
+        Some(if self.get_entity().is_under_water() {
+            Sound::ItemNautilusSaddleUnderwaterEquip
+        } else {
+            Sound::ItemNautilusSaddleEquip
+        })
     }
 }
