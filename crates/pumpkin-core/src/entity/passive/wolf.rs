@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,31 +13,54 @@ use pumpkin_data::wolf_sound_variant::WolfSoundVariant;
 use pumpkin_data::wolf_variant::WolfVariant;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::AgeableMob,
-    ai::behavior::neutral::apply_targets,
+    ai::behavior::{
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
+        neutral::apply_targets,
+    },
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        active_target::TargetCondition, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        revenge::RevengeGoal, sit_when_ordered_to::SitWhenOrderedToGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
+    ai::target_match::TargetMatch,
     mob::{
         Mob, MobEntity,
         neutral::{NeutralData, NeutralMob},
     },
     passive::{
         animal::Animal,
-        tamable::{TamableAnimal, TamableData},
+        llama::scares_wolves,
+        tamable::{TamableAnimal, TamableData, is_untamed},
     },
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+
+const WOLF_PREY: TargetMatch =
+    TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);
+
+const WOLF_FLEES: &[Flee] = &[Flee::new(3, TargetMatch::LLAMA_LIKE, 24.0, 1.5, 1.5)
+    .when(is_untamed)
+    .confirmed_by(scares_wolves)
+    .dropping_target()];
+
+const WOLF_HUNTS: &[Hunt] = &[
+    Hunt::new(5, WOLF_PREY, false).when(TargetCondition::Untamed),
+    hunting::baby_turtles(6, false).when(TargetCondition::Untamed),
+    Hunt::new(7, TargetMatch::SKELETON_LIKE, false),
+];
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -66,31 +91,27 @@ impl WolfEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal selector (matching Vanilla registerGoals):
             // 1: SwimGoal (FloatGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // 1: EscapeDangerGoal (TamableAnimalPanicGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            // 3: Avoid Llama
-            goal_selector.add_goal(
-                3,
-                Box::new(AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5)),
-            );
+            // 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
+            // 3: WolfAvoidEntityGoal (Llama)
+            fleeing::apply(goal_selector, WOLF_FLEES);
+            // 4: LeapAtTargetGoal
+            goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             // 5: MeleeAttackGoal
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             // 6: FollowOwnerGoal
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             // 7: BreedGoal
             goal_selector.add_goal(7, BreedGoal::new(1.0));
-            // 8: FollowParentGoal & WanderAroundGoal
-            goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
-            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
+            // 8: WaterAvoidingRandomStrollGoal
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             // 9: BegGoal
             goal_selector.add_goal(9, BegGoal::new(8.0));
             // 10: LookAtPlayer & RandomLookAround
@@ -102,11 +123,7 @@ impl WolfEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Target selector (matching Vanilla registerGoals):
             // 1: OwnerHurtByTargetGoal
@@ -116,28 +133,21 @@ impl WolfEntity {
             // 3: HurtByTargetGoal (RevengeGoal)
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true).alerting_others()));
             // 4: NearestAttackableTarget (Player, angry only), 8: ResetUniversalAnger
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 4, 8, true);
-            // 5: NonTameRandomTarget (Sheep, Rabbit, Fox)
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
-            );
-            // 7: NearestAttackableTarget (Skeleton)
-            target_selector.add_goal(
-                7,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false),
-            );
+            apply_targets(target_selector, &mob_arc.mob_entity, 4, 8, true);
+            // 5, 6: NonTameRandomTarget (prey, baby turtle), 7: NearestAttackableTarget (AbstractSkeleton)
+            hunting::apply(target_selector, &mob_arc.mob_entity, WOLF_HUNTS);
         };
 
         mob_arc
+    }
+
+    fn stop_and_forget_target(&self) {
+        self.mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        self.set_mob_target(None, TargetReason::ForgotTarget);
     }
 
     pub fn get_tame_flags(&self) -> u8 {
@@ -178,6 +188,16 @@ impl NeutralMob for WolfEntity {
 }
 
 impl Mob for WolfEntity {
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        self.order_to_sit(false);
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -192,6 +212,27 @@ impl Mob for WolfEntity {
 
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_baby() {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        if self.is_angry() {
+            meta = meta.angry(true);
+        }
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
+        Some(meta)
     }
 
     fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
@@ -232,28 +273,26 @@ impl Mob for WolfEntity {
             return true;
         }
 
-        if let Some(target_mob) = target.get_mob()
-            && let Some(tamable) = target_mob.as_tamable()
-            && tamable.is_tame()
-        {
-            return false;
-        }
-
-        true
+        !target.get_mob().is_some_and(Mob::is_tamed)
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = self.variant.load(Ordering::Relaxed);
-        let variant_str = WolfVariant::all()
-            .get(variant_id as usize)
-            .map_or("minecraft:pale", WolfVariant::asset_id);
-        nbt.put_string("variant", variant_str.to_string());
-        let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        nbt.put_string(
-            "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
-        );
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:wolf_variant", variant_id, |id| {
+                WolfVariant::all()
+                    .get(id as usize)
+                    .map_or("minecraft:pale", WolfVariant::asset_id)
+                    .to_string()
+            });
+        nbt.put_string("variant", variant_str);
+        let sound_variant_id = u32::from(self.sound_variant.load(Ordering::Relaxed));
+        let sound_variant_str =
+            self.resolve_dynamic_entry_id("minecraft:wolf_sound_variant", sound_variant_id, |id| {
+                let sound_variant = WolfSoundVariant::from_id(id as u8).unwrap_or_default();
+                format!("minecraft:{}", sound_variant.to_name())
+            });
+        nbt.put_string("sound_variant", sound_variant_str);
         nbt.put_byte(
             "CollarColor",
             self.collar_color.load(Ordering::Relaxed) as i8,
@@ -261,16 +300,21 @@ impl Mob for WolfEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            let variant =
-                WolfVariant::from_name(variant_str).map_or(WolfVariant::Pale.id(), |v| v.id());
-            self.variant.store(variant, Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:wolf_variant", variant_str, |n| {
+                    WolfVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+        {
+            self.set_variant_id(id as u8);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
-            && let Some(sound_variant) = WolfSoundVariant::from_name(sound_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:wolf_sound_variant", sound_str, |n| {
+                    WolfSoundVariant::from_name(n).map(|v| v as u32)
+                })
         {
-            self.sound_variant
-                .store(sound_variant as u8, Ordering::Relaxed);
+            self.set_sound_variant_id(id as u8);
         }
         if let Some(collar) = nbt.get_byte("CollarColor") {
             self.collar_color.store(collar as u8, Ordering::Relaxed);
@@ -288,13 +332,18 @@ impl Mob for WolfEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = WolfVariant::from_name(name).map_or(WolfVariant::Pale.id(), |v| v.id());
-        self.variant.store(variant, Ordering::Relaxed);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:wolf_variant", name, |n| {
+            WolfVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) {
+            self.set_variant_id(id as u8);
+        }
     }
 
     fn mob_set_sound_variant_name(&self, name: &str) {
-        if let Some(v) = WolfSoundVariant::from_name(name) {
-            self.set_sound_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:wolf_sound_variant", name, |n| {
+            WolfSoundVariant::from_name(n).map(|v| v as u32)
+        }) {
+            self.set_sound_variant_id(id as u8);
         }
     }
 
@@ -343,17 +392,29 @@ impl Mob for WolfEntity {
             }
 
             if self.is_owned_by(&player.gameprofile.id) {
-                if let Some(color) = super::animal::get_dye_color_from_item(item)
-                    && color != self.get_collar_color()
+                if item == &Item::SHEARS {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerShearedEquipment {
+                            entity_type: "minecraft:wolf".to_string(),
+                            item_id: "minecraft:wolf_armor".to_string(),
+                        },
+                    );
+                }
+
+                if let Some(dye) =
+                    item_stack.get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                    && dye.color.id() != self.get_collar_color()
                 {
-                    self.set_collar_color(color);
+                    self.set_collar_color(dye.color.id());
                     item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                     return true;
                 }
 
                 let parent_interaction = self.animal_interact(player, item_stack, ambient);
                 if !parent_interaction {
-                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
+                    if self.order_to_sit(!self.is_ordered_to_sit()) {
+                        self.stop_and_forget_target();
+                    }
                     return true;
                 }
                 return parent_interaction;
@@ -361,8 +422,9 @@ impl Mob for WolfEntity {
         } else if item == &Item::BONE && !self.mob_entity.is_attacking() {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if rng.random_range(0..3) == 0 && self.approve_taming(player) {
                 TamableAnimal::tame(self, player.gameprofile.id);
+                self.stop_and_forget_target();
                 self.set_ordered_to_sit(true);
                 self.spawn_taming_particles(true);
             } else {
@@ -406,21 +468,28 @@ impl WolfEntity {
     }
 
     pub fn set_variant(&self, variant: WolfVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 
     pub fn set_sound_variant(&self, sound_variant: WolfSoundVariant) {
-        self.sound_variant
-            .store(sound_variant as u8, Ordering::Relaxed);
+        self.set_sound_variant_id(sound_variant as u8);
+    }
+
+    pub fn set_sound_variant_id(&self, raw_id: u8) {
+        self.sound_variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::wolf::DATA_SOUND_VARIANT_ID,
-            VarInt(sound_variant as u8 as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 }

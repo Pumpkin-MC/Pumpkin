@@ -5,8 +5,13 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockId, BlockStateId};
 use pumpkin_world::world::BlockFlags;
 
+use crate::block::blocks::falling::FallingBlock;
 use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
-use crate::block::{BlockBehaviour, BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
+};
+use crate::entity::falling::FallingEntity;
 
 pub struct BrushableBlock;
 
@@ -86,18 +91,45 @@ impl BlockBehaviour for BrushableBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         let entity = BrushableBlockBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(entity));
+        FallingBlock::placed_with_delay(&args, 2);
     }
 
-    fn broken(&self, args: BrokenArgs<'_>) {
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        FallingBlock::get_state_for_neighbor_update_with_delay(&args, 2)
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if let Some(be) = args.world.get_block_entity(args.position)
             && let Some(brush_be) = be.as_any().downcast_ref::<BrushableBlockBlockEntity>()
-            && let Some(contained) = brush_be
-                .item
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take()
         {
-            args.world.drop_stack(args.position, contained);
+            let mut hits = brush_be
+                .hits
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if *hits > 0 {
+                *hits -= 1;
+                let state = args.world.get_block_state(args.position);
+                let mut props = SuspiciousSandLikeProperties::from_state_id(state.id);
+                let new_dusted = (*hits as u8).min(3);
+                if props.dusted != new_dusted {
+                    props.dusted = new_dusted;
+                    args.world.set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                }
+            }
         }
+
+        let (block, state) = args.world.get_block_and_state(&args.position.down());
+        if !FallingBlock::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
+            return;
+        }
+        let state = args.world.get_block_state(args.position);
+        FallingEntity::replace_spawn(args.world, *args.position, state.id);
     }
 }

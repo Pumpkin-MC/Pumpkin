@@ -1,59 +1,20 @@
-use crate::entity::EntityBase;
-use crate::entity::ai::control::Control;
+use crate::entity::ai::control::{Control, LookControlTrait};
 use crate::entity::mob::{Mob, MobEntity};
 use pumpkin_util::math::clamp_angle;
 use pumpkin_util::math::vector3::Vector3;
-use std::sync::Arc;
 
 // Please keep the atomic values out of here!!!
 #[derive(Default)]
 pub struct LookControl {
-    max_yaw_change: f32,
-    max_pitch_change: f32,
-    look_at_timer: i32,
-    position: Vector3<f64>,
+    pub(super) max_yaw_change: f32,
+    pub(super) max_pitch_change: f32,
+    pub(super) look_at_timer: i32,
+    pub(super) position: Vector3<f64>,
 }
 
 impl Control for LookControl {}
 
 impl LookControl {
-    pub fn look_at_position(&mut self, mob: &dyn Mob, position: Vector3<f64>) {
-        self.look_at(mob, position.x, position.y, position.z);
-    }
-
-    pub fn look_at_entity(&mut self, mob: &dyn Mob, entity: &Arc<dyn EntityBase>) {
-        let entity = entity.get_entity();
-        let pos = entity.get_eye_pos();
-        self.look_at(mob, pos.x, pos.y, pos.z);
-    }
-
-    pub fn look_at_entity_with_range(
-        &mut self,
-        entity: &Arc<dyn EntityBase>,
-        max_yaw_change: f32,
-        max_pitch_change: f32,
-    ) {
-        let entity = entity.get_entity();
-        let pos = entity.pos.load();
-        self.look_at_with_range(
-            pos.x,
-            entity.get_eye_y(),
-            pos.z,
-            max_yaw_change,
-            max_pitch_change,
-        );
-    }
-
-    pub fn look_at(&mut self, mob: &dyn Mob, x: f64, y: f64, z: f64) {
-        self.look_at_with_range(
-            x,
-            y,
-            z,
-            mob.get_max_look_yaw_change(),
-            mob.get_max_look_pitch_change(),
-        );
-    }
-
     pub const fn look_at_with_range(
         &mut self,
         x: f64,
@@ -70,7 +31,7 @@ impl LookControl {
 
     pub fn tick(&mut self, mob: &dyn Mob) {
         let entity = mob.get_entity();
-        if Self::should_stay_horizontal() {
+        if mob.look_resets_pitch() {
             entity.set_pitch(0.0);
         }
 
@@ -101,15 +62,11 @@ impl LookControl {
         Self::clamp_head_yaw(mob);
     }
 
-    const fn should_stay_horizontal() -> bool {
-        true
-    }
-
     fn clamp_head_yaw(mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
-        if let Ok(navigator) = mob_entity.navigator.try_lock()
-            && navigator.is_in_progress()
-        {
+        let steered = mob_entity.steered();
+        let navigator = steered.navigator();
+        if !navigator.is_done() {
             let entity = &mob_entity.living_entity.entity;
             let max_head_rotation = mob.get_max_head_rotation();
             entity.head_yaw.store(clamp_angle(
@@ -120,7 +77,7 @@ impl LookControl {
         }
     }
 
-    fn get_target_pitch(&self, mob: &MobEntity) -> Option<f32> {
+    pub(super) fn get_target_pitch(&self, mob: &MobEntity) -> Option<f32> {
         let position = self.position;
         let mob_position = mob.living_entity.entity.pos.load();
         let d = position.x - mob_position.x;
@@ -134,7 +91,7 @@ impl LookControl {
         }
     }
 
-    fn get_target_yaw(&self, mob: &MobEntity) -> Option<f32> {
+    pub(super) fn get_target_yaw(&self, mob: &MobEntity) -> Option<f32> {
         let position = self.position;
         let mob_position = mob.living_entity.entity.pos.load();
         let d = position.x - mob_position.x;
@@ -144,5 +101,22 @@ impl LookControl {
         } else {
             Some((e.atan2(d) as f32).to_degrees() - 90.0)
         }
+    }
+}
+
+impl LookControlTrait for LookControl {
+    fn tick(&mut self, mob: &dyn Mob) {
+        Self::tick(self, mob);
+    }
+
+    fn look_at_with_range(
+        &mut self,
+        x: f64,
+        y: f64,
+        z: f64,
+        max_yaw_change: f32,
+        max_pitch_change: f32,
+    ) {
+        Self::look_at_with_range(self, x, y, z, max_yaw_change, max_pitch_change);
     }
 }

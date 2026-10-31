@@ -1,5 +1,6 @@
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
@@ -59,8 +60,12 @@ impl Goal for BegGoal {
         let world = mob_entity.living_entity.entity.world.load();
         let pos = mob_entity.living_entity.entity.pos.load();
 
+        let conditions =
+            TargetPredicate::create_non_attackable().set_base_max_distance(self.look_distance);
+
+        // Nearest player the wolf sees, after the held item is checked.
         let Some(player) = world.get_nearest_player(pos, self.look_distance, |player| {
-            player.living_entity.is_part_of_game()
+            conditions.test(&world, Some(mob), player.as_ref())
         }) else {
             return false;
         };

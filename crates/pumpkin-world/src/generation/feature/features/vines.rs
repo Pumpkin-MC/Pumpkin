@@ -27,7 +27,9 @@ impl VinesFeature {
 
             let neighbor = pos.offset(dir.to_offset());
             let neighbor_state = GenerationCache::get_block_state(chunk, &neighbor.0);
-            if !neighbor_state.to_state().is_side_solid(dir.opposite()) {
+            if !neighbor_state.to_state().is_side_solid(dir.opposite())
+                && !neighbor_state.to_state().is_full_cube()
+            {
                 continue;
             }
 

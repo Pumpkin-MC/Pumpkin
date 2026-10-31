@@ -67,12 +67,12 @@ mod tests {
     #[test]
     fn accepts_only_the_current_bedrock_protocol() {
         assert!(matches!(
-            incompatible_protocol_status(2192),
+            incompatible_protocol_status(2224),
             Some(CPlayStatus::OutdatedClient)
         ));
-        assert!(incompatible_protocol_status(2193).is_none());
+        assert!(incompatible_protocol_status(2225).is_none());
         assert!(matches!(
-            incompatible_protocol_status(2194),
+            incompatible_protocol_status(2226),
             Some(CPlayStatus::OutdatedServer)
         ));
     }

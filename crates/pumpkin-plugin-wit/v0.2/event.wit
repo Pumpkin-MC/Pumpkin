@@ -452,6 +452,7 @@ interface event {
         father-id: s32,
         mother-id: s32,
         child-id: s32,
+        experience: s32,
         cancelled: bool
     }
 
@@ -519,9 +520,25 @@ interface event {
         cancelled: bool
     }
 
+    enum target-reason {
+        closest-player,
+        closest-entity,
+        random-target,
+        target-attacked-entity,
+        target-attacked-nearby-entity,
+        target-attacked-owner,
+        owner-attacked-target,
+        pig-zombie-target,
+        angry,
+        forgot-target,
+        fleeing,
+        unknown,
+    }
+
     record entity-target-event-data {
         entity-id: s32,
         target-id: option<s32>,
+        reason: target-reason,
         cancelled: bool
     }
 
@@ -654,6 +671,12 @@ interface event {
         entity-id: s32,
         target-id: option<s32>,
         reason: string,
+        cancelled: bool
+    }
+
+    record entity-toggle-sit-event-data {
+        entity-id: s32,
+        sitting: bool,
         cancelled: bool
     }
 
@@ -2070,6 +2093,7 @@ interface event {
         entity-potion-effect-event,
         entity-spell-cast-event,
         entity-target-living-entity-event,
+        entity-toggle-sit-event,
         entity-toggle-swim-event,
         explosion-prime-event,
         firework-explode-event,
@@ -2346,6 +2370,7 @@ interface event {
         entity-potion-effect-event(entity-potion-effect-event-data),
         entity-spell-cast-event(entity-spell-cast-event-data),
         entity-target-living-entity-event(entity-target-living-entity-event-data),
+        entity-toggle-sit-event(entity-toggle-sit-event-data),
         entity-toggle-swim-event(entity-toggle-swim-event-data),
         explosion-prime-event(explosion-prime-event-data),
         firework-explode-event(firework-explode-event-data),

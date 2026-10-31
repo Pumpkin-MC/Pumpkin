@@ -13,18 +13,30 @@ use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+    ai::behavior::{
+        feline,
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
     },
+    ai::goal::swim::SwimGoal,
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
+const OCELOT_FLEES: &[Flee] = &[feline::flee_players(4, is_wary)];
+
+const OCELOT_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::CHICKEN), false),
+    hunting::baby_turtles(1, false),
+];
+
+fn is_wary(mob: &dyn Mob) -> bool {
+    mob.cast_any()
+        .downcast_ref::<OcelotEntity>()
+        .is_some_and(|ocelot| !ocelot.is_trusting())
+}
 
 /// Represents an Ocelot, a shy passive mob found in jungles.
 ///
@@ -48,54 +60,23 @@ impl OcelotEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal 1: FloatGoal (SwimGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // Goal 1: PanicGoal (EscapeDangerGoal)
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             // Goal 3: OcelotTemptGoal
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
+            goal_selector.add_goal(3, feline::tempt_goal());
             // Goal 4: OcelotAvoidEntityGoal (when not trusting)
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 0.8, 1.33)),
-            );
-            // Goal 9: BreedGoal
-            goal_selector.add_goal(9, BreedGoal::new(0.8));
-            // Goal 9: FollowParentGoal
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
-            // Goal 10: WaterAvoidingRandomStrollGoal (WanderAroundGoal)
-            goal_selector.add_goal(10, Box::new(WanderAroundGoal::new(0.8)));
-            // Goal 11: LookAtPlayerGoal
-            goal_selector.add_goal(
-                11,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
-            );
-            // Goal 11: RandomLookAroundGoal
-            goal_selector.add_goal(11, Box::new(RandomLookAroundGoal::default()));
+            fleeing::apply(goal_selector, OCELOT_FLEES);
+            // Goal 7-11: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
+            feline::apply_tail(goal_selector, mob_weak, 7);
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
-            // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, false),
-            );
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
-            );
+            // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle (baby on land)
+            hunting::apply(target_selector, &mob_arc.mob_entity, OCELOT_HUNTS);
         };
 
         mob_arc
@@ -169,13 +150,13 @@ impl Mob for OcelotEntity {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TrustingSucceeded,
-                    Some(ActorEventID::TamingSucceeded),
+                    ActorEventID::TamingSucceeded,
                 );
             } else {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TrustingFailed,
-                    Some(ActorEventID::TamingFailed),
+                    ActorEventID::TamingFailed,
                 );
             }
 
