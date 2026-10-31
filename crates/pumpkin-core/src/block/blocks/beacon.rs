@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use pumpkin_data::translation;
-use pumpkin_inventory::Inventory;
 use pumpkin_inventory::beacon_screen_handler::create_beacon_handler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -11,11 +10,11 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 
+use crate::block::entities::PropertyDelegate;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs};
 
-// Create the factory just like ChestScreenFactory
-struct BeaconScreenFactory(Arc<dyn Inventory>);
+struct BeaconScreenFactory(Arc<dyn PropertyDelegate>);
 
 impl ScreenHandlerFactory for BeaconScreenFactory {
     fn create_screen_handler(
@@ -24,10 +23,8 @@ impl ScreenHandlerFactory for BeaconScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let concrete_handler = create_beacon_handler(sync_id, player_inventory, self.0.clone());
-        let concrete_arc = Arc::new(Mutex::new(concrete_handler));
-
-        Some(concrete_arc as SharedScreenHandler)
+        let handler = create_beacon_handler(sync_id, player_inventory, &self.0);
+        Some(Arc::new(Mutex::new(handler)) as SharedScreenHandler)
     }
 
     fn get_display_name(&self) -> TextComponent {
@@ -56,11 +53,8 @@ impl BlockBehaviour for BeaconBlock {
                 pumpkin_data::statistic::CustomStatistic::InteractWithBeacon as i32,
                 1,
             );
-
-            // Open the screen using the factory
             args.player
                 .open_handled_screen(factory.as_ref(), Some(*args.position));
-
             BlockActionResult::Success
         })
     }
@@ -70,7 +64,8 @@ impl BlockBehaviour for BeaconBlock {
         args: GetScreenHandlerFactoryArgs<'_>,
     ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
-        Some(Box::new(BeaconScreenFactory(inventory)))
+        Some(Box::new(BeaconScreenFactory(
+            block_entity.to_property_delegate()?,
+        )))
     }
 }
