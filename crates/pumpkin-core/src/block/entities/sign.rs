@@ -4,12 +4,19 @@ use std::sync::{
 };
 
 use super::BlockEntity;
+use crate::world::World;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 
 pub use pumpkin_data::dye_color::DyeColor;
+
+/// Extra reach allowed when checking that a sign editor is still near the sign.
+///
+/// Added on top of the block interaction range. Vanilla passes the same value to
+/// `Player#isWithinBlockInteractionRange` from `SignBlockEntity#playerIsTooFarAwayToEdit`.
+pub const SIGN_EDIT_RANGE_BUFFER: f64 = 4.0;
 
 pub struct SignBlockEntity {
     pub front_text: SignText,
@@ -497,5 +504,38 @@ impl<'a> SignEntityRef<'a> {
             Self::Sign(s) => &s.currently_editing_player,
             Self::Hanging(s) => &s.currently_editing_player,
         }
+    }
+
+    #[must_use]
+    pub fn block_pos(&self) -> BlockPos {
+        match self {
+            Self::Sign(sign) => sign.get_position(),
+            Self::Hanging(sign) => sign.get_position(),
+        }
+    }
+
+    /// Mirrors the gate in `SignBlockEntity#updateSignText`: only the player the editor was
+    /// opened for may write text, and only while they can still reach the sign. Vanilla keeps
+    /// that registration from going stale in `SignBlockEntity#tick`; Pumpkin has no sign
+    /// ticker, so `SignBlockEntity#playerIsTooFarAwayToEdit` is checked here instead.
+    #[must_use]
+    pub fn may_update_text(&self, world: &World, player_id: uuid::Uuid) -> bool {
+        if self.is_waxed() {
+            return false;
+        }
+        let currently_editing = *self
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        currently_editing == Some(player_id)
+            && !self.player_is_too_far_away_to_edit(world, player_id)
+    }
+
+    /// Mirrors `SignBlockEntity#playerIsTooFarAwayToEdit`.
+    fn player_is_too_far_away_to_edit(&self, world: &World, player_id: uuid::Uuid) -> bool {
+        let Some(editing_player) = world.get_player_by_uuid(player_id) else {
+            return true;
+        };
+        !editing_player.can_interact_with_block_at(&self.block_pos(), SIGN_EDIT_RANGE_BUFFER)
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::block::entities::hanging_sign::HangingSignBlockEntity;
-use crate::block::entities::sign::{SignBlockEntity, SignEntityRef, Text};
+use crate::block::entities::sign::{SIGN_EDIT_RANGE_BUFFER, SignBlockEntity, SignEntityRef, Text};
 use crate::command::CommandSender;
 use crate::command::context::command_source::CommandSource;
 use pumpkin_data::Block;
@@ -693,7 +693,7 @@ fn other_player_is_editing_sign(
     if let Some(editing_player_id) = *currently_editing
         && editing_player_id != player.gameprofile.id
         && let Some(editing_player) = world.get_player_by_uuid(editing_player_id)
-        && editing_player.can_interact_with_block_at(position, 4.0)
+        && editing_player.can_interact_with_block_at(position, SIGN_EDIT_RANGE_BUFFER)
     {
         return true;
     }

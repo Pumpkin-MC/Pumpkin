@@ -76,17 +76,7 @@ impl BedrockClient {
         else {
             return;
         };
-        if sign_entity.is_waxed() {
-            return;
-        }
-
-        let currently_editing = *sign_entity
-            .currently_editing_player()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(editor_id) = currently_editing
-            && editor_id != player.gameprofile.id
-        {
+        if !sign_entity.may_update_text(&world, player.gameprofile.id) {
             return;
         }
 
