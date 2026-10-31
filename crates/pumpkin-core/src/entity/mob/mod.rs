@@ -1351,7 +1351,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
     }
-  
+
     fn mob_is_pushable(&self) -> bool {
         self.get_mob_entity().living_entity.is_pushable()
     }
