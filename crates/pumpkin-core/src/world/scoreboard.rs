@@ -14,7 +14,7 @@ use pumpkin_protocol::{
         RenderType, TeamMethod, TeamParameters,
     },
 };
-use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
 use tracing::warn;
 
 use super::World;
@@ -183,6 +183,20 @@ impl Scoreboard {
             }
         }
         entity_scores
+    }
+
+    /// Vanilla's `Scoreboard.getTrackedPlayers`: every holder with at least one score.
+    #[must_use]
+    pub fn get_tracked_players(&self) -> Vec<&str> {
+        let mut tracked = Vec::new();
+        for objective_scores in self.scores.values() {
+            for entity_name in objective_scores.keys() {
+                if !tracked.contains(&entity_name.as_str()) {
+                    tracked.push(entity_name.as_str());
+                }
+            }
+        }
+        tracked
     }
 
     #[must_use]
@@ -740,6 +754,18 @@ impl ScoreboardObjective {
             number_format,
             criterion: criterion.into(),
         }
+    }
+
+    /// Vanilla's `Objective.getFormattedDisplayName`: the display name in square
+    /// brackets, with the objective's name as its tooltip.
+    #[must_use]
+    pub fn formatted_display_name(&self) -> TextComponent {
+        self.display_name
+            .clone()
+            .hover_event(HoverEvent::show_text(TextComponent::text(
+                self.name.clone(),
+            )))
+            .wrap_in_square_brackets()
     }
 }
 

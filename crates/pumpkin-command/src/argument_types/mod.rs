@@ -254,6 +254,7 @@ pub mod range;
 pub mod registry_id;
 pub mod resource;
 pub mod resource_or_tag;
+pub mod scoreboard_slot;
 pub mod slot;
 pub mod sound_category;
 pub mod team_color;

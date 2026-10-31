@@ -7,6 +7,7 @@ use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::objective::ObjectiveArgumentType;
 use crate::command::argument_types::operation::{OperationArgumentType, ScoreboardOperation};
 use crate::command::argument_types::score_holder::{ResolvedScoreHolder, ScoreHolderArgumentType};
+use crate::command::argument_types::scoreboard_slot::ScoreboardSlotArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -31,12 +32,23 @@ const ARG_DISPLAY_NAME: &str = "displayName";
 const ARG_TARGETS: &str = "targets";
 const ARG_SCORE: &str = "score";
 const ARG_OPERATION: &str = "operation";
+const ARG_SLOT: &str = "slot";
 const ARG_SOURCE_TARGETS: &str = "source";
 const ARG_SOURCE_OBJECTIVE: &str = "sourceObjective";
 
 const NO_SCORE_ERROR: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
+);
+
+const DISPLAY_SLOT_ALREADY_EMPTY_ERROR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYEMPTY,
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYEMPTY,
+);
+
+const DISPLAY_SLOT_ALREADY_SET_ERROR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYSET,
+    translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_ALREADYSET,
 );
 
 const DUPLICATE_OBJECTIVE_ERROR: CommandErrorType<0> = CommandErrorType::new(
@@ -106,6 +118,165 @@ impl CommandExecutor for ObjectivesAddExecutor {
         );
 
         Ok(1)
+    }
+}
+
+struct ObjectivesListExecutor;
+
+impl CommandExecutor for ObjectivesListExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let world = context.world().clone();
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let display_names: Vec<TextComponent> = scoreboard
+            .get_objectives()
+            .values()
+            .map(ScoreboardObjective::formatted_display_name)
+            .collect();
+        let count = display_names.len() as i32;
+
+        let message = if display_names.is_empty() {
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_LIST_EMPTY,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_LIST_EMPTY
+            )
+        } else {
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_LIST_SUCCESS,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_LIST_SUCCESS,
+                TextComponent::text(count.to_string()),
+                TextComponent::join_with_comma(display_names)
+            )
+        };
+        drop(scoreboard);
+
+        context.source.send_feedback(message, false);
+        Ok(count)
+    }
+}
+
+struct ObjectivesModifyDisplayNameExecutor;
+
+impl CommandExecutor for ObjectivesModifyDisplayNameExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
+        let display_name = ComponentArgumentType::get(context, ARG_DISPLAY_NAME)?;
+
+        let world = context.world().clone();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut objective =
+            ObjectiveArgumentType::objective_or_error(&scoreboard, &objective_name)?.clone();
+        if objective.display_name == display_name {
+            return Ok(0);
+        }
+        objective.display_name = display_name;
+        let formatted_display_name = objective.formatted_display_name();
+        scoreboard.update_objective(&world, objective);
+        drop(scoreboard);
+
+        context.source.send_feedback(
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_MODIFY_DISPLAYNAME,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_MODIFY_DISPLAYNAME,
+                TextComponent::text(objective_name),
+                formatted_display_name
+            ),
+            true,
+        );
+        Ok(0)
+    }
+}
+
+struct ObjectivesModifyRenderTypeExecutor {
+    render_type: RenderType,
+}
+
+impl CommandExecutor for ObjectivesModifyRenderTypeExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
+
+        let world = context.world().clone();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut objective =
+            ObjectiveArgumentType::objective_or_error(&scoreboard, &objective_name)?.clone();
+        if objective.render_type == self.render_type {
+            return Ok(0);
+        }
+        objective.render_type = self.render_type;
+        let formatted_display_name = objective.formatted_display_name();
+        scoreboard.update_objective(&world, objective);
+        drop(scoreboard);
+
+        context.source.send_feedback(
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_MODIFY_RENDERTYPE,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_MODIFY_RENDERTYPE,
+                formatted_display_name
+            ),
+            true,
+        );
+        Ok(0)
+    }
+}
+
+struct ObjectivesSetDisplayExecutor {
+    has_objective: bool,
+}
+
+impl CommandExecutor for ObjectivesSetDisplayExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let slot = ScoreboardSlotArgumentType::get(context, ARG_SLOT)?;
+
+        let world = context.world().clone();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let message = if self.has_objective {
+            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?.to_string();
+            let display_name =
+                ObjectiveArgumentType::objective_or_error(&scoreboard, &objective_name)?
+                    .display_name
+                    .clone();
+            if scoreboard.get_display_objective(slot) == Some(objective_name.as_str()) {
+                return Err(DISPLAY_SLOT_ALREADY_SET_ERROR.create_without_context());
+            }
+            scoreboard.set_display_objective(&world, slot, Some(&objective_name));
+
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_SET,
+                translation::bedrock::COMMANDS_SCOREBOARD_OBJECTIVES_SETDISPLAY_SUCCESSSET,
+                TextComponent::text(ScoreboardSlotArgumentType::serialized_name(slot)),
+                display_name
+            )
+        } else {
+            if scoreboard.get_display_objective(slot).is_none() {
+                return Err(DISPLAY_SLOT_ALREADY_EMPTY_ERROR.create_without_context());
+            }
+            scoreboard.clear_display_objective(&world, slot);
+
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_DISPLAY_CLEARED,
+                translation::bedrock::COMMANDS_SCOREBOARD_OBJECTIVES_SETDISPLAY_SUCCESSCLEARED,
+                TextComponent::text(ScoreboardSlotArgumentType::serialized_name(slot))
+            )
+        };
+        drop(scoreboard);
+
+        context.source.send_feedback(message, true);
+        Ok(0)
     }
 }
 
@@ -239,6 +410,97 @@ fn holder_component(holders: &[ResolvedScoreHolder]) -> (TextComponent, bool) {
         (holders[0].display_name.clone(), true)
     } else {
         (TextComponent::text(holders.len().to_string()), false)
+    }
+}
+
+struct PlayersListExecutor;
+
+impl CommandExecutor for PlayersListExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let world = context.world().clone();
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let tracked = scoreboard.get_tracked_players();
+        let count = tracked.len() as i32;
+        let message = if tracked.is_empty() {
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_EMPTY,
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_EMPTY
+            )
+        } else {
+            pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_SUCCESS,
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_SUCCESS,
+                TextComponent::text(count.to_string()),
+                TextComponent::join_with_comma(
+                    tracked
+                        .into_iter()
+                        .map(|name| TextComponent::text(name.to_string()))
+                        .collect()
+                )
+            )
+        };
+        drop(scoreboard);
+
+        context.source.send_feedback(message, false);
+        Ok(count)
+    }
+}
+
+struct PlayersListEntityExecutor;
+
+impl CommandExecutor for PlayersListEntityExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let holder = ScoreHolderArgumentType::get_score_holder(context, ARG_TARGETS)?;
+
+        let world = context.world().clone();
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let entries: Vec<TextComponent> = scoreboard
+            .get_scores_for_entity(&holder.name)
+            .iter()
+            .filter_map(|(objective_name, score)| {
+                scoreboard.get_objective(objective_name).map(|objective| {
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_ENTITY_ENTRY,
+                        translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_ENTITY_ENTRY,
+                        objective.formatted_display_name(),
+                        TextComponent::text(score.value.0.to_string())
+                    )
+                })
+            })
+            .collect();
+        let count = entries.len() as i32;
+
+        let messages = if entries.is_empty() {
+            vec![pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_ENTITY_EMPTY,
+                translation::bedrock::COMMANDS_SCOREBOARD_PLAYERS_LIST_PLAYER_EMPTY,
+                holder.display_name
+            )]
+        } else {
+            let mut messages = Vec::with_capacity(entries.len() + 1);
+            messages.push(pumpkin_macros::translate_cross!(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_ENTITY_SUCCESS,
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_LIST_ENTITY_SUCCESS,
+                holder.display_name,
+                TextComponent::text(count.to_string())
+            ));
+            messages.extend(entries);
+            messages
+        };
+        drop(scoreboard);
+
+        for message in messages {
+            context.source.send_feedback(message, false);
+        }
+        Ok(count)
     }
 }
 
@@ -625,6 +887,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .requires(PERMISSION)
             .then(
                 literal("objectives")
+                    .then(literal("list").executes(ObjectivesListExecutor))
                     .then(
                         literal("add").then(
                             argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
@@ -649,14 +912,57 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         ),
                     )
                     .then(
+                        literal("modify").then(
+                            argument(ARG_OBJECTIVE, ObjectiveArgumentType)
+                                .then(
+                                    literal("displayname").then(
+                                        argument(ARG_DISPLAY_NAME, ComponentArgumentType)
+                                            .executes(ObjectivesModifyDisplayNameExecutor),
+                                    ),
+                                )
+                                .then(
+                                    literal("rendertype")
+                                        .then(literal("integer").executes(
+                                            ObjectivesModifyRenderTypeExecutor {
+                                                render_type: RenderType::Integer,
+                                            },
+                                        ))
+                                        .then(literal("hearts").executes(
+                                            ObjectivesModifyRenderTypeExecutor {
+                                                render_type: RenderType::Hearts,
+                                            },
+                                        )),
+                                ),
+                        ),
+                    )
+                    .then(
                         literal("remove").then(
                             argument(ARG_OBJECTIVE, ObjectiveArgumentType)
                                 .executes(ObjectivesRemoveExecutor),
+                        ),
+                    )
+                    .then(
+                        literal("setdisplay").then(
+                            argument(ARG_SLOT, ScoreboardSlotArgumentType)
+                                .executes(ObjectivesSetDisplayExecutor {
+                                    has_objective: false,
+                                })
+                                .then(argument(ARG_OBJECTIVE, ObjectiveArgumentType).executes(
+                                    ObjectivesSetDisplayExecutor {
+                                        has_objective: true,
+                                    },
+                                )),
                         ),
                     ),
             )
             .then(
                 literal("players")
+                    .then(
+                        literal("list").executes(PlayersListExecutor).then(
+                            argument(ARG_TARGETS, ScoreHolderArgumentType::Single)
+                                .executes(PlayersListEntityExecutor),
+                        ),
+                    )
                     .then(
                         literal("set").then(
                             argument(ARG_TARGETS, ScoreHolderArgumentType::Multiple).then(
@@ -1024,6 +1330,30 @@ mod tests {
         ] {
             let result = dispatcher.parse_input(input, &source);
             assert!(!result.errors.is_empty(), "{input}");
+        }
+    }
+
+    #[test]
+    fn new_subcommands_parse() {
+        use crate::command::CommandSource;
+        use std::sync::Arc;
+
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        for input in [
+            "scoreboard objectives list",
+            "scoreboard objectives modify test displayname hello",
+            "scoreboard objectives modify test rendertype hearts",
+            "scoreboard objectives setdisplay sidebar",
+            "scoreboard objectives setdisplay sidebar.team.blue test",
+            "scoreboard players list",
+            "scoreboard players list #temp",
+            "scoreboard players list @s",
+        ] {
+            let result = dispatcher.parse_input(input, &source);
+            assert!(result.errors.is_empty(), "{input}: {:?}", result.errors);
+            assert_eq!(result.reader.remaining_length(), 0, "{input}");
         }
     }
 
