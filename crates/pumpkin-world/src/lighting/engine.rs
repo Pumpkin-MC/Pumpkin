@@ -127,6 +127,9 @@ impl LightProvider for SkyLightProvider {
 #[derive(Clone, Copy)]
 pub struct PropagationEntry {
     pos: BlockPos,
+    /// Cached light level for entries enqueued during BFS propagation.
+    /// `0` indicates that the level must be queried from chunk storage (used for initial/dynamic updates).
+    level: u8,
     skip_direction: Option<BlockDirection>,
 }
 
@@ -274,8 +277,11 @@ impl<P: LightProvider> LightPropagator<P> {
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
-
-            let current_light = P::get_light(cache, pos);
+            let current_light = if entry.level == 0 {
+                P::get_light(cache, pos)
+            } else {
+                entry.level
+            };
             if current_light <= 1 {
                 continue;
             }
@@ -372,6 +378,7 @@ impl<P: LightProvider> LightPropagator<P> {
                     if new_level > 1 && self.visited.test_and_set(nx, ny, nz) {
                         self.queue.push_back(PropagationEntry {
                             pos: neighbor_pos,
+                            level: new_level,
                             skip_direction: Some(dir.opposite()),
                         });
                     }
@@ -421,6 +428,7 @@ impl<P: LightProvider> LightPropagator<P> {
                     let nz = neighbor_pos.0.z;
                     self.queue.push_back(PropagationEntry {
                         pos: neighbor_pos,
+                        level: 0,
                         skip_direction: None,
                     });
                     self.visited.test_and_set(nx, ny, nz);
@@ -499,6 +507,7 @@ impl BlockLightPropagator {
                                     let pos = BlockPos(Vector3::new(x, y, z));
                                     self.queue.push_back(PropagationEntry {
                                         pos,
+                                        level: emission,
                                         skip_direction: None,
                                     });
                                 }
@@ -530,6 +539,7 @@ impl BlockLightPropagator {
                                     let pos = BlockPos(Vector3::new(x, y, z));
                                     self.queue.push_back(PropagationEntry {
                                         pos,
+                                        level: emission,
                                         skip_direction: None,
                                     });
                                 }
@@ -744,6 +754,7 @@ impl SkyLightPropagator {
 
                         self.queue.push_back(PropagationEntry {
                             pos,
+                            level: light,
                             skip_direction: skip_dir,
                         });
                     }
@@ -826,6 +837,7 @@ impl LightEngine {
             {
                 self.block_light.queue.push_back(PropagationEntry {
                     pos,
+                    level: 0,
                     skip_direction: None,
                 });
             }
@@ -900,5 +912,44 @@ impl LightEngine {
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunk_system::Chunk;
+    use crate::generation::get_world_gen;
+    use crate::generation::proto_chunk::ProtoChunk;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::world_seed::Seed;
+
+    #[test]
+    fn stale_queue_entry_does_not_propagate() {
+        let world_gen = get_world_gen(
+            Seed(12345),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut cache = Cache::new(0, 0, 1);
+        let chunk = ProtoChunk::new(0, 0, &world_gen);
+        cache.chunks.push(Chunk::Proto(Box::new(chunk)));
+
+        let mut engine = LightEngine::new();
+        let pos = BlockPos(Vector3::new(8, 64, 8));
+
+        // Place a light source, then extinguish it before running updates
+        engine.update_block_light(&mut cache, pos, 0, 15);
+        engine.update_block_light(&mut cache, pos, 15, 0);
+
+        engine.run_light_updates(&mut cache);
+
+        let neighbor = BlockPos(Vector3::new(8, 64, 9));
+        assert_eq!(get_block_light(&cache, pos), 0);
+        assert_eq!(get_block_light(&cache, neighbor), 0);
     }
 }
