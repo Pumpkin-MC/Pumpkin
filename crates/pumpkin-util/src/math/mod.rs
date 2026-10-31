@@ -32,6 +32,66 @@ pub fn cos(value: f32) -> f32 {
     SIN[(((value as f64 * SIN_SCALE) + 16384.0) as i64 & SIN_MASK) as usize]
 }
 
+const FRAC_EXP: u32 = 8;
+const LUT_SIZE: usize = 257;
+
+// Vanilla Mth initializes both lookup tables from the same quantized sine.
+static ATAN2_TABLE: LazyLock<[(f64, f64); LUT_SIZE]> = LazyLock::new(|| {
+    std::array::from_fn(|i| {
+        let angle = (f64::from(i as u32) / f64::from(1u32 << FRAC_EXP)).asin();
+        (angle, angle.cos())
+    })
+});
+
+#[must_use]
+pub fn atan2(mut y: f64, mut x: f64) -> f64 {
+    let squared_length = x * x + y * y;
+    if squared_length.is_nan() {
+        return f64::NAN;
+    }
+
+    let negative_y = y < 0.0;
+    if negative_y {
+        y = -y;
+    }
+
+    let negative_x = x < 0.0;
+    if negative_x {
+        x = -x;
+    }
+
+    let steep = y > x;
+    if steep {
+        std::mem::swap(&mut x, &mut y);
+    }
+
+    let inverse_length = fast_inv_sqrt(squared_length);
+
+    x *= inverse_length;
+    y *= inverse_length;
+
+    let fraction_bias = f64::from_bits(4_805_340_802_404_319_232);
+    let biased_y = fraction_bias + y;
+    let index = (biased_y.to_bits() & 0xffff_ffff) as usize;
+
+    let (angle, cosine) = ATAN2_TABLE[index];
+    let sine = biased_y - fraction_bias;
+    let difference = y * cosine - x * sine;
+    let correction = (6.0 + difference * difference) * difference * 0.16666666666666666;
+
+    let mut result = angle + correction;
+    if steep {
+        result = std::f64::consts::FRAC_PI_2 - result;
+    }
+    if negative_x {
+        result = std::f64::consts::PI - result;
+    }
+    if negative_y {
+        result = -result;
+    }
+    result
+}
+
 #[must_use]
 pub fn wrap_degrees(degrees: f32) -> f32 {
     let mut normalized_angle = degrees % 360.0;

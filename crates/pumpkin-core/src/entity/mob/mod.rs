@@ -777,7 +777,7 @@ impl MobEntity {
     pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
         let below = pos.down();
         let state = world.get_block_state(&below);
-        state.is_side_solid(BlockDirection::Up)
+        state.is_side_solid(BlockDirection::Up) && state.luminance < 14
     }
 
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -1352,6 +1352,14 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn mob_is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
+    fn pushes_entities(&self) -> bool {
+        true
+    }
+
     /// See [`EntityBase::sound_source`].
     fn mob_sound_source(&self) -> SoundCategory {
         self.get_entity().entity_type.sound_source
@@ -1432,6 +1440,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn should_check_fall_damage(&self) -> bool {
         true
+    }
+
+    fn ignores_block_triggers(&self) -> bool {
+        false
     }
 
     fn on_removed(&self) {}
@@ -2060,7 +2072,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        self.mob_is_pushable()
     }
 
     fn on_lightning_strike(

@@ -1,31 +1,32 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicI8, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 
+use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
-const ROOSTING_FLAG: u8 = 1;
+const ROOSTING_FLAG: i8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
-/// Vanilla: `getMinAmbientSoundDelay()` returns 80 for most mobs
-const MIN_AMBIENT_SOUND_DELAY: i32 = 80;
+const AMBIENT_SOUND_INTERVAL: i32 = 80;
 
 pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
-    roosting: AtomicBool,
-    ambient_sound_chance: AtomicI32,
+    flags: AtomicI8,
 }
 
 impl BatEntity {
@@ -34,8 +35,7 @@ impl BatEntity {
         let bat = Self {
             mob_entity,
             hanging_position: Mutex::new(None),
-            roosting: AtomicBool::new(true),
-            ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
+            flags: AtomicI8::new(ROOSTING_FLAG),
         };
         Arc::new(bat)
     }
@@ -59,42 +59,29 @@ impl BatEntity {
         {
             return false;
         }
-        true
+        MobEntity::check_mob_spawn_rules(world, pos)
     }
 
     #[must_use]
     pub fn is_roosting(&self) -> bool {
-        self.roosting.load(Relaxed)
+        self.flags.load(Relaxed) & ROOSTING_FLAG != 0
     }
 
     pub fn set_roosting(&self, roosting: bool) {
-        self.roosting.store(roosting, Relaxed);
-        let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
+        let flags = if roosting {
+            self.flags.fetch_or(ROOSTING_FLAG, Relaxed) | ROOSTING_FLAG
+        } else {
+            self.flags.fetch_and(!ROOSTING_FLAG, Relaxed) & !ROOSTING_FLAG
+        };
         self.mob_entity
             .living_entity
             .entity
             .set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
     }
 
-    fn tick_ambient_sound(&self, world: &World, pos: &Vector3<f64>) {
-        let chance = self.ambient_sound_chance.fetch_sub(1, Relaxed);
-        if chance <= 0 {
-            self.ambient_sound_chance
-                .store(MIN_AMBIENT_SOUND_DELAY, Relaxed);
-            if !self.is_roosting() || rand::random_range(0..4) == 0 {
-                world.play_sound_fine(
-                    Sound::EntityBatAmbient,
-                    SoundCategory::Ambient,
-                    pos,
-                    0.1,
-                    0.95,
-                );
-            }
-        }
-    }
-
     fn tick_roosting(&self, world: &World, above_pos: &BlockPos, pos: &Vector3<f64>) {
         let entity = &self.mob_entity.living_entity.entity;
+        let is_silent = entity.is_silent();
         let above_state = world.get_block_state(above_pos);
         if above_state.is_solid_block() {
             let rotate_head = {
@@ -105,28 +92,24 @@ impl BatEntity {
                 entity.head_yaw.store(head_yaw);
             }
 
+            let resting_targeting = TargetPredicate::create_non_attackable()
+                .set_base_max_distance(CLOSE_PLAYER_DISTANCE);
             if world
-                .get_closest_player(*pos, CLOSE_PLAYER_DISTANCE)
+                .get_nearest_player(*pos, CLOSE_PLAYER_DISTANCE, |player| {
+                    resting_targeting.test(world, Some(self), player.as_ref())
+                })
                 .is_some()
             {
                 self.set_roosting(false);
-                world.play_sound_fine(
-                    Sound::EntityBatTakeoff,
-                    SoundCategory::Ambient,
-                    pos,
-                    0.1,
-                    0.95,
-                );
+                if !is_silent {
+                    world.sync_world_event(WorldEvent::SoundBatLiftoff, entity.block_pos.load(), 0);
+                }
             }
         } else {
             self.set_roosting(false);
-            world.play_sound_fine(
-                Sound::EntityBatTakeoff,
-                SoundCategory::Ambient,
-                pos,
-                0.1,
-                0.95,
-            );
+            if !is_silent {
+                world.sync_world_event(WorldEvent::SoundBatLiftoff, entity.block_pos.load(), 0);
+            }
         }
     }
 
@@ -137,112 +120,149 @@ impl BatEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        if let Some(hp) = *hanging_pos {
-            let hp_state = world.get_block_state(&hp);
-            if !hp_state.is_air() || hp.0.y <= world.dimension.min_y {
-                *hanging_pos = None;
-            }
+        if let Some(target) = *hanging_pos
+            && (!world.get_block_state(&target).is_air() || target.0.y <= world.dimension.min_y)
+        {
+            *hanging_pos = None;
         }
 
-        let (should_pick_new, new_target, try_roost) = {
-            let mut rng = rand::rng();
-            let should_pick = hanging_pos.is_none()
-                || rng.random_range(0u32..30) == 0
-                || hanging_pos.is_some_and(|hp| {
-                    let dx = f64::from(hp.0.x) + 0.5 - pos.x;
-                    let dy = f64::from(hp.0.y) + 0.1 - pos.y;
-                    let dz = f64::from(hp.0.z) + 0.5 - pos.z;
-                    dx * dx + dy * dy + dz * dz < 4.0
-                });
-            let new_target = should_pick.then(|| {
-                BlockPos::new(
-                    pos.x as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                    (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0) as i32,
-                    pos.z as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                )
+        let mut rng = rand::rng();
+
+        let should_pick_new = hanging_pos.is_none()
+            || rng.random_range(0u32..30) == 0
+            || hanging_pos.is_some_and(|target| {
+                let dx = f64::from(target.0.x) + 0.5 - pos.x;
+                let dy = f64::from(target.0.y) + 0.5 - pos.y;
+                let dz = f64::from(target.0.z) + 0.5 - pos.z;
+                dx * dx + dy * dy + dz * dz < 4.0
             });
-            let try_roost = rng.random_range(0u32..100) == 0;
-            (should_pick, new_target, try_roost)
-        };
 
         if should_pick_new {
-            if let Some(target) = new_target {
-                let target_state = world.get_block_state(&target);
-                if target_state.is_air() && target.0.y > world.dimension.min_y {
-                    *hanging_pos = Some(target);
-                } else {
-                    *hanging_pos = None;
-                }
-            } else {
-                *hanging_pos = None;
-            }
+            *hanging_pos = Some(BlockPos::new(
+                (pos.x + f64::from(rng.random_range(0i32..7))
+                    - f64::from(rng.random_range(0i32..7)))
+                .floor() as i32,
+                (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0).floor() as i32,
+                (pos.z + f64::from(rng.random_range(0i32..7))
+                    - f64::from(rng.random_range(0i32..7)))
+                .floor() as i32,
+            ));
         }
 
-        if let Some(target) = *hanging_pos {
-            let d = f64::from(target.0.x) + 0.5 - pos.x;
-            let e = f64::from(target.0.y) + 0.1 - pos.y;
-            let f = f64::from(target.0.z) + 0.5 - pos.z;
-
-            let velo = entity.velocity.load();
-            let new_velo = Vector3::new(
-                velo.x + (d.signum() * 0.5 - velo.x) * 0.1,
-                velo.y + (e.signum() * 0.7 - velo.y) * 0.1,
-                velo.z + (f.signum() * 0.5 - velo.z) * 0.1,
-            );
-            entity.velocity.store(new_velo);
-
-            let yaw = (new_velo.z.atan2(new_velo.x) as f32).to_degrees() - 90.0;
-            let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - entity.yaw.load());
-            entity.yaw.store(entity.yaw.load() + yaw_diff);
-        }
+        let Some(target) = *hanging_pos else {
+            return;
+        };
         drop(hanging_pos);
 
-        if try_roost {
-            let above_state = world.get_block_state(above_pos);
-            if above_state.is_solid_block() {
-                self.set_roosting(true);
-            }
+        let dx = f64::from(target.0.x) + 0.5 - pos.x;
+        let dy = f64::from(target.0.y) + 0.1 - pos.y;
+        let dz = f64::from(target.0.z) + 0.5 - pos.z;
+
+        // Java Math.signum(0.0) returns 0.0.
+        let signum = |value: f64| {
+            if value == 0.0 { value } else { value.signum() }
+        };
+
+        let velocity = entity.velocity.load();
+        let acceleration = f64::from(0.1f32);
+        let vertical_speed = f64::from(0.7f32);
+
+        let new_velocity = Vector3::new(
+            velocity.x + (signum(dx) * 0.5 - velocity.x) * acceleration,
+            velocity.y + (signum(dy) * vertical_speed - velocity.y) * acceleration,
+            velocity.z + (signum(dz) * 0.5 - velocity.z) * acceleration,
+        );
+        entity.velocity.store(new_velocity);
+
+        let yaw = (pumpkin_util::math::atan2(new_velocity.z, new_velocity.x) * 180.0
+            / f64::from(std::f32::consts::PI)) as f32
+            - 90.0;
+        let old_yaw = entity.yaw.load();
+        let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - old_yaw);
+
+        let input = self.mob_entity.living_entity.movement_input.load();
+        self.mob_entity
+            .living_entity
+            .movement_input
+            .store(Vector3::new(input.x, input.y, 0.5));
+
+        entity.yaw.store(old_yaw + yaw_diff);
+
+        if rng.random_range(0u32..100) == 0 && world.get_block_state(above_pos).is_solid_block() {
+            self.set_roosting(true);
         }
     }
 }
 
 impl Mob for BatEntity {
+    fn get_ambient_sound_interval(&self) -> i32 {
+        AMBIENT_SOUND_INTERVAL
+    }
+
+    fn play_ambient_sound(&self) {
+        let entity = self.get_entity();
+        if (!self.is_roosting() || rand::random_range(0..4) == 0) && !entity.is_silent() {
+            entity.world.load().play_sound_fine(
+                Sound::EntityBatAmbient,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                self.sound_volume(),
+                self.voice_pitch(),
+            );
+        }
+    }
+
+    fn should_check_fall_damage(&self) -> bool {
+        false
+    }
+
+    fn ignores_block_triggers(&self) -> bool {
+        true
+    }
+
+    fn can_be_leashed(&self) -> bool {
+        false
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(self)
+    }
+
+    fn mob_is_pushable(&self) -> bool {
+        false
+    }
+
+    fn pushes_entities(&self) -> bool {
+        false
+    }
+
     fn mob_is_flapping(&self) -> bool {
         !self.is_roosting() && self.get_entity().tick_count.load(Relaxed) % 10 == 0
     }
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
+        let flags = self.flags.load(Relaxed);
         entity.set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-        nbt.put_byte("BatFlags", i8::try_from(flags).unwrap_or(0));
+        nbt.put_byte("BatFlags", self.flags.load(Relaxed));
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        let flags = u8::try_from(nbt.get_byte("BatFlags").unwrap_or(0)).unwrap_or(0);
-        let roosting = (flags & ROOSTING_FLAG) != 0;
-        self.set_roosting(roosting);
+        let flags = nbt.get_byte("BatFlags").unwrap_or(0);
+        self.flags.store(flags, Relaxed);
+        self.get_entity()
+            .set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
-        let mut meta = crate::entity::mob::MobMetadata::new();
-        if self.is_roosting() {
-            meta = meta.bat_roosting(true);
-        }
-        Some(meta)
+        Some(crate::entity::mob::MobMetadata::new().bat_flags(self.flags.load(Relaxed)))
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let entity = &self.mob_entity.living_entity.entity;
-        self.tick_ambient_sound(&entity.world.load(), &entity.pos.load());
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
@@ -260,35 +280,161 @@ impl Mob for BatEntity {
     }
 
     fn post_tick(&self) {
+        let entity = &self.mob_entity.living_entity.entity;
         if self.is_roosting() {
-            let entity = &self.mob_entity.living_entity.entity;
             entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
             let pos = entity.pos.load();
             let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
             entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
+        } else {
+            let mut velocity = entity.velocity.load();
+            velocity.y *= 0.6;
+            entity.velocity.store(velocity);
         }
     }
 
-    fn get_mob_gravity(&self) -> f64 {
-        0.0
-    }
-
-    fn get_mob_y_velocity_drag(&self) -> Option<f64> {
-        Some(0.6)
-    }
-
-    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.get_entity().is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
         if self.is_roosting() {
             self.set_roosting(false);
-            let entity = &self.mob_entity.living_entity.entity;
-            let pos = entity.pos.load();
-            entity.world.load().play_sound_fine(
-                Sound::EntityBatTakeoff,
-                SoundCategory::Ambient,
-                &pos,
-                0.1,
-                0.95,
-            );
         }
+        true
+    }
+}
+
+impl CustomSound for BatEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatDeath)
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityBatHurt)
+    }
+
+    fn sound_volume(&self) -> f32 {
+        0.1
+    }
+
+    fn sound_category(&self) -> SoundCategory {
+        SoundCategory::Neutral
+    }
+
+    fn voice_pitch(&self) -> f32 {
+        self.mob_entity.living_entity.get_pitch() * 0.95
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use pumpkin_data::entity::EntityType;
+
+    #[tokio::test]
+    async fn bat_flags_preserve_other_bits_when_resting_changes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let mut saved = NbtCompound::new();
+        saved.put_byte("BatFlags", -127);
+        bat.mob_read_nbt(&saved);
+        assert!(bat.is_roosting());
+        bat.mob_write_nbt(&mut saved);
+        assert_eq!(saved.get_byte("BatFlags"), Some(-127));
+        bat.set_roosting(false);
+        bat.mob_write_nbt(&mut saved);
+        assert_eq!(saved.get_byte("BatFlags"), Some(-128));
+        bat.set_roosting(true);
+        bat.mob_write_nbt(&mut saved);
+        assert_eq!(saved.get_byte("BatFlags"), Some(-127));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bat_does_not_power_pressure_plates_or_accumulate_fall_distance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::blocks::redstone::pressure_plate::{
+            PressurePlate, plate::PressurePlateBlock, weighted::WeightedPressurePlateBlock,
+        };
+        use pumpkin_data::Block;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = BlockPos::new(0, 64, 0);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::BAT,
+        ));
+        world.add_entity_silent(bat.clone());
+        assert_eq!(
+            world
+                .get_entities_at_box(&pumpkin_util::math::boundingbox::BoundingBox::from_block(
+                    &pos
+                ))
+                .len(),
+            1
+        );
+        let normal =
+            PressurePlateBlock.calculate_redstone_output(&world, &Block::OAK_PRESSURE_PLATE, &pos);
+        let weighted = WeightedPressurePlateBlock.calculate_redstone_output(
+            &world,
+            &Block::LIGHT_WEIGHTED_PRESSURE_PLATE,
+            &pos,
+        );
+        bat.mob_entity
+            .living_entity
+            .fall(bat.as_ref(), -10.0, false, false);
+        let fall_distance = bat.mob_entity.living_entity.fall_distance.load();
+        world.level.shutdown().await;
+        assert_eq!(normal, 0);
+        assert_eq!(weighted, 0);
+        assert_eq!(fall_distance, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn damage_wakes_bat_before_hurt_cooldown_but_not_when_invulnerable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let entity = bat.get_entity();
+        entity.set_invulnerable(true);
+        let invulnerable_damage = bat.damage(bat.as_ref(), 1.0, DamageType::GENERIC);
+        let stayed_roosting = bat.is_roosting();
+
+        entity.set_invulnerable(false);
+        bat.mob_entity
+            .living_entity
+            .hurt_cooldown
+            .store(20, Relaxed);
+        bat.mob_entity.living_entity.last_damage_taken.store(2.0);
+        let cooldown_damage = bat.damage(bat.as_ref(), 1.0, DamageType::GENERIC);
+        let woke_up = !bat.is_roosting();
+        world.level.shutdown().await;
+
+        assert!(!invulnerable_damage);
+        assert!(stayed_roosting);
+        assert!(!cooldown_damage);
+        assert!(woke_up);
+        Ok(())
     }
 }

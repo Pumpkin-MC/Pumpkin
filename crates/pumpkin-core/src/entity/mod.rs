@@ -861,6 +861,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn is_ignoring_block_triggers(&self) -> bool {
+        self.get_mob().is_some_and(mob::Mob::ignores_block_triggers)
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();

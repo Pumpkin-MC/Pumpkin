@@ -109,7 +109,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         let len = world
             .get_entities_at_box(&aabb)
             .iter()
-            .filter(|e| !e.get_entity().is_spectator())
+            .filter(|e| !e.get_entity().is_spectator() && !e.is_ignoring_block_triggers())
             .count()
             + world
                 .get_players_at_box(&aabb)
