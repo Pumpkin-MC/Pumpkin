@@ -9,8 +9,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnNeighborUpdateArgs,
-    blocks::plant::PlantBlockBase,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase,
 };
 
 #[pumpkin_block("minecraft:bamboo_sapling")]
@@ -34,20 +33,6 @@ impl BlockBehaviour for BambooSaplingBlock {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        {
-            if args.block == &Block::BAMBOO_SAPLING
-                && args.world.get_block(&args.position.up()) == &Block::BAMBOO
-            {
-                args.world.set_block_state(
-                    args.position,
-                    Block::BAMBOO.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
-            }
-        }
-    }
-
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
@@ -64,11 +49,14 @@ impl BlockBehaviour for BambooSaplingBlock {
     }
 
     fn random_tick(&self, args: crate::block::RandomTickArgs<'_>) {
-        let state_above = args.world.get_block_state(&args.position.up());
-        if !state_above.is_air() || rand::rng().random_range(0..3) > 0 {
-            return;
+        let above = args.position.up();
+        let state_above = args.world.get_block_state(&above);
+        if rand::rng().random_range(0..3) == 0
+            && state_above.is_air()
+            && args.world.get_raw_brightness(&above, 0) >= 9
+        {
+            grow_bamboo(args.world, args.position);
         }
-        grow_bamboo(args.world, args.position);
     }
 }
 

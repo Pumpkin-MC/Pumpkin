@@ -7,6 +7,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -40,7 +41,11 @@ impl ItemBehaviour for ArmorStandItem {
         }
 
         let world = player.world();
-        let target_pos = location.offset(face.to_offset());
+        let target_pos = if world.get_block_state(&location).replaceable() {
+            location
+        } else {
+            location.offset(face.to_offset())
+        };
         let bottom_center = Vector3::new(
             f64::from(target_pos.0.x) + 0.5,
             f64::from(target_pos.0.y),
@@ -64,7 +69,9 @@ impl ItemBehaviour for ArmorStandItem {
             ),
         );
 
-        if world.is_space_empty(bounding_box) && world.get_entities_at_box(&bounding_box).is_empty()
+        if world.is_space_empty(bounding_box)
+            && world.get_entities_at_box(&bounding_box).is_empty()
+            && world.get_players_at_box(&bounding_box).is_empty()
         {
             let (player_yaw, _) = player.rotation();
             let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
@@ -73,15 +80,19 @@ impl ItemBehaviour for ArmorStandItem {
 
             entity.set_rotation(rotation, 0.0);
 
-            world.play_sound(
+            let pos = entity.pos.load();
+            world.play_sound_fine(
                 Sound::EntityArmorStandPlace,
                 SoundCategory::Blocks,
-                &entity.pos.load(),
+                &pos,
+                0.75,
+                0.8,
             );
 
             let armor_stand = ArmorStandEntity::new(entity);
 
             world.spawn_entity(Arc::new(armor_stand));
+            world.emit_game_event(GameEvent::EntityPlace.name(), pos);
             item.decrement_unless_creative(player.gamemode.load(), 1);
             BlockActionResult::Success
         } else {

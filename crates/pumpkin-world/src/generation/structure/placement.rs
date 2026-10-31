@@ -24,6 +24,7 @@ use pumpkin_data::structures::StructureKeys;
 use super::structures::StructurePosition;
 
 type StrongholdChunks = Option<Vec<(i32, i32)>>;
+type CachedStructureStart = Arc<OnceLock<Option<StructurePosition>>>;
 
 /// stronghold lookup.
 pub enum StrongholdLayout<'a> {
@@ -50,7 +51,7 @@ pub struct GlobalStructureCache {
     /// A jigsaw structure's placement is fully determined by its start chunk and the
     /// world seed, so it is computed once here instead of being recomputed for every
     /// surrounding chunk whose structure references overlap it.
-    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
+    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), CachedStructureStart>>,
 }
 
 struct StrongholdJob {
@@ -193,15 +194,12 @@ impl GlobalStructureCache {
         compute: impl FnOnce() -> Option<StructurePosition>,
     ) -> Option<StructurePosition> {
         let cache = self.structure_starts.get_or_init(DashMap::new);
-        if let Some(cached) = cache.get(&(key, chunk_x, chunk_z)) {
-            return cached.value().clone();
-        }
-        let computed = compute();
-        cache
-            .entry((key, chunk_x, chunk_z))
-            .or_insert(computed)
-            .value()
-            .clone()
+        let cache_key = (key, chunk_x, chunk_z);
+        let start = cache.get(&cache_key).map_or_else(
+            || cache.entry(cache_key).or_default().value().clone(),
+            |cached| cached.value().clone(),
+        );
+        start.get_or_init(compute).clone()
     }
 
     /// Calculates the 128 ring positions matching vanilla Minecraft's
@@ -563,6 +561,47 @@ mod tests {
         GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
         is_start_chunk, should_generate_structure,
     };
+
+    #[test]
+    fn concurrent_structure_requests_share_computation() {
+        use std::sync::{
+            Barrier,
+            atomic::{AtomicUsize, Ordering},
+        };
+        use std::time::Duration;
+
+        let cache = GlobalStructureCache::new();
+        let requests = Barrier::new(8);
+        let computations = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| {
+                    requests.wait();
+                    cache.get_or_compute_structure_start(
+                        pumpkin_data::structures::StructureKeys::AncientCity,
+                        0,
+                        0,
+                        || {
+                            computations.fetch_add(1, Ordering::Relaxed);
+                            std::thread::sleep(Duration::from_millis(20));
+                            None
+                        },
+                    );
+                });
+            }
+        });
+        assert_eq!(computations.load(Ordering::Relaxed), 1);
+        cache.get_or_compute_structure_start(
+            pumpkin_data::structures::StructureKeys::AncientCity,
+            0,
+            0,
+            || {
+                computations.fetch_add(1, Ordering::Relaxed);
+                None
+            },
+        );
+        assert_eq!(computations.load(Ordering::Relaxed), 1);
+    }
 
     #[test]
     fn get_start_chunk_random() {

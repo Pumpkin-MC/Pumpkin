@@ -12,6 +12,9 @@ use crate::pumpkin::plugin::{
     },
     damage_types::DamageType as WitDamageType,
     item_stack::ItemStack as WitHostItemStack,
+    status_effect::{
+        StatusEffectInstance as WitStatusEffectInstance, StatusEffectType as WitStatusEffectType,
+    },
     text::TextComponent,
     world::{
         Entity, EquipmentSlot as WitEquipmentSlot, HostLivingEntity,
@@ -415,6 +418,40 @@ impl HostLivingEntity for PluginHostState {
         Ok(())
     }
 
+    fn remove_effect(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+        effect: WitStatusEffectType,
+    ) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        else {
+            return Ok(false);
+        };
+        Ok(entity
+            .get_living_entity()
+            .is_some_and(|living| living.remove_effect(status_effect)))
+    }
+
+    fn has_effect(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+        effect: WitStatusEffectType,
+    ) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        else {
+            return Ok(false);
+        };
+        Ok(entity
+            .get_living_entity()
+            .is_some_and(|living| living.has_effect(status_effect)))
+    }
+
     fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -458,5 +495,43 @@ impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             entity.damage(&*entity, amount, damage_type);
         })
         .await
+    }
+
+    async fn add_effect(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        effect: WitStatusEffectInstance,
+    ) -> wasmtime::Result<()> {
+        let entity = accessor.get_res(&this)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect.effect_type);
+        let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        else {
+            return Ok(());
+        };
+        let effect = pumpkin_data::potion::Effect {
+            effect_type: status_effect,
+            duration: effect.duration as i32,
+            amplifier: effect.amplifier,
+            ambient: effect.ambient,
+            show_particles: effect.show_particles,
+            show_icon: effect.show_icon,
+            blend: false,
+        };
+        if let Some(living) = entity.get_living_entity() {
+            living.add_effect(effect);
+        }
+        Ok(())
+    }
+
+    async fn clear_effects(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<()> {
+        let entity = accessor.get_res(&this)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.reset_effects_and_attributes();
+        }
+        Ok(())
     }
 }

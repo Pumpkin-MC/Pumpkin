@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
+    Block, BlockStateId,
     entity::EntityType,
     fluid::Fluid,
     sound::{Sound, SoundCategory},
@@ -78,9 +78,7 @@ impl BlockBehaviour for FrogspawnBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Down
-            && !Self::may_place_on_world(args.world, args.position)
-        {
+        if !Self::may_place_on_world(args.world, args.position) {
             return Block::AIR.default_state.id;
         }
         args.state_id
@@ -105,7 +103,7 @@ impl BlockBehaviour for FrogspawnBlock {
             let z_offset = rand::rng().random_range(0.2..0.8);
             let spawn_pos = Vector3::new(
                 f64::from(args.position.0.x) + x_offset,
-                f64::from(args.position.0.y),
+                f64::from(args.position.0.y) - 0.5,
                 f64::from(args.position.0.z) + z_offset,
             );
             let tadpole = from_type(&EntityType::TADPOLE, spawn_pos, args.world, Uuid::new_v4());

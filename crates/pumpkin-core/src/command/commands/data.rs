@@ -207,6 +207,14 @@ pub fn snbt_colorful_display(tag: &NbtTag, _depth: usize) -> TextComponent {
 
 pub trait DataAccessor: Send + Sync {
     fn set_data(&self, data: &NbtCompound) -> Result<(), CommandSyntaxError>;
+    /// `data` is the full snapshot without the `removed` top-level keys.
+    fn remove_data(
+        &self,
+        data: &NbtCompound,
+        _removed: &[Box<str>],
+    ) -> Result<(), CommandSyntaxError> {
+        self.set_data(data)
+    }
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError>;
     fn get_modified_success(&self) -> TextComponent;
     fn get_print_success(&self, data: &NbtTag) -> TextComponent;
@@ -230,6 +238,16 @@ impl DataAccessor for EntityDataAccessor {
             return Err(ERROR_ENTITY_INVALID.create_without_context());
         }
         self.entity.read_nbt_non_mut(tag);
+        Ok(())
+    }
+
+    fn remove_data(
+        &self,
+        data: &NbtCompound,
+        removed: &[Box<str>],
+    ) -> Result<(), CommandSyntaxError> {
+        self.set_data(data)?;
+        self.entity.remove_nbt(removed);
         Ok(())
     }
 
@@ -484,20 +502,17 @@ impl TargetKind {
     ) -> Result<Box<dyn DataAccessor>, CommandSyntaxError> {
         match self {
             Self::Entity => {
-                let entity = EntityArgumentType::get_entity(context, &format!("{prefix}_target"))?;
+                let entity = EntityArgumentType::get_entity(context, prefix)?;
                 Ok(Box::new(EntityDataAccessor::new(entity)))
             }
             Self::Block => {
-                let pos =
-                    BlockPosArgumentType::get_block_pos(context, &format!("{prefix}_target"))?;
+                let pos = BlockPosArgumentType::get_block_pos(context, prefix)?;
                 let world = context.world().clone();
                 let accessor = BlockDataAccessor::new(pos, world)?;
                 Ok(Box::new(accessor))
             }
             Self::Storage => {
-                let id = context.get_argument::<pumpkin_util::identifier::Identifier>(&format!(
-                    "{prefix}_target"
-                ))?;
+                let id = context.get_argument::<pumpkin_util::identifier::Identifier>(prefix)?;
                 let server = context.server().clone();
                 Ok(Box::new(StorageDataAccessor::new(id.to_string(), server)))
             }
@@ -596,16 +611,21 @@ fn execute_merge(context: &CommandContext, target_kind: TargetKind) -> CommandEx
 fn execute_remove(context: &CommandContext, target_kind: TargetKind) -> CommandExecutorResult {
     let accessor = target_kind.access(context, "target")?;
     let path = context.get_argument::<NbtPath>("path")?;
-    let mut data = accessor.get_data()?;
-    let mut root = NbtTag::Compound(data.clone());
+    let old = accessor.get_data()?;
+    let mut root = NbtTag::Compound(old.clone());
     let count = path.remove(&mut root);
     if count == 0 {
         return Err(ERROR_MERGE_UNCHANGED.create_without_context());
     }
-    if let NbtTag::Compound(new_compound) = root {
-        data = new_compound;
-    }
-    accessor.set_data(&data)?;
+    let NbtTag::Compound(data) = root else {
+        return Err(ERROR_MERGE_UNCHANGED.create_without_context());
+    };
+    let removed: Vec<Box<str>> = old
+        .child_tags
+        .into_keys()
+        .filter(|key| !data.has(key))
+        .collect();
+    accessor.remove_data(&data, &removed)?;
     context
         .source
         .send_feedback(accessor.get_modified_success(), true);
@@ -843,7 +863,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     for &(target_kind, name) in &all_target_kinds {
         // data merge <target> <nbt>
         merge_node = merge_node.then(literal(name).then(
-            make_target_arg(target_kind, "target_target").then(
+            make_target_arg(target_kind, "target").then(
                 argument("nbt", NbtCompoundArgumentType).executes(MergeExecutor { target_kind }),
             ),
         ));
@@ -851,7 +871,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         // data get <target> [<path>] [<scale>]
         get_node = get_node.then(
             literal(name).then(
-                make_target_arg(target_kind, "target_target")
+                make_target_arg(target_kind, "target")
                     .executes(GetExecutor {
                         target_kind,
                         has_path: false,
@@ -877,7 +897,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
         // data remove <target> <path>
         remove_node = remove_node.then(literal(name).then(
-            make_target_arg(target_kind, "target_target").then(
+            make_target_arg(target_kind, "target").then(
                 argument("path", NbtPathArgumentType).executes(RemoveExecutor { target_kind }),
             ),
         ));
@@ -920,7 +940,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 mod_node = mod_node.then(
                     literal("from").then(
                         literal(source_name).then(
-                            make_target_arg(source_kind, "source_target")
+                            make_target_arg(source_kind, "source")
                                 .executes(ModifyExecutor {
                                     target_kind,
                                     modify_mode: mod_mode,
@@ -943,7 +963,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 mod_node = mod_node.then(
                     literal("string").then(
                         literal(source_name).then(
-                            make_target_arg(source_kind, "source_target")
+                            make_target_arg(source_kind, "source")
                                 .executes(ModifyExecutor {
                                     target_kind,
                                     modify_mode: mod_mode,
@@ -1002,8 +1022,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         }
 
         modify_node = modify_node.then(
-            literal(target_name)
-                .then(make_target_arg(target_kind, "target_target").then(target_path_arg)),
+            literal(target_name).then(make_target_arg(target_kind, "target").then(target_path_arg)),
         );
     }
     data_cmd = data_cmd.then(modify_node);

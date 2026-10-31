@@ -23,11 +23,11 @@ impl BlockBehaviour for SpawnerBlock {
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
+        if args.player.gamemode.load() != GameMode::Creative
+            && args.world.level_info.load().game_rules.block_drops
         {
-            if args.player.gamemode.load() != GameMode::Creative {
-                let xp_count = 15 + rand::random_range(0..15) + rand::random_range(0..15);
-                ExperienceOrbEntity::spawn(args.world, args.position.to_centered_f64(), xp_count);
-            }
+            let xp_count = 15 + rand::random_range(0..15) + rand::random_range(0..15);
+            ExperienceOrbEntity::spawn(args.world, args.position.to_centered_f64(), xp_count);
         }
     }
 }

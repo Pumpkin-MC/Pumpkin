@@ -37,7 +37,8 @@ impl TNTEntity {
     /// Vanilla `PrimedTnt.DEFAULT_EXPLOSION_POWER`.
     pub const DEFAULT_POWER: f32 = 4.0;
 
-    pub const fn new(entity: Entity, power: f32, fuse: u32) -> Self {
+    pub const fn new(mut entity: Entity, power: f32, fuse: u32) -> Self {
+        entity.blocks_building = true;
         Self {
             entity,
             power: AtomicCell::new(power),
@@ -165,7 +166,19 @@ impl EntityBase for TNTEntity {
         0.04
     }
 
-    // TODO: currently Bedrock has no fuse metadata, so the TNT doesn't blink.
+    fn entity_bedrock_spawn_metadata(
+        &self,
+    ) -> Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList> {
+        let mut meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+        let fuse = self.fuse.load(Ordering::Relaxed) as i32;
+        meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FUSE_TIME,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int(fuse),
+        );
+        Some(meta)
+    }
+
     fn bedrock_y_offset(&self) -> f64 {
         0.49
     }

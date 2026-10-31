@@ -14,6 +14,7 @@ use rand::RngExt;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
+use crate::command::argument_types::client_parsed::ClientParsed;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
@@ -33,10 +34,10 @@ use crate::entity::EntityBase;
 const DESCRIPTION: &str = "Evaluates number providers.";
 const PERMISSION: &str = "minecraft:command.compute";
 
-const ARG_POS: &str = "pos";
-const ARG_TARGET: &str = "target";
-const ARG_INT_PROVIDER: &str = "int_provider";
-const ARG_FLOAT_PROVIDER: &str = "float_provider";
+const ARG_POS: &str = "computePos";
+const ARG_TARGET: &str = "computeTarget";
+const ARG_INT_PROVIDER: &str = "provider";
+const ARG_FLOAT_PROVIDER: &str = "provider";
 const ARG_SCALE: &str = "scale";
 
 const MAX_PROVIDER_DEPTH: usize = 64;
@@ -1149,25 +1150,48 @@ fn add_provider_nodes<B: ArgumentBuilder>(builder: B, target_type: TargetType) -
     builder
         .then(
             literal("integer").then(
-                argument(ARG_INT_PROVIDER, ProviderArgumentType)
-                    .suggests(ContextIntProviderSuggestionProvider)
-                    .executes(ComputeIntegerExecutor { target_type }),
+                argument(
+                    ARG_INT_PROVIDER,
+                    ClientParsed::new(
+                        ProviderArgumentType,
+                        JavaClientArgumentType::ContextIntProvider,
+                    ),
+                )
+                .suggests(ContextIntProviderSuggestionProvider)
+                .executes(ComputeIntegerExecutor { target_type }),
             ),
         )
         .then(
             literal("float").then(
-                argument(ARG_FLOAT_PROVIDER, ProviderArgumentType)
-                    .suggests(ContextFloatProviderSuggestionProvider)
+                argument(
+                    ARG_FLOAT_PROVIDER,
+                    ClientParsed::new(
+                        ProviderArgumentType,
+                        JavaClientArgumentType::ContextFloatProvider,
+                    ),
+                )
+                .suggests(ContextFloatProviderSuggestionProvider)
+                .executes(ComputeFloatExecutor {
+                    target_type,
+                    has_scale: false,
+                })
+                .then(
+                    argument(
+                        ARG_SCALE,
+                        // Vanilla's scale is a float.
+                        ClientParsed::new(
+                            DoubleArgumentType::any(),
+                            JavaClientArgumentType::Float {
+                                min: None,
+                                max: None,
+                            },
+                        ),
+                    )
                     .executes(ComputeFloatExecutor {
                         target_type,
-                        has_scale: false,
-                    })
-                    .then(argument(ARG_SCALE, DoubleArgumentType::any()).executes(
-                        ComputeFloatExecutor {
-                            target_type,
-                            has_scale: true,
-                        },
-                    )),
+                        has_scale: true,
+                    }),
+                ),
             ),
         )
 }

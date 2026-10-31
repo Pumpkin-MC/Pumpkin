@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -18,20 +19,25 @@ impl ItemMetadata for SaddleItem {
 
 impl ItemBehaviour for SaddleItem {
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        if let Some(mob) = entity.get_mob()
+        let ent = entity.get_entity();
+        if ent.is_alive()
+            && let Some(mob) = entity.get_mob()
             && mob.can_be_saddled()
             && !mob.is_saddled()
+            && !mob
+                .as_ageable()
+                .is_some_and(crate::entity::ageable::AgeableMob::is_baby)
         {
             mob.set_saddled(true);
-            let ent = entity.get_entity();
             let sound = if ent.entity_type == &pumpkin_data::entity::EntityType::STRIDER {
                 Sound::EntityStriderSaddle
             } else {
                 Sound::EntityPigSaddle
             };
-            player
-                .world()
-                .play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
+            let pos = ent.pos.load();
+            let world = player.world();
+            world.play_sound(sound, SoundCategory::Neutral, &pos);
+            world.emit_game_event(GameEvent::Equip.name(), pos);
             item.decrement_unless_creative(player.gamemode.load(), 1);
         }
     }
