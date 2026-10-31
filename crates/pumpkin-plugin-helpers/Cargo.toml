@@ -1,0 +1,15 @@
+[package]
+name = "pumpkin-plugin-helpers"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+description = "Shared WebAssembly helpers composed into Pumpkin plugins"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen.workspace = true
+
+[lints]
+workspace = true

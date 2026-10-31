@@ -16,6 +16,7 @@ serde_json.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 wasmtime = { workspace = true }
+pumpkin-plugin-compose = { path = "../../tools/pumpkin-plugin-compose" }
 
 [[example]]
 name = "component_fixture"

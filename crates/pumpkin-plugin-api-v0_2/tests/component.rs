@@ -57,6 +57,10 @@ fn fixture_path() -> &'static PathBuf {
                 "build",
                 "--package",
                 "pumpkin-plugin-api-v0_2",
+                "--package",
+                "pumpkin-plugin-helpers",
+                "--lib",
+                "--locked",
                 "--example",
                 "component_fixture",
                 "--target",
@@ -68,7 +72,21 @@ fn fixture_path() -> &'static PathBuf {
             .status()
             .expect("failed to run cargo to build the fixture");
         assert!(status.success(), "building the fixture component failed");
-        target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm")
+        let plugin_path = target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm");
+        let helper_path = target_dir.join("wasm32-wasip2/debug/pumpkin_plugin_helpers.wasm");
+        let plugin = std::fs::read(plugin_path).expect("fixture bytes");
+        let helpers = std::fs::read(helper_path).expect("helper bytes");
+        assert!(
+            pumpkin_plugin_compose::compose(&plugin, b"\0asm\x0d\0\x01\0").is_err(),
+            "a missing helper export must fail composition"
+        );
+        let output = target_dir.join("composed-fixture.wasm");
+        std::fs::write(
+            &output,
+            pumpkin_plugin_compose::compose(&plugin, &helpers).expect("compose fixture"),
+        )
+        .expect("write composed fixture");
+        output
     })
 }
 
@@ -124,6 +142,11 @@ fn component_declares_the_mixed_v0_2_world() {
     let engine = engine();
     let component = load(&engine);
     let ty = component.component_type();
+    assert!(
+        ty.imports(&engine)
+            .all(|(name, _)| !name.starts_with("pumpkin:helpers/")),
+        "helper imports must be satisfied inside the distributed plugin"
+    );
 
     for name in ASYNC_CALLBACKS {
         let export = ty.get_export(&engine, name).map(|export| export.ty);
