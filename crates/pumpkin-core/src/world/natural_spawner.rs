@@ -4,7 +4,6 @@ use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
 use arc_swap::ArcSwap;
-use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
@@ -263,7 +262,6 @@ pub struct SpawnState {
     pub mob_category_counts: MobCounts,
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
-    last_checked: AtomicCell<Option<(BlockPos, &'static EntityType, f64)>>,
 }
 
 impl Clone for SpawnState {
@@ -273,7 +271,6 @@ impl Clone for SpawnState {
             mob_category_counts: self.mob_category_counts.clone(),
             spawn_potential: self.spawn_potential.clone(),
             local_mob_cap_calculator: self.local_mob_cap_calculator.clone(),
-            last_checked: AtomicCell::new(self.last_checked.load()),
         }
     }
 }
@@ -285,7 +282,6 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
-            .field("last_checked", &self.last_checked)
             .finish()
     }
 }
@@ -298,7 +294,6 @@ impl SpawnState {
             mob_category_counts: MobCounts::default(),
             spawn_potential: PotentialCalculator::default(),
             local_mob_cap_calculator: LocalMobCapCalculator::default(),
-            last_checked: AtomicCell::new(None),
         }
     }
 
@@ -396,7 +391,6 @@ impl SpawnState {
             mob_category_counts: counter,
             spawn_potential: potential,
             local_mob_cap_calculator: local_mob_cap,
-            last_checked: AtomicCell::new(None),
         }
     }
 
@@ -426,51 +420,11 @@ impl SpawnState {
         biome
             .spawn_costs
             .get(entity_type.resource_name)
-            .map_or_else(
-                || {
-                    self.last_checked.store(Some((*pos, entity_type, 0.0)));
-                    true
-                },
-                |cost| {
-                    self.last_checked
-                        .store(Some((*pos, entity_type, cost.charge)));
-                    self.spawn_potential
-                        .get_potential_energy_change(pos, cost.charge)
-                        <= cost.energy_budget
-                },
-            )
-    }
-
-    pub fn after_spawn(
-        &self,
-        entity_type: &'static EntityType,
-        pos: &BlockPos,
-        world: &Arc<World>,
-    ) {
-        let charge = if let Some((l_pos, l_type, l_charge)) = self.last_checked.load()
-            && l_pos.eq(pos)
-            && l_type == entity_type
-        {
-            Some(l_charge)
-        } else {
-            None
-        };
-
-        let charge = charge.unwrap_or_else(|| {
-            let biome = world.level.get_rough_biome(pos);
-            biome
-                .spawn_costs
-                .get(entity_type.resource_name)
-                .map_or(0.0, |cost| cost.charge)
-        });
-
-        self.spawn_potential.add_charge(pos, charge);
-        self.mob_category_counts.add(entity_type.category);
-        self.local_mob_cap_calculator.add_mob(
-            Vector2::<i32>::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)),
-            world,
-            entity_type.category,
-        );
+            .is_none_or(|cost| {
+                self.spawn_potential
+                    .get_potential_energy_change(pos, cost.charge)
+                    <= cost.energy_budget
+            })
     }
 }
 
@@ -843,7 +797,6 @@ pub fn spawn_category_for_position(
                             .get_mob()
                             .is_some_and(|mob| mob.is_max_group_size_reached(group_size));
                         batch_buffer.push(entity);
-                        spawn_state.after_spawn(entity_type, &check_pos, world);
                         if cluster_size >= entity_type.limit_per_chunk {
                             return batch_buffer;
                         }
