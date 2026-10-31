@@ -23,6 +23,10 @@ pub enum LootCondition {
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
     },
+    RandomChanceWithLooting {
+        chance: f32,
+        looting_multiplier: f32,
+    },
     TableBonus {
         enchantment: &'static str,
         chances: &'static [f32],
@@ -50,6 +54,16 @@ pub enum LootCondition {
         tag: &'static str,
         expected: bool,
     },
+    DamageSourceProperties(&'static std::sync::LazyLock<serde_json::Value>),
+    TimeCheck {
+        value: &'static std::sync::LazyLock<serde_json::Value>,
+        period: Option<u64>,
+    },
+    ValueCheck {
+        value: LootNumberProvider,
+        range: &'static std::sync::LazyLock<serde_json::Value>,
+    },
+    Reference(&'static str),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +177,10 @@ pub enum DynamicLootCondition {
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
     },
+    RandomChanceWithLooting {
+        chance: f32,
+        looting_multiplier: f32,
+    },
     TableBonus {
         enchantment: String,
         chances: Box<[f32]>,
@@ -190,6 +208,16 @@ pub enum DynamicLootCondition {
         tag: String,
         expected: bool,
     },
+    DamageSourceProperties(serde_json::Value),
+    TimeCheck {
+        value: serde_json::Value,
+        period: Option<u64>,
+    },
+    ValueCheck {
+        value: LootNumberProvider,
+        range: serde_json::Value,
+    },
+    Reference(String),
 }
 
 impl From<LootCondition> for DynamicLootCondition {
@@ -215,6 +243,13 @@ impl From<LootCondition> for DynamicLootCondition {
                 unenchanted_chance,
                 enchanted_chance_base,
                 enchanted_chance_per_level_above_first,
+            },
+            LootCondition::RandomChanceWithLooting {
+                chance,
+                looting_multiplier,
+            } => Self::RandomChanceWithLooting {
+                chance,
+                looting_multiplier,
             },
             LootCondition::TableBonus {
                 enchantment,
@@ -255,6 +290,18 @@ impl From<LootCondition> for DynamicLootCondition {
                 tag: tag.into(),
                 expected,
             },
+            LootCondition::DamageSourceProperties(predicate) => {
+                Self::DamageSourceProperties((**predicate).clone())
+            }
+            LootCondition::TimeCheck { value, period } => Self::TimeCheck {
+                value: (**value).clone(),
+                period,
+            },
+            LootCondition::ValueCheck { value, range } => Self::ValueCheck {
+                value,
+                range: (**range).clone(),
+            },
+            LootCondition::Reference(name) => Self::Reference(name.to_string()),
         }
     }
 }

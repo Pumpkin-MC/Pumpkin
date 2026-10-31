@@ -8,6 +8,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -27,7 +28,7 @@ impl ItemMetadata for LeadItem {
 impl ItemBehaviour for LeadItem {
     fn use_on_block(
         &self,
-        item: &mut ItemStack,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -52,13 +53,14 @@ impl ItemBehaviour for LeadItem {
             eye_height: 16.0,
         };
 
-        let search_box = BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim);
+        let search_box =
+            BoundingBox::new_from_pos(center.x, center.y - 16.0, center.z, &search_dim);
 
         let player_id = player.entity_id();
         let entities = world.get_entities_at_box(&search_box);
 
         let mut any_leashed = false;
-        let mut knot: Option<Arc<LeashKnotEntity>> = None;
+        let mut knot: Option<Arc<dyn EntityBase>> = None;
 
         for entity_base in entities {
             let ent = entity_base.get_entity();
@@ -78,18 +80,16 @@ impl ItemBehaviour for LeadItem {
                     knot = Some(LeashKnotEntity::get_or_create(&world, location));
                 }
                 if let Some(k) = &knot {
-                    ent.leash_to(k.clone() as Arc<dyn EntityBase>);
+                    ent.leash_to(k.clone());
                     any_leashed = true;
                 }
             }
         }
 
         if any_leashed {
-            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item.decrement(1);
-            }
             world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
-            BlockActionResult::Success
+            world.emit_game_event(GameEvent::BlockAttach.name(), center);
+            BlockActionResult::SuccessServer
         } else {
             BlockActionResult::Pass
         }

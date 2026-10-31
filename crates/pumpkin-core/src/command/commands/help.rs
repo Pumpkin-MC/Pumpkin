@@ -26,7 +26,7 @@ const PLUGIN_NOT_FOUND_ERROR_TYPE: LiteralCommandErrorType =
 const DESCRIPTION: &str = "Print a help message.";
 const PERMISSION: &str = "minecraft:command.help";
 
-const ARG: &str = "commandOrPage";
+const ARG: &str = "command";
 
 const COMMANDS_PER_PAGE: usize = 7;
 

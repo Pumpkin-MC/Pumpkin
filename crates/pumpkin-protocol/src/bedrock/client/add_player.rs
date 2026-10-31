@@ -48,6 +48,8 @@ pub struct CAddPlayer {
     pub abilities_data: SerializedAbilitiesData,
     /// Vehicle and attachment links.
     pub actor_links: Vec<ActorLink>,
+    /// Whether passenger block data is present.
+    pub has_passenger_block_data: bool,
     /// Unique device ID of the client device.
     pub device_id: String,
     /// Operating system platform of the player.

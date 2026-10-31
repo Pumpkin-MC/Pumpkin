@@ -466,6 +466,7 @@ fn register_entity_event(
         entity_target_living_entity::EntityTargetLivingEntityEvent,
         entity_teleport::EntityTeleportEvent,
         entity_toggle_glide::EntityToggleGlideEvent,
+        entity_toggle_sit::EntityToggleSitEvent,
         entity_toggle_swim::EntityToggleSwimEvent,
         entity_transform::EntityTransformEvent,
         entity_unleash::EntityUnleashEvent,
@@ -611,6 +612,9 @@ fn register_entity_event(
         }
         EventType::EntityTargetLivingEntityEvent => {
             register_typed_event::<EntityTargetLivingEntityEvent>(ctx, handler, priority, blocking);
+        }
+        EventType::EntityToggleSitEvent => {
+            register_typed_event::<EntityToggleSitEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityToggleSwimEvent => {
             register_typed_event::<EntityToggleSwimEvent>(ctx, handler, priority, blocking);
@@ -1521,6 +1525,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::EntityPotionEffectEvent
             | EventType::EntitySpellCastEvent
             | EventType::EntityTargetLivingEntityEvent
+            | EventType::EntityToggleSitEvent
             | EventType::EntityToggleSwimEvent
             | EventType::ExplosionPrimeEvent
             | EventType::FireworkExplodeEvent

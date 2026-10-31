@@ -142,6 +142,56 @@ mod tests {
     }
 
     #[test]
+    fn nether_lighting_clears_stale_sky_light_and_preserves_block_light() {
+        use crate::chunk_system::Cache;
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::Block;
+
+        let dimension = Dimension::THE_NETHER;
+        let world_gen = get_world_gen(
+            Seed(42),
+            dimension.clone(),
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut cache = Cache::new(-1, -1, 3);
+        for x in -1..=1 {
+            for z in -1..=1 {
+                cache
+                    .chunks
+                    .push(Chunk::Proto(Box::new(crate::ProtoChunk::new(
+                        x, z, &world_gen,
+                    ))));
+            }
+        }
+        let chunk = cache.chunks[4].get_proto_chunk_mut();
+        chunk.stage = StagedChunkEnum::Features;
+        for section in &mut chunk.light.sky_light {
+            section.fill(15);
+        }
+        let y = dimension.min_y + 1;
+        chunk.set_block_state(8, y, 8, Block::LAVA.default_state);
+        cache.advance(
+            StagedChunkEnum::Lighting,
+            &world_gen,
+            &BlockRegistry,
+            &LightingEngineConfig::Default,
+        );
+        let chunk = cache.chunks[4].get_proto_chunk_mut();
+        assert_eq!(chunk.light.sky_light.len(), dimension.height as usize / 16);
+        assert!(
+            chunk.light.sky_light.iter().all(|section| {
+                matches!(section, crate::chunk::format::LightContainer::Empty(0))
+            })
+        );
+        assert_eq!(
+            chunk.light.block_light[0].get(8, 1, 8),
+            Block::LAVA.default_state.luminance
+        );
+    }
+
+    #[test]
     fn dimensions_taller_than_their_noise_settings_generate_all_sections() {
         for (dimension, terrain_state) in [
             (

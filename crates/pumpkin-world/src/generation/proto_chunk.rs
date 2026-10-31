@@ -239,7 +239,8 @@ impl ProtoChunk {
             super::generator::WorldGenerator::Custom(custom_gen) => custom_gen.biome_mixer_seed(),
         };
 
-        let default_heightmap = [i16::MIN; CHUNK_AREA];
+        let default_heightmap = [(bottom_y as i16) - 1; CHUNK_AREA];
+        let unprimed_wg_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
             x,
             z,
@@ -255,8 +256,8 @@ impl ProtoChunk {
             .into_boxed_slice(),
             flat_surface_height_map: default_heightmap,
             flat_ocean_floor_height_map: default_heightmap,
-            flat_surface_wg_height_map: default_heightmap,
-            flat_ocean_floor_wg_height_map: default_heightmap,
+            flat_surface_wg_height_map: unprimed_wg_heightmap,
+            flat_ocean_floor_wg_height_map: unprimed_wg_heightmap,
             flat_motion_blocking_height_map: default_heightmap,
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
@@ -462,24 +463,102 @@ impl ProtoChunk {
         });
     }
 
-    fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_surface_height_map[index];
-        self.flat_surface_height_map[index] = current_height.max(y);
-    }
+    fn update_height_map_column(
+        &mut self,
+        hm_index: usize,
+        local_x: i32,
+        local_y: i32,
+        local_z: i32,
+        y: i16,
+        block_state: &BlockState,
+    ) {
+        let is_not_air = !block_state.is_air();
+        let (is_ocean_floor, is_liquid, is_leaves) = if is_not_air {
+            let block = BlockId::from_state_id(block_state.id);
+            (
+                blocks_movement(block_state, block),
+                block_state.is_liquid(),
+                block.has_tag(tag::Block::MINECRAFT_LEAVES),
+            )
+        } else {
+            (false, false, false)
+        };
+        let motion_blocking = is_ocean_floor || is_liquid;
+        let motion_blocking_no_leaves = motion_blocking && !is_leaves;
 
-    fn maybe_update_ocean_floor_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_ocean_floor_height_map[index];
-        self.flat_ocean_floor_height_map[index] = current_height.max(y);
-    }
+        if is_not_air && y > self.flat_surface_height_map[hm_index] {
+            self.flat_surface_height_map[hm_index] = y;
+        }
+        if is_ocean_floor && y > self.flat_ocean_floor_height_map[hm_index] {
+            self.flat_ocean_floor_height_map[hm_index] = y;
+        }
+        if motion_blocking && y > self.flat_motion_blocking_height_map[hm_index] {
+            self.flat_motion_blocking_height_map[hm_index] = y;
+        }
+        if motion_blocking_no_leaves && y > self.flat_motion_blocking_no_leaves_height_map[hm_index]
+        {
+            self.flat_motion_blocking_no_leaves_height_map[hm_index] = y;
+        }
 
-    fn maybe_update_motion_blocking_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_motion_blocking_height_map[index];
-        self.flat_motion_blocking_height_map[index] = current_height.max(y);
-    }
+        let mut lower_surface = !is_not_air && y == self.flat_surface_height_map[hm_index];
+        let mut lower_ocean = !is_ocean_floor && y == self.flat_ocean_floor_height_map[hm_index];
+        let mut lower_mb = !motion_blocking && y == self.flat_motion_blocking_height_map[hm_index];
+        let mut lower_mb_no_leaves = !motion_blocking_no_leaves
+            && y == self.flat_motion_blocking_no_leaves_height_map[hm_index];
 
-    fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
-        self.flat_motion_blocking_no_leaves_height_map[index] = current_height.max(y);
+        if lower_surface || lower_ocean || lower_mb || lower_mb_no_leaves {
+            let bottom_y = self.bottom_y() as i32;
+            let default_y = (bottom_y - 1) as i16;
+            if lower_surface {
+                self.flat_surface_height_map[hm_index] = default_y;
+            }
+            if lower_ocean {
+                self.flat_ocean_floor_height_map[hm_index] = default_y;
+            }
+            if lower_mb {
+                self.flat_motion_blocking_height_map[hm_index] = default_y;
+            }
+            if lower_mb_no_leaves {
+                self.flat_motion_blocking_no_leaves_height_map[hm_index] = default_y;
+            }
+
+            for scan_local_y in (0..local_y).rev() {
+                let idx = Self::local_pos_to_block_index(local_x, scan_local_y, local_z);
+                let Some(&state_id) = self.flat_block_map.get(idx) else {
+                    continue;
+                };
+                if state_id == BlockStateId::AIR {
+                    continue;
+                }
+                let state = state_id.to_state();
+                if state.is_air() {
+                    continue;
+                }
+                let scan_y = (bottom_y + scan_local_y) as i16;
+                if lower_surface {
+                    self.flat_surface_height_map[hm_index] = scan_y;
+                    lower_surface = false;
+                }
+                let block = BlockId::from_state_id(state_id);
+                let bm = blocks_movement(state, block);
+                if lower_ocean && bm {
+                    self.flat_ocean_floor_height_map[hm_index] = scan_y;
+                    lower_ocean = false;
+                }
+                let mb = bm || state.is_liquid();
+                if lower_mb && mb {
+                    self.flat_motion_blocking_height_map[hm_index] = scan_y;
+                    lower_mb = false;
+                }
+                if lower_mb_no_leaves && mb && !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
+                    self.flat_motion_blocking_no_leaves_height_map[hm_index] = scan_y;
+                    lower_mb_no_leaves = false;
+                }
+                if !(lower_surface || lower_ocean || lower_mb || lower_mb_no_leaves) {
+                    break;
+                }
+            }
+        }
     }
 
     #[must_use]
@@ -658,25 +737,6 @@ impl ProtoChunk {
         if local_y < 0 || local_y >= self.height() as i32 {
             return;
         }
-        if !block_state.is_air() {
-            let index = Self::local_position_to_height_map_index(local_x, local_z);
-            let y = y as i16;
-            self.maybe_update_surface_height_map(index, y);
-            let block = BlockId::from_state_id(block_state.id);
-
-            let blocks_movement = blocks_movement(block_state, block);
-            if blocks_movement {
-                self.maybe_update_ocean_floor_height_map(index, y);
-            }
-            if blocks_movement || block_state.is_liquid() {
-                self.maybe_update_motion_blocking_height_map(index, y);
-                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
-                    {
-                        self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
-                    }
-                }
-            }
-        }
 
         let index = Self::local_pos_to_block_index(local_x, local_y, local_z);
         if index >= self.flat_block_map.len() {
@@ -689,6 +749,9 @@ impl ProtoChunk {
             self.flat_block_map.resize(section_end, BlockStateId::AIR);
         }
         self.flat_block_map[index] = block_state.id;
+
+        let hm_index = Self::local_position_to_height_map_index(local_x, local_z);
+        self.update_height_map_column(hm_index, local_x, local_y, local_z, y as i16, block_state);
     }
 
     #[inline]
@@ -1286,13 +1349,11 @@ impl ProtoChunk {
 
         for chunk_x in center_x - 1..=center_x + 1 {
             for chunk_z in center_z - 1..=center_z + 1 {
-                if let Some(chunk) = cache.get_chunk_mut(chunk_x, chunk_z) {
-                    if chunk.flat_surface_wg_height_map[0] == i16::MIN {
-                        chunk.prime_heightmaps();
-                        chunk.snapshot_wg_heightmaps();
-                    } else if chunk.flat_motion_blocking_height_map[0] == i16::MIN {
-                        chunk.prime_heightmaps();
-                    }
+                if let Some(chunk) = cache.get_chunk_mut(chunk_x, chunk_z)
+                    && chunk.flat_surface_wg_height_map[0] == i16::MIN
+                {
+                    chunk.prime_heightmaps();
+                    chunk.snapshot_wg_heightmaps();
                 }
             }
         }
@@ -1498,9 +1559,7 @@ impl ProtoChunk {
             crate::generation::structure::height_sampler::NoiseHeightSampler::new(generator);
 
         for (i, set) in StructureSet::ALL.iter().enumerate() {
-            if let Some(ref enabled) = generator.enabled_structure_sets
-                && !enabled.contains(&i)
-            {
+            if !generator.enabled_structure_sets.contains(&i) {
                 continue;
             }
 
@@ -1636,9 +1695,7 @@ impl ProtoChunk {
         let chunk_height = self.generation_height().min(self.height());
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
-            if let Some(ref enabled) = generator.enabled_structure_sets
-                && !enabled.contains(&set_index)
-            {
+            if !generator.enabled_structure_sets.contains(&set_index) {
                 continue;
             }
 
@@ -1829,20 +1886,27 @@ impl GenerationCache for ProtoChunk {
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
         Self::get_block_state(self, pos)
     }
-    fn get_fluid_and_fluid_state(&self, _pos: &Vector3<i32>) -> (Fluid, FluidState) {
-        (
-            Fluid::EMPTY,
-            FluidState {
-                height: 0.0,
-                level: 0,
-                is_empty: true,
-                blast_resistance: 0.0,
-                block_state_id: BlockStateId::AIR,
-                is_still: false,
-                is_source: false,
-                falling: false,
-            },
-        )
+    fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (Fluid, FluidState) {
+        let id = GenerationCache::get_block_state(self, pos);
+        let Some(fluid) = Fluid::from_state_id(id) else {
+            let fluid = if id.is_waterlogged()
+                || matches!(
+                    id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                ) {
+                Fluid::WATER
+            } else {
+                Fluid::EMPTY
+            };
+            let state = fluid.states[0].clone();
+            return (fluid, state);
+        };
+        let state = fluid.states[0].clone();
+        (fluid.clone(), state)
     }
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
         Self::set_block_state(self, pos.x, pos.y, pos.z, block_state);

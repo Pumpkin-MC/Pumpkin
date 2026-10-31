@@ -614,6 +614,34 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         })
     }
 
+    fn set_spawn_location(
+        &mut self,
+        world: Resource<World>,
+        location: WitWorldSpawnLocation,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get(&world)?;
+        let current_info = world_ref.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.spawn_x = location.pos.x;
+        new_info.spawn_y = location.pos.y;
+        new_info.spawn_z = location.pos.z;
+        new_info.spawn_yaw = location.yaw;
+        new_info.spawn_pitch = location.pitch;
+        world_ref.level_info.store(Arc::new(new_info));
+        Ok(())
+    }
+
+    fn is_chunk_loaded(
+        &mut self,
+        world: Resource<World>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<bool> {
+        let world_ref = self.get(&world)?;
+        let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+        Ok(world_ref.level.is_chunk_loaded(&pos))
+    }
+
     fn get_chunk(
         &mut self,
         world: Resource<World>,
@@ -894,6 +922,66 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
 
         Ok(entities)
+    }
+
+    fn get_entity_by_id(
+        &mut self,
+        world: Resource<World>,
+        id: i32,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::entity::Entity>>> {
+        let world_provider = self.get(&world)?.clone();
+        if let Some(entity) = world_provider.get_entity_by_id(id) {
+            Ok(Some(self.add(entity)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_entity_by_uuid(
+        &mut self,
+        world: Resource<World>,
+        id: crate::pumpkin::plugin::uuid::Uuid,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::entity::Entity>>> {
+        let world_provider = self.get(&world)?.clone();
+        let uuid = <crate::pumpkin::plugin::uuid::Uuid as crate::uuid::UuidExt>::from_wit(&id);
+        if let Some(player) = world_provider.get_player_by_uuid(uuid) {
+            return Ok(Some(
+                self.add(player as Arc<dyn pumpkin_core::entity::EntityBase>)?,
+            ));
+        }
+        if let Some(entity) = world_provider.get_entity_by_uuid(uuid) {
+            return Ok(Some(self.add(entity)?));
+        }
+        Ok(None)
+    }
+
+    fn get_entities_in_box(
+        &mut self,
+        world: Resource<World>,
+        min: WitPosition,
+        max: WitPosition,
+    ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::entity::Entity>>> {
+        let world_provider = self.get(&world)?.clone();
+        let min_vec = super::events::from_wasm_position(min);
+        let max_vec = super::events::from_wasm_position(max);
+        let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                min_vec.x.min(max_vec.x),
+                min_vec.y.min(max_vec.y),
+                min_vec.z.min(max_vec.z),
+            ),
+            pumpkin_util::math::vector3::Vector3::new(
+                min_vec.x.max(max_vec.x),
+                min_vec.y.max(max_vec.y),
+                min_vec.z.max(max_vec.z),
+            ),
+        );
+        let found = world_provider.get_all_at_box(&aabb);
+        let mut results = Vec::with_capacity(found.len());
+        for entity in found {
+            results.push(self.add(entity)?);
+        }
+        Ok(results)
     }
 
     fn ray_trace_blocks(
@@ -1288,6 +1376,97 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
         update_flags: WitBlockFlags,
     ) -> wasmtime::Result<()> {
         set_block_state_with_store(accessor, world, pos, state, update_flags).await
+    }
+
+    async fn break_block(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        drop_items: bool,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<bool> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        let mut flags = from_wit_block_flags(update_flags);
+        if !drop_items {
+            flags.insert(pumpkin_world::world::BlockFlags::SKIP_DROPS);
+        }
+        run_blocking(accessor, move || {
+            world.break_block(&internal_pos, None, flags).is_some()
+        })
+        .await
+    }
+
+    async fn drop_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        item: Resource<crate::pumpkin::plugin::item_stack::ItemStack>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let pos_vec = super::events::from_wasm_position(pos);
+        let entity = pumpkin_core::entity::Entity::new(
+            Arc::clone(&world),
+            pos_vec,
+            &pumpkin_data::entity::EntityType::ITEM,
+        );
+        let item_entity: Arc<dyn pumpkin_core::entity::EntityBase> =
+            Arc::new(pumpkin_core::entity::item::ItemEntity::new_with_velocity(
+                entity,
+                stack,
+                pumpkin_util::math::vector3::Vector3::default(),
+                pumpkin_core::entity::item::ItemEntity::DEFAULT_PICKUP_DELAY,
+            ));
+        let spawned = Arc::clone(&item_entity);
+        run_blocking(accessor, move || {
+            world.spawn_entity(spawned);
+        })
+        .await?;
+        accessor.add_res(item_entity)
+    }
+
+    async fn drop_item_naturally(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        item: Resource<crate::pumpkin::plugin::item_stack::ItemStack>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let pos_vec = super::events::from_wasm_position(pos);
+        let entity = pumpkin_core::entity::Entity::new(
+            Arc::clone(&world),
+            pos_vec,
+            &pumpkin_data::entity::EntityType::ITEM,
+        );
+        let item_entity: Arc<dyn pumpkin_core::entity::EntityBase> =
+            Arc::new(pumpkin_core::entity::item::ItemEntity::new(entity, stack));
+        let spawned = Arc::clone(&item_entity);
+        run_blocking(accessor, move || {
+            world.spawn_entity(spawned);
+        })
+        .await?;
+        accessor.add_res(item_entity)
+    }
+
+    async fn spawn_experience_orb(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        amount: u32,
+    ) -> wasmtime::Result<()> {
+        if amount == 0 {
+            return Ok(());
+        }
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let pos_vec = super::events::from_wasm_position(pos);
+        run_blocking(accessor, move || {
+            pumpkin_core::entity::experience_orb::ExperienceOrbEntity::spawn(
+                &world, pos_vec, amount,
+            );
+        })
+        .await
     }
 }
 

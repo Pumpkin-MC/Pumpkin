@@ -13,12 +13,11 @@ use pumpkin_world::generation::proto_chunk::ProtoChunk;
 use pumpkin_world::world::{BlockAccessor, WorldPortalExt};
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::argument_type::JavaClientArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
-use crate::command::argument_types::placed_feature::PlacedFeatureNameArgumentType;
-use crate::command::argument_types::pool::PoolNameArgumentType;
-use crate::command::argument_types::structure::StructureNameArgumentType;
+use crate::command::argument_types::registry_id::RegistryIdArgumentType;
 use crate::command::argument_types::template::TemplateNameArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -82,12 +81,22 @@ struct CommandBlockRegistry;
 impl WorldPortalExt for CommandBlockRegistry {
     fn can_place_at(
         &self,
-        _block: &pumpkin_data::Block,
-        _state: &pumpkin_data::BlockState,
-        _block_accessor: &dyn BlockAccessor,
-        _block_pos: &BlockPos,
+        block: &pumpkin_data::Block,
+        state: &pumpkin_data::BlockState,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
     ) -> bool {
-        true
+        crate::block::registry::default_registry().can_place_at(
+            None,
+            None,
+            block_accessor,
+            None,
+            block,
+            state,
+            block_pos,
+            None,
+            None,
+        )
     }
 
     fn mirror(
@@ -701,7 +710,22 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             )
             .then(
                 literal("jigsaw").then(
-                    argument("pool", PoolNameArgumentType).then(
+                    argument(
+                        "pool",
+                        RegistryIdArgumentType::with_names(
+                            JavaClientArgumentType::ResourceKey {
+                                identifier: Identifier::vanilla_static("worldgen/template_pool"),
+                            },
+                            || {
+                                pumpkin_world::generation::structure::template::all_pool_names()
+                                    .iter()
+                                    .map(|name| format!("minecraft:{name}"))
+                                    .collect()
+                            },
+                            &["minecraft:village/plains/houses"],
+                        ),
+                    )
+                    .then(
                         argument("target", IdentifierArgumentType).then(
                             argument("max_depth", IntegerArgumentType::new(1, 20))
                                 .executes(PlaceJigsawExecutor)
@@ -715,7 +739,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             )
             .then(
                 literal("structure").then(
-                    argument("structure", StructureNameArgumentType)
+                    argument("structure", RegistryIdArgumentType::structure())
                         .executes(PlaceStructureExecutor)
                         .then(
                             argument("pos", BlockPosArgumentType).executes(PlaceStructureExecutor),
@@ -724,7 +748,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             )
             .then(
                 literal("feature").then(
-                    argument("feature", PlacedFeatureNameArgumentType)
+                    argument("feature", RegistryIdArgumentType::placed_feature())
                         .executes(PlaceFeatureExecutor)
                         .then(argument("pos", BlockPosArgumentType).executes(PlaceFeatureExecutor)),
                 ),

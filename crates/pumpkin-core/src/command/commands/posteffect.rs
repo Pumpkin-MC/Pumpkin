@@ -15,7 +15,7 @@ use crate::entity::EntityBase;
 const DESCRIPTION: &str = "Adds, removes, or lists screen shaders (post-processing effects).";
 const PERMISSION: &str = "minecraft:command.posteffect";
 
-const ARG_PLAYER: &str = "player";
+const ARG_PLAYER: &str = "targets";
 const ARG_TARGET: &str = "target";
 const ARG_POSTEFFECT: &str = "posteffect";
 
