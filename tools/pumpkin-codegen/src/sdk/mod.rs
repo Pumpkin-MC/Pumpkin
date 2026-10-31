@@ -1,15 +1,18 @@
 pub mod block;
+mod helpers;
 pub mod item;
 
 use std::fs;
 use std::path::Path;
 
-const SDK_OUT_DIRS: [&str; 2] = [
-    "../../crates/pumpkin-plugin-api/src/generated",
-    "../../crates/pumpkin-plugin-api-v0_2/src/generated",
-];
+const SDK_OUT_DIRS: [&str; 1] = ["../../crates/pumpkin-plugin-api/src/generated"];
 
 pub fn main() {
+    fs::write(
+        "../../crates/pumpkin-plugin-helpers/src/generated.rs",
+        helpers::build(),
+    )
+    .expect("Failed to write shared helper data");
     for directory in SDK_OUT_DIRS {
         fs::create_dir_all(directory).expect("Failed to create SDK generated directory");
     }

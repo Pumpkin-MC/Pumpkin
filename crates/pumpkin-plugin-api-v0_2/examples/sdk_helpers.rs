@@ -25,11 +25,11 @@ impl Plugin for Example {
     }
 
     async fn on_load(&self, context: Context) -> Result<()> {
-        let output = ItemStack::of(Item::Diamond, 1);
+        let output = ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 1);
         output.set_string("sdk-helpers", "origin", "recipe").await;
         ShapedRecipeBuilder::new("sdk_helpers:diamond", output)
             .pattern(["CC", "CC"])
-            .key('C', Item::Coal.resource_location())
+            .key('C', "minecraft:coal")
             .register_to_context(&context)
             .await
             .map_err(|error| error.to_string())?;
