@@ -871,7 +871,7 @@ impl BlockRegistry {
         );
 
         if let Some(ref stack) = held_stack
-            && placed_block.default_state.block_entity_type != u16::MAX
+            && placed_block.default_state.has_block_entity()
         {
             if let Some(block_entity_data) =
                 stack.get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
@@ -1242,7 +1242,7 @@ impl BlockRegistry {
         notify: bool,
     ) {
         let state = world.get_block_state(position);
-        if state.block_entity_type != u16::MAX
+        if state.has_block_entity()
             && world.get_block_entity(position).is_none()
             && let Some(entity) =
                 crate::block::entities::create_block_entity(state.block_entity_type, *position)
