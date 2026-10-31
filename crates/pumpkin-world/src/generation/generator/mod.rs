@@ -156,6 +156,16 @@ impl VanillaGenerator {
         )
     }
 
+    /// Vanilla `ChunkGenerator#getBaseHeight` for the `WORLD_SURFACE` heightmap: the y of the
+    /// first free block above the terrain, which is where a player stands in that column.
+    #[must_use]
+    pub fn get_base_height(&self, block_x: i32, block_z: i32) -> i32 {
+        use crate::generation::structure::structures::HeightSampler;
+
+        crate::generation::structure::height_sampler::NoiseHeightSampler::new(self)
+            .estimate_height(block_x, block_z)
+    }
+
     #[must_use]
     pub fn new_with_settings(
         seed: Seed,

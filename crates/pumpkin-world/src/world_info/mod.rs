@@ -568,6 +568,11 @@ impl LevelData {
         data
     }
 
+    /// Builds the level data of a new world.
+    ///
+    /// Vanilla `MinecraftServer#setInitialSpawn` generates the spawn area and stores a spawn
+    /// position on the surface, so the spawn y is the terrain height of the spawn column here
+    /// too instead of the `DEFAULT_SPAWN_Y` placeholder.
     #[must_use]
     pub fn from_world_generator(
         seed: Seed,
@@ -577,6 +582,7 @@ impl LevelData {
         let spawn_pos = generator.find_spawn_position();
         data.spawn_x = spawn_pos.0.x;
         data.spawn_z = spawn_pos.0.z;
+        data.spawn_y = generator.get_base_height(data.spawn_x, data.spawn_z);
         data
     }
 
@@ -814,5 +820,35 @@ mod tests {
             void.settings.structure_overrides_vec(),
             Some(Vec::<String>::new())
         );
+    }
+
+    // Regression test for #4359: the spawn of a new world was stored as the placeholder
+    // `DEFAULT_SPAWN_Y`, which made the console act 130 blocks above the ground.
+    #[test]
+    fn new_world_spawn_y_is_on_the_surface() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use crate::generation::structure::height_sampler::NoiseHeightSampler;
+        use crate::generation::structure::structures::HeightSampler;
+        use pumpkin_data::dimension::Dimension;
+
+        let seed = Seed(123_456_789);
+        let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
+        let data = LevelData::from_world_generator(seed, &generator);
+
+        assert_ne!(
+            data.spawn_y, DEFAULT_SPAWN_Y,
+            "a new world must not store the placeholder spawn height"
+        );
+
+        // The spawn is the first free block above the terrain: air at the spawn, ground below.
+        let mut height_sampler = NoiseHeightSampler::new(&generator);
+        let spawn_block = height_sampler
+            .sample_column_block(data.spawn_x, data.spawn_z, data.spawn_y)
+            .expect("spawn column is inside the world height");
+        assert!(spawn_block.is_air(), "the spawn must not be inside a block");
+        let below_spawn = height_sampler
+            .sample_column_block(data.spawn_x, data.spawn_z, data.spawn_y - 1)
+            .expect("spawn column is inside the world height");
+        assert!(!below_spawn.is_air(), "the spawn must stand on the surface");
     }
 }
