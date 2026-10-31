@@ -281,6 +281,7 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
 };
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -374,7 +375,9 @@ fn write_last_death_location(nbt: &mut NbtCompound, dimension: &ResourceLocation
 
 fn read_last_death_location(nbt: &NbtCompound) -> Option<(ResourceLocation, BlockPos)> {
     let death = nbt.get_compound("LastDeathLocation")?;
-    let dimension = death.get_string("dimension")?.to_string();
+    let dimension_str = death.get_string("dimension")?;
+    Identifier::try_from(dimension_str).ok()?;
+    let dimension = dimension_str.to_string();
     let pos = if let Some(pos_array) = death.get_int_array("pos")
         && pos_array.len() >= 3
     {
@@ -8599,6 +8602,16 @@ mod tests {
     #[test]
     fn last_death_location_missing_returns_none() {
         let nbt = NbtCompound::new();
+        assert_eq!(read_last_death_location(&nbt), None);
+    }
+
+    #[test]
+    fn last_death_location_invalid_dimension_returns_none() {
+        let pos = BlockPos(Vector3::new(10, 64, -20));
+        let mut nbt = NbtCompound::new();
+
+        write_last_death_location(&mut nbt, &"Not A Valid Dimension!".to_string(), &pos);
+
         assert_eq!(read_last_death_location(&nbt), None);
     }
 }
