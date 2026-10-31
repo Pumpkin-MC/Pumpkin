@@ -1535,6 +1535,12 @@ impl World {
 
         self.flush_block_updates();
         self.flush_synced_block_events();
+        // Vanilla `processPacketsAndTick` handles queued player packets before the level tick
+        // advances time and runs scheduled ticks, so a player's action lands a tick earlier than
+        // it would with the rest of `Player::tick`.
+        self.players.load().par_iter().for_each(|player| {
+            player.process_inbound_packets();
+        });
         self.update_active_chunks();
         self.tick_environment();
         let mut raids = {
