@@ -8,7 +8,6 @@ use pumpkin_data::block_properties::{
     OakTrapdoorLikeProperties, WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
 };
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
@@ -19,7 +18,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
@@ -31,10 +29,10 @@ use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::entities::copper_golem_statue::CopperGolemStatueBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
+    BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs, CanUpdateAtArgs,
     GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
-    UseWithItemArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlaceLiquidArgs, PlacedArgs,
+    RandomTickArgs, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
@@ -707,13 +705,6 @@ impl BlockBehaviour for WeatheringCopperChainBlock {
         ChainBlock.on_place(args)
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        ChainBlock.get_state_for_neighbor_update(args)
-    }
-
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
@@ -846,13 +837,6 @@ impl BlockBehaviour for WeatheringCopperTrapDoorBlock {
         TrapDoorBlock.on_place(args)
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        TrapDoorBlock.get_state_for_neighbor_update(args)
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         TrapDoorBlock.normal_use(args)
     }
@@ -911,15 +895,16 @@ impl BlockMetadata for WeatheringCopperSlabBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperSlabBlock {
-    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        SlabBlock.on_place(args)
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        SlabBlock.place_liquid(args)
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        SlabBlock.get_state_for_neighbor_update(args)
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        SlabBlock.can_place_liquid(args)
+    }
+
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        SlabBlock.on_place(args)
     }
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
@@ -1075,22 +1060,6 @@ impl BlockBehaviour for WeatheringCopperGrateBlock {
         props.to_state_id(args.block)
     }
 
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = MangroveRootsLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
-    }
-
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
@@ -1170,22 +1139,6 @@ impl BlockBehaviour for CopperGolemStatueBlock {
             args.world
                 .add_block_entity(Arc::new(CopperGolemStatueBlockEntity::new(*args.position)));
         }
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = CopperGolemStatueLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

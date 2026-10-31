@@ -1,9 +1,9 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt,
-    block_properties::AmethystClusterLikeProperties, fluid::Fluid,
+    block_properties::AmethystClusterLikeProperties,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::{tick::TickPriority, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
 use crate::block::{
@@ -55,15 +55,6 @@ impl BlockBehaviour for AmethystBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = AmethystClusterLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         WallMountedBlock::get_state_for_neighbor_update(self, args)
     }
 }

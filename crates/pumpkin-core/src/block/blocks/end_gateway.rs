@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use pumpkin_data::BlockState;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 
 use crate::block::entities::end_gateway::EndGatewayBlockEntity;
@@ -9,6 +11,10 @@ use crate::block::{BlockBehaviour, OnEntityCollisionArgs, OnSyncedBlockEventArgs
 pub struct EndGatewayBlock;
 
 impl BlockBehaviour for EndGatewayBlock {
+    fn can_be_replaced_with_fluid(&self, _state: &BlockState, _fluid: &Fluid) -> bool {
+        false
+    }
+
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         let entity = args.entity.get_entity();
         if entity

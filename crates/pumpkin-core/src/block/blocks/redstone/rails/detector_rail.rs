@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::RailShapeStraight;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
@@ -18,7 +17,6 @@ use crate::block::CanPlaceAtArgs;
 use crate::block::EmitsRedstonePowerArgs;
 use crate::block::GetComparatorOutputArgs;
 use crate::block::GetRedstonePowerArgs;
-use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnEntityCollisionArgs;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
@@ -132,21 +130,6 @@ impl BlockBehaviour for DetectorRailBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         update_flanking_rails_shape(args.world, args.block, args.state_id, args.position);
         self.check_pressed(args.world, args.position, args.block, args.state_id);
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if RailProperties::new(args.state_id, args.block).is_waterlogged() {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

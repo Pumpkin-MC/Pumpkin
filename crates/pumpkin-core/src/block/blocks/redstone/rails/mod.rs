@@ -244,13 +244,6 @@ impl RailProperties {
         }
     }
 
-    const fn is_waterlogged(&self) -> bool {
-        match self {
-            Self::Rail(props) => props.waterlogged,
-            Self::StraightRail(props) => props.waterlogged,
-        }
-    }
-
     const fn set_waterlogged(&mut self, waterlogged: bool) {
         match self {
             Self::Rail(props) => props.waterlogged = waterlogged,

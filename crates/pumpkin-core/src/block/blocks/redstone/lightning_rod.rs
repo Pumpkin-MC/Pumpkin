@@ -5,13 +5,11 @@ use crate::block::blocks::weathering_copper::{
     get_first, get_next, get_previous, get_weather_state,
 };
 use crate::block::{
-    BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs,
-    RandomTickArgs,
+    BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs,
+    OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::LightningRodLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockState, BlockStateId, FacingExt};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -99,22 +97,6 @@ impl BlockBehaviour for LightningRodBlock {
         props.facing = args.direction.to_facing().opposite();
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = LightningRodLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {

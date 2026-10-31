@@ -11,11 +11,9 @@ use pumpkin_data::{
     block_properties::{
         Facing, HorizontalFacing, LadderLikeProperties, MangroveRootsLikeProperties,
     },
-    fluid::Fluid,
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct CoralFanBlock;
@@ -146,10 +144,18 @@ impl BlockBehaviour for CoralFanBlock {
         false
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let is_dead = is_dead_coral(args.block);
+        if is_dead {
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
+        }
         if is_wall_fan(args.block) {
             let props = CoralWallFanLikeProperties::from_state_id(args.state_id);
             if props.facing.to_block_direction().opposite() == args.direction
@@ -164,20 +170,13 @@ impl BlockBehaviour for CoralFanBlock {
             }
         }
 
-        let waterlogged = is_waterlogged(args.block, args.state_id);
-        if waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
+        if !is_dead {
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
-        if !is_dead_coral(args.block) && !waterlogged && !scan_for_water(args.world, args.position)
-        {
+        let waterlogged = is_waterlogged(args.block, args.state_id);
+        if !is_dead && !waterlogged && !scan_for_water(args.world, args.position) {
             try_schedule_die_tick(args.block, args.world, args.position);
         }
-
         args.state_id
     }
 }

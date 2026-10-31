@@ -1,5 +1,4 @@
 use pumpkin_data::block_properties::ScaffoldingLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -70,15 +69,6 @@ impl BlockBehaviour for ScaffoldingBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = ScaffoldingLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         args.world
             .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         args.state_id

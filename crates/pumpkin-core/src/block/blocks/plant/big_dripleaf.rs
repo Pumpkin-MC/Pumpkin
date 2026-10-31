@@ -18,14 +18,12 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     BigDripleafLikeProperties, HorizontalFacing, Tilt, WaterLikeProperties,
 };
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
@@ -169,6 +167,10 @@ impl BlockBehaviour for BigDripleafBlock {
         dripleaf_props.to_state_id(args.block)
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
@@ -179,14 +181,7 @@ impl BlockBehaviour for BigDripleafBlock {
             return Block::AIR.default_state.id;
         }
         let props = BigDripleafLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         if args.direction == BlockDirection::Up
             && args.world.get_block(args.neighbor_position) == &Block::BIG_DRIPLEAF
         {

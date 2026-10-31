@@ -5516,7 +5516,7 @@ impl World {
             crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
+        let new_state_id = if self.get_fluid(position).matches_type(&Fluid::WATER) {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id

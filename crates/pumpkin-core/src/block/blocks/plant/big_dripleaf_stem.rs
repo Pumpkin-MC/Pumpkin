@@ -7,7 +7,6 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{HorizontalFacing, LadderLikeProperties};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
@@ -68,6 +67,10 @@ impl BlockBehaviour for BigDripleafStemBlock {
         Self::can_survive(args.block_accessor, args.position)
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
@@ -78,15 +81,7 @@ impl BlockBehaviour for BigDripleafStemBlock {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         }
-        let props = BigDripleafStemLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 

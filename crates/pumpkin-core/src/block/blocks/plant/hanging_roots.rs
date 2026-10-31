@@ -1,9 +1,7 @@
 use pumpkin_data::block_properties::MangroveRootsLikeProperties as HangingRootsLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs};
@@ -31,6 +29,10 @@ impl BlockBehaviour for HangingRootsBlock {
         props.to_state_id(args.block)
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
@@ -39,15 +41,7 @@ impl BlockBehaviour for HangingRootsBlock {
             return Block::AIR.default_state.id;
         }
 
-        let props = HangingRootsLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
 
         args.state_id
     }

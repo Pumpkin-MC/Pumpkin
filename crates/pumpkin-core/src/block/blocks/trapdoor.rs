@@ -1,21 +1,18 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, PathComputationType,
+    BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Half;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -120,22 +117,6 @@ impl BlockBehaviour for TrapDoorBlock {
         trapdoor_props.open = powered;
 
         trapdoor_props.to_state_id(args.block)
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let trapdoor_props = TrapDoorProperties::from_state_id(args.state_id);
-        if trapdoor_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

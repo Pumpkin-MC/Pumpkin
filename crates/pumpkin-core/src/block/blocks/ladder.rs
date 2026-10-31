@@ -4,12 +4,10 @@ use crate::block::{
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Facing, LadderLikeProperties};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 
 #[pumpkin_block("minecraft:ladder")]
@@ -86,6 +84,9 @@ impl BlockBehaviour for LadderBlock {
         }
         false
     }
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
 
     fn get_state_for_neighbor_update(
         &self,
@@ -101,14 +102,7 @@ impl BlockBehaviour for LadderBlock {
         {
             return BlockStateId::AIR;
         }
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 }

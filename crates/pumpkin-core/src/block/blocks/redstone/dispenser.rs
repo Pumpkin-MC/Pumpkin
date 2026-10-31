@@ -788,7 +788,7 @@ impl DispenserBlock {
         item: &mut ItemStack,
     ) {
         let front = Self::target_position(ctx);
-        let Some(filled) = try_pickup_fluid_at(ctx.world, front) else {
+        let Some(filled) = try_pickup_fluid_at(ctx.world, None, front) else {
             Self::drop_item(ctx, item);
             return;
         };
@@ -828,10 +828,12 @@ impl DispenserBlock {
         } else {
             try_place_filled_bucket(
                 ctx.world,
+                None,
                 item.item,
                 *ctx.position,
                 ctx.facing.to_block_direction(),
             )
+            .is_some()
         };
 
         if emptied {
