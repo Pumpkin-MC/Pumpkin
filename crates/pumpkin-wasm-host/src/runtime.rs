@@ -8,7 +8,9 @@ use pumpkin_core::plugin::{Context, PluginMetadata, cache::calculate_hash_for_by
 use pumpkin_plugin_runtime::RuntimeSpawner;
 use pumpkin_wasm_host_common::{
     concurrent_store::{self, LegacySyncReentry, StoreMode},
-    plugin::{PluginApiVersion, PluginInitError, WasmPlugin, scan_component_names},
+    plugin::{
+        PluginApiVersion, PluginInitError, SUPPORTED_PLUGIN_APIS, WasmPlugin, scan_component_names,
+    },
     scheduler::TaskScheduler,
     signature,
     state::PluginHostState,
@@ -166,53 +168,50 @@ impl PluginRuntime {
         let api_version = plugin_api_version(&wasm_bytes)?;
         let engine = self.engine(api_version);
         let component = load_component(engine, &wasm_bytes, &self.cache_dir)?;
+        let preparation_error = |error| PluginInitError::preparation_failed(api_version, error);
 
         let (plugin_instance, store, metadata) = match api_version {
             PluginApiVersion::V0_1 => {
                 let instance_pre = self
                     .linker_v0_1
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(preparation_error)?;
 
                 let plugin_pre = pumpkin_wasm_host_v0_1::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(preparation_error)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_1::init_plugin(
                     engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(feature = "v0_2")]
             PluginApiVersion::V0_2 => {
                 let instance_pre = self
                     .linker_v0_2
                     .instantiate_pre(&component)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(preparation_error)?;
 
                 let plugin_pre = pumpkin_wasm_host_v0_2::prepare_plugin(&instance_pre)
-                    .map_err(PluginInitError::ApiMismatch)?;
+                    .map_err(preparation_error)?;
 
                 let (plugin, store, metadata) = pumpkin_wasm_host_v0_2::init_plugin(
                     engine,
+                    path.as_ref(),
                     plugin_pre,
                     &self.legacy_sync_reentry,
                 )
                 .await?;
-                (
-                    Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
-                    store,
-                    metadata,
-                )
+                let plugin_instance: Arc<dyn Any + Send + Sync> = Arc::new(plugin);
+                (plugin_instance, store, metadata)
             }
             #[cfg(not(feature = "v0_2"))]
-            PluginApiVersion::V0_2 => return Err(PluginInitError::ApiMismatch(v0_2_disabled())),
+            PluginApiVersion::V0_2 => return Err(preparation_error(v0_2_disabled())),
         };
 
         let store = concurrent_store::start_legacy_store(
@@ -227,6 +226,8 @@ impl PluginRuntime {
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
         let wasm_plugin = Arc::new(WasmPlugin {
+            name: metadata.name.clone(),
+            version: metadata.version.clone(),
             plugin_instance,
             api_version,
             store,
@@ -273,26 +274,30 @@ fn plugin_api_version(wasm_bytes: &[u8]) -> Result<PluginApiVersion, PluginInitE
     let Some(version) = names.metadata_version else {
         return Err(PluginInitError::UnknownApiVersion());
     };
-    // `starts_with` to ignore "minor" version differences
-    // WIT enforces semver. Will always be major.minor.patch
-    // For early/unstable release: 0.major.minor
-    if version.starts_with("0.1.") {
-        // WASI 0.3 needs concurrency support, which the v0.1 engine doesn't have, so the linker
-        // would report this as an API mismatch.
-        if let Some(import) = names.wasi_p3_import {
-            return Err(PluginInitError::UnsupportedWasi(import));
+    for (supported, api) in SUPPORTED_PLUGIN_APIS {
+        if version.starts_with(&format!("{supported}.")) {
+            return match api {
+                PluginApiVersion::V0_1 => {
+                    // WASI 0.3 requires the concurrent engine, which API 0.1 cannot use.
+                    if let Some(import) = names.wasi_p3_import {
+                        return Err(PluginInitError::UnsupportedWasi(import));
+                    }
+                    Ok(api)
+                }
+                PluginApiVersion::V0_2 => v0_2_api_version(&version),
+            };
         }
-        Ok(PluginApiVersion::V0_1)
-    } else if version.starts_with("0.2.") {
-        v0_2_api_version(&version)
-    } else {
-        Err(PluginInitError::UnsupportedApiVersion(version))
     }
+    Err(PluginInitError::UnsupportedApiVersion(
+        version,
+        supported_api_versions(),
+    ))
 }
 
 /// Builds the engine for one store mode, with the settings every plugin engine shares.
 fn new_engine(cache_dir: &Path, mode: StoreMode) -> Result<Engine, PluginInitError> {
     let mut config = wasmtime::Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
     config.wasm_component_model(true);
     if mode == StoreMode::Concurrent {
         config.wasm_component_model_async(true);
@@ -322,6 +327,14 @@ fn setup_linker_v0_1(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState
     Ok(linker)
 }
 
+const fn supported_api_versions() -> &'static str {
+    if cfg!(feature = "v0_2") {
+        "0.1 and 0.2"
+    } else {
+        "0.1"
+    }
+}
+
 #[cfg(feature = "v0_2")]
 #[allow(clippy::unnecessary_wraps)] // same signature as the build without the feature
 const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInitError> {
@@ -330,9 +343,10 @@ const fn v0_2_api_version(_version: &str) -> Result<PluginApiVersion, PluginInit
 
 #[cfg(not(feature = "v0_2"))]
 fn v0_2_api_version(version: &str) -> Result<PluginApiVersion, PluginInitError> {
-    Err(PluginInitError::UnsupportedApiVersion(format!(
-        "{version} (this server was built without the `plugin-v0_2` feature)"
-    )))
+    Err(PluginInitError::UnsupportedApiVersion(
+        format!("{version} (this server was built without the `plugin-v0_2` feature)"),
+        supported_api_versions(),
+    ))
 }
 
 /// The error for the `V0_2` arms when the `v0_2` feature is off. `plugin_api_version` already
@@ -709,7 +723,7 @@ mod tests {
         ));
         assert!(matches!(
             plugin_api_version(&component(Some("9.0.0"), &[])),
-            Err(PluginInitError::UnsupportedApiVersion(version)) if version == "9.0.0"
+            Err(PluginInitError::UnsupportedApiVersion(version, _)) if version == "9.0.0"
         ));
     }
 
@@ -860,7 +874,8 @@ mod tests {
     fn v0_2_plugins_are_rejected_without_the_feature() {
         assert!(matches!(
             super::v0_2_api_version("0.2.0"),
-            Err(super::PluginInitError::UnsupportedApiVersion(version)) if version.contains("plugin-v0_2")
+            Err(super::PluginInitError::UnsupportedApiVersion(version, supported))
+                if version.contains("plugin-v0_2") && supported == "0.1"
         ));
     }
 }

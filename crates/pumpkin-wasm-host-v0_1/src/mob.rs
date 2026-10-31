@@ -218,6 +218,9 @@ impl CustomWasmGoal {
         let plugin = self.plugin.clone();
         let goal_id = self.goal_id;
         let run = async move {
+            if plugin.report_stopped("AI goal callback") {
+                return;
+            }
             let function = {
                 let instance = plugin.instance::<crate::Plugin>();
                 match call {
@@ -254,7 +257,7 @@ impl CustomWasmGoal {
                 })
                 .await
             {
-                tracing::error!(goal_id, %error, "Wasm AI goal callback failed");
+                plugin.report_failure(&format!("AI goal callback (goal {goal_id})"), &error);
             }
         };
 

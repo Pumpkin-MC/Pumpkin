@@ -55,6 +55,15 @@ impl CommandExecutor for WasmCommandExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let sender = context.source.output.clone();
         let server = self.server.clone();
+        let operation = || {
+            pumpkin_wasm_host_common::error::command_operation(
+                "execution",
+                &context.input,
+                self.handler_id,
+            )
+        };
+        let stopped =
+            self.plugin.store.state().is_terminal() && self.plugin.report_stopped(&operation());
         let consumed_args = build_consumed_args_from_context(context);
         let handler_id = self.handler_id;
         let function = {
@@ -107,9 +116,13 @@ impl CommandExecutor for WasmCommandExecutor {
                     })
                     .await
                     .map_err(|error| {
+                        if !stopped {
+                            self.plugin.report_failure(&operation(), &error);
+                        }
                         DISPATCHER_PARSE_EXCEPTION.create_without_context(
                             TextComponent::text(format!(
-                                "Wasm command failed with following error: {error}"
+                                "Plugin \"{}\" could not run this command. See the server log.",
+                                pumpkin_core::plugin::error::inline(&self.plugin.name)
                             ))
                             .color(Color::Named(NamedColor::Red)),
                         )
@@ -127,6 +140,16 @@ pub struct WasmCommandSuggestionProvider {
 
 impl SuggestionProvider for WasmCommandSuggestionProvider {
     fn suggest(&self, context: &CommandContext, builder: SuggestionsBuilder) -> Suggestions {
+        let operation = || {
+            pumpkin_wasm_host_common::error::command_operation(
+                "completion",
+                &context.input,
+                self.handler_id,
+            )
+        };
+        if self.plugin.store.state().is_terminal() && self.plugin.report_stopped(&operation()) {
+            return Suggestions::empty();
+        }
         let sender = context.source.output.clone();
         let server = self.server.clone();
         let input = context.input.clone();
@@ -191,7 +214,7 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                 {
                     Ok(suggestions) => suggestions,
                     Err(error) => {
-                        tracing::error!("Wasm command suggestion failed: {error}");
+                        self.plugin.report_failure(&operation(), &error);
                         Suggestions::empty()
                     }
                 }

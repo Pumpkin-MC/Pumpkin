@@ -478,6 +478,8 @@ pub trait Plugin: Send + Sync {
 #[doc(hidden)]
 pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
     let _ = tracing::subscriber::set_global_default(WitSubscriber::new());
+    #[cfg(target_arch = "wasm32")]
+    logging::install_panic_hook();
     assert!(
         PLUGIN.set(build_plugin()).is_ok(),
         "register_plugin must only be called once"
@@ -503,6 +505,11 @@ static PLUGIN: OnceLock<Box<dyn Plugin>> = OnceLock::new();
 ///
 /// This macro generates the WebAssembly export entry point that the server uses to
 /// instantiate the plugin. The type must implement the [`Plugin`] trait.
+///
+/// On Wasm, initialization installs a panic hook before constructing the plugin.
+/// The hook reports the panic message and available source location to the server,
+/// even in optimized builds without DWARF. Plugins can replace the hook after
+/// initialization. Raw Wasm traps do not invoke it.
 ///
 /// # Example
 /// ```rust,ignore

@@ -504,10 +504,13 @@ pub fn prepare_plugin(
 
 pub async fn init_plugin(
     engine: &Engine,
+    plugin_file: &std::path::Path,
     plugin_pre: PluginPre<PluginHostState>,
     legacy_sync_reentry: &LegacySyncReentry,
 ) -> Result<(Plugin, Store<PluginHostState>, PluginMetadata), PluginInitError> {
-    let mut store = Store::new(engine, PluginHostState::new());
+    let mut state = PluginHostState::new();
+    state.plugin_file = Some(plugin_file.to_owned());
+    let mut store = Store::new(engine, state);
     store.limiter(|state| &mut state.limits);
     let plugin = legacy_sync_reentry
         .scope_bootstrap(plugin_pre.instantiate_async(&mut store))

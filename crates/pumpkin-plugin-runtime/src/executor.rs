@@ -107,9 +107,9 @@ where
                 Ok(())
             }
             Err(error) => {
-                let message = error.to_string();
-                let _ = result.send(Err(error));
-                Err(wasmtime::Error::msg(message))
+                let error = SharedGuestCallError(Arc::new(error));
+                let _ = result.send(Err(wasmtime::Error::new(error.clone())));
+                Err(wasmtime::Error::new(error))
             }
         }
     }
@@ -160,16 +160,51 @@ struct GuestStoreCall<T, F, R> {
 
 #[derive(Default)]
 struct GuestCallFailure {
-    message: OnceLock<String>,
+    error: OnceLock<Arc<wasmtime::Error>>,
+}
+
+#[derive(Clone, Debug)]
+struct SharedGuestCallError(Arc<wasmtime::Error>);
+
+impl std::fmt::Display for SharedGuestCallError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&*self.0, formatter)
+    }
+}
+
+impl std::error::Error for SharedGuestCallError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&**self.0)
+    }
+}
+
+/// Returns whether an error is a retained failure that stops the store driver.
+#[must_use]
+pub fn is_guest_call_failure(error: &wasmtime::Error) -> bool {
+    error.is::<SharedGuestCallError>()
+}
+
+/// Returns the original error when a guest-call failure is wrapped for sharing.
+#[must_use]
+pub fn guest_call_error(mut error: &wasmtime::Error) -> &wasmtime::Error {
+    // Wasmtime does not follow `SharedGuestCallError::source` when downcasting.
+    while let Some(failure) = error.downcast_ref::<SharedGuestCallError>() {
+        error = &failure.0;
+    }
+    error
 }
 
 impl GuestCallFailure {
-    fn record(&self, error: &wasmtime::Error) {
-        let _ = self.message.set(format!("{error:#}"));
+    fn record(&self, error: wasmtime::Error) -> wasmtime::Error {
+        let error = Arc::new(error);
+        let _ = self.error.set(Arc::clone(&error));
+        wasmtime::Error::new(SharedGuestCallError(error))
     }
 
-    fn message(&self) -> Option<String> {
-        self.message.get().cloned()
+    fn failure(&self) -> Option<SharedGuestCallError> {
+        self.error
+            .get()
+            .map(|error| SharedGuestCallError(Arc::clone(error)))
     }
 }
 
@@ -197,15 +232,15 @@ where
             call(make_scope(failure_for_scope)).await
         })
         .await;
-        let guest_call_failure = guest_call_failure.message();
+        let guest_call_failure = guest_call_failure.failure();
         drop(root_admission);
-        if let Some(message) = guest_call_failure {
+        if let Some(failure) = guest_call_failure {
             let output = match output {
-                Ok(_) => Err(wasmtime::Error::msg(message.clone())),
+                Ok(_) => Err(wasmtime::Error::new(failure.clone())),
                 Err(error) => Err(error),
             };
             let _ = result.send(output);
-            Err(wasmtime::Error::msg(message))
+            Err(wasmtime::Error::new(failure))
         } else {
             let _ = result.send(output);
             Ok(())
@@ -323,8 +358,8 @@ where
         Params: ComponentNamedList + Lower + 'static,
         Return: ComponentNamedList + Lift + 'static,
     {
-        if let Some(message) = self.guest_call_failure.message() {
-            return Err(wasmtime::Error::msg(message));
+        if let Some(failure) = self.guest_call_failure.failure() {
+            return Err(wasmtime::Error::new(failure));
         }
         let result = match &mut self.access {
             LegacyGuestAccess::Concurrent(accessor) => {
@@ -334,10 +369,7 @@ where
                 function.call_async(store.as_context_mut(), params).await
             }
         };
-        if let Err(error) = &result {
-            self.guest_call_failure.record(error);
-        }
-        result
+        result.map_err(|error| self.guest_call_failure.record(error))
     }
 
     /// Like [`Self::call`], for exports whose generated `TypedFunc` borrows its arguments and so
@@ -622,20 +654,23 @@ where
     }
 
     fn ensure_accepting(&self, message: &'static str) -> wasmtime::Result<()> {
+        if let Some(failure) = self.shared.guest_call_failure.failure() {
+            return Err(wasmtime::Error::new(failure));
+        }
         match self.state() {
             DriverState::Failed(error) => Err(wasmtime::Error::msg(format!(
                 "Wasm plugin store driver failed: {error}"
             ))),
             DriverState::Stopped => Err(wasmtime::Error::msg(message)),
-            _ if self.shared.guest_call_failure.message().is_some() => Err(wasmtime::Error::msg(
-                "Wasm plugin store failed during a guest call",
-            )),
             _ if self.shared.accepting.load(Ordering::Acquire) => Ok(()),
             _ => Err(wasmtime::Error::msg(message)),
         }
     }
 
     fn terminal_error(&self, fallback: &'static str) -> wasmtime::Error {
+        if let Some(failure) = self.shared.guest_call_failure.failure() {
+            return wasmtime::Error::new(failure);
+        }
         match self.state() {
             DriverState::Failed(error) => {
                 wasmtime::Error::msg(format!("Wasm plugin store driver failed: {error}"))
@@ -654,7 +689,11 @@ where
             result
         } else {
             let mut join = self.driver_join();
-            match join.wait().await {
+            let joined = join.wait().await;
+            if let Some(failure) = self.shared.guest_call_failure.failure() {
+                return Err(wasmtime::Error::new(failure));
+            }
+            match joined {
                 Ok(()) => Err(wasmtime::Error::msg(fallback)),
                 Err(error) => Err(wasmtime::Error::msg(format!(
                     "Wasm plugin store driver failed: {error}"
@@ -675,10 +714,8 @@ where
         F: for<'a> FnOnce(LegacyGuestScope<'a, T>) -> StoreFuture<'a, R> + Send + 'static,
         R: Send + 'static,
     {
-        if let Some(message) = self.shared.guest_call_failure.message() {
-            return Err(wasmtime::Error::msg(format!(
-                "Wasm plugin store failed during a guest call: {message}"
-            )));
+        if let Some(failure) = self.shared.guest_call_failure.failure() {
+            return Err(wasmtime::Error::new(failure));
         }
         let (result, receiver) = oneshot::channel();
         let inherited_context = self.shared.policy.inherited_context();
@@ -925,7 +962,7 @@ where
         let shared = Arc::new(StoreShared {
             sender,
             accepting: Arc::clone(&accepting),
-            guest_call_failure,
+            guest_call_failure: Arc::clone(&guest_call_failure),
             send_gate: Mutex::new(()),
             lifecycle: Arc::clone(&lifecycle),
             reentry: Arc::new(ReentryState::new()),
@@ -950,6 +987,7 @@ where
                     receiver,
                     control_receiver,
                     Arc::clone(&task_guard.lifecycle),
+                    guest_call_failure,
                     ready_sender,
                     policy_name,
                     mode,
@@ -1078,21 +1116,23 @@ where
 
         let result = receiver.await;
         let mut join = self.driver_join();
-        let terminal = join.wait().await;
+        let terminal = join.wait().await.map_err(|error| {
+            self.handle.shared.guest_call_failure.failure().map_or_else(
+                || wasmtime::Error::msg(format!("Wasm plugin store driver failed: {error}")),
+                wasmtime::Error::new,
+            )
+        });
         reconcile_shutdown_result(result, terminal)
     }
 }
 
 pub fn reconcile_shutdown_result<R>(
     result: Result<wasmtime::Result<R>, oneshot::error::RecvError>,
-    terminal: Result<(), Arc<DriverError>>,
+    terminal: wasmtime::Result<()>,
 ) -> wasmtime::Result<R> {
     match (result, terminal) {
-        (Ok(Err(error)), _) => Err(error),
+        (Ok(Err(error)), _) | (Ok(Ok(_)) | Err(_), Err(error)) => Err(error),
         (Ok(Ok(value)), Ok(())) => Ok(value),
-        (Ok(Ok(_)) | Err(_), Err(error)) => Err(wasmtime::Error::msg(format!(
-            "Wasm plugin store driver failed: {error}"
-        ))),
         (Err(_), Ok(())) => Err(wasmtime::Error::msg(
             "Wasm plugin store shutdown did not complete",
         )),
@@ -1139,11 +1179,16 @@ fn control_result(message: Option<&ControlMessage>) -> wasmtime::Result<()> {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the driver needs the store, channels, lifecycle, and retained failure state"
+)]
 async fn run_driver<T>(
     store: Store<T>,
     receiver: mpsc::Receiver<StoreMessage<T>>,
     control: mpsc::UnboundedReceiver<ControlMessage>,
     lifecycle: Arc<Lifecycle>,
+    guest_call_failure: Arc<GuestCallFailure>,
     ready: oneshot::Sender<()>,
     policy_name: &'static str,
     mode: StoreMode,
@@ -1152,10 +1197,28 @@ async fn run_driver<T>(
 {
     match mode {
         StoreMode::Concurrent => {
-            run_concurrent_driver(store, receiver, control, lifecycle, ready, policy_name).await;
+            run_concurrent_driver(
+                store,
+                receiver,
+                control,
+                lifecycle,
+                guest_call_failure,
+                ready,
+                policy_name,
+            )
+            .await;
         }
         StoreMode::Sequential => {
-            run_sequential_driver(store, receiver, control, lifecycle, ready, policy_name).await;
+            run_sequential_driver(
+                store,
+                receiver,
+                control,
+                lifecycle,
+                guest_call_failure,
+                ready,
+                policy_name,
+            )
+            .await;
         }
     }
 }
@@ -1165,6 +1228,7 @@ async fn run_sequential_driver<T>(
     mut receiver: mpsc::Receiver<StoreMessage<T>>,
     mut control: mpsc::UnboundedReceiver<ControlMessage>,
     lifecycle: Arc<Lifecycle>,
+    guest_call_failure: Arc<GuestCallFailure>,
     ready: oneshot::Sender<()>,
     policy_name: &'static str,
 ) where
@@ -1179,12 +1243,9 @@ async fn run_sequential_driver<T>(
     match result {
         Ok(()) => lifecycle.transition(DriverState::Stopped),
         Err(error) => {
-            let error = Arc::new(DriverError::new(format!("{error:#}")));
-            tracing::error!(
-                %error,
-                wasm_plugin_policy = policy_name,
-                "Wasm plugin store driver stopped"
-            );
+            let error = guest_call_failure.record(error);
+            let error = Arc::new(DriverError::new(error.to_string()));
+            tracing::debug!("Wasm plugin store driver failed under {policy_name}");
             lifecycle.transition(DriverState::Failed(error));
         }
     }
@@ -1272,6 +1333,7 @@ async fn run_concurrent_driver<T>(
     mut receiver: mpsc::Receiver<StoreMessage<T>>,
     mut control: mpsc::UnboundedReceiver<ControlMessage>,
     lifecycle: Arc<Lifecycle>,
+    guest_call_failure: Arc<GuestCallFailure>,
     ready: oneshot::Sender<()>,
     policy_name: &'static str,
 ) where
@@ -1369,12 +1431,9 @@ async fn run_concurrent_driver<T>(
     match result {
         Ok(Ok(())) => lifecycle.transition(DriverState::Stopped),
         Ok(Err(error)) | Err(error) => {
+            let error = guest_call_failure.record(error);
             let error = Arc::new(DriverError::new(error.to_string()));
-            tracing::error!(
-                %error,
-                wasm_plugin_policy = policy_name,
-                "Wasm plugin store driver stopped"
-            );
+            tracing::debug!("Wasm plugin store driver failed under {policy_name}");
             lifecycle.transition(DriverState::Failed(error));
         }
     }
@@ -1463,6 +1522,7 @@ mod tests {
             receiver,
             control_receiver,
             Arc::clone(&lifecycle),
+            Arc::new(super::GuestCallFailure::default()),
             ready_sender,
             "test",
             mode,

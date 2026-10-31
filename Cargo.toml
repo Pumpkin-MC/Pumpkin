@@ -263,7 +263,7 @@ rustc_version_runtime = { version = "0.3", default-features = false }
 ordered-float = { version = "5.5", default-features = false, features = ["std"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "50.0.0", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime = { version = "50.0.0", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std", "demangle", "addr2line"] }
 wasmtime-wasi = { version = "50.0.0", default-features = false, features = ["p2", "p3"] }
 wasmtime-wasi-http = { version = "50.0.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 
