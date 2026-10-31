@@ -201,6 +201,7 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use super::BlockIsReplacing;
+use super::BlockPlaceContext;
 use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
 use super::blocks::plant::crop::gourds::stem::StemBlock;
 use super::fluid::FluidBehaviour;
@@ -733,30 +734,36 @@ impl BlockRegistry {
             _ => {}
         }
 
-        if location.0.y + face.to_offset().y < world.get_bottom_y() {
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
-        if location.0.y + face.to_offset().y > world.get_top_y() {
-            player.send_system_message_raw(
-                &pumpkin_util::text::TextComponent::translate_cross(
-                    pumpkin_data::translation::java::BUILD_TOOHIGH,
-                    pumpkin_data::translation::bedrock::BUILD_TOOHIGH,
-                    vec![pumpkin_util::text::TextComponent::text(
-                        (world.get_top_y()).to_string(),
-                    )],
-                )
-                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                true,
-            );
-            return Err(BlockPlacingError::BlockOutOfWorld);
-        }
-
         let Some((final_block_pos, final_face, replacing)) =
             self.placement_target(&world, player, placed_block, use_item_on, location, face)
         else {
             return Ok(None);
         };
+
+        let context = BlockPlaceContext {
+            position: final_block_pos,
+            clicked_face: final_face.opposite(),
+            inside: use_item_on.inside_block,
+            replacing,
+        };
+        let Some(context) = server.item_registry.update_placement_context(
+            placed_block.item_id,
+            &world,
+            player,
+            context,
+        ) else {
+            return Ok(None);
+        };
+        let final_block_pos = context.position;
+        let final_face = context.clicked_face.opposite();
+        let replacing = context.replacing;
+
+        if !world.is_in_height_limit(final_block_pos.0.y) {
+            if final_block_pos.0.y > world.get_top_y() {
+                player.send_build_too_high_message(world.get_top_y());
+            }
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
 
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
@@ -769,17 +776,19 @@ impl BlockRegistry {
             return Ok(None);
         }
 
-        if !self.can_place_at(
-            Some(server),
-            Some(&*world),
-            &*world,
-            Some(player),
-            placed_block,
-            placed_block.default_state,
-            &final_block_pos,
-            Some(final_face),
-            Some(use_item_on),
-        ) {
+        if server.item_registry.must_survive(placed_block.item_id)
+            && !self.can_place_at(
+                Some(server),
+                Some(&*world),
+                &*world,
+                Some(player),
+                placed_block,
+                placed_block.default_state,
+                &final_block_pos,
+                Some(final_face),
+                Some(use_item_on),
+            )
+        {
             return Ok(None);
         }
 
@@ -829,7 +838,9 @@ impl BlockRegistry {
         for shape in state.get_block_collision_shapes_at(&final_block_pos) {
             let placed_box = shape.at_pos(final_block_pos);
 
-            if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
+            if self.has_placement_collision(placed_block)
+                && Self::has_blocking_entity_in_box(world.as_ref(), &placed_box)
+            {
                 buildable = false;
                 break;
             }
@@ -1154,6 +1165,12 @@ impl BlockRegistry {
             });
         }
         true
+    }
+
+    #[must_use]
+    pub fn has_placement_collision(&self, block: &Block) -> bool {
+        self.get_pumpkin_block(block.id)
+            .is_none_or(|pumpkin_block| pumpkin_block.has_placement_collision())
     }
 
     #[expect(clippy::too_many_arguments)]
