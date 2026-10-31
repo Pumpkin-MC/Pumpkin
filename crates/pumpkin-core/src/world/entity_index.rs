@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock, Weak};
 
 use pumpkin_util::math::boundingbox::BoundingBox;
 use rustc_hash::FxHashMap;
+use uuid::Uuid;
 
 use crate::entity::EntityBase;
 use crossbeam::atomic::AtomicCell;
@@ -61,6 +62,7 @@ impl CellRange {
 struct Index {
     registry: Weak<Registry>,
     slots: FxHashMap<i32, usize>,
+    uuids: FxHashMap<Uuid, usize>,
     ranges: Vec<Option<CellRange>>,
     cells: FxHashMap<Cell, Vec<usize>>,
     oversized: Vec<usize>,
@@ -73,12 +75,15 @@ impl Index {
 
     fn rebuild(&mut self, registry: &Arc<Registry>) {
         self.slots.clear();
+        self.uuids.clear();
         self.ranges.clear();
         self.cells.clear();
         self.oversized.clear();
         for (slot, entity) in registry.iter().enumerate() {
             let entity = entity.get_entity();
             self.slots.insert(entity.entity_id, slot);
+            // The first in list order wins, like a linear search.
+            self.uuids.entry(entity.entity_uuid).or_insert(slot);
             let range = Self::entity_range(&entity.bounding_box.load());
             self.ranges.push(range);
             self.insert(slot, range);
@@ -191,6 +196,12 @@ impl EntityIndex {
         })
     }
 
+    /// The first entity with `uuid` in registry order, without a scan.
+    pub fn by_uuid(&self, registry: &Arc<Registry>, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
+        let slot = self.with_index(registry, |index| index.uuids.get(&uuid).copied())?;
+        Some(registry[slot].clone())
+    }
+
     pub fn set_bounds(&self, entity_id: i32, bounds: &AtomicCell<BoundingBox>, area: BoundingBox) {
         let index = self
             .inner
@@ -248,6 +259,11 @@ mod tests {
             Vector3::new(-4.1, 65.0, 0.1),
         );
         assert!(ids(&world, &area).is_empty());
+        assert!(
+            world
+                .get_entity_by_uuid(body.get_entity().entity_uuid)
+                .is_some()
+        );
         // A bound change within the same grid cells still changes exact membership.
         body.get_entity().set_pos(Vector3::new(-4.6, 64.0, 0.0));
         assert_eq!(ids(&world, &area), [body.get_entity().entity_id]);
@@ -272,6 +288,16 @@ mod tests {
             world
                 .get_entity_by_id(body.get_entity().entity_id)
                 .is_none()
+        );
+        assert!(
+            world
+                .get_entity_by_uuid(body.get_entity().entity_uuid)
+                .is_none()
+        );
+        assert!(
+            world
+                .get_entity_by_uuid(replacement.entity.entity_uuid)
+                .is_some()
         );
         world.entities.store(Arc::new(Vec::new()));
         let removed = Arc::downgrade(&replacement);

@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::{damage::DamageType, effect::StatusEffect, potion::Effect, tracked_data};
@@ -25,7 +26,7 @@ impl WitherSkullEntity {
     pub const fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -75,8 +76,8 @@ impl WitherSkullEntity {
 }
 
 impl EntityBase for WitherSkullEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {

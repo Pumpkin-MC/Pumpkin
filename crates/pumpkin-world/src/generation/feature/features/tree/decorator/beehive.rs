@@ -64,6 +64,10 @@ impl BeehiveTreeDecorator {
                 props.facing = HorizontalFacing::South;
                 let state_id = props.to_state_id(&Block::BEE_NEST);
                 chunk.set_block_state(&pos.0, BlockState::from_id(state_id));
+                let num_bees = 2 + random.next_bounded_i32(2);
+                for _ in 0..num_bees {
+                    let _ = random.next_bounded_i32(599);
+                }
                 decorations.push(pos);
                 break;
             }

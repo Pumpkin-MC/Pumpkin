@@ -112,6 +112,8 @@ interface bedrock-packets {
     data: f32,
     /// Source context that triggered an arm swing.
     swing-source: option<actor-swing-source>,
+    /// Hand used for the animation (0: main hand, 1: off hand).
+    hand: u8,
   }
   /// Sent by the client when picking a targeted block (middle-click / pick block action).
   record s-block-pick-request {
@@ -256,6 +258,7 @@ interface bedrock-packets {
     target-entity-runtime-id: s64,
     action-type: s32,
     hot-bar-slot: s32,
+    hand: hand-slot,
     item-in-hand: network-item-descriptor,
     player-position: tuple<f64, f64, f64>,
     click-position: tuple<f64, f64, f64>,
@@ -265,6 +268,7 @@ interface bedrock-packets {
     hot-bar-slot: s32,
     item-in-hand: network-item-descriptor,
     head-position: tuple<f64, f64, f64>,
+    hand: hand-slot,
   }
   /// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
   record s-inventory-transaction {
@@ -900,6 +904,8 @@ interface bedrock-packets {
     synced-properties: property-sync-data,
     /// Entity attachment links (e.g. passenger or leash connections).
     actor-links: list<actor-link>,
+    /// Whether passenger block data is present.
+    has-passenger-block-data: bool,
   }
   /// Synchronized numeric entity attribute with min, current, and max bounds.
   record synced-attribute {
@@ -959,6 +965,8 @@ interface bedrock-packets {
     abilities-data: serialized-abilities-data,
     /// Vehicle and attachment links.
     actor-links: list<actor-link>,
+    /// Whether passenger block data is present.
+    has-passenger-block-data: bool,
     /// Unique device ID of the client device.
     device-id: string,
     /// Operating system platform of the player.
@@ -1994,6 +2002,7 @@ interface bedrock-packets {
     editor-world-type: s32,
     is-created-in-editor: bool,
     is-exported-from-editor: bool,
+    editor-level-migration-version: u8,
     day-cycle-stop-time: s32,
     education-edition-offer: s32,
     has-education-features-enabled: bool,

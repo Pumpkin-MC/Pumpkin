@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
@@ -29,7 +30,7 @@ impl EnderPearlEntity {
 
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -46,8 +47,8 @@ impl EnderPearlEntity {
 }
 
 impl EntityBase for EnderPearlEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -69,10 +70,7 @@ impl EntityBase for EnderPearlEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
-        let attacker = self
-            .thrown
-            .owner_id
-            .and_then(|id| world.get_entity_by_id(id));
+        let attacker = self.get_owner_entity();
 
         // Spawn portal particles at hit position
         let hit_pos = hit.hit_pos();
@@ -97,31 +95,26 @@ impl EntityBase for EnderPearlEntity {
             );
         }
 
-        let owner_id = self.thrown.owner_id;
         let teleport_pos = entity.last_pos.load();
 
-        if let (
-            ProjectileHit::Entity {
-                entity: hit_entity,
-                hit_pos,
-                ..
-            },
-            Some(owner),
-        ) = (&hit, attacker)
+        // Like vanilla, a zero hit from the pearl, credited to its thrower if any.
+        if let ProjectileHit::Entity {
+            entity: hit_entity,
+            hit_pos,
+            ..
+        } = &hit
         {
-            let victim_ref = &**hit_entity;
             hit_entity.damage_with_context(
-                victim_ref,
+                &**hit_entity,
                 0.0,
                 DamageType::THROWN,
                 Some(*hit_pos),
-                Some(owner.get_entity()),
-                Some(victim_ref),
+                Some(self),
+                attacker.as_deref(),
             );
         }
 
-        if let Some(owner_id) = owner_id
-            && let Some(owner) = world.get_entity_by_id(owner_id)
+        if let Some(owner) = attacker
             && owner.get_entity().is_alive()
             && owner.get_living_entity().is_none_or(|living| {
                 living.health.load() > 0.0 && owner.get_entity().pose.load() != EntityPose::Sleeping
@@ -161,6 +154,6 @@ impl EntityBase for EnderPearlEntity {
             );
         }
 
-        world.send_entity_status(entity, EntityStatus::Death, Some(ActorEventID::Death));
+        world.send_entity_status(entity, EntityStatus::Death, ActorEventID::Death);
     }
 }

@@ -45,66 +45,39 @@ pub(super) fn compute_placed_rail_shape(
     block_pos: &BlockPos,
     player_facing: HorizontalFacing,
 ) -> RailShapeStraight {
-    // Use the same sophisticated logic as normal rails, but adapted for straight rails
-    // Check each direction for rail connections, similar to normal rail placement
+    let north = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North);
+    let south = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South);
+    let west = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West);
+    let east = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East);
 
-    // Check East first
-    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East) {
-        // Check for opposite connection (West) to form a straight line
-        if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West) {
-            // We have connections in both East and West
-            if east_rail.elevation == RailElevation::Up {
-                return RailShapeStraight::AscendingEast;
-            } else if west_rail.elevation == RailElevation::Up {
-                return RailShapeStraight::AscendingWest;
-            }
-            return RailShapeStraight::EastWest;
+    let has_north_or_south = north.is_some() || south.is_some();
+    let has_east_or_west = west.is_some() || east.is_some();
+
+    let mut shape = if has_north_or_south && !has_east_or_west {
+        RailShapeStraight::NorthSouth
+    } else if has_east_or_west && !has_north_or_south {
+        RailShapeStraight::EastWest
+    } else {
+        player_facing.to_rail_shape_flat()
+    };
+
+    if shape == RailShapeStraight::NorthSouth {
+        if north.is_some_and(|r| r.elevation == RailElevation::Up) {
+            shape = RailShapeStraight::AscendingNorth;
         }
-        // Only East connection
-        if east_rail.elevation == RailElevation::Up {
-            return RailShapeStraight::AscendingEast;
+        if south.is_some_and(|r| r.elevation == RailElevation::Up) {
+            shape = RailShapeStraight::AscendingSouth;
         }
-        return RailShapeStraight::EastWest;
+    } else if shape == RailShapeStraight::EastWest {
+        if east.is_some_and(|r| r.elevation == RailElevation::Up) {
+            shape = RailShapeStraight::AscendingEast;
+        }
+        if west.is_some_and(|r| r.elevation == RailElevation::Up) {
+            shape = RailShapeStraight::AscendingWest;
+        }
     }
 
-    // Check South
-    if let Some(south_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South) {
-        // Check for opposite connection (North) to form a straight line
-        if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North)
-        {
-            // We have connections in both South and North
-            if south_rail.elevation == RailElevation::Up {
-                return RailShapeStraight::AscendingSouth;
-            } else if north_rail.elevation == RailElevation::Up {
-                return RailShapeStraight::AscendingNorth;
-            }
-            return RailShapeStraight::NorthSouth;
-        }
-        // Only South connection
-        if south_rail.elevation == RailElevation::Up {
-            return RailShapeStraight::AscendingSouth;
-        }
-        return RailShapeStraight::NorthSouth;
-    }
-
-    // Check West
-    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West) {
-        if west_rail.elevation == RailElevation::Up {
-            return RailShapeStraight::AscendingWest;
-        }
-        return RailShapeStraight::EastWest;
-    }
-
-    // Check North
-    if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North) {
-        if north_rail.elevation == RailElevation::Up {
-            return RailShapeStraight::AscendingNorth;
-        }
-        return RailShapeStraight::NorthSouth;
-    }
-
-    // No connections found, use player facing direction
-    player_facing.to_rail_shape_flat()
+    shape
 }
 
 pub(super) fn update_flanking_rails_shape(
