@@ -914,7 +914,10 @@ pub(crate) fn map_bedrock_container_slot(
 
     match container_name {
         ContainerName::HotBar => {
-            if is_player_screen {
+            // The hotbar has nine slots; a larger id would index past it.
+            if slot_id >= 9 {
+                None
+            } else if is_player_screen {
                 Some(36 + slot_id as usize)
             } else {
                 Some(container_slots + 27 + slot_id as usize)
@@ -1211,15 +1214,14 @@ fn get_slot_stack(
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
     }
+    // The index comes from client data; a bad request must not panic the tick.
     map_bedrock_container_slot(
         screen_handler,
         slot_info.container_name.container_name,
         slot_info.slot_id,
     )
-    .map_or_else(
-        || ItemStack::EMPTY.clone(),
-        |screen_slot| screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack(),
-    )
+    .and_then(|screen_slot| screen_handler.get_behaviour().slots.get(screen_slot))
+    .map_or_else(|| ItemStack::EMPTY.clone(), |slot| slot.get_cloned_stack())
 }
 
 #[allow(clippy::unreachable)]
@@ -1243,10 +1245,19 @@ fn update_slot_stack(
         slot_info.container_name.container_name,
         slot_info.slot_id,
     ) {
+        // The index comes from client data; a bad request must not panic the tick.
+        let Some(slot) = screen_handler
+            .get_behaviour()
+            .slots
+            .get(screen_slot)
+            .cloned()
+        else {
+            tracing::warn!("Client sent an item stack request for a slot outside its screen");
+            return;
+        };
         let is_player_screen = screen_handler.window_type().is_none();
         if is_player_screen {
-            let current_stack =
-                screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack();
+            let current_stack = slot.get_cloned_stack();
             if !current_stack.are_items_and_components_equal(&new_stack) {
                 if (5..9).contains(&screen_slot) {
                     player.enqueue_equipment_change(
@@ -1269,7 +1280,7 @@ fn update_slot_stack(
             }
         }
 
-        screen_handler.get_behaviour().slots[screen_slot].set_stack(new_stack.clone());
+        slot.set_stack(new_stack.clone());
         screen_handler.set_received_stack(screen_slot, new_stack);
     }
 }
@@ -1661,6 +1672,28 @@ mod tests {
         assert_eq!(
             map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 40),
             Some(9)
+        );
+    }
+
+    #[tokio::test]
+    async fn hotbar_slot_ids_past_the_hotbar_are_rejected() {
+        let inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        let handler = CraftingTableScreenHandler::new(1, &inventory, None);
+
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::HotBar, 8),
+            Some(45)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::HotBar, 9),
+            None
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::HotBar, 200),
+            None
         );
     }
 
