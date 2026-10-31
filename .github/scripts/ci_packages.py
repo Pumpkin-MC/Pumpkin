@@ -84,6 +84,8 @@ WIT_ROOT = Path("crates/pumpkin-plugin-wit")
 # Crates that generate Rust bindings from the WIT files; their dependents follow from the closure.
 WIT_CONSUMER_PACKAGES = {
     "pumpkin-plugin-api",
+    "pumpkin-plugin-api-v0_2",
+    "pumpkin-plugin-helpers",
     "pumpkin-wasm-host-v0_1",
     "pumpkin-wasm-host-v0_2",
 }
@@ -134,6 +136,10 @@ def package_graph(
             dependency_name = package_by_root.get(Path(dependency_path).resolve())
             if dependency_name is not None:
                 reverse_dependencies[dependency_name].add(dependent)
+
+    # SDK component tests build the helper with Cargo in a subprocess.
+    if "pumpkin-plugin-helpers" in reverse_dependencies:
+        reverse_dependencies["pumpkin-plugin-helpers"].add("pumpkin-plugin-api-v0_2")
 
     relative_roots = {
         root.relative_to(workspace_root): name for root, name in package_by_root.items()
@@ -210,9 +216,15 @@ def select_packages(
 
         # WIT packages have their own validation job and no Cargo manifest.
         if path == WIT_ROOT or WIT_ROOT in path.parents:
+            helper_root = WIT_ROOT / "helpers"
+            consumers = (
+                {"pumpkin-plugin-api-v0_2", "pumpkin-plugin-helpers"}
+                if path == helper_root or helper_root in path.parents
+                else WIT_CONSUMER_PACKAGES
+            )
             directly_affected.update(
                 package
-                for package in WIT_CONSUMER_PACKAGES
+                for package in consumers
                 if package in reverse_dependencies
             )
             continue

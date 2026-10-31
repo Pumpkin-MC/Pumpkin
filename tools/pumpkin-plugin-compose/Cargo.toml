@@ -1,0 +1,17 @@
+[package]
+name = "pumpkin-plugin-compose"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+description = "Embed shared helper components in Pumpkin plugins."
+
+[dependencies]
+anyhow = "1.0"
+wasm-compose = { version = "=0.259.0", default-features = false }
+wasmparser = { version = "0.259", default-features = false, features = ["std", "validate", "component-model", "features"] }
+
+[dev-dependencies]
+wat = "=1.261.0"
+
+[lints]
+workspace = true

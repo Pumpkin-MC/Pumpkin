@@ -140,13 +140,18 @@ jobs:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
       - uses: bytecodealliance/actions/wasm-tools/setup@v1
-      - name: Generate bindings and validate both WIT packages
+      - name: Generate bindings and validate WIT packages
         run: |
           for version in v0.1 v0.2; do
             wit-bindgen rust "crates/pumpkin-plugin-wit/$version" --out-dir "$RUNNER_TEMP/bindings-$version"
             wasm-tools component wit "crates/pumpkin-plugin-wit/$version" --wasm -o "$RUNNER_TEMP/pumpkin-$version.wasm"
             wasm-tools validate "$RUNNER_TEMP/pumpkin-$version.wasm"
           done
+          for world in helpers helper-client; do
+            wit-bindgen rust crates/pumpkin-plugin-wit/helpers --world "$world" --out-dir "$RUNNER_TEMP/bindings-$world"
+          done
+          wasm-tools component wit crates/pumpkin-plugin-wit/helpers --wasm -o "$RUNNER_TEMP/pumpkin-helpers.wasm"
+          wasm-tools validate "$RUNNER_TEMP/pumpkin-helpers.wasm"
 
   test:
     name: Test (${{ matrix.name }})
@@ -172,6 +177,8 @@ jobs:
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      # The v0.2 guest SDK tests build a fixture component for this target
+      - run: rustup target add wasm32-wasip2
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
         with:
