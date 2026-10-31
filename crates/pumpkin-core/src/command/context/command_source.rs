@@ -524,6 +524,6 @@ impl pumpkin_command::source::CommandSource for CommandSource {
         let pos = self.position;
         self.entity
             .as_ref()
-            .map_or_else(|| pos, |e| anchor.position_at_entity(e.get_entity()))
+            .map_or_else(|| pos, |e| anchor.transform_position(pos, e.get_entity()))
     }
 }
