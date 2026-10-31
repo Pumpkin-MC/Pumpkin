@@ -100,13 +100,14 @@ impl MinecartEntity {
         }
     }
 
-    const fn drop_item(&self) -> Option<&'static Item> {
+    /// Vanilla `getDropItem`. Command block and spawner minecarts drop a plain minecart.
+    const fn drop_item(&self) -> &'static Item {
         match &self.kind {
-            MinecartKind::Chest(_) => Some(&Item::CHEST_MINECART),
-            MinecartKind::Furnace(_) => Some(&Item::FURNACE_MINECART),
-            MinecartKind::Hopper(_) => Some(&Item::HOPPER_MINECART),
-            MinecartKind::Tnt(_) => Some(&Item::TNT_MINECART),
-            _ => None,
+            MinecartKind::Rideable(_) | MinecartKind::Other => &Item::MINECART,
+            MinecartKind::Chest(_) => &Item::CHEST_MINECART,
+            MinecartKind::Furnace(_) => &Item::FURNACE_MINECART,
+            MinecartKind::Hopper(_) => &Item::HOPPER_MINECART,
+            MinecartKind::Tnt(_) => &Item::TNT_MINECART,
         }
     }
 }
@@ -751,9 +752,7 @@ impl EntityBase for MinecartEntity {
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
-                if let Some(item) = self.drop_item() {
-                    world.drop_stack(&position, ItemStack::new(1, item));
-                }
+                world.drop_stack(&position, ItemStack::new(1, self.drop_item()));
             }
         }
 
