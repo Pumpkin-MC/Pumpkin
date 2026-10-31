@@ -5,6 +5,9 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::EntityBase;
 
+/// Vanilla `PoiTypes.MEETING`, used to place wandering traders near a village bell.
+pub const POI_TYPE_MEETING: &str = "minecraft:meeting";
+
 struct JobSite {
     profession: VillagerProfession,
     owner: Option<Weak<dyn EntityBase>>,
@@ -154,6 +157,9 @@ pub fn profession_for_block(block: &Block) -> Option<VillagerProfession> {
 
 #[must_use]
 pub fn poi_type_for_block(block: &Block) -> Option<&'static str> {
+    if block == &Block::BELL {
+        return Some(POI_TYPE_MEETING);
+    }
     Some(match profession_for_block(block)? {
         VillagerProfession::Armorer => "minecraft:armorer",
         VillagerProfession::Butcher => "minecraft:butcher",

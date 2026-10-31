@@ -287,6 +287,12 @@ impl MobEntity {
         self.position_target_range.load(Relaxed) != -1
     }
 
+    /// Vanilla `Mob.setHomeTo`: the centre and radius restriction goals keep the mob inside.
+    pub fn set_home_to(&self, center: BlockPos, radius: i32) {
+        self.position_target.store(center);
+        self.position_target_range.store(radius, Relaxed);
+    }
+
     pub fn is_in_position_target_range(&self) -> bool {
         self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }
@@ -1312,6 +1318,11 @@ pub trait Mob: EntityBase + Send + Sync {
     fn release_pending_job_site(&self, _position: BlockPos) {}
 
     fn get_trading_player(&self) -> Option<Arc<Player>> {
+        None
+    }
+
+    /// Vanilla `WanderingTrader.getDespawnDelay`, read by leashed trader llamas.
+    fn get_despawn_delay(&self) -> Option<i32> {
         None
     }
 

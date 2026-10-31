@@ -557,8 +557,8 @@ pub fn write_world_clocks(
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
-pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
-    let path = minecraft_data_dir(level_folder).join("wandering_trader.dat");
+pub fn read_wandering_trader(data_dir: &Path) -> WanderingTraderData {
+    let path = data_dir.join("wandering_trader.dat");
     if !path.exists() {
         return WanderingTraderData::default();
     }
@@ -596,11 +596,11 @@ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
 }
 
 pub fn write_wandering_trader(
-    level_folder: &Path,
+    data_dir: &Path,
     data: &WanderingTraderData,
 ) -> Result<(), WorldInfoError> {
-    let dir = ensure_minecraft_data_dir(level_folder)?;
-    let path = dir.join("wandering_trader.dat");
+    fs::create_dir_all(data_dir)?;
+    let path = data_dir.join("wandering_trader.dat");
     let file = File::create(&path)?;
     let mut data_comp = NbtCompound::new();
     data_comp.put_int("spawn_delay", data.spawn_delay);

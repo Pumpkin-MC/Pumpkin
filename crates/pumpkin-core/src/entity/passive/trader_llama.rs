@@ -23,18 +23,23 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        Controls, Goal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, tempt::TemptGoal, track_target::TrackTargetGoal,
         wander_around::WanderAroundGoal,
     },
+    ai::target_predicate::TargetPredicate,
     mob::{Mob, MobEntity, RangedAttackMob},
     passive::animal::{Animal, get_carpet_color_from_item},
     player::Player,
     projectile::llama_spit::LlamaSpitEntity,
 };
 
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+
 const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
+const DEFAULT_DESPAWN_DELAY: i32 = 47_999;
 
 pub const FLAG_TAME: u8 = 2;
 pub const FLAG_BRED: u8 = 8;
@@ -97,6 +102,7 @@ pub struct TraderLlamaEntity {
     pub has_chest: AtomicBool,
     pub temper: AtomicI32,
     pub owner: AtomicCell<Option<Uuid>>,
+    pub despawn_delay: AtomicI32,
 }
 
 impl TraderLlamaEntity {
@@ -117,6 +123,7 @@ impl TraderLlamaEntity {
             has_chest: AtomicBool::new(false),
             temper: AtomicI32::new(0),
             owner: AtomicCell::new(None),
+            despawn_delay: AtomicI32::new(DEFAULT_DESPAWN_DELAY),
         };
         let mob_arc = Arc::new(llama);
         let mob_weak: Weak<dyn Mob> = {
@@ -149,7 +156,7 @@ impl TraderLlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // TODO: TraderLlamaDefendWanderingTraderGoal at 1.
+            target_selector.add_goal(1, Box::new(TraderLlamaDefendWanderingTraderGoal::new()));
             hunting::apply(target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
             hunting::apply(target_selector, &mob_arc.mob_entity, TRADER_LLAMA_HUNTS);
         };
@@ -248,6 +255,56 @@ impl TraderLlamaEntity {
         let spit_arc: Arc<dyn EntityBase> = Arc::new(spit);
         world.spawn_entity(spit_arc);
     }
+
+    fn leashing_trader(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .get_leash_holder()
+            .filter(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
+    }
+
+    fn is_leashed_to_something_other_than_the_wandering_trader(&self) -> bool {
+        let entity = self.get_entity();
+        entity.is_leashed() && self.leashing_trader().is_none()
+    }
+
+    fn has_exactly_one_player_passenger(&self) -> bool {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        passengers.len() == 1 && passengers[0].get_entity().entity_type == &EntityType::PLAYER
+    }
+
+    /// Vanilla `TraderLlama.canDespawn`.
+    fn can_despawn(&self) -> bool {
+        !self.is_tame()
+            && !self.is_leashed_to_something_other_than_the_wandering_trader()
+            && !self.has_exactly_one_player_passenger()
+            && !self.is_age_locked()
+            && !self.mob_entity.persistence_required.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `TraderLlama.maybeDespawn`: mirrors the leashing trader's remaining delay.
+    fn maybe_despawn(&self) {
+        if !self.can_despawn() {
+            return;
+        }
+
+        let trader_delay = self
+            .leashing_trader()
+            .and_then(|trader| trader.get_mob().and_then(Mob::get_despawn_delay));
+        let despawn_delay = trader_delay.map_or_else(
+            || self.despawn_delay.load(Ordering::Relaxed) - 1,
+            |delay| delay - 1,
+        );
+        self.despawn_delay.store(despawn_delay, Ordering::Relaxed);
+
+        if despawn_delay <= 0 {
+            self.get_entity().remove_leash();
+            self.get_entity().remove();
+        }
+    }
 }
 
 impl AgeableMob for TraderLlamaEntity {
@@ -291,6 +348,7 @@ impl Mob for TraderLlamaEntity {
         nbt.put_bool("ChestedHorse", self.has_chest());
         nbt.put_bool("Tame", self.is_tame());
         nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
+        nbt.put_int("DespawnDelay", self.despawn_delay.load(Ordering::Relaxed));
         if let Some(owner) = self.owner.load() {
             nbt.put_uuid("Owner", owner);
         }
@@ -313,9 +371,16 @@ impl Mob for TraderLlamaEntity {
         if let Some(temper) = nbt.get_int("Temper") {
             self.temper.store(temper, Ordering::Relaxed);
         }
+        if let Some(delay) = nbt.get_int("DespawnDelay") {
+            self.despawn_delay.store(delay, Ordering::Relaxed);
+        }
         if let Some(owner) = nbt.get_uuid("Owner") {
             self.owner.store(Some(owner));
         }
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.maybe_despawn();
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -379,6 +444,10 @@ impl Mob for TraderLlamaEntity {
         }
 
         if !self.is_baby() && !self.is_food(item_stack) {
+            // Vanilla `TraderLlama.doPlayerRide` refuses a llama leashed to its trader.
+            if self.leashing_trader().is_some() {
+                return true;
+            }
             let world = player.world();
             let ent = &self.mob_entity.living_entity.entity;
             if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
@@ -396,5 +465,81 @@ impl Mob for TraderLlamaEntity {
 impl RangedAttackMob for TraderLlamaEntity {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
         self.spit(target);
+    }
+}
+
+/// Vanilla `TraderLlama.TraderLlamaDefendWanderingTraderGoal`.
+struct TraderLlamaDefendWanderingTraderGoal {
+    track_target_goal: TrackTargetGoal,
+    target: Option<Arc<dyn EntityBase>>,
+    timestamp: i32,
+    target_predicate: TargetPredicate,
+}
+
+impl TraderLlamaDefendWanderingTraderGoal {
+    fn new() -> Self {
+        Self {
+            track_target_goal: TrackTargetGoal::with_default(false),
+            target: None,
+            timestamp: 0,
+            target_predicate: TargetPredicate::create_attackable(),
+        }
+    }
+
+    fn leashing_trader(mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+        mob.get_entity()
+            .get_leash_holder()
+            .filter(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
+    }
+}
+
+impl Goal for TraderLlamaDefendWanderingTraderGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(trader) = Self::leashing_trader(mob) else {
+            return false;
+        };
+        let Some(trader_living) = trader.get_living_entity() else {
+            return false;
+        };
+        let timestamp = trader_living.get_last_hurt_by_mob_timestamp();
+        let Some(attacker) = trader_living.get_last_hurt_by_mob() else {
+            return false;
+        };
+        if timestamp == self.timestamp
+            || !self.track_target_goal.can_track(
+                mob,
+                Some(attacker.as_ref()),
+                &self.target_predicate,
+            )
+        {
+            return false;
+        }
+
+        self.target = Some(attacker);
+        true
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.set_mob_target(self.target.clone(), TargetReason::TargetAttackedOwner);
+        if let Some(trader) = Self::leashing_trader(mob)
+            && let Some(trader_living) = trader.get_living_entity()
+        {
+            self.timestamp = trader_living.get_last_hurt_by_mob_timestamp();
+        }
+        self.track_target_goal.set_target_mob(self.target.clone());
+        self.track_target_goal.start(mob);
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
+        self.track_target_goal.stop(mob);
+    }
+
+    fn controls(&self) -> Controls {
+        self.track_target_goal.controls()
     }
 }
