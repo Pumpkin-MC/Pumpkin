@@ -938,6 +938,10 @@ interface %world {
         /// Spawns one or more experience orbs totaling `amount` XP at the given position.
         spawn-experience-orb: async func(pos: position, amount: u32);
 
+        /// Attempts to drop an item stack at the given position.
+        /// No entity is spawned if the stack is empty or the item-spawn event is cancelled.
+        drop-item: func(pos: position, item: item-stack);
+
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;
 

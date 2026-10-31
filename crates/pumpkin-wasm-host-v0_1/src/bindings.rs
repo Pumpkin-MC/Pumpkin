@@ -63,6 +63,7 @@ bindgen!({
         "pumpkin:plugin/world@0.1.0.[method]world.set-raining": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.set-thundering": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.spawn-entity": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.drop-item": async | store | trappable,
         "pumpkin:plugin/world@0.1.0.[method]world.strike-lightning": async | store | trappable,
         "pumpkin:plugin/block-entity@0.1.0.[method]container-block-entity.set-stack": async | trappable,
         "pumpkin:plugin/boss-bar@0.1.0.[drop]boss-bar": async | trappable,
