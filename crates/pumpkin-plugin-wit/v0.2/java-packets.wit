@@ -1103,7 +1103,12 @@ interface java-packets {
     loot-table,
     loot-predicate,
     loot-modifier,
+    context-float-provider,
+    context-int-provider,
+    slot-source,
     dialog,
+    feature,
+    swing-animation,
     uuid,
   }
   enum string-proto-arg-behavior {

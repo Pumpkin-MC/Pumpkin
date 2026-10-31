@@ -3435,6 +3435,13 @@ pub fn deserialize_bedrock_serverbound_packet(
                 server_initiated_close: p.server_initiated_close.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SCursorItemDrag as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SCursorItemDrag as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SCursorItemDrag(crate::pumpkin::plugin::bedrock_packets::SCursorItemDrag {
+                state: p.state.try_into().unwrap(),
+            }))
+        }
         id if id == <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;

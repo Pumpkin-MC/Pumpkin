@@ -31,10 +31,11 @@ use pumpkin_protocol::{
             block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
-            interact::SInteract, inventory_transaction::SInventoryTransaction,
-            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
-            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
+            container_close::SContainerClose, cursor_item_drag::SCursorItemDrag, emote::SEmote,
+            emote_list::SEmoteList, interact::SInteract,
+            inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
+            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
+            modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
             request_ability::SRequestAbility, request_chunk_radius::SRequestChunkRadius,
@@ -816,6 +817,10 @@ impl BedrockClient {
             }
             SSetPlayerInventoryOptions::PACKET_ID => {
                 let _ = SSetPlayerInventoryOptions::read(reader)?;
+                // Ignore for now
+            }
+            SCursorItemDrag::PACKET_ID => {
+                let _ = SCursorItemDrag::read(reader)?;
                 // Ignore for now
             }
             SPlayerAction::PACKET_ID => {
