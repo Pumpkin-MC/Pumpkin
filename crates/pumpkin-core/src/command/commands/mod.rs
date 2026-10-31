@@ -299,11 +299,13 @@ fn resolve_permission_node(
 
 fn register_permissions(registry: &PermissionRegistry) {
     // Register our entity selector permission as well.
+    // Vanilla only lets permission level 2 use `@a`/`@e`/`@r`, so a regular player can't
+    // target everyone with `/msg @a`; console and command blocks are at least level 2.
     registry
         .register_permission(Permission::new(
             "minecraft:command.selector",
             "Allows a player to use selector variables",
-            PermissionDefault::Allow,
+            PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap_or_else(|e| tracing::warn!("{e}"));
     // Checked with vanilla's isOp mapped to level One, see `NBT_PLACE_PERMISSION`.
