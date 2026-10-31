@@ -2936,6 +2936,10 @@ impl LivingEntity {
         self.entity.air_supply.load(Relaxed) <= -DROWNING_INTERVAL
     }
 
+    pub fn is_part_of_game(&self) -> bool {
+        !self.is_spectator() && self.is_alive()
+    }
+
     #[must_use]
     pub fn is_alive(&self) -> bool {
         self.entity.is_alive() && self.health.load() > 0.0
