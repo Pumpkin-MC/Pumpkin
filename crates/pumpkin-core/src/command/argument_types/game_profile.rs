@@ -97,8 +97,8 @@ impl GameProfileResult {
                         }
                         _ => Err(Self::unknown_player_syntax_error()),
                     }
-                } else if let Ok(uuid) = offline_uuid(name) {
-                    let profile = Self::profile_from_uuid_name(uuid, name.clone());
+                } else {
+                    let profile = Self::profile_from_uuid_name(offline_uuid(name), name.clone());
                     server
                         .data
                         .user_cache
@@ -106,8 +106,6 @@ impl GameProfileResult {
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .upsert(profile.id, profile.name.clone());
                     Ok(vec![profile])
-                } else {
-                    Err(Self::unknown_player_syntax_error())
                 }
             }
             Self::Uuid(uuid) => {
