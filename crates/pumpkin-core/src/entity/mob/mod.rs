@@ -763,15 +763,15 @@ impl MobEntity {
             return false;
         }
 
-        let current_brightness = if is_thundering {
-            (sky_light - 10).max(block_light)
+        let brightness = if is_thundering {
+            world.get_raw_brightness(pos, 10)
         } else {
-            sky_light.max(block_light)
+            world.get_max_local_raw_brightness(pos)
         };
 
         // TODO
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-        current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
+        brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
     pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
