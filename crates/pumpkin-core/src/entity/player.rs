@@ -281,6 +281,7 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
 };
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -365,6 +366,34 @@ fn read_root_vehicle(nbt: &NbtCompound) -> Option<Uuid> {
     ))
 }
 
+fn write_last_death_location(nbt: &mut NbtCompound, dimension: &ResourceLocation, pos: &BlockPos) {
+    let mut death_compound = NbtCompound::new();
+    death_compound.put_string("dimension", dimension.clone());
+    death_compound.put("pos", NbtTag::IntArray(vec![pos.0.x, pos.0.y, pos.0.z]));
+    nbt.put_compound("LastDeathLocation", death_compound);
+}
+
+fn read_last_death_location(nbt: &NbtCompound) -> Option<(ResourceLocation, BlockPos)> {
+    let death = nbt.get_compound("LastDeathLocation")?;
+    let dimension_str = death.get_string("dimension")?;
+    Identifier::try_from(dimension_str).ok()?;
+    let dimension = dimension_str.to_string();
+    let pos = if let Some(pos_array) = death.get_int_array("pos")
+        && pos_array.len() >= 3
+    {
+        BlockPos(Vector3::new(pos_array[0], pos_array[1], pos_array[2]))
+    } else {
+        let list = death.get_list("pos")?;
+        let [x, y, z] = list else { return None };
+        BlockPos(Vector3::new(
+            x.extract_int()?,
+            y.extract_int()?,
+            z.extract_int()?,
+        ))
+    };
+    Some((dimension, pos))
+}
+
 pub const DATA_VERSION: i32 = 5023; // 26.3
 
 /// Food exhaustion applied for every block a player mines.
@@ -429,6 +458,8 @@ pub struct Player {
     pub camera_target_id: AtomicCell<Option<i32>>,
     /// The player's spawnpoint
     pub respawn_point: std::sync::Mutex<Option<RespawnPoint>>,
+    /// The player's last death location (vanilla `ServerPlayer.lastDeathLocation`).
+    pub last_death_location: std::sync::Mutex<Option<(ResourceLocation, BlockPos)>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Head position of the bed the player is currently sleeping in.
@@ -761,6 +792,7 @@ impl Player {
             is_movement_locked: AtomicBool::new(false),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: std::sync::Mutex::new(None),
+            last_death_location: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
             sleeping_ignored: AtomicBool::new(false),
@@ -4259,13 +4291,11 @@ impl Player {
                     });
                 }
 
-                let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
-                let death_location = BlockPos(Vector3::new(
-                    last_pos.x.round() as i32,
-                    last_pos.y.round() as i32,
-                    last_pos.z.round() as i32,
-                ));
+                let last_death_location = self
+                    .last_death_location
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
                 match self.client.as_ref() {
                     ClientPlatform::Java(java) => {
                         let packet = CRespawn::new(
@@ -4276,7 +4306,7 @@ impl Player {
                                 self.previous_gamemode.load().unwrap_or(self.gamemode.load()) as i8,
                                 false,
                                 new_world.is_flat(),
-                                Some((death_dimension, death_location)),
+                                last_death_location,
                                 VarInt(self.get_entity().portal_cooldown.load(Ordering::Relaxed) as i32),
                                 new_world.sea_level.into(),
                             ),
@@ -5086,6 +5116,15 @@ impl Player {
         );
         crate::entity::mob::neutral::tell_neutral_mobs_player_died(self, &self.world());
         let block_pos = self.position().to_block_pos();
+        // Vanilla `ServerPlayer` records the containing (floored) block
+        // position on death for the recovery compass.
+        *self
+            .last_death_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((
+            ResourceLocation::from(self.world().dimension.minecraft_name),
+            BlockPos::floored_v(self.position()),
+        ));
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
 
@@ -7281,6 +7320,7 @@ impl EntityBase for Player {
         self
     }
 
+    #[expect(clippy::too_many_lines)]
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("DataVersion", DATA_VERSION);
         self.inventory.write_nbt(nbt);
@@ -7373,6 +7413,15 @@ impl EntityBase for Player {
             respawn_compound.put_float("angle", respawn.yaw);
             respawn_compound.put_bool("forced", respawn.force);
             nbt.put_compound("respawn", respawn_compound);
+        }
+
+        if let Some((dimension, pos)) = self
+            .last_death_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            write_last_death_location(nbt, dimension, pos);
         }
 
         let vehicle_uuid = self
@@ -7561,6 +7610,11 @@ impl EntityBase for Player {
                 force,
             });
         }
+        // Vanilla `LastDeathLocation` is `{dimension: string, pos: [i32; 3]}`.
+        *self
+            .last_death_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = read_last_death_location(nbt);
         self.root_vehicle_uuid.store(read_root_vehicle(nbt));
         self.stats
             .lock()
@@ -8427,8 +8481,12 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use super::{
+        bedrock_inventory_slot, read_last_death_location, read_root_vehicle,
+        write_last_death_location, write_root_vehicle,
+    };
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
     use uuid::Uuid;
 
     #[test]
@@ -8525,5 +8583,35 @@ mod tests {
         let java_block = 4.5f64;
         let bedrock_block = 5.0f64;
         assert!(bedrock_block > java_block);
+    }
+
+    #[test]
+    fn last_death_location_round_trip() {
+        let dimension = "minecraft:the_nether".to_string();
+        let pos = BlockPos(Vector3::new(10, 64, -20));
+        let mut nbt = NbtCompound::new();
+
+        write_last_death_location(&mut nbt, &dimension, &pos);
+
+        assert_eq!(read_last_death_location(&nbt), Some((dimension, pos)));
+        let death = nbt.get_compound("LastDeathLocation").unwrap();
+        assert_eq!(death.get_string("dimension"), Some("minecraft:the_nether"));
+        assert_eq!(death.get_int_array("pos"), Some([10, 64, -20].as_slice()));
+    }
+
+    #[test]
+    fn last_death_location_missing_returns_none() {
+        let nbt = NbtCompound::new();
+        assert_eq!(read_last_death_location(&nbt), None);
+    }
+
+    #[test]
+    fn last_death_location_invalid_dimension_returns_none() {
+        let pos = BlockPos(Vector3::new(10, 64, -20));
+        let mut nbt = NbtCompound::new();
+
+        write_last_death_location(&mut nbt, &"Not A Valid Dimension!".to_string(), &pos);
+
+        assert_eq!(read_last_death_location(&nbt), None);
     }
 }
