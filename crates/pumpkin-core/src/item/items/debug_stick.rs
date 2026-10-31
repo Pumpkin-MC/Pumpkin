@@ -32,11 +32,12 @@ impl DebugStickItem {
         state_id: BlockStateId,
         cycle: bool,
     ) -> bool {
+        let block_key = format!("minecraft:{}", block.name);
         let Some(props) = block.properties(state_id) else {
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.empty",
-                    [TextComponent::text(block.name)],
+                    [TextComponent::text(block_key)],
                 ),
                 true,
             );
@@ -48,7 +49,7 @@ impl DebugStickItem {
             player.send_system_message_raw(
                 &TextComponent::translate(
                     "item.minecraft.debug_stick.empty",
-                    [TextComponent::text(block.name)],
+                    [TextComponent::text(block_key)],
                 ),
                 true,
             );
@@ -56,7 +57,6 @@ impl DebugStickItem {
         }
 
         let prop_names: Vec<PropertyKey> = prop_list.iter().map(|p| p.key()).collect();
-        let block_key = format!("minecraft:{}", block.name);
         let mut stick_state = item
             .get_data_component::<DebugStickStateImpl>()
             .cloned()
@@ -110,7 +110,11 @@ impl DebugStickItem {
 
             let new_state_id = block.from_properties(&new_props).to_state_id(block);
             let world = player.world();
-            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
+            world.set_block_state(
+                pos,
+                new_state_id,
+                BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+            );
 
             player.send_system_message_raw(
                 &TextComponent::translate(
@@ -179,7 +183,9 @@ impl ItemBehaviour for DebugStickItem {
                 let (block, state) = world.get_block_and_state(&pos);
                 let mut held = player.inventory().held_item();
                 Self::handle_interaction(&mut held, player, &pos, block, state.id, false);
-                player.inventory().set_held_item(held);
+                player.inventory().set_held_item(held.clone());
+                let slot = player.inventory().get_selected_slot() as usize;
+                player.sync_hand_slot(slot, held);
             }
         }
         false

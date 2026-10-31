@@ -8,7 +8,7 @@ interface java-packets {
     /// The language code used by the client (e.g., "`en_us`")
     locale: string,
     /// The maximum number of chunks the client renders
-    view-distance: u8,
+    view-distance: s8,
     /// Visibility of chat messages (0: Enabled, 1: Commands Only, 2: Hidden)
     chat-mode: s32,
     /// Whether the client wants chat colors/formatting rendered
@@ -152,7 +152,7 @@ interface java-packets {
     sync-id: s32,
     revision: s32,
     slot: s32,
-    button: u8,
+    button: s8,
     mode: slot-action-type,
     length-of-array: s32,
     /// WARNING: Could not fully translate type `Vec < (i16 , OptionalItemStackHash) >` to WIT
@@ -184,7 +184,7 @@ interface java-packets {
   }
   record s-client-information-play {
     locale: string,
-    view-distance: u8,
+    view-distance: s8,
     chat-mode: s32,
     chat-colors: bool,
     skin-parts: u8,
@@ -297,12 +297,12 @@ interface java-packets {
     payload: s64,
   }
   record s-place-recipe {
-    container-id: u8,
+    container-id: s8,
     recipe-display-id: s32,
     use-max-items: bool,
   }
   record s-player-abilities {
-    %flags: u8,
+    %flags: s8,
     fly-speed: option<f32>,
     walk-speed: option<f32>,
   }
@@ -353,7 +353,7 @@ interface java-packets {
     on-ground: bool,
   }
   record s-player-input {
-    input: u8,
+    input: s8,
   }
   record s-player-position {
     position: tuple<f64, f64, f64>,
@@ -426,7 +426,7 @@ interface java-packets {
     /// - 0x01: Track output
     /// - 0x02: Is conditional
     /// - 0x04: Automatic
-    %flags: u8,
+    %flags: s8,
   }
   enum command-block-mode {
     chain,
@@ -469,9 +469,9 @@ interface java-packets {
     action: s32,
     mode: s32,
     name: string,
-    offset-x: u8,
-    offset-y: u8,
-    offset-z: u8,
+    offset-x: s8,
+    offset-y: s8,
+    offset-z: s8,
     size-x: u8,
     size-y: u8,
     size-z: u8,
@@ -759,7 +759,7 @@ interface java-packets {
     location: tuple<s32, s32, s32>,
     /// The destruction stage, typically a value from 0 to 9.
     /// Any value outside 0-9 (like -1) will remove the destruction overlay.
-    destroy-stage: u8,
+    destroy-stage: s8,
   }
   /// Updates the NBT data of a block entity (e.g., signs, chests, or banners).
   /// 
@@ -1322,7 +1322,7 @@ interface java-packets {
     entity-id: s32,
     /// The ID of the status/event to trigger.
     /// See the table below for common entity statuses.
-    entity-status: u8,
+    entity-status: s8,
   }
   /// Updates the velocity of an entity.
   /// 
@@ -1527,7 +1527,7 @@ interface java-packets {
   }
   record c-map-item-data {
     map-id: s32,
-    scale: u8,
+    scale: s8,
     tracking-position: bool,
     locked: bool,
     icons: option<list<map-icon>>,
@@ -1535,16 +1535,16 @@ interface java-packets {
   }
   record map-icon {
     icon-type: s32,
-    x: u8,
-    z: u8,
-    direction: u8,
+    x: s8,
+    z: s8,
+    direction: s8,
     display-name: option<string>,
   }
   record map-patch {
     columns: u8,
     rows: u8,
-    x: u8,
-    z: u8,
+    x: s8,
+    z: s8,
     data: list<u8>,
   }
   record merchant-offer {
@@ -1691,7 +1691,7 @@ interface java-packets {
     /// Bit 1 (0x02): Flying
     /// Bit 2 (0x04): Allow Flying
     /// Bit 3 (0x08): Creative Mode (Instant Break)
-    %flags: u8,
+    %flags: s8,
     /// The multiplier for flying speed.
     /// Default is 0.05.
     flying-speed: f32,
@@ -1839,7 +1839,7 @@ interface java-packets {
     hashed-seed: s64,
     game-mode: u8,
     /// The previous gamemode (used for the F3+F4 toggle UI). -1 if none.
-    previous-gamemode: u8,
+    previous-gamemode: s8,
     /// If true, the world is a debug world (all blocks shown in a grid).
     debug: bool,
     /// If true, the world is a flat world (affects the horizon rendering).
@@ -1974,7 +1974,7 @@ interface java-packets {
     value: s32,
   }
   record c-set-container-slot {
-    window-id: u8,
+    window-id: s8,
     state-id: s32,
     slot: s32,
     /// WARNING: Could not fully translate type `& 'a ItemStackSerializer < 'a >` to WIT
@@ -1993,7 +1993,7 @@ interface java-packets {
   record c-set-equipment {
     entity-id: s32,
     /// WARNING: Could not fully translate type `Vec < (i8 , ItemStackSerializer < 'static >) >` to WIT
-    equipment: list<tuple<u8, inexpressible-host-type>>,
+    equipment: list<tuple<s8, inexpressible-host-type>>,
   }
   record c-set-experience {
     progress: f32,
@@ -2006,7 +2006,7 @@ interface java-packets {
     food-saturation: f32,
   }
   record c-set-selected-slot {
-    slot: u8,
+    slot: s8,
   }
   record c-set-passengers {
     entity-id: s32,
@@ -2026,7 +2026,7 @@ interface java-packets {
   }
   record team-parameters {
     display-name: string,
-    options: u8,
+    options: s8,
     nametag-visibility: string,
     collision-rule: string,
     color: s32,
@@ -2174,7 +2174,7 @@ interface java-packets {
   record attribute-modifier {
     id: string,
     amount: f64,
-    operation: u8,
+    operation: s8,
   }
   record c-update-entity-pos {
     entity-id: s32,
@@ -2199,7 +2199,7 @@ interface java-packets {
     effect-id: s32,
     amplifier: s32,
     duration: s32,
-    %flags: u8,
+    %flags: s8,
   }
   record c-update-objectives {
     objective-name: string,

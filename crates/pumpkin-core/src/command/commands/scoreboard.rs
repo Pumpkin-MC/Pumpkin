@@ -1,4 +1,7 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::argument_type::JavaClientArgumentType;
+use crate::command::argument_types::client_parsed::{ClientParsed, WordArgumentType};
+use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::objective::ObjectiveArgumentType;
@@ -23,13 +26,13 @@ const DESCRIPTION: &str = "Manages scoreboard objectives and players.";
 const PERMISSION: &str = "minecraft:command.scoreboard";
 
 const ARG_OBJECTIVE: &str = "objective";
-const ARG_CRITERION: &str = "criterion";
-const ARG_DISPLAY_NAME: &str = "display_name";
+const ARG_CRITERION: &str = "criteria";
+const ARG_DISPLAY_NAME: &str = "displayName";
 const ARG_TARGETS: &str = "targets";
 const ARG_SCORE: &str = "score";
 const ARG_OPERATION: &str = "operation";
-const ARG_SOURCE_TARGETS: &str = "source_targets";
-const ARG_SOURCE_OBJECTIVE: &str = "source_objective";
+const ARG_SOURCE_TARGETS: &str = "source";
+const ARG_SOURCE_OBJECTIVE: &str = "sourceObjective";
 
 const NO_SCORE_ERROR: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_SCOREBOARD_PLAYERS_GET_NULL,
@@ -61,7 +64,7 @@ impl CommandExecutor for ObjectivesAddExecutor {
         let criterion = StringArgumentType::get(context, ARG_CRITERION)?;
 
         let display_name = if self.has_display_name {
-            TextComponent::text(StringArgumentType::get(context, ARG_DISPLAY_NAME)?.to_string())
+            ComponentArgumentType::get(context, ARG_DISPLAY_NAME)?
         } else {
             TextComponent::text(objective_name.to_string())
         };
@@ -625,21 +628,23 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     .then(
                         literal("add").then(
                             argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
-                                argument(ARG_CRITERION, StringArgumentType::SingleWord)
-                                    .executes(ObjectivesAddExecutor {
-                                        has_display_name: false,
-                                    })
-                                    .then(
-                                        argument(
-                                            ARG_DISPLAY_NAME,
-                                            StringArgumentType::GreedyPhrase,
-                                        )
-                                        .executes(
-                                            ObjectivesAddExecutor {
-                                                has_display_name: true,
-                                            },
-                                        ),
+                                argument(
+                                    ARG_CRITERION,
+                                    ClientParsed::new(
+                                        WordArgumentType,
+                                        JavaClientArgumentType::ObjectiveCriteria,
                                     ),
+                                )
+                                .executes(ObjectivesAddExecutor {
+                                    has_display_name: false,
+                                })
+                                .then(
+                                    argument(ARG_DISPLAY_NAME, ComponentArgumentType).executes(
+                                        ObjectivesAddExecutor {
+                                            has_display_name: true,
+                                        },
+                                    ),
+                                ),
                             ),
                         ),
                     )

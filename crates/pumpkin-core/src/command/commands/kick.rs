@@ -5,6 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -73,7 +74,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             argument("targets", EntityArgumentType::Players)
                 .executes(KickExecutor { has_reason: false })
                 .then(
-                    argument("reason", StringArgumentType::GreedyPhrase)
+                    argument("reason", MessageArgumentType)
                         .executes(KickExecutor { has_reason: true }),
                 ),
         ),

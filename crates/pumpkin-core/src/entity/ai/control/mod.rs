@@ -4,6 +4,7 @@ use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
 pub mod body_rotation_control;
+pub mod fish_move_control;
 pub mod flying_move_control;
 pub mod jump_control;
 pub mod look_control;

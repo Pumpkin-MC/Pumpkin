@@ -1,3 +1,6 @@
+pub mod abstract_fish;
+pub mod abstract_schooling_fish;
+pub mod ageable_water_creature;
 pub mod allay;
 pub mod animal;
 pub mod armadillo;
@@ -43,5 +46,6 @@ pub mod tropical_fish;
 pub mod turtle;
 pub mod villager;
 pub mod wandering_trader;
+pub mod water_animal;
 pub mod wolf;
 pub mod zombie_horse;

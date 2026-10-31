@@ -482,6 +482,7 @@ impl Slot for ResultSlot {
             stack.item.id as i32,
             stack.item_count as i32,
         );
+        player.on_recipe_crafted(stack);
         for i in 0..self.inventory.size() {
             self.inventory.remove_stack_specific(i, 1);
         }
