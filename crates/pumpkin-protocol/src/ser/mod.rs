@@ -99,8 +99,7 @@ impl<'a, R: NetworkReadExt + ?Sized> pumpkin_nbt::deserializer::NbtDataSource<'a
                 e.to_string(),
             ))
         })?;
-        let string =
-            cesu8::from_java_cesu8(&buf).map_err(|_| pumpkin_nbt::Error::Cesu8DecodingError)?;
+        let string = pumpkin_nbt::cesu8::from_java_cesu8(&buf)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 

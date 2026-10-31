@@ -18,7 +18,6 @@ pumpkin-macros.workspace = true
 pumpkin-util.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-cesu8.workspace = true
 
 uuid.workspace = true
 thiserror.workspace = true
@@ -31,7 +30,6 @@ cfb8.workspace = true
 hybrid-array = "0.4"
 
 # compression
-async-compression = { workspace = true, features = ["tokio", "zlib", "deflate"] }
 flate2.workspace = true
 
 bitflags.workspace = true
