@@ -22,12 +22,12 @@ use tracing::{debug, info, trace, warn};
 
 use crate::server::Server;
 
+use super::ice_socket::IceSocket;
 use super::state::NetherNetState;
 use super::{
     discovery::NetherNetDiscovery, ice_router::IceRouter, peer::negotiate_direct,
     session::IncomingSession,
 };
-use crate::net::bedrock::status::IceSocket;
 
 const MAX_SDP_SIZE: usize = 1 << 20;
 
@@ -48,7 +48,15 @@ impl NetherNetListener {
         let address = config.address;
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
-        let ice_router = Arc::new(IceRouter::bind(ice_socket, server.stop_token.clone()).await?);
+        let ice_router = Arc::new(
+            IceRouter::bind(
+                ice_socket,
+                Arc::downgrade(server),
+                server.server_guid,
+                server.stop_token.clone(),
+            )
+            .await?,
+        );
         let ice_local_addr = ice_router.public_addr();
         let (incoming, receiver) = mpsc::channel(128);
         let state = NetherNetState {
@@ -65,6 +73,10 @@ impl NetherNetListener {
         };
         let router = Router::new()
             .route("/v1/join", get(status))
+            .route("/join", get(status))
+            .route("/v1/ping", get(status))
+            .route("/ping", get(status))
+            .route("/status", get(status))
             .route("/v1/join/{network_id}", post(join))
             .fallback(unknown_request)
             .layer(DefaultBodyLimit::max(MAX_SDP_SIZE))
