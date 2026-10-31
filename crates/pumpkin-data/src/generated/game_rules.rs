@@ -127,6 +127,26 @@ impl GameRule {
             Self::WaterSourceConversion,
         ]
     }
+    #[doc = r" The inclusive bounds an integer rule accepts, mirroring the"]
+    #[doc = r" `IntegerArgumentType` and `Codec.intRange` vanilla registers it with."]
+    #[must_use]
+    pub const fn int_bounds(&self) -> Option<(i32, i32)> {
+        match self {
+            Self::FireSpreadRadiusAroundPlayer => Some((-1i32, 2147483647i32)),
+            Self::MaxBlockModifications => Some((1i32, 2147483647i32)),
+            Self::MaxCommandForks => Some((0i32, 2147483647i32)),
+            Self::MaxCommandSequenceLength => Some((0i32, 2147483647i32)),
+            Self::MaxEntityCramming => Some((0i32, 2147483647i32)),
+            Self::MaxMinecartSpeed => Some((1i32, 1000i32)),
+            Self::MaxSnowAccumulationHeight => Some((0i32, 8i32)),
+            Self::PlayersNetherPortalCreativeDelay => Some((0i32, 2147483647i32)),
+            Self::PlayersNetherPortalDefaultDelay => Some((0i32, 2147483647i32)),
+            Self::PlayersSleepingPercentage => Some((0i32, 2147483647i32)),
+            Self::RandomTickSpeed => Some((0i32, 2147483647i32)),
+            Self::RespawnRadius => Some((0i32, 2147483647i32)),
+            _ => None,
+        }
+    }
 }
 impl fmt::Display for GameRule {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -50,6 +50,17 @@ impl JavaClient {
             match current_val {
                 GameRuleValue::Int(_) => {
                     if let Ok(val) = entry.value.parse::<i64>() {
+                        // Vanilla parses these through the rule's `Codec.intRange`, which
+                        // drops a value outside the range instead of applying it.
+                        if let Some((min, max)) = rule.int_bounds()
+                            && !(i64::from(min)..=i64::from(max)).contains(&val)
+                        {
+                            warn!(
+                                "Player {} tried to set out of range value {} for gamerule {}",
+                                player.gameprofile.name, val, key
+                            );
+                            continue;
+                        }
                         player.world().set_game_rule(rule, GameRuleValue::Int(val));
                         info!(
                             "Player {} set gamerule {} to {}",

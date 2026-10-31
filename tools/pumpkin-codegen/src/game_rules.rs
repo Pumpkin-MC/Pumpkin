@@ -20,6 +20,7 @@ pub fn build() -> TokenStream {
     let mut getter_match = TokenStream::new();
     let mut mut_getter_match = TokenStream::new();
     let mut default_functions = TokenStream::new();
+    let mut int_bounds_match = TokenStream::new();
 
     for (raw_name, raw_value) in &game_rules {
         let (variant_type, field_type, default_value) = match raw_value {
@@ -47,6 +48,19 @@ pub fn build() -> TokenStream {
         let pascal_case = format_ident!("{}", raw_name.to_pascal_case());
         let default_fn_name = format!("default_{snake_case}");
         let default_fn_ident = format_ident!("default_{snake_case}");
+
+        // Integer rules carry the range the vanilla rule accepts next to the default.
+        if let Value::Object(obj) = raw_value
+            && let (Some(Value::Number(min)), Some(Value::Number(max))) =
+                (obj.get("min"), obj.get("max"))
+            && let (Some(min), Some(max)) = (min.as_i64(), max.as_i64())
+        {
+            let min = i32::try_from(min).expect("Integer rule min outside i32");
+            let max = i32::try_from(max).expect("Integer rule max outside i32");
+            int_bounds_match.extend(quote! {
+                Self::#pascal_case => Some((#min, #max)),
+            });
+        }
 
         // Struct field
         struct_fields.extend(quote! {
@@ -107,6 +121,16 @@ pub fn build() -> TokenStream {
                 &[
                     #enum_variants_list
                 ]
+            }
+
+            /// The inclusive bounds an integer rule accepts, mirroring the
+            /// `IntegerArgumentType` and `Codec.intRange` vanilla registers it with.
+            #[must_use]
+            pub const fn int_bounds(&self) -> Option<(i32, i32)> {
+                match self {
+                    #int_bounds_match
+                    _ => None,
+                }
             }
         }
 

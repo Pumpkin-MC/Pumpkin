@@ -128,10 +128,18 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         for name in [rule.to_string(), format!("minecraft:{rule}")] {
             let rule_literal = literal(name).executes(QueryExecutor(rule.clone()));
             let branch = match rule_registry.get(rule) {
-                GameRuleValue::Int(_) => rule_literal.then(
-                    argument("value", IntegerArgumentType::any())
-                        .executes(SetIntExecutor(rule.clone())),
-                ),
+                GameRuleValue::Int(_) => {
+                    // Vanilla gives each integer rule the argument type its own range
+                    // declares, so out of range values are rejected while parsing.
+                    let argument_type = rule
+                        .int_bounds()
+                        .map_or_else(IntegerArgumentType::any, |(min, max)| {
+                            IntegerArgumentType::new(min, max)
+                        });
+                    rule_literal.then(
+                        argument("value", argument_type).executes(SetIntExecutor(rule.clone())),
+                    )
+                }
                 GameRuleValue::Bool(_) => rule_literal.then(
                     argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone())),
                 ),
