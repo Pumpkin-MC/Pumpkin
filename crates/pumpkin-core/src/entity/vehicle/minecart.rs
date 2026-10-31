@@ -135,6 +135,12 @@ impl EntityBase for MinecartEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
+        self.vehicle.entity.check_out_of_world(caller);
+        if self.vehicle.entity.is_removed() {
+            return;
+        }
+        // Vanilla `handlePortal` is left out: non-player entities can't change dimension yet,
+        // so the minecart would stay behind while its rider is teleported.
         if let MinecartKind::Furnace(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);
         }
@@ -185,17 +191,6 @@ impl EntityBase for MinecartEntity {
             if is_activator_rail && let MinecartKind::Hopper(minecart) = &self.kind {
                 minecart.set_enabled(!powered);
             }
-        } else if block.id == Block::DETECTOR_RAIL.id
-            && let Some(server) = world.server.upgrade()
-        {
-            world.block_registry.on_entity_collision(
-                block,
-                &world,
-                self,
-                &block_pos,
-                world.get_block_state(&block_pos),
-                &server,
-            );
         }
 
         if is_powered_rail || is_activator_rail {
@@ -497,6 +492,20 @@ impl EntityBase for MinecartEntity {
                 self.vehicle.entity.send_velocity();
             }
         }
+
+        // Vanilla `OldMinecartBehavior.tick`: `applyEffectsFromBlocks` after moving.
+        self.vehicle.entity.tick_block_collisions(caller);
+
+        // Vanilla `AbstractMinecart.tick` hurts minecarts in lava on top of the lava fluid effect.
+        self.vehicle.entity.update_fluid_state(caller);
+        if self.vehicle.entity.touching_lava.load(Ordering::SeqCst) {
+            self.vehicle.entity.lava_ignite(caller);
+            self.vehicle.entity.lava_hurt(caller);
+        }
+        self.vehicle
+            .entity
+            .first_tick
+            .store(false, Ordering::Relaxed);
 
         if let MinecartKind::Hopper(minecart) = &self.kind {
             minecart.tick(&self.vehicle.entity);

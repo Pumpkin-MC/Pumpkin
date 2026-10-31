@@ -6,7 +6,6 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
-    damage::DamageType,
     fluid::{Falling, Fluid, FluidProperties, Level},
     tag::Taggable,
     world::WorldEvent,
@@ -180,12 +179,8 @@ impl FluidBehaviour for FlowingLava {
 
     fn on_entity_collision(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        if !base_entity.is_fire_immune() {
-            entity.set_on_fire_for(15.0);
-
-            // Also apply lava damage
-            base_entity.damage(entity, 4.0, DamageType::LAVA);
-        }
+        base_entity.lava_ignite(entity);
+        base_entity.lava_hurt(entity);
     }
 
     fn random_tick(&self, _fluid: &Fluid, world: &Arc<World>, block_pos: &BlockPos) {

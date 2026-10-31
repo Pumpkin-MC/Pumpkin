@@ -240,6 +240,9 @@ impl VehicleEntity {
             } else {
                 self.kill_and_drop_self();
             }
+            // Vanilla `Entity.setRemoved`: passengers stop riding once the vehicle is removed,
+            // so they stay where they are instead of looking for a dismount spot.
+            self.entity.eject_passengers();
         }
 
         true

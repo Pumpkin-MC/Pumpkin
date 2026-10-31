@@ -35,7 +35,7 @@ impl HopperMinecart {
     }
 
     pub(super) fn tick(&self, entity: &Entity) {
-        if !self.enabled.load(Ordering::Relaxed) {
+        if !entity.is_alive() || !self.enabled.load(Ordering::Relaxed) {
             return;
         }
 
