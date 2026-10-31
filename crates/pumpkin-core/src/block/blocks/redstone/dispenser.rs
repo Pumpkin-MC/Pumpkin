@@ -366,6 +366,10 @@ impl DispenserBlock {
         } else if item.item.id == Item::HONEYCOMB.id {
             // Honeycombs wax copper blocks
             Self::dispense_honeycomb(ctx, item);
+        } else if item.item.id == Item::BONE_MEAL.id {
+            // TODO: Support the `growWaterPlant` fallback for seagrass and sea pickles via `use_with_item`.
+            // Bone meal fertilizes the block in front of the dispenser
+            Self::dispense_bone_meal(ctx, item);
         } else if entity_from_egg(item.item.id).is_some() {
             // Spawn eggs
             Self::dispense_spawn_egg(ctx, item);
@@ -875,6 +879,24 @@ impl DispenserBlock {
 
         if try_wax_block(ctx.world, front, front_block) {
             item.decrement(1);
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
+        } else {
+            Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
+        }
+    }
+
+    fn dispense_bone_meal(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        let target = Self::target_position(ctx);
+        let (block, state_id) = ctx.world.get_block_and_state_id(&target);
+        let applied = ctx
+            .world
+            .block_registry
+            .bone_meal(block, ctx.world, &target, state_id);
+
+        if applied {
+            item.decrement(1);
+            ctx.world
+                .sync_world_event(WorldEvent::ParticlesAndSoundPlantGrowth, target, 15);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserFail);
