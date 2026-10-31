@@ -366,11 +366,6 @@ impl SpawnState {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
-        let active_chunks = world
-            .active_chunks
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
         for entity in entities.load().iter() {
             if let Some(mob) = entity.get_mob()
                 && (mob.get_mob_entity().persistence_required.load(Relaxed)
@@ -384,9 +379,6 @@ impl SpawnState {
                 continue;
             }
             let chunk_pos = base_entity.chunk_pos.load();
-            if !active_chunks.contains(&chunk_pos) {
-                continue;
-            }
             let entity_pos = base_entity.block_pos.load();
             let biome = base_entity.current_biome.load();
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
@@ -1165,6 +1157,40 @@ fn is_burning_block(block: &Block) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn spawn_state_counts_entities_outside_active_chunks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, r#type::from_type};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        // Nothing has been marked active, so the entity's chunk is outside the
+        // simulation-distance set. Vanilla still counts it through `getFullChunk`.
+        assert!(
+            world
+                .active_chunks
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+        let entity: Arc<dyn EntityBase> = from_type(
+            &EntityType::ZOMBIE,
+            Vector3::new(8.0, 64.0, 8.0),
+            &world,
+            Uuid::new_v4(),
+        );
+        let entities = ArcSwap::from_pointee(vec![entity]);
+
+        let state = SpawnState::new(289, &entities, &world);
+
+        assert_eq!(
+            state.mob_category_counts.0[MobCategory::MONSTER.id].load(Relaxed),
+            1
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn potential_change_is_finite_beyond_i32_range() {
