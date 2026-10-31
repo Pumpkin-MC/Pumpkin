@@ -155,15 +155,7 @@ impl TickExecutor {
         );
     }
 
-    fn send_sprint_report(source: &CommandSource, ticks: i32) {
-        source.send_feedback(
-            TextComponent::translate_cross(
-                translation::java::COMMANDS_TICK_SPRINT_REPORT,
-                translation::java::COMMANDS_TICK_SPRINT_REPORT,
-                [TextComponent::text(ticks.to_string())],
-            ),
-            true,
-        );
+    fn send_sprint_started(source: &CommandSource) {
         source.send_feedback(
             TextComponent::translate_cross(
                 translation::java::COMMANDS_TICK_STATUS_SPRINTING,
@@ -287,7 +279,7 @@ impl CommandExecutor for TickExecutor {
             SubCommand::SprintTimed => {
                 let ticks = TimeArgumentType::get(context, "time")?;
                 manager.request_game_to_sprint(server, ticks as i64);
-                Self::send_sprint_report(source, ticks);
+                Self::send_sprint_started(source);
                 Ok(1)
             }
             SubCommand::SprintStop => {
