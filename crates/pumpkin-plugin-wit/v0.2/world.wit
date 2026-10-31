@@ -786,6 +786,55 @@ interface %world {
         max: position,
     }
 
+    /// The running state of a custom weather phase.
+    record weather-phase-state {
+        /// The phase id from the weather profile.
+        id: string,
+        active: bool,
+        /// Ticks until the phase flips between active and inactive.
+        ticks-left: s32,
+    }
+
+    /// A snapshot of a world's weather.
+    record weather-state {
+        clear-time: s32,
+        rain-time: s32,
+        thunder-time: s32,
+        /// Whether the weather cycle currently rains (without custom phases).
+        raining: bool,
+        thundering: bool,
+        /// The current client-visible rain level, from 0 to 1.
+        rain-level: f32,
+        thunder-level: f32,
+        /// The custom phases of the world's weather profile.
+        phases: list<weather-phase-state>,
+    }
+
+    /// The weather a fixed cycle holds.
+    record fixed-weather {
+        raining: bool,
+        thundering: bool,
+    }
+
+    /// Which weather cycle a world follows
+    variant weather-cycle {
+        /// The server's cycle, shared with the other worlds
+        shared,
+        /// A cycle of its own, saved with the world
+        dedicated,
+        /// Never changes by itself
+        fixed(fixed-weather),
+    }
+
+    /// How a created world handles weather.
+    record world-weather-settings {
+        cycle: weather-cycle,
+        /// A registered weather profile for an own or fixed cycle.
+        profile: option<string>,
+        /// Overrides whether the world has weather; the dimension decides if unset.
+        enabled: option<bool>,
+    }
+
     /// Represents the configured shared spawn location for a world.
     record world-spawn-location {
         /// The block position of the shared world spawn.
@@ -886,6 +935,29 @@ interface %world {
 
         /// Sets whether there should be a thunderstorm.
         set-thundering: async func(thundering: bool);
+
+        /// Returns whether this world has weather at all.
+        has-weather: func() -> bool;
+
+        /// Returns a snapshot of this world's weather cycle and levels.
+        get-weather: func() -> weather-state;
+
+        /// Sets the weather cycle of this world like `/weather` does: `clear-time` ticks of
+        /// clear sky, then `rain-time` ticks of the given state. Fires no events.
+        set-weather: func(clear-time: s32, rain-time: s32, raining: bool, thundering: bool);
+
+        /// Sets the ticks of clear sky left from `/weather clear`. Negative values count as 0.
+        set-clear-weather-duration: func(ticks: s32);
+
+        /// Sets the ticks until the rain next starts or stops.
+        set-rain-duration: func(ticks: s32);
+
+        /// Sets the ticks until the thunder next starts or stops.
+        set-thunder-duration: func(ticks: s32);
+
+        /// Starts or ends a custom phase of the weather profile. Without `ticks` the phase
+        /// lasts its profile duration (or waits its delay when ended).
+        set-weather-phase: func(id: string, active: bool, ticks: option<s32>) -> result<_, string>;
 
         /// Broadcasts a system message to all players in this world.
         broadcast-system-message: func(message: text-component, overlay: bool);

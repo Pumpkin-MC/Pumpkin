@@ -39,14 +39,7 @@ impl<'a> EnvironmentAttributes<'a> {
 
                 // Weather modifier (WeatherAttributes.RAIN and THUNDER)
                 if self.world.dimension.has_skylight {
-                    let (rain_level, thunder_level) = {
-                        let weather = self
-                            .world
-                            .weather
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        (weather.rain_level, weather.thunder_level)
-                    };
+                    let (rain_level, thunder_level) = self.world.weather_levels();
                     level = Self::apply_weather_sky_light(level, rain_level, thunder_level);
                 }
                 level.clamp(0.0, 15.0)
@@ -125,15 +118,7 @@ impl<'a> EnvironmentAttributes<'a> {
                     )
             }
             EnvironmentAttribute::GameplayBeesStayInHive => {
-                let raining = {
-                    let weather = self
-                        .world
-                        .weather
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    weather.raining
-                };
-                raining
+                self.world.is_raining()
                     || !self.world.dimension.has_skylight
                     || sample_bool_track(
                         DayTimeline::BEES_STAY_IN_HIVE_KEYFRAMES,
