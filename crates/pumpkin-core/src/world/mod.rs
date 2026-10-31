@@ -7143,10 +7143,17 @@ impl World {
         }
     }
 
-    pub async fn save(&self) {
+    /// Writes the live entities into their chunks' saved data, as vanilla's autosave does,
+    /// so entities survive a crash or a killed process and not only a clean stop.
+    pub async fn autosave_entities(&self) {
         let entities = self.entities.load_full();
         self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
             .await;
+        self.level.save_loaded_entity_chunks().await;
+    }
+
+    pub async fn save(&self) {
+        self.autosave_entities().await;
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
