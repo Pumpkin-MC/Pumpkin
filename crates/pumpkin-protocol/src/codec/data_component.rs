@@ -1757,43 +1757,49 @@ impl DataComponentCodec<Self> for AttributeModifiersImpl {
         seq.write_var_int(&VarInt::from(self.attribute_modifiers.len() as i32))?;
         for modifier in self.attribute_modifiers.iter() {
             seq.write_var_int(&VarInt::from(modifier.r#type.id as i32))?;
-            seq.write_string(modifier.id)?;
+            seq.write_string(&modifier.id)?;
             seq.write_f64(modifier.amount)?;
             seq.write_var_int(&VarInt::from(modifier.operation as i32))?;
-            let slot_id = match modifier.slot {
-                pumpkin_data::enchantment::AttributeModifierSlot::Any => 0,
-                pumpkin_data::enchantment::AttributeModifierSlot::MainHand => 1,
-                pumpkin_data::enchantment::AttributeModifierSlot::OffHand => 2,
-                pumpkin_data::enchantment::AttributeModifierSlot::Hand => 3,
-                pumpkin_data::enchantment::AttributeModifierSlot::Feet => 4,
-                pumpkin_data::enchantment::AttributeModifierSlot::Legs => 5,
-                pumpkin_data::enchantment::AttributeModifierSlot::Chest => 6,
-                pumpkin_data::enchantment::AttributeModifierSlot::Head => 7,
-                pumpkin_data::enchantment::AttributeModifierSlot::Armor => 8,
-                pumpkin_data::enchantment::AttributeModifierSlot::Body => 9,
-                pumpkin_data::enchantment::AttributeModifierSlot::Saddle => 10,
-            };
-            seq.write_var_int(&VarInt(slot_id))?;
+            seq.write_var_int(&VarInt(modifier.slot.id()))?;
             seq.write_var_int(&VarInt(0))?;
         }
         Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        use pumpkin_data::AttributeModifierSlot;
+        use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
+
+        const MAX_ATTRIBUTE_MODIFIERS: usize = 256;
+        let len = read_count(seq, MAX_ATTRIBUTE_MODIFIERS)?;
+        let mut modifiers = Vec::with_capacity(len);
         for _ in 0..len {
-            let _attr_id = seq.get_var_int()?;
-            let _id = seq.get_str()?;
-            let _amount = seq.get_f64()?;
-            let _operation = seq.get_var_int()?;
-            let _slot = seq.get_var_int()?;
+            let attr_id = seq.get_var_int()?.0;
+            let id = seq.get_str()?;
+            let amount = seq.get_f64()?;
+            let operation = seq.get_var_int()?.0;
+            let slot = seq.get_var_int()?.0;
             let display_type = seq.get_var_int()?.0;
             if display_type == 2 {
                 let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             }
+            let r#type = pumpkin_data::attributes::Attributes::ALL
+                .iter()
+                .find(|a| i32::from(a.id) == attr_id)
+                .ok_or_else(|| ReadingError::Message(format!("unknown attribute id {attr_id}")))?;
+            modifiers.push(Modifier {
+                r#type,
+                id: Cow::Owned(id.into_string()),
+                amount,
+                operation: Operation::from_id(operation).ok_or_else(|| {
+                    ReadingError::Message(format!("unknown modifier operation {operation}"))
+                })?,
+                slot: AttributeModifierSlot::from_id(slot)
+                    .ok_or_else(|| ReadingError::Message(format!("unknown slot group {slot}")))?,
+            });
         }
         Ok(Self {
-            attribute_modifiers: Cow::Borrowed(&[]),
+            attribute_modifiers: Cow::Owned(modifiers),
         })
     }
 }
