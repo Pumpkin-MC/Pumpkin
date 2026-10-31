@@ -828,10 +828,16 @@ pub struct Team {
 
 impl Team {
     pub(crate) const ALLOW_FRIENDLY_FIRE: i8 = 0x01;
+    pub(crate) const SEE_FRIENDLY_INVISIBLES: i8 = 0x02;
 
     #[must_use]
     pub const fn is_allow_friendly_fire(&self) -> bool {
         self.options & Self::ALLOW_FRIENDLY_FIRE != 0
+    }
+
+    #[must_use]
+    pub const fn is_see_friendly_invisibles(&self) -> bool {
+        self.options & Self::SEE_FRIENDLY_INVISIBLES != 0
     }
 }
 

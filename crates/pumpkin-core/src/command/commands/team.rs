@@ -114,7 +114,8 @@ impl CommandExecutor for TeamAddExecutor {
         let new_team = Team {
             name: team_name_owned,
             display_name: display_name_clone.clone(),
-            options: 0,
+            // A new team starts with both options on, as in vanilla's `PlayerTeam`.
+            options: Team::ALLOW_FRIENDLY_FIRE | Team::SEE_FRIENDLY_INVISIBLES,
             nametag_visibility: NameTagVisibility::Always,
             collision_rule: CollisionRule::Always,
             color: NamedColor::White,
@@ -717,7 +718,7 @@ impl CommandExecutor for TeamModifySeeFriendlyInvisiblesExecutor {
         };
 
         let mut team = team.clone();
-        let is_enabled = (team.options & 0x02) != 0;
+        let is_enabled = team.is_see_friendly_invisibles();
         if value == is_enabled {
             if value {
                 return Err(SEE_FRIENDLY_INVISIBLES_ALREADY_ENABLED_ERROR.create_without_context());
@@ -726,9 +727,9 @@ impl CommandExecutor for TeamModifySeeFriendlyInvisiblesExecutor {
         }
 
         if value {
-            team.options |= 0x02;
+            team.options |= Team::SEE_FRIENDLY_INVISIBLES;
         } else {
-            team.options &= !0x02;
+            team.options &= !Team::SEE_FRIENDLY_INVISIBLES;
         }
 
         let team_display_name = team.display_name.clone();
