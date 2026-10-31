@@ -3315,23 +3315,13 @@ name = "pumpkin-plugin-api-v0_2"
 version = "0.2.1+26.3-26.51"
 dependencies = [
  "postcard",
- "pumpkin-plugin-compose",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-serde-structured",
+ "wasm-compose",
  "wasmtime",
  "wit-bindgen 0.63.0",
-]
-
-[[package]]
-name = "pumpkin-plugin-compose"
-version = "0.2.1+26.3-26.51"
-dependencies = [
- "anyhow",
- "wasm-compose",
- "wasmparser 0.259.0",
- "wat",
 ]
 
 [[package]]

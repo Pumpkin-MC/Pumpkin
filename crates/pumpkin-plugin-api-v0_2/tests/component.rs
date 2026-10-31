@@ -74,18 +74,18 @@ fn fixture_path() -> &'static PathBuf {
         assert!(status.success(), "building the fixture component failed");
         let plugin_path = target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm");
         let helper_path = target_dir.join("wasm32-wasip2/debug/pumpkin_plugin_helpers.wasm");
-        let plugin = std::fs::read(plugin_path).expect("fixture bytes");
-        let helpers = std::fs::read(helper_path).expect("helper bytes");
-        assert!(
-            pumpkin_plugin_compose::compose(&plugin, b"\0asm\x0d\0\x01\0").is_err(),
-            "a missing helper export must fail composition"
-        );
+        // Definition names come from filenames and must be valid component identifiers.
+        let definition = target_dir.join("registry-helpers.wasm");
+        std::fs::copy(helper_path, &definition).expect("copy helper definition");
+        let config = wasm_compose::config::Config {
+            definitions: vec![definition],
+            ..Default::default()
+        };
+        let composed = wasm_compose::composer::ComponentComposer::new(&plugin_path, &config)
+            .compose()
+            .expect("compose fixture");
         let output = target_dir.join("composed-fixture.wasm");
-        std::fs::write(
-            &output,
-            pumpkin_plugin_compose::compose(&plugin, &helpers).expect("compose fixture"),
-        )
-        .expect("write composed fixture");
+        std::fs::write(&output, composed).expect("write composed fixture");
         output
     })
 }

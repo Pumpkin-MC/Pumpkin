@@ -27,7 +27,6 @@ members = [
     "crates/pumpkin-wasm-host-v0_2",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
-    "tools/pumpkin-plugin-compose",
     "tools/pumpkin-fuzzer",
     "tools/pumpkin-tester",
 ]
