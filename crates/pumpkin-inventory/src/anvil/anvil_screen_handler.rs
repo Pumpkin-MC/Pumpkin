@@ -564,6 +564,7 @@ mod tests {
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory, CSetSelectedSlot,
     };
+    use pumpkin_protocol::java::server::play::SlotActionType;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicI32;
 
@@ -677,6 +678,32 @@ mod tests {
         let result = anvil_inv.get_stack(2);
         assert_eq!(result.get_hover_name(), "Excalibur");
         assert_eq!(result.get_repair_cost(), 0); // Only renaming does not increase repair cost
+    }
+
+    #[test]
+    fn throw_result_charges_once() {
+        let player = DummyPlayer::new(10, false);
+        let anvil_inv = Arc::new(SimpleInventory::new(3));
+        let mut handler = AnvilScreenHandler::new(1, &player.inventory, anvil_inv.clone());
+        anvil_inv.set_stack(0, ItemStack::new(1, &Item::DIAMOND_SWORD));
+        handler.set_item_name("Excalibur", false);
+
+        handler.on_slot_click(2, 0, SlotActionType::Throw, &player);
+
+        assert_eq!(player.experience_level(), 9);
+    }
+
+    #[test]
+    fn throw_all_unaffordable_result_stops() {
+        let player = DummyPlayer::new(0, false);
+        let anvil_inv = Arc::new(SimpleInventory::new(3));
+        let mut handler = AnvilScreenHandler::new(1, &player.inventory, anvil_inv.clone());
+        anvil_inv.set_stack(0, ItemStack::new(1, &Item::DIAMOND_SWORD));
+        handler.set_item_name("Excalibur", false);
+
+        handler.on_slot_click(2, 1, SlotActionType::Throw, &player);
+
+        assert_eq!(anvil_inv.get_stack(0).item, &Item::DIAMOND_SWORD);
     }
 
     #[test]
