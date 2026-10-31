@@ -530,9 +530,14 @@ impl World {
                 migrations.push(pos);
             }
         }
-        let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
         drop(active_chunks);
         drop(tracker);
+        let spawnable_chunks = natural_spawn_chunk_count(
+            players
+                .iter()
+                .filter(|player| !player.is_spectator())
+                .map(|player| player.get_entity().chunk_pos.load()),
+        );
         for pos in migrations {
             self.migrate_pending_block_entities(pos);
         }
@@ -2221,7 +2226,7 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = self.get_time_of_day() % 400 == 0;
+        let spawn_passives = spawn_persistent(self);
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
 
@@ -7686,6 +7691,26 @@ fn bedrock_block_breaking_rate(speed: f32) -> i32 {
     (speed.clamp(0.0, 1.0) * f32::from(u16::MAX)) as i32
 }
 
+/// Vanilla `DistanceManager`'s fixed radius-8 spawning footprint around every
+/// non-spectator player, independent of simulation distance.
+fn natural_spawn_chunk_count(player_chunks: impl Iterator<Item = Vector2<i32>>) -> i32 {
+    let offsets =
+        pumpkin_data::chunk_view_lut::get_chebyshev_square(natural_spawner::SPAWN_DISTANCE_CHUNK);
+    let mut chunks = FxHashSet::default();
+    for center in player_chunks {
+        for &(dx, dz) in offsets {
+            chunks.insert(center.add_raw(i32::from(dx), i32::from(dz)));
+        }
+    }
+    chunks.len() as i32
+}
+
+/// Vanilla `ServerChunkCache.tickChunks` gates persistent categories on game
+/// time, so daylight changes do not shift the 400-tick schedule.
+fn spawn_persistent(world: &World) -> bool {
+    world.get_world_age() % 400 == 0
+}
+
 pub struct WorldPortal(pub Arc<World>);
 
 // Pure Beauty :cap:
@@ -7871,10 +7896,12 @@ mod tests {
     };
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
     use uuid::Uuid;
 
     use super::{
         World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        natural_spawn_chunk_count, spawn_persistent,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -8305,6 +8332,38 @@ mod tests {
         world.level.shutdown().await;
         assert!(empty);
         assert!(no_entities);
+        Ok(())
+    }
+
+    #[test]
+    fn natural_spawn_cap_uses_fixed_eight_chunk_radius() {
+        assert_eq!(
+            natural_spawn_chunk_count([Vector2::new(0, 0)].into_iter()),
+            289
+        );
+        assert_eq!(
+            natural_spawn_chunk_count([Vector2::new(0, 0), Vector2::new(1, 0)].into_iter()),
+            306
+        );
+    }
+
+    #[tokio::test]
+    async fn passive_cadence_uses_world_age() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .load_from(400, 1);
+        assert!(!spawn_persistent(&world));
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .load_from(1, 400);
+        assert!(spawn_persistent(&world));
+        world.level.shutdown().await;
         Ok(())
     }
 }

@@ -33,6 +33,8 @@ use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
 
+pub(crate) const SPAWN_DISTANCE_CHUNK: u8 = 8;
+
 pub struct MobCounts([AtomicI32; 8]);
 
 impl Default for MobCounts {
