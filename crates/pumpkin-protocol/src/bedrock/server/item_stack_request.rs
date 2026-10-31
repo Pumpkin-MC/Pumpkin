@@ -138,6 +138,10 @@ pub enum ItemStackRequestAction {
         pattern_id: String,
         repetitions: u8,
     },
+    CraftReserved {
+        reserved_id: String,
+        repetitions: u8,
+    },
     CraftNonImplemented,
     CraftResultsDeprecated {
         result_items: Vec<StackRequestItem>,
@@ -224,8 +228,12 @@ impl PacketRead for ItemStackRequestAction {
                 pattern_id: String::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            16 => Ok(Self::CraftNonImplemented),
-            17 => {
+            16 => Ok(Self::CraftReserved {
+                reserved_id: String::read(buf)?,
+                repetitions: u8::read(buf)?,
+            }),
+            17 => Ok(Self::CraftNonImplemented),
+            18 => {
                 let result_items_len = collection_length(buf, "craft result items")?;
                 let mut result_items = Vec::with_capacity(result_items_len);
                 for _ in 0..result_items_len {
@@ -376,5 +384,26 @@ mod tests {
         VarUInt(2).write(&mut encoded).unwrap();
         2u8.write(&mut encoded).unwrap();
         assert!(StackRequestItem::read(&mut encoded.as_slice()).is_err());
+    }
+
+    #[test]
+    fn craft_results_deprecated_action_variant_18_decodes() {
+        let mut encoded = Vec::new();
+        VarUInt(18).write(&mut encoded).unwrap();
+        0u8.write(&mut encoded).unwrap();
+        VarUInt(0).write(&mut encoded).unwrap();
+        1u8.write(&mut encoded).unwrap();
+
+        let action = ItemStackRequestAction::read(&mut encoded.as_slice()).unwrap();
+        match action {
+            ItemStackRequestAction::CraftResultsDeprecated {
+                result_items,
+                times_crafted,
+            } => {
+                assert!(result_items.is_empty());
+                assert_eq!(times_crafted, 1);
+            }
+            _ => panic!("Expected CraftResultsDeprecated"),
+        }
     }
 }
