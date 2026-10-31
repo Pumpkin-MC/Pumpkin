@@ -1,11 +1,12 @@
-use crate::inventory::{Clearable, Inventory};
+use crate::inventory::{Clearable, Inventory, InventoryHolder};
 use pumpkin_data::item_stack::ItemStack;
 use std::any::Any;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 pub struct SimpleInventory {
     pub stacks: RwLock<Vec<ItemStack>>,
     size: usize,
+    holder: Option<Arc<dyn InventoryHolder>>,
 }
 
 impl SimpleInventory {
@@ -14,7 +15,15 @@ impl SimpleInventory {
         Self {
             stacks: RwLock::new(vec![ItemStack::EMPTY.clone(); size]),
             size,
+            holder: None,
         }
+    }
+
+    /// Associates an owner with this inventory before it is shared.
+    #[must_use]
+    pub fn with_holder(mut self, holder: Arc<dyn InventoryHolder>) -> Self {
+        self.holder = Some(holder);
+        self
     }
 }
 
@@ -29,6 +38,10 @@ impl Clearable for SimpleInventory {
 }
 
 impl Inventory for SimpleInventory {
+    fn holder(&self) -> Option<Arc<dyn InventoryHolder>> {
+        self.holder.clone()
+    }
+
     fn size(&self) -> usize {
         self.size
     }

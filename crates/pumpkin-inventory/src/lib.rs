@@ -7,6 +7,7 @@
 //! # Core Concepts
 //!
 //! - [`Inventory`] - A trait representing any item storage (player inventory, chest, furnace, etc.)
+//! - [`InventoryHolder`] - An optional owner carrying an inventory's identity and typed state
 //! - [`ScreenHandler`] - Manages the UI screen for a container, handling slot layout and interactions
 //! - [`Slot`] - Represents a single slot in an inventory that can hold items
 //! - [`PlayerInventory`] - The player's 36-slot main inventory plus equipment slots
@@ -32,6 +33,16 @@
 //! [`Slot`]: slot::Slot
 //! [`PlayerInventory`]: PlayerInventory
 //! [`SyncHandler`]: sync_handler::SyncHandler
+
+//! # Inventory Holders
+//!
+//! Attach an owner with [`SimpleInventory::with_holder`] before sharing the inventory.
+//! Menus and slots retain the same inventory, so [`Inventory::holder`] returns the same
+//! owner independently of the window title or item contents. Several inventories may
+//! share an owner without sharing their storage.
+//!
+//! Holders are server-side state: they are not serialized into NBT or sent to clients.
+//! This infrastructure does not expose holders through the v0.1 Wasm plugin API.
 
 pub mod anvil;
 pub mod beacon_screen_handler;
@@ -66,7 +77,7 @@ use rustc_hash::FxHashMap;
 
 pub use error::InventoryError;
 pub use inventory::{
-    Clearable, ComparableInventory, Inventory, SimpleInventory, split_stack_slice,
+    Clearable, ComparableInventory, Inventory, InventoryHolder, SimpleInventory, split_stack_slice,
     sync_read_items_from_nbt, sync_write_items_to_nbt,
 };
 use pumpkin_data::data_component_impl::EquipmentSlot;

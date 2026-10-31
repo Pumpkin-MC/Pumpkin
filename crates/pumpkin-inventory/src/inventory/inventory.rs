@@ -7,7 +7,24 @@ use std::{
     sync::Arc,
 };
 
+/// Identifies the owner of an inventory.
+///
+/// The concrete type identifies a category; `Arc` reference identity distinguishes owners.
+/// An owner may be shared by multiple inventories without sharing their contents.
+/// Implementations must not hold a strong reference back to an associated inventory.
+pub trait InventoryHolder: Any + Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+}
+
 pub trait Inventory: Send + Sync + Clearable {
+    /// Returns the associated owner, if this inventory has one.
+    ///
+    /// Implementations must preserve the association for the inventory's lifetime.
+    /// Repeated calls return handles to the same owner, not newly created owners.
+    fn holder(&self) -> Option<Arc<dyn InventoryHolder>> {
+        None
+    }
+
     fn size(&self) -> usize;
 
     fn is_empty(&self) -> bool;
