@@ -1302,6 +1302,8 @@ interface event {
 
     record block-ignite-event-data {
         block-pos: block-pos,
+        player: option<player>,
+        cause: string,
         cancelled: bool
     }
 
