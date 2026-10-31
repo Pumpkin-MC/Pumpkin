@@ -581,9 +581,17 @@ impl pumpkin::plugin::world::Host for PluginHostState {
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
+fn world_id(_level_name: &str, dimension_name: &str) -> String {
+    dimension_name.to_string()
+}
+
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
     fn get_id(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
-        Ok(self.get(&world)?.get_world_name().to_string())
+        let world = self.get(&world)?;
+        Ok(world_id(
+            world.get_world_name(),
+            world.dimension.minecraft_name,
+        ))
     }
 
     fn get_border(&mut self, world: Resource<World>) -> wasmtime::Result<Resource<WitWorldBorder>> {
@@ -2327,5 +2335,16 @@ mod tests {
                 Some(internal)
             );
         }
+    }
+
+    #[test]
+    fn world_id_is_unique_per_dimension() {
+        let overworld = world_id("world", "minecraft:overworld");
+        let nether = world_id("world", "minecraft:the_nether");
+        let end = world_id("world", "minecraft:the_end");
+
+        assert_ne!(overworld, nether);
+        assert_ne!(overworld, end);
+        assert_ne!(nether, end);
     }
 }
