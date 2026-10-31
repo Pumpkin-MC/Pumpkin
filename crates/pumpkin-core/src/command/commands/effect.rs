@@ -13,15 +13,9 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::entity::EntityBase;
 
 const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
 const PERMISSION: &str = "minecraft:command.effect";
-
-const ERROR_NOT_PLAYER: CommandErrorType<0> = CommandErrorType::new(
-    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-);
 
 const ERROR_GIVE_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_EFFECT_GIVE_FAILED,
@@ -53,7 +47,7 @@ struct GiveExecutor {
 
 impl CommandExecutor for GiveExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let targets = EntityArgumentType::get_entities(context, "targets")?;
         let effect = ResourceArgument::get_mob_effect(context, "effect")?;
 
         let duration_ticks = match self.duration {
@@ -74,25 +68,39 @@ impl CommandExecutor for GiveExecutor {
             false
         };
 
+        let instance = Effect {
+            effect_type: effect,
+            duration: duration_ticks,
+            amplifier,
+            ambient: false,
+            show_particles: !hide_particles,
+            show_icon: true,
+            blend: false,
+        };
+
+        // Vanilla only tracks successful applications, so the feedback below counts those.
         let mut successes = 0;
+        let mut only_success = None;
 
         for target in &targets {
-            let should_skip = target
-                .living_entity
+            // Vanilla skips every selected entity that isn't a `LivingEntity`.
+            let Some(living) = target.get_living_entity() else {
+                continue;
+            };
+
+            let should_skip = living
                 .get_effect(effect)
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
             if !should_skip {
-                target.add_effect(Effect {
-                    effect_type: effect,
-                    duration: duration_ticks,
-                    amplifier,
-                    ambient: false,
-                    show_particles: !hide_particles,
-                    show_icon: true,
-                    blend: false,
-                });
+                // The player path also fires the effects-changed advancement, as `ServerPlayer` does.
+                if let Some(player) = target.get_player() {
+                    player.add_effect(instance.clone());
+                } else {
+                    living.add_effect(instance.clone());
+                }
                 successes += 1;
+                only_success = (successes == 1).then_some(target.as_ref());
             }
         }
 
@@ -106,12 +114,12 @@ impl CommandExecutor for GiveExecutor {
             return Err(ERROR_GIVE_FAILED.create_without_context());
         }
 
-        if targets.len() == 1 {
+        if let Some(target) = only_success {
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
-                    [translation_name, targets[0].as_ref().get_display_name()],
+                    [translation_name, target.get_display_name()],
                 ),
                 true,
             );
@@ -120,10 +128,7 @@ impl CommandExecutor for GiveExecutor {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
-                    [
-                        translation_name,
-                        TextComponent::text(targets.len().to_string()),
-                    ],
+                    [translation_name, TextComponent::text(successes.to_string())],
                 ),
                 true,
             );
@@ -142,34 +147,33 @@ enum ClearMode {
 struct ClearExecutor(ClearMode);
 
 impl CommandExecutor for ClearExecutor {
+    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = match self.0 {
-            ClearMode::SelfAll => {
-                let player = context
-                    .source
-                    .output
-                    .as_player()
-                    .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
-                vec![player]
-            }
+            ClearMode::SelfAll => vec![context.source.entity_or_err()?],
             ClearMode::TargetsAll | ClearMode::TargetsSpecific => {
-                EntityArgumentType::get_players(context, "targets")?
+                EntityArgumentType::get_entities(context, "targets")?
             }
         };
 
         match self.0 {
             ClearMode::SelfAll | ClearMode::TargetsAll => {
                 let mut succeeded_clears = 0;
+                let mut only_success = None;
                 for target in &targets {
-                    let has_effects = !target
-                        .living_entity
-                        .active_effects
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .is_empty();
-                    if has_effects {
-                        target.remove_all_effects();
+                    // Vanilla skips every selected entity that isn't a `LivingEntity`.
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+                    let cleared = if let Some(player) = target.get_player() {
+                        player.remove_all_effects()
+                    } else {
+                        living.remove_all_effects()
+                    };
+
+                    if cleared {
                         succeeded_clears += 1;
+                        only_success = (succeeded_clears == 1).then_some(target.as_ref());
                     }
                 }
 
@@ -177,12 +181,12 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_EVERYTHING_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if let Some(target) = only_success {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
-                            [targets[0].as_ref().get_display_name()],
+                            [target.get_display_name()],
                         ),
                         true,
                     );
@@ -191,7 +195,7 @@ impl CommandExecutor for ClearExecutor {
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
-                            [TextComponent::text(targets.len().to_string())],
+                            [TextComponent::text(succeeded_clears.to_string())],
                         ),
                         true,
                     );
@@ -201,10 +205,21 @@ impl CommandExecutor for ClearExecutor {
             ClearMode::TargetsSpecific => {
                 let effect = ResourceArgument::get_mob_effect(context, "effect")?;
                 let mut succeeded_clears = 0;
+                let mut only_success = None;
                 for target in &targets {
-                    if target.living_entity.has_effect(effect) {
-                        target.remove_effect(effect);
+                    // Vanilla skips every selected entity that isn't a `LivingEntity`.
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+                    let removed = if let Some(player) = target.get_player() {
+                        player.remove_effect(effect)
+                    } else {
+                        living.remove_effect(effect)
+                    };
+
+                    if removed {
                         succeeded_clears += 1;
+                        only_success = (succeeded_clears == 1).then_some(target.as_ref());
                     }
                 }
 
@@ -212,7 +227,7 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_SPECIFIC_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if let Some(target) = only_success {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_SPECIFIC_SUCCESS_SINGLE,
@@ -223,7 +238,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                targets[0].as_ref().get_display_name(),
+                                target.get_display_name(),
                             ],
                         ),
                         true,
@@ -239,7 +254,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                TextComponent::text(targets.len().to_string()),
+                                TextComponent::text(succeeded_clears.to_string()),
                             ],
                         ),
                         true,
@@ -303,7 +318,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         );
 
     let give_node = literal("give").then(
-        argument("targets", EntityArgumentType::Players).then(
+        argument("targets", EntityArgumentType::Entities).then(
             argument("effect", MOB_EFFECT_ARGUMENT.clone())
                 .executes(GiveExecutor {
                     duration: Duration::Default,
@@ -318,7 +333,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let clear_node = literal("clear")
         .executes(ClearExecutor(ClearMode::SelfAll))
         .then(
-            argument("targets", EntityArgumentType::Players)
+            argument("targets", EntityArgumentType::Entities)
                 .executes(ClearExecutor(ClearMode::TargetsAll))
                 .then(
                     argument("effect", MOB_EFFECT_ARGUMENT.clone())
@@ -332,4 +347,37 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .then(clear_node)
             .then(give_node),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::context::command_source::CommandSource;
+    use std::sync::Arc;
+
+    #[test]
+    fn parse_effect_with_entity_targets() {
+        let mut dispatcher = CommandDispatcher::new();
+        let registry = PermissionRegistry::default();
+        register(&mut dispatcher, &registry);
+
+        let source = Arc::new(CommandSource::dummy());
+
+        // Vanilla declares `targets` as `EntityArgument.entities()`, so selectors that include
+        // non-player entities must parse for both subcommands.
+        for input in [
+            "effect give @e minecraft:glowing",
+            "effect give @e[type=pig] minecraft:glowing 30 0 true",
+            "effect give @e minecraft:glowing infinite",
+            "effect clear @e",
+            "effect clear @e minecraft:glowing",
+        ] {
+            let result = dispatcher.parse_input(input, &source);
+            assert!(
+                result.errors.is_empty(),
+                "`{input}` failed to parse: {:?}",
+                result.errors
+            );
+        }
+    }
 }
