@@ -35,7 +35,7 @@ pub enum VelocityError {
     #[error("Failed to read forward version")]
     FailedReadForwardVersion,
     #[error("Unsupported forwarding version {0}. Maximum supported version is {1}")]
-    UnsupportedForwardVersion(u8, u8),
+    UnsupportedForwardVersion(i32, u8),
     #[error("Failed to read address")]
     FailedReadAddress,
     #[error("Failed to parse address")]
@@ -130,10 +130,11 @@ pub fn receive_velocity_plugin_response(
             .get_var_int()
             .map_err(|_| VelocityError::FailedReadForwardVersion)?;
 
-        let version = version.0 as u8;
-        if version > MAX_SUPPORTED_FORWARDING_VERSION {
+        // Compared as read: truncating to `u8` first would let 256, 512 and so
+        // on pass as version 0.
+        if version.0 > i32::from(MAX_SUPPORTED_FORWARDING_VERSION) || version.0 < 1 {
             return Err(VelocityError::UnsupportedForwardVersion(
-                version,
+                version.0,
                 MAX_SUPPORTED_FORWARDING_VERSION,
             ));
         }
