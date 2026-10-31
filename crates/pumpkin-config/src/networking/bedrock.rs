@@ -24,7 +24,7 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// TCP signaling and shared UDP status/ICE address.
+    /// TCP signaling and UDP discovery/ICE address.
     pub address: SocketAddr,
     /// Optional public IP advertised when the ICE address is behind NAT.
     #[serde(with = "optional_ip")]

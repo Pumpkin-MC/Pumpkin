@@ -16,8 +16,6 @@ pub const MOVE_ACTOR_DELTA_FLAG_HAS_YAW: u16 = 0x0010;
 pub const MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW: u16 = 0x0020;
 /// Flag indicating the entity is on the ground.
 pub const MOVE_ACTOR_DELTA_FLAG_ON_GROUND: u16 = 0x0040;
-#[deprecated(note = "use MOVE_ACTOR_DELTA_FLAG_FORCE_MOVE")]
-pub const MOVE_ACTOR_DELTA_FLAG_TELEPORT: u16 = 0x0080;
 /// Flag indicating the movement is forced by the server.
 pub const MOVE_ACTOR_DELTA_FLAG_FORCE_MOVE: u16 = 0x0080;
 /// Flag indicating movement applies to local player entities.
