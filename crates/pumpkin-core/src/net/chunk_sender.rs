@@ -64,8 +64,9 @@ impl EncodedChunk {
 pub struct ChunkSender {
     pub pending_chunks: FxHashSet<Vector2<i32>>,
     sent_chunks: FxHashSet<Vector2<i32>>,
-    /// Committed Bedrock chunks packets are still being encoded, by dispatch token.
-    awaiting_delivery: FxHashMap<Vector2<i32>, u64>,
+    /// Committed Bedrock chunks packets are still being encoded, by dispatch token and
+    /// whether the client already held an earlier copy.
+    awaiting_delivery: FxHashMap<Vector2<i32>, (u64, bool)>,
     /// Monotonic across resets, so a superseded dispatch can never match again.
     next_delivery_token: u64,
     pub in_flight_batches: u16,
@@ -114,7 +115,7 @@ impl ChunkSender {
     pub fn mark_delivered(&mut self, deliveries: &[(Vector2<i32>, u64)]) -> Vec<Vector2<i32>> {
         let mut delivered = Vec::with_capacity(deliveries.len());
         for &(pos, token) in deliveries {
-            if self.awaiting_delivery.get(&pos) == Some(&token) {
+            if self.awaiting_delivery.get(&pos).map(|d| d.0) == Some(token) {
                 self.awaiting_delivery.remove(&pos);
                 delivered.push(pos);
             }
@@ -122,9 +123,47 @@ impl ChunkSender {
         delivered
     }
 
+    /// Cancelled `ChunkSend` before dispatch -> the client never gets it, so it stops being pending.
+    pub fn cancel_pending(
+        &mut self,
+        batch: &PreparedBatch,
+        current_epoch: u32,
+        cancelled: &[Vector2<i32>],
+    ) {
+        if current_epoch != batch.epoch_snapshot {
+            return;
+        }
+        for pos in cancelled {
+            self.pending_chunks.remove(pos);
+        }
+    }
+
+    /// Bedrock dispatch that never reached the client -> no longer held, unless an earlier
+    /// copy was. A re-enqueue since then holds a newer token and is kept.
+    pub fn cancel_delivery(&mut self, cancelled: &[(Vector2<i32>, u64)]) {
+        for &(pos, token) in cancelled {
+            if let Some(&(current, held_before)) = self.awaiting_delivery.get(&pos)
+                && current == token
+            {
+                self.awaiting_delivery.remove(&pos);
+                if !held_before {
+                    self.sent_chunks.remove(&pos);
+                }
+            }
+        }
+    }
+
     #[must_use]
     pub fn sent_chunks_count(&self) -> usize {
         self.sent_chunks.len()
+    }
+
+    /// Chunks the client holds, without Bedrock dispatches still being queued.
+    #[must_use]
+    pub fn ready_chunks_count(&self) -> usize {
+        self.sent_chunks
+            .len()
+            .saturating_sub(self.awaiting_delivery.len())
     }
 
     /// Records a chunk sent outside the batch path as held.
@@ -156,7 +195,7 @@ impl ChunkSender {
 
     /// Vanilla `ChunkMap.markChunkPendingToSend` -> a held copy stays tracked while re-queued.
     pub fn enqueue_chunk(&mut self, pos: Vector2<i32>) {
-        self.awaiting_delivery.remove(&pos);
+        // A Bedrock dispatch still encoding keeps its marker until it resolves
         self.pending_chunks.insert(pos);
     }
 
@@ -334,35 +373,47 @@ impl ChunkSender {
         let mut dispatched_positions = Vec::with_capacity(encoded_chunks.len());
         let version = batch.target_version;
 
-        if version >= JavaMinecraftVersion::V_1_20_2
-            && let ClientPlatform::Java(java_client) = client
-        {
-            java_client.try_send_packet(&CChunkBatchStart);
-        }
+        let batch_client = match client {
+            ClientPlatform::Java(java_client) if version >= JavaMinecraftVersion::V_1_20_2 => {
+                java_client.try_send_packet(&CChunkBatchStart);
+                Some(java_client)
+            }
+            _ => None,
+        };
 
         for chunk in encoded_chunks {
-            if !self.pending_chunks.contains(&chunk.position) {
+            if !self.pending_chunks.remove(&chunk.position) {
                 continue;
             }
 
-            client.try_enqueue_packet(chunk.payload.clone());
-
-            self.pending_chunks.remove(&chunk.position);
-            self.sent_chunks.insert(chunk.position);
-            dispatched_positions.push(chunk.position);
+            // A dropped packet (e.g. cancelled `PacketSentEvent`) never reached the client.
+            let queued = match client {
+                ClientPlatform::Java(java_client) => {
+                    java_client.try_enqueue_packet_data(chunk.payload.clone())
+                }
+                ClientPlatform::Bedrock(_) => {
+                    client.try_enqueue_packet(chunk.payload.clone());
+                    true
+                }
+            };
+            if queued {
+                self.sent_chunks.insert(chunk.position);
+                dispatched_positions.push(chunk.position);
+            } else {
+                // Still owed to the client, so a later batch retries it
+                self.pending_chunks.insert(chunk.position);
+            }
         }
 
         let sent_count = dispatched_positions.len();
-        if sent_count > 0 {
-            if version >= JavaMinecraftVersion::V_1_20_2
-                && let ClientPlatform::Java(java_client) = client
-            {
-                java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
-                self.in_flight_batches = self.in_flight_batches.saturating_add(1);
-            }
-
-            self.send_quota -= sent_count as f32;
+        // A started batch is always closed. The client acks every `CChunkBatchEnd` it receives,
+        // so only a queued one counts as in flight
+        if let Some(java_client) = batch_client
+            && java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16))
+        {
+            self.in_flight_batches = self.in_flight_batches.saturating_add(1);
         }
+        self.send_quota -= sent_count as f32;
 
         dispatched_positions
     }
@@ -390,9 +441,13 @@ impl ChunkSender {
 
             let delivery_token = self.next_delivery_token;
             self.next_delivery_token += 1;
+            let held_before = self
+                .awaiting_delivery
+                .get(&candidate.position)
+                .map_or_else(|| self.sent_chunks.contains(&candidate.position), |d| d.1);
             self.sent_chunks.insert(candidate.position);
             self.awaiting_delivery
-                .insert(candidate.position, delivery_token);
+                .insert(candidate.position, (delivery_token, held_before));
             dispatched_chunks.push(DispatchedChunk {
                 position: candidate.position,
                 chunk: candidate.chunk.clone(),
@@ -547,6 +602,22 @@ mod tests {
         let delivered = sender.mark_delivered(&[(position, second[0].delivery_token)]);
         assert_eq!(delivered, vec![position]);
         assert!(sender.is_chunk_ready(&position));
+    }
+
+    #[test]
+    fn re_enqueue_during_dispatch_is_not_counted_ready() {
+        let position = Vector2::new(2, 2);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let first = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.enqueue_chunk(position);
+
+        assert_eq!(sender.ready_chunks_count(), 0);
+        assert!(!sender.is_chunk_ready(&position));
+
+        sender.mark_delivered(&[(position, first[0].delivery_token)]);
+        assert_eq!(sender.ready_chunks_count(), 1);
     }
 
     fn batch_for(position: Vector2<i32>, epoch_snapshot: u32) -> PreparedBatch {

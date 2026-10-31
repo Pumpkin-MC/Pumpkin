@@ -19,6 +19,7 @@ use pumpkin_data::translation;
 use pumpkin_protocol::{BClientPacket, ClientPacket, Property};
 use pumpkin_util::{
     Hand, ProfileAction,
+    math::vector2::Vector2,
     text::TextComponent,
     version::{BedrockMinecraftVersion, JavaMinecraftVersion},
 };
@@ -201,8 +202,12 @@ impl ClientPlatform {
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+            Self::Java(java) => {
+                java.try_enqueue_packet_data(packet_data);
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.try_enqueue_packet_data(packet_data);
+            }
         }
     }
 
@@ -210,8 +215,12 @@ impl ClientPlatform {
     /// packets a plugin injected itself.
     pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet_data_unobserved(packet_data),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+            Self::Java(java) => {
+                java.try_enqueue_packet_data_unobserved(packet_data);
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.try_enqueue_packet_data(packet_data);
+            }
         }
     }
 
@@ -296,7 +305,8 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
             Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
