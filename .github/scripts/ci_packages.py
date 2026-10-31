@@ -54,6 +54,7 @@ RUST_CI_IGNORED_FILES = {
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/nix.yml",
     ".github/workflows/docker.yml",
+    ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
     ".github/workflows/reviewers.yml",
     ".github/workflows/sync-wit.yml",
@@ -80,6 +81,12 @@ RUST_CI_IGNORED_FILES = {
 }
 
 WIT_ROOT = Path("crates/pumpkin-plugin-wit")
+# Crates that generate Rust bindings from the WIT files; their dependents follow from the closure.
+WIT_CONSUMER_PACKAGES = {
+    "pumpkin-plugin-api",
+    "pumpkin-wasm-host-v0_1",
+    "pumpkin-wasm-host-v0_2",
+}
 
 
 def run_command(command: list[str], *, capture: bool = False) -> str:
@@ -201,6 +208,15 @@ def select_packages(
             directly_affected.add(package_roots[package_root])
             continue
 
+        # WIT packages have their own validation job and no Cargo manifest.
+        if path == WIT_ROOT or WIT_ROOT in path.parents:
+            directly_affected.update(
+                package
+                for package in WIT_CONSUMER_PACKAGES
+                if package in reverse_dependencies
+            )
+            continue
+
         if is_rust_ci_ignored_change(path):
             continue
 
@@ -282,6 +298,19 @@ def run_for_packages(args: argparse.Namespace) -> None:
         for package in packages
     ):
         raise ValueError("CI_AFFECTED_PACKAGES contains an invalid package name")
+
+    if "--doc" in args.command:
+        # Cargo rejects `--doc` when none of the selected packages has a library.
+        _, metadata_packages = cargo_metadata()
+        doctested = {
+            package["name"]
+            for package in metadata_packages
+            if any(target.get("doctest") for target in package["targets"])
+        }
+        packages = [package for package in packages if package in doctested]
+        if not packages:
+            print("No affected packages have doctests, skipping")
+            return
 
     package_arguments = [
         argument for package in packages for argument in ("-p", package)

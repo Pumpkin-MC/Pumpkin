@@ -249,7 +249,6 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
-#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
@@ -295,6 +294,136 @@ pub mod status_effect;
 #[path = "generated/structures.rs"]
 pub mod structures;
 
+#[cfg(feature = "structures")]
+#[rustfmt::skip]
+#[path = "generated/template_pool.rs"]
+pub mod template_pool;
+
+#[cfg(feature = "structures")]
+#[rustfmt::skip]
+#[path = "generated/processor_list.rs"]
+pub mod processor_list;
+
+#[cfg(feature = "structures")]
+#[rustfmt::skip]
+#[path = "generated/structure_metadata.rs"]
+pub mod structure_metadata;
+
+#[cfg(feature = "structures")]
+#[rustfmt::skip]
+#[path = "generated/structure_template.rs"]
+pub mod structure_template;
+
+#[cfg(feature = "test_instance")]
+#[rustfmt::skip]
+#[path = "generated/test_instance.rs"]
+pub mod test_instance;
+
+#[cfg(feature = "painting_variant")]
+#[rustfmt::skip]
+#[path = "generated/painting_variant.rs"]
+pub mod painting_variant;
+
+#[cfg(feature = "context_provider")]
+#[rustfmt::skip]
+#[path = "generated/context_provider.rs"]
+pub mod context_provider;
+
+#[cfg(feature = "instrument")]
+#[rustfmt::skip]
+#[path = "generated/instrument.rs"]
+pub mod instrument;
+
+#[cfg(feature = "wolf_variant")]
+#[rustfmt::skip]
+#[path = "generated/wolf_variant.rs"]
+pub mod wolf_variant;
+
+#[cfg(feature = "cat_variant")]
+#[rustfmt::skip]
+#[path = "generated/cat_variant.rs"]
+pub mod cat_variant;
+
+#[cfg(feature = "frog_variant")]
+#[rustfmt::skip]
+#[path = "generated/frog_variant.rs"]
+pub mod frog_variant;
+
+#[cfg(feature = "cow_variant")]
+#[rustfmt::skip]
+#[path = "generated/cow_variant.rs"]
+pub mod cow_variant;
+
+#[cfg(feature = "cow_sound_variant")]
+#[rustfmt::skip]
+#[path = "generated/cow_sound_variant.rs"]
+pub mod cow_sound_variant;
+
+#[cfg(feature = "pig_variant")]
+#[rustfmt::skip]
+#[path = "generated/pig_variant.rs"]
+pub mod pig_variant;
+
+#[cfg(feature = "pig_sound_variant")]
+#[rustfmt::skip]
+#[path = "generated/pig_sound_variant.rs"]
+pub mod pig_sound_variant;
+
+#[cfg(feature = "chicken_variant")]
+#[rustfmt::skip]
+#[path = "generated/chicken_variant.rs"]
+pub mod chicken_variant;
+
+#[cfg(feature = "chicken_sound_variant")]
+#[rustfmt::skip]
+#[path = "generated/chicken_sound_variant.rs"]
+pub mod chicken_sound_variant;
+
+#[cfg(feature = "cat_sound_variant")]
+#[rustfmt::skip]
+#[path = "generated/cat_sound_variant.rs"]
+pub mod cat_sound_variant;
+
+#[cfg(feature = "wolf_sound_variant")]
+#[rustfmt::skip]
+#[path = "generated/wolf_sound_variant.rs"]
+pub mod wolf_sound_variant;
+
+#[cfg(feature = "zombie_nautilus_variant")]
+#[rustfmt::skip]
+#[path = "generated/zombie_nautilus_variant.rs"]
+pub mod zombie_nautilus_variant;
+
+#[cfg(feature = "trim_material")]
+#[rustfmt::skip]
+#[path = "generated/trim_material.rs"]
+pub mod trim_material;
+
+#[cfg(feature = "trim_pattern")]
+#[rustfmt::skip]
+#[path = "generated/trim_pattern.rs"]
+pub mod trim_pattern;
+
+#[cfg(feature = "banner_pattern")]
+#[rustfmt::skip]
+#[path = "generated/banner_pattern.rs"]
+pub mod banner_pattern;
+
+#[cfg(feature = "decorated_pot_pattern")]
+#[rustfmt::skip]
+#[path = "generated/decorated_pot_pattern.rs"]
+pub mod decorated_pot_pattern;
+
+#[cfg(feature = "chat_type")]
+#[rustfmt::skip]
+#[path = "generated/chat_type.rs"]
+pub mod chat_type;
+
+#[cfg(feature = "enchantment_provider")]
+#[rustfmt::skip]
+#[path = "generated/enchantment_provider.rs"]
+pub mod enchantment_provider;
+
 #[cfg(feature = "potion")]
 #[rustfmt::skip]
 #[path = "generated/potion.rs"]
@@ -317,6 +446,8 @@ mod blocks;
 
 #[cfg(feature = "block")]
 pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
+#[cfg(feature = "block")]
+pub use block_properties::{Property, PropertyKey};
 #[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform_rail_shape};
 #[cfg(feature = "block")]
@@ -367,10 +498,36 @@ pub mod map_decoration;
 #[path = "generated/dye_color.rs"]
 pub mod dye_color;
 
+#[cfg(feature = "entity_variant")]
+#[rustfmt::skip]
+#[path = "generated/entity_variant.rs"]
+pub mod entity_variant;
+
 #[cfg(feature = "block_transformer")]
 #[rustfmt::skip]
 #[path = "generated/block_transformer.rs"]
 pub mod block_transformer;
+
+#[cfg(all(test, feature = "block_transformer"))]
+mod block_transformer_tests {
+    use crate::Block;
+    use crate::BlockDirection;
+    use crate::block_transformer::HOE;
+
+    #[test]
+    fn hoe_tills_dirt_with_air_above() {
+        let get_block = |_: i8, dy: i8, _: i8| if dy == 1 { &Block::AIR } else { &Block::DIRT };
+        let result = HOE
+            .transform(
+                &Block::DIRT,
+                Block::DIRT.default_state.id,
+                BlockDirection::Up,
+                &get_block,
+            )
+            .unwrap();
+        assert_eq!(result.target_block.id, Block::FARMLAND.id);
+    }
+}
 
 #[cfg(feature = "trial_spawner")]
 #[rustfmt::skip]

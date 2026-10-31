@@ -10,7 +10,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector, WorldPortalExt,
-            nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
 };
@@ -55,43 +55,6 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings_nether(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut last: Option<NetherFortressPieceType> = None;
-        // Two forward exits (one at the back, one even further)
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            5,
-            3,
-            true,
-            pieces_to_process,
-        );
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            5,
-            11,
-            true,
-            pieces_to_process,
-        );
     }
 
     #[allow(clippy::too_many_lines)]

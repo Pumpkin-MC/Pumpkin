@@ -14,8 +14,8 @@ use std::{
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use wasmtime::{
-    AsContextMut, Store, StoreContextMut,
-    component::{Accessor, AccessorTask, ComponentNamedList, Lift, Lower, TypedFunc},
+    AsContext, AsContextMut, Store, StoreContextMut,
+    component::{Accessor, ComponentNamedList, Func, Lift, Lower, TypedFunc},
 };
 
 use crate::{
@@ -28,46 +28,61 @@ use crate::{
 const STORE_QUEUE_CAPACITY: usize = 64;
 const REENTRY_QUEUE_CAPACITY: usize = 64;
 
+/// How a Store's guest calls are driven.
+///
+/// A Store takes its mode from the `Engine` it was created on, so both must agree.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StoreMode {
+    /// One call at a time through `call_async`, on an engine without Wasmtime concurrency
+    /// support. A host import may re-enter the guest of the Store it is running on, which Wasmtime
+    /// rejects once concurrency support is on.
+    Sequential,
+    /// Calls run as tasks in Wasmtime's concurrent event loop, on an engine with concurrency
+    /// support. Host imports reach the guest through the event loop instead of nesting calls.
+    Concurrent,
+}
+
 pub type StoreFuture<'a, R> = Pin<Box<dyn Future<Output = wasmtime::Result<R>> + Send + 'a>>;
 
 trait StoreJob<T>: Send {
-    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()>;
+    fn run_concurrent(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()>;
+
+    fn run_sequential(self: Box<Self>, store: StoreContextMut<'_, T>) -> StoreFuture<'_, ()>;
 }
 
 trait GuestStoreJob<T>: Send {
     fn run_concurrent(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()>;
 
-    fn run_reentrant(self: Box<Self>, store: StoreContextMut<'_, T>) -> StoreFuture<'_, ()>;
+    fn run_sequential(
+        self: Box<Self>,
+        store: StoreContextMut<'_, T>,
+        reentrant: bool,
+    ) -> StoreFuture<'_, ()>;
 }
 
 struct StoreCall<F, R> {
     call: F,
     result: oneshot::Sender<wasmtime::Result<R>>,
-    context: Option<ReentryContext>,
 }
 
 impl<T, F, R> StoreJob<T> for StoreCall<F, R>
 where
     T: Send + 'static,
-    F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+    F: FnOnce(&mut T) -> R + Send + 'static,
     R: Send + 'static,
 {
-    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
-        let Self {
-            call,
-            result,
-            context,
-        } = *self;
-        let future = call(accessor);
-        Box::pin(async move {
-            let output = if let Some(context) = context {
-                scope(context, future).await
-            } else {
-                future.await
-            };
-            let _ = result.send(output);
-            Ok(())
-        })
+    fn run_concurrent(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
+        let Self { call, result } = *self;
+        let output = accessor.with(|mut access| call(access.data_mut()));
+        let _ = result.send(Ok(output));
+        Box::pin(std::future::ready(Ok(())))
+    }
+
+    fn run_sequential(self: Box<Self>, mut store: StoreContextMut<'_, T>) -> StoreFuture<'_, ()> {
+        let Self { call, result } = *self;
+        let output = call(store.data_mut());
+        let _ = result.send(Ok(output));
+        Box::pin(std::future::ready(Ok(())))
     }
 }
 
@@ -77,32 +92,60 @@ struct ShutdownStoreCall<F, R> {
     context: ReentryContext,
 }
 
+impl<F, R> ShutdownStoreCall<F, R>
+where
+    R: Send + 'static,
+{
+    async fn finish(
+        context: ReentryContext,
+        result: oneshot::Sender<wasmtime::Result<R>>,
+        future: impl Future<Output = wasmtime::Result<R>>,
+    ) -> wasmtime::Result<()> {
+        match scope(context, future).await {
+            Ok(value) => {
+                let _ = result.send(Ok(value));
+                Ok(())
+            }
+            Err(error) => {
+                let message = error.to_string();
+                let _ = result.send(Err(error));
+                Err(wasmtime::Error::msg(message))
+            }
+        }
+    }
+}
+
 impl<T, F, R> StoreJob<T> for ShutdownStoreCall<F, R>
 where
     T: Send + 'static,
-    F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+    F: for<'a> FnOnce(LegacyGuestScope<'a, T>) -> StoreFuture<'a, R> + Send + 'static,
     R: Send + 'static,
 {
-    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
+    fn run_concurrent(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
         let Self {
             call,
             result,
             context,
         } = *self;
-        let future = call(accessor);
-        Box::pin(async move {
-            match scope(context, future).await {
-                Ok(value) => {
-                    let _ = result.send(Ok(value));
-                    Ok(())
-                }
-                Err(error) => {
-                    let message = error.to_string();
-                    let _ = result.send(Err(error));
-                    Err(wasmtime::Error::msg(message))
-                }
-            }
-        })
+        let future = call(LegacyGuestScope::concurrent(
+            accessor,
+            Arc::new(GuestCallFailure::default()),
+        ));
+        Box::pin(Self::finish(context, result, future))
+    }
+
+    fn run_sequential(self: Box<Self>, store: StoreContextMut<'_, T>) -> StoreFuture<'_, ()> {
+        let Self {
+            call,
+            result,
+            context,
+        } = *self;
+        let future = call(LegacyGuestScope::sequential(
+            store,
+            Arc::new(GuestCallFailure::default()),
+            false,
+        ));
+        Box::pin(Self::finish(context, result, future))
     }
 }
 
@@ -130,6 +173,46 @@ impl GuestCallFailure {
     }
 }
 
+impl<T, F, R> GuestStoreCall<T, F, R>
+where
+    T: Send + 'static,
+    F: for<'a> FnOnce(LegacyGuestScope<'a, T>) -> StoreFuture<'a, R> + Send + 'static,
+    R: Send + 'static,
+{
+    async fn execute<'a>(
+        self,
+        make_scope: impl FnOnce(Arc<GuestCallFailure>) -> LegacyGuestScope<'a, T>,
+    ) -> wasmtime::Result<()> {
+        let Self {
+            call,
+            result,
+            context,
+            reentry,
+            guest_call_failure,
+            root_admission,
+        } = self;
+        let failure_for_scope = Arc::clone(&guest_call_failure);
+        let output = scope(context, async move {
+            let _active_context = reentry.enter_active_context(context);
+            call(make_scope(failure_for_scope)).await
+        })
+        .await;
+        let guest_call_failure = guest_call_failure.message();
+        drop(root_admission);
+        if let Some(message) = guest_call_failure {
+            let output = match output {
+                Ok(_) => Err(wasmtime::Error::msg(message.clone())),
+                Err(error) => Err(error),
+            };
+            let _ = result.send(output);
+            Err(wasmtime::Error::msg(message))
+        } else {
+            let _ = result.send(output);
+            Ok(())
+        }
+    }
+}
+
 impl<T, F, R> GuestStoreJob<T> for GuestStoreCall<T, F, R>
 where
     T: Send + 'static,
@@ -137,73 +220,32 @@ where
     R: Send + 'static,
 {
     fn run_concurrent(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
-        let Self {
-            call,
-            result,
-            context,
-            reentry,
-            guest_call_failure,
-            root_admission,
-        } = *self;
-        Box::pin(async move {
-            let failure_for_scope = Arc::clone(&guest_call_failure);
-            let output = scope(context, async move {
-                let _active_context = reentry.enter_active_context(context);
-                call(LegacyGuestScope::concurrent(accessor, failure_for_scope)).await
-            })
-            .await;
-            let guest_call_failure = guest_call_failure.message();
-            drop(root_admission);
-            if let Some(message) = guest_call_failure {
-                let output = match output {
-                    Ok(_) => Err(wasmtime::Error::msg(message.clone())),
-                    Err(error) => Err(error),
-                };
-                let _ = result.send(output);
-                Err(wasmtime::Error::msg(message))
-            } else {
-                let _ = result.send(output);
-                Ok(())
-            }
-        })
+        Box::pin((*self).execute(move |failure| LegacyGuestScope::concurrent(accessor, failure)))
     }
 
-    fn run_reentrant(self: Box<Self>, store: StoreContextMut<'_, T>) -> StoreFuture<'_, ()> {
-        let Self {
-            call,
-            result,
-            context,
-            reentry,
-            guest_call_failure,
-            root_admission,
-        } = *self;
-        Box::pin(async move {
-            let failure_for_scope = Arc::clone(&guest_call_failure);
-            let output = scope(context, async move {
-                let _active_context = reentry.enter_active_context(context);
-                call(LegacyGuestScope::reentrant(store, failure_for_scope)).await
-            })
-            .await;
-            let guest_call_failure = guest_call_failure.message();
-            drop(root_admission);
-            if let Some(message) = guest_call_failure {
-                let output = match output {
-                    Ok(_) => Err(wasmtime::Error::msg(message.clone())),
-                    Err(error) => Err(error),
-                };
-                let _ = result.send(output);
-                Err(wasmtime::Error::msg(message))
-            } else {
-                let _ = result.send(output);
-                Ok(())
-            }
-        })
+    fn run_sequential(
+        self: Box<Self>,
+        store: StoreContextMut<'_, T>,
+        reentrant: bool,
+    ) -> StoreFuture<'_, ()> {
+        Box::pin(
+            (*self).execute(move |failure| LegacyGuestScope::sequential(store, failure, reentrant)),
+        )
     }
 }
 
 enum LegacyGuestAccess<'a, T: 'static> {
     Concurrent(&'a Accessor<T>),
-    Reentrant(StoreContextMut<'a, T>),
+    /// The Store is driven one call at a time. `reentrant` is set when the call was routed into a
+    /// host import that is already running on the Store.
+    Sequential {
+        store: StoreContextMut<'a, T>,
+        #[cfg_attr(
+            not(test),
+            expect(dead_code, reason = "tests assert which path routed the call")
+        )]
+        reentrant: bool,
+    },
 }
 
 /// Capability available while one synchronous legacy guest call is active.
@@ -229,19 +271,34 @@ where
         }
     }
 
-    const fn reentrant(
+    const fn sequential(
         store: StoreContextMut<'a, T>,
         guest_call_failure: Arc<GuestCallFailure>,
+        reentrant: bool,
     ) -> Self {
         Self {
-            access: LegacyGuestAccess::Reentrant(store),
+            access: LegacyGuestAccess::Sequential { store, reentrant },
             guest_call_failure,
         }
     }
 
     #[cfg(test)]
     pub(crate) const fn is_reentrant(&self) -> bool {
-        matches!(self.access, LegacyGuestAccess::Reentrant(_))
+        matches!(
+            self.access,
+            LegacyGuestAccess::Sequential {
+                reentrant: true,
+                ..
+            }
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn accessor(&self) -> Option<&'a Accessor<T>> {
+        match &self.access {
+            LegacyGuestAccess::Concurrent(accessor) => Some(*accessor),
+            LegacyGuestAccess::Sequential { .. } => None,
+        }
     }
 
     pub fn with<R>(&mut self, call: impl for<'store> FnOnce(StoreDataMut<'store, T>) -> R) -> R {
@@ -251,7 +308,7 @@ where
                     data: access.data_mut(),
                 })
             }),
-            LegacyGuestAccess::Reentrant(store) => call(StoreDataMut {
+            LegacyGuestAccess::Sequential { store, .. } => call(StoreDataMut {
                 data: store.data_mut(),
             }),
         }
@@ -273,7 +330,7 @@ where
             LegacyGuestAccess::Concurrent(accessor) => {
                 function.call_concurrent(&**accessor, params).await
             }
-            LegacyGuestAccess::Reentrant(store) => {
+            LegacyGuestAccess::Sequential { store, .. } => {
                 function.call_async(store.as_context_mut(), params).await
             }
         };
@@ -281,6 +338,29 @@ where
             self.guest_call_failure.record(error);
         }
         result
+    }
+
+    /// Like [`Self::call`], for exports whose generated `TypedFunc` borrows its arguments and so
+    /// cannot be moved into a `'static` job. Takes the untyped `Func` and re-types it here with
+    /// owned arguments.
+    pub async fn call_func<Params, Return>(
+        &mut self,
+        function: Func,
+        params: Params,
+    ) -> wasmtime::Result<Return>
+    where
+        Params: ComponentNamedList + Lower + 'static,
+        Return: ComponentNamedList + Lift + 'static,
+    {
+        let function = match &self.access {
+            LegacyGuestAccess::Concurrent(accessor) => {
+                accessor.with(|access| function.typed::<Params, Return>(access))?
+            }
+            LegacyGuestAccess::Sequential { store, .. } => {
+                function.typed::<Params, Return>(store.as_context())?
+            }
+        };
+        self.call(function, params).await
     }
 }
 
@@ -291,17 +371,6 @@ pub struct StoreDataMut<'a, T> {
 impl<T> StoreDataMut<'_, T> {
     pub const fn data_mut(&mut self) -> &mut T {
         self.data
-    }
-}
-
-struct ConcurrentTask<T>(Box<dyn StoreJob<T>>);
-
-impl<T> AccessorTask<T> for ConcurrentTask<T>
-where
-    T: Send + 'static,
-{
-    fn run(self, accessor: &Accessor<T>) -> impl Future<Output = wasmtime::Result<()>> + Send {
-        self.0.run(accessor)
     }
 }
 
@@ -494,6 +563,7 @@ struct StoreShared<T, P> {
     reentry: Arc<ReentryState<T>>,
     policy: P,
     spawner: Arc<dyn RuntimeSpawner>,
+    mode: StoreMode,
 }
 
 /// Cloneable submission and observation capability for one Wasmtime Store.
@@ -524,11 +594,15 @@ where
         self.shared.lifecycle.subscribe()
     }
 
-    /// Queues an owned Store operation. Once accepted, the operation runs even
-    /// if the caller stops waiting for its result.
+    /// Queues a short synchronous operation on the Store data. Once accepted,
+    /// the operation runs even if the caller stops waiting for its result.
+    ///
+    /// The closure cannot await, so it cannot delay other plugin work beyond its own runtime. Keep
+    /// it brief; anything that needs the guest or an async host operation belongs in
+    /// [`StoreHandle::call_guest`].
     pub async fn call<R, F>(&self, call: F) -> wasmtime::Result<R>
     where
-        F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+        F: FnOnce(&mut T) -> R + Send + 'static,
         R: Send + 'static,
     {
         let (result, receiver) = oneshot::channel();
@@ -540,11 +614,7 @@ where
             .reserve()
             .await
             .map_err(|_| self.terminal_error("Wasm plugin store driver is not running"))?;
-        permit.send(StoreMessage::Call(Box::new(StoreCall {
-            call,
-            result,
-            context: None,
-        })));
+        permit.send(StoreMessage::Call(Box::new(StoreCall { call, result })));
         drop(send_guard);
 
         self.receive_result(receiver, "Wasm plugin store call did not complete")
@@ -662,6 +732,68 @@ where
             .await
     }
 
+    /// Awaits host work in the active guest call's chain with the reentry depth incremented
+    ///
+    /// For [`StoreMode::Concurrent`] stores. A sequential store runs one guest call at a time, so
+    /// guest calls made from the awaited future would queue behind the active one; use
+    /// [`StoreHandle::pump_reentry`] there instead
+    ///
+    /// Host imports are polled by Wasmtime's own event loop, outside the guest call's task-local
+    /// scope, so the context has to come from the Store's active-context registry
+    /// Without an active guest call, the future runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error before polling the future if the reentry depth limit is reached
+    pub async fn in_active_context<R>(
+        &self,
+        future: impl Future<Output = R>,
+    ) -> wasmtime::Result<R> {
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
+        Ok(match context {
+            Some(context) => scope(context, future).await,
+            None => future.await,
+        })
+    }
+
+    /// Runs synchronous host work on Tokio's blocking pool in the active guest call's chain
+    ///
+    /// Increments the reentry depth before spawning so callbacks inherit the same chain and
+    /// root admission on the blocking thread
+    /// Without an active guest call, the operation runs without adding a reentry context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the reentry depth limit is reached or the blocking task fails
+    /// The operation is not spawned when the depth check fails
+    pub async fn spawn_blocking_in_active_context<R, F>(&self, operation: F) -> wasmtime::Result<R>
+    where
+        R: Send + 'static,
+        F: FnOnce() -> R + Send + 'static,
+    {
+        let context = self
+            .shared
+            .reentry
+            .current_context()
+            .map(ReentryContext::child)
+            .transpose()?;
+        tokio::task::spawn_blocking(move || match context {
+            Some(context) => sync_scope(context, operation),
+            None => operation(),
+        })
+        .await
+        .map_err(|error| {
+            wasmtime::Error::msg(format!(
+                "Synchronous Wasm plugin host operation failed: {error}"
+            ))
+        })
+    }
+
     /// Waits for an outbound host operation while servicing callbacks routed
     /// back into this Store from the active synchronous chain.
     pub async fn pump_reentry<R, S, F>(&self, store: &mut S, future: F) -> wasmtime::Result<R>
@@ -669,8 +801,20 @@ where
         S: AsContextMut<Data = T> + Send,
         F: Future<Output = R> + Send,
     {
+        self.ensure_sequential()?;
         let context = self.next_reentry_context()?;
         self.pump_reentry_with_context(store, context, future).await
+    }
+
+    /// Pumping only works when guest calls run one at a time. Checked before any work starts, so a
+    /// rejected call never runs its operation.
+    fn ensure_sequential(&self) -> wasmtime::Result<()> {
+        if self.shared.mode == StoreMode::Concurrent {
+            return Err(wasmtime::Error::msg(
+                "Reentrant callbacks can only be pumped on a sequential Wasm plugin store",
+            ));
+        }
+        Ok(())
     }
 
     fn next_reentry_context(&self) -> wasmtime::Result<ReentryContext> {
@@ -701,7 +845,7 @@ where
         let output = loop {
             tokio::select! {
                 Some(job) = receiver.recv() => {
-                    job.run_reentrant(store.as_context_mut()).await?;
+                    job.run_sequential(store.as_context_mut(), true).await?;
                 }
                 output = &mut scoped_future => break output,
             }
@@ -710,7 +854,7 @@ where
         registration.close();
         receiver.close();
         while let Ok(job) = receiver.try_recv() {
-            job.run_reentrant(store.as_context_mut()).await?;
+            job.run_sequential(store.as_context_mut(), true).await?;
         }
         Ok(output)
     }
@@ -723,6 +867,7 @@ where
         S: AsContextMut<Data = T> + Send,
         F: FnOnce() -> R + Send + 'static,
     {
+        self.ensure_sequential()?;
         let context = self.next_reentry_context()?;
         let (result, receiver) = oneshot::channel();
         self.shared
@@ -770,6 +915,7 @@ where
         store: Store<T>,
         policy: P,
         spawner: Arc<dyn RuntimeSpawner>,
+        mode: StoreMode,
     ) -> wasmtime::Result<Self> {
         let (sender, receiver) = mpsc::channel(STORE_QUEUE_CAPACITY);
         let (control, control_receiver) = mpsc::unbounded_channel();
@@ -785,6 +931,7 @@ where
             reentry: Arc::new(ReentryState::new()),
             policy,
             spawner: Arc::clone(&spawner),
+            mode,
         });
         let (ready_sender, ready) = oneshot::channel();
         let policy_name = P::NAME;
@@ -805,6 +952,7 @@ where
                     Arc::clone(&task_guard.lifecycle),
                     ready_sender,
                     policy_name,
+                    mode,
                 )
                 .await;
                 task_guard.disarm();
@@ -877,7 +1025,7 @@ where
     /// drains Wasmtime tasks, and drops the Store.
     pub async fn shutdown<R, F>(&self, call: F) -> wasmtime::Result<R>
     where
-        F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+        F: for<'a> FnOnce(LegacyGuestScope<'a, T>) -> StoreFuture<'a, R> + Send + 'static,
         R: Send + 'static,
     {
         let (result, receiver) = oneshot::channel();
@@ -979,8 +1127,147 @@ where
 
 pub type LegacyStore<T> = StoreExecutor<T, LegacySyncReentry>;
 
-#[allow(clippy::too_many_lines)]
+fn control_result(message: Option<&ControlMessage>) -> wasmtime::Result<()> {
+    match message {
+        Some(ControlMessage::Dropped) => Err(wasmtime::Error::msg(
+            "Wasm plugin store lifecycle control was dropped before shutdown",
+        )),
+        Some(ControlMessage::Discarded) => Ok(()),
+        None => Err(wasmtime::Error::msg(
+            "Wasm plugin store submission channel closed before shutdown",
+        )),
+    }
+}
+
 async fn run_driver<T>(
+    store: Store<T>,
+    receiver: mpsc::Receiver<StoreMessage<T>>,
+    control: mpsc::UnboundedReceiver<ControlMessage>,
+    lifecycle: Arc<Lifecycle>,
+    ready: oneshot::Sender<()>,
+    policy_name: &'static str,
+    mode: StoreMode,
+) where
+    T: Send + 'static,
+{
+    match mode {
+        StoreMode::Concurrent => {
+            run_concurrent_driver(store, receiver, control, lifecycle, ready, policy_name).await;
+        }
+        StoreMode::Sequential => {
+            run_sequential_driver(store, receiver, control, lifecycle, ready, policy_name).await;
+        }
+    }
+}
+
+async fn run_sequential_driver<T>(
+    mut store: Store<T>,
+    mut receiver: mpsc::Receiver<StoreMessage<T>>,
+    mut control: mpsc::UnboundedReceiver<ControlMessage>,
+    lifecycle: Arc<Lifecycle>,
+    ready: oneshot::Sender<()>,
+    policy_name: &'static str,
+) where
+    T: Send + 'static,
+{
+    lifecycle.transition(DriverState::Accepting);
+    let _ = ready.send(());
+
+    let result = drive_store(&mut store, &mut receiver, &mut control, &lifecycle).await;
+    drop(store);
+
+    match result {
+        Ok(()) => lifecycle.transition(DriverState::Stopped),
+        Err(error) => {
+            let error = Arc::new(DriverError::new(format!("{error:#}")));
+            tracing::error!(
+                %error,
+                wasm_plugin_policy = policy_name,
+                "Wasm plugin store driver stopped"
+            );
+            lifecycle.transition(DriverState::Failed(error));
+        }
+    }
+}
+
+/// Outcome of handling one queued message.
+enum Step {
+    Continue,
+    /// A shutdown job ran; the driver stops with its result.
+    Finished(wasmtime::Result<()>),
+}
+
+async fn run_sequential_message<T>(
+    store: &mut Store<T>,
+    message: StoreMessage<T>,
+    lifecycle: &Lifecycle,
+) -> wasmtime::Result<Step>
+where
+    T: Send + 'static,
+{
+    match message {
+        StoreMessage::Call(job) => job.run_sequential(store.as_context_mut()).await?,
+        StoreMessage::GuestCall(job) => job.run_sequential(store.as_context_mut(), false).await?,
+        StoreMessage::Shutdown {
+            job,
+            root_admission,
+        } => {
+            lifecycle.transition(DriverState::Stopping);
+            let result = job.run_sequential(store.as_context_mut()).await;
+            drop(root_admission);
+            return Ok(Step::Finished(result));
+        }
+    }
+    Ok(Step::Continue)
+}
+
+async fn drive_store<T>(
+    store: &mut Store<T>,
+    receiver: &mut mpsc::Receiver<StoreMessage<T>>,
+    control: &mut mpsc::UnboundedReceiver<ControlMessage>,
+    lifecycle: &Lifecycle,
+) -> wasmtime::Result<()>
+where
+    T: Send + 'static,
+{
+    loop {
+        let message = tokio::select! {
+            biased;
+            Some(control_message) = control.recv() => {
+                lifecycle.transition(DriverState::Draining);
+                receiver.close();
+                while let Some(message) = receiver.recv().await {
+                    if let Step::Finished(result) =
+                        run_sequential_message(store, message, lifecycle).await?
+                    {
+                        return result;
+                    }
+                }
+                lifecycle.transition(DriverState::Stopping);
+                return control_result(Some(&control_message));
+            }
+            message = receiver.recv() => message,
+        };
+        let Some(message) = message else {
+            lifecycle.transition(DriverState::Draining);
+            // The owner may have closed the submission channel while its control signal is still pending
+            let control_message = control.recv().await;
+            lifecycle.transition(DriverState::Stopping);
+            return control_result(control_message.as_ref());
+        };
+
+        if matches!(message, StoreMessage::Shutdown { .. }) {
+            lifecycle.transition(DriverState::Draining);
+            receiver.close();
+        }
+        if let Step::Finished(result) = run_sequential_message(store, message, lifecycle).await? {
+            return result;
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+async fn run_concurrent_driver<T>(
     mut store: Store<T>,
     mut receiver: mpsc::Receiver<StoreMessage<T>>,
     mut control: mpsc::UnboundedReceiver<ControlMessage>,
@@ -1018,10 +1305,10 @@ async fn run_driver<T>(
                             };
                             match message {
                                 StoreMessage::Call(job) => {
-                                    active_calls.push(accessor.spawn(ConcurrentTask(job))?);
+                                    job.run_concurrent(accessor).await?;
                                 }
                                 StoreMessage::GuestCall(job) => {
-                                    job.run_concurrent(accessor).await?;
+                                    active_calls.push(accessor.spawn(async move |accessor| job.run_concurrent(accessor).await)?);
                                 }
                                 StoreMessage::Shutdown {
                                     job,
@@ -1029,7 +1316,7 @@ async fn run_driver<T>(
                                 } => {
                                     while active_calls.next().await.is_some() {}
                                     loop_lifecycle.transition(DriverState::Stopping);
-                                    let result = job.run(accessor).await;
+                                    let result = job.run_concurrent(accessor).await;
                                     poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
                                     drop(root_admission);
                                     return result;
@@ -1039,31 +1326,26 @@ async fn run_driver<T>(
                         while active_calls.next().await.is_some() {}
                         loop_lifecycle.transition(DriverState::Stopping);
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                        return match control_message {
-                            ControlMessage::Dropped => Err(wasmtime::Error::msg(
-                                "Wasm plugin store lifecycle control was dropped before shutdown",
-                            )),
-                            ControlMessage::Discarded => Ok(()),
-                        };
+                        return control_result(Some(&control_message));
                     }
                     message = receiver.recv() => message,
                 };
                 let Some(message) = message else {
+                    loop_lifecycle.transition(DriverState::Draining);
                     while active_calls.next().await.is_some() {}
+                    // The owner may have closed the submission channel while its control signal is still pending
+                    let control_message = control.recv().await;
                     loop_lifecycle.transition(DriverState::Stopping);
                     poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                    return Err(wasmtime::Error::msg(
-                        "Wasm plugin store submission channel closed before shutdown",
-                    ));
+                    return control_result(control_message.as_ref());
                 };
 
                 match message {
                     StoreMessage::Call(job) => {
-                        active_calls.push(accessor.spawn(ConcurrentTask(job))?);
-                        tokio::task::yield_now().await;
+                        job.run_concurrent(accessor).await?;
                     }
                     StoreMessage::GuestCall(job) => {
-                        job.run_concurrent(accessor).await?;
+                        active_calls.push(accessor.spawn(async move |accessor| job.run_concurrent(accessor).await)?);
                     }
                     StoreMessage::Shutdown {
                         job,
@@ -1073,7 +1355,7 @@ async fn run_driver<T>(
                         receiver.close();
                         while active_calls.next().await.is_some() {}
                         loop_lifecycle.transition(DriverState::Stopping);
-                        let result = job.run(accessor).await;
+                        let result = job.run_concurrent(accessor).await;
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
                         drop(root_admission);
                         return result;
@@ -1141,4 +1423,68 @@ fn panic_message(payload: &(dyn Any + Send)) -> String {
         },
         |message| (*message).to_owned(),
     )
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::sync::Arc;
+
+    use tokio::{
+        sync::{mpsc, oneshot},
+        time::{Duration, timeout},
+    };
+    use wasmtime::{Config, Engine, Store};
+
+    use super::{ControlMessage, DriverState, Lifecycle, StoreMode, run_driver};
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn submission_close_waits_for_owner_control() {
+        for mode in [StoreMode::Sequential, StoreMode::Concurrent] {
+            submission_close_waits_for_owner_control_in(mode).await;
+        }
+    }
+
+    async fn submission_close_waits_for_owner_control_in(mode: StoreMode) {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        if mode == StoreMode::Concurrent {
+            config.wasm_component_model_async(true);
+        }
+        config.concurrency_support(mode == StoreMode::Concurrent);
+        let engine = Engine::new(&config).expect("test engine");
+        let store = Store::new(&engine, ());
+        let (sender, receiver) = mpsc::channel(1);
+        let (control_sender, control_receiver) = mpsc::unbounded_channel();
+        let lifecycle = Lifecycle::new();
+        let (ready_sender, ready) = oneshot::channel();
+        let driver = tokio::spawn(run_driver(
+            store,
+            receiver,
+            control_receiver,
+            Arc::clone(&lifecycle),
+            ready_sender,
+            "test",
+            mode,
+        ));
+
+        timeout(Duration::from_secs(10), async {
+            ready.await.expect("driver should become ready");
+            drop(sender);
+            while lifecycle.state() != DriverState::Draining {
+                tokio::task::yield_now().await;
+            }
+            assert!(control_sender.send(ControlMessage::Dropped).is_ok());
+            driver.await.expect("driver task should finish");
+        })
+        .await
+        .expect("owner control should stop the driver");
+
+        let mut join = lifecycle.subscribe();
+        let error = join
+            .wait()
+            .await
+            .expect_err("owner drop should fail the driver");
+        assert!(error.to_string().contains("control was dropped"));
+    }
 }
