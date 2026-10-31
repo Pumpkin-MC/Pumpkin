@@ -136,12 +136,15 @@ impl Plugin for Fixture {
             Item, ItemStack, ItemStackExt, TextComponent, enchantment::EnchantmentBuilder,
             recipe::ShapedRecipeBuilder,
         };
-        ShapedRecipeBuilder::new("fixture:diamond", ItemStack::of(Item::Diamond, 2))
-            .pattern(["DD"])
-            .key('D', "diamond")
-            .register_to_context(&context)
-            .await
-            .map_err(|error| error.to_string())?;
+        ShapedRecipeBuilder::new(
+            "fixture:diamond",
+            ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2),
+        )
+        .pattern(["DD"])
+        .key('D', "diamond")
+        .register_to_context(&context)
+        .await
+        .map_err(|error| error.to_string())?;
         EnchantmentBuilder::new("fixture:test", TextComponent::text("Test"))
             .register_to_context(&context)
             .await
@@ -184,9 +187,20 @@ impl Plugin for Fixture {
                 forms::{FormResponse, SimpleFormBuilder},
                 recipe::{Ingredient, ShapedRecipeBuilder},
             };
-            let item = ItemStack::of(Item::Diamond, 2);
-            assert_eq!(item.get_item().await, Some(Item::Diamond));
+            let item = ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2);
+            assert_eq!(item.get_item().await, Item::from_name("minecraft:diamond"));
             assert!(item.matches_item("diamond").await);
+            use pumpkin_plugin_api_v0_2::{BlockType, IntoBlockKey, IntoItemKey};
+            assert_eq!("diamond".into_item_key(), "minecraft:diamond");
+            assert_eq!("custom:item".into_item_key(), "custom:item");
+            assert_eq!("stone".into_block_key(), "minecraft:stone");
+            assert_eq!("custom:block".into_block_key(), "custom:block");
+            let stone = BlockType::from_name("stone").ok_or("unknown stone block")?;
+            assert_eq!(stone.resource_location(), "minecraft:stone");
+            assert_eq!(stone.as_str(), "stone");
+            assert_eq!(Some(stone), BlockType::from_registry_key("minecraft:stone"));
+            assert!(Item::from_name("custom:diamond").is_none());
+            assert!(BlockType::from_name("custom:stone").is_none());
             item.set_string("fixture", "owner", "guest").await;
             assert_eq!(
                 item.get_string("fixture", "owner").await.as_deref(),
@@ -202,6 +216,22 @@ impl Plugin for Fixture {
             assert_eq!(
                 Ingredient::tag("planks"),
                 Ingredient::Tag("minecraft:planks".into())
+            );
+            assert_eq!(
+                Ingredient::from("custom:ruby"),
+                Ingredient::Item("custom:ruby".into())
+            );
+            assert_eq!(
+                Ingredient::from("#logs"),
+                Ingredient::Tag("minecraft:logs".into())
+            );
+            assert_eq!(
+                Ingredient::from("#minecraft:planks"),
+                Ingredient::Tag("minecraft:planks".into())
+            );
+            assert_eq!(
+                Ingredient::from(["coal", "charcoal"]),
+                Ingredient::OneOf(vec!["minecraft:coal".into(), "minecraft:charcoal".into()])
             );
             assert!(
                 EnchantmentBuilder::new("", TextComponent::text("Invalid"))

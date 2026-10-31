@@ -1,4 +1,4 @@
-pub use crate::generated::block::BlockType;
+pub use crate::keys::BlockType;
 use crate::wit::pumpkin::plugin::world::{Block, BlockState};
 
 /// Trait for converting types into a valid Minecraft block registry key (e.g. `"minecraft:stone"`).
@@ -9,7 +9,7 @@ pub trait IntoBlockKey {
 
 impl IntoBlockKey for BlockType {
     fn into_block_key(self) -> String {
-        self.resource_location().to_string()
+        self.into_registry_key()
     }
 }
 
@@ -21,21 +21,13 @@ impl IntoBlockKey for &BlockType {
 
 impl IntoBlockKey for &str {
     fn into_block_key(self) -> String {
-        if self.contains(':') {
-            self.to_string()
-        } else {
-            format!("minecraft:{self}")
-        }
+        crate::keys::qualify(self)
     }
 }
 
 impl IntoBlockKey for String {
     fn into_block_key(self) -> String {
-        if self.contains(':') {
-            self
-        } else {
-            format!("minecraft:{self}")
-        }
+        crate::keys::qualify(&self)
     }
 }
 
@@ -47,7 +39,7 @@ impl IntoBlockKey for &String {
 
 /// Extension trait providing typed helper methods on `Block`.
 pub trait BlockTypeExt {
-    /// Gets a block definition by any valid block key (e.g. `BlockType::Stone`, `"minecraft:stone"`, or `"custom:block"`).
+    /// Gets a block definition from a typed block, a plain name, or a namespaced key.
     #[must_use]
     fn of(key: impl IntoBlockKey) -> Option<Block>;
 
@@ -119,42 +111,5 @@ impl BlockStateTypeExt for BlockState {
             .strip_prefix("minecraft:")
             .unwrap_or(&self.block_name);
         expected_clean == actual_clean
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn block_to_resource_location() {
-        assert_eq!(BlockType::Stone.into_block_key(), "minecraft:stone");
-        assert_eq!(
-            BlockType::DiamondBlock.into_block_key(),
-            "minecraft:diamond_block"
-        );
-        assert_eq!(BlockType::OakLog.into_block_key(), "minecraft:oak_log");
-        assert_eq!(BlockType::Obsidian.into_block_key(), "minecraft:obsidian");
-    }
-
-    #[test]
-    fn string_to_resource_location() {
-        assert_eq!("stone".into_block_key(), "minecraft:stone");
-        assert_eq!("minecraft:stone".into_block_key(), "minecraft:stone");
-        assert_eq!("custom:ruby_block".into_block_key(), "custom:ruby_block");
-    }
-
-    #[test]
-    fn block_parsing() {
-        assert_eq!(BlockType::from_name("stone"), Some(BlockType::Stone));
-        assert_eq!(
-            BlockType::from_name("minecraft:stone"),
-            Some(BlockType::Stone)
-        );
-        assert_eq!(
-            BlockType::from_name("diamond_block"),
-            Some(BlockType::DiamondBlock)
-        );
-        assert_eq!(BlockType::from_name("custom:ruby_block"), None);
     }
 }

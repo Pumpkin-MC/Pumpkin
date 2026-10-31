@@ -105,13 +105,7 @@ impl Ingredient {
     /// If no namespace is provided (e.g., `"diamond"`), `"minecraft:"` is prepended.
     #[must_use]
     pub fn item(id: impl AsRef<str>) -> Self {
-        let s = id.as_ref();
-        let normalized = if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("minecraft:{s}")
-        };
-        Self::Item(normalized)
+        Self::Item(crate::keys::qualify(id.as_ref()))
     }
 
     /// Creates an ingredient matching a tag group of items.
@@ -124,12 +118,7 @@ impl Ingredient {
         if let Some(stripped) = s.strip_prefix('#') {
             s = stripped;
         }
-        let normalized = if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("minecraft:{s}")
-        };
-        Self::Tag(normalized)
+        Self::Tag(crate::keys::qualify(s))
     }
 
     /// Creates an ingredient matching any of the provided item IDs.
@@ -990,34 +979,5 @@ impl RecipeManager {
         builder: CookingRecipeBuilder,
     ) -> Result<(), RecipeError> {
         self.register(builder).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ingredient_normalization() {
-        assert_eq!(
-            Ingredient::from("diamond"),
-            Ingredient::Item("minecraft:diamond".into())
-        );
-        assert_eq!(
-            Ingredient::from("custom:ruby"),
-            Ingredient::Item("custom:ruby".into())
-        );
-        assert_eq!(
-            Ingredient::from("#logs"),
-            Ingredient::Tag("minecraft:logs".into())
-        );
-        assert_eq!(
-            Ingredient::from("#minecraft:planks"),
-            Ingredient::Tag("minecraft:planks".into())
-        );
-        assert_eq!(
-            Ingredient::from(["coal", "charcoal"]),
-            Ingredient::OneOf(vec!["minecraft:coal".into(), "minecraft:charcoal".into()])
-        );
     }
 }

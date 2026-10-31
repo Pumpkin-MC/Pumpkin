@@ -16,6 +16,7 @@ members = [
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
     "crates/pumpkin-plugin-api-v0_2",
+    "crates/pumpkin-plugin-helpers",
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
@@ -26,6 +27,7 @@ members = [
     "crates/pumpkin-wasm-host-v0_2",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
+    "tools/pumpkin-plugin-compose",
     "tools/pumpkin-fuzzer",
     "tools/pumpkin-tester",
 ]
