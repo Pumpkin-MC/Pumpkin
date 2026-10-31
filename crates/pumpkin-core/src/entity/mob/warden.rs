@@ -3,16 +3,18 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::{
     effect::StatusEffect,
     entity::{EntityPose, EntityType},
     potion::Effect,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::{GameMode, math::vector3::Vector3};
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{
         Controls, Goal, active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -148,6 +150,10 @@ impl WardenEntity {
 }
 
 impl Mob for WardenEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityWardenStep, 10.0, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

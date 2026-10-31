@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::AtomicBool;
 
 use pumpkin_util::math::vector3::Vector3;
@@ -21,7 +22,7 @@ impl SmallFireballEntity {
     pub const fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -43,8 +44,8 @@ impl SmallFireballEntity {
 }
 
 impl EntityBase for SmallFireballEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {

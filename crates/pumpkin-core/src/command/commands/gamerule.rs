@@ -123,17 +123,21 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let mut cmd = command("gamerule", DESCRIPTION).requires(PERMISSION);
     let rule_registry = GameRuleRegistry::default();
 
+    // Vanilla takes each rule by its name and by its namespaced id.
     for rule in GameRule::all() {
-        let rule_literal = literal(rule.to_string()).executes(QueryExecutor(rule.clone()));
-        let branch = match rule_registry.get(rule) {
-            GameRuleValue::Int(_) => rule_literal.then(
-                argument("value", IntegerArgumentType::any())
-                    .executes(SetIntExecutor(rule.clone())),
-            ),
-            GameRuleValue::Bool(_) => rule_literal
-                .then(argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone()))),
-        };
-        cmd = cmd.then(branch);
+        for name in [rule.to_string(), format!("minecraft:{rule}")] {
+            let rule_literal = literal(name).executes(QueryExecutor(rule.clone()));
+            let branch = match rule_registry.get(rule) {
+                GameRuleValue::Int(_) => rule_literal.then(
+                    argument("value", IntegerArgumentType::any())
+                        .executes(SetIntExecutor(rule.clone())),
+                ),
+                GameRuleValue::Bool(_) => rule_literal.then(
+                    argument("value", BoolArgumentType).executes(SetBoolExecutor(rule.clone())),
+                ),
+            };
+            cmd = cmd.then(branch);
+        }
     }
 
     dispatcher.register(cmd);

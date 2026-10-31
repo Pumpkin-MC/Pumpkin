@@ -1,32 +1,55 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::Sound;
 use pumpkin_util::difficulty::Difficulty;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        revenge::RevengeGoal,
-        spider_attack::SpiderAttackGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, spider_attack::SpiderAttackGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         equipment::RegionalDifficulty,
         spawn::{SpawnGroupData, finalize_spawn},
     },
+    passive::armadillo::ArmadilloEntity,
     r#type::from_type,
 };
 use crate::world::World;
+
+pub const SPIDER_FLEES: &[Flee] =
+    &[
+        Flee::new(2, TargetMatch::Type(&EntityType::ARMADILLO), 6.0, 1.0, 1.2)
+            .matching(is_calm_armadillo),
+    ];
+
+/// An armadillo out of its shell.
+fn is_calm_armadillo(_mob: &dyn Mob, candidate: &dyn EntityBase) -> bool {
+    candidate
+        .cast_any()
+        .downcast_ref::<ArmadilloEntity>()
+        .is_some_and(|armadillo| !armadillo.is_scared())
+}
+
+pub const SPIDER_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).when(TargetCondition::NoDaylight),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true)
+        .when(TargetCondition::NoDaylight),
+];
 
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
@@ -51,6 +74,7 @@ impl SpiderEntity {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            fleeing::apply(goal_selector, SPIDER_FLEES);
             goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
@@ -60,16 +84,7 @@ impl SpiderEntity {
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::NoDaylight),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true)
-                    .when(TargetCondition::NoDaylight),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, SPIDER_HUNTS);
         };
 
         mob_arc
@@ -138,6 +153,10 @@ pub fn finalize_spider_spawn(
 }
 
 impl Mob for SpiderEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,

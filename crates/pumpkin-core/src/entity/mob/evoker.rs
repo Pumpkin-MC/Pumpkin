@@ -8,17 +8,20 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        Controls, Goal, active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        Controls, Goal, look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
         patrol::{PatrolData, PatrollingMonster},
         raider::{
-            ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
+            self, ObtainRaidLeaderBannerGoal, PathfindToRaidGoal, Raider, RaiderCelebrationGoal,
             RaiderData, RaiderMoveThroughVillageGoal,
         },
     },
@@ -51,6 +54,17 @@ impl IllagerSpell {
     }
 }
 
+const EVOKER_FLEES: &[Flee] = &[
+    Flee::new(2, TargetMatch::Type(&EntityType::PLAYER), 8.0, 0.6, 1.0),
+    raider::flee_creaking(3, 0.6, 1.0),
+];
+
+const EVOKER_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true).forget_unseen_after(300),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, false).forget_unseen_after(300),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), false),
+];
+
 pub struct EvokerEntity {
     pub mob_entity: MobEntity,
     pub raider_data: RaiderData,
@@ -82,6 +96,7 @@ impl EvokerEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(EvokerCastingSpellGoal::new(mob_weak.clone())));
             goal_selector.add_goal(2, Box::new(ObtainRaidLeaderBannerGoal));
+            fleeing::apply(goal_selector, EVOKER_FLEES);
             goal_selector.add_goal(3, Box::new(RaiderMoveThroughVillageGoal::new(1.05)));
             goal_selector.add_goal(3, Box::new(PathfindToRaidGoal::default()));
             goal_selector.add_goal(4, Box::new(EvokerSummonSpellGoal::new(mob_weak.clone())));
@@ -96,18 +111,8 @@ impl EvokerEntity {
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
             let target_selector = &mob_arc.mob_entity.target_selector;
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
+            target_selector.add_goal(1, raider::revenge_goal());
+            hunting::apply(target_selector, &mob_arc.mob_entity, EVOKER_HUNTS);
         };
 
         mob_arc
@@ -319,7 +324,6 @@ impl Goal for EvokerAttackSpellGoal {
             let min_y = evoker_pos.y.min(target_pos.y);
             let dist_sq = evoker_pos.squared_distance_to_vec(&target_pos);
             let world = evoker_ent.world.load();
-            let evoker_id = evoker_ent.entity_id;
 
             if dist_sq < 81.0 {
                 // Close range: concentric rings around Evoker
@@ -335,7 +339,8 @@ impl Goal for EvokerAttackSpellGoal {
                         pos,
                         &EntityType::EVOKER_FANGS,
                     );
-                    let fangs = Arc::new(EvokerFangsEntity::new(entity, 0, angle, Some(evoker_id)));
+                    let fangs =
+                        Arc::new(EvokerFangsEntity::new(entity, 0, angle, Some(evoker_ent)));
                     world.spawn_entity(fangs);
                 }
 
@@ -353,7 +358,8 @@ impl Goal for EvokerAttackSpellGoal {
                         pos,
                         &EntityType::EVOKER_FANGS,
                     );
-                    let fangs = Arc::new(EvokerFangsEntity::new(entity, 3, angle, Some(evoker_id)));
+                    let fangs =
+                        Arc::new(EvokerFangsEntity::new(entity, 3, angle, Some(evoker_ent)));
                     world.spawn_entity(fangs);
                 }
             } else {
@@ -374,7 +380,7 @@ impl Goal for EvokerAttackSpellGoal {
                         entity,
                         i as u32,
                         angle_towards_target,
-                        Some(evoker_id),
+                        Some(evoker_ent),
                     ));
                     world.spawn_entity(fangs);
                 }

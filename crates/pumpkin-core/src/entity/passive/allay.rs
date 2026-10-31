@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EquipmentSlot, PotionContentsImpl};
 use pumpkin_data::entity::{EntityStatus, EntityType};
@@ -11,6 +12,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::{
     Hand,
     math::{position::BlockPos, vector3::Vector3},
@@ -364,7 +366,11 @@ impl AllayEntity {
             && stack.item.has_tag(&tag::Item::MINECRAFT_DUPLICATES_ALLAYS)
         {
             self.duplicate_allay();
-            world.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::InLoveHearts,
+                ActorEventID::InLoveHearts,
+            );
             sound = Sound::BlockAmethystBlockChime;
             stack.decrement_unless_creative(player.gamemode.load(), 1);
         } else if self.sample().is_empty() && !stack.is_empty() {
@@ -430,6 +436,13 @@ impl CustomSound for AllayEntity {
 }
 
 impl Mob for AllayEntity {
+    fn mob_is_flapping(&self) -> bool {
+        !self.get_entity().on_ground.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `Allay` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

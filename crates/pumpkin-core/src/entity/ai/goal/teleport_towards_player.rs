@@ -8,6 +8,7 @@ use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 use crate::entity::mob::neutral::NeutralMob;
 use crate::entity::player::Player;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 
@@ -52,15 +53,11 @@ impl TeleportTowardsPlayerGoal {
         let entity = &self.enderman.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
-        let follow_range = self
-            .enderman
-            .mob_entity
-            .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
         // A nearer player that is not anger-inducing must not hide a farther one that is.
+        // The conditions carry the follow range.
         let enderman: &dyn EntityBase = self.enderman.as_ref();
-        world.get_nearest_player(pos, follow_range, |player| {
+        world.get_nearest_player(pos, f64::INFINITY, |player| {
             self.target_predicate
                 .test(&world, Some(enderman), player.as_ref())
                 && self.is_anger_inducing(player, &world)
@@ -120,7 +117,7 @@ impl Goal for TeleportTowardsPlayerGoal {
             }
             let needs_reset = mob_entity.get_target().is_none();
             if needs_reset {
-                mob.set_mob_target(Some(target.clone()));
+                mob.set_mob_target(Some(target.clone()), TargetReason::ClosestPlayer);
             }
             true
         } else {
