@@ -98,9 +98,7 @@ pub trait ExplosionDamageCalculator: Send + Sync {
         .sqrt()
             / radius;
         let damage_multiplier = (1.0 - distance) * exposure as f64;
-        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-            * 7.0
-            * explosion.power as f64
+        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier) * 7.0 * radius
             + 1.0) as f32
     }
 }
