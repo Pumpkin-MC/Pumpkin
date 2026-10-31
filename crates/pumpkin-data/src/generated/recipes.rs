@@ -109,16 +109,14 @@ impl RecipeIngredientTypes {
     pub fn match_item(&self, item: &Item) -> bool {
         match self {
             Self::Simple(ingredient) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                name == *ingredient
+                ingredient.strip_prefix("minecraft:") == Some(item.registry_key)
             }
             Self::Tagged(tag) => item
                 .is_tagged_with(tag)
                 .expect("Crafting recipe used invalid tag"),
-            Self::OneOf(ingredients) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                ingredients.contains(&name.as_str())
-            }
+            Self::OneOf(ingredients) => ingredients
+                .iter()
+                .any(|ingredient| ingredient.strip_prefix("minecraft:") == Some(item.registry_key)),
         }
     }
 }
