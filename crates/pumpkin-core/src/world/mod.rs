@@ -270,6 +270,7 @@ pub struct World {
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
+    natural_spawn_chunk_cache: std::sync::Mutex<NaturalSpawnChunkCache>,
     pub active_chunks: RwLock<Arc<FxHashSet<Vector2<i32>>>>,
     pub(crate) navigation_change_sequence: std::sync::atomic::AtomicU64,
     /// Entities spawned by ticking entities, with their sequential order.
@@ -429,6 +430,7 @@ impl World {
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
+            natural_spawn_chunk_cache: std::sync::Mutex::new(NaturalSpawnChunkCache::default()),
             active_chunks: RwLock::new(Arc::default()),
             navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
             tick_spawns: std::sync::Mutex::new(Vec::new()),
@@ -532,7 +534,7 @@ impl World {
         }
         drop(active_chunks);
         drop(tracker);
-        let spawnable_chunks = natural_spawn_chunk_count(
+        let spawnable_chunks = self.count_natural_spawn_chunks(
             players
                 .iter()
                 .filter(|player| !player.is_spectator())
@@ -571,6 +573,13 @@ impl World {
         for chunk in chunks {
             poi_scan::scan_chunk(&mut storage, &chunk);
         }
+    }
+
+    fn count_natural_spawn_chunks(&self, player_chunks: impl Iterator<Item = Vector2<i32>>) -> i32 {
+        self.natural_spawn_chunk_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .count(player_chunks.collect())
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
@@ -7699,6 +7708,23 @@ fn natural_spawn_chunk_count(player_chunks: impl Iterator<Item = Vector2<i32>>) 
     chunks.len() as i32
 }
 
+#[derive(Default)]
+struct NaturalSpawnChunkCache {
+    player_chunks: Vec<Vector2<i32>>,
+    count: i32,
+}
+
+impl NaturalSpawnChunkCache {
+    fn count(&mut self, mut player_chunks: Vec<Vector2<i32>>) -> i32 {
+        player_chunks.sort_unstable_by_key(|pos| (pos.x, pos.y));
+        if self.player_chunks != player_chunks {
+            self.count = natural_spawn_chunk_count(player_chunks.iter().copied());
+            self.player_chunks = player_chunks;
+        }
+        self.count
+    }
+}
+
 /// Vanilla `ServerChunkCache.tickChunks` gates persistent categories on game
 /// time, so daylight changes do not shift the 400-tick schedule.
 fn spawn_persistent(world: &World) -> bool {
@@ -7894,8 +7920,8 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
-        natural_spawn_chunk_count, spawn_persistent,
+        NaturalSpawnChunkCache, World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        merge_entity_records, natural_spawn_chunk_count, spawn_persistent,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -8339,6 +8365,17 @@ mod tests {
             natural_spawn_chunk_count([Vector2::new(0, 0), Vector2::new(1, 0)].into_iter()),
             306
         );
+    }
+
+    #[test]
+    fn natural_spawn_chunk_cache_invalidates_when_players_move() {
+        let mut cache = NaturalSpawnChunkCache::default();
+        assert_eq!(cache.count(vec![Vector2::new(0, 0)]), 289);
+        assert_eq!(
+            cache.count(vec![Vector2::new(0, 0), Vector2::new(1, 0)]),
+            306
+        );
+        assert_eq!(cache.count(vec![Vector2::new(1, 0)]), 289);
     }
 
     #[tokio::test]
