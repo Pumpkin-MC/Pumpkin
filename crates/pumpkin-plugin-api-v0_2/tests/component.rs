@@ -74,8 +74,10 @@ fn fixture_path() -> &'static PathBuf {
         assert!(status.success(), "building the fixture component failed");
         let plugin_path = target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm");
         let helper_path = target_dir.join("wasm32-wasip2/debug/pumpkin_plugin_helpers.wasm");
+        let process_dir = target_dir.join(std::process::id().to_string());
+        std::fs::create_dir_all(&process_dir).expect("create process fixture directory");
         // Definition names come from filenames and must be valid component identifiers.
-        let definition = target_dir.join("registry-helpers.wasm");
+        let definition = process_dir.join("registry-helpers.wasm");
         std::fs::copy(helper_path, &definition).expect("copy helper definition");
         let config = wasm_compose::config::Config {
             definitions: vec![definition],
@@ -84,7 +86,7 @@ fn fixture_path() -> &'static PathBuf {
         let composed = wasm_compose::composer::ComponentComposer::new(&plugin_path, &config)
             .compose()
             .expect("compose fixture");
-        let output = target_dir.join("composed-fixture.wasm");
+        let output = process_dir.join("composed-fixture.wasm");
         std::fs::write(&output, composed).expect("write composed fixture");
         output
     })
@@ -203,6 +205,7 @@ struct State {
     calls: std::sync::Mutex<Vec<String>>,
     custom_data: std::sync::Mutex<Option<Val>>,
     cancelled_tasks: AtomicU32,
+    ender_chest_slots: std::sync::Mutex<Vec<(u8, bool)>>,
     // Signals that the guest entered the host import and is now waiting on it
     entered: Notify,
     // Held by the host import until the test lets the awaited work finish
@@ -381,6 +384,7 @@ async fn async_handler_awaits_a_host_import_while_other_calls_proceed() {
 
 struct ContextResource;
 struct ServerResource;
+struct PlayerResource;
 struct CommandResource;
 struct NodeResource;
 struct SenderResource;
@@ -494,6 +498,15 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
         .expect("schedule repeating task");
     let mut server = interface!("server", "server" => ServerResource);
     server
+        .func_wrap(
+            "[method]server.get-player-by-name",
+            |_, (_server, name): (Resource<ServerResource>, String)| {
+                assert_eq!(name, "fixture");
+                Ok((Some(Resource::<PlayerResource>::new_own(0)),))
+            },
+        )
+        .expect("fixture player");
+    server
         .func_wrap_concurrent(
             "[method]server.broadcast",
             |accessor: &Accessor<Arc<State>>,
@@ -522,6 +535,28 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
             },
         )
         .expect("enchantment manager");
+    let mut player = interface!("player", "player" => PlayerResource);
+    player
+        .func_new_concurrent(
+            "[method]player.set-ender-chest-item",
+            |accessor, _, params, _| {
+                Box::pin(async move {
+                    let Val::U8(slot) = params[1] else {
+                        return Err(wasmtime::Error::msg("expected an ender chest slot"));
+                    };
+                    accessor.with(|mut store| {
+                        store
+                            .data_mut()
+                            .ender_chest_slots
+                            .lock()
+                            .expect("ender chest")
+                            .push((slot, matches!(params[2], Val::Option(Some(_)))));
+                        release_values(&mut store, params)
+                    })
+                })
+            },
+        )
+        .expect("set ender chest item");
     let mut recipes = interface!("recipe", "recipe-manager" => RecipeResource);
     recipes
         .func_new_concurrent(
@@ -711,7 +746,7 @@ async fn sdk_helpers_and_registered_callbacks_run_in_a_component() {
         init.call_concurrent(accessor, &[], &mut []).await.expect("init");
         let mut result = [Val::Bool(false)];
         ipc.call_concurrent(accessor, &ipc_params("helpers", b""), &mut result).await.expect("helpers");
-        assert_eq!(ipc_reply(&result[0]).as_deref(), Some(&b"helpers passed"[..]));
+        assert_eq!(ipc_reply(&result[0]).as_deref(), Some(&b"helpers passed"[..]), "{:?}", result[0]);
         on_load.call_concurrent(accessor, &[owned::<ContextResource>(accessor)], &mut result).await.expect("load");
         assert!(matches!(&result[0], Val::Result(Ok(None))));
         let id = |key| *state.ids.lock().expect("ids").get(key).expect("registered id");
@@ -738,7 +773,15 @@ async fn sdk_helpers_and_registered_callbacks_run_in_a_component() {
         on_unload.call_concurrent(accessor, &[owned::<ContextResource>(accessor)], &mut result).await.expect("unload");
         assert!(matches!(&result[0], Val::Result(Ok(None))));
     }).await.expect("SDK exercise");
-    assert_eq!(state.cancelled_tasks.load(Ordering::SeqCst), 4);
+    assert_eq!(state.cancelled_tasks.load(Ordering::SeqCst), 6);
+    let slots = state.ender_chest_slots.lock().expect("ender chest");
+    assert_eq!(slots.len(), 81);
+    for (batch, writes) in slots.as_chunks::<27>().0.iter().enumerate() {
+        for (slot, &(actual_slot, has_item)) in writes.iter().enumerate() {
+            assert_eq!(usize::from(actual_slot), slot);
+            assert_eq!(has_item, batch == 0 && slot == 0);
+        }
+    }
     assert_eq!(
         *state.calls.lock().expect("calls"),
         [
@@ -781,6 +824,7 @@ fn release_value(
             release!(
                 ContextResource,
                 ServerResource,
+                PlayerResource,
                 CommandResource,
                 NodeResource,
                 SenderResource,
