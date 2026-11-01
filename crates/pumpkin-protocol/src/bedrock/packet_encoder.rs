@@ -9,8 +9,7 @@ use crate::{
     ser::NetworkWriteExt,
 };
 
-/// Encoder: Server -> Client
-/// Supports Zlib compression.
+/// Encodes outgoing Bedrock game packets and batches them into compressed frames.
 pub struct BedrockBatchEncoder {
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
@@ -23,11 +22,13 @@ impl Default for BedrockBatchEncoder {
 }
 
 impl BedrockBatchEncoder {
+    /// Creates a new uncompressed batch encoder.
     #[must_use]
     pub const fn new() -> Self {
         Self { compression: None }
     }
 
+    /// Sets the compression threshold and Deflate level for batched frames.
     pub const fn set_compression(
         &mut self,
         compression_info: (CompressionThreshold, CompressionLevel),
@@ -35,6 +36,7 @@ impl BedrockBatchEncoder {
         self.compression = Some(compression_info);
     }
 
+    /// Encodes a raw packet payload with the 14-bit Bedrock game packet header into a batch frame.
     pub fn write_game_packet(
         &self,
         packet_id: u16,
@@ -87,6 +89,7 @@ impl BedrockBatchEncoder {
         Ok(())
     }
 
+    /// Encodes a typed Bedrock clientbound packet into a batch frame and writes it.
     pub fn write_packet<P: crate::BClientPacket + ?Sized>(
         &self,
         packet: &P,
@@ -103,6 +106,7 @@ impl BedrockBatchEncoder {
         )
     }
 
+    /// Serializes a typed Bedrock clientbound packet into an in-memory byte buffer.
     pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
         &self,
         packet: &P,
@@ -113,6 +117,7 @@ impl BedrockBatchEncoder {
     }
 }
 
+/// Encodes a typed Bedrock clientbound packet with default encoder settings.
 pub fn write_packet<P: crate::BClientPacket + ?Sized>(
     packet: &P,
     writer: impl Write,
@@ -120,6 +125,7 @@ pub fn write_packet<P: crate::BClientPacket + ?Sized>(
     BedrockBatchEncoder::new().write_packet(packet, writer)
 }
 
+/// Serializes a typed Bedrock clientbound packet to bytes with default encoder settings.
 pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
     packet: &P,
 ) -> Result<bytes::Bytes, Error> {

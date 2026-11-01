@@ -1,7 +1,5 @@
 pub mod blending_data;
 
-use std::f64;
-
 use crate::biome::BiomeSupplier;
 use crate::generation::biome_coords;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;

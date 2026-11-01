@@ -6,9 +6,12 @@ use pumpkin_macros::packet;
 
 use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 
+/// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
 #[packet(135)]
 pub struct SClientCacheBlobStatus {
+    /// Hashes of chunk blobs not found in the client cache, which the server must send.
     pub miss_hashes: Vec<u64>,
+    /// Hashes of chunk blobs successfully retrieved from the client cache.
     pub hit_hashes: Vec<u64>,
 }
 

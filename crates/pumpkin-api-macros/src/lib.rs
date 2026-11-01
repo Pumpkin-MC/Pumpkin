@@ -84,14 +84,14 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Combine the original struct definition with the impl block and plugin() function
     let expanded = quote! {
-        use pumpkin::plugin::PluginFuture;
+        use pumpkin_core::plugin::PluginFuture;
 
         pub static GLOBAL_RUNTIME: std::sync::LazyLock<std::sync::Arc<tokio::runtime::Runtime>> =
             std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap()));
 
         #[unsafe(no_mangle)]
-        pub static METADATA: std::sync::LazyLock<pumpkin::plugin::PluginMetadata> = std::sync::LazyLock::new(|| {
-            pumpkin::plugin::PluginMetadata {
+        pub static METADATA: std::sync::LazyLock<pumpkin_core::plugin::PluginMetadata> = std::sync::LazyLock::new(|| {
+            pumpkin_core::plugin::PluginMetadata {
                 name: env!("CARGO_PKG_NAME").to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 authors: env!("CARGO_PKG_AUTHORS").split(',').map(String::from).collect(),
@@ -102,16 +102,16 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         });
 
         #[unsafe(no_mangle)]
-        pub static PUMPKIN_API_VERSION: u32 = pumpkin::plugin::PLUGIN_API_VERSION;
+        pub static PUMPKIN_API_VERSION: u32 = pumpkin_core::plugin::PLUGIN_API_VERSION;
 
         #input_struct
 
-        impl pumpkin::plugin::Plugin for #struct_ident {
+        impl pumpkin_core::plugin::Plugin for #struct_ident {
             #(#methods)*
         }
 
         #[unsafe(no_mangle)]
-        pub fn plugin() -> Box<dyn pumpkin::plugin::Plugin> {
+        pub fn plugin() -> Box<dyn pumpkin_core::plugin::Plugin> {
             Box::new(#struct_ident::new())
         }
     };

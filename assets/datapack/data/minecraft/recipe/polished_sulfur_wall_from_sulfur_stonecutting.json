@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:stonecutting",
-  "ingredient": "minecraft:sulfur",
-  "result": {
-    "id": "minecraft:polished_sulfur_wall"
-  }
-}

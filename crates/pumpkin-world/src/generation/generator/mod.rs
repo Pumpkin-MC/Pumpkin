@@ -16,7 +16,7 @@ pub trait GeneratorInit {
 }
 
 use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::Arc;
 
@@ -59,6 +59,7 @@ pub trait CustomChunkGenerator: Send + Sync {
     }
 
     fn step_to_carvers(&self, chunk: &mut ProtoChunk) {
+        chunk.snapshot_wg_heightmaps();
         chunk.stage = StagedChunkEnum::Carvers;
     }
 
@@ -136,7 +137,7 @@ pub struct VanillaGenerator {
     pub global_structure_cache: crate::generation::structure::placement::GlobalStructureCache,
     pub structure_calculator: StructurePlacementCalculator,
     pub structure_allowed_biomes: FxHashMap<usize, Vec<u16>>,
-    pub enabled_structure_sets: Option<rustc_hash::FxHashSet<usize>>,
+    pub enabled_structure_sets: FxHashSet<usize>,
 }
 
 impl VanillaGenerator {
@@ -199,34 +200,37 @@ impl VanillaGenerator {
             );
         }
 
-        let enabled_structure_sets: Option<rustc_hash::FxHashSet<usize>> =
-            structure_overrides.map(|overrides| {
-                overrides
+        let possible_biomes = biome_supplier.possible_biomes();
+        let enabled_structure_sets = StructureSet::NAMES
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &name)| {
+                let has_biomes = structure_allowed_biomes[&index]
                     .iter()
-                    .filter_map(|s| {
-                        let clean = s.strip_prefix("minecraft:").unwrap_or(s);
-                        StructureSet::NAMES.iter().position(|&name| name == clean)
-                    })
-                    .collect()
-            });
+                    .any(|biome| possible_biomes.contains(biome));
+                let selected = structure_overrides.is_none_or(|overrides| {
+                    overrides
+                        .iter()
+                        .any(|value| value.strip_prefix("minecraft:").unwrap_or(value) == name)
+                });
+                (has_biomes && selected).then_some(index)
+            })
+            .collect();
 
-        let global_structure_cache =
-            crate::generation::structure::placement::GlobalStructureCache::new();
-
-        if dimension == Dimension::OVERWORLD {
+        let global_structure_cache = if dimension == Dimension::OVERWORLD {
             let pumpkin_data::structures::StructurePlacementType::ConcentricRings(rings) =
                 &StructureSet::STRONGHOLDS.placement.placement_type
             else {
                 unreachable!()
             };
-            let strongholds =
-                crate::generation::structure::placement::GlobalStructureCache::calculate_strongholds(
-                    seed.0 as i64,
-                    rings,
-                    &base_router.multi_noise,
-                );
-            global_structure_cache.init_strongholds(strongholds);
-        }
+            crate::generation::structure::placement::GlobalStructureCache::with_background_strongholds(
+                seed.0 as i64,
+                rings,
+                &base_router.multi_noise,
+            )
+        } else {
+            crate::generation::structure::placement::GlobalStructureCache::new()
+        };
 
         Self {
             random_config,
@@ -298,10 +302,10 @@ mod tests {
     fn vanilla_generator_structure_overrides() {
         let seed = Seed(42);
 
-        // No overrides: None means all structure sets enabled
+        // Default biome source keeps only compatible structure sets.
         let all_gen =
             VanillaGenerator::new_with_all_settings(seed, Dimension::OVERWORLD, None, None, None);
-        assert!(all_gen.enabled_structure_sets.is_none());
+        assert!(!all_gen.enabled_structure_sets.is_empty());
 
         // Overrides with villages only
         let village_overrides = vec!["minecraft:villages".to_string()];
@@ -312,9 +316,7 @@ mod tests {
             None,
             Some(&village_overrides),
         );
-        let enabled = filtered_gen
-            .enabled_structure_sets
-            .expect("should have enabled structure set filter");
+        let enabled = filtered_gen.enabled_structure_sets;
         let village_idx = StructureSet::NAMES
             .iter()
             .position(|&n| n == "villages")
@@ -325,6 +327,40 @@ mod tests {
             .unwrap();
         assert!(enabled.contains(&village_idx));
         assert!(!enabled.contains(&mineshaft_idx));
+
+        let void_source = crate::world_info::BiomeSource::Fixed {
+            biome: "minecraft:the_void".to_string(),
+            biome_type: "minecraft:fixed".to_string(),
+        };
+        let void_gen = VanillaGenerator::new_with_all_settings(
+            seed,
+            Dimension::OVERWORLD,
+            None,
+            Some(&void_source),
+            Some(&village_overrides),
+        );
+        assert!(void_gen.enabled_structure_sets.is_empty());
+    }
+
+    #[test]
+    fn other_dimensions_do_not_calculate_overworld_strongholds() {
+        for dimension in [Dimension::THE_NETHER, Dimension::THE_END] {
+            let generator = VanillaGenerator::new(Seed(42), dimension);
+            let world_gen = WorldGenerator::Noise(Box::new(generator));
+            let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+            let WorldGenerator::Noise(generator) = &world_gen else {
+                unreachable!()
+            };
+            chunk.step_to_biomes(generator);
+            chunk.set_structure_starts(generator);
+            chunk.set_structure_references(generator);
+            assert!(
+                generator
+                    .global_structure_cache
+                    .get_stronghold_chunks()
+                    .is_empty()
+            );
+        }
     }
 
     #[test]

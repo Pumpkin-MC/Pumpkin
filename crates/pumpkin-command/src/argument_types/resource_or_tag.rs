@@ -1,4 +1,4 @@
-use pumpkin_data::structures::StructureSet;
+use pumpkin_data::structures::StructureKeys;
 use pumpkin_data::tag::{self, RegistryKey};
 use pumpkin_data::translation;
 use pumpkin_util::identifier::Identifier;
@@ -46,6 +46,24 @@ impl ResourceOrTag {
         }
     }
 
+    /// The ids of the biomes this names: the entry itself or the tag's members.
+    #[must_use]
+    pub fn biome_ids(&self) -> Vec<u8> {
+        use pumpkin_data::biome::Biome;
+        match self {
+            Self::Resource(id) => Biome::from_name(id.path())
+                .map(|b| b.id)
+                .into_iter()
+                .collect(),
+            Self::Tag(id) => tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
+                .into_iter()
+                .flatten()
+                .filter_map(|name| Biome::from_name(name))
+                .map(|b| b.id)
+                .collect(),
+        }
+    }
+
     fn from_string_reader(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
         if reader.peek() == Some('#') {
             reader.skip();
@@ -62,14 +80,11 @@ fn suggest_for_registry(registry: &Identifier, builder: SuggestionsBuilder) -> S
     let tag_names = |key: RegistryKey| tag::get_latest_map(key).keys().map(|tag| format!("#{tag}"));
 
     if *registry == STRUCTURE_REGISTRY {
-        // The generator models vanilla's structure sets, so those are the
-        // locatable names. There is no structure tag data to offer.
+        let structures = StructureKeys::all_names()
+            .iter()
+            .map(|&name| name.to_string());
         builder
-            .filter_and_suggest_iter(
-                StructureSet::NAMES
-                    .iter()
-                    .map(|name| format!("minecraft:{name}")),
-            )
+            .filter_and_suggest_iter(structures.chain(tag_names(RegistryKey::WorldgenStructure)))
             .build()
     } else if *registry == BIOME_REGISTRY {
         let biomes = pumpkin_data::biome::Biome::ALL

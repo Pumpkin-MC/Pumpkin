@@ -18,10 +18,26 @@ pub struct EntityType {
     pub hurt_sound: Option<String>,
     /// Static death sound event name when it is safely derivable from extracted entity data.
     pub death_sound: Option<String>,
+    /// Vanilla `getSoundSource`; missing only for the player.
+    pub sound_source: Option<String>,
+    /// Vanilla `getMovementEmission`; missing only for the player, whose emission depends on its state.
+    pub movement_emission: Option<MovementEmission>,
+    /// Vanilla `getSwimSound`.
+    pub swim_sound: Option<String>,
+    /// Vanilla `getSwimSplashSound`.
+    pub swim_splash_sound: Option<String>,
+    /// Vanilla `getSwimHighSpeedSplashSound`.
+    pub swim_high_speed_splash_sound: Option<String>,
+    /// Vanilla `getFallSounds().small()`, living entities only.
+    pub small_fall_sound: Option<String>,
+    /// Vanilla `getFallSounds().big()`, living entities only.
+    pub big_fall_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
     pub mob: Option<bool>,
+    /// Whether the vanilla entity implements the Enemy marker interface.
+    pub is_enemy: bool,
     /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
     /// Whether this entity can be summoned by the `/summon` command.
@@ -48,6 +64,26 @@ pub struct EntityType {
     pub spawn_dimensions_scale: f32,
     /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum MovementEmission {
+    None,
+    Sounds,
+    Events,
+    All,
+}
+
+impl ToTokens for MovementEmission {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Self::None => quote! { MovementEmission::None },
+            Self::Sounds => quote! { MovementEmission::Sounds },
+            Self::Events => quote! { MovementEmission::Events },
+            Self::All => quote! { MovementEmission::All },
+        });
+    }
 }
 
 /// Spawn restrictions controlling where an entity is allowed to naturally spawn.
@@ -120,19 +156,14 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
-        let death_sound = if let Some(sound_name) = entity.death_sound.as_ref() {
-            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
-            quote! { Some(Sound::#sound_ident) }
-        } else {
-            quote! { None }
-        };
-
-        let hurt_sound = if let Some(sound_name) = entity.hurt_sound.as_ref() {
-            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
-            quote! { Some(Sound::#sound_ident) }
-        } else {
-            quote! { None }
-        };
+        let death_sound = optional_sound(entity.death_sound.as_ref());
+        let hurt_sound = optional_sound(entity.hurt_sound.as_ref());
+        let swim_sound = optional_sound(entity.swim_sound.as_ref());
+        let swim_splash_sound = optional_sound(entity.swim_splash_sound.as_ref());
+        let swim_high_speed_splash_sound =
+            optional_sound(entity.swim_high_speed_splash_sound.as_ref());
+        let small_fall_sound = optional_sound(entity.small_fall_sound.as_ref());
+        let big_fall_sound = optional_sound(entity.big_fall_sound.as_ref());
 
         let spawn_restriction_location = match entity.spawn_restriction.location {
             SpawnLocation::InLava => quote! {SpawnLocation::InLava},
@@ -180,7 +211,26 @@ impl ToTokens for NamedEntityType<'_> {
             !(entity.limit_per_chunk.is_none() && name != "player"),
             "missing field 'mob', entity name {name}"
         );
+        assert!(
+            !(entity.movement_emission.is_none() && name != "player"),
+            "missing field 'movement_emission', entity name {name}"
+        );
+        let movement_emission = entity.movement_emission.unwrap_or(MovementEmission::All);
+        assert!(
+            !(entity.sound_source.is_none() && name != "player"),
+            "missing field 'sound_source', entity name {name}"
+        );
+        // The player overrides `sound_source` in code, like `movement_emission`.
+        let sound_source = format_ident!(
+            "{}",
+            entity
+                .sound_source
+                .as_deref()
+                .unwrap_or("NEUTRAL")
+                .to_pascal_case()
+        );
         let mob = entity.mob.unwrap_or(false);
+        let is_enemy = entity.is_enemy;
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
 
@@ -199,8 +249,16 @@ impl ToTokens for NamedEntityType<'_> {
                 experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
                 death_sound: #death_sound,
+                sound_source: SoundCategory::#sound_source,
+                movement_emission: #movement_emission,
+                swim_sound: #swim_sound,
+                swim_splash_sound: #swim_splash_sound,
+                swim_high_speed_splash_sound: #swim_high_speed_splash_sound,
+                small_fall_sound: #small_fall_sound,
+                big_fall_sound: #big_fall_sound,
                 attackable: #attackable,
                 mob: #mob,
+                is_enemy: #is_enemy,
                 saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
@@ -218,6 +276,16 @@ impl ToTokens for NamedEntityType<'_> {
             }
         });
     }
+}
+
+fn optional_sound(name: Option<&String>) -> TokenStream {
+    name.map_or_else(
+        || quote! { None },
+        |name| {
+            let ident = format_ident!("{}", name.to_pascal_case());
+            quote! { Some(Sound::#ident) }
+        },
+    )
 }
 
 /// Generates the `TokenStream` for the `EntityType` struct, `MobCategory`, `SpawnRestriction`,
@@ -260,7 +328,7 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
-        use crate::sound::Sound;
+        use crate::sound::{Sound, SoundCategory};
         use pumpkin_util::HeightMap;
         use pumpkin_util::math::boundingbox::BoundingBox;
         use pumpkin_util::math::vector3::Vector3;
@@ -273,8 +341,16 @@ pub fn build() -> TokenStream {
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
             pub death_sound: Option<Sound>,
+            pub sound_source: SoundCategory,
+            pub movement_emission: MovementEmission,
+            pub swim_sound: Option<Sound>,
+            pub swim_splash_sound: Option<Sound>,
+            pub swim_high_speed_splash_sound: Option<Sound>,
+            pub small_fall_sound: Option<Sound>,
+            pub big_fall_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
+            pub is_enemy: bool,
             pub saveable: bool,
             pub limit_per_chunk: i32,
             pub summonable: bool,
@@ -322,6 +398,32 @@ pub fn build() -> TokenStream {
             }
         }
 
+
+        /// Vanilla `Entity.MovementEmission`: whether moving plays step sounds, emits game events, or both.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum MovementEmission {
+            None,
+            Sounds,
+            Events,
+            All,
+        }
+
+        impl MovementEmission {
+            #[must_use]
+            pub const fn emits_anything(self) -> bool {
+                !matches!(self, Self::None)
+            }
+
+            #[must_use]
+            pub const fn emits_sounds(self) -> bool {
+                matches!(self, Self::Sounds | Self::All)
+            }
+
+            #[must_use]
+            pub const fn emits_events(self) -> bool {
+                matches!(self, Self::Events | Self::All)
+            }
+        }
 
         #[derive(Debug, Clone)]
         pub struct SpawnRestriction {

@@ -1,9 +1,0 @@
-{
-  "asset_id": "minecraft:wither",
-  "height": 2,
-  "title": {
-    "color": "yellow",
-    "translate": "painting.minecraft.wither.title"
-  },
-  "width": 2
-}

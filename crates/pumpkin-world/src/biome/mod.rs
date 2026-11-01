@@ -1,3 +1,4 @@
+use rustc_hash::FxHashSet;
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
@@ -111,6 +112,35 @@ impl BiomeSupplier for ActiveBiomeSupplier {
 }
 
 impl ActiveBiomeSupplier {
+    #[must_use]
+    pub fn possible_biomes(&self) -> FxHashSet<u16> {
+        fn collect(tree: &BiomeTree, biomes: &mut FxHashSet<u16>) {
+            match tree {
+                BiomeTree::Leaf { biome, .. } => {
+                    biomes.insert(u16::from(biome.id));
+                }
+                BiomeTree::Branch { nodes, .. } => {
+                    for node in *nodes {
+                        collect(node, biomes);
+                    }
+                }
+            }
+        }
+
+        match self {
+            Self::MultiNoise(supplier) => {
+                let mut biomes = FxHashSet::default();
+                collect(supplier.source, &mut biomes);
+                biomes
+            }
+            Self::End(_) => end::TheEndBiomeSupplier::POSSIBLE_BIOMES
+                .iter()
+                .map(|biome| u16::from(biome.id))
+                .collect(),
+            Self::Fixed(supplier) => std::iter::once(u16::from(supplier.biome.id)).collect(),
+        }
+    }
+
     #[must_use]
     pub fn from_biome_source(
         source: Option<&crate::world_info::BiomeSource>,

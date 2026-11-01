@@ -1,7 +1,5 @@
 // Last verified for v2169
 
-use std::io::{Error, ErrorKind, Read, Write};
-
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -10,40 +8,28 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Bidirectional packet managing player respawning and client spawn readiness.
 #[derive(PacketRead, PacketWrite)]
 #[packet(45)]
 pub struct SRespawn {
+    /// World coordinates where the player is to respawn.
     pub position: Vector3<f32>,
+    /// Stage of the respawn lifecycle.
     pub state: RespawnState,
+    /// Runtime entity ID of the respawning player.
     pub player_runtime_id: VarULong,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Lifecycle stage for player respawning.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketRead, PacketWrite)]
 #[repr(u8)]
 pub enum RespawnState {
+    /// Server is searching for a valid spawn position point.
     SearchingForSpawn,
+    /// Server indicates client is ready to spawn at target coordinates.
     ReadyToSpawn,
+    /// Client confirms it has loaded the surrounding world and is ready to spawn.
     ClientReadyToSpawn,
-}
-
-impl PacketRead for RespawnState {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match u8::read(reader)? {
-            0 => Ok(Self::SearchingForSpawn),
-            1 => Ok(Self::ReadyToSpawn),
-            2 => Ok(Self::ClientReadyToSpawn),
-            state => Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("invalid Bedrock respawn state {state}"),
-            )),
-        }
-    }
-}
-
-impl PacketWrite for RespawnState {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
 }
 
 #[cfg(test)]

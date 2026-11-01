@@ -10,6 +10,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::io::Error;
 
+/// Sent by the server to update metadata and Molang properties of an entity (e.g. name tags, fire, scale).
 #[derive(PacketWrite)]
 #[packet(39)]
 pub struct CSetActorData {
@@ -23,6 +24,8 @@ pub struct CSetActorData {
     pub tick: VarULong,
 }
 
+/// A map of metadata property keys to their typed values.
+#[derive(Clone)]
 pub struct SyncedActorDataList(pub HashMap<u32, MetadataValue>);
 
 impl Default for SyncedActorDataList {
@@ -66,6 +69,16 @@ impl SyncedActorDataList {
                 current_value & !(1i64 << index)
             };
             self.0.insert(key, MetadataValue::Int64(new_value));
+        }
+    }
+
+    /// Sets an actor flag by index, automatically targeting [`entity_data_key::FLAGS`] for flags
+    /// 0..63 and [`entity_data_key::FLAGS_TWO`] for flags 64..127.
+    pub fn set_actor_flag(&mut self, flag_index: u32, value: bool) {
+        if flag_index < 64 {
+            self.set_flag(entity_data_key::FLAGS, flag_index as u8, value);
+        } else {
+            self.set_flag(entity_data_key::FLAGS_TWO, (flag_index - 64) as u8, value);
         }
     }
 }
@@ -437,5 +450,35 @@ mod tests {
         assert!(!metadata.0.contains_key(&entity_data_key::FLAGS));
         assert!(!metadata.0.contains_key(&entity_data_key::FLAGS_TWO));
         assert!(!metadata.0.contains_key(&entity_data_key::PLAYER_FLAGS));
+    }
+
+    #[test]
+    fn actor_flag_sets_correct_flags_key() {
+        use super::{MetadataValue, entity_data_flag};
+        let mut metadata = SyncedActorDataList::new();
+
+        metadata.set_actor_flag(entity_data_flag::BABY, true);
+        metadata.set_actor_flag(entity_data_flag::SHAKING, true);
+
+        if let Some(MetadataValue::Int64(flags)) = metadata.0.get(&entity_data_key::FLAGS) {
+            assert_eq!(
+                *flags & (1i64 << entity_data_flag::BABY),
+                1i64 << entity_data_flag::BABY
+            );
+            assert_eq!(
+                *flags & (1i64 << entity_data_flag::SHAKING),
+                1i64 << entity_data_flag::SHAKING
+            );
+        } else {
+            panic!("FLAGS key missing");
+        }
+
+        // Flag 64 (LAYING_DOWN) belongs to FLAGS_TWO
+        metadata.set_actor_flag(entity_data_flag::LAYING_DOWN, true);
+        if let Some(MetadataValue::Int64(flags_two)) = metadata.0.get(&entity_data_key::FLAGS_TWO) {
+            assert_eq!(*flags_two & (1i64 << 0), 1i64 << 0);
+        } else {
+            panic!("FLAGS_TWO key missing");
+        }
     }
 }

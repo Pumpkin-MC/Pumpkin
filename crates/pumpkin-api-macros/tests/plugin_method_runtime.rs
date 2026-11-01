@@ -1,5 +1,5 @@
-use pumpkin::plugin::Plugin;
 use pumpkin_api_macros::{plugin_impl, plugin_method};
+use pumpkin_core::plugin::Plugin;
 
 #[plugin_method]
 async fn on_ipc_message(&self, _sender: &str, _message: &[u8]) -> Result<Vec<u8>, String> {

@@ -1,13 +1,9 @@
-use std::io::{Error, Write};
-
 use pumpkin_util::GameMode;
 
-use crate::{
-    codec::{var_int::VarInt, var_long::VarLong},
-    serial::PacketWrite,
-};
+use crate::{codec::var_long::VarLong, serial::PacketWrite};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Operating system or client platform identifier reported by the client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
 pub enum BuildPlatform {
     Unknown = -1,
@@ -27,14 +23,10 @@ pub enum BuildPlatform {
     Linux = 15,
 }
 
-impl PacketWrite for BuildPlatform {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i32).write(writer)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Game mode identifier used in Bedrock protocol packets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i32)]
+#[serial(varint)]
 pub enum GameType {
     Unknown = -1,
     Survival = 0,
@@ -43,12 +35,6 @@ pub enum GameType {
     Default = 5,
     Spectator = 6,
     //WorldDefault = 0,
-}
-
-impl PacketWrite for GameType {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(*self as i32).write(writer)
-    }
 }
 
 impl From<GameMode> for GameType {
@@ -62,15 +48,21 @@ impl From<GameMode> for GameType {
     }
 }
 
+/// Serialized abilities data containing permissions and ability bitmasks for a player.
 #[derive(Clone, PacketWrite)]
 pub struct SerializedAbilitiesData {
+    /// Unique entity ID of the target player.
     pub target_player_raw_id: i64,
+    /// Permission level shown in the player list.
     pub player_permissions: PlayerPermissionLevel,
+    /// Level determining what command categories the player can invoke.
     pub command_permissions: CommandPermissionLevel,
+    /// Ability layers specifying capabilities (flight, invulnerability, etc.).
     pub layers: Vec<SerializedAbilitiesDataSerializedLayer>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Player permission level representing their world access rights.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(i8)]
 pub enum PlayerPermissionLevel {
     Visitor = 0,
@@ -79,13 +71,8 @@ pub enum PlayerPermissionLevel {
     Custom = 3,
 }
 
-impl PacketWrite for PlayerPermissionLevel {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i8).write(writer)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Command permission level determining allowed command execution scope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PacketWrite)]
 #[repr(u8)]
 pub enum CommandPermissionLevel {
     Any = 0,
@@ -111,28 +98,36 @@ impl ToString for CommandPermissionLevel {
     }
 }
 
-impl PacketWrite for CommandPermissionLevel {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as u8).write(writer)
-    }
-}
-
+/// A single ability layer defining movement speeds and allowed action bitflags.
 #[derive(Default, Clone, PacketWrite)]
 pub struct SerializedAbilitiesDataSerializedLayer {
+    /// Layer type index (such as base, spectator, or creative).
     pub serialized_layer: u16,
+    /// Bitmask of abilities configured for this layer.
     pub abilities_set: u32,
+    /// Current boolean values for the configured abilities bitmask.
     pub ability_value: u32,
+    /// Flying speed multiplier.
     pub fly_speed: f32,
+    /// Vertical flying speed multiplier.
     pub vertical_fly_speed: f32,
+    /// Walking speed multiplier.
     pub walk_speed: f32,
 }
 
+/// Describes an attachment link between two entities, such as a player riding a vehicle.
 #[derive(Default, Clone, PacketWrite)]
 pub struct ActorLink {
+    /// Unique entity ID of the vehicle / entity being ridden.
     pub ridden_unique_id: VarLong,
+    /// Unique entity ID of the passenger / rider.
     pub rider_unique_id: VarLong,
+    /// Type of link (e.g. 0 for passenger, 1 for vehicle).
     pub link_type: u8,
+    /// Whether the link takes effect immediately without smooth transition.
     pub immediate: bool,
+    /// Whether the link was initiated by the passenger entity.
     pub rider_initiated: bool,
+    /// Rotational velocity applied to the vehicle.
     pub vehicle_angular_velocity: f32,
 }

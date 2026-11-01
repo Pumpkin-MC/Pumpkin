@@ -223,6 +223,15 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs grindstone experience drop and plays grindstone sound events.
     fn use_grindstone(&self, _xp_amount: i32) {}
+
+    /// Called when the player successfully enchants an item in an enchanting table.
+    fn on_enchanted_item(&self, _levels: i32) {}
+
+    /// Called when the player takes a crafted item from a crafting result slot.
+    fn on_recipe_crafted(&self, _item: &ItemStack) {}
+
+    /// Called when the player takes a brewed potion from a brewing stand potion slot.
+    fn on_brewed_potion(&self) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
@@ -675,7 +684,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot = self.get_behaviour().slots[current_index as usize].clone();
                 let mut slot_stack = slot.get_stack();
 
-                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
+                if self.get_behaviour().can_put_in_slot(current_index as usize)
+                    && !slot_stack.is_empty()
+                    && slot_stack.are_items_and_components_equal(stack)
+                {
                     let combined_count = slot_stack.item_count + stack.item_count;
                     let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack);
                     if combined_count <= max_slot_count {
@@ -714,7 +726,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot = self.get_behaviour().slots[current_index as usize].clone();
                 let slot_stack = slot.get_stack();
 
-                if slot_stack.is_empty() && slot.can_insert(stack) {
+                if self.get_behaviour().can_put_in_slot(current_index as usize)
+                    && slot_stack.is_empty()
+                    && slot.can_insert(stack)
+                {
                     let max_count = slot.get_max_item_count_for_stack(stack);
                     slot.set_stack(stack.split(max_count.min(stack.item_count)));
                     slot.mark_dirty();
@@ -783,7 +798,7 @@ pub trait ScreenHandler: Send + Sync {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
-            for slot in &behavior.slots {
+            for (index, slot) in behavior.slots.iter().enumerate() {
                 if to_pick_up == 0 {
                     break;
                 }
@@ -793,7 +808,7 @@ pub trait ScreenHandler: Send + Sync {
                     continue;
                 }
 
-                if !slot.allow_modification(player) {
+                if !behavior.can_grab_from_slot(index) || !slot.allow_modification(player) {
                     continue;
                 }
 
@@ -823,7 +838,8 @@ pub trait ScreenHandler: Send + Sync {
 
                 let slot = &behaviour.slots[slot_index as usize];
                 let stack = slot.get_stack();
-                if !cursor_stack.is_empty()
+                if behaviour.can_put_in_slot(slot_index as usize)
+                    && !cursor_stack.is_empty()
                     && slot.can_insert(&cursor_stack)
                     && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                     && slot.get_max_item_count_for_stack(&stack) > stack.item_count
@@ -855,7 +871,8 @@ pub trait ScreenHandler: Send + Sync {
                     };
                     let stack = slot.get_stack();
 
-                    if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                    if behaviour.can_put_in_slot(*slot_index as usize)
+                        && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                         && slot.can_insert(&cursor_stack)
                     {
                         let mut inserting_count = match drag_button {
@@ -900,6 +917,7 @@ pub trait ScreenHandler: Send + Sync {
             }
         } else if action_type == SlotActionType::Throw {
             if slot_index >= 0
+                && self.get_behaviour().can_grab_from_slot(slot_index as usize)
                 && self
                     .get_behaviour()
                     .cursor_stack
@@ -975,7 +993,9 @@ pub trait ScreenHandler: Send + Sync {
 
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-                if !slot.can_take_items(player) {
+                if !self.get_behaviour().can_grab_from_slot(slot_index as usize)
+                    || !slot.can_take_items(player)
+                {
                     return;
                 }
 
@@ -1002,6 +1022,8 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 let slot_stack = slot.get_cloned_stack();
+                let can_put = self.get_behaviour().can_put_in_slot(slot_index as usize);
+                let can_grab = self.get_behaviour().can_grab_from_slot(slot_index as usize);
                 let mut cursor_stack = self
                     .get_behaviour()
                     .cursor_stack
@@ -1011,7 +1033,7 @@ pub trait ScreenHandler: Send + Sync {
                 if click_type == MouseClick::Right {
                     let mut intercepted = false;
 
-                    if !cursor_stack.is_empty() {
+                    if can_put && slot.can_insert(&cursor_stack) && !cursor_stack.is_empty() {
                         let mut inner_slot_stack = slot.get_stack();
                         if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                             && bundle.try_insert(&mut cursor_stack) {
@@ -1020,7 +1042,7 @@ pub trait ScreenHandler: Send + Sync {
                             }
                     }
 
-                    if !intercepted && !slot_stack.is_empty()
+                    if !intercepted && can_grab && slot.can_take_items(player) && !slot_stack.is_empty()
                         && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
                             let mut inner_slot_stack = slot.get_stack();
                             if bundle.try_insert(&mut inner_slot_stack) {
@@ -1032,7 +1054,11 @@ pub trait ScreenHandler: Send + Sync {
                             }
                         }
 
-                    if !intercepted && cursor_stack.is_empty() {
+                    if !intercepted
+                        && can_grab
+                        && slot.can_take_items(player)
+                        && cursor_stack.is_empty()
+                    {
                         let mut inner_slot_stack = slot.get_stack();
                         if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                             && let Some(extracted) = bundle.try_extract() {
@@ -1042,10 +1068,13 @@ pub trait ScreenHandler: Send + Sync {
                             }
                     }
 
-                    if !intercepted && slot_stack.is_empty()
+                    if !intercepted && can_put && slot_stack.is_empty()
                         && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                         && let Some(extracted) = bundle.try_extract() {
-                            slot.set_stack(extracted);
+                            let remainder = slot.insert_stack(extracted);
+                            if !remainder.is_empty() {
+                                bundle.items.insert(0, remainder);
+                            }
                             intercepted = true;
                         }
 
@@ -1073,7 +1102,7 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 if slot_stack.is_empty() {
-                    if !cursor_stack.is_empty() {
+                    if can_put && !cursor_stack.is_empty() {
                         if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                             && (5..9).contains(&slot_index)
                         {
@@ -1089,7 +1118,7 @@ pub trait ScreenHandler: Send + Sync {
                             slot.insert_stack_count(cursor_stack.clone(), transfer_count);
                     }
                 } else if slot.can_take_items(player) {
-                    if cursor_stack.is_empty() {
+                    if cursor_stack.is_empty() && can_grab {
                         let take_count = if click_type == MouseClick::Left {
                             slot_stack.item_count
                         } else {
@@ -1110,14 +1139,19 @@ pub trait ScreenHandler: Send + Sync {
                                 player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
                             }
                         }
-                    } else if slot.can_insert(&cursor_stack) {
+                    } else if can_put && slot.can_insert(&cursor_stack) {
+                        let matching_stack =
+                            ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack);
+                        if !matching_stack && !can_grab {
+                            return;
+                        }
                         if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                             && (5..9).contains(&slot_index)
                         {
                             player.enqueue_equipment_change(equipment_slot, &cursor_stack);
                         }
 
-                        if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
+                        if matching_stack {
                             let insert_count = if click_type == MouseClick::Left {
                                 cursor_stack.item_count
                             } else {
@@ -1132,7 +1166,8 @@ pub trait ScreenHandler: Send + Sync {
                             *cursor_stack = slot_stack;
                             slot.set_stack(old_cursor_stack);
                         }
-                    } else if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
+                    } else if can_grab
+                        && ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
                     {
                         let taken = slot.try_take_stack_range(
                             slot_stack.item_count,
@@ -1160,15 +1195,20 @@ pub trait ScreenHandler: Send + Sync {
             let mut button_stack = player_inventory.get_stack(button as usize);
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack();
+            let can_put = self.get_behaviour().can_put_in_slot(slot_index as usize);
+            let can_grab = self.get_behaviour().can_grab_from_slot(slot_index as usize);
 
             if !button_stack.is_empty() || !source_stack.is_empty() {
                 if button_stack.is_empty() {
-                    if source_slot.can_take_items(player) {
+                    if can_grab && source_slot.can_take_items(player) {
                         player_inventory.set_stack(button as usize, source_stack.clone());
                         source_slot.set_stack(ItemStack::EMPTY.clone());
                         source_slot.on_take_item(player, &source_stack);
                     }
-                } else if source_stack.is_empty() && source_slot.can_insert(&button_stack) {
+                } else if can_put
+                    && source_stack.is_empty()
+                    && source_slot.can_insert(&button_stack)
+                {
                     let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
                     if button_stack.item_count > max_count {
                         source_slot.set_stack(button_stack.split(max_count));
@@ -1177,7 +1217,9 @@ pub trait ScreenHandler: Send + Sync {
                         player_inventory.set_stack(button as usize, ItemStack::EMPTY.clone());
                         source_slot.set_stack(button_stack);
                     }
-                } else if source_slot.can_take_items(player)
+                } else if can_grab
+                    && can_put
+                    && source_slot.can_take_items(player)
                     && source_slot.can_insert(&button_stack)
                 {
                     let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
@@ -1305,6 +1347,14 @@ impl ScreenHandlerBehaviour {
             allow_put_items: true,
             container_slots: 0,
         }
+    }
+
+    const fn can_put_in_slot(&self, index: usize) -> bool {
+        index >= self.container_slots || self.allow_put_items
+    }
+
+    const fn can_grab_from_slot(&self, index: usize) -> bool {
+        index >= self.container_slots || self.allow_grab_items
     }
 
     pub fn next_revision(&self) -> u32 {

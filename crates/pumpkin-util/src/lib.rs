@@ -113,7 +113,7 @@ pub enum ProfileAction {
 }
 
 /// Represents the six possible block-facing directions in a 3D world.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockDirection {
     /// Points downward along the Y axis; often used for blocks attached to the ceiling.
     Down = 0,

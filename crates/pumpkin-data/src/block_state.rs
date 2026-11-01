@@ -1,6 +1,9 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument, SOUND_TYPES};
+use crate::blocks::SuffocationPredicate;
+use crate::sound::Sound;
+use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -30,6 +33,8 @@ pub struct BlockState {
     pub outline_shapes: &'static [u16],
     /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
+    /// Index into [`SOUND_TYPES`], see [`Self::get_sound_type`].
+    pub sound_type: u8,
     /// The ID of the block entity associated with this state.
     /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
@@ -40,6 +45,20 @@ pub struct BlockState {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct BlockStateId(u16);
+
+/// Vanilla `SoundType`: the sounds a block makes when broken, stepped on, placed, hit or fallen on.
+#[derive(Debug)]
+pub struct SoundType {
+    /// The vanilla `SoundType` constant name, e.g. `WOOD`.
+    pub name: &'static str,
+    pub volume: f32,
+    pub pitch: f32,
+    pub break_sound: Sound,
+    pub step_sound: Sound,
+    pub place_sound: Sound,
+    pub hit_sound: Sound,
+    pub fall_sound: Sound,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -157,14 +176,32 @@ impl BlockState {
         }
     }
 
-    ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
-    ///Only valid for UP and DOWN sides
+    /// Checks if a face of this block provides center support (`isFaceSturdy(..., Direction, SupportType.CENTER)` in Java).
+    /// Used for placing torches, levers, redstone components, lanterns, and wall fixtures.
     #[must_use]
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
+        if self.is_side_solid(side) {
+            return true;
+        }
+
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
             _ => false,
+        }
+    }
+
+    /// `isSuffocating()` in Java. Shulker boxes don't check whether their lid is open.
+    #[must_use]
+    pub fn is_suffocating(&self) -> bool {
+        let block = self.id.to_block();
+        match block.suffocation_predicate() {
+            // Flag first: the tag check scans about 1000 IDs.
+            SuffocationPredicate::Default => {
+                self.is_full_cube() && block.has_tag(&tag::Block::MINECRAFT_CAUSES_SUFFOCATION)
+            }
+            SuffocationPredicate::Never => false,
+            SuffocationPredicate::Always => true,
         }
     }
 
@@ -182,6 +219,11 @@ impl BlockState {
             .to_block()
             .set_waterlogged(self.id, value)
             .map(BlockStateId::to_state)
+    }
+
+    #[must_use]
+    pub fn get_sound_type(&self) -> &'static SoundType {
+        &SOUND_TYPES[self.sound_type as usize]
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
@@ -315,6 +357,18 @@ impl BlockStateId {
     #[must_use]
     pub fn is_waterlogged(self) -> bool {
         self.to_block().is_waterlogged(self)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_side_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_side_solid(side)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_center_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_center_solid(side)
     }
 
     #[inline]

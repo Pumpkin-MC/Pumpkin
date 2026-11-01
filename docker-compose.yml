@@ -8,9 +8,17 @@ services:
       - "25565:25565"
       - "19132:19132/udp"
     volumes:
+      # Pumpkin runs as UID/GID 2613. On Linux hosts, make sure the data
+      # directory has the correct ownership before starting the server:
+      #   mkdir -p ./data
+      #   sudo chown -R 2613:2613 ./data
       - ./data:/pumpkin
-      # Use the following, if you want to make your config immutable
-      #- ./config:/pumpkin/config:ro
+      # As an alternative, Docker can manage the storage volume. Existing
+      # installations must migrate ./data before switching to avoid creating
+      # a new, empty world:
+      # - pumpkin-data:/pumpkin
+      # Use the following mount if you want to make your config immutable.
+      # - ./pumpkin.toml:/pumpkin/pumpkin.toml:ro
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -19,3 +27,7 @@ services:
     cap_drop:
       - ALL
     read_only: true
+
+# Uncomment this section when using the pumpkin-data volume above.
+# volumes:
+#   pumpkin-data:

@@ -460,3 +460,49 @@ fn cancelled_out_of_range_task_clears_holder_task_slot() {
         "All task slots must be null when idle"
     );
 }
+
+#[test]
+fn features_task_waits_for_higher_priority_overlapping_features_neighbor() {
+    let mut graph = DAG::default();
+    let mut chunk_map = HashMap::new();
+
+    let earlier_pos = ChunkPos::new(-1, -1);
+    let later_pos = ChunkPos::new(0, 0);
+
+    let earlier_key = graph
+        .nodes
+        .insert(Node::new(earlier_pos, StagedChunkEnum::Features));
+    let later_key = graph
+        .nodes
+        .insert(Node::new(later_pos, StagedChunkEnum::Features));
+
+    let mut earlier_holder = ChunkHolder {
+        current_stage: StagedChunkEnum::Carvers,
+        target_stage: StagedChunkEnum::Full,
+        ..Default::default()
+    };
+    earlier_holder.tasks[StagedChunkEnum::Features as usize] = earlier_key;
+    chunk_map.insert(earlier_pos, earlier_holder);
+
+    let mut later_holder = ChunkHolder {
+        current_stage: StagedChunkEnum::Carvers,
+        target_stage: StagedChunkEnum::Full,
+        ..Default::default()
+    };
+    later_holder.tasks[StagedChunkEnum::Features as usize] = later_key;
+    chunk_map.insert(later_pos, later_holder);
+
+    assert!(GenerationSchedule::is_features_order_ready(
+        &chunk_map,
+        earlier_pos,
+    ));
+    assert!(!GenerationSchedule::is_features_order_ready(
+        &chunk_map, later_pos,
+    ));
+
+    chunk_map.get_mut(&earlier_pos).unwrap().current_stage = StagedChunkEnum::Features;
+
+    assert!(GenerationSchedule::is_features_order_ready(
+        &chunk_map, later_pos,
+    ));
+}
