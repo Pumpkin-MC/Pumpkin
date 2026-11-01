@@ -124,6 +124,10 @@ impl Plugin for Fixture {
     }
 
     async fn on_load(&self, context: Context) -> Result<()> {
+        use pumpkin_plugin_api_v0_2::{
+            Item, ItemStack, ItemStackExt, PlayerEnderChestExt, TextComponent,
+            enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder,
+        };
         context.register_event_handler::<PlayerChatEvent, _>(
             ChatGuard,
             EventPriority::Normal,
@@ -132,10 +136,17 @@ impl Plugin for Fixture {
         let ping = Command::new(&["ping".to_string()], "replies when allowed").execute(Ping);
         let node = CommandNode::literal("complete").suggest(Suggest);
         context.register_command(ping.then(node), "fixture.ping");
-        use pumpkin_plugin_api_v0_2::{
-            Item, ItemStack, ItemStackExt, TextComponent, enchantment::EnchantmentBuilder,
-            recipe::ShapedRecipeBuilder,
-        };
+        let player = context
+            .get_server()
+            .get_player_by_name("fixture")
+            .ok_or("missing fixture player")?;
+        player
+            .set_all_ender_chest_items([Some(ItemStack::new("minecraft:diamond", 2))])
+            .await;
+        player.set_all_ender_chest_items([]).await;
+        player
+            .set_all_ender_chest_items(std::iter::repeat_with(|| None).take(30))
+            .await;
         ShapedRecipeBuilder::new(
             "fixture:diamond",
             ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2),
@@ -181,8 +192,8 @@ impl Plugin for Fixture {
     ) -> Result<ipc::IpcMessage> {
         if sender == "helpers" {
             use pumpkin_plugin_api_v0_2::{
-                Item, ItemStack, ItemStackExt, PersistentDataHolder, TextComponent,
-                TransformationBuilder,
+                BlockType, IntoBlockKey, IntoItemKey, Item, ItemStack, ItemStackExt,
+                PersistentDataHolder, TextComponent, TransformationBuilder,
                 enchantment::EnchantmentBuilder,
                 forms::{FormResponse, SimpleFormBuilder},
                 recipe::{Ingredient, ShapedRecipeBuilder},
@@ -190,7 +201,6 @@ impl Plugin for Fixture {
             let item = ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2);
             assert_eq!(item.get_item().await, Item::from_name("minecraft:diamond"));
             assert!(item.matches_item("diamond").await);
-            use pumpkin_plugin_api_v0_2::{BlockType, IntoBlockKey, IntoItemKey};
             assert_eq!("diamond".into_item_key(), "minecraft:diamond");
             assert_eq!("custom:item".into_item_key(), "custom:item");
             assert_eq!("stone".into_block_key(), "minecraft:stone");
@@ -254,6 +264,7 @@ impl Plugin for Fixture {
                     .x,
                 2.0
             );
+            check_cancelled_tasks()?;
             return Ok(b"helpers passed".to_vec());
         }
         // cancel_task is a synchronous import; the send is an async one and has to be awaited
@@ -262,6 +273,31 @@ impl Plugin for Fixture {
             .await
             .map_err(|()| "ipc send failed".to_string())?
     }
+}
+
+fn check_cancelled_tasks() -> Result<()> {
+    use std::sync::Arc;
+    let captured = Arc::new(());
+    let delayed = Arc::downgrade(&captured);
+    let task = schedule_delayed_task(20, move |_server| async move {
+        drop(captured);
+    });
+    pumpkin_plugin_api_v0_2::scheduler::cancel_task(task);
+    if delayed.upgrade().is_some() {
+        return Err("cancelled delayed task retains its closure".into());
+    }
+
+    let captured = Arc::new(());
+    let repeating = Arc::downgrade(&captured);
+    let task = schedule_repeating_task(20, 40, move |_server| {
+        let captured = Arc::clone(&captured);
+        async move { drop(captured) }
+    });
+    pumpkin_plugin_api_v0_2::scheduler::cancel_task(task);
+    if repeating.upgrade().is_some() {
+        return Err("cancelled repeating task retains its closure".into());
+    }
+    Ok(())
 }
 
 register_plugin!(Fixture);

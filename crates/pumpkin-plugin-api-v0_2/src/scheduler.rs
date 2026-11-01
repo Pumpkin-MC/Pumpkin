@@ -11,6 +11,7 @@
 //! * [`cancel_task`] stops future runs
 
 use std::{
+    collections::BTreeMap,
     future::Future,
     sync::{Arc, Mutex},
 };
@@ -30,6 +31,7 @@ enum TaskHandler {
 }
 
 static TASK_HANDLERS: Registry<TaskHandler> = Registry::new();
+static TASK_IDS: Mutex<BTreeMap<u32, u32>> = Mutex::new(BTreeMap::new());
 
 pub(crate) async fn dispatch(handler_id: u32, server: Server) {
     let Some(handler) = TASK_HANDLERS.get(handler_id) else {
@@ -38,6 +40,10 @@ pub(crate) async fn dispatch(handler_id: u32, server: Server) {
     let future = match &*handler {
         TaskHandler::Delayed(callback) => {
             TASK_HANDLERS.take(handler_id);
+            TASK_IDS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|_, id| *id != handler_id);
             // Another dispatch may already have cloned the entry. Only one may consume it.
             let callback = callback
                 .lock()
@@ -74,7 +80,12 @@ where
 {
     let handler: DelayedHandler = Box::new(move |server| Box::pin(handler(server)));
     let id = TASK_HANDLERS.register(Arc::new(TaskHandler::Delayed(Mutex::new(Some(handler)))));
-    scheduler::schedule_delayed_task(id, delay_ticks)
+    let task_id = scheduler::schedule_delayed_task(id, delay_ticks);
+    TASK_IDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(task_id, id);
+    task_id
 }
 
 /// Schedules a task to run after `delay_ticks` and then every `period_ticks`
@@ -98,7 +109,12 @@ where
 {
     let handler: RepeatingHandler = Box::new(move |server| Box::pin(handler(server)));
     let id = TASK_HANDLERS.register(Arc::new(TaskHandler::Repeating(handler)));
-    scheduler::schedule_repeating_task(id, delay_ticks, period_ticks)
+    let task_id = scheduler::schedule_repeating_task(id, delay_ticks, period_ticks);
+    TASK_IDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(task_id, id);
+    task_id
 }
 
 /// Cancels a scheduled task by the task id that scheduling returned
@@ -107,4 +123,11 @@ where
 /// the host cancels it
 pub fn cancel_task(task_id: u32) {
     scheduler::cancel_task(task_id);
+    let handler_id = TASK_IDS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&task_id);
+    if let Some(handler_id) = handler_id {
+        TASK_HANDLERS.take(handler_id);
+    }
 }
