@@ -193,7 +193,7 @@ pub struct PluginMetadata {
 /// The entry point of a v0.2 plugin
 ///
 /// Implement it on one type and hand that type to [`register_plugin!`]; the host creates it once
-/// and then drives it through the lifecycle in the [crate docs](crate#life-of-a-plugin)
+/// and then drives it through [`on_load`](Self::on_load), the callbacks and [`on_unload`](Self::on_unload)
 ///
 /// Only [`new`](Self::new) and [`metadata`](Self::metadata) are required
 #[allow(
