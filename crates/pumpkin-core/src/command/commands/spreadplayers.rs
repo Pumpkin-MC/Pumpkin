@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::chunk::ChunkHeightmapType;
+use rustc_hash::FxHashMap;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::vec2::Vec2ArgumentType;
@@ -15,6 +18,7 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::EntityBase;
 use crate::world::World;
 
 const DESCRIPTION: &str = "Teleports entities to random surface locations within an area.";
@@ -231,6 +235,32 @@ fn average_min_distance(piles: &[Pile]) -> f64 {
     total / count
 }
 
+/// One pile index per target, in target order, plus the number of piles.
+/// Vanilla builds the same mapping in `getNumberOfTeams` and
+/// `setPlayerPositions`: one pile per team with `respectTeams`, one per target
+/// otherwise, handed out in the order a group first appears. Only players have
+/// a team, so players without one and non-player entities share the `None` pile.
+fn assign_piles(targets: &[Arc<dyn EntityBase>], respect_teams: bool) -> (Vec<usize>, usize) {
+    if !respect_teams {
+        return ((0..targets.len()).collect(), targets.len());
+    }
+
+    let mut team_piles: FxHashMap<Option<String>, usize> = FxHashMap::default();
+    let pile_indices = targets
+        .iter()
+        .map(|target| {
+            let team = if target.get_player().is_some() {
+                target.get_team_name()
+            } else {
+                None
+            };
+            let next_index = team_piles.len();
+            *team_piles.entry(team).or_insert(next_index)
+        })
+        .collect();
+    (pile_indices, team_piles.len())
+}
+
 struct SpreadPlayersExecutor {
     has_max_height: bool,
 }
@@ -267,7 +297,7 @@ impl CommandExecutor for SpreadPlayersExecutor {
             world.dimension.height + min_y + 1
         };
 
-        let pile_count = if respect_teams { 1 } else { targets.len() };
+        let (pile_indices, pile_count) = assign_piles(&targets, respect_teams);
 
         let Some((piles, surface_ys)) =
             find_spread_positions(&world, pile_count, spread_distance, max_height, &area)
@@ -287,9 +317,9 @@ impl CommandExecutor for SpreadPlayersExecutor {
             ));
         };
 
-        for (index, target) in targets.iter().enumerate() {
-            let pile = piles[index % pile_count];
-            let y = surface_ys[index % pile_count];
+        for (target, &pile_index) in targets.iter().zip(&pile_indices) {
+            let pile = piles[pile_index];
+            let y = surface_ys[pile_index];
             target.teleport(
                 Vector3::new(pile.x.floor() + 0.5, f64::from(y), pile.z.floor() + 0.5),
                 None,
