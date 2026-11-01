@@ -113,7 +113,7 @@ impl ClientPacket for CPlayerChatMessage {
             FilterType::FullyFiltered => write.write_var_int(&VarInt(1))?,
             FilterType::PartiallyFiltered(bit_set) => {
                 write.write_var_int(&VarInt(2))?;
-                bit_set.encode(&mut write)?;
+                bit_set.encode_with_version(&mut write, version)?;
             }
         }
         write.write_var_int(&self.chat_type)?;

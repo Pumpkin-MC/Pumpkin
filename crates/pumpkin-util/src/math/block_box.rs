@@ -226,10 +226,32 @@ impl BlockBox {
         self.max.x >= min_x && self.min.x <= max_x && self.max.z >= min_z && self.min.z <= max_z
     }
 
+    /// Returns the center of this box matching vanilla `BoundingBox.getCenter()`.
+    #[must_use]
+    pub const fn get_center(&self) -> Vector3<i32> {
+        Vector3::new(
+            self.min.x + (self.max.x - self.min.x + 1) / 2,
+            self.min.y + (self.max.y - self.min.y + 1) / 2,
+            self.min.z + (self.max.z - self.min.z + 1) / 2,
+        )
+    }
+
+    /// Returns the number of blocks along the X axis.
+    #[must_use]
+    pub const fn get_block_count_x(&self) -> i32 {
+        self.max.x - self.min.x + 1
+    }
+
     /// Returns the number of blocks along the Y axis.
     #[must_use]
     pub const fn get_block_count_y(&self) -> i32 {
         self.max.y - self.min.y + 1
+    }
+
+    /// Returns the number of blocks along the Z axis.
+    #[must_use]
+    pub const fn get_block_count_z(&self) -> i32 {
+        self.max.z - self.min.z + 1
     }
 
     /// Expands this box to encompass another box.

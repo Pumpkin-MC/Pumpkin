@@ -1,4 +1,4 @@
-use std::{error, sync::Arc};
+use std::{error, fs::File, path::Path, time::Duration};
 
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
@@ -6,6 +6,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
+pub mod converter;
 pub mod file_manager;
 
 pub(crate) async fn run_blocking<T, F>(task: F) -> Result<T, tokio::task::JoinError>
@@ -74,62 +75,136 @@ where
         chunks_data: Vec<(Vector2<i32>, Self::Data)>,
     ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send + 'a;
 
-    /// Tells the `ChunkIO` that these chunks are currently loaded in memory
-    fn watch_chunks<'a>(
-        &'a self,
-        folder: &'a LevelFolder,
-        chunks: &'a [Vector2<i32>],
-    ) -> impl Future<Output = ()> + Send + 'a;
+    /// Writes regions whose staged chunks have waited long enough and drops idle regions
+    /// from the cache.
+    fn flush_due(&self) -> impl Future<Output = ()> + Send + '_;
 
-    /// Tells the `ChunkIO` that these chunks are no longer loaded in memory
-    fn unwatch_chunks<'a>(
-        &'a self,
-        folder: &'a LevelFolder,
-        chunks: &'a [Vector2<i32>],
-    ) -> impl Future<Output = ()> + Send + 'a;
-
-    /// Tells the `ChunkIO` that no more chunks are loaded in memory
-    fn clear_watched_chunks(&self) -> impl Future<Output = ()> + Send + '_;
-
-    /// Ensure that all ongoing operations are finished
-    fn block_and_await_ongoing_tasks(&self) -> impl Future<Output = ()> + Send + '_;
+    /// Writes every staged chunk and syncs the region files.
+    fn flush_all(&self) -> impl Future<Output = ()> + Send + '_;
 }
 
-/// Trait to serialize and deserialize the chunk data to and from bytes.
+/// One open region file (32x32 chunks) of a storage format.
 ///
-/// The `Data` type is the type of the data that will be updated or serialized/deserialized
-/// like `ChunkData` or `EntityData`
-pub trait ChunkSerializer: Send + Sync + Default + 'static {
-    type Data: Send + Sync + Sized + Dirtiable;
-    type WriteBackend;
+/// Every method except `file_name` does blocking I/O or compression, so callers run them off the
+/// async workers.
+pub trait RegionFile: Send + Sync + Sized + 'static {
+    type Config: Clone + Send + Sync + 'static;
+    /// A chunk prepared for `stage_chunk`, built in parallel by `encode_chunk`.
+    type Encoded: Send + 'static;
+    /// A chunk as `read_chunk` found it, turned into NBT in parallel by `decode_chunk`.
+    type Raw: Send + 'static;
 
-    type ChunkConfig;
+    /// How long staged chunks may wait before the region is written out. Formats that rewrite
+    /// the whole file on every write wait so several saves share one write.
+    const FLUSH_DELAY: Duration;
+    /// The most regions kept open per storage.
+    const CACHE_CAPACITY: usize;
 
-    /// Get the key for the chunk (like the file name)
-    fn get_chunk_key(chunk: &Vector2<i32>) -> String;
+    fn file_name(region: Vector2<i32>) -> String;
 
-    fn should_write(&self, is_watched: bool) -> bool;
+    /// Opens the region at `path`. A missing file is an empty region; it is created on the
+    /// first flush.
+    fn open(path: &Path, region: Vector2<i32>) -> Result<Self, ChunkReadingError>;
 
-    /// Serialize the data to bytes.
-    fn write(
-        &self,
-        backend: &Self::WriteBackend,
-    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
+    /// Reads the chunk at `index`, or returns `None` when it was never saved.
+    fn read_chunk(&self, index: usize) -> Result<Option<Self::Raw>, ChunkReadingError>;
 
-    /// Create a new instance from bytes
-    fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
+    /// Returns the uncompressed NBT of a chunk from `read_chunk`.
+    fn decode_chunk(raw: Self::Raw) -> Result<Bytes, ChunkReadingError>;
 
-    /// Add the chunk data to the serializer
-    fn update_chunk(
-        &mut self,
-        chunk_data: Arc<Self::Data>,
-        chunk_config: &Self::ChunkConfig,
-    ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send;
+    fn serialize_chunk<D: crate::chunk::format::anvil::SingleChunkDataSerializer>(
+        chunk: &D,
+    ) -> Result<Bytes, crate::chunk::ChunkSerializingError> {
+        chunk.to_bytes()
+    }
 
-    /// Get the chunks data from the serializer
-    fn get_chunks(
-        &self,
-        chunks: Vec<Vector2<i32>>,
-        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    ) -> impl Future<Output = ()> + Send;
+    fn encode_chunk(nbt: Bytes, config: &Self::Config) -> Result<Self::Encoded, ChunkWritingError>;
+
+    /// Replaces the chunk at `index`. It is readable right away and reaches the disk on the
+    /// next `flush`.
+    fn stage_chunk(&mut self, index: usize, chunk: Self::Encoded);
+
+    fn has_staged(&self) -> bool;
+
+    /// Writes the staged chunks to disk, and syncs the file when `sync` is set.
+    fn flush(&mut self, sync: bool) -> std::io::Result<()>;
+}
+
+/// Index of a chunk inside its 32x32 region.
+#[must_use]
+pub const fn region_chunk_index(chunk: Vector2<i32>) -> usize {
+    ((chunk.y & 31) * 32 + (chunk.x & 31)) as usize
+}
+
+#[must_use]
+pub const fn region_of(chunk: Vector2<i32>) -> Vector2<i32> {
+    Vector2::new(chunk.x >> 5, chunk.y >> 5)
+}
+
+pub(crate) fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::FileExt::read_exact_at(file, buf, offset)
+    }
+    #[cfg(windows)]
+    {
+        let mut done = 0;
+        while done < buf.len() {
+            let read = std::os::windows::fs::FileExt::seek_read(
+                file,
+                &mut buf[done..],
+                offset + done as u64,
+            )?;
+            if read == 0 {
+                return Err(std::io::ErrorKind::UnexpectedEof.into());
+            }
+            done += read;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn write_all_at(file: &File, buf: &[u8], offset: u64) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::FileExt::write_all_at(file, buf, offset)
+    }
+    #[cfg(windows)]
+    {
+        let mut done = 0;
+        while done < buf.len() {
+            let written = std::os::windows::fs::FileExt::seek_write(
+                file,
+                &buf[done..],
+                offset + done as u64,
+            )?;
+            if written == 0 {
+                return Err(std::io::ErrorKind::WriteZero.into());
+            }
+            done += written;
+        }
+        Ok(())
+    }
+}
+
+/// Writes `bytes` next to `path` and renames it over `path`, so a crash leaves either the old or
+/// the new file.
+pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8], sync: bool) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let temp_path = path.with_extension("tmp");
+    let mut file = File::create(&temp_path)?;
+    std::io::Write::write_all(&mut file, bytes)?;
+    if sync {
+        file.sync_data()?;
+    }
+    drop(file);
+    std::fs::rename(temp_path, path)
+}
+
+/// Syncs a file that an earlier `write_file_atomically` wrote without syncing.
+pub(crate) fn sync_file(path: &Path) -> std::io::Result<()> {
+    // Windows needs write access to flush a file's buffers.
+    File::options().write(true).open(path)?.sync_data()
 }

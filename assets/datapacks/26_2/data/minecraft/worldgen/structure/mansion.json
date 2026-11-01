@@ -1,6 +1,0 @@
-{
-  "type": "minecraft:woodland_mansion",
-  "biomes": "#minecraft:has_structure/woodland_mansion",
-  "spawn_overrides": {},
-  "step": "surface_structures"
-}

@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{HorizontalFacing, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, WhiteWoolStairsLikeProperties},
 };
 use pumpkin_util::{
     BlockDirection,
@@ -14,10 +14,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -68,30 +65,6 @@ impl StructurePieceBase for StairsPiece {
         &mut self.piece.piece
     }
 
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1,
-            1,
-            pieces_to_process,
-            None,
-        );
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -127,7 +100,7 @@ impl StructurePieceBase for StairsPiece {
         p.generate_entrance(chunk, &box_limit, EntranceType::Opening, 1, 1, 7);
 
         // 4. Stairs Generation
-        let mut props = OakStairsLikeProperties::default(&Block::COBBLESTONE_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::COBBLESTONE_STAIRS);
         props.facing = HorizontalFacing::South;
         let stair_state = BlockState::from_id(props.to_state_id(&Block::COBBLESTONE_STAIRS));
 

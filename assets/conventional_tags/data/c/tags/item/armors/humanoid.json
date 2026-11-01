@@ -1,0 +1,20 @@
+{
+  "values": [
+    {
+      "id": "#minecraft:head_armor",
+      "required": false
+    },
+    {
+      "id": "#minecraft:chest_armor",
+      "required": false
+    },
+    {
+      "id": "#minecraft:leg_armor",
+      "required": false
+    },
+    {
+      "id": "#minecraft:foot_armor",
+      "required": false
+    }
+  ]
+}

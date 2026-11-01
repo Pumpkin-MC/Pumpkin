@@ -5,6 +5,7 @@ use crate::chunk::{
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -70,9 +71,7 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::StructureStarts => Self::StructureStart,
             ChunkStatus::StructureReferences => Self::StructureReferences,
             ChunkStatus::Biomes => Self::Biomes,
-            ChunkStatus::Noise => Self::Noise,
-            ChunkStatus::Surface => Self::Surface,
-            ChunkStatus::Carvers => Self::Carvers,
+            ChunkStatus::Terrain => Self::Noise,
             ChunkStatus::Features => Self::Features,
             ChunkStatus::InitializeLight | ChunkStatus::Light => Self::Lighting,
             ChunkStatus::Spawn => Self::Spawn,
@@ -89,9 +88,9 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::StructureStart => Self::StructureStarts,
             StagedChunkEnum::StructureReferences => Self::StructureReferences,
             StagedChunkEnum::Biomes => Self::Biomes,
-            StagedChunkEnum::Noise => Self::Noise,
-            StagedChunkEnum::Surface => Self::Surface,
-            StagedChunkEnum::Carvers => Self::Carvers,
+            StagedChunkEnum::Noise | StagedChunkEnum::Surface | StagedChunkEnum::Carvers => {
+                Self::Terrain
+            }
             StagedChunkEnum::Features => Self::Features,
             StagedChunkEnum::Lighting => Self::Light,
             StagedChunkEnum::Spawn => Self::Spawn,
@@ -217,6 +216,9 @@ impl Chunk {
         let biome_min_y = biome_coords::from_block(dimension.min_y);
         let block_sections = (0..total_sections)
             .map(|section_index| {
+                if section_index * BlockPalette::VOLUME >= proto_chunk.flat_block_map.len() {
+                    return BlockPalette::Homogeneous(BlockStateId::AIR);
+                }
                 BlockPalette::from_fn(|x, y, z| {
                     let y = section_index * BlockPalette::SIZE + y;
                     proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)

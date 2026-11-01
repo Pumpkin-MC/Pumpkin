@@ -1,0 +1,28 @@
+{
+  "values": [
+    {
+      "id": "#c:gems/amethyst",
+      "required": false
+    },
+    {
+      "id": "#c:gems/diamond",
+      "required": false
+    },
+    {
+      "id": "#c:gems/emerald",
+      "required": false
+    },
+    {
+      "id": "#c:gems/lapis",
+      "required": false
+    },
+    {
+      "id": "#c:gems/prismarine",
+      "required": false
+    },
+    {
+      "id": "#c:gems/quartz",
+      "required": false
+    }
+  ]
+}

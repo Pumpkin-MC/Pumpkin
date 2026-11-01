@@ -55,6 +55,56 @@ struct PaletteEntry {
 }
 
 impl GameTestStructureTemplate {
+    pub fn new(size: [i32; 3], blocks: Vec<GameTestStructureBlock>) -> GameTestResult<Self> {
+        if size.iter().any(|axis| *axis <= 0) {
+            return Err(invalid_structure(format!(
+                "Structure has invalid size {size:?}"
+            )));
+        }
+
+        for (index, block) in blocks.iter().enumerate() {
+            let position = block.position;
+            if position[0] < 0
+                || position[1] < 0
+                || position[2] < 0
+                || position[0] >= size[0]
+                || position[1] >= size[1]
+                || position[2] >= size[2]
+            {
+                return Err(invalid_structure(format!(
+                    "Structure block {index} position {position:?} is outside size {size:?}"
+                )));
+            }
+        }
+
+        Ok(Self { size, blocks })
+    }
+
+    pub fn empty(size: [i32; 3]) -> GameTestResult<Self> {
+        Self::new(size, Vec::new())
+    }
+
+    /// Parses synthetic empty structure identifiers of the form `[namespace:]empty_<W>x<H>x<D>`
+    /// or `[namespace:]empty` (`1x1x1`).
+    #[must_use]
+    pub fn parse_empty_id(resource_location: &str) -> Option<Self> {
+        let path = resource_location
+            .split_once(':')
+            .map_or(resource_location, |(_, path)| path);
+        if path == "empty" {
+            return Self::empty([1, 1, 1]).ok();
+        }
+        let dims = path.strip_prefix("empty_")?;
+        let mut parts = dims.split('x');
+        let width = parts.next()?.parse::<i32>().ok()?;
+        let height = parts.next()?.parse::<i32>().ok()?;
+        let depth = parts.next()?.parse::<i32>().ok()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Self::empty([width, height, depth]).ok()
+    }
+
     pub fn from_nbt(structure: &NbtCompound) -> GameTestResult<Self> {
         let size = read_vec3(structure, "size")?;
         if size.iter().any(|axis| *axis <= 0) {
@@ -165,23 +215,34 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
         let entry = entry
             .extract_compound()
             .ok_or_else(|| invalid_structure(format!("Palette entry {index} is not a compound")))?;
+        // 26.3 renamed palette keys from "Name"/"Properties" to "id"/"properties".
         let name = entry
-            .get_string("Name")
+            .get_string("id")
+            .or_else(|| entry.get_string("Name"))
             .ok_or_else(|| invalid_structure(format!("Palette entry {index} is missing 'Name'")))?;
         let block = Block::from_name(name).ok_or_else(|| {
             invalid_structure(format!("Unknown block '{name}' in structure palette"))
         })?;
 
         let mut test_mode = None;
-        let state = if let Some(properties) = entry.get_compound("Properties") {
-            let mut property_pairs = Vec::with_capacity(properties.child_tags.len());
+        let state = if let Some(properties) = entry
+            .get_compound("properties")
+            .or_else(|| entry.get_compound("Properties"))
+        {
+            let mut parsed_properties = Vec::with_capacity(properties.child_tags.len());
             for (property_name, property_value) in &properties.child_tags {
                 let property_value = property_value.extract_string().ok_or_else(|| {
                     invalid_structure(format!(
                         "Block '{name}' property '{property_name}' in palette entry {index} is not a string"
                     ))
                 })?;
-                if block == &Block::TEST_BLOCK && property_name.as_ref() == "mode" {
+                let property_key =
+                    pumpkin_data::PropertyKey::from_str(property_name.as_ref()).ok_or_else(|| {
+                        invalid_structure(format!(
+                            "Unknown block property '{property_name}' for '{name}' in palette entry {index}"
+                        ))
+                    })?;
+                if block == &Block::TEST_BLOCK && property_key == pumpkin_data::PropertyKey::Mode {
                     test_mode = Some(TestBlockMode::from_serialized_name(property_value).ok_or_else(
                         || {
                             invalid_structure(format!(
@@ -190,11 +251,17 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
                         },
                     )?);
                 }
-                property_pairs.push((property_name.as_ref(), property_value));
+                let prop = pumpkin_data::Property::from_key_value_str(property_key, property_value)
+                    .ok_or_else(|| {
+                        invalid_structure(format!(
+                            "No Pumpkin block state matches palette entry {index} for '{name}'"
+                        ))
+                    })?;
+                parsed_properties.push(prop);
             }
 
             block
-                .state_from_properties(&property_pairs)
+                .state_from_properties(&parsed_properties)
                 .ok_or_else(|| {
                     invalid_structure(format!(
                         "No Pumpkin block state matches palette entry {index} for '{name}'"

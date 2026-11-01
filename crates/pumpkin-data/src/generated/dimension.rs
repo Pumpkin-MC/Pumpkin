@@ -196,7 +196,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::Never,
             can_set_spawn: BedRuleOption::Never,
-            explodes: true,
+            explodes: false,
         },
         timelines: Some("#minecraft:in_end"),
     };
@@ -235,7 +235,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::Never,
             can_set_spawn: BedRuleOption::Never,
-            explodes: true,
+            explodes: false,
         },
         timelines: Some("#minecraft:in_nether"),
     };

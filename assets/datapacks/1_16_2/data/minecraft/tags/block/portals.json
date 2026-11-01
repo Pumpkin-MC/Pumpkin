@@ -1,8 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    "minecraft:nether_portal",
-    "minecraft:end_portal",
-    "minecraft:end_gateway"
-  ]
-}

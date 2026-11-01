@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:stonecutting",
-  "ingredient": "minecraft:cut_copper",
-  "result": {
-    "id": "minecraft:chiseled_copper"
-  }
-}

@@ -5,6 +5,7 @@ use pumpkin_nbt::compound::NbtCompound;
 
 use crate::serial::PacketWrite;
 
+/// Transmits server-defined jigsaw structure generation rules, processors, and template pools.
 #[packet(313)]
 pub struct CJigsawStructureData;
 

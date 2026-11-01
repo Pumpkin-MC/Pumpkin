@@ -16,9 +16,12 @@ const DEFAULT_SKIN_GEOMETRY: &[u8] = include_bytes!(concat!(
     "/../../assets/bedrock/player_geometry.json"
 ));
 
+/// Sent by the server to add or remove players from the in-game pause screen player list.
 #[packet(63)]
 pub struct CPlayerList {
+    /// Action type (`ACTION_ADD` = 0 to add, `ACTION_REMOVE` = 1 to remove).
     pub action: u8,
+    /// Player entries being added or removed.
     pub entries: Vec<PlayerListEntry>,
 }
 
@@ -69,6 +72,7 @@ impl PacketWrite for PlayerListEntry {
         self.entity_unique_id.write(writer)?;
         self.username.write(writer)?;
         self.xuid.write(writer)?;
+        self.skin.play_fab_id.write(writer)?;
         self.platform_chat_id.write(writer)?;
         self.build_platform.write(writer)?;
         self.skin.write(writer)?;
@@ -160,7 +164,6 @@ impl Skin {
 impl PacketWrite for Skin {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.skin_id.write(writer)?;
-        self.play_fab_id.write(writer)?;
         VarUInt(self.resource_patch.len() as u32).write(writer)?;
         writer.write_all(&self.resource_patch)?;
         self.image_width.write(writer)?;

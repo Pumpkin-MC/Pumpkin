@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "#minecraft:is_mountain",
+      "required": false
+    },
+    {
+      "id": "#c:is_mountain/peak",
+      "required": false
+    },
+    {
+      "id": "#c:is_mountain/slope",
+      "required": false
+    }
+  ]
+}

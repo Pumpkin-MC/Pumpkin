@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use pumpkin_util::math::{square_f64, vector3::Vector3};
 
 use super::biome_coords;
@@ -25,52 +27,28 @@ pub fn get_biome_blend(
     let quarters_y = (offset_y & 0b11) as f64 * 0.25;
     let quarters_z = (offset_z & 0b11) as f64 * 0.25;
 
+    let offsets = cell_offsets(seed, biome_x, biome_y, biome_z);
     let mut best_permutation = 0;
     let mut best_score = f64::INFINITY;
-    for permutation in 0..8 {
-        let should_maintain_x = (permutation & 0b100) == 0;
-        let should_maintain_y = (permutation & 0b010) == 0;
-        let should_maintain_z = (permutation & 0b001) == 0;
-
-        // If we are shifting, add 1 to the biome coords
-        let shifted_biome_x = if should_maintain_x {
-            biome_x
-        } else {
-            biome_x + 1
-        };
-        let shifted_biome_y = if should_maintain_y {
-            biome_y
-        } else {
-            biome_y + 1
-        };
-        let shifted_biome_z = if should_maintain_z {
-            biome_z
-        } else {
-            biome_z + 1
-        };
-
-        // And reflect the "quarters" across the shift
-        let shifted_quarters_x = if should_maintain_x {
+    for (permutation, offset) in offsets.iter().enumerate() {
+        let shifted_quarters_x = if (permutation & 0b100) == 0 {
             quarters_x
         } else {
             quarters_x - 1.0
         };
-        let shifted_quarters_y = if should_maintain_y {
+        let shifted_quarters_y = if (permutation & 0b010) == 0 {
             quarters_y
         } else {
             quarters_y - 1.0
         };
-        let shifted_quarters_z = if should_maintain_z {
+        let shifted_quarters_z = if (permutation & 0b001) == 0 {
             quarters_z
         } else {
             quarters_z - 1.0
         };
 
-        let permutation_score = score_permutation(
-            seed,
-            shifted_biome_x,
-            shifted_biome_y,
-            shifted_biome_z,
+        let permutation_score = score_offset(
+            offset,
             shifted_quarters_x,
             shifted_quarters_y,
             shifted_quarters_z,
@@ -108,17 +86,37 @@ pub fn get_biome_blend(
     Vector3::new(biome_x, biome_y, biome_z)
 }
 
-// This is effectively getting a random offset (+/- 0.0-0.8ish) to our biome position quarters and
-// returning a hypotenuse squared of the parts + the offset
-const fn score_permutation(
-    seed: i64,
-    x: i32,
-    y: i32,
-    z: i32,
-    x_part: f64,
-    y_part: f64,
-    z_part: f64,
-) -> f64 {
+type CellOffsets = [[f64; 3]; 8];
+type CellKey = (i64, i32, i32, i32);
+
+thread_local! {
+    static LAST_CELL_OFFSETS: RefCell<Option<(CellKey, CellOffsets)>> =
+        const { RefCell::new(None) };
+}
+
+// A column scan asks for the same biome cell four times in a row, so the corner offsets are reused.
+fn cell_offsets(seed: i64, x: i32, y: i32, z: i32) -> CellOffsets {
+    let key = (seed, x, y, z);
+    LAST_CELL_OFFSETS.with_borrow_mut(|last| {
+        if let Some((last_key, offsets)) = last
+            && *last_key == key
+        {
+            return *offsets;
+        }
+        let mut offsets = [[0.0; 3]; 8];
+        for (permutation, offset) in offsets.iter_mut().enumerate() {
+            let shifted_x = if (permutation & 0b100) == 0 { x } else { x + 1 };
+            let shifted_y = if (permutation & 0b010) == 0 { y } else { y + 1 };
+            let shifted_z = if (permutation & 0b001) == 0 { z } else { z + 1 };
+            *offset = corner_offset(seed, shifted_x, shifted_y, shifted_z);
+        }
+        *last = Some((key, offsets));
+        offsets
+    })
+}
+
+// A random offset (+/- 0.0-0.8ish) for one corner of a biome cell
+const fn corner_offset(seed: i64, x: i32, y: i32, z: i32) -> [f64; 3] {
     let mix = salt_mix(seed, x as i64);
     let mix = salt_mix(mix, y as i64);
     let mix = salt_mix(mix, z as i64);
@@ -130,8 +128,25 @@ const fn score_permutation(
     let offset_y = scale_mix(mix);
     let mix = salt_mix(mix, seed);
     let offset_z = scale_mix(mix);
+    [offset_x, offset_y, offset_z]
+}
 
-    square_f64(z_part + offset_z) + square_f64(y_part + offset_y) + square_f64(x_part + offset_x)
+// The hypotenuse squared of the quarters plus the corner's offset
+const fn score_offset(offset: &[f64; 3], x_part: f64, y_part: f64, z_part: f64) -> f64 {
+    square_f64(z_part + offset[2]) + square_f64(y_part + offset[1]) + square_f64(x_part + offset[0])
+}
+
+#[cfg(test)]
+const fn score_permutation(
+    seed: i64,
+    x: i32,
+    y: i32,
+    z: i32,
+    x_part: f64,
+    y_part: f64,
+    z_part: f64,
+) -> f64 {
+    score_offset(&corner_offset(seed, x, y, z), x_part, y_part, z_part)
 }
 
 #[inline]

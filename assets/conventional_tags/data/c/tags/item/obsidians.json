@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:obsidians/normal",
+      "required": false
+    },
+    {
+      "id": "#c:obsidians/crying",
+      "required": false
+    }
+  ]
+}

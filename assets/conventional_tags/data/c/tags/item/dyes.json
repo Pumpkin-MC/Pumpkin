@@ -1,0 +1,20 @@
+{
+  "values": [
+    "#c:dyes/white",
+    "#c:dyes/orange",
+    "#c:dyes/magenta",
+    "#c:dyes/light_blue",
+    "#c:dyes/yellow",
+    "#c:dyes/lime",
+    "#c:dyes/pink",
+    "#c:dyes/gray",
+    "#c:dyes/light_gray",
+    "#c:dyes/cyan",
+    "#c:dyes/purple",
+    "#c:dyes/blue",
+    "#c:dyes/brown",
+    "#c:dyes/green",
+    "#c:dyes/red",
+    "#c:dyes/black"
+  ]
+}

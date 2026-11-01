@@ -1,6 +1,0 @@
-{
-  "exhaustion": 0.1,
-  "effects": "thorns",
-  "message_id": "thorns",
-  "scaling": "when_caused_by_living_non_player"
-}

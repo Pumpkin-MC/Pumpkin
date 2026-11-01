@@ -1,0 +1,25 @@
+[package]
+name = "pumpkin-tester"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bytes.workspace = true
+pumpkin-config.workspace = true
+pumpkin-core.workspace = true
+pumpkin-data.workspace = true
+pumpkin-gametest.workspace = true
+pumpkin-protocol.workspace = true
+pumpkin-util.workspace = true
+rayon.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

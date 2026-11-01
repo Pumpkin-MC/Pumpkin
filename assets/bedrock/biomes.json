@@ -23,6 +23,9 @@
   "minecraft:crimson_forest": {
     "bedrock_id": 179
   },
+  "minecraft:dappled_forest": {
+    "bedrock_id": 195
+  },
   "minecraft:dark_forest": {
     "bedrock_id": 29
   },
@@ -157,6 +160,9 @@
   },
   "minecraft:stony_shore": {
     "bedrock_id": 25
+  },
+  "minecraft:sulfur_caves": {
+    "bedrock_id": 194
   },
   "minecraft:sunflower_plains": {
     "bedrock_id": 129

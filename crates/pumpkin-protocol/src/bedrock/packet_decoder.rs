@@ -1,15 +1,11 @@
 use std::io::{Cursor, Read};
 
-use async_compression::tokio::bufread::DeflateDecoder;
-use tokio::io::BufReader;
-
 use crate::{
     CompressionThreshold, MAX_PACKET_DATA_SIZE, PacketDecodeError, RawPacket,
     bedrock::BEDROCK_GAME_PACKET, codec::var_uint::VarUInt, ser::ReadingError,
 };
 
-/// Decoder: Client -> Server
-/// Supports Zlib decompression.
+/// Decodes incoming Bedrock game packets and decompresses batched network frames.
 pub struct BedrockBatchDecoder {
     compression: Option<CompressionThreshold>,
 }
@@ -21,15 +17,22 @@ impl Default for BedrockBatchDecoder {
 }
 
 impl BedrockBatchDecoder {
+    /// Creates a new uncompressed batch decoder.
     #[must_use]
     pub const fn new() -> Self {
         Self { compression: None }
     }
 
+    /// Sets the decompression threshold for incoming batch frames.
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
+    /// Validates the frame header, handles decompression if active, and extracts the raw batch payload.
+    #[expect(
+        clippy::unused_async,
+        reason = "Preserves async API compatibility for select loops"
+    )]
     pub async fn get_packet_payload(
         &mut self,
         full_packet: Vec<u8>,
@@ -66,14 +69,12 @@ impl BedrockBatchDecoder {
 
         match compression_method {
             0x00 => {
-                use tokio::io::AsyncReadExt;
                 let compressed_payload = &full_packet_payload[data_start..];
-                let mut decoder = DeflateDecoder::new(BufReader::new(compressed_payload))
+                let mut decoder = flate2::read::DeflateDecoder::new(compressed_payload)
                     .take(MAX_PACKET_DATA_SIZE as u64 + 1);
                 let mut decompressed = Vec::new();
                 decoder
                     .read_to_end(&mut decompressed)
-                    .await
                     .map_err(|e| PacketDecodeError::FailedDecompression(e.to_string()))?;
                 if decompressed.len() > MAX_PACKET_DATA_SIZE {
                     return Err(PacketDecodeError::TooLong);
@@ -94,6 +95,7 @@ impl BedrockBatchDecoder {
         }
     }
 
+    /// Reads the next game packet header and payload from a decompressed batch frame reader.
     pub fn get_game_packet(
         &mut self,
         decompressed_reader: &mut Cursor<Vec<u8>>,

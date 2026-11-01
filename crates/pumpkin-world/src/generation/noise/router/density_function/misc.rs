@@ -43,12 +43,14 @@ impl EndIsland {
                 let o = (i + m) as i64;
                 let p = (j + n) as i64;
 
-                if (o * o + p * p) > 4096 && sampler.sample_2d(o as f64, p as f64) < -0.9 {
-                    let g = (o as f32).abs().mul_add(3439.0, (p as f32).abs() * 147.0) % 13.0 + 9.0;
-                    let h = (k - m * 2) as f32;
-                    let q = (l - n * 2) as f32;
-                    let r = h.hypot(q).mul_add(-g, 100.0);
-                    let s = r.clamp(-100.0, 80.0);
+                if (o * o + p * p) > 4096 && (sampler.sample_2d(o as f64, p as f64) as f32) < -0.9 {
+                    let island_size =
+                        ((o as f32).abs() * 3439.0 + (p as f32).abs() * 147.0) % 13.0 + 9.0;
+                    let xd = (k - m * 2) as f32;
+                    let zd = (l - n * 2) as f32;
+                    let new_doffs =
+                        100.0 - (f64::from(xd * xd + zd * zd)).sqrt() as f32 * island_size;
+                    let s = new_doffs.clamp(-100.0, 80.0);
 
                     f = f.max(s);
                 }

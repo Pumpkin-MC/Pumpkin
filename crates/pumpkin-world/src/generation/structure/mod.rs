@@ -73,6 +73,24 @@ pub fn generate_structure_position(
         | StructureKeys::VillageSavanna
         | StructureKeys::VillageSnowy
         | StructureKeys::VillageTaiga
+        | StructureKeys::AbandonedCampBambooJungle
+        | StructureKeys::AbandonedCampBirchForest
+        | StructureKeys::AbandonedCampCherryGrove
+        | StructureKeys::AbandonedCampDappledForest
+        | StructureKeys::AbandonedCampFlowerForest
+        | StructureKeys::AbandonedCampForest
+        | StructureKeys::AbandonedCampMeadow
+        | StructureKeys::AbandonedCampOldGrowthBirchForest
+        | StructureKeys::AbandonedCampOldGrowthPineTaiga
+        | StructureKeys::AbandonedCampOldGrowthSpruceTaiga
+        | StructureKeys::AbandonedCampPaleGarden
+        | StructureKeys::AbandonedCampSavanna
+        | StructureKeys::AbandonedCampSnowyTaiga
+        | StructureKeys::AbandonedCampSparseJungle
+        | StructureKeys::AbandonedCampSwamp
+        | StructureKeys::AbandonedCampTaiga
+        | StructureKeys::AbandonedCampWindsweptForest
+        | StructureKeys::AbandonedCampWoodedBadlands
         | StructureKeys::AncientCity
         | StructureKeys::BastionRemnant
         | StructureKeys::PillagerOutpost

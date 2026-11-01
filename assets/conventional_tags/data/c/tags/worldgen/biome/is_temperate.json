@@ -1,0 +1,7 @@
+{
+  "values": [
+    "#c:is_temperate/overworld",
+    "#c:is_temperate/nether",
+    "#c:is_temperate/end"
+  ]
+}

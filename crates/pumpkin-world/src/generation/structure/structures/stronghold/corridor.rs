@@ -1,4 +1,7 @@
-use pumpkin_data::Block;
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{HorizontalFacing, WallTorchLikeProperties},
+};
 use pumpkin_util::{
     BlockDirection,
     math::block_box::BlockBox,
@@ -12,7 +15,7 @@ use crate::{
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
             stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                EntranceType, PendingChild, StoneBrickRandomizer, StrongholdPiece,
                 StrongholdPieceType,
             },
         },
@@ -36,7 +39,7 @@ impl CorridorPiece {
         z: i32,
         orientation: BlockDirection,
         chain_length: u32,
-    ) -> Option<Box<dyn StructurePieceBase>> {
+    ) -> Option<(Box<dyn StructurePieceBase>, PendingChild)> {
         let bounding_box = BlockBox::rotated(x, y, z, -1, -1, 0, 5, 5, 7, &orientation);
 
         if !StrongholdPiece::is_in_bounds(&bounding_box)
@@ -53,11 +56,31 @@ impl CorridorPiece {
         piece.piece.set_facing(Some(orientation));
         piece.entry_door = EntranceType::get_random(random);
 
-        Some(Box::new(Self {
-            piece,
-            left_exit: random.next_bounded_i32(2) == 0,
-            right_exit: random.next_bounded_i32(2) == 0,
-        }))
+        let left_child = random.next_bounded_i32(2) == 0;
+        let right_child = random.next_bounded_i32(2) == 0;
+
+        let child = PendingChild {
+            piece_type: StrongholdPieceType::Corridor,
+            bbox: bounding_box,
+            orientation,
+            depth: chain_length,
+            is_source: false,
+            lower_left: false,
+            upper_left: false,
+            lower_right: false,
+            upper_right: false,
+            left_child,
+            right_child,
+        };
+
+        Some((
+            Box::new(Self {
+                piece,
+                left_exit: left_child,
+                right_exit: right_child,
+            }),
+            child,
+        ))
     }
 }
 
@@ -71,56 +94,6 @@ impl StructurePieceBase for CorridorPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1,
-            1,
-            pieces_to_process,
-            None,
-        );
-
-        if self.left_exit {
-            self.piece.fill_nw_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                1,
-                2,
-                pieces_to_process,
-            );
-        }
-
-        if self.right_exit {
-            self.piece.fill_se_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                1,
-                2,
-                pieces_to_process,
-            );
-        }
     }
 
     fn place(
@@ -154,13 +127,16 @@ impl StructurePieceBase for CorridorPiece {
         p.generate_entrance(chunk, &box_limit, self.piece.entry_door, 1, 1, 0);
         p.generate_entrance(chunk, &box_limit, EntranceType::Opening, 1, 1, 6);
 
-        // let torch_east = Block::WALL_TORCH.default_state.with("facing", "east");
-        // let torch_west = Block::WALL_TORCH.default_state.with("facing", "west");
+        let mut torch_props = WallTorchLikeProperties::default(&Block::WALL_TORCH);
+        torch_props.facing = HorizontalFacing::East;
+        let torch_east = BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH));
+        torch_props.facing = HorizontalFacing::West;
+        let torch_west = BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH));
 
-        // inner.add_block_with_random_threshold(chunk, &box_limit, random, 0.1, 1, 2, 1, &torch_east);
-        // inner.add_block_with_random_threshold(chunk, &box_limit, random, 0.1, 3, 2, 1, &torch_west);
-        // inner.add_block_with_random_threshold(chunk, &box_limit, random, 0.1, 1, 2, 5, &torch_east);
-        // inner.add_block_with_random_threshold(chunk, &box_limit, random, 0.1, 3, 2, 5, &torch_west);
+        inner.maybe_generate_block(chunk, &box_limit, random, 0.1, 1, 2, 1, torch_east);
+        inner.maybe_generate_block(chunk, &box_limit, random, 0.1, 3, 2, 1, torch_west);
+        inner.maybe_generate_block(chunk, &box_limit, random, 0.1, 1, 2, 5, torch_east);
+        inner.maybe_generate_block(chunk, &box_limit, random, 0.1, 3, 2, 5, torch_west);
 
         if self.left_exit {
             inner.fill_with_outline(chunk, &box_limit, false, 0, 1, 2, 0, 3, 4, air, air);

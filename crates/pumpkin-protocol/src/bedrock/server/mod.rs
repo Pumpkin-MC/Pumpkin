@@ -1,10 +1,14 @@
+//! Serverbound Bedrock protocol packets received from clients.
+
 pub mod actor_event;
 pub mod animate;
+pub mod block_actor_data;
 pub mod block_pick_request;
 pub mod client_cache_blob_status;
 pub mod client_cache_status;
 pub mod command_request;
 pub mod container_close;
+pub mod cursor_item_drag;
 pub mod emote;
 pub mod emote_list;
 pub mod interact;
@@ -21,6 +25,7 @@ pub mod player_hotbar;
 pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod request_network_settings;
+pub mod resource_pack_chunk_request;
 pub mod resource_pack_client_response;
 pub mod respawn;
 pub mod set_local_player_as_initialized;
@@ -29,11 +34,13 @@ pub mod text;
 
 pub use actor_event::*;
 pub use animate::*;
+pub use block_actor_data::*;
 pub use block_pick_request::*;
 pub use client_cache_blob_status::*;
 pub use client_cache_status::*;
 pub use command_request::*;
 pub use container_close::*;
+pub use cursor_item_drag::*;
 pub use emote::*;
 pub use emote_list::*;
 pub use interact::{Action as InteractAction, SInteract};
@@ -50,6 +57,7 @@ pub use player_hotbar::*;
 pub use request_ability::*;
 pub use request_chunk_radius::*;
 pub use request_network_settings::*;
+pub use resource_pack_chunk_request::*;
 pub use resource_pack_client_response::*;
 pub use respawn::*;
 pub use set_local_player_as_initialized::*;

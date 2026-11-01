@@ -62,13 +62,45 @@ fn bench_chunk_deserialization(c: &mut Criterion) {
     let bytes = chunk
         .to_bytes()
         .expect("failed to serialize benchmark chunk");
+    let pump_bytes = chunk
+        .to_pump_bytes()
+        .expect("failed to serialize benchmark pump chunk");
     let position = Vector2::new(chunk.x, chunk.z);
+
+    c.bench_function("chunk_nbt_serialization", |b| {
+        b.iter(|| {
+            black_box(
+                black_box(&chunk)
+                    .to_bytes()
+                    .expect("failed to serialize benchmark chunk"),
+            );
+        });
+    });
+
+    c.bench_function("chunk_pump_serialization", |b| {
+        b.iter(|| {
+            black_box(
+                black_box(&chunk)
+                    .to_pump_bytes()
+                    .expect("failed to serialize benchmark pump chunk"),
+            );
+        });
+    });
 
     c.bench_function("chunk_nbt_deserialization", |b| {
         b.iter(|| {
             black_box(
                 ChunkData::from_bytes(black_box(&bytes), position)
                     .expect("failed to deserialize benchmark chunk"),
+            );
+        });
+    });
+
+    c.bench_function("chunk_pump_deserialization", |b| {
+        b.iter(|| {
+            black_box(
+                ChunkData::from_bytes(black_box(&pump_bytes), position)
+                    .expect("failed to deserialize benchmark pump chunk"),
             );
         });
     });

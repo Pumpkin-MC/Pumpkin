@@ -1,0 +1,97 @@
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, block_properties::CactusLikeProperties, tag};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+use crate::{
+    block::{
+        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
+        RandomTickArgs,
+    },
+    world::World,
+};
+
+#[pumpkin_block("minecraft:sugar_cane")]
+pub struct SugarCaneBlock;
+
+impl BlockBehaviour for SugarCaneBlock {
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        if !can_place_at(args.world.as_ref(), args.position) {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
+    }
+
+    fn random_tick(&self, args: RandomTickArgs<'_>) {
+        if args.world.get_block_state(&args.position.up()).is_air()
+            && !(args.world.get_block(&args.position.down()) == &Block::SUGAR_CANE
+                && args.world.get_block(&args.position.down().down()) == &Block::SUGAR_CANE)
+        {
+            let state_id = args.world.get_block_state(args.position).id;
+            let age = CactusLikeProperties::from_state_id(state_id).age;
+            if age == 15 {
+                args.world.set_block_state(
+                    &args.position.up(),
+                    args.block.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+                let props = CactusLikeProperties { age: 0 };
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
+            } else {
+                let props = CactusLikeProperties { age: age + 1 };
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                );
+            }
+        }
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !can_place_at(args.world, args.position) {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+        }
+        args.state_id
+    }
+
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
+    }
+}
+
+fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let block_below = block_accessor.get_block(&block_pos.down());
+
+    if block_below == &Block::SUGAR_CANE {
+        return true;
+    }
+
+    if block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
+        let below = block_pos.down();
+        for direction in HorizontalFacing::all() {
+            let neighbor_pos = below.offset(direction.to_offset());
+            let (block, state) = block_accessor.get_block_and_state(&neighbor_pos);
+            let fluid = World::get_fluid_from_state_id(state.id);
+            if fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+                || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            {
+                return true;
+            }
+        }
+    }
+
+    false
+}

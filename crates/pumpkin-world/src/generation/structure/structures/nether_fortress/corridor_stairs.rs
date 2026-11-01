@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{HorizontalFacing, OakFenceLikeProperties, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, OakFenceLikeProperties, WhiteWoolStairsLikeProperties},
 };
 use pumpkin_util::{BlockDirection, math::block_box::BlockBox, random::RandomGenerator};
 
@@ -10,7 +10,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector, WorldPortalExt,
-            nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
 };
@@ -58,30 +58,6 @@ impl StructurePieceBase for CorridorStairsPiece {
         &mut self.piece.piece
     }
 
-    fn fill_openings_nether(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut last: Option<NetherFortressPieceType> = None;
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            1,
-            0,
-            true,
-            pieces_to_process,
-        );
-    }
-
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -96,7 +72,7 @@ impl StructurePieceBase for CorridorStairsPiece {
         let air = Block::AIR.default_state;
 
         // Stair block facing south (going deeper into the structure)
-        let mut stair_props = OakStairsLikeProperties::default(&Block::NETHER_BRICK_STAIRS);
+        let mut stair_props = WhiteWoolStairsLikeProperties::default(&Block::NETHER_BRICK_STAIRS);
         stair_props.facing = HorizontalFacing::South;
         let stair =
             pumpkin_data::BlockState::from_id(stair_props.to_state_id(&Block::NETHER_BRICK_STAIRS));
