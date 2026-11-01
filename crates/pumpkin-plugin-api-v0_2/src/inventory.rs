@@ -9,13 +9,13 @@
 //! ```rust,ignore
 //! use pumpkin_plugin_api_v0_2::{Player, ItemStack};
 //!
-//! fn equip_player(player: &Player) {
+//! async fn equip_player(player: &Player) {
 //!     let inv = player.get_inventory();
-//!     inv.set_helmet(Some(ItemStack::new("minecraft:diamond_helmet", 1)));
-//!     inv.set_boots(Some(ItemStack::new("minecraft:diamond_boots", 1)));
+//!     inv.set_helmet(Some(ItemStack::new("minecraft:diamond_helmet", 1))).await;
+//!     inv.set_boots(Some(ItemStack::new("minecraft:diamond_boots", 1))).await;
 //!
 //!     let storage = inv.as_inventory();
-//!     storage.set_item(0, Some(ItemStack::new("minecraft:diamond_sword", 1)));
+//!     storage.set_item(0, Some(ItemStack::new("minecraft:diamond_sword", 1))).await;
 //! }
 //! ```
 //!
@@ -23,9 +23,9 @@
 //! ```rust,ignore
 //! use pumpkin_plugin_api_v0_2::gui::Gui;
 //!
-//! fn setup_gui(gui: &Gui) {
-//!     let inv = gui.get_inventory();
-//!     inv.clear();
+//! async fn setup_gui(gui: &Gui) {
+//!     let inv = gui.get_inventory().await;
+//!     inv.clear().await;
 //! }
 //! ```
 
