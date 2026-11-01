@@ -218,11 +218,31 @@ impl FormResponse {
         match serde_json::from_str::<serde_json::Value>(&s) {
             Ok(serde_json::Value::Number(number)) => number
                 .as_u64()
-                .map_or(Self::Closed, |index| Self::Simple(index as u32)),
+                .and_then(|index| u32::try_from(index).ok())
+                .map_or(Self::Closed, Self::Simple),
             Ok(serde_json::Value::Bool(value)) => Self::Modal(value),
             Ok(serde_json::Value::Array(values)) => Self::Custom(values),
             Ok(_) => Self::Closed,
             Err(_) => s.parse::<u32>().map_or(Self::Closed, Self::Simple),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FormResponse;
+
+    #[test]
+    fn simple_form_indexes_must_fit_in_u32() {
+        assert!(matches!(
+            FormResponse::parse(Some(u32::MAX.to_string())),
+            FormResponse::Simple(u32::MAX)
+        ));
+        for input in ["4294967296", "18446744073709551615", "-1", "1.5"] {
+            assert!(matches!(
+                FormResponse::parse(Some(input.into())),
+                FormResponse::Closed
+            ));
         }
     }
 }
