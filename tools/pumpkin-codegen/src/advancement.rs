@@ -1073,6 +1073,55 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
     }
 }
 
+fn opt_entity_condition_tokens(val: Option<&serde_json::Value>) -> TokenStream {
+    match val.map(generate_entity_condition_tokens) {
+        Some(t) => quote! { Some(#t) },
+        None => quote! { None },
+    }
+}
+
+/// `MinMaxBounds.Ints`: either an exact number or `{"min": .., "max": ..}`.
+fn int_bounds(val: Option<&serde_json::Value>) -> (Option<i64>, Option<i64>) {
+    match val {
+        Some(serde_json::Value::Number(n)) => (n.as_i64(), n.as_i64()),
+        Some(obj) => (
+            obj.get("min").and_then(serde_json::Value::as_i64),
+            obj.get("max").and_then(serde_json::Value::as_i64),
+        ),
+        None => (None, None),
+    }
+}
+
+/// `MobEffectsPredicate`: a map from effect id to `MobEffectInstancePredicate`.
+fn generate_mob_effects_condition_tokens(val: &serde_json::Value) -> Vec<TokenStream> {
+    let Some(map) = val.as_object() else {
+        panic!("effects_changed `effects` must be an object, got {val}");
+    };
+    map.iter()
+        .map(|(effect, pred)| {
+            let (amp_min, amp_max) = int_bounds(pred.get("amplifier"));
+            let (dur_min, dur_max) = int_bounds(pred.get("duration"));
+            let amp_min = opt_i64_tokens(amp_min);
+            let amp_max = opt_i64_tokens(amp_max);
+            let dur_min = opt_i64_tokens(dur_min);
+            let dur_max = opt_i64_tokens(dur_max);
+            let ambient = opt_bool_tokens(pred.get("ambient").and_then(serde_json::Value::as_bool));
+            let visible = opt_bool_tokens(pred.get("visible").and_then(serde_json::Value::as_bool));
+            quote! {
+                MobEffectCondition {
+                    effect: #effect,
+                    amplifier_min: #amp_min,
+                    amplifier_max: #amp_max,
+                    duration_min: #dur_min,
+                    duration_max: #dur_max,
+                    ambient: #ambient,
+                    visible: #visible,
+                }
+            }
+        })
+        .collect()
+}
+
 fn generate_location_condition_tokens(val: &serde_json::Value) -> TokenStream {
     let loc_val = val
         .get("player")
@@ -1295,7 +1344,9 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
             }
             "minecraft:hero_of_the_village" => quote! { AdvancementCondition::HeroOfTheVillage },
             "minecraft:started_riding" => quote! { AdvancementCondition::StartedRiding },
-            "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+            "minecraft:effects_changed" => quote! {
+                AdvancementCondition::EffectsChanged { player: None, effects: None, source: None }
+            },
             "minecraft:impossible" => quote! { AdvancementCondition::Impossible },
             _ => quote! { AdvancementCondition::Empty },
         };
@@ -1792,7 +1843,24 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
                 .unwrap_or("");
             quote! { AdvancementCondition::CrafterRecipeCrafted(#r) }
         }
-        "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+        "minecraft:effects_changed" => {
+            let player_tok = opt_entity_condition_tokens(val.get("player"));
+            let effects_tok = match val.get("effects") {
+                Some(effects) => {
+                    let effects = generate_mob_effects_condition_tokens(effects);
+                    quote! { Some(&[#(#effects),*]) }
+                }
+                None => quote! { None },
+            };
+            let source_tok = opt_entity_condition_tokens(val.get("source"));
+            quote! {
+                AdvancementCondition::EffectsChanged {
+                    player: #player_tok,
+                    effects: #effects_tok,
+                    source: #source_tok,
+                }
+            }
+        }
         "minecraft:spear_mobs" => {
             let cnt = val.get("count").and_then(|v| v.as_i64()).map(|v| v as i32);
             let c_tok = opt_i32_tokens(cnt);
