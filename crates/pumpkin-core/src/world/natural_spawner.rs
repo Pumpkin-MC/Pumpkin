@@ -465,24 +465,22 @@ pub fn spawn_for_chunk(
     spawn_state: &SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
     is_thundering: bool,
-) -> Vec<Arc<dyn EntityBase>> {
-    let mut entities = Vec::new();
+) {
     for category in spawn_list {
         if spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
             let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk);
             if random_pos.0.y > world.min_y {
-                entities.extend(spawn_category_for_position(
+                spawn_category_for_position(
                     category,
                     world,
                     random_pos,
                     &chunk_pos,
                     spawn_state,
                     is_thundering,
-                ));
+                );
             }
         }
     }
-    entities
 }
 
 pub fn get_random_pos_within(
@@ -688,12 +686,11 @@ pub fn spawn_category_for_position(
     chunk_pos: &Vector2<i32>,
     spawn_state: &SpawnState,
     is_thundering: bool,
-) -> Vec<Arc<dyn EntityBase>> {
-    let mut batch_buffer = Vec::new();
+) {
     let y_start = pos.0.y;
     let state = world.get_block_state(&pos);
     if state.is_solid_block() || state.is_full_cube() {
-        return batch_buffer;
+        return;
     }
 
     let mut cluster_size = 0;
@@ -796,9 +793,9 @@ pub fn spawn_category_for_position(
                         let max_group_size_reached = entity
                             .get_mob()
                             .is_some_and(|mob| mob.is_max_group_size_reached(group_size));
-                        batch_buffer.push(entity);
+                        world.spawn_entity_non_save(entity);
                         if cluster_size >= entity_type.limit_per_chunk {
-                            return batch_buffer;
+                            return;
                         }
 
                         if max_group_size_reached {
@@ -811,7 +808,6 @@ pub fn spawn_category_for_position(
             ll += 1;
         }
     }
-    batch_buffer
 }
 
 #[must_use]

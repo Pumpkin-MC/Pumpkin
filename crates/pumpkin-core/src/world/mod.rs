@@ -2617,7 +2617,7 @@ impl World {
             return;
         }
         // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
-        let entities = spawn_for_chunk(
+        spawn_for_chunk(
             self,
             chunk_pos,
             chunk,
@@ -2625,9 +2625,6 @@ impl World {
             spawn_list,
             is_thundering,
         );
-        for entity in entities {
-            self.spawn_entity_non_save(entity);
-        }
     }
 
     fn tick_thunder(self: &Arc<Self>, chunk_pos: Vector2<i32>) {
