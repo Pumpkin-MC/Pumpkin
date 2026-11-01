@@ -252,8 +252,6 @@ pub enum RecipeError {
     NoIngredients,
     /// Too many ingredients in a shapeless recipe (maximum 9).
     TooManyIngredients(usize),
-    /// No input ingredient provided for cooking recipe.
-    MissingCookingInput,
 }
 
 impl std::fmt::Display for RecipeError {
@@ -284,7 +282,6 @@ impl std::fmt::Display for RecipeError {
                     "shapeless recipe has too many ingredients ({count}, max 9)"
                 )
             }
-            Self::MissingCookingInput => write!(f, "cooking recipe requires an input ingredient"),
         }
     }
 }
@@ -440,9 +437,7 @@ impl ShapedRecipeBuilder {
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
     pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
-        let (id, recipe) = self.build()?;
-        manager.register_shaped(id, recipe).await;
-        Ok(())
+        manager.register(self).await
     }
 
     /// Registers this shaped recipe with the server.
@@ -576,9 +571,7 @@ impl ShapelessRecipeBuilder {
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
     pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
-        let (id, recipe) = self.build()?;
-        manager.register_shapeless(id, recipe).await;
-        Ok(())
+        manager.register(self).await
     }
 
     /// Registers this shapeless recipe with the server.
@@ -604,7 +597,7 @@ impl ShapelessRecipeBuilder {
 pub struct CookingRecipeBuilder {
     id: String,
     cooking_type: CookingType,
-    ingredient: Option<Ingredient>,
+    ingredient: Ingredient,
     output: ItemStack,
     cooking_time: u32,
     experience: f32,
@@ -629,7 +622,7 @@ impl CookingRecipeBuilder {
         Self {
             id: id.into(),
             cooking_type,
-            ingredient: Some(ingredient.into()),
+            ingredient: ingredient.into(),
             output,
             cooking_time,
             experience: 0.0,
@@ -696,7 +689,7 @@ impl CookingRecipeBuilder {
     /// Sets the input ingredient.
     #[must_use]
     pub fn ingredient(mut self, ingredient: impl Into<Ingredient>) -> Self {
-        self.ingredient = Some(ingredient.into());
+        self.ingredient = ingredient.into();
         self
     }
 
@@ -737,13 +730,10 @@ impl CookingRecipeBuilder {
     /// Validates the recipe configuration.
     ///
     /// # Errors
-    /// Returns [`RecipeError`] if the ID is empty or no input ingredient is set.
+    /// Returns [`RecipeError`] if the ID is empty.
     pub const fn validate(&self) -> Result<(), RecipeError> {
         if self.id.is_empty() {
             return Err(RecipeError::EmptyId);
-        }
-        if self.ingredient.is_none() {
-            return Err(RecipeError::MissingCookingInput);
         }
         Ok(())
     }
@@ -754,10 +744,7 @@ impl CookingRecipeBuilder {
     /// Returns [`RecipeError`] if validation fails.
     pub fn build(self) -> Result<(String, CookingType, CookingRecipe), RecipeError> {
         self.validate()?;
-        let ingredient = self
-            .ingredient
-            .ok_or(RecipeError::MissingCookingInput)?
-            .into();
+        let ingredient = self.ingredient.into();
         let recipe = CookingRecipe {
             ingredient,
             output: self.output,
@@ -774,9 +761,7 @@ impl CookingRecipeBuilder {
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
     pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
-        let (id, cooking_type, recipe) = self.build()?;
-        manager.register_cooking(id, cooking_type, recipe).await;
-        Ok(())
+        manager.register(self).await
     }
 
     /// Registers this cooking recipe with the server.
