@@ -5817,7 +5817,15 @@ impl Player {
     /// Add experience levels to the player.
     pub fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
-        let new_level = current_level + added_levels;
+        let new_level = current_level.saturating_add(added_levels);
+
+        // Vanilla `Player::giveExperienceLevels` clamps a negative level to 0 and
+        // resets the progress and total experience with it.
+        if new_level < 0 {
+            self.set_experience(0, 0.0, 0);
+            return;
+        }
+
         self.set_experience_level(new_level, true);
     }
 
