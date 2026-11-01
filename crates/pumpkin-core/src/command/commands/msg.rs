@@ -44,11 +44,25 @@ impl CommandExecutor for MsgExecutor {
             }
         } else {
             for target in &targets {
+                let target_name = target.get_display_name();
+
+                // Vanilla's `CommandSourceStack#sendChatMessage` echoes the outgoing message
+                // to non-player sources as well; for the console that echo is written to the
+                // log by `MinecraftServer#sendSystemMessage`.
+                if !context.source.silent && context.source.output.is_console() {
+                    crate::net::chat::log_chat_message(
+                        &msg_text,
+                        MSG_COMMAND_OUTGOING,
+                        sender_name,
+                        Some(&target_name),
+                    );
+                }
+
                 target.send_message(
                     &msg_text,
                     MSG_COMMAND_INCOMING,
                     sender_name,
-                    Some(&target.get_display_name()),
+                    Some(&target_name),
                 );
             }
         }

@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use pumpkin_data::chat_type::ChatType;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::bit_set::BitSet;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CDisguisedChatMessage, CPlayerChatMessage, FilterType};
 use pumpkin_util::text::TextComponent;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::entity::player::Player;
@@ -428,5 +430,113 @@ impl OutgoingChatMessage {
                 }
             }
         }
+    }
+}
+
+/// Resolves the chat type of a message type id.
+///
+/// [`pumpkin_data::world`]'s message type constants and [`ChatType`] are generated from the
+/// same chat type assets, in the same order, so their ids line up.
+fn chat_type_from_id(id: u8) -> Option<ChatType> {
+    ChatType::all()
+        .iter()
+        .find(|chat_type| chat_type.id() == u32::from(id))
+        .copied()
+}
+
+/// Decorates `content` with its chat type the way clients do, mirroring vanilla's
+/// `ChatType.Bound#decorate`.
+///
+/// The translation parameters are positional in `assets/datapack/data/minecraft/chat_type`,
+/// which decides whether the sender or the target name comes first.
+#[must_use]
+fn decorate_chat_message(
+    content: &TextComponent,
+    chat_type: u8,
+    sender_name: &TextComponent,
+    target_name: Option<&TextComponent>,
+) -> TextComponent {
+    let Some(chat_type) = chat_type_from_id(chat_type) else {
+        // `world::RAW` is not a registered chat type, it is sent as is.
+        return content.clone();
+    };
+
+    let content = content.clone();
+    let sender = sender_name.clone();
+
+    let with = match chat_type {
+        ChatType::MsgCommandOutgoing => vec![
+            target_name.cloned().unwrap_or_else(TextComponent::empty),
+            content,
+        ],
+        ChatType::TeamMsgCommandIncoming | ChatType::TeamMsgCommandOutgoing => vec![
+            target_name.cloned().unwrap_or_else(TextComponent::empty),
+            sender,
+            content,
+        ],
+        ChatType::Chat
+        | ChatType::EmoteCommand
+        | ChatType::MsgCommandIncoming
+        | ChatType::SayCommand => vec![sender, content],
+    };
+
+    TextComponent::translate(chat_type.translation_key(), with)
+}
+
+/// Writes a chat message to the console and `logs/latest.log`, decorated with its chat type
+/// like vanilla's `MinecraftServer#logChatMessage`.
+pub fn log_chat_message(
+    content: &TextComponent,
+    chat_type: u8,
+    sender_name: &TextComponent,
+    target_name: Option<&TextComponent>,
+) {
+    info!(
+        "{}",
+        decorate_chat_message(content, chat_type, sender_name, target_name).to_pretty_console()
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::world::{
+        CHAT, EMOTE_COMMAND, MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING, RAW, SAY_COMMAND,
+    };
+
+    fn text(value: &str) -> TextComponent {
+        TextComponent::text(value.to_string())
+    }
+
+    #[test]
+    fn chat_messages_are_decorated_for_the_log() {
+        let server = text("Server");
+        let alice = text("Alice");
+        let content = text("hello");
+
+        assert_eq!(
+            decorate_chat_message(&content, SAY_COMMAND, &server, None).get_text(),
+            "[Server] hello"
+        );
+        assert_eq!(
+            decorate_chat_message(&content, EMOTE_COMMAND, &server, None).get_text(),
+            "* Server hello"
+        );
+        assert_eq!(
+            decorate_chat_message(&content, CHAT, &alice, None).get_text(),
+            "<Alice> hello"
+        );
+        assert_eq!(
+            decorate_chat_message(&content, MSG_COMMAND_OUTGOING, &server, Some(&alice)).get_text(),
+            "You whisper to Alice: hello"
+        );
+        assert_eq!(
+            decorate_chat_message(&content, MSG_COMMAND_INCOMING, &alice, Some(&server)).get_text(),
+            "Alice whispers to you: hello"
+        );
+        assert_eq!(
+            decorate_chat_message(&content, RAW, &server, None).get_text(),
+            "hello"
+        );
     }
 }

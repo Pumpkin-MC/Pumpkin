@@ -903,6 +903,14 @@ impl Server {
         let mut event = ServerBroadcastEvent::new(message.clone(), sender_name.clone());
         self.plugin_manager.fire_blocking(self, &mut event);
         if !event.cancelled {
+            // Vanilla logs every broadcast chat message, whatever sent it
+            // (`PlayerList#broadcastChatMessage` -> `MinecraftServer#logChatMessage`).
+            crate::net::chat::log_chat_message(
+                &event.message,
+                chat_type,
+                &event.sender,
+                target_name,
+            );
             for world in self.worlds.load().iter() {
                 world.broadcast_message(&event.message, &event.sender, chat_type, target_name);
             }
