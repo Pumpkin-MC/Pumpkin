@@ -12,7 +12,7 @@ pub trait PlayerEnderChestExt {
     /// Returns all 27 slots of the player's ender chest.
     fn get_all_ender_chest_items(&self) -> Vec<Option<ItemStack>>;
 
-    /// Sets all 27 slots of the player's ender chest from an iterator.
+    /// Sets all 27 slots, clearing slots beyond the input and ignoring entries after slot 26.
     async fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>);
 }
 
@@ -24,7 +24,8 @@ impl PlayerEnderChestExt for Player {
     }
 
     async fn set_all_ender_chest_items(&self, items: impl IntoIterator<Item = Option<ItemStack>>) {
-        for (slot, item) in items.into_iter().take(27).enumerate() {
+        let padded = items.into_iter().chain(std::iter::repeat_with(|| None));
+        for (slot, item) in padded.take(27).enumerate() {
             self.set_ender_chest_item(slot as u8, item).await;
         }
     }
