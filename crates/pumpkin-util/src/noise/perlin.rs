@@ -302,6 +302,42 @@ impl Noise for PerlinNoise {
         amplitude: f32,
     ) {
         let mut corners = Corners::zero();
+        if y_scale == 0.0 && volume.size_y > 1 {
+            let y = self.offset_y;
+            let floor_y = y.floor() as i32;
+            let relative_y = (y - f64::from(floor_y)) as f32;
+            let alpha_y = smoothstep(relative_y);
+            let mut index = 0;
+            for index_z in 0..volume.size_z {
+                let z = wrap(f64::from(volume.block_z(index_z)) * xz_scale) + self.offset_z;
+                let floor_z = z.floor() as i32;
+                let relative_z = (z - f64::from(floor_z)) as f32;
+                let alpha_z = smoothstep(relative_z);
+                for index_x in 0..volume.size_x {
+                    let x = wrap(f64::from(volume.block_x(index_x)) * xz_scale) + self.offset_x;
+                    let floor_x = x.floor() as i32;
+                    let relative_x = (x - f64::from(floor_x)) as f32;
+                    let x0 = self.permute(floor_x);
+                    let x1 = self.permute(floor_x + 1);
+                    let alpha_x = smoothstep(relative_x);
+                    self.corners(
+                        x0,
+                        x1,
+                        floor_y,
+                        floor_z,
+                        relative_x,
+                        relative_z,
+                        &mut corners,
+                    );
+                    let val = amplitude * corners.lerp(alpha_x, alpha_y, alpha_z, relative_y);
+                    for out in &mut buffer[index..index + volume.size_y] {
+                        *out += val;
+                    }
+                    index += volume.size_y;
+                }
+            }
+            return;
+        }
         let mut index = 0;
         for index_z in 0..volume.size_z {
             let z = wrap(f64::from(volume.block_z(index_z)) * xz_scale) + self.offset_z;
