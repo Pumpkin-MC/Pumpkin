@@ -225,8 +225,25 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
 
+    fn get_max_air_supply(&self) -> i32 {
+        self.get_mob()
+            .map_or(breath::MAX_AIR, mob::Mob::mob_max_air_supply)
+    }
+
+    fn increase_air_supply(&self, current: i32) -> i32 {
+        self.get_mob().map_or_else(
+            || {
+                current
+                    .wrapping_add(breath::AIR_RECOVERY_RATE)
+                    .min(self.get_max_air_supply())
+            },
+            |mob| mob.mob_increase_air_supply(current),
+        )
+    }
+
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.get_entity().read_nbt_non_mut(nbt);
+        self.get_entity()
+            .read_nbt_with_max_air_supply(nbt, self.get_max_air_supply());
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
         }
@@ -5142,6 +5159,10 @@ impl Entity {
     }
 
     pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_max_air_supply(nbt, breath::MAX_AIR);
+    }
+
+    fn read_nbt_with_max_air_supply(&self, nbt: &NbtCompound, max_air_supply: i32) {
         self.read_placement_nbt(nbt);
         self.fire_ticks.store(
             i32::from(nbt.get_numeric_short("Fire").unwrap_or(0)),
@@ -5150,10 +5171,9 @@ impl Entity {
         self.on_ground
             .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
         if self.entity_type != &EntityType::PLAYER {
-            let air = i32::from(
-                nbt.get_numeric_short("Air")
-                    .unwrap_or(breath::MAX_AIR as i16),
-            );
+            let air = nbt
+                .get_numeric_short("Air")
+                .map_or(max_air_supply, i32::from);
             self.air_supply.store(air, Relaxed);
             self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }

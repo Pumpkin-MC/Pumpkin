@@ -1175,6 +1175,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        self.can_attack_base(target)
+    }
+
+    fn can_attack_base(&self, target: &dyn EntityBase) -> bool {
         let target_entity = target.get_entity();
         if target_entity.entity_type == &EntityType::GHAST {
             return false;
@@ -1348,6 +1352,16 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
+    fn mob_max_air_supply(&self) -> i32 {
+        crate::entity::breath::MAX_AIR
+    }
+
+    fn mob_increase_air_supply(&self, current: i32) -> i32 {
+        current
+            .wrapping_add(crate::entity::breath::AIR_RECOVERY_RATE)
+            .min(self.mob_max_air_supply())
+    }
+
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
     }
@@ -1414,6 +1428,21 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn has_global_tick_reach(&self) -> bool {
         false
+    }
+
+    /// Retained entities accessed regardless of their distance from the mob.
+    fn tick_links(&self) -> Vec<i32> {
+        Vec::new()
+    }
+
+    /// Additional player search range for the conservative island bound.
+    fn player_tick_range(&self) -> f64 {
+        0.0
+    }
+
+    /// Movement before normal travel that the conservative island bound must include.
+    fn additional_tick_movement(&self) -> f64 {
+        0.0
     }
 
     fn mob_considers_entity_as_ally(
