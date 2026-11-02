@@ -2259,12 +2259,25 @@ impl LivingEntity {
         }
     }
 
+    /// Applies fall damage through the mob's override when it has one.
     pub fn handle_fall_damage(
         &self,
         caller: &dyn EntityBase,
         fall_distance: f32,
-        damage_per_distance: f32,
-    ) {
+        damage_modifier: f32,
+    ) -> bool {
+        caller.get_mob().map_or_else(
+            || self.cause_fall_damage(caller, fall_distance, damage_modifier),
+            |mob| mob.cause_fall_damage(caller, fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
         let may_fly = caller.get_player().is_some_and(|player| {
             player
                 .abilities
@@ -2273,7 +2286,7 @@ impl LivingEntity {
                 .allow_flying
         });
         if may_fly || self.is_immune_to_fall_damage() {
-            return;
+            return false;
         }
 
         // Vanilla parity: the fall_damage gamerule only affects players.
@@ -2287,7 +2300,7 @@ impl LivingEntity {
                 .game_rules
                 .fall_damage
         {
-            return;
+            return false;
         }
 
         if fall_distance >= 2.0
@@ -2300,25 +2313,63 @@ impl LivingEntity {
             );
         }
 
-        let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
-        let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
+        self.propagate_fall_to_passengers(fall_distance, damage_modifier);
+        let damage = self.calculate_fall_damage(caller, fall_distance, damage_modifier);
+        if damage <= 0 {
+            return false;
+        }
+        caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
+        self.play_block_fall_sound(caller);
+        self.damage(caller, damage as f32, DamageType::FALL);
+        true
+    }
 
-        let damage = (unsafe_fall_distance * damage_per_distance).floor();
-        if damage > 0.0 {
-            caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
-            self.play_block_fall_sound(caller);
-            self.damage(caller, damage, DamageType::FALL);
+    fn calculate_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> i32 {
+        caller.get_mob().map_or_else(
+            || self.base_fall_damage(fall_distance, damage_modifier),
+            |mob| mob.calculate_fall_damage(fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn base_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        if self.is_immune_to_fall_damage() {
+            return 0;
+        }
+        let fall_power = f64::from(fall_distance) + 1.0E-6
+            - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+        (fall_power
+            * f64::from(damage_modifier)
+            * self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER))
+        .floor() as i32
+    }
+
+    pub fn propagate_fall_to_passengers(&self, fall_distance: f32, damage_modifier: f32) {
+        let passengers = self
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            if let Some(living) = passenger.get_living_entity() {
+                living.handle_fall_damage(passenger.as_ref(), fall_distance, damage_modifier);
+            }
         }
     }
 
     /// Vanilla `getFallDamageSound`.
-    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: f32) -> Sound {
+    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: i32) -> Sound {
         let (small, big) = caller.get_fall_sounds();
-        if damage as i32 > 4 { big } else { small }
+        if damage > 4 { big } else { small }
     }
 
     /// Vanilla `playBlockFallSound`: the fall sound of the block landed on.
-    fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
+    pub fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
         if self.entity.is_silent() {
             return;
         }

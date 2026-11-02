@@ -127,6 +127,13 @@ impl Animal for GoatEntity {
 }
 
 impl Mob for GoatEntity {
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.mob_entity
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+            - 10
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityGoatStep, 0.15, 1.0);
     }

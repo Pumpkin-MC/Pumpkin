@@ -5,6 +5,7 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     DataComponentImpl, EquipmentSlot, EquippableImpl, LlamaVariantImpl,
@@ -62,6 +63,7 @@ const MAX_STRENGTH: i32 = 5;
 const MAX_TEMPER: i32 = 30;
 const FOLLOW_CARAVAN_SPEED: f64 = 2.1;
 const FOLLOW_LEASH_SPEED: f64 = 2.0;
+const LLAMA_SAFE_FALL_DISTANCE: f32 = 6.0;
 const BABY_SCALE: f32 = 0.5;
 const BEDROCK_CONTAINER_SIZE: i32 = 16;
 const BEDROCK_CONTAINER_STRENGTH_MODIFIER: i32 = 3;
@@ -654,6 +656,25 @@ impl CustomSound for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        let damage = self.calculate_fall_damage(fall_distance, damage_modifier);
+        if damage <= 0 {
+            return false;
+        }
+        let living = &self.mob_entity.living_entity;
+        if fall_distance >= LLAMA_SAFE_FALL_DISTANCE {
+            living.damage(caller, damage as f32, DamageType::FALL);
+            living.propagate_fall_to_passengers(fall_distance, damage_modifier);
+        }
+        living.play_block_fall_sound(caller);
+        true
+    }
+
     fn mob_is_pushable(&self) -> bool {
         !self.get_entity().has_passengers()
     }

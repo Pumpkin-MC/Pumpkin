@@ -117,6 +117,20 @@ impl Animal for CamelEntity {
 
 // TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::cause_fall_damage(
+            self,
+            caller,
+            fall_distance,
+            damage_modifier,
+        )
+    }
+
     fn mob_is_pushable(&self) -> bool {
         !self.get_entity().has_passengers()
     }

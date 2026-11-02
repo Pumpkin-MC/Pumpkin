@@ -198,6 +198,20 @@ fn is_wood_sound_type(sound_type: &SoundType) -> bool {
 
 // TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::cause_fall_damage(
+            self,
+            caller,
+            fall_distance,
+            damage_modifier,
+        )
+    }
+
     fn mob_is_pushable(&self) -> bool {
         !self.get_entity().has_passengers()
     }

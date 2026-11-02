@@ -200,6 +200,16 @@ impl Goal for DefendWanderingTraderGoal {
 }
 
 impl Mob for TraderLlamaEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        self.llama
+            .cause_fall_damage(caller, fall_distance, damage_modifier)
+    }
+
     fn mob_is_pushable(&self) -> bool {
         self.llama.mob_is_pushable()
     }

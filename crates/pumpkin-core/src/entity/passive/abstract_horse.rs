@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::item::Item;
@@ -18,7 +19,10 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{SyncedActorDataList, ent
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use uuid::Uuid;
 
+use crate::entity::EntityBase;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::living::prevents_equipment_drop;
+use crate::entity::mob::Mob;
 use crate::entity::mob::equipment::EquipmentSlotContainer;
 use crate::entity::passive::animal::Animal;
 use crate::entity::player::Player;
@@ -334,4 +338,30 @@ pub fn generate_jump_strength(mut probability: impl FnMut() -> f64) -> f64 {
 
 pub fn generate_speed(mut probability: impl FnMut() -> f64) -> f64 {
     (f64::from(0.45f32) + probability() * 0.3 + probability() * 0.3 + probability() * 0.3) * 0.25
+}
+
+/// Fall damage for horse-like mobs: a landing sound and no hurt sound.
+pub fn cause_fall_damage(
+    mob: &dyn Mob,
+    caller: &dyn EntityBase,
+    fall_distance: f32,
+    damage_modifier: f32,
+) -> bool {
+    if fall_distance > 1.0 {
+        let sound = if mob.as_ageable().is_some_and(AgeableMob::is_baby) {
+            Sound::EntityBabyHorseLand
+        } else {
+            Sound::EntityHorseLand
+        };
+        caller.play_entity_sound(sound, 0.4, 1.0);
+    }
+    let damage = mob.calculate_fall_damage(fall_distance, damage_modifier);
+    if damage <= 0 {
+        return false;
+    }
+    let living = &mob.get_mob_entity().living_entity;
+    living.damage(caller, damage as f32, DamageType::FALL);
+    living.propagate_fall_to_passengers(fall_distance, damage_modifier);
+    living.play_block_fall_sound(caller);
+    true
 }

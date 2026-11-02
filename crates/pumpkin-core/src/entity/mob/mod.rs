@@ -1697,6 +1697,25 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        self.get_mob_entity().living_entity.cause_fall_damage(
+            caller,
+            fall_distance,
+            damage_modifier,
+        )
+    }
+
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.get_mob_entity()
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+    }
+
     fn should_check_fall_damage(&self) -> bool {
         true
     }
