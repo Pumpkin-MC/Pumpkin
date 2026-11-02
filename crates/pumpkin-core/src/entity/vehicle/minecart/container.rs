@@ -87,7 +87,10 @@ impl MinecartInventory {
             .is_some()
     }
 
-    pub(super) fn unpack_loot(self: &Arc<Self>) {
+    pub(super) fn unpack_loot(
+        self: &Arc<Self>,
+        params: &crate::world::loot::LootContextParameters<'_>,
+    ) {
         let loot_table = self
             .loot_table
             .lock()
@@ -105,7 +108,7 @@ impl MinecartInventory {
         };
 
         let inventory: Arc<dyn Inventory> = self.clone();
-        crate::world::loot::fill_chest_inventory_handle(&inventory, &table, seed);
+        crate::world::loot::fill_chest_inventory_handle(&inventory, &table, seed, params);
     }
 }
 
@@ -182,6 +185,9 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
+        if self.inventory.has_loot_table() && player.is_spectator() {
+            return None;
+        }
         let inventory: Arc<dyn Inventory> = self.inventory.clone();
         let handler = if self.hopper {
             create_hopper(sync_id, player_inventory, inventory, player)
@@ -197,24 +203,31 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
 }
 
 pub(super) fn open(
-    custom_name: Option<TextComponent>,
+    entity: &Entity,
     player: &Arc<Player>,
     inventory: &Arc<MinecartInventory>,
     title: TextComponent,
     hopper: bool,
 ) -> bool {
-    if player.is_spectator() && inventory.has_loot_table() {
-        return false;
-    }
     if !player.is_spectator() {
-        inventory.unpack_loot();
+        let world = entity.world.load();
+        inventory.unpack_loot(&crate::world::loot::LootContextParameters {
+            world: Some(&world),
+            position: Some(entity.pos.load()),
+            this_entity: Some(player.as_ref()),
+            luck: player
+                .living_entity
+                .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
+                as f32,
+            ..Default::default()
+        });
     }
 
     player
         .open_handled_screen(
             &MinecartScreenFactory {
                 inventory: inventory.clone(),
-                title: custom_name.unwrap_or(title),
+                title: entity.custom_name.load().as_ref().clone().unwrap_or(title),
                 hopper,
             },
             None,
@@ -294,7 +307,7 @@ mod tests {
         assert_eq!(deferred.get_long("LootTableSeed"), Some(1234));
         assert!(deferred.get_list("Items").is_none());
 
-        inventory.unpack_loot();
+        inventory.unpack_loot(&crate::world::loot::LootContextParameters::default());
         assert!(!inventory.is_empty());
 
         let mut unpacked = NbtCompound::new();

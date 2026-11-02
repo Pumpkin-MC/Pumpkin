@@ -1,6 +1,7 @@
 use crate::{
     net::{
-        DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig, bedrock::BedrockClient,
+        DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig,
+        bedrock::{BedrockClient, BedrockStreamingPack},
     },
     server::Server,
 };
@@ -9,10 +10,15 @@ use pumpkin_auth::jwt::AuthError;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
+        resource_pack_chunk_data::CResourcePackChunkData,
+        resource_pack_data_info::CResourcePackDataInfo,
         resource_pack_stack::CResourcePackStackPacket, resource_packs_info::CResourcePacksInfo,
         start_game::Experiments,
     },
-    server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
+    server::{
+        login::SLogin, request_network_settings::SRequestNetworkSettings,
+        resource_pack_chunk_request::SResourcePackChunkRequest,
+    },
 };
 use pumpkin_protocol::bedrock::{
     client::{resource_pack_stack::PackInstanceId, resource_packs_info::PackInfoData},
@@ -22,6 +28,7 @@ use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
@@ -69,7 +76,7 @@ async fn verify_oidc_token_path(
     let token = token.to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     if self_signed {
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let res = pumpkin_auth::jwt::verify_oidc_token_self_signed(&token)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);
@@ -84,7 +91,7 @@ async fn verify_oidc_token_path(
                     AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
                 ))?;
 
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let res = pumpkin_auth::jwt::verify_oidc_token(&token, &issuer, &jwks)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);

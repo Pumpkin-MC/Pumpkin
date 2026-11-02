@@ -54,6 +54,7 @@ default = [
     "map_color",
     "map_decoration",
     "dye_color",
+    "entity_variant",
     "block_transformer",
     "trial_spawner",
     "test_instance",
@@ -107,6 +108,7 @@ block_transformer = ["block", "sound", "world", "tag"]
 map_color = []
 map_decoration = []
 dye_color = []
+entity_variant = ["dye_color"]
 advancement = []
 bedrock_creative = []
 bedrock_biome = []

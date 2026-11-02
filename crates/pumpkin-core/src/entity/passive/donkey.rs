@@ -4,12 +4,14 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -65,11 +67,7 @@ impl DonkeyEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
@@ -137,6 +135,10 @@ impl AgeableMob for DonkeyEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for DonkeyEntity {
@@ -153,6 +155,14 @@ impl Animal for DonkeyEntity {
 }
 
 impl Mob for DonkeyEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        super::horse::play_horse_step_sound(self, pos, state, false);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -189,10 +199,6 @@ impl Mob for DonkeyEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

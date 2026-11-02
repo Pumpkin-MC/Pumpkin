@@ -67,6 +67,70 @@ impl BlockEntity for DecoratedPotBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let sherds_guard = self.sherds.lock().ok();
+        let sherds = sherds_guard.as_ref().and_then(|s| s.as_deref());
+        Some(crate::block::entities::bedrock::build_decorated_pot_actor(
+            self.position,
+            sherds,
+        ))
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        if let Ok(sherds) = self.sherds.lock()
+            && let Some(sh) = sherds.as_ref()
+        {
+            let sherds_vec: Vec<std::borrow::Cow<'static, str>> = sh
+                .iter()
+                .filter_map(NbtTag::extract_string)
+                .map(|s| std::borrow::Cow::Owned(s.to_string()))
+                .collect();
+            if !sherds_vec.is_empty() {
+                stack.set_data_component(pumpkin_data::data_component_impl::PotDecorationsImpl {
+                    sherds: sherds_vec,
+                });
+            }
+        }
+        if let Ok(item) = self.item.lock()
+            && let Some(it) = item.as_ref()
+            && !it.is_empty()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
+                items: vec![(0, it.clone())],
+            });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(decorations) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::PotDecorationsImpl>()
+            && !decorations.sherds.is_empty()
+        {
+            let tags: Vec<NbtTag> = decorations
+                .sherds
+                .iter()
+                .map(|s| NbtTag::String(s.to_string().into()))
+                .collect();
+            *self
+                .sherds
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tags);
+        }
+        if let Some(container) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+            && let Some((_, it)) = container.items.first()
+            && !it.is_empty()
+        {
+            *self
+                .item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(it.clone());
+        }
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

@@ -67,6 +67,161 @@ pub const DYNAMIC_REGISTRIES: &[(&str, &[&str])] = &[
         "minecraft:villager_trade",
         &["villager_trade", "villager_trades"],
     ),
+    (
+        "minecraft:painting_variant",
+        &["painting_variant", "painting_variants"],
+    ),
+    ("minecraft:dimension", &["dimension", "dimensions"]),
+    (
+        "minecraft:dimension_type",
+        &["dimension_type", "dimension_types"],
+    ),
+    (
+        "minecraft:item_modifier",
+        &["item_modifier", "item_modifiers"],
+    ),
+    ("minecraft:slot_source", &["slot_source", "slot_sources"]),
+    ("minecraft:jukebox_song", &["jukebox_song", "jukebox_songs"]),
+    ("minecraft:dialog", &["dialog", "dialogs"]),
+    ("minecraft:timeline", &["timeline", "timelines"]),
+    ("minecraft:world_clock", &["world_clock", "world_clocks"]),
+    (
+        "minecraft:test_environment",
+        &["test_environment", "test_environments"],
+    ),
+    (
+        "minecraft:test_instance",
+        &["test_instance", "test_instances"],
+    ),
+    (
+        "minecraft:sulfur_cube_archetype",
+        &["sulfur_cube_archetype", "sulfur_cube_archetypes"],
+    ),
+    (
+        "minecraft:block_transformer",
+        &["block_transformer", "block_transformers"],
+    ),
+    (
+        "minecraft:block_sound_set",
+        &["block_sound_set", "block_sound_sets"],
+    ),
+    (
+        "minecraft:trial_spawner",
+        &["trial_spawner", "trial_spawners"],
+    ),
+    (
+        "minecraft:worldgen/biome",
+        &["worldgen/biome", "worldgen/biomes"],
+    ),
+    (
+        "minecraft:worldgen/block_state_provider",
+        &[
+            "worldgen/block_state_provider",
+            "worldgen/block_state_providers",
+        ],
+    ),
+    (
+        "minecraft:worldgen/carver",
+        &[
+            "worldgen/carver",
+            "worldgen/carvers",
+            "worldgen/configured_carver",
+            "worldgen/configured_carvers",
+        ],
+    ),
+    (
+        "minecraft:worldgen/configured_carver",
+        &[
+            "worldgen/configured_carver",
+            "worldgen/configured_carvers",
+            "worldgen/carver",
+            "worldgen/carvers",
+        ],
+    ),
+    (
+        "minecraft:worldgen/density_function",
+        &["worldgen/density_function", "worldgen/density_functions"],
+    ),
+    (
+        "minecraft:worldgen/feature",
+        &[
+            "worldgen/feature",
+            "worldgen/features",
+            "worldgen/configured_feature",
+            "worldgen/configured_features",
+        ],
+    ),
+    (
+        "minecraft:worldgen/configured_feature",
+        &[
+            "worldgen/configured_feature",
+            "worldgen/configured_features",
+            "worldgen/feature",
+            "worldgen/features",
+        ],
+    ),
+    (
+        "minecraft:worldgen/flat_level_generator_preset",
+        &[
+            "worldgen/flat_level_generator_preset",
+            "worldgen/flat_level_generator_presets",
+        ],
+    ),
+    (
+        "minecraft:worldgen/material_condition",
+        &[
+            "worldgen/material_condition",
+            "worldgen/material_conditions",
+        ],
+    ),
+    (
+        "minecraft:worldgen/material_rule",
+        &["worldgen/material_rule", "worldgen/material_rules"],
+    ),
+    (
+        "minecraft:worldgen/multi_noise_biome_source_parameter_list",
+        &[
+            "worldgen/multi_noise_biome_source_parameter_list",
+            "worldgen/multi_noise_biome_source_parameter_lists",
+        ],
+    ),
+    (
+        "minecraft:worldgen/noise",
+        &["worldgen/noise", "worldgen/noises"],
+    ),
+    (
+        "minecraft:worldgen/noise_settings",
+        &["worldgen/noise_settings"],
+    ),
+    (
+        "minecraft:worldgen/placed_feature",
+        &["worldgen/placed_feature", "worldgen/placed_features"],
+    ),
+    (
+        "minecraft:worldgen/processor_list",
+        &["worldgen/processor_list", "worldgen/processor_lists"],
+    ),
+    (
+        "minecraft:worldgen/structure",
+        &[
+            "worldgen/structure",
+            "worldgen/structures",
+            "worldgen/configured_structure",
+            "worldgen/configured_structures",
+        ],
+    ),
+    (
+        "minecraft:worldgen/structure_set",
+        &["worldgen/structure_set", "worldgen/structure_sets"],
+    ),
+    (
+        "minecraft:worldgen/template_pool",
+        &["worldgen/template_pool", "worldgen/template_pools"],
+    ),
+    (
+        "minecraft:worldgen/world_preset",
+        &["worldgen/world_preset", "worldgen/world_presets"],
+    ),
 ];
 
 /// Converts a JSON `serde_json::Value` into an `NbtTag`.
@@ -157,6 +312,33 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     }
 }
 
+const EXCLUDED_REGISTRY_DIRS: &[&str] = &[
+    "recipe",
+    "recipes",
+    "function",
+    "functions",
+    "tags",
+    "structure",
+    "structures",
+    "advancement",
+    "advancements",
+    "loot_table",
+    "loot_tables",
+    "predicate",
+    "predicates",
+    "item_modifier",
+    "item_modifiers",
+    "slot_source",
+    "slot_sources",
+    "context_int_provider",
+    "context_int_providers",
+    "context_float_provider",
+    "context_float_providers",
+    "damage_type",
+    "damage_types",
+    "datapacks",
+];
+
 /// Scans a namespace directory for any dynamic registry subfolders and loads their JSON definitions.
 pub fn load_dynamic_registries_from_ns<
     S1: std::hash::BuildHasher + Default,
@@ -167,14 +349,57 @@ pub fn load_dynamic_registries_from_ns<
     registries: &mut HashMap<String, HashMap<String, RegistryEntryData, S1>, S2>,
 ) -> usize {
     let mut total_loaded = 0;
+    let mut visited_paths = HashSet::new();
 
     for &(registry_id, dir_names) in DYNAMIC_REGISTRIES {
         let registry_map = registries.entry(registry_id.to_string()).or_default();
         for &dir_name in dir_names {
             let reg_dir = ns_path.join(dir_name);
             if reg_dir.is_dir() {
+                visited_paths.insert(reg_dir.clone());
                 let before = registry_map.len();
                 load_registry_dir_recursive(namespace, &reg_dir, &reg_dir, registry_map);
+                total_loaded += registry_map.len() - before;
+            }
+        }
+    }
+
+    // Auto-discover any additional registry folders in the namespace (including custom/modded ones)
+    if let Ok(entries) = fs::read_dir(ns_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !path.is_dir()
+                || EXCLUDED_REGISTRY_DIRS.contains(&name.as_str())
+                || visited_paths.contains(&path)
+            {
+                continue;
+            }
+
+            if name == "worldgen" {
+                if let Ok(sub_entries) = fs::read_dir(&path) {
+                    for sub_entry in sub_entries.flatten() {
+                        let sub_path = sub_entry.path();
+                        let sub_name = sub_entry.file_name().to_string_lossy().to_string();
+                        if sub_path.is_dir() && !visited_paths.contains(&sub_path) {
+                            let reg_id = format!("{namespace}:worldgen/{sub_name}");
+                            let registry_map = registries.entry(reg_id).or_default();
+                            let before = registry_map.len();
+                            load_registry_dir_recursive(
+                                namespace,
+                                &sub_path,
+                                &sub_path,
+                                registry_map,
+                            );
+                            total_loaded += registry_map.len() - before;
+                        }
+                    }
+                }
+            } else {
+                let reg_id = format!("{namespace}:{name}");
+                let registry_map = registries.entry(reg_id).or_default();
+                let before = registry_map.len();
+                load_registry_dir_recursive(namespace, &path, &path, registry_map);
                 total_loaded += registry_map.len() - before;
             }
         }

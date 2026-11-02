@@ -5,6 +5,8 @@ use crate::data_component_impl::{
     get_idset_hash, get_str_hash, put_idor,
 };
 use crate::effect::StatusEffect;
+use crate::item::Item;
+use crate::item_stack::ItemStack;
 use crate::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -381,14 +383,57 @@ impl Hash for ConsumableImpl {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseEffectsImpl;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UseEffectsImpl {
+    pub can_sprint: bool,
+    pub interact_vibrations: bool,
+    pub speed_multiplier: f32,
+}
+impl Default for UseEffectsImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+impl Eq for UseEffectsImpl {}
+impl Hash for UseEffectsImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.can_sprint.hash(state);
+        self.interact_vibrations.hash(state);
+        self.speed_multiplier.to_bits().hash(state);
+    }
+}
 impl UseEffectsImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        can_sprint: false,
+        interact_vibrations: true,
+        speed_multiplier: 0.2,
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let Some(compound) = data.extract_compound() else {
+            return Some(Self::DEFAULT);
+        };
+        Some(Self {
+            can_sprint: compound.get_bool("can_sprint").unwrap_or(false),
+            interact_vibrations: compound.get_bool("interact_vibrations").unwrap_or(true),
+            speed_multiplier: compound.get_float("speed_multiplier").unwrap_or(0.2),
+        })
     }
 }
 impl DataComponentImpl for UseEffectsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("can_sprint", self.can_sprint);
+        compound.put_bool("interact_vibrations", self.interact_vibrations);
+        compound.put_float("speed_multiplier", self.speed_multiplier);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        digest.update(&[self.can_sprint as u8, self.interact_vibrations as u8]);
+        digest.update(&get_f32_hash(self.speed_multiplier).to_le_bytes());
+        digest.finalize() as i32
+    }
     default_impl!(UseEffects);
 }
 
@@ -397,12 +442,76 @@ pub struct UseRemainderImpl {
     pub remainder: Option<Cow<'static, str>>,
 }
 impl UseRemainderImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self { remainder: None })
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let remainder = match data {
+            NbtTag::String(s) => Some(Cow::Owned(s.to_string())),
+            NbtTag::Compound(c) => c.get_string("id").map(|s| Cow::Owned(s.to_string())),
+            _ => None,
+        };
+        Some(Self { remainder })
+    }
+
+    /// Mirrors vanilla's `UseRemainder.convertIntoRemainder`.
+    pub fn convert_into_remainder(
+        &self,
+        used_stack: ItemStack,
+        stack_count_before_using: u8,
+        has_infinite_materials: bool,
+        on_extra_created_remainder: impl FnOnce(ItemStack),
+    ) -> ItemStack {
+        if has_infinite_materials || used_stack.item_count >= stack_count_before_using {
+            return used_stack;
+        }
+        let Some(item) = self
+            .remainder
+            .as_deref()
+            .and_then(|id| Item::from_registry_key(id.strip_prefix("minecraft:").unwrap_or(id)))
+        else {
+            return used_stack;
+        };
+        let remainder_stack = ItemStack::new(1, item);
+        if used_stack.is_empty() {
+            return remainder_stack;
+        }
+        on_extra_created_remainder(remainder_stack);
+        used_stack
     }
 }
 impl DataComponentImpl for UseRemainderImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if let Some(id) = &self.remainder {
+            compound.put_string("id", id.to_string());
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(UseRemainder);
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct VillagerFoodImpl {
+    pub nutrition: i32,
+}
+impl VillagerFoodImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let nutrition = match data {
+            NbtTag::Int(n) => *n,
+            NbtTag::Compound(c) => c.get_int("nutrition")?,
+            _ => return None,
+        };
+        Some(Self { nutrition })
+    }
+}
+impl DataComponentImpl for VillagerFoodImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("nutrition", self.nutrition);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.nutrition) as i32
+    }
+    default_impl!(VillagerFood);
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

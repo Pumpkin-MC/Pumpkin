@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
@@ -52,7 +53,7 @@ impl ArrowPickup {
 
 pub struct ArrowEntity {
     pub entity: Entity,
-    pub owner_id: Option<i32>,
+    pub owner: ProjectileOwner,
     pub item_stack: RwLock<ItemStack>,
     pub base_damage: AtomicU64,
     pub pickup: ArrowPickup,
@@ -78,20 +79,20 @@ impl ArrowEntity {
     const GRAVITY: f64 = 0.05;
     const DESPAWN_TIME: u32 = 1200;
 
-    pub fn new(entity: Entity, owner_id: Option<i32>) -> Self {
+    pub fn new(entity: Entity, owner: Option<&Entity>) -> Self {
         let item_stack = ItemStack::new(1, Self::default_item(entity.entity_type));
-        Self::new_with_item(entity, owner_id, &item_stack, ArrowPickup::Disallowed)
+        Self::new_with_item(entity, owner, &item_stack, ArrowPickup::Disallowed)
     }
 
     pub fn new_with_item(
         entity: Entity,
-        owner_id: Option<i32>,
+        owner: Option<&Entity>,
         item_stack: &ItemStack,
         pickup: ArrowPickup,
     ) -> Self {
         Self {
             entity,
-            owner_id,
+            owner: ProjectileOwner::new(owner),
             item_stack: RwLock::new(item_stack.copy_with_count(1)),
             base_damage: AtomicU64::new(Self::ARROW_BASE_DAMAGE.to_bits()),
             pickup,
@@ -133,7 +134,7 @@ impl ArrowEntity {
 
         Self {
             entity,
-            owner_id: Some(shooter.entity_id),
+            owner: ProjectileOwner::new(Some(shooter)),
             item_stack: RwLock::new(item_stack.copy_with_count(1)),
             base_damage: AtomicU64::new(Self::ARROW_BASE_DAMAGE.to_bits()),
             pickup,
@@ -400,8 +401,8 @@ impl ArrowEntity {
 }
 
 impl EntityBase for ArrowEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.owner)
     }
 
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
@@ -544,6 +545,7 @@ impl EntityBase for ArrowEntity {
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
+        self.owner.check_left_owner(entity);
 
         // Fire & Extinguish logic
         let mut fire_ticks = entity.fire_ticks.load(Ordering::Relaxed);
@@ -731,10 +733,8 @@ impl EntityBase for ArrowEntity {
                 closest_t = t;
 
                 // Map back to block pos
-                let mut curr = 0;
                 for (len, pos) in &block_positions {
-                    curr += len;
-                    if idx < curr {
+                    if idx < *len {
                         let hit_pos = start_pos.add(&velocity.multiply(t, t, t));
                         hit = Some(ProjectileHit::Block {
                             pos: *pos,
@@ -841,7 +841,7 @@ impl EntityBase for ArrowEntity {
                 }
 
                 if block == &pumpkin_data::Block::TARGET
-                    && let Some(player) = self.owner_id.and_then(|id| world.get_player_by_id(id))
+                    && let Some(player) = self.owner.get_player(&world)
                 {
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye,
@@ -914,18 +914,18 @@ impl EntityBase for ArrowEntity {
 
                 let punch = self.punch_level.load(Ordering::Relaxed);
                 let is_spectral = entity.entity_type.id == EntityType::SPECTRAL_ARROW.id;
-                let owner_id = self.owner_id;
                 let pierce = self.pierce_level.load(Ordering::Relaxed);
 
-                let owner_entity = owner_id.and_then(|id| world.get_entity_by_id(id));
+                let owner_entity = self.owner.get(&world);
 
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
-                    owner_entity.as_deref(),
-                    None,
+                    Some(self),
+                    // Like vanilla, an ownerless arrow is its own cause.
+                    Some(owner_entity.as_deref().unwrap_or(self)),
                 );
 
                 if let Some(living) = target.get_living_entity() {
@@ -967,6 +967,7 @@ impl EntityBase for ArrowEntity {
                             crate::item::potion::PotionContents::read_potion_effects(&item_stack),
                             scale,
                             crate::item::potion::PotionApplicationSource::Arrow,
+                            None,
                         );
 
                         if is_spectral {
@@ -1060,8 +1061,7 @@ impl ArrowEntity {
             return true;
         }
 
-        // Skip owner for initial frames (5 ticks)
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+        if !self.owner.can_hit(&self_ent.world.load(), other_ent) {
             return true;
         }
 

@@ -15,6 +15,17 @@ use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
+const MAX_INITIAL_COLLECTION_SIZE: usize = 65536;
+
+fn read_count(seq: &mut impl NetworkReadExt, max_size: usize) -> Result<usize, ReadingError> {
+    let count = seq.get_var_int()?.0;
+    usize::try_from(count)
+        .ok()
+        .filter(|&count| count <= max_size)
+        .ok_or_else(|| {
+            ReadingError::TooLarge(format!("{count} elements exceeded max size of {max_size}"))
+        })
+}
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -53,7 +64,8 @@ fn deserialize_idset<T: IDSetContent>(
         }
         std::cmp::Ordering::Greater => {
             let len = id_type - 1;
-            let mut content_vec = Vec::with_capacity(len as usize);
+            let mut content_vec =
+                Vec::with_capacity((len as usize).min(MAX_INITIAL_COLLECTION_SIZE));
 
             for _ in 0..len {
                 let varint_id = seq.get_var_int()?.0;
@@ -163,11 +175,9 @@ fn deserialize_consume_effect(
     let effect_type = seq.get_var_int()?.0;
     match effect_type {
         0 => {
+            let effects = Cow::Owned(deserialize_status_effects(seq)?);
             let probability = seq.get_f32()?;
-            Ok(ConsumeEffect::ApplyEffects((
-                Cow::Owned(deserialize_status_effects(seq)?),
-                probability,
-            )))
+            Ok(ConsumeEffect::ApplyEffects((effects, probability)))
         }
         1 => {
             let idset = deserialize_idset(seq)?;
@@ -385,9 +395,19 @@ impl DataComponentCodec<Self> for ItemNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
+        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let name = match tag {
+            Some(NbtTag::Compound(c)) => c
+                .get_string("translate")
+                .or_else(|| c.get_string("text"))
+                .unwrap_or("")
+                .to_string(),
+            Some(NbtTag::String(s)) => s.to_string(),
+            Some(t) => pumpkin_util::text::TextComponent::from_nbt(&t).get_text(),
+            None => String::new(),
+        };
         Ok(Self {
-            name: Cow::Owned(name.into()),
+            name: Cow::Owned(name),
         })
     }
 }
@@ -1077,10 +1097,20 @@ pub fn deserialize(
         DataComponent::CatCollar => Ok(CatCollarImpl::deserialize(seq)?.to_dyn()),
         DataComponent::SheepColor => Ok(SheepColorImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ShulkerColor => Ok(ShulkerColorImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(ReadingError::Message(format!(
-            "Unimplemented data component {}",
-            id.to_name()
-        ))),
+        DataComponent::InteractAnimation => Ok(InteractAnimationImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BlockTransformer => Ok(BlockTransformerImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::VillagerFood => Ok(VillagerFoodImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MobVisibility => Ok(MobVisibilityImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Ok(ProvidesPotteryPatternImpl::deserialize(seq)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Ok(SignTextFrontImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::SignTextBack => Ok(SignTextBackImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CushionColor => Ok(CushionColorImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Compostable => Ok(CompostableImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CookingFuel => Ok(CookingFuelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BrewingFuel => Ok(BrewingFuelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Waxed => Ok(WaxedImpl::deserialize(seq)?.to_dyn()),
     }
 }
 
@@ -1219,10 +1249,20 @@ pub fn serialize(
         DataComponent::CatCollar => get::<CatCollarImpl>(value).serialize(seq),
         DataComponent::SheepColor => get::<SheepColorImpl>(value).serialize(seq),
         DataComponent::ShulkerColor => get::<ShulkerColorImpl>(value).serialize(seq),
-        _ => Err(WritingError::Message(format!(
-            "Unimplemented data component {}",
-            id.to_name()
-        ))),
+        DataComponent::InteractAnimation => get::<InteractAnimationImpl>(value).serialize(seq),
+        DataComponent::BlockTransformer => get::<BlockTransformerImpl>(value).serialize(seq),
+        DataComponent::VillagerFood => get::<VillagerFoodImpl>(value).serialize(seq),
+        DataComponent::MobVisibility => get::<MobVisibilityImpl>(value).serialize(seq),
+        DataComponent::ProvidesPotteryPattern => {
+            get::<ProvidesPotteryPatternImpl>(value).serialize(seq)
+        }
+        DataComponent::SignTextFront => get::<SignTextFrontImpl>(value).serialize(seq),
+        DataComponent::SignTextBack => get::<SignTextBackImpl>(value).serialize(seq),
+        DataComponent::CushionColor => get::<CushionColorImpl>(value).serialize(seq),
+        DataComponent::Compostable => get::<CompostableImpl>(value).serialize(seq),
+        DataComponent::CookingFuel => get::<CookingFuelImpl>(value).serialize(seq),
+        DataComponent::BrewingFuel => get::<BrewingFuelImpl>(value).serialize(seq),
+        DataComponent::Waxed => get::<WaxedImpl>(value).serialize(seq),
     }
 }
 
@@ -1378,51 +1418,183 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
     }
 }
 
-macro_rules! codec_string_variant {
-    ($struct_name:ident) => {
+fn unknown_variant(component: &str, value: &str) -> WritingError {
+    WritingError::Message(format!("unknown {component} value {value}"))
+}
+
+/// Vanilla `ByteBufCodecs.holderRegistry`: the entry's id in the synced registry.
+macro_rules! codec_registry_variant {
+    ($struct_name:ident, $variant:ty) => {
         impl DataComponentCodec<Self> for $struct_name {
             fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-                seq.write_string(&self.value)
+                let variant = <$variant>::from_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                let id = i32::try_from(variant.id())
+                    .map_err(|_| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(id))
             }
             fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-                let value = seq.get_str()?;
+                let id = seq.get_var_int()?.0;
+                let variant = usize::try_from(id)
+                    .ok()
+                    .and_then(|id| <$variant>::all().get(id))
+                    .ok_or_else(|| {
+                        ReadingError::Message(format!(
+                            "unknown {} id {id}",
+                            stringify!($struct_name)
+                        ))
+                    })?;
                 Ok(Self {
-                    value: Cow::Owned(value.into()),
+                    value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
                 })
             }
         }
     };
 }
 
-codec_string_variant!(VillagerVariantImpl);
-codec_string_variant!(WolfVariantImpl);
-codec_string_variant!(WolfSoundVariantImpl);
-codec_string_variant!(WolfCollarImpl);
-codec_string_variant!(FoxVariantImpl);
-codec_string_variant!(SalmonSizeImpl);
-codec_string_variant!(ParrotVariantImpl);
-codec_string_variant!(TropicalFishPatternImpl);
-codec_string_variant!(TropicalFishBaseColorImpl);
-codec_string_variant!(TropicalFishPatternColorImpl);
-codec_string_variant!(MooshroomVariantImpl);
-codec_string_variant!(RabbitVariantImpl);
-codec_string_variant!(PigVariantImpl);
-codec_string_variant!(PigSoundVariantImpl);
-codec_string_variant!(CowVariantImpl);
-codec_string_variant!(CowSoundVariantImpl);
-codec_string_variant!(ChickenVariantImpl);
-codec_string_variant!(ChickenSoundVariantImpl);
-codec_string_variant!(ZombieNautilusVariantImpl);
-codec_string_variant!(FrogVariantImpl);
-codec_string_variant!(HorseVariantImpl);
-codec_string_variant!(PaintingVariantImpl);
-codec_string_variant!(LlamaVariantImpl);
-codec_string_variant!(AxolotlVariantImpl);
-codec_string_variant!(CatVariantImpl);
-codec_string_variant!(CatSoundVariantImpl);
-codec_string_variant!(CatCollarImpl);
-codec_string_variant!(SheepColorImpl);
-codec_string_variant!(ShulkerColorImpl);
+codec_registry_variant!(WolfVariantImpl, pumpkin_data::wolf_variant::WolfVariant);
+codec_registry_variant!(
+    WolfSoundVariantImpl,
+    pumpkin_data::wolf_sound_variant::WolfSoundVariant
+);
+codec_registry_variant!(PigVariantImpl, pumpkin_data::pig_variant::PigVariant);
+codec_registry_variant!(
+    PigSoundVariantImpl,
+    pumpkin_data::pig_sound_variant::PigSoundVariant
+);
+codec_registry_variant!(CowVariantImpl, pumpkin_data::cow_variant::CowVariant);
+codec_registry_variant!(
+    CowSoundVariantImpl,
+    pumpkin_data::cow_sound_variant::CowSoundVariant
+);
+codec_registry_variant!(
+    ChickenVariantImpl,
+    pumpkin_data::chicken_variant::ChickenVariant
+);
+codec_registry_variant!(
+    ChickenSoundVariantImpl,
+    pumpkin_data::chicken_sound_variant::ChickenSoundVariant
+);
+codec_registry_variant!(
+    ZombieNautilusVariantImpl,
+    pumpkin_data::zombie_nautilus_variant::ZombieNautilusVariant
+);
+codec_registry_variant!(FrogVariantImpl, pumpkin_data::frog_variant::FrogVariant);
+codec_registry_variant!(CatVariantImpl, pumpkin_data::cat_variant::CatVariant);
+codec_registry_variant!(
+    CatSoundVariantImpl,
+    pumpkin_data::cat_sound_variant::CatSoundVariant
+);
+
+impl DataComponentCodec<Self> for VillagerVariantImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let variant = pumpkin_data::villager::VillagerType::from_name(&self.value)
+            .ok_or_else(|| unknown_variant("VillagerVariantImpl", &self.value))?;
+        seq.write_var_int(&VarInt(variant as i32))
+    }
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let variant = pumpkin_data::villager::VillagerType::from_i32(id)
+            .ok_or_else(|| ReadingError::Message(format!("unknown VillagerVariantImpl id {id}")))?;
+        Ok(Self {
+            value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
+        })
+    }
+}
+
+/// Vanilla `ByteBufCodecs.holder`: 0 for an inline value, otherwise the registry id plus one.
+impl DataComponentCodec<Self> for PaintingVariantImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let variant = pumpkin_data::painting_variant::PaintingVariant::from_name(&self.value)
+            .ok_or_else(|| unknown_variant("PaintingVariantImpl", &self.value))?;
+        let id = i32::try_from(variant.id())
+            .map_err(|_| unknown_variant("PaintingVariantImpl", &self.value))?;
+        seq.write_var_int(&VarInt(id + 1))
+    }
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let variant = id
+            .checked_sub(1)
+            .and_then(|id| usize::try_from(id).ok())
+            .and_then(|id| pumpkin_data::painting_variant::PaintingVariant::all().get(id))
+            .ok_or_else(|| {
+                ReadingError::Message(format!("unsupported PaintingVariantImpl holder {id}"))
+            })?;
+        Ok(Self {
+            value: Cow::Owned(format!("minecraft:{}", variant.to_name())),
+        })
+    }
+}
+
+/// Vanilla `ByteBufCodecs.idMapper` over a Java enum; unknown ids follow its `ByIdMap` strategy.
+macro_rules! codec_id_mapped_variant {
+    ($struct_name:ident, $variant:ty) => {
+        impl DataComponentCodec<Self> for $struct_name {
+            fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+                let variant = <$variant>::from_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(variant.id()))
+            }
+            fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+                let id = seq.get_var_int()?.0;
+                Ok(Self {
+                    value: Cow::Borrowed(<$variant>::by_id(id).name()),
+                })
+            }
+        }
+    };
+}
+
+codec_id_mapped_variant!(FoxVariantImpl, pumpkin_data::entity_variant::FoxVariant);
+codec_id_mapped_variant!(SalmonSizeImpl, pumpkin_data::entity_variant::SalmonSize);
+codec_id_mapped_variant!(
+    ParrotVariantImpl,
+    pumpkin_data::entity_variant::ParrotVariant
+);
+codec_id_mapped_variant!(
+    TropicalFishPatternImpl,
+    pumpkin_data::entity_variant::TropicalFishPattern
+);
+codec_id_mapped_variant!(
+    MooshroomVariantImpl,
+    pumpkin_data::entity_variant::MooshroomVariant
+);
+codec_id_mapped_variant!(
+    RabbitVariantImpl,
+    pumpkin_data::entity_variant::RabbitVariant
+);
+codec_id_mapped_variant!(HorseVariantImpl, pumpkin_data::entity_variant::HorseVariant);
+codec_id_mapped_variant!(LlamaVariantImpl, pumpkin_data::entity_variant::LlamaVariant);
+codec_id_mapped_variant!(
+    AxolotlVariantImpl,
+    pumpkin_data::entity_variant::AxolotlVariant
+);
+
+/// Vanilla `DyeColor.STREAM_CODEC`: the color id, unknown ids read as white.
+macro_rules! codec_dye_color {
+    ($struct_name:ident) => {
+        impl DataComponentCodec<Self> for $struct_name {
+            fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+                let color = pumpkin_data::dye_color::DyeColor::by_name(&self.value)
+                    .ok_or_else(|| unknown_variant(stringify!($struct_name), &self.value))?;
+                seq.write_var_int(&VarInt(i32::from(color.id())))
+            }
+            fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+                let color = pumpkin_data::dye_color::DyeColor::by_id_or_white(seq.get_var_int()?.0);
+                Ok(Self {
+                    value: Cow::Borrowed(color.name()),
+                })
+            }
+        }
+    };
+}
+
+codec_dye_color!(WolfCollarImpl);
+codec_dye_color!(TropicalFishBaseColorImpl);
+codec_dye_color!(TropicalFishPatternColorImpl);
+codec_dye_color!(CatCollarImpl);
+codec_dye_color!(SheepColorImpl);
+codec_dye_color!(ShulkerColorImpl);
 
 impl DataComponentCodec<Self> for MaxDamageImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
@@ -1437,16 +1609,20 @@ impl DataComponentCodec<Self> for MaxDamageImpl {
 
 impl DataComponentCodec<Self> for UseEffectsImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_bool(false)?;
-        seq.write_bool(true)?;
-        seq.write_f32(0.2)
+        seq.write_bool(self.can_sprint)?;
+        seq.write_bool(self.interact_vibrations)?;
+        seq.write_f32(self.speed_multiplier)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _can_sprint = seq.get_bool()?;
-        let _interact_vibrations = seq.get_bool()?;
-        let _speed_multiplier = seq.get_f32()?;
-        Ok(Self)
+        let can_sprint = seq.get_bool()?;
+        let interact_vibrations = seq.get_bool()?;
+        let speed_multiplier = seq.get_f32()?;
+        Ok(Self {
+            can_sprint,
+            interact_vibrations,
+            speed_multiplier,
+        })
     }
 }
 
@@ -1474,120 +1650,104 @@ impl DataComponentCodec<Self> for DamageTypeImpl {
     }
 }
 
+fn serialize_adventure_predicate(
+    predicate: &NbtTag,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    let list: Vec<&pumpkin_nbt::compound::NbtCompound> = match predicate {
+        NbtTag::Compound(c) => c.get_list("predicates").map_or_else(
+            || vec![c],
+            |preds| preds.iter().filter_map(NbtTag::extract_compound).collect(),
+        ),
+        NbtTag::List(preds) => preds.iter().filter_map(NbtTag::extract_compound).collect(),
+        _ => Vec::new(),
+    };
+    seq.write_var_int(&VarInt::from(list.len() as i32))?;
+    for c in list {
+        if let Some(blocks_tag) = c.get("blocks")
+            && let Some(idset) = IDSet::<pumpkin_data::Block>::read(blocks_tag)
+        {
+            seq.write_bool(true)?;
+            serialize_idset(&idset, seq)?;
+        } else {
+            seq.write_bool(false)?;
+        }
+        seq.write_bool(false)?;
+        seq.write_bool(false)?;
+        seq.write_var_int(&VarInt(0))?;
+        seq.write_var_int(&VarInt(0))?;
+    }
+    Ok(())
+}
+
+fn deserialize_adventure_predicate(seq: &mut impl NetworkReadExt) -> Result<NbtTag, ReadingError> {
+    let count = seq.get_var_int()?.0.max(0) as usize;
+    let mut preds = Vec::with_capacity(count.min(64));
+    for _ in 0..count {
+        let mut comp = pumpkin_nbt::compound::NbtCompound::new();
+        let has_blocks = seq.get_bool()?;
+        if has_blocks {
+            let idset = deserialize_idset::<pumpkin_data::Block>(seq)?;
+            idset.write(&mut comp, "blocks");
+        }
+        let has_props = seq.get_bool()?;
+        if has_props {
+            let props_len = seq.get_var_int()?.0;
+            for _ in 0..props_len {
+                let _ = seq.get_str()?;
+                let is_exact = seq.get_bool()?;
+                if is_exact {
+                    let _ = seq.get_str()?;
+                } else {
+                    if seq.get_bool()? {
+                        let _ = seq.get_str()?;
+                    }
+                    if seq.get_bool()? {
+                        let _ = seq.get_str()?;
+                    }
+                }
+            }
+        }
+        let has_nbt = seq.get_bool()?;
+        if has_nbt {
+            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        }
+        let exact_len = seq.get_var_int()?.0;
+        for _ in 0..exact_len {
+            let comp_id = seq.get_var_int()?.0 as u8;
+            if let Some(comp) = DataComponent::try_from_id(comp_id) {
+                let _ = deserialize(comp, seq)?;
+            }
+        }
+        let partial_len = seq.get_var_int()?.0;
+        for _ in 0..partial_len {
+            let _ = seq.get_var_int()?;
+        }
+        preds.push(NbtTag::Compound(comp));
+    }
+    Ok(NbtTag::List(preds))
+}
+
 impl DataComponentCodec<Self> for CanPlaceOnImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        serialize_adventure_predicate(&self.predicate, seq)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let count = seq.get_var_int()?.0;
-        for _ in 0..count {
-            let has_blocks = seq.get_bool()?;
-            if has_blocks {
-                let id_type = seq.get_var_int()?.0;
-                if id_type == 0 {
-                    let _ = seq.get_str()?;
-                } else if id_type > 0 {
-                    for _ in 0..(id_type - 1) {
-                        let _ = seq.get_var_int()?;
-                    }
-                }
-            }
-            let has_props = seq.get_bool()?;
-            if has_props {
-                let props_len = seq.get_var_int()?.0;
-                for _ in 0..props_len {
-                    let _ = seq.get_str()?;
-                    let is_exact = seq.get_bool()?;
-                    if is_exact {
-                        let _ = seq.get_str()?;
-                    } else {
-                        if seq.get_bool()? {
-                            let _ = seq.get_str()?;
-                        }
-                        if seq.get_bool()? {
-                            let _ = seq.get_str()?;
-                        }
-                    }
-                }
-            }
-            let has_nbt = seq.get_bool()?;
-            if has_nbt {
-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-            }
-            let exact_len = seq.get_var_int()?.0;
-            for _ in 0..exact_len {
-                let comp_id = seq.get_var_int()?.0 as u8;
-                if let Some(comp) = DataComponent::try_from_id(comp_id) {
-                    let _ = deserialize(comp, seq)?;
-                }
-            }
-            let partial_len = seq.get_var_int()?.0;
-            for _ in 0..partial_len {
-                let _ = seq.get_var_int()?;
-            }
-        }
         Ok(Self {
-            predicate: NbtTag::List(Vec::new()),
+            predicate: deserialize_adventure_predicate(seq)?,
         })
     }
 }
 
 impl DataComponentCodec<Self> for CanBreakImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        serialize_adventure_predicate(&self.predicate, seq)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let count = seq.get_var_int()?.0;
-        for _ in 0..count {
-            let has_blocks = seq.get_bool()?;
-            if has_blocks {
-                let id_type = seq.get_var_int()?.0;
-                if id_type == 0 {
-                    let _ = seq.get_str()?;
-                } else if id_type > 0 {
-                    for _ in 0..(id_type - 1) {
-                        let _ = seq.get_var_int()?;
-                    }
-                }
-            }
-            let has_props = seq.get_bool()?;
-            if has_props {
-                let props_len = seq.get_var_int()?.0;
-                for _ in 0..props_len {
-                    let _ = seq.get_str()?;
-                    let is_exact = seq.get_bool()?;
-                    if is_exact {
-                        let _ = seq.get_str()?;
-                    } else {
-                        if seq.get_bool()? {
-                            let _ = seq.get_str()?;
-                        }
-                        if seq.get_bool()? {
-                            let _ = seq.get_str()?;
-                        }
-                    }
-                }
-            }
-            let has_nbt = seq.get_bool()?;
-            if has_nbt {
-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-            }
-            let exact_len = seq.get_var_int()?.0;
-            for _ in 0..exact_len {
-                let comp_id = seq.get_var_int()?.0 as u8;
-                if let Some(comp) = DataComponent::try_from_id(comp_id) {
-                    let _ = deserialize(comp, seq)?;
-                }
-            }
-            let partial_len = seq.get_var_int()?.0;
-            for _ in 0..partial_len {
-                let _ = seq.get_var_int()?;
-            }
-        }
         Ok(Self {
-            predicate: NbtTag::List(Vec::new()),
+            predicate: deserialize_adventure_predicate(seq)?,
         })
     }
 }
@@ -1660,23 +1820,23 @@ impl DataComponentCodec<Self> for CustomModelDataImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let floats_len = seq.get_var_int()?.0 as usize;
-        let mut floats = Vec::with_capacity(floats_len);
+        let floats_len = read_count(seq, usize::MAX)?;
+        let mut floats = Vec::with_capacity(floats_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..floats_len {
             floats.push(seq.get_f32()?);
         }
-        let flags_len = seq.get_var_int()?.0 as usize;
-        let mut flags = Vec::with_capacity(flags_len);
+        let flags_len = read_count(seq, usize::MAX)?;
+        let mut flags = Vec::with_capacity(flags_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..flags_len {
             flags.push(seq.get_bool()?);
         }
-        let strings_len = seq.get_var_int()?.0 as usize;
-        let mut strings = Vec::with_capacity(strings_len);
+        let strings_len = read_count(seq, usize::MAX)?;
+        let mut strings = Vec::with_capacity(strings_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..strings_len {
             strings.push(seq.get_str()?.to_string());
         }
-        let colors_len = seq.get_var_int()?.0 as usize;
-        let mut colors = Vec::with_capacity(colors_len);
+        let colors_len = read_count(seq, usize::MAX)?;
+        let mut colors = Vec::with_capacity(colors_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..colors_len {
             colors.push(seq.get_i32()?);
         }
@@ -1717,12 +1877,12 @@ impl DataComponentCodec<Self> for CreativeSlotLockImpl {
 
 impl DataComponentCodec<Self> for EnchantmentGlintOverrideImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_bool(true)
+        seq.write_bool(self.glint)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_bool()?;
-        Ok(Self)
+        let glint = seq.get_bool()?;
+        Ok(Self { glint })
     }
 }
 
@@ -1757,15 +1917,26 @@ impl DataComponentCodec<Self> for FoodImpl {
 
 impl DataComponentCodec<Self> for UseRemainderImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))?;
+        let item_id = self
+            .remainder
+            .as_ref()
+            .and_then(|key| {
+                pumpkin_data::item::Item::from_registry_key(
+                    key.strip_prefix("minecraft:").unwrap_or(key),
+                )
+            })
+            .map_or(0, |item| item.id as i32);
+        seq.write_var_int(&VarInt(item_id))?;
+        seq.write_var_int(&VarInt(1))?;
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt(0))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = deserialize_item_stack_template(seq)?;
-        Ok(Self { remainder: None })
+        let stack = deserialize_item_stack_template(seq)?;
+        let remainder = (stack.item.id != 0)
+            .then(|| Cow::Owned(format!("minecraft:{}", stack.item.registry_key)));
+        Ok(Self { remainder })
     }
 }
 
@@ -1802,8 +1973,8 @@ impl DataComponentCodec<Self> for ToolImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let rules_len = seq.get_var_int()?.0 as usize;
-        let mut rules = Vec::with_capacity(rules_len);
+        let rules_len = read_count(seq, usize::MAX)?;
+        let mut rules = Vec::with_capacity(rules_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..rules_len {
             let blocks = deserialize_idset(seq)?;
             let speed = if seq.get_bool()? {
@@ -1837,14 +2008,15 @@ impl DataComponentCodec<Self> for ToolImpl {
 impl DataComponentCodec<Self> for WeaponImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.item_damage_per_attack as i32))?;
-        seq.write_f32(0.0)
+        seq.write_f32(self.disable_blocking_for_seconds)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let item_damage_per_attack = seq.get_var_int()?.0 as u32;
-        let _disable_blocking_for_seconds = seq.get_f32()?;
+        let disable_blocking_for_seconds = seq.get_f32()?;
         Ok(Self {
             item_damage_per_attack,
+            disable_blocking_for_seconds,
         })
     }
 }
@@ -2166,23 +2338,27 @@ impl DataComponentCodec<Self> for KineticWeaponImpl {
 
 impl DataComponentCodec<Self> for AdditionalTradeCostImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_var_int(&VarInt::from(self.cost))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let cost = seq.get_var_int()?.0;
+        Ok(Self { cost })
     }
 }
 
 impl DataComponentCodec<Self> for DyeImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_var_int(&VarInt::from(self.color.id() as i32))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let id = seq.get_var_int()?.0;
+        let color = u8::try_from(id)
+            .ok()
+            .and_then(pumpkin_data::dye_color::DyeColor::by_id)
+            .ok_or_else(|| ReadingError::Message(format!("Invalid DyeColor id {id}")))?;
+        Ok(Self { color })
     }
 }
 
@@ -2225,7 +2401,8 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PROJECTILES: usize = 1024;
+        let len = read_count(seq, MAX_PROJECTILES)?;
         let mut projectiles = Vec::with_capacity(len);
         for _ in 0..len {
             let _ = deserialize_item_stack_template(seq)?;
@@ -2257,7 +2434,8 @@ impl DataComponentCodec<Self> for WritableBookContentImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_PAGES: usize = 100;
+        let len = read_count(seq, MAX_PAGES)?;
         let mut pages = Vec::with_capacity(len);
         for _ in 0..len {
             let raw = seq.get_str()?.to_string();
@@ -2292,8 +2470,8 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         }
         let author = seq.get_str()?.to_string();
         let _generation = seq.get_var_int()?.0;
-        let pages_len = seq.get_var_int()?.0 as usize;
-        let mut pages = Vec::with_capacity(pages_len);
+        let pages_len = read_count(seq, usize::MAX)?;
+        let mut pages = Vec::with_capacity(pages_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..pages_len {
             let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
             let comp = tag.as_ref().map_or_else(
@@ -2336,7 +2514,9 @@ impl DataComponentCodec<Self> for DebugStickStateImpl {
     }
 
     fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Ok(Self)
+        Ok(Self {
+            properties: Vec::new(),
+        })
     }
 }
 
@@ -2375,12 +2555,16 @@ impl DataComponentCodec<Self> for EntityDataImpl {
 
 impl DataComponentCodec<Self> for BucketEntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
+        seq.write_nbt(NbtTag::Compound(self.nbt.clone().unwrap_or_default()))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-        Ok(Self)
+        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        let nbt = match tag {
+            Some(NbtTag::Compound(c)) => Some(c),
+            _ => None,
+        };
+        Ok(Self { nbt })
     }
 }
 
@@ -2404,23 +2588,63 @@ impl DataComponentCodec<Self> for BlockEntityDataImpl {
 
 impl DataComponentCodec<Self> for InstrumentImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        let id = pumpkin_data::instrument::Instrument::from_name(&self.instrument)
+            .map_or(1, |inst| inst.id() as i32 + 1);
+        seq.write_var_int(&VarInt(id))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let raw_id = seq.get_var_int()?.0;
+        let instrument = if raw_id <= 0 {
+            let _sound = crate::IdOr::<crate::SoundEvent>::read(seq, |r| {
+                let sound_name = r.get_str()?.to_string();
+                let range = r.get_option(NetworkReadExt::get_f32)?;
+                Ok(crate::SoundEvent { sound_name, range })
+            })
+            .map_err(|e| ReadingError::Message(format!("No sound: {e}")))?;
+            let _use_duration = seq.get_f32()?;
+            let _range = seq.get_f32()?;
+            let _description = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            Cow::Borrowed("minecraft:ponder_goat_horn")
+        } else {
+            let idx = (raw_id - 1) as usize;
+            pumpkin_data::instrument::Instrument::all()
+                .get(idx)
+                .map_or(Cow::Borrowed("minecraft:ponder_goat_horn"), |inst| {
+                    Cow::Borrowed(inst.asset_id())
+                })
+        };
+        Ok(Self { instrument })
     }
 }
 
 impl DataComponentCodec<Self> for ProvidesTrimMaterialImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        let id = pumpkin_data::trim_material::TrimMaterial::from_name(&self.material)
+            .map_or(1, |mat| mat.id() as i32 + 1);
+        seq.write_var_int(&VarInt(id))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let raw_id = seq.get_var_int()?.0;
+        let material = if raw_id <= 0 {
+            let _base_asset = seq.get_str()?;
+            let overrides_len = seq.get_var_int()?.0 as usize;
+            for _ in 0..overrides_len.min(256) {
+                let _key = seq.get_str()?;
+                let _val = seq.get_str()?;
+            }
+            let _description = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            Cow::Borrowed("minecraft:quartz")
+        } else {
+            let idx = (raw_id - 1) as usize;
+            pumpkin_data::trim_material::TrimMaterial::all()
+                .get(idx)
+                .map_or(Cow::Borrowed("minecraft:quartz"), |mat| {
+                    Cow::Borrowed(mat.asset_id())
+                })
+        };
+        Ok(Self { material })
     }
 }
 
@@ -2449,19 +2673,17 @@ impl DataComponentCodec<Self> for JukeboxPlayableImpl {
 
 impl DataComponentCodec<Self> for ProvidesBannerPatternsImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_string(self.key.strip_prefix('#').unwrap_or(&self.key))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let id_type = seq.get_var_int()?.0;
-        if id_type == 0 {
-            let _ = seq.get_str()?;
-        } else if id_type > 0 {
-            for _ in 0..(id_type - 1) {
-                let _ = seq.get_var_int()?;
-            }
-        }
-        Ok(Self)
+        let tag = seq.get_str()?;
+        let key = if tag.starts_with('#') {
+            Cow::Owned(tag.to_string())
+        } else {
+            Cow::Owned(format!("#{tag}"))
+        };
+        Ok(Self { key })
     }
 }
 
@@ -2471,7 +2693,9 @@ impl DataComponentCodec<Self> for RecipesImpl {
     }
 
     fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        Ok(Self)
+        Ok(Self {
+            recipes: Cow::Borrowed(&[]),
+        })
     }
 }
 
@@ -2665,8 +2889,8 @@ impl DataComponentCodec<Self> for BannerPatternsImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut layers = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut layers = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let _pattern = seq.get_var_int()?.0;
             let color_id = seq.get_var_int()?.0 as u8;
@@ -2698,15 +2922,33 @@ impl DataComponentCodec<Self> for BaseColorImpl {
 
 impl DataComponentCodec<Self> for PotDecorationsImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_var_int(&VarInt::from(self.sherds.len() as i32))?;
+        for sherd in &self.sherds {
+            let name = sherd.strip_prefix("minecraft:").unwrap_or(sherd);
+            let id = pumpkin_data::item::Item::from_registry_key(name)
+                .map_or(pumpkin_data::item::Item::BRICK.id as i32, |item| {
+                    item.id as i32
+                });
+            seq.write_var_int(&VarInt::from(id))?;
+        }
+        Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let len = seq.get_var_int()?.0 as usize;
+        let mut sherds = Vec::with_capacity(len.min(16));
         for _ in 0..len {
-            let _ = seq.get_var_int()?;
+            let id = seq.get_var_int()?.0 as u16;
+            let name = pumpkin_data::item::Item::from_id(id)
+                .map_or("minecraft:brick", |item| item.registry_key);
+            let full_name = if name.starts_with("minecraft:") {
+                Cow::Borrowed(name)
+            } else {
+                Cow::Owned(format!("minecraft:{name}"))
+            };
+            sherds.push(full_name);
         }
-        Ok(Self)
+        Ok(Self { sherds })
     }
 }
 
@@ -2721,7 +2963,8 @@ impl DataComponentCodec<Self> for ContainerImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
+        const MAX_SIZE: usize = 256;
+        let len = read_count(seq, MAX_SIZE)?;
         let mut items = Vec::with_capacity(len);
         for slot in 0..len {
             if seq.get_bool()? {
@@ -2744,8 +2987,8 @@ impl DataComponentCodec<Self> for BlockStateImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut properties = Vec::with_capacity(len);
+        let len = read_count(seq, usize::MAX)?;
+        let mut properties = Vec::with_capacity(len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..len {
             let k = seq.get_str()?.to_string();
             let v = seq.get_str()?.to_string();
@@ -2759,32 +3002,53 @@ impl DataComponentCodec<Self> for BlockStateImpl {
 
 impl DataComponentCodec<Self> for BeesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        seq.write_var_int(&VarInt::from(self.bees.len() as i32))?;
+        for bee in &self.bees {
+            let comp = bee.extract_compound();
+            let entity_data = comp
+                .and_then(|c| c.get_compound("entity_data"))
+                .cloned()
+                .unwrap_or_default();
+            let ticks = comp.and_then(|c| c.get_int("ticks_in_hive")).unwrap_or(0);
+            let min_ticks = comp
+                .and_then(|c| c.get_int("min_ticks_in_hive"))
+                .unwrap_or(0);
+            seq.write_var_int(&VarInt(i32::from(EntityType::BEE.id)))?;
+            seq.write_nbt(NbtTag::Compound(entity_data))?;
+            seq.write_var_int(&VarInt(ticks))?;
+            seq.write_var_int(&VarInt(min_ticks))?;
+        }
+        Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let len = seq.get_var_int()?.0 as usize;
+        let mut bees = Vec::with_capacity(len.min(64));
         for _ in 0..len {
             let _entity_type = seq.get_var_int()?;
-            let _nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
-            let _ticks = seq.get_var_int()?;
-            let _min_ticks = seq.get_var_int()?;
+            let nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let ticks = seq.get_var_int()?.0;
+            let min_ticks = seq.get_var_int()?.0;
+            let mut bee_comp = pumpkin_nbt::compound::NbtCompound::new();
+            if let Some(NbtTag::Compound(c)) = nbt {
+                bee_comp.put_compound("entity_data", c);
+            }
+            bee_comp.put_int("ticks_in_hive", ticks);
+            bee_comp.put_int("min_ticks_in_hive", min_ticks);
+            bees.push(NbtTag::Compound(bee_comp));
         }
-        Ok(Self)
+        Ok(Self { bees })
     }
 }
 
 impl DataComponentCodec<Self> for SulfurCubeContentImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))
+        serialize_item_stack_template(&self.item, seq)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = deserialize_item_stack_template(seq)?;
-        Ok(Self)
+        let item = deserialize_item_stack_template(seq)?;
+        Ok(Self { item })
     }
 }
 
@@ -2815,11 +3079,363 @@ impl DataComponentCodec<Self> for ContainerLootImpl {
 
 impl DataComponentCodec<Self> for BreakSoundImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        crate::IdOr::<crate::SoundEvent>::write(&data_to_proto_sound(&self.sound), seq, |w, e| {
+            w.write_string(&e.sound_name)?;
+            w.write_option(&e.range, |w2, r| w2.write_f32(*r))
+        })
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
+        let proto = crate::IdOr::<crate::SoundEvent>::read(seq, |r| {
+            let sound_name = r.get_str()?.into();
+            let range = r.get_option(NetworkReadExt::get_f32)?;
+            Ok(crate::SoundEvent { sound_name, range })
+        })?;
+        let sound = proto_to_data_sound(&proto)
+            .ok_or_else(|| ReadingError::Message("Invalid sound in BreakSoundImpl".into()))?;
+        Ok(Self { sound })
+    }
+}
+
+impl DataComponentCodec<Self> for InteractAnimationImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.animation_type.to_id()))?;
+        seq.write_var_int(&VarInt::from(self.duration))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let anim_id = seq.get_var_int()?.0;
+        let animation_type = pumpkin_data::data_component_impl::SwingAnimationType::from_id(
+            anim_id,
+        )
+        .ok_or_else(|| ReadingError::Message(format!("Invalid SwingAnimationType id {anim_id}")))?;
+        let duration = seq.get_var_int()?.0;
+        Ok(Self {
+            animation_type,
+            duration,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for BlockTransformerImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let id = match self.transformer.as_ref() {
+            "minecraft:hoe" | "hoe" => 1,
+            "minecraft:shovel" | "shovel" => 2,
+            _ => 0,
+        };
+        seq.write_var_int(&VarInt(id))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let transformer = match id {
+            0 => Cow::Borrowed("minecraft:axe"),
+            1 => Cow::Borrowed("minecraft:hoe"),
+            2 => Cow::Borrowed("minecraft:shovel"),
+            _ => {
+                return Err(ReadingError::Message(format!(
+                    "Invalid BlockTransformer id {id}"
+                )));
+            }
+        };
+        Ok(Self { transformer })
+    }
+}
+
+impl DataComponentCodec<Self> for VillagerFoodImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.nutrition))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let nutrition = seq.get_var_int()?.0;
+        Ok(Self { nutrition })
+    }
+}
+
+impl DataComponentCodec<Self> for MobVisibilityImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_idset(&self.targeting_entity_types, seq)?;
+        seq.write_f32(self.visibility)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let targeting_entity_types = deserialize_idset(seq)?;
+        let visibility = seq.get_f32()?;
+        // Like vanilla's validated item stacks, the persistent range applies here too.
+        if !Self::is_valid_visibility(visibility) {
+            return Err(ReadingError::Message(format!(
+                "Mob visibility {visibility} outside 0..={}",
+                Self::MAX_VISIBILITY
+            )));
+        }
+        Ok(Self {
+            targeting_entity_types,
+            visibility,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for ProvidesPotteryPatternImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let id = pumpkin_data::decorated_pot_pattern::DecoratedPotPattern::from_name(&self.pattern)
+            .map_or(0, |p| p.id() as i32);
+        seq.write_var_int(&VarInt(id))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let pattern = usize::try_from(id)
+            .ok()
+            .and_then(|idx| {
+                pumpkin_data::decorated_pot_pattern::DecoratedPotPattern::all().get(idx)
+            })
+            .map_or(Cow::Borrowed("minecraft:angler"), |p| {
+                Cow::Owned(format!("minecraft:{}", p.to_name()))
+            });
+        Ok(Self { pattern })
+    }
+}
+
+fn serialize_sign_messages(
+    messages: &[Cow<'static, str>; 4],
+    filtered_messages: Option<&[Cow<'static, str>; 4]>,
+    color: pumpkin_data::dye_color::DyeColor,
+    has_glowing_text: bool,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    for msg in messages {
+        seq.write_nbt(NbtTag::String(msg.to_string().into()))?;
+    }
+    if let Some(filtered) = filtered_messages {
+        seq.write_bool(true)?;
+        for msg in filtered {
+            seq.write_nbt(NbtTag::String(msg.to_string().into()))?;
+        }
+    } else {
+        seq.write_bool(false)?;
+    }
+    seq.write_var_int(&VarInt::from(color.id() as i32))?;
+    seq.write_bool(has_glowing_text)
+}
+
+type DeserializedSignData = (
+    [Cow<'static, str>; 4],
+    Option<[Cow<'static, str>; 4]>,
+    pumpkin_data::dye_color::DyeColor,
+    bool,
+);
+
+fn deserialize_sign_messages(
+    seq: &mut impl NetworkReadExt,
+) -> Result<DeserializedSignData, ReadingError> {
+    let mut messages = [
+        Cow::Borrowed(""),
+        Cow::Borrowed(""),
+        Cow::Borrowed(""),
+        Cow::Borrowed(""),
+    ];
+    for slot in &mut messages {
+        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        if let Some(t) = tag {
+            *slot = Cow::Owned(pumpkin_util::text::TextComponent::from_nbt(&t).get_text());
+        }
+    }
+    let filtered_messages = if seq.get_bool()? {
+        let mut filtered = [
+            Cow::Borrowed(""),
+            Cow::Borrowed(""),
+            Cow::Borrowed(""),
+            Cow::Borrowed(""),
+        ];
+        for slot in &mut filtered {
+            let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            if let Some(t) = tag {
+                *slot = Cow::Owned(pumpkin_util::text::TextComponent::from_nbt(&t).get_text());
+            }
+        }
+        Some(filtered)
+    } else {
+        None
+    };
+    let color_id = seq.get_var_int()?.0;
+    let color = u8::try_from(color_id)
+        .ok()
+        .and_then(pumpkin_data::dye_color::DyeColor::by_id)
+        .ok_or_else(|| ReadingError::Message(format!("Invalid SignText DyeColor {color_id}")))?;
+    let has_glowing_text = seq.get_bool()?;
+    Ok((messages, filtered_messages, color, has_glowing_text))
+}
+
+impl DataComponentCodec<Self> for SignTextFrontImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_sign_messages(
+            &self.messages,
+            self.filtered_messages.as_ref(),
+            self.color,
+            self.has_glowing_text,
+            seq,
+        )
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let (messages, filtered_messages, color, has_glowing_text) =
+            deserialize_sign_messages(seq)?;
+        Ok(Self {
+            messages,
+            filtered_messages,
+            color,
+            has_glowing_text,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for SignTextBackImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_sign_messages(
+            &self.messages,
+            self.filtered_messages.as_ref(),
+            self.color,
+            self.has_glowing_text,
+            seq,
+        )
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let (messages, filtered_messages, color, has_glowing_text) =
+            deserialize_sign_messages(seq)?;
+        Ok(Self {
+            messages,
+            filtered_messages,
+            color,
+            has_glowing_text,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for CushionColorImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt::from(self.color.id() as i32))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let color = u8::try_from(id)
+            .ok()
+            .and_then(pumpkin_data::dye_color::DyeColor::by_id)
+            .ok_or_else(|| ReadingError::Message(format!("Invalid CushionColor id {id}")))?;
+        Ok(Self { color })
+    }
+}
+
+impl DataComponentCodec<Self> for CompostableImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let layers = match self.chance {
+            0.3 => "minecraft:compostable/low",
+            0.5 => "minecraft:compostable/low_medium",
+            0.65 => "minecraft:compostable/medium",
+            0.85 => "minecraft:compostable/medium_high",
+            _ => "minecraft:compostable/always_add_one",
+        };
+        seq.write_bool(false)?;
+        seq.write_string(layers)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let is_direct = seq.get_bool()?;
+        let chance = if is_direct {
+            let val = seq.get_i32()?;
+            if val > 0 { 1.0 } else { 0.3 }
+        } else {
+            let key = seq.get_str()?;
+            match key.strip_prefix("minecraft:").unwrap_or(&key) {
+                "compostable/low" => 0.3,
+                "compostable/low_medium" => 0.5,
+                "compostable/medium" => 0.65,
+                "compostable/medium_high" => 0.85,
+                _ => 1.0,
+            }
+        };
+        Ok(Self { chance })
+    }
+}
+
+impl DataComponentCodec<Self> for CookingFuelImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        match &self.burn_time {
+            pumpkin_data::data_component_impl::IntProvider::Inline(val) => {
+                seq.write_bool(true)?;
+                seq.write_i32(*val)?;
+            }
+            pumpkin_data::data_component_impl::IntProvider::Id(id) => {
+                seq.write_bool(false)?;
+                seq.write_string(id)?;
+            }
+        }
+        match &self.speed_multiplier {
+            pumpkin_data::data_component_impl::FloatProvider::Inline(val) => {
+                seq.write_bool(true)?;
+                seq.write_f32(*val)
+            }
+            pumpkin_data::data_component_impl::FloatProvider::Id(id) => {
+                seq.write_bool(false)?;
+                seq.write_string(id)
+            }
+        }
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let burn_time = if seq.get_bool()? {
+            pumpkin_data::data_component_impl::IntProvider::Inline(seq.get_i32()?)
+        } else {
+            pumpkin_data::data_component_impl::IntProvider::Id(Cow::Owned(
+                seq.get_str()?.to_string(),
+            ))
+        };
+        let speed_multiplier = if seq.get_bool()? {
+            pumpkin_data::data_component_impl::FloatProvider::Inline(seq.get_f32()?)
+        } else {
+            pumpkin_data::data_component_impl::FloatProvider::Id(Cow::Owned(
+                seq.get_str()?.to_string(),
+            ))
+        };
+        Ok(Self {
+            burn_time,
+            speed_multiplier,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for BrewingFuelImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_bool(false)?;
+        seq.write_string("minecraft:brewing/uses_default")?;
+        seq.write_bool(false)?;
+        seq.write_string("minecraft:brewing/speed_default")
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        if seq.get_bool()? {
+            let _uses = seq.get_i32()?;
+        } else {
+            let _uses_key = seq.get_str()?;
+        }
+        if seq.get_bool()? {
+            let _speed = seq.get_f32()?;
+        } else {
+            let _speed_key = seq.get_str()?;
+        }
+        Ok(Self)
+    }
+}
+
+impl DataComponentCodec<Self> for WaxedImpl {
+    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        Ok(())
+    }
+
+    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         Ok(Self)
     }
 }
@@ -2883,5 +3499,80 @@ mod tests {
         let decoded = ProfileImpl::deserialize(&mut encoded.as_slice()).unwrap();
         assert_eq!(decoded.name.as_deref(), Some("Notch"));
         assert_eq!(decoded.id, Some([1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn variant_components_use_vanilla_network_ids() {
+        let mut encoded = Vec::new();
+        SalmonSizeImpl {
+            value: Cow::Borrowed("large"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        TropicalFishPatternImpl {
+            value: Cow::Borrowed("stripey"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        SheepColorImpl {
+            value: Cow::Borrowed("red"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        // Holders send the registry id plus one.
+        PaintingVariantImpl {
+            value: Cow::Borrowed("minecraft:alban"),
+        }
+        .serialize(&mut encoded)
+        .unwrap();
+        assert_eq!(encoded, [2, 0x81, 0x02, 14, 1]);
+
+        let clamped = SalmonSizeImpl::deserialize(&mut [9u8].as_slice()).unwrap();
+        assert_eq!(clamped.value, "large");
+
+        let min_holder = [0x80, 0x80, 0x80, 0x80, 0x08];
+        assert!(PaintingVariantImpl::deserialize(&mut min_holder.as_slice()).is_err());
+    }
+
+    #[test]
+    fn all_default_item_components_serialize_and_deserialize() {
+        for id in 0..=2000 {
+            let Some(item) = pumpkin_data::item::Item::from_id(id) else {
+                continue;
+            };
+            for (comp, val) in item.components {
+                if *comp == DataComponent::EntityData {
+                    // Static Item constants use nbt: None because NbtCompound is not const-constructible.
+                    continue;
+                }
+                let mut buf = Vec::new();
+                serialize(*comp, *val, &mut buf).unwrap_or_else(|e| {
+                    panic!("Failed to serialize {comp:?} on {}: {e}", item.registry_key)
+                });
+                let mut slice = buf.as_slice();
+                let _decoded = deserialize(*comp, &mut slice).unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to deserialize {comp:?} on {}: {e}",
+                        item.registry_key
+                    )
+                });
+                assert!(
+                    slice.is_empty(),
+                    "Trailing bytes after deserializing {comp:?} on {}: {} bytes left",
+                    item.registry_key,
+                    slice.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn oversized_tool_rule_count_is_rejected_without_preallocating() {
+        for count in [
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x07],
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x0F],
+        ] {
+            assert!(ToolImpl::deserialize(&mut count.as_slice()).is_err());
+        }
     }
 }

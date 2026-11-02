@@ -130,7 +130,8 @@ interface command {
         as-player: func() -> option<player>;
         permission-level: func() -> permission-level;
         has-permission-level: func(level: permission-level) -> bool;
-        has-permission: func(server: borrow<server>, node: string) -> bool;
+        /// Checks whether the sender has a permission on the server.
+        has-permission: async func(node: string) -> bool;
         position: func() -> option<position>;
         %world: func() -> option<%world>;
         get-locale: func() -> locale;

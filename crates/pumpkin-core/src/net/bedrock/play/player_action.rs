@@ -7,7 +7,7 @@ impl BedrockClient {
     pub fn handle_player_action(
         &self,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &SPlayerAction,
     ) {
         if !player.has_client_loaded()
@@ -54,6 +54,17 @@ impl BedrockClient {
                             .broken(&world, block, player, &location, server, state);
                     }
                 } else if !state.is_air() {
+                    let starts_breaking = !player.mining.load(Ordering::Relaxed)
+                        || *player
+                            .mining_pos
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            != location;
+                    if starts_breaking {
+                        server
+                            .block_registry
+                            .attack(&world, block, state, &location, player);
+                    }
                     let speed = crate::block::calc_block_breaking(player, state, block);
                     if speed >= 1.0 {
                         player.stop_mining();
@@ -95,8 +106,6 @@ impl BedrockClient {
                             .mining_pos
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        let starts_breaking =
-                            !player.mining.load(Ordering::Relaxed) || *mining_pos != location;
                         let progress = if starts_breaking {
                             player.start_mining_time.store(
                                 player.tick_counter.load(Ordering::Relaxed),
@@ -113,20 +122,6 @@ impl BedrockClient {
                             .current_block_breaking_speed
                             .swap(speed.to_bits(), Ordering::Relaxed);
                         if starts_breaking {
-                            if block == &pumpkin_data::Block::NOTE_BLOCK {
-                                let props =
-                                    pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                        state.id,
-                                    );
-                                crate::block::blocks::note::NoteBlock::play_note(
-                                    &props, &world, &location,
-                                );
-                                player.increment_stat(
-                                    pumpkin_data::statistic::StatisticCategory::Custom,
-                                    pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
-                                    1,
-                                );
-                            }
                             world.set_block_breaking(
                                 entity,
                                 location,
@@ -234,6 +229,53 @@ impl BedrockClient {
             }
             PlayerAction::DropItem => {
                 player.drop_held_item(false);
+            }
+            PlayerAction::StartGliding => {
+                player.try_start_fall_flying(server);
+            }
+            PlayerAction::StopGliding => {
+                player.stop_fall_flying(server);
+            }
+            PlayerAction::StartSwimming => {
+                player.get_entity().set_swimming(true);
+                player.update_player_pose();
+            }
+            PlayerAction::StopSwimming => {
+                player.get_entity().set_swimming(false);
+                player.update_player_pose();
+            }
+            PlayerAction::StartSpinAttack => {
+                player
+                    .get_entity()
+                    .set_pose(pumpkin_data::entity::EntityPose::SpinAttack);
+            }
+            PlayerAction::StopSpinAttack => {
+                player.update_player_pose();
+            }
+            PlayerAction::StartSprinting => {
+                player.set_sprinting(true);
+            }
+            PlayerAction::StopSprinting => {
+                player.set_sprinting(false);
+            }
+            PlayerAction::StartSneaking => {
+                player.get_entity().set_sneaking(true);
+                player.update_bedrock_shield_sneaking();
+            }
+            PlayerAction::StopSneaking => {
+                player.get_entity().set_sneaking(false);
+                player.update_bedrock_shield_sneaking();
+            }
+            PlayerAction::StartCrawling => {
+                player
+                    .get_entity()
+                    .set_pose(pumpkin_data::entity::EntityPose::Swimming);
+            }
+            PlayerAction::StopCrawling => {
+                player.update_player_pose();
+            }
+            PlayerAction::StopSleeping => {
+                player.wake_up();
             }
             PlayerAction::Respawn
                 if player.living_entity.dead.load(Ordering::Relaxed)

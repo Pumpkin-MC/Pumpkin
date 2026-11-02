@@ -68,8 +68,10 @@ interface scoreboard {
 
         update-score: func(entity-name: string, objective-name: string, value: s32, number-format: option<number-format>);
         add-score: func(entity-name: string, objective-name: string, delta: s32) -> s32;
+        get-score: func(entity-name: string, objective-name: string) -> option<s32>;
         remove-score: func(entity-name: string, objective-name: string);
         reset-entity-scores: func(entity-name: string);
+        get-objectives: func() -> list<string>;
 
         create-team: func(name: string, settings: team-settings);
         remove-team: func(name: string);
@@ -105,7 +107,9 @@ interface scoreboard {
 
         update-score: func(entity-name: string, objective-name: string, value: s32);
         add-score: func(entity-name: string, objective-name: string, delta: s32) -> s32;
+        get-score: func(entity-name: string, objective-name: string) -> option<s32>;
         remove-score: func(entity-name: string, objective-name: string);
         reset-entity-scores: func(entity-name: string);
+        get-objectives: func() -> list<string>;
     }
 }

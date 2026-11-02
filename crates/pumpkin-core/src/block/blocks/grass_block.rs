@@ -140,7 +140,11 @@ impl BlockBehaviour for GrassBlock {
 
 fn place_tall_grass(world: &std::sync::Arc<crate::world::World>, position: BlockPos) {
     let state = Block::TALL_GRASS.default_state.id;
-    world.set_block_state(&position, state, BlockFlags::NOTIFY_LISTENERS);
+    world.set_block_state(
+        &position,
+        state,
+        BlockFlags::NOTIFY_LISTENERS | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+    );
     place_tall_grass_upper(world, position, state);
 }
 

@@ -4,13 +4,16 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::block_state::SoundType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -72,12 +75,9 @@ impl HorseEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
+            // TODO: RunAroundLikeCrazyGoal at 1, the only way to tame by riding.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -147,6 +147,10 @@ impl AgeableMob for HorseEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for HorseEntity {
@@ -162,7 +166,55 @@ impl Animal for HorseEntity {
     }
 }
 
+/// Vanilla `AbstractHorse.playStepSound`, shared by every horse that doesn't override it.
+pub(crate) fn play_horse_step_sound(
+    horse: &dyn Mob,
+    pos: &BlockPos,
+    state: &BlockState,
+    can_gallop: bool,
+) {
+    if state.is_liquid() {
+        return;
+    }
+    let entity = horse.get_entity();
+    let above = entity.world.load().get_block_state(&pos.up());
+    let sound_type = if above.id.to_block() == &Block::SNOW {
+        above.get_sound_type()
+    } else {
+        state.get_sound_type()
+    };
+    let volume = sound_type.volume * 0.15;
+    // TODO: gallop once ridden horses move: `tickRidden` resets the gallop counter while the
+    // rider isn't pressing forward, which is always the case without ridden movement.
+    let ridden = entity.has_passengers() && can_gallop;
+    let sound = if ridden || is_wood_sound_type(sound_type) {
+        Sound::EntityHorseStepWood
+    } else if entity.age.load(Ordering::Relaxed) < 0 {
+        Sound::EntityBabyHorseStep
+    } else {
+        Sound::EntityHorseStep
+    };
+    horse.play_entity_sound(sound, volume, sound_type.pitch);
+}
+
+/// Vanilla `AbstractHorse.isWoodSoundType`.
+fn is_wood_sound_type(sound_type: &SoundType) -> bool {
+    matches!(
+        sound_type.name,
+        "WOOD" | "NETHER_WOOD" | "STEM" | "CHERRY_WOOD" | "BAMBOO_WOOD"
+    )
+}
+
+// TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        play_horse_step_sound(self, pos, state, true);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -199,10 +251,6 @@ impl Mob for HorseEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

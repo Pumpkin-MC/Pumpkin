@@ -250,18 +250,62 @@ impl WaxedImpl {
 }
 
 impl DataComponentImpl for WaxedImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(Waxed);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DyeImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct DyeImpl {
+    pub color: crate::dye_color::DyeColor,
+}
 impl DyeImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let color = if let Some(s) = data.extract_string() {
+            crate::dye_color::DyeColor::by_name(s)?
+        } else if let Some(id) = data.extract_int() {
+            crate::dye_color::DyeColor::by_id(id as u8)?
+        } else {
+            return None;
+        };
+        Some(Self { color })
     }
 }
 impl DataComponentImpl for DyeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.color.name().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.color.name()) as i32
+    }
     default_impl!(Dye);
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BlockTransformerImpl {
+    pub transformer: Cow<'static, str>,
+}
+impl BlockTransformerImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|transformer| Self {
+            transformer: Cow::Owned(transformer.to_string()),
+        })
+    }
+
+    #[must_use]
+    pub fn get_transformer(&self) -> Option<&'static crate::block_transformer::BlockTransformer> {
+        crate::block_transformer::get_block_transformer(&self.transformer)
+    }
+}
+impl DataComponentImpl for BlockTransformerImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.transformer.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.transformer) as i32
+    }
+    default_impl!(BlockTransformer);
 }
 
 /// 26.3 `minecraft:brewing_fuel` marker. Presence identifies brewing-stand fuel.
@@ -273,6 +317,9 @@ impl BrewingFuelImpl {
     }
 }
 impl DataComponentImpl for BrewingFuelImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(BrewingFuel);
 }
 
@@ -875,12 +922,46 @@ impl DataComponentImpl for JukeboxPlayableImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecipesImpl;
+pub struct RecipesImpl {
+    pub recipes: Cow<'static, [Cow<'static, str>]>,
+}
+#[allow(non_upper_case_globals)]
+pub const RecipesImpl: RecipesImpl = RecipesImpl {
+    recipes: Cow::Borrowed(&[]),
+};
 impl RecipesImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut recipes = Vec::new();
+        if let NbtTag::List(list) = data {
+            for tag in list {
+                if let NbtTag::String(s) = tag {
+                    recipes.push(Cow::Owned(s.to_string()));
+                }
+            }
+        } else if let Some(compound) = data.extract_compound()
+            && let Some(list) = compound
+                .get_list("recipes")
+                .or_else(|| compound.get_list("Recipes"))
+        {
+            for tag in list {
+                if let NbtTag::String(s) = tag {
+                    recipes.push(Cow::Owned(s.to_string()));
+                }
+            }
+        }
+        Some(Self {
+            recipes: Cow::Owned(recipes),
+        })
     }
 }
 impl DataComponentImpl for RecipesImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.recipes
+                .iter()
+                .map(|r| NbtTag::String(r.to_string().into()))
+                .collect(),
+        )
+    }
     default_impl!(Recipes);
 }

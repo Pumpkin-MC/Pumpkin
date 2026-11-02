@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::pig_sound_variant::PigSoundVariant;
 use pumpkin_data::pig_variant::PigVariant;
@@ -10,6 +11,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::EntityBase;
 use crate::entity::custom_sound::CustomSound;
@@ -67,11 +69,7 @@ impl PigEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
@@ -90,11 +88,15 @@ impl PigEntity {
     }
 
     pub fn set_variant(&self, variant: PigVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::pig::DATA_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 
@@ -142,6 +144,16 @@ impl Animal for PigEntity {
 }
 
 impl Mob for PigEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn has_audited_tick(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -171,8 +183,11 @@ impl Mob for PigEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        if let Some(v) = PigVariant::from_name(name) {
-            self.set_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:pig_variant", name, |n| {
+            PigVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant_id(variant_id);
         }
     }
 
@@ -184,8 +199,13 @@ impl Mob for PigEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Saddle", self.is_saddled());
-        let variant = PigVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
-        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:pig_variant", variant_id, |id| {
+                let variant = PigVariant::from_id(id as u8).unwrap_or_default();
+                format!("minecraft:{}", variant.to_name())
+            });
+        nbt.put_string("variant", variant_str);
         let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
         nbt.put_string(
@@ -199,9 +219,13 @@ impl Mob for PigEntity {
             self.set_saddled(saddle == 1);
         }
         if let Some(variant_str) = nbt.get_string("variant")
-            && let Some(variant) = PigVariant::from_name(variant_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:pig_variant", variant_str, |n| {
+                    PigVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
         {
-            self.variant.store(variant.id(), Ordering::Relaxed);
+            self.variant.store(variant_id, Ordering::Relaxed);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = PigSoundVariant::from_name(sound_str)

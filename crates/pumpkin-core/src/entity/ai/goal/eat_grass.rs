@@ -1,10 +1,11 @@
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 use crate::entity::ageable::AgeableMob;
 use crate::entity::mob::Mob;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::world::WorldEvent;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
@@ -34,6 +35,14 @@ impl EatGrassGoal {
 }
 
 impl Goal for EatGrassGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        Some(GoalReach {
+            // `tick` eats at this timer value.
+            changes_blocks: running && (self.timer - 1).max(0) == self.get_tick_count(4),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let interval = self.get_tick_count(if mob.as_ageable().is_some_and(AgeableMob::is_baby) {
             BABY_INTERVAL
@@ -64,15 +73,13 @@ impl Goal for EatGrassGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.timer = self.get_tick_count(MAX_TIMER);
         let entity = &mob.get_mob_entity().living_entity.entity;
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, EntityStatus::EatGrass, None);
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::EatGrass,
+            ActorEventID::EatGrass,
+        );
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 

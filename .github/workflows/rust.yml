@@ -51,7 +51,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Select affected packages
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
@@ -130,7 +130,7 @@ jobs:
       - run: cargo clippy --release --all-targets --all-features
 
   check_wit:
-    name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    name: Validate `pumpkin-plugin-wit`
     needs: prepare
     if: needs.prepare.outputs.should_check_wit == 'true'
     runs-on: ubuntu-slim
@@ -139,8 +139,14 @@ jobs:
         with:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
-      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
-      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.2
+      - uses: bytecodealliance/actions/wasm-tools/setup@v1
+      - name: Generate bindings and validate both WIT packages
+        run: |
+          for version in v0.1 v0.2; do
+            wit-bindgen rust "crates/pumpkin-plugin-wit/$version" --out-dir "$RUNNER_TEMP/bindings-$version"
+            wasm-tools component wit "crates/pumpkin-plugin-wit/$version" --wasm -o "$RUNNER_TEMP/pumpkin-$version.wasm"
+            wasm-tools validate "$RUNNER_TEMP/pumpkin-$version.wasm"
+          done
 
   test:
     name: Test (${{ matrix.name }})
@@ -162,7 +168,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
@@ -178,6 +184,28 @@ jobs:
         run: >-
           python .github/scripts/ci_packages.py run --
           cargo test --doc --verbose
+
+  gametest:
+    name: GameTest and Bot Harness
+    needs: [prepare, format, machete, clippy, check_wit]
+    if: >-
+      !cancelled() &&
+      needs.prepare.outputs.has_code == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Run pumpkin-tester (headless bots + Mojang GameTests)
+        run: cargo run -p pumpkin-tester
 
   test_android:
     name: Test on Android AArch64
@@ -250,7 +278,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
@@ -279,7 +307,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}

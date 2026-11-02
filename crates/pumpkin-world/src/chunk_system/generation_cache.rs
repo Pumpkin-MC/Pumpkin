@@ -92,6 +92,9 @@ pub(crate) struct SurfaceBiomeNeighborhood {
     center_x: i32,
     center_z: i32,
     palettes: [Option<SurfaceBiomePalette>; 9],
+    present_biomes: [u64; 4],
+    single_biome: Option<u8>,
+    has_multiple_biomes: bool,
 }
 
 impl SurfaceBiomeNeighborhood {
@@ -101,6 +104,9 @@ impl SurfaceBiomeNeighborhood {
             center_x,
             center_z,
             palettes: std::array::from_fn(|_| None),
+            present_biomes: [0; 4],
+            single_biome: None,
+            has_multiple_biomes: false,
         }
     }
 
@@ -117,8 +123,37 @@ impl SurfaceBiomeNeighborhood {
         if slot.is_some() {
             return false;
         }
+        for &b in &palette.biomes {
+            let word = (b >> 6) as usize;
+            let bit = 1u64 << (b & 63);
+            if (self.present_biomes[word] & bit) == 0 {
+                self.present_biomes[word] |= bit;
+                if !self.has_multiple_biomes {
+                    if let Some(existing) = self.single_biome {
+                        if existing != b {
+                            self.single_biome = None;
+                            self.has_multiple_biomes = true;
+                        }
+                    } else {
+                        self.single_biome = Some(b);
+                    }
+                }
+            }
+        }
         *slot = Some(palette);
         true
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) const fn contains_biome(&self, id: u8) -> bool {
+        (self.present_biomes[(id >> 6) as usize] & (1u64 << (id & 63))) != 0
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) const fn single_biome(&self) -> Option<u8> {
+        self.single_biome
     }
 
     #[must_use]
@@ -233,8 +268,16 @@ impl GenerationCache for Cache {
         let id = GenerationCache::get_block_state(self, pos);
 
         let Some(fluid) = Fluid::from_state_id(id) else {
-            let fluid = if id.is_waterlogged() {
-                Fluid::FLOWING_WATER
+            let fluid = if id.is_waterlogged()
+                || matches!(
+                    id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                ) {
+                Fluid::WATER
             } else {
                 Fluid::EMPTY
             };
@@ -243,7 +286,6 @@ impl GenerationCache for Cache {
             return (fluid, state);
         };
 
-        //let state = fluid.get_state(id);
         let state = fluid.states[0].clone();
 
         (fluid.clone(), state)
@@ -322,12 +364,10 @@ impl GenerationCache for Cache {
 
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
-                self.top_block_height_exclusive(x, z)
-            }
-            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
-                self.ocean_floor_height_exclusive(x, z)
-            }
+            HeightMap::WorldSurfaceWg => self.top_block_wg_height_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_wg_height_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -348,7 +388,7 @@ impl GenerationCache for Cache {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
 
-                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
+                heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
@@ -366,7 +406,7 @@ impl GenerationCache for Cache {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
-                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
+                heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
@@ -384,9 +424,27 @@ impl GenerationCache for Cache {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
-                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) + 1
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
+        }
+    }
+
+    fn top_block_wg_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.z;
+        debug_assert!(dx < self.size && dy < self.size);
+        debug_assert!(dx >= 0 && dy >= 0);
+        match &self.chunks[(dx * self.size + dy) as usize] {
+            Chunk::Level(data) => {
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let min_y = data.section.min_y;
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) + 1
+            }
+            Chunk::Proto(data) => data.top_block_wg_height_exclusive(x, z),
         }
     }
 
@@ -401,6 +459,18 @@ impl GenerationCache for Cache {
                 0 // todo missing
             }
             Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
+        }
+    }
+
+    fn ocean_floor_wg_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.z;
+        if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            return 0;
+        }
+        match &self.chunks[(dx * self.size + dy) as usize] {
+            Chunk::Level(_data) => 0,
+            Chunk::Proto(data) => data.ocean_floor_wg_height_exclusive(x, z),
         }
     }
 
@@ -683,16 +753,23 @@ impl Cache {
                 }
             },
             StagedChunkEnum::Lighting => {
-                let mut engine = crate::lighting::LightEngine::new();
-                engine.initialize_light(self, lighting_config);
+                thread_local! {
+                    static LIGHT_ENGINE: std::cell::RefCell<crate::lighting::LightEngine> =
+                        std::cell::RefCell::new(crate::lighting::LightEngine::new());
+                }
+                LIGHT_ENGINE.with(|engine| {
+                    engine.borrow_mut().initialize_light(
+                        self,
+                        lighting_config,
+                        generator.dimension().has_skylight,
+                    );
+                });
                 // Only set stage to Lighting if it wasn't already at Lighting or higher
                 // (initialize_light may short-circuit for already-lit chunks)
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
                 if chunk.stage < StagedChunkEnum::Lighting {
                     chunk.stage = StagedChunkEnum::Lighting;
                 }
-                // Engine's internal state is cleared by initialize_light() and will be dropped here
-                drop(engine);
             }
             StagedChunkEnum::Spawn => {
                 ProtoChunk::spawn_mobs(self, block_registry);

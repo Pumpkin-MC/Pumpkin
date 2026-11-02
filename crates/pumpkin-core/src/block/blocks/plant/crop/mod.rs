@@ -5,16 +5,30 @@ use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
     BlockStateId,
-    block_properties::{FarmlandLikeProperties, WheatLikeProperties},
+    block_properties::{BlockProperties, FarmlandLikeProperties, WheatLikeProperties},
+    entity::EntityType,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
-use crate::{block::blocks::plant::PlantBlockBase, world::World};
+use crate::{
+    block::{CanPlaceAtArgs, OnEntityCollisionArgs, blocks::plant::PlantBlockBase},
+    world::World,
+};
 
 type CropProperties = WheatLikeProperties;
 type FarmlandProperties = FarmlandLikeProperties;
+
+/// Raw brightness `CropBlock` and `StemBlock` need at the plant to grow on a random tick.
+const MIN_GROWTH_LIGHT: u8 = 9;
+/// Minimum raw brightness `CropBlock` and `PitcherCropBlock` need at the plant to survive.
+const MIN_SURVIVAL_LIGHT: u8 = 8;
+
+#[must_use]
+pub fn has_sufficient_light(world: &World, pos: &BlockPos) -> bool {
+    world.get_raw_brightness(pos, 0) >= MIN_SURVIVAL_LIGHT
+}
 
 pub mod beetroot;
 pub mod carrot;
@@ -36,6 +50,36 @@ trait CropBlockBase: PlantBlockBase {
         block_accessor
             .get_block(pos)
             .has_tag(&tag::Block::MINECRAFT_SUPPORTS_CROPS)
+    }
+
+    fn can_place_at(&self, args: &CanPlaceAtArgs<'_>) -> bool {
+        if let Some(world) = args.world
+            && !has_sufficient_light(world, args.position)
+        {
+            return false;
+        }
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        pos: &BlockPos,
+        state_id: BlockStateId,
+    ) -> BlockStateId {
+        if !has_sufficient_light(world, pos) {
+            return Block::AIR.default_state.id;
+        }
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world, pos, state_id)
+    }
+
+    fn on_entity_collision(&self, args: &OnEntityCollisionArgs<'_>) {
+        if args.entity.get_entity().entity_type == &EntityType::RAVAGER
+            && args.world.level_info.load().game_rules.mob_griefing
+        {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
     }
 
     fn max_age(&self) -> i32 {
@@ -74,6 +118,10 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+        if world.get_raw_brightness(pos, 0) < MIN_GROWTH_LIGHT {
+            return;
+        }
+
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
@@ -111,13 +159,15 @@ pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f
         for dz in -1..=1 {
             let mut local_moisture = 0.0;
 
-            let (block, block_state) =
+            let (soil_block, block_state) =
                 world.get_block_and_state_id(&down_pos.offset(Vector3 { x: dx, y: 0, z: dz }));
-            if block == &Block::FARMLAND {
+            if soil_block.has_tag(&tag::Block::MINECRAFT_GROWS_CROPS) {
                 local_moisture = 1.0;
-                let props = FarmlandProperties::from_state_id(block_state);
-                if props.moisture != 0 {
-                    local_moisture = 3.0;
+                if <FarmlandProperties as BlockProperties>::handles_block_id(soil_block.id) {
+                    let props = FarmlandProperties::from_state_id(block_state);
+                    if props.moisture != 0 {
+                        local_moisture = 3.0;
+                    }
                 }
             }
 

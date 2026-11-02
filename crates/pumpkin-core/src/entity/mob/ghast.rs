@@ -10,8 +10,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-use crate::entity::ai::goal::active_target::ActiveTargetGoal;
-use crate::entity::living::LivingEntity;
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::{
     Entity, EntityBase,
@@ -19,6 +19,9 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
+
+const GHAST_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Type(&EntityType::PLAYER), true)
+    .matching(hunting::within_four_blocks_height)];
 
 pub struct GhastEntity {
     pub mob_entity: MobEntity,
@@ -44,11 +47,7 @@ impl GhastEntity {
         let mob_arc = Arc::new(ghast);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Priority 5: Random floating around
             goal_selector.add_goal(
@@ -65,24 +64,10 @@ impl GhastEntity {
                 Box::new(GhastShootFireballGoal::new(Arc::downgrade(&mob_arc))),
             );
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             // Priority 1: Target nearest player within vertical proximity
-            target_selector.add_goal(
-                1,
-                Box::new(ActiveTargetGoal::new(
-                    &mob_arc.mob_entity,
-                    &EntityType::PLAYER,
-                    10,
-                    true,
-                    false,
-                    Some(|_target: &LivingEntity, _world: &World| true),
-                )),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, GHAST_HUNTS);
         };
 
         mob_arc

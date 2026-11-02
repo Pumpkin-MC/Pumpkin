@@ -546,6 +546,18 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_brewing_stand_actor(
+            self.position,
+            self.brew_time.load(Ordering::Relaxed),
+            self.fuel.load(Ordering::Relaxed),
+            None,
+        ))
+    }
+
     fn is_comparator_dirty(&self) -> bool {
         self.comparator_dirty.load(Ordering::Relaxed)
     }

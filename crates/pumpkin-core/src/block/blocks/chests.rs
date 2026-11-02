@@ -6,6 +6,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
@@ -30,10 +31,13 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::fill_chest_inventory;
+use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
 use pumpkin_data::BlockState;
 
-struct ChestScreenFactory(Arc<dyn Inventory>);
+struct ChestScreenFactory {
+    inventory: Arc<dyn Inventory>,
+    loot_pending: bool,
+}
 
 impl ScreenHandlerFactory for ChestScreenFactory {
     fn create_screen_handler(
@@ -42,10 +46,14 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let concrete_handler = if self.0.size() > 27 {
-            create_generic_9x6(sync_id, player_inventory, self.0.clone(), player)
+        if self.loot_pending && player.is_spectator() {
+            return None;
+        }
+
+        let concrete_handler = if self.inventory.size() > 27 {
+            create_generic_9x6(sync_id, player_inventory, self.inventory.clone(), player)
         } else {
-            create_generic_9x3(sync_id, player_inventory, self.0.clone(), player)
+            create_generic_9x3(sync_id, player_inventory, self.inventory.clone(), player)
         };
 
         let concrete_arc = Arc::new(Mutex::new(concrete_handler));
@@ -54,7 +62,7 @@ impl ScreenHandlerFactory for ChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        if self.0.size() > 27 {
+        if self.inventory.size() > 27 {
             pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHESTDOUBLE,
                 translation::bedrock::CONTAINER_CHESTDOUBLE
@@ -92,8 +100,10 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     args: &PlacedArgs<'_>,
     create_entity: impl FnOnce(BlockPos) -> E,
 ) {
-    let chest = create_entity(*args.position);
-    args.world.add_block_entity(Arc::new(chest));
+    if args.world.get_block_entity(args.position).is_none() {
+        let chest = create_entity(*args.position);
+        args.world.add_block_entity(Arc::new(chest));
+    }
 
     let chest_props = ChestLikeProperties::from_state_id(args.state_id);
     let connected_towards = match chest_props.r#type {
@@ -189,7 +199,27 @@ fn get_chest_screen_handler_factory(
             && let Some(table) = get_loot_table(&loot_key)
             && let Some(inv) = entity.clone().get_inventory()
         {
-            fill_chest_inventory(&inv, table, seed);
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                    loot_table_id: loot_key.clone(),
+                },
+            );
+            fill_chest_inventory_handle(
+                &inv,
+                &crate::world::loot::LootTableHandle::Static(table),
+                seed,
+                &LootContextParameters {
+                    world: Some(args.world),
+                    position: Some(args.position.to_f64()),
+                    this_entity: Some(args.player.as_ref()),
+                    luck: args
+                        .player
+                        .living_entity
+                        .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
+                        as f32,
+                    ..Default::default()
+                },
+            );
             inv.mark_dirty();
         }
     };
@@ -199,6 +229,9 @@ fn get_chest_screen_handler_factory(
         unpack(entity);
     }
 
+    let first_loot_pending = first_chest
+        .as_ref()
+        .is_some_and(|entity| entity.has_loot_table());
     let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
     if is_chest_blocked(args.world, args.position) {
@@ -222,6 +255,13 @@ fn get_chest_screen_handler_factory(
         unpack(&second);
     }
 
+    let loot_pending = first_loot_pending
+        || connected_towards.is_some_and(|direction| {
+            args.world
+                .get_block_entity(&args.position.offset(direction.to_offset()))
+                .is_some_and(|second| second.has_loot_table())
+        });
+
     let inventory = if let Some(direction) = connected_towards
         && let Some(second_inventory) = args
             .world
@@ -238,7 +278,10 @@ fn get_chest_screen_handler_factory(
         first_inventory
     };
 
-    Some(Box::new(ChestScreenFactory(inventory)))
+    Some(Box::new(ChestScreenFactory {
+        inventory,
+        loot_pending,
+    }))
 }
 
 fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
@@ -336,6 +379,30 @@ impl BlockBehaviour for ChestBlock {
 /// Copper chests have the same behavior as wooden chests but also oxidize over time.
 #[pumpkin_block_from_tag("minecraft:copper_chests")]
 pub struct CopperChestBlock;
+
+impl CopperChestBlock {
+    pub(crate) fn get_hinge_sound(block: &Block, open: bool) -> Sound {
+        let (open_sound, close_sound) = if block == &Block::WEATHERED_COPPER_CHEST
+            || block == &Block::WAXED_WEATHERED_COPPER_CHEST
+        {
+            (
+                Sound::BlockCopperChestWeatheredOpen,
+                Sound::BlockCopperChestWeatheredClose,
+            )
+        } else if block == &Block::OXIDIZED_COPPER_CHEST
+            || block == &Block::WAXED_OXIDIZED_COPPER_CHEST
+        {
+            (
+                Sound::BlockCopperChestOxidizedOpen,
+                Sound::BlockCopperChestOxidizedClose,
+            )
+        } else {
+            (Sound::BlockCopperChestOpen, Sound::BlockCopperChestClose)
+        };
+
+        if open { open_sound } else { close_sound }
+    }
+}
 
 impl
     crate::block::blocks::weathering_copper::ChangeOverTimeBlock<

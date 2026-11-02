@@ -1,5 +1,8 @@
+use crate::entity::living::{LivingEntity, attributes_by_id};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use rustc_hash::FxHashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -11,6 +14,25 @@ pub enum ModifierOperation {
     Add = 0,           // add value
     MultiplyBase = 1,  // multiply base (base * (1 + x))
     MultiplyTotal = 2, // multiply total (applied last)
+}
+
+impl ModifierOperation {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Add => "add_value",
+            Self::MultiplyBase => "add_multiplied_base",
+            Self::MultiplyTotal => "add_multiplied_total",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "add_value" => Some(Self::Add),
+            "add_multiplied_base" => Some(Self::MultiplyBase),
+            "add_multiplied_total" => Some(Self::MultiplyTotal),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,8 +47,11 @@ pub struct Modifier {
 pub struct AttributeInstance {
     pub base_value: f64,
     pub modifiers: Vec<Modifier>,
+    pub permanent_modifiers: Vec<String>,
     pub cached_value: AtomicU64,
     pub dirty: AtomicBool,
+    /// Vanilla `AttributeMap.attributesToUpdate` membership, drained by the owner's tick.
+    pub updated: AtomicBool,
 }
 
 impl AttributeInstance {
@@ -35,9 +60,17 @@ impl AttributeInstance {
         Self {
             base_value,
             modifiers: Vec::new(),
+            permanent_modifiers: Vec::new(),
             cached_value: AtomicU64::new(base_value.to_bits()),
             dirty: AtomicBool::new(false),
+            updated: AtomicBool::new(false),
         }
+    }
+
+    /// Invalidates the cached value and queues an attribute update for the owner.
+    pub fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+        self.updated.store(true, Ordering::Relaxed);
     }
 
     pub fn value(&self) -> f64 {
@@ -77,14 +110,110 @@ impl AttributeInstance {
             self.modifiers.remove(pos);
         }
         self.modifiers.push(modifier);
-        self.dirty.store(true, Ordering::Relaxed);
+        self.mark_dirty();
+    }
+
+    pub fn add_or_replace_permanent_modifier(&mut self, modifier: Modifier) {
+        if !self.permanent_modifiers.contains(&modifier.id) {
+            self.permanent_modifiers.push(modifier.id.clone());
+        }
+        self.add_or_replace_modifier(modifier);
     }
 
     pub fn remove_modifier(&mut self, id: &str) {
         if let Some(pos) = self.modifiers.iter().position(|m| m.id == id) {
             self.modifiers.swap_remove(pos);
         }
-        self.dirty.store(true, Ordering::Relaxed);
+        self.permanent_modifiers.retain(|permanent| permanent != id);
+        self.mark_dirty();
+    }
+
+    fn pack(&self, attribute: &Attributes) -> NbtCompound {
+        let mut packed = NbtCompound::new();
+        packed.put_string("id", attribute.name.to_string());
+        packed.put_double("base", self.base_value);
+        let modifiers: Vec<NbtTag> = self
+            .modifiers
+            .iter()
+            .filter(|modifier| self.permanent_modifiers.contains(&modifier.id))
+            .map(|modifier| {
+                let mut tag = NbtCompound::new();
+                tag.put_string("id", modifier.id.clone());
+                tag.put_double("amount", modifier.amount);
+                tag.put_string("operation", modifier.operation.name().to_string());
+                NbtTag::Compound(tag)
+            })
+            .collect();
+        if !modifiers.is_empty() {
+            packed.put_list("modifiers", modifiers);
+        }
+        packed
+    }
+
+    fn apply(&mut self, packed: &NbtCompound) {
+        self.base_value = packed.get_double("base").unwrap_or(0.0);
+        for modifier in packed.get_list("modifiers").unwrap_or_default() {
+            let Some(modifier) = modifier.extract_compound() else {
+                continue;
+            };
+            let (Some(id), Some(amount), Some(operation)) = (
+                modifier.get_string("id"),
+                modifier.get_double("amount"),
+                modifier
+                    .get_string("operation")
+                    .and_then(ModifierOperation::from_name),
+            ) else {
+                continue;
+            };
+            self.add_or_replace_permanent_modifier(Modifier {
+                id: id.to_string(),
+                amount,
+                operation,
+            });
+        }
+        self.mark_dirty();
+    }
+}
+
+#[must_use]
+pub fn pack_attributes(living: &LivingEntity) -> Vec<NbtTag> {
+    let attributes = living
+        .attributes
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut packed: Vec<(u8, NbtCompound)> = attributes
+        .iter()
+        .filter_map(|(id, instance)| {
+            attributes_by_id(*id).map(|attribute| (*id, instance.pack(attribute)))
+        })
+        .collect();
+    packed.sort_unstable_by_key(|(id, _)| *id);
+    packed
+        .into_iter()
+        .map(|(_, tag)| NbtTag::Compound(tag))
+        .collect()
+}
+
+pub fn apply_attributes(living: &LivingEntity, packed: &[NbtTag]) {
+    let mut attributes = living
+        .attributes
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for packed in packed {
+        let Some(packed) = packed.extract_compound() else {
+            continue;
+        };
+        let Some(id) = packed.get_string("id") else {
+            continue;
+        };
+        let Some(attribute) = Attributes::ALL.iter().find(|attribute| {
+            attribute.name == id || attribute.name.strip_prefix("minecraft:") == Some(id)
+        }) else {
+            continue;
+        };
+        if let Some(instance) = attributes.get_mut(&attribute.id) {
+            instance.apply(packed);
+        }
     }
 }
 
@@ -186,8 +315,10 @@ impl Clone for AttributeInstance {
         Self {
             base_value: self.base_value,
             modifiers: self.modifiers.clone(),
+            permanent_modifiers: self.permanent_modifiers.clone(),
             cached_value: AtomicU64::new(self.cached_value.load(Ordering::Relaxed)),
             dirty: AtomicBool::new(self.dirty.load(Ordering::Relaxed)),
+            updated: AtomicBool::new(self.updated.load(Ordering::Relaxed)),
         }
     }
 }

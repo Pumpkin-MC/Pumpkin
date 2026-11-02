@@ -73,56 +73,45 @@ impl StructureGenerator for StrongholdGenerator {
                 context.chunk_z,
             );
             tries += 1;
-            let mut weights = get_initial_weights();
-            let mut last_piece_type: Option<StrongholdPieceType> = None;
-            let mut has_portal_room = false;
+            let mut state = StrongholdState::new();
 
             let start_x = section_coords::section_to_block(context.chunk_x) + 2;
             let start_z = section_coords::section_to_block(context.chunk_z) + 2;
 
-            let start_piece = SpiralStaircasePiece::new_start(&mut random, start_x, start_z);
-
-            let base_piece = start_piece.piece.piece.clone();
-
-            // In Vanilla, pieces_to_process is 'start.pieces'
-            let mut pieces_to_process: Vec<Box<dyn StructurePieceBase>> = Vec::new();
-
-            // Initial Fill
-            start_piece.fill_openings(
-                &base_piece,
-                &mut random,
-                &mut weights,
-                &mut last_piece_type,
-                &mut has_portal_room,
-                &mut collector,
-                &mut pieces_to_process,
-            );
+            let (start_piece, start_child) =
+                SpiralStaircasePiece::new_start(&mut random, start_x, start_z);
+            let start_box = start_child.bbox;
 
             collector.add_piece(Box::new(start_piece));
 
-            // Growth Loop
-            while !pieces_to_process.is_empty() {
-                let idx = random.next_bounded_i32(pieces_to_process.len() as i32) as usize;
-                let piece = pieces_to_process.remove(idx);
+            let mut pending_children: Vec<PendingChild> = Vec::new();
+            add_children(
+                &start_child,
+                &start_box,
+                &mut state,
+                &mut random,
+                &mut collector,
+                &mut pending_children,
+            );
 
-                piece.fill_openings(
-                    &base_piece,
+            while !pending_children.is_empty() {
+                let pos = random.next_bounded_i32(pending_children.len() as i32) as usize;
+                let child = pending_children.remove(pos);
+
+                add_children(
+                    &child,
+                    &start_box,
+                    &mut state,
                     &mut random,
-                    &mut weights,
-                    &mut last_piece_type,
-                    &mut has_portal_room,
                     &mut collector,
-                    &mut pieces_to_process,
+                    &mut pending_children,
                 );
-
-                // Move into collector AFTER processing its children
-                collector.add_piece(piece);
             }
 
             // Shift height
             collector.shift_into(context.sea_level, context.min_y, &mut random, 10);
 
-            if !collector.is_empty() && has_portal_room {
+            if !collector.is_empty() && state.has_portal_room {
                 break;
             }
         }
@@ -189,6 +178,7 @@ pub enum StrongholdPieceType {
     ChestCorridor,
     Library,
     PortalRoom,
+    SmallCorridor,
 }
 impl StrongholdPieceType {
     #[must_use]
@@ -205,6 +195,7 @@ impl StrongholdPieceType {
             Self::ChestCorridor => StructurePieceType::StrongholdChestCorridor,
             Self::Library => StructurePieceType::StrongholdLibrary,
             Self::PortalRoom => StructurePieceType::StrongholdPortalRoom,
+            Self::SmallCorridor => StructurePieceType::StrongholdSmallCorridor,
         }
     }
 }
@@ -413,350 +404,644 @@ impl StrongholdPiece {
             }
         }
     }
+}
 
-    #[expect(clippy::too_many_arguments)]
-    pub fn fill_forward_opening(
-        &self,
-        start: &StructurePiece,
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        left_right_offset: i32,
-        height_offset: i32,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-        piece: Option<StrongholdPieceType>,
-    ) {
-        if let Some(facing) = self.piece.facing {
-            let bounding_box = self.piece.bounding_box;
-            let (nx, ny, nz) = match facing {
-                BlockDirection::North => (
-                    bounding_box.min.x + left_right_offset,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z - 1,
-                ),
-                BlockDirection::South => (
-                    bounding_box.min.x + left_right_offset,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.max.z + 1,
-                ),
-                BlockDirection::West => (
-                    bounding_box.min.x - 1,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z + left_right_offset,
-                ),
-                BlockDirection::East => (
-                    bounding_box.max.x + 1,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z + left_right_offset,
-                ),
-                _ => return,
-            };
+#[derive(Clone, Debug)]
+pub struct PendingChild {
+    pub piece_type: StrongholdPieceType,
+    pub bbox: BlockBox,
+    pub orientation: BlockDirection,
+    pub depth: u32,
+    pub is_source: bool,
+    pub lower_left: bool,
+    pub upper_left: bool,
+    pub lower_right: bool,
+    pub upper_right: bool,
+    pub left_child: bool,
+    pub right_child: bool,
+}
 
-            if let Some(next) = Self::piece_generator(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                nx,
-                ny,
-                nz,
-                facing,
-                self.piece.chain_length,
-                piece,
-            ) {
-                pieces_to_process.push(next);
-            }
-        }
-    }
-
-    #[expect(clippy::too_many_arguments)]
-    pub fn fill_nw_opening(
-        &self,
-        start: &StructurePiece,
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        height_offset: i32,
-        left_right_offset: i32,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        if let Some(facing) = &self.piece.facing {
-            let bounding_box = self.piece.bounding_box;
-
-            // Java switch(direction) logic translated to world coordinates
-            let (nx, ny, nz, next_facing) = match facing {
-                BlockDirection::North | BlockDirection::South => (
-                    bounding_box.min.x - 1,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z + left_right_offset,
-                    BlockDirection::West,
-                ),
-                BlockDirection::West | BlockDirection::East => (
-                    bounding_box.min.x + left_right_offset,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z - 1,
-                    BlockDirection::North,
-                ),
-                _ => return,
-            };
-
-            if let Some(next) = Self::piece_generator(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                nx,
-                ny,
-                nz,
-                next_facing,
-                self.piece.chain_length,
-                None,
-            ) {
-                pieces_to_process.push(next);
-            }
-        }
-    }
-
-    #[expect(clippy::too_many_arguments)]
-    pub fn fill_se_opening(
-        &self,
-        start: &StructurePiece,
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        height_offset: i32,
-        left_right_offset: i32,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        if let Some(facing) = &self.piece.facing {
-            let bounding_box = self.piece.bounding_box;
-
-            let (nx, ny, nz, next_facing) = match facing {
-                BlockDirection::North | BlockDirection::South => (
-                    bounding_box.max.x + 1,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.min.z + left_right_offset,
-                    BlockDirection::East,
-                ),
-                BlockDirection::West | BlockDirection::East => (
-                    bounding_box.min.x + left_right_offset,
-                    bounding_box.min.y + height_offset,
-                    bounding_box.max.z + 1,
-                    BlockDirection::South,
-                ),
-                _ => return,
-            };
-
-            if let Some(next) = Self::piece_generator(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                nx,
-                ny,
-                nz,
-                next_facing,
-                self.piece.chain_length,
-                None,
-            ) {
-                pieces_to_process.push(next);
-            }
-        }
-    }
-
-    #[expect(clippy::too_many_arguments)]
-    pub fn piece_generator(
-        start: &StructurePiece,
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        x: i32,
-        y: i32,
-        z: i32,
+impl PendingChild {
+    #[must_use]
+    pub const fn simple(
+        piece_type: StrongholdPieceType,
+        bbox: BlockBox,
         orientation: BlockDirection,
-        chain_length: u32,
-        piece_type: Option<StrongholdPieceType>,
-    ) -> Option<Box<dyn StructurePieceBase>> {
-        // Vanilla limit is 50
-        if chain_length > 50 {
-            return None;
+        depth: u32,
+    ) -> Self {
+        Self {
+            piece_type,
+            bbox,
+            orientation,
+            depth,
+            is_source: false,
+            lower_left: false,
+            upper_left: false,
+            lower_right: false,
+            upper_right: false,
+            left_child: false,
+            right_child: false,
         }
-
-        // Distance check from start (112 blocks)
-        let start_box = start.bounding_box;
-        if (x - start_box.min.x).abs() > 112 || (z - start_box.min.z).abs() > 112 {
-            return None;
-        }
-
-        let next_piece = if let Some(p_type) = piece_type {
-            Self::create_piece(
-                p_type,
-                collector,
-                random,
-                x,
-                y,
-                z,
-                orientation,
-                chain_length + 1,
-            )
-        } else {
-            Self::pick_piece(
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                x,
-                y,
-                z,
-                orientation,
-                chain_length + 1,
-            )
-        };
-
-        if let Some(p) = next_piece {
-            return Some(p);
-        }
-
-        None
     }
+}
 
-    fn check_remaining_pieces(weights: &Vec<PieceWeight>, total_weight: &mut i32) -> bool {
-        let mut can_generate = false;
-        *total_weight = 0;
+struct StrongholdState {
+    weights: Vec<PieceWeight>,
+    previous_piece: Option<StrongholdPieceType>,
+    imposed_piece: Option<StrongholdPieceType>,
+    has_portal_room: bool,
+}
 
-        for piece_data in weights {
-            // If at least one piece with a limit hasn't reached it, we can keep going
-            if piece_data.limit > 0 && piece_data.generated_count < piece_data.limit {
-                can_generate = true;
+impl StrongholdState {
+    fn new() -> Self {
+        Self {
+            weights: get_initial_weights(),
+            previous_piece: None,
+            imposed_piece: None,
+            has_portal_room: false,
+        }
+    }
+}
+
+#[expect(clippy::too_many_lines)]
+fn add_children(
+    child: &PendingChild,
+    start_box: &BlockBox,
+    state: &mut StrongholdState,
+    random: &mut impl RandomImpl,
+    collector: &mut StructurePiecesCollector,
+    pending_children: &mut Vec<PendingChild>,
+) {
+    match child.piece_type {
+        StrongholdPieceType::ChestCorridor
+        | StrongholdPieceType::PrisonHall
+        | StrongholdPieceType::Stairs => {
+            generate_child_forward(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                1,
+                1,
+            );
+        }
+        StrongholdPieceType::FiveWayCrossing => {
+            let mut z_off_a = 3;
+            let mut z_off_b = 5;
+            if child.orientation == BlockDirection::West
+                || child.orientation == BlockDirection::North
+            {
+                z_off_a = 8 - z_off_a;
+                z_off_b = 8 - z_off_b;
             }
-            *total_weight += piece_data.weight;
-        }
 
-        can_generate
+            generate_child_forward(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                5,
+                1,
+            );
+            if child.lower_left {
+                generate_child_left(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    z_off_a,
+                    1,
+                );
+            }
+            if child.upper_left {
+                generate_child_left(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    z_off_b,
+                    7,
+                );
+            }
+            if child.lower_right {
+                generate_child_right(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    z_off_a,
+                    1,
+                );
+            }
+            if child.upper_right {
+                generate_child_right(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    z_off_b,
+                    7,
+                );
+            }
+        }
+        StrongholdPieceType::LeftTurn => {
+            if child.orientation != BlockDirection::North
+                && child.orientation != BlockDirection::East
+            {
+                generate_child_right(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    1,
+                );
+            } else {
+                generate_child_left(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    1,
+                );
+            }
+        }
+        StrongholdPieceType::Library | StrongholdPieceType::SmallCorridor => {}
+        StrongholdPieceType::PortalRoom => {
+            state.has_portal_room = true;
+        }
+        StrongholdPieceType::RightTurn => {
+            if child.orientation != BlockDirection::North
+                && child.orientation != BlockDirection::East
+            {
+                generate_child_left(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    1,
+                );
+            } else {
+                generate_child_right(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    1,
+                );
+            }
+        }
+        StrongholdPieceType::SquareRoom => {
+            generate_child_forward(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                4,
+                1,
+            );
+            generate_child_left(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                1,
+                4,
+            );
+            generate_child_right(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                1,
+                4,
+            );
+        }
+        StrongholdPieceType::SpiralStaircase => {
+            if child.is_source {
+                state.imposed_piece = Some(StrongholdPieceType::FiveWayCrossing);
+            }
+            generate_child_forward(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                1,
+                1,
+            );
+        }
+        StrongholdPieceType::Corridor => {
+            generate_child_forward(
+                child,
+                start_box,
+                state,
+                random,
+                collector,
+                pending_children,
+                1,
+                1,
+            );
+            if child.left_child {
+                generate_child_left(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    2,
+                );
+            }
+            if child.right_child {
+                generate_child_right(
+                    child,
+                    start_box,
+                    state,
+                    random,
+                    collector,
+                    pending_children,
+                    1,
+                    2,
+                );
+            }
+        }
+    }
+}
+
+#[expect(clippy::too_many_arguments)]
+fn generate_child_forward(
+    parent: &PendingChild,
+    start_box: &BlockBox,
+    state: &mut StrongholdState,
+    random: &mut impl RandomImpl,
+    collector: &mut StructurePiecesCollector,
+    pending_children: &mut Vec<PendingChild>,
+    x_off: i32,
+    y_off: i32,
+) {
+    let (nx, ny, nz) = match parent.orientation {
+        BlockDirection::North => (
+            parent.bbox.min.x + x_off,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z - 1,
+        ),
+        BlockDirection::South => (
+            parent.bbox.min.x + x_off,
+            parent.bbox.min.y + y_off,
+            parent.bbox.max.z + 1,
+        ),
+        BlockDirection::West => (
+            parent.bbox.min.x - 1,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z + x_off,
+        ),
+        BlockDirection::East => (
+            parent.bbox.max.x + 1,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z + x_off,
+        ),
+        _ => return,
+    };
+    generate_and_add_piece(
+        start_box,
+        state,
+        random,
+        collector,
+        pending_children,
+        nx,
+        ny,
+        nz,
+        parent.orientation,
+        parent.depth,
+    );
+}
+
+#[expect(clippy::too_many_arguments)]
+fn generate_child_left(
+    parent: &PendingChild,
+    start_box: &BlockBox,
+    state: &mut StrongholdState,
+    random: &mut impl RandomImpl,
+    collector: &mut StructurePiecesCollector,
+    pending_children: &mut Vec<PendingChild>,
+    y_off: i32,
+    z_off: i32,
+) {
+    let (nx, ny, nz, next_facing) = match parent.orientation {
+        BlockDirection::North | BlockDirection::South => (
+            parent.bbox.min.x - 1,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z + z_off,
+            BlockDirection::West,
+        ),
+        BlockDirection::West | BlockDirection::East => (
+            parent.bbox.min.x + z_off,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z - 1,
+            BlockDirection::North,
+        ),
+        _ => return,
+    };
+    generate_and_add_piece(
+        start_box,
+        state,
+        random,
+        collector,
+        pending_children,
+        nx,
+        ny,
+        nz,
+        next_facing,
+        parent.depth,
+    );
+}
+
+#[expect(clippy::too_many_arguments)]
+fn generate_child_right(
+    parent: &PendingChild,
+    start_box: &BlockBox,
+    state: &mut StrongholdState,
+    random: &mut impl RandomImpl,
+    collector: &mut StructurePiecesCollector,
+    pending_children: &mut Vec<PendingChild>,
+    y_off: i32,
+    z_off: i32,
+) {
+    let (nx, ny, nz, next_facing) = match parent.orientation {
+        BlockDirection::North | BlockDirection::South => (
+            parent.bbox.max.x + 1,
+            parent.bbox.min.y + y_off,
+            parent.bbox.min.z + z_off,
+            BlockDirection::East,
+        ),
+        BlockDirection::West | BlockDirection::East => (
+            parent.bbox.min.x + z_off,
+            parent.bbox.min.y + y_off,
+            parent.bbox.max.z + 1,
+            BlockDirection::South,
+        ),
+        _ => return,
+    };
+    generate_and_add_piece(
+        start_box,
+        state,
+        random,
+        collector,
+        pending_children,
+        nx,
+        ny,
+        nz,
+        next_facing,
+        parent.depth,
+    );
+}
+
+#[expect(clippy::too_many_arguments)]
+fn generate_and_add_piece(
+    start_box: &BlockBox,
+    state: &mut StrongholdState,
+    random: &mut impl RandomImpl,
+    collector: &mut StructurePiecesCollector,
+    pending_children: &mut Vec<PendingChild>,
+    foot_x: i32,
+    foot_y: i32,
+    foot_z: i32,
+    direction: BlockDirection,
+    depth: u32,
+) {
+    if depth > 50 {
+        return;
+    }
+    if (foot_x - start_box.min.x).abs() <= 112 && (foot_z - start_box.min.z).abs() <= 112 {
+        let (piece_opt, child_opt) = generate_piece_from_small_door(
+            state,
+            collector,
+            random,
+            foot_x,
+            foot_y,
+            foot_z,
+            direction,
+            depth + 1,
+        );
+        if let Some(piece) = piece_opt {
+            collector.add_piece(piece);
+            if let Some(child) = child_opt {
+                pending_children.push(child);
+            }
+        }
+    }
+}
+
+#[expect(clippy::too_many_arguments)]
+fn generate_piece_from_small_door(
+    state: &mut StrongholdState,
+    collector: &mut StructurePiecesCollector,
+    random: &mut impl RandomImpl,
+    foot_x: i32,
+    foot_y: i32,
+    foot_z: i32,
+    direction: BlockDirection,
+    depth: u32,
+) -> (Option<Box<dyn StructurePieceBase>>, Option<PendingChild>) {
+    let Some(total_weight) = update_piece_weight(&state.weights) else {
+        return (None, None);
+    };
+
+    if let Some(imposed) = state.imposed_piece.take()
+        && let Some((piece, child)) = create_piece_and_child(
+            imposed, collector, random, foot_x, foot_y, foot_z, direction, depth,
+        )
+    {
+        return (Some(piece), Some(child));
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn pick_piece(
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        x: i32,
-        y: i32,
-        z: i32,
-        orientation: BlockDirection,
-        chain_length: u32,
-    ) -> Option<Box<dyn StructurePieceBase>> {
-        let mut total_weight = 0;
+    let mut num_attempts = 0;
+    while num_attempts < 5 {
+        num_attempts += 1;
+        let mut weight_selection = random.next_bounded_i32(total_weight);
 
-        if !Self::check_remaining_pieces(weights, &mut total_weight) {
-            return None;
-        }
+        let mut i = 0;
+        while i < state.weights.len() {
+            weight_selection -= state.weights[i].weight;
+            if weight_selection < 0 {
+                if !state.weights[i].can_generate_chained(depth)
+                    || Some(state.weights[i].piece_type) == state.previous_piece
+                {
+                    break;
+                }
 
-        let mut attempt = 0;
-        while attempt < 5 {
-            attempt += 1;
-            let mut j = random.next_bounded_i32(total_weight);
-
-            for i in 0..weights.len() {
-                j -= weights[i].weight;
-                if j < 0 {
-                    // Check if this piece can generate at this chain_length
-                    if !weights[i].can_generate_chained(chain_length)
-                        || Some(weights[i].piece_type) == *last_piece_type
-                    {
-                        break;
+                let piece_type = state.weights[i].piece_type;
+                if let Some((piece, child)) = create_piece_and_child(
+                    piece_type, collector, random, foot_x, foot_y, foot_z, direction, depth,
+                ) {
+                    state.weights[i].generated_count += 1;
+                    state.previous_piece = Some(piece_type);
+                    if !state.weights[i].can_generate() {
+                        state.weights.remove(i);
                     }
-
-                    if let Some(p) = Self::create_piece(
-                        weights[i].piece_type,
-                        collector,
-                        random,
-                        x,
-                        y,
-                        z,
-                        orientation,
-                        chain_length,
-                    ) {
-                        weights[i].generated_count += 1;
-                        *last_piece_type = Some(weights[i].piece_type);
-
-                        if !weights[i].can_generate() {
-                            weights.remove(i);
-                        }
-
-                        return Some(p);
-                    }
+                    return (Some(piece), Some(child));
                 }
             }
+            i += 1;
         }
-
-        // Fallback: Small Corridor
-        if let Some(bbox) = SmallCorridorPiece::create_box(collector, x, y, z, &orientation)
-            && bbox.min.y > 1
-        {
-            return Some(Box::new(SmallCorridorPiece::new(
-                chain_length,
-                bbox,
-                orientation,
-            )));
-        }
-
-        None
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn create_piece(
-        piece_type: StrongholdPieceType,
-        collector: &mut StructurePiecesCollector,
-        random: &mut impl RandomImpl,
-        x: i32,
-        y: i32,
-        z: i32,
-        orientation: BlockDirection,
-        chain_length: u32,
-    ) -> Option<Box<dyn StructurePieceBase>> {
-        match piece_type {
-            StrongholdPieceType::FiveWayCrossing => {
-                FiveWayCrossingPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::Corridor => {
-                CorridorPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::SquareRoom => {
-                SquareRoomPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::PortalRoom => {
-                PortalRoomPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::SpiralStaircase => {
-                SpiralStaircasePiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::PrisonHall => {
-                PrisonHallPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::LeftTurn => {
-                LeftTurnPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::RightTurn => {
-                RightTurnPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::Stairs => {
-                StairsPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::ChestCorridor => {
-                ChestCorridorPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
-            StrongholdPieceType::Library => {
-                LibraryPiece::create(collector, random, x, y, z, orientation, chain_length)
-            }
+    // Fallback: FillerCorridor (SmallCorridorPiece)
+    if let Some(box_) =
+        SmallCorridorPiece::create_box(collector, foot_x, foot_y, foot_z, &direction)
+        && box_.min.y > 1
+    {
+        let piece = Box::new(SmallCorridorPiece::new(depth, box_, direction));
+        let child =
+            PendingChild::simple(StrongholdPieceType::SmallCorridor, box_, direction, depth);
+        return (Some(piece), Some(child));
+    }
+
+    (None, None)
+}
+
+fn update_piece_weight(weights: &[PieceWeight]) -> Option<i32> {
+    let mut has_any_pieces = false;
+    let mut total_weight = 0;
+
+    for piece in weights {
+        if piece.limit > 0 && piece.generated_count < piece.limit {
+            has_any_pieces = true;
         }
+        total_weight += piece.weight;
+    }
+
+    has_any_pieces.then_some(total_weight)
+}
+
+#[expect(clippy::too_many_arguments)]
+fn create_piece_and_child(
+    piece_type: StrongholdPieceType,
+    collector: &mut StructurePiecesCollector,
+    random: &mut impl RandomImpl,
+    x: i32,
+    y: i32,
+    z: i32,
+    orientation: BlockDirection,
+    depth: u32,
+) -> Option<(Box<dyn StructurePieceBase>, PendingChild)> {
+    match piece_type {
+        StrongholdPieceType::FiveWayCrossing => {
+            FiveWayCrossingPiece::create(collector, random, x, y, z, orientation, depth)
+        }
+        StrongholdPieceType::Corridor => {
+            CorridorPiece::create(collector, random, x, y, z, orientation, depth)
+        }
+        StrongholdPieceType::SquareRoom => {
+            let piece = SquareRoomPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::SquareRoom, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::PortalRoom => {
+            let piece = PortalRoomPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::PortalRoom, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::SpiralStaircase => {
+            let piece =
+                SpiralStaircasePiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(
+                    StrongholdPieceType::SpiralStaircase,
+                    bbox,
+                    orientation,
+                    depth,
+                ),
+            ))
+        }
+        StrongholdPieceType::PrisonHall => {
+            let piece = PrisonHallPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::PrisonHall, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::LeftTurn => {
+            let piece = LeftTurnPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::LeftTurn, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::RightTurn => {
+            let piece = RightTurnPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::RightTurn, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::Stairs => {
+            let piece = StairsPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::Stairs, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::ChestCorridor => {
+            let piece = ChestCorridorPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::ChestCorridor, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::Library => {
+            let piece = LibraryPiece::create(collector, random, x, y, z, orientation, depth)?;
+            let bbox = piece.bounding_box();
+            Some((
+                piece,
+                PendingChild::simple(StrongholdPieceType::Library, bbox, orientation, depth),
+            ))
+        }
+        StrongholdPieceType::SmallCorridor => None,
     }
 }

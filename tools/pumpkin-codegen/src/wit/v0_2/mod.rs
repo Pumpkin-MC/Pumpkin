@@ -6,6 +6,7 @@ pub mod data_component;
 pub mod enchantment;
 pub mod entity_status;
 pub mod entity_type;
+//pub mod event;
 pub mod game_event;
 pub mod game_rules;
 pub mod java_packet;
@@ -36,6 +37,7 @@ pub fn main() {
         (entity_type::build, "entity-types.wit"),
         (java_packet::build, "java-packets.wit"),
         (bedrock_packet::build, "bedrock-packets.wit"),
+        //(event::build, "event_new.wit"),
         (data_component::build, "data-components.wit"),
         (enchantment::build, "enchantments.wit"),
         (biome::build, "biomes.wit"),

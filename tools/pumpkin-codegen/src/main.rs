@@ -42,7 +42,7 @@ mod chunk_view_lut;
 mod configured_feature;
 mod context_provider;
 mod damage_type;
-mod data_component;
+pub mod data_component;
 mod decorated_pot_pattern;
 mod dimension;
 mod dye_color;
@@ -52,6 +52,7 @@ mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod entity_variant;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
@@ -203,6 +204,7 @@ pub fn main() {
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (entity_variant::build, "entity_variant.rs"),
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
         (banner_pattern::build, "banner_pattern.rs"),
@@ -233,12 +235,10 @@ pub fn main() {
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
     if filters.iter().any(|f| f == "wit") {
-        wit::v0_1::main();
         wit::v0_2::main();
         return;
     }
     let build_functions: Vec<_> = if filters.is_empty() {
-        wit::v0_1::main();
         wit::v0_2::main();
         sdk::main();
         build_functions

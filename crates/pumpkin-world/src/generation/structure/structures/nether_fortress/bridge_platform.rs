@@ -8,7 +8,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            nether_fortress::{NetherFortressPiece, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
     world::WorldPortalExt,
@@ -58,18 +58,6 @@ impl StructurePieceBase for BridgePlatformPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    // Terminal piece – no children.
-    fn fill_openings_nether(
-        &self,
-        _start: &StructurePiece,
-        _random: &mut RandomGenerator,
-        _bridge_pieces: &mut Vec<PieceWeight>,
-        _corridor_pieces: &mut Vec<PieceWeight>,
-        _collector: &mut StructurePiecesCollector,
-        _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
     }
 
     fn place(

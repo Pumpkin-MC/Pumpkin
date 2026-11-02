@@ -7,6 +7,14 @@ impl PendingConnection {
         server: &Server,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling login acknowledgement");
+        // Only valid once `CLoginSuccess` went out. Without this the claimed
+        // profile from `SLoginStart` reaches the config phase, and from there the
+        // play phase, without ever being authenticated.
+        if !self.login_success_sent {
+            self.kick(TextComponent::text("Unexpected login acknowledgement"))
+                .await;
+            return Some(PacketHandlerResult::Stop);
+        }
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 

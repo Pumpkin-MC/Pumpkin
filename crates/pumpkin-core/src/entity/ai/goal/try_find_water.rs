@@ -83,9 +83,8 @@ impl Goal for TryFindWaterGoal {
 
         if let Some(pos) = water_pos {
             mob.get_mob_entity()
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .move_control()
                 .set_wanted_position(
                     f64::from(pos.0.x),
                     f64::from(pos.0.y),

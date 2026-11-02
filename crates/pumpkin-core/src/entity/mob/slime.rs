@@ -7,20 +7,28 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
-    ai::control::{Control, MoveControlTrait},
-    ai::goal::{Goal, active_target::ActiveTargetGoal},
+    ai::control::{Control, MoveControlTrait, move_control::MoveControl},
+    ai::goal::Goal,
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
 use pumpkin_util::random::RandomImpl;
 use rand::RngExt;
+
+const SLIME_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::PLAYER), true)
+        .matching(hunting::within_four_blocks_height),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+];
 
 pub struct SlimeEntity {
     entity: Arc<MobEntity>,
@@ -31,7 +39,7 @@ pub struct SlimeEntity {
     pub squish: AtomicCell<f32>,
     pub target_squish: AtomicCell<f32>,
     pub o_squish: AtomicCell<f32>,
-    speed_modifier: AtomicCell<f64>,
+    speed_modifier: AtomicCell<Option<f64>>,
     has_split: AtomicBool,
 }
 
@@ -47,7 +55,7 @@ impl SlimeEntity {
             squish: AtomicCell::new(0.0),
             target_squish: AtomicCell::new(0.0),
             o_squish: AtomicCell::new(0.0),
-            speed_modifier: AtomicCell::new(0.0),
+            speed_modifier: AtomicCell::new(None),
             has_split: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(slime);
@@ -60,30 +68,15 @@ impl SlimeEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             *move_control = Box::new(SlimeMoveControl::new(Arc::downgrade(&mob_arc)));
 
-            let mut goal_selector = mob_arc
-                .entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.entity.goals_selector;
+            let target_selector = &mob_arc.entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SlimeFloatGoal::new(mob_arc.clone())));
             goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(mob_arc.clone())));
             goal_selector.add_goal(3, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
             goal_selector.add_goal(5, Box::new(SlimeKeepOnJumpingGoal::new(mob_arc.clone())));
 
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::IRON_GOLEM, true),
-            );
+            hunting::apply(target_selector, &mob_arc.entity, SLIME_HUNTS);
         };
 
         mob_arc.randomize_size();
@@ -141,11 +134,12 @@ impl SlimeEntity {
             height: entity.entity_type.dimension[1] * actual_size as f32,
             eye_height: entity.entity_type.eye_height * actual_size as f32,
         };
-        entity.entity_dimension.store(scaled_dimensions);
+        entity.set_default_dimensions(scaled_dimensions);
 
-        let pos = entity.pos.load();
-        let new_bb = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &scaled_dimensions);
-        entity.bounding_box.store(new_bb);
+        entity.set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, actual_size);
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     pub fn get_size(&self) -> i32 {
@@ -219,14 +213,6 @@ impl SlimeEntity {
         rand::random_range(10..30)
     }
 
-    fn rot_lerp(start: f32, end: f32, max_step: f32) -> f32 {
-        let mut diff = (end - start).rem_euclid(360.0);
-        if diff > 180.0 {
-            diff -= 360.0;
-        }
-        start + diff.clamp(-max_step, max_step)
-    }
-
     fn do_play_jump_sound(&self) -> bool {
         self.get_size() > 0
     }
@@ -298,6 +284,10 @@ impl Mob for SlimeEntity {
         &self.entity
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        Some(crate::entity::mob::MobMetadata::new().slime_size(self.get_size()))
+    }
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         self.o_squish.store(self.squish.load());
         self.squish
@@ -332,13 +322,16 @@ impl Mob for SlimeEntity {
         self.target_squish.store(self.target_squish.load() * 0.6);
 
         self.is_aggressive.store(false, Ordering::Relaxed);
-        self.speed_modifier.store(0.0);
+        self.speed_modifier.store(None);
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
             // dealDamage
-            self.entity.try_attack(self, &**player);
+            let damaged = self.entity.try_attack(self, &**player);
+            if damaged {
+                self.on_attack(&**player);
+            }
         }
     }
 
@@ -407,6 +400,24 @@ impl SlimeMoveControl {
 impl Control for SlimeMoveControl {}
 
 impl MoveControlTrait for SlimeMoveControl {
+    fn set_wanted_position(&mut self, _x: f64, _y: f64, _z: f64, speed_modifier: f64) {
+        if let Some(slime) = self.slime.upgrade() {
+            slime.speed_modifier.store(Some(speed_modifier));
+        }
+    }
+
+    fn strafe(&mut self, _forward: f32, _right: f32) {
+        if let Some(slime) = self.slime.upgrade() {
+            slime.speed_modifier.store(None);
+        }
+    }
+
+    fn has_wanted(&self) -> bool {
+        self.slime
+            .upgrade()
+            .is_some_and(|slime| slime.speed_modifier.load().is_some())
+    }
+
     fn tick(&mut self, mob: &dyn Mob) {
         let Some(slime) = self.slime.upgrade() else {
             return;
@@ -416,53 +427,54 @@ impl MoveControlTrait for SlimeMoveControl {
         let entity = &living_entity.entity;
 
         let current_yaw = entity.yaw.load();
-        let new_yaw = SlimeEntity::rot_lerp(current_yaw, slime.target_yaw.load(), 90.0);
+        let new_yaw =
+            MoveControl::rotlerp(current_yaw, slime.target_yaw.load(), MoveControl::MAX_TURN);
         entity.yaw.store(new_yaw);
         entity.head_yaw.store(new_yaw);
         entity.body_yaw.store(new_yaw);
 
-        let speed_modifier = slime.speed_modifier.load();
-        let mut movement_input = Vector3::new(0.0, 0.0, 0.0);
-
-        let on_ground = entity.on_ground.load(Ordering::Relaxed);
-
-        if on_ground {
-            if speed_modifier > 0.0 {
-                let current_delay = slime.jump_delay.load(Ordering::Relaxed);
-                if current_delay <= 0 {
-                    // Start jump
-                    let mut next_delay = SlimeEntity::get_jump_delay();
-                    if slime.is_aggressive.load(Ordering::Relaxed) {
-                        next_delay /= 3;
-                    }
-                    slime.jump_delay.store(next_delay, Ordering::Relaxed);
-                    living_entity.jumping.store(true, Ordering::SeqCst);
-                    if slime.do_play_jump_sound() {
-                        let world = entity.world.load();
-                        world.play_sound_fine(
-                            slime.get_jump_sound(),
-                            SoundCategory::Hostile,
-                            &entity.pos.load(),
-                            slime.get_sound_volume(),
-                            slime.get_sound_pitch(),
-                        );
-                    }
-                    movement_input.z = speed_modifier;
-                } else {
-                    slime.jump_delay.store(current_delay - 1, Ordering::Relaxed);
-                    living_entity.jumping.store(false, Ordering::SeqCst);
+        let Some(speed_modifier) = slime.speed_modifier.take() else {
+            let input = living_entity.movement_input.load();
+            living_entity
+                .movement_input
+                .store(Vector3::new(input.x, input.y, 0.0));
+            return;
+        };
+        mob_entity.set_speed(
+            (speed_modifier * living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED))
+                as f32,
+        );
+        if entity.on_ground.load(Ordering::Relaxed) {
+            let delay = slime.jump_delay.fetch_sub(1, Ordering::Relaxed);
+            if delay <= 0 {
+                let mut next_delay = SlimeEntity::get_jump_delay();
+                if slime.is_aggressive.load(Ordering::Relaxed) {
+                    next_delay /= 3;
+                }
+                slime.jump_delay.store(next_delay, Ordering::Relaxed);
+                mob_entity
+                    .jump_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .jump();
+                if slime.do_play_jump_sound() {
+                    let world = entity.world.load();
+                    world.play_sound_fine(
+                        slime.get_jump_sound(),
+                        SoundCategory::Hostile,
+                        &entity.pos.load(),
+                        slime.get_sound_volume(),
+                        slime.get_sound_pitch(),
+                    );
                 }
             } else {
-                living_entity.jumping.store(false, Ordering::SeqCst);
+                mob_entity.set_speed(0.0);
+                let input = living_entity.movement_input.load();
+                living_entity
+                    .movement_input
+                    .store(Vector3::new(0.0, input.y, 0.0));
             }
-        } else {
-            // In air: move forward but don't "jump" again
-            if speed_modifier > 0.0 {
-                movement_input.z = speed_modifier;
-            }
-            living_entity.jumping.store(false, Ordering::SeqCst);
         }
-        living_entity.movement_input.store(movement_input);
     }
 }
 
@@ -487,11 +499,12 @@ impl Goal for SlimeFloatGoal {
         if rand::random_range(0.0..1.0) < 0.8 {
             self.slime
                 .entity
-                .living_entity
-                .jumping
-                .store(true, Ordering::SeqCst);
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .jump();
         }
-        self.slime.speed_modifier.store(1.2);
+        self.slime.speed_modifier.store(Some(1.2));
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -626,10 +639,61 @@ impl Goal for SlimeKeepOnJumpingGoal {
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
-        self.slime.speed_modifier.store(1.0);
+        self.slime.speed_modifier.store(Some(1.0));
     }
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
         crate::entity::ai::goal::Controls::JUMP | crate::entity::ai::goal::Controls::MOVE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+
+    #[tokio::test]
+    async fn zero_speed_requests_are_consumed_as_movement_operations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let slime = SlimeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::SLIME,
+        ));
+        let living = &slime.entity.living_entity;
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        slime.jump_delay.store(10, Ordering::Relaxed);
+        slime.entity.set_speed(0.5);
+        let (speed, delay, pending) = {
+            let mut control = slime
+                .entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            control.set_wanted_position(0.0, 64.0, 8.0, 0.0);
+            control.tick(&*slime);
+            (
+                living.get_speed(),
+                slime.jump_delay.load(Ordering::Relaxed),
+                control.has_wanted(),
+            )
+        };
+        slime.entity.set_speed(0.5);
+        let waiting_speed = {
+            let mut control = slime
+                .entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            control.tick(&*slime);
+            living.get_speed()
+        };
+        world.level.shutdown().await;
+        assert_eq!((speed, delay, pending), (0.0, 9, false));
+        assert_eq!(waiting_speed, 0.5);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
     }
 }

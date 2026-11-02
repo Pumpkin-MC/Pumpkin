@@ -18,61 +18,30 @@ use uuid::Uuid;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+    ai::behavior::{
+        feline,
+        fleeing::{self, Flee},
+        hunting::{self, Hunt},
     },
+    ai::goal::{
+        active_target::TargetCondition, escape_danger::EscapeDangerGoal,
+        follow_owner::FollowOwnerGoal, sit_when_ordered_to::SitWhenOrderedToGoal, swim::SwimGoal,
+    },
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::{
         animal::Animal,
-        tamable::{TamableAnimal, TamableData},
+        tamable::{TamableAnimal, TamableData, is_untamed},
     },
     player::Player,
 };
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
+const CAT_FLEES: &[Flee] = &[feline::flee_players(4, is_untamed)];
 
-fn get_dye_color_from_item(item: &Item) -> Option<u8> {
-    let key = item.registry_key;
-    if key.contains("white") {
-        Some(0)
-    } else if key.contains("orange") {
-        Some(1)
-    } else if key.contains("magenta") {
-        Some(2)
-    } else if key.contains("light_blue") {
-        Some(3)
-    } else if key.contains("yellow") {
-        Some(4)
-    } else if key.contains("lime") {
-        Some(5)
-    } else if key.contains("pink") {
-        Some(6)
-    } else if key.contains("light_gray") {
-        Some(8)
-    } else if key.contains("gray") {
-        Some(7)
-    } else if key.contains("cyan") {
-        Some(9)
-    } else if key.contains("purple") {
-        Some(10)
-    } else if key.contains("blue") {
-        Some(11)
-    } else if key.contains("brown") {
-        Some(12)
-    } else if key.contains("green") {
-        Some(13)
-    } else if key.contains("red") {
-        Some(14)
-    } else if key.contains("black") {
-        Some(15)
-    } else {
-        None
-    }
-}
+const CAT_HUNTS: &[Hunt] = &[
+    Hunt::new(1, TargetMatch::Type(&EntityType::RABBIT), false).when(TargetCondition::Untamed),
+    hunting::baby_turtles(1, false).when(TargetCondition::Untamed),
+];
 
 pub struct CatEntity {
     pub mob_entity: MobEntity,
@@ -103,56 +72,30 @@ impl CatEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Goal 1: SwimGoal (FloatGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // Goal 1: TamableAnimalPanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // Goal 2: SitWhenOrderedToGoal
+            goal_selector.add_goal(2, Box::new(SitWhenOrderedToGoal::new()));
+            // TODO: CatRelaxOnOwnerGoal at 3, CatLieOnBlockGoal at 5, CatSitOnBlockGoal at 7.
             // Goal 4: CatTemptGoal
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
+            goal_selector.add_goal(4, feline::tempt_goal());
             // Goal 4: CatAvoidEntityGoal (when untamed)
-            goal_selector.add_goal(
-                4,
-                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 0.8, 1.33)),
-            );
-            // Goal 5: BreedGoal
-            goal_selector.add_goal(5, BreedGoal::new(0.8));
+            fleeing::apply(goal_selector, CAT_FLEES);
             // Goal 6: FollowOwnerGoal
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 5.0));
-            // Goal 9: FollowParentGoal
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
-            // Goal 11: WanderAroundGoal
-            goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
-            // Goal 12: LookAtPlayerGoal
-            goal_selector.add_goal(
-                12,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
-            );
-            // Goal 12: RandomLookAroundGoal
-            goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
+            // Goal 8-12: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
+            feline::apply_tail(goal_selector, mob_weak, 8);
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
-            // Target Goal 1: NonTameRandomTargetGoal for Rabbit and Turtle
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
-            );
+            // NonTameRandomTargetGoal for Rabbit and Turtle
+            hunting::apply(target_selector, &mob_arc.mob_entity, CAT_HUNTS);
         };
 
         mob_arc
@@ -167,10 +110,6 @@ impl CatEntity {
             flags |= 0x04;
         }
         flags
-    }
-
-    pub fn is_sitting(&self) -> bool {
-        self.is_in_sitting_pose()
     }
 
     pub fn is_lying(&self) -> bool {
@@ -191,15 +130,6 @@ impl CatEntity {
         entity.set_synced_data(
             pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
             VarInt(color as i32),
-        );
-    }
-
-    pub fn set_sitting(&self, sitting: bool) {
-        self.set_in_sitting_pose(sitting);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::cat::TAMEABLE_FLAGS,
-            self.get_tame_flags(),
         );
     }
 
@@ -302,12 +232,34 @@ impl Mob for CatEntity {
         Some(self)
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
+        }
+        if self.is_tame() {
+            meta = meta.tamed(true);
+        }
+        if self.is_in_sitting_pose() {
+            meta = meta.sitting(true);
+        }
+        meta = meta.collar_color(
+            pumpkin_data::tracked_data::cat::CAT_COLLAR_COLOR,
+            pumpkin_data::dye_color::DyeColor::from(self.collar_color.load(Ordering::Relaxed)),
+        );
+        Some(meta)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = self.variant.load(Ordering::Relaxed);
-        let variant_str = CatVariant::all()
-            .get(variant_id as usize)
-            .map_or("minecraft:tabby", CatVariant::asset_id);
-        nbt.put_string("variant", variant_str.to_string());
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:cat_variant", variant_id, |id| {
+                CatVariant::all()
+                    .get(id as usize)
+                    .map_or("minecraft:tabby", CatVariant::asset_id)
+                    .to_string()
+            });
+        nbt.put_string("variant", variant_str);
         let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
         nbt.put_string(
@@ -321,10 +273,14 @@ impl Mob for CatEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            let variant =
-                CatVariant::from_name(variant_str).map_or(CatVariant::Tabby.id(), |v| v.id());
-            self.variant.store(variant, Ordering::Relaxed);
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:cat_variant", variant_str, |n| {
+                    CatVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant(variant_id);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = CatSoundVariant::from_name(sound_str)
@@ -344,8 +300,12 @@ impl Mob for CatEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = CatVariant::from_name(name).map_or(CatVariant::Tabby.id(), |v| v.id());
-        self.variant.store(variant, Ordering::Relaxed);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:cat_variant", name, |n| {
+            CatVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant(variant_id);
+        }
     }
 
     fn mob_set_sound_variant_name(&self, name: &str) {
@@ -399,10 +359,11 @@ impl Mob for CatEntity {
                 if item.has_tag(&tag::Item::MINECRAFT_CAT_COLLAR_DYES)
                     || item.has_tag(&tag::Item::C_DYES)
                 {
-                    if let Some(color) = get_dye_color_from_item(item)
-                        && color != self.get_collar_color()
+                    if let Some(dye) = item_stack
+                        .get_data_component::<pumpkin_data::data_component_impl::DyeImpl>()
+                        && dye.color.id() != self.get_collar_color()
                     {
-                        self.set_collar_color(color);
+                        self.set_collar_color(dye.color.id());
                         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                         return true;
                     }
@@ -416,9 +377,11 @@ impl Mob for CatEntity {
                     return true;
                 }
 
-                let parent_interaction = self.mob_entity.mob_interact(player, item_stack);
+                let parent_interaction =
+                    self.mob_entity
+                        .mob_interact(player, item_stack, self.can_be_leashed());
                 if !parent_interaction {
-                    self.set_sitting(!self.is_sitting());
+                    self.order_to_sit(!self.is_ordered_to_sit());
                     return true;
                 }
                 return parent_interaction;
@@ -428,25 +391,30 @@ impl Mob for CatEntity {
             self.play_eating_sound();
 
             let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if rng.random_range(0..3) == 0 && self.approve_taming(player) {
                 self.set_tame(true, Some(player.gameprofile.id));
-                self.set_sitting(true);
+                self.set_ordered_to_sit(true);
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TamingSucceeded,
-                    Some(ActorEventID::TamingSucceeded),
+                    ActorEventID::TamingSucceeded,
                 );
             } else {
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
                     EntityStatus::TamingFailed,
-                    Some(ActorEventID::TamingFailed),
+                    ActorEventID::TamingFailed,
                 );
             }
 
             return true;
         }
 
-        self.mob_entity.mob_interact(player, item_stack)
+        self.mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_tame() && self.get_entity().tick_count.load(Ordering::Relaxed) > 2400
     }
 }

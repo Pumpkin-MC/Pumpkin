@@ -65,6 +65,10 @@ impl Mob for MagmaCubeEntity {
         self.slime.get_mob_entity()
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        self.slime.mob_metadata()
+    }
+
     fn mob_tick(&self, caller: &dyn EntityBase) {
         self.slime.mob_tick(caller);
     }
@@ -74,8 +78,12 @@ impl Mob for MagmaCubeEntity {
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
-        self.slime
+        let damaged = self
+            .slime
             .get_mob_entity()
             .try_attack(&*self.slime, &**player);
+        if damaged {
+            self.slime.on_attack(&**player);
+        }
     }
 }

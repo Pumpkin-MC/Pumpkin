@@ -9,6 +9,15 @@ impl PendingConnection {
     ) -> Option<PacketHandlerResult> {
         debug!("login start");
 
+        // A second login start would replace an already authenticated profile
+        // with a freshly claimed name and uuid.
+        if self.login_started {
+            self.kick(TextComponent::text("Unexpected login start"))
+                .await;
+            return Some(PacketHandlerResult::Stop);
+        }
+        self.login_started = true;
+
         let max_players = server.advanced_config.networking.java.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
             self.kick(TextComponent::translate_cross(

@@ -17,11 +17,7 @@ bytes.workspace = true
 
 tokio = { workspace = true, features = [
     "macros",
-    # Maybe remove this in the future
-    "rt-multi-thread",
     "sync",
-    "io-std",
-    "signal",
     "fs",
     "io-util",
     "time",
@@ -34,6 +30,7 @@ tracing.workspace = true
 crossbeam.workspace = true
 
 sha2.workspace = true
+md5.workspace = true
 bitflags.workspace = true
 arc-swap.workspace = true
 
@@ -43,13 +40,11 @@ dashmap.workspace = true
 flate2.workspace = true
 lz4-java-wrc.workspace = true
 ruzstd.workspace = true
-xxhash-rust = { version = "0.8", features = ["xxh64"] }
+xxhash-rust.workspace = true
 
-itertools.workspace = true
 rayon.workspace = true
 
 # thread_local.workspace = true
-# lru.workspace = true
 
 tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true

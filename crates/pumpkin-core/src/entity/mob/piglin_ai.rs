@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -11,6 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::ai::random_pos::land_random_pos;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::piglin::{PiglinActivity, PiglinEntity};
@@ -39,8 +41,6 @@ impl PiglinAi {
     pub const MAX_DISTANCE_TO_WALK_TO_ITEM: f64 = 9.0;
     pub const MAX_TIME_TRYING_TO_REACH_ITEM: i32 = 200;
     pub const DISABLE_WALK_TO_ADMIRE_DURATION: i32 = 200;
-    pub const TARGETING_RANGE: f64 = 16.0;
-    pub const MIN_VISIBILITY_DISTANCE: f64 = 2.0;
     pub const THROW_SPEED: f64 = 0.3;
     pub const THROW_HAND_Y_DISTANCE_FROM_EYE: f64 = 0.3;
     pub const RANDOM_THROW_POS_RANGE_HORIZONTAL: i32 = 4;
@@ -240,83 +240,28 @@ impl PiglinAi {
             .is_some_and(|player| Self::is_player_holding_loved_item(&player))
     }
 
-    /// Whether the piglin can see and would notice `target`, invisibility and sneaking included.
+    /// Vanilla `Sensor.isEntityTargetable`: non-combat test within the follow range,
+    /// unscaled by sneaking and invisibility for the current attack target.
     #[must_use]
     pub fn is_entity_targetable(piglin: &PiglinEntity, target: &Player) -> bool {
-        let entity = &piglin.mob_entity.living_entity.entity;
-        let target_entity = target.get_entity();
-        if !target.living_entity.is_part_of_game() {
-            return false;
-        }
-
+        let living = &piglin.mob_entity.living_entity;
+        let target_id = target.get_entity().entity_id;
         let is_attack_target = piglin
             .mob_entity
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .is_some_and(|current| current.get_entity().entity_id == target_entity.entity_id);
-        let modifier = if is_attack_target {
-            1.0
+            .is_some_and(|current| current.get_entity().entity_id == target_id);
+        let conditions = TargetPredicate::create_non_attackable()
+            .set_base_max_distance(living.get_attribute_value(&Attributes::FOLLOW_RANGE));
+        let conditions = if is_attack_target {
+            conditions.ignore_distance_scaling_factor()
         } else {
-            Self::visibility_percent(target)
+            conditions
         };
-        let visibility_distance =
-            (Self::TARGETING_RANGE * modifier).max(Self::MIN_VISIBILITY_DISTANCE);
-        let distance_sq = entity
-            .pos
-            .load()
-            .squared_distance_to_vec(&target_entity.pos.load());
-        if distance_sq > visibility_distance * visibility_distance {
-            return false;
-        }
-
-        entity
-            .world
-            .load()
-            .raycast(
-                entity.get_eye_pos(),
-                target_entity.get_eye_pos(),
-                |block_pos, w| w.get_block_state(block_pos).is_solid(),
-            )
-            .is_none()
-    }
-
-    /// How visible `target` is to a piglin, from 1.0 down to 0.1.
-    fn visibility_percent(target: &Player) -> f64 {
-        let target_entity = target.get_entity();
-        let mut percent = 1.0;
-        if target_entity.is_sneaking() {
-            percent *= 0.8;
-        }
-        let head = {
-            let equipment = target
-                .living_entity
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if target_entity
-                .invisible
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                let worn = [
-                    EquipmentSlot::HEAD,
-                    EquipmentSlot::CHEST,
-                    EquipmentSlot::LEGS,
-                    EquipmentSlot::FEET,
-                ]
-                .iter()
-                .filter(|slot| !equipment.get(slot).is_empty())
-                .count();
-                let cover = (worn as f64 / 4.0).max(0.1);
-                percent *= 0.7 * cover;
-            }
-            equipment.get(&EquipmentSlot::HEAD)
-        };
-        if head.item.id == Item::PIGLIN_HEAD.id {
-            percent *= 0.5;
-        }
-        percent
+        let world = living.entity.world.load();
+        conditions.test(&world, Some(piglin), target)
     }
 
     pub fn throw_items(piglin: &PiglinEntity, items: Vec<ItemStack>) {

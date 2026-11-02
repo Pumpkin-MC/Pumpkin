@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::{BlockStateId, attributes::Attributes};
@@ -12,7 +14,6 @@ use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     entity::EntityType,
-    item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
@@ -27,11 +28,10 @@ use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
-            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-            melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
-            place_block::PlaceBlockGoal, reset_universal_anger::ResetUniversalAngerGoal,
-            revenge::RevengeGoal, swim::SwimGoal,
+            chase_player::ChasePlayerGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+            pick_up_block::PickUpBlockGoal, place_block::PlaceBlockGoal,
+            reset_universal_anger::ResetUniversalAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
             teleport_towards_player::TeleportTowardsPlayerGoal, wander_around::WanderAroundGoal,
         },
         pathfinder::node::PathType,
@@ -54,6 +54,12 @@ fn is_projectile_damage(dt: DamageType) -> bool {
     let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
     names.contains(&dt.message_id)
 }
+
+const ENDERMAN_HUNTS: &[Hunt] = &[Hunt::new(
+    3,
+    TargetMatch::Type(&EntityType::ENDERMITE),
+    true,
+)];
 
 pub struct EndermanEntity {
     pub mob_entity: MobEntity,
@@ -87,21 +93,12 @@ impl EndermanEntity {
             .navigator
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        navigator.set_mob_dimensions(0.6, 2.9);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
@@ -117,10 +114,7 @@ impl EndermanEntity {
 
             target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ENDERMITE, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
             target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
         };
 
@@ -239,11 +233,7 @@ impl EndermanEntity {
 
         entity.teleport(new_pos, None, None, &world);
 
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        self.mob_entity.steered().navigator().stop();
 
         true
     }
@@ -334,7 +324,9 @@ impl EndermanEntity {
         if let Ok(equipment) = equipment
             && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
             && !head_stack.is_empty()
-            && head_stack.item == &Item::CARVED_PUMPKIN
+            && head_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_GAZE_DISGUISE_EQUIPMENT)
         {
             return false;
         }
@@ -380,11 +372,13 @@ impl EndermanEntity {
         let player_eye_pos = Vector3::new(player_pos.x, player_eye_y, player_pos.z);
         let world = entity.world.load();
         world
-            .raycast(enderman_eye_pos, player_eye_pos, |block_pos, w| {
-                let state = w.get_block_state(block_pos);
-                state.is_solid()
-            })
-            .is_none()
+            .clip(&pumpkin_world::clip::ClipContext::new(
+                enderman_eye_pos,
+                player_eye_pos,
+                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipFluid::None,
+            ))
+            .is_miss
     }
 }
 
@@ -415,11 +409,16 @@ impl Mob for EndermanEntity {
         &self.mob_entity
     }
 
-    fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        self.set_target(self.as_valid_target(target));
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        self.is_creepy()
+            .then(|| crate::entity::mob::MobMetadata::new().screaming(true))
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
+    fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        self.set_target(target);
+    }
+
+    // TODO: sunlight avoidance, carried block drop on death, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {

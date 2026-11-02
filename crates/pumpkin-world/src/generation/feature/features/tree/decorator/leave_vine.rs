@@ -15,30 +15,31 @@ impl LeavesVineTreeDecorator {
         chunk: &mut T,
         random: &mut RandomGenerator,
         foliage_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         for pos in foliage_positions {
             if random.next_f32() < self.probability {
                 let target = pos.west();
                 if chunk.is_air(&target.0) {
-                    Self::place_vines(chunk, target, |vine| vine.east = true);
+                    Self::place_vines(chunk, target, decorations, |vine| vine.east = true);
                 }
             }
             if random.next_f32() < self.probability {
                 let target = pos.east();
                 if chunk.is_air(&target.0) {
-                    Self::place_vines(chunk, target, |vine| vine.west = true);
+                    Self::place_vines(chunk, target, decorations, |vine| vine.west = true);
                 }
             }
             if random.next_f32() < self.probability {
                 let target = pos.north();
                 if chunk.is_air(&target.0) {
-                    Self::place_vines(chunk, target, |vine| vine.south = true);
+                    Self::place_vines(chunk, target, decorations, |vine| vine.south = true);
                 }
             }
             if random.next_f32() < self.probability {
                 let target = pos.south();
                 if chunk.is_air(&target.0) {
-                    Self::place_vines(chunk, target, |vine| vine.north = true);
+                    Self::place_vines(chunk, target, decorations, |vine| vine.north = true);
                 }
             }
         }
@@ -47,12 +48,14 @@ impl LeavesVineTreeDecorator {
     fn place_vines<T: GenerationCache>(
         chunk: &mut T,
         start: BlockPos,
+        decorations: &mut Vec<BlockPos>,
         configure_face: impl Fn(&mut VineLikeProperties),
     ) {
         let mut vine = VineLikeProperties::default(&Block::VINE);
         configure_face(&mut vine);
         let state = BlockState::from_id(vine.to_state_id(&Block::VINE));
         chunk.set_block_state(&start.0, state);
+        decorations.push(start);
 
         let mut current = start.down();
         for _ in 0..4 {
@@ -60,6 +63,7 @@ impl LeavesVineTreeDecorator {
                 break;
             }
             chunk.set_block_state(&current.0, state);
+            decorations.push(current);
             current = current.down();
         }
     }

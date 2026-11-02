@@ -177,7 +177,15 @@ pub enum DirectMaterialRule {
     #[serde(rename = "minecraft:bandlands", alias = "minecraft:badlands")]
     Badlands,
     #[serde(rename = "minecraft:ore_vein")]
-    OreVein(serde_json::Value),
+    OreVein {
+        ore_block: BlockStateCodecStruct,
+        raw_ore_block: BlockStateCodecStruct,
+        filler_block: BlockStateCodecStruct,
+        raw_ore_chance: f32,
+        density: String,
+        richness: String,
+        filler_gap: String,
+    },
 }
 
 /// Deserialized surface material condition that gates a material rule.
@@ -279,8 +287,8 @@ impl ToTokens for MaterialConditionStruct {
                 false_at_and_above,
             } => {
                 let bytes = md5::compute(random_name.as_bytes());
-                let lo = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect length"));
-                let hi = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect length"));
+                let lo = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
+                let hi = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
                 tokens.extend(quote!(
                     MaterialCondition::VerticalGradient(VerticalGradientMaterialCondition {
                         random_lo: #lo,
@@ -381,6 +389,16 @@ pub enum MaterialRuleStruct {
     },
     #[serde(rename = "minecraft:bandlands")]
     Badlands,
+    #[serde(rename = "minecraft:ore_vein")]
+    OreVein {
+        ore_block: BlockStateCodecStruct,
+        raw_ore_block: BlockStateCodecStruct,
+        filler_block: BlockStateCodecStruct,
+        raw_ore_chance: f32,
+        min_y: i32,
+        max_y: i32,
+        is_iron: bool,
+    },
 }
 
 impl ToTokens for MaterialRuleStruct {
@@ -410,6 +428,27 @@ impl ToTokens for MaterialRuleStruct {
             }
             Self::Badlands => {
                 tokens.extend(quote!(MaterialRule::Badlands(BadLandsMaterialRule)));
+            }
+            Self::OreVein {
+                ore_block,
+                raw_ore_block,
+                filler_block,
+                raw_ore_chance,
+                min_y,
+                max_y,
+                is_iron,
+            } => {
+                tokens.extend(quote!(
+                    MaterialRule::OreVein(OreVeinMaterialRule {
+                        ore_block: #ore_block,
+                        raw_ore_block: #raw_ore_block,
+                        filler_block: #filler_block,
+                        raw_ore_chance: #raw_ore_chance,
+                        min_y: #min_y,
+                        max_y: #max_y,
+                        is_iron: #is_iron,
+                    })
+                ));
             }
         }
     }
@@ -531,7 +570,26 @@ pub fn resolve_rule(
                 })
             }
             DirectMaterialRule::Badlands => Some(MaterialRuleStruct::Badlands),
-            DirectMaterialRule::OreVein(_) => None,
+            DirectMaterialRule::OreVein {
+                ore_block,
+                raw_ore_block,
+                filler_block,
+                raw_ore_chance,
+                density,
+                ..
+            } => {
+                let is_iron = density.contains("iron");
+                let (min_y, max_y) = if is_iron { (-60, -8) } else { (0, 50) };
+                Some(MaterialRuleStruct::OreVein {
+                    ore_block: ore_block.clone(),
+                    raw_ore_block: raw_ore_block.clone(),
+                    filler_block: filler_block.clone(),
+                    raw_ore_chance: *raw_ore_chance,
+                    min_y,
+                    max_y,
+                    is_iron,
+                })
+            }
         },
     }
 }
@@ -589,11 +647,22 @@ pub fn build() -> TokenStream {
 
         pub struct BadLandsMaterialRule;
 
+        pub struct OreVeinMaterialRule {
+            pub ore_block: &'static BlockState,
+            pub raw_ore_block: &'static BlockState,
+            pub filler_block: &'static BlockState,
+            pub raw_ore_chance: f32,
+            pub min_y: i32,
+            pub max_y: i32,
+            pub is_iron: bool,
+        }
+
         pub enum MaterialRule {
             Block(BlockMaterialRule),
             Sequence(SequenceMaterialRule),
             Condition(ConditionMaterialRule),
             Badlands(BadLandsMaterialRule),
+            OreVein(OreVeinMaterialRule),
         }
 
         impl MaterialRule {

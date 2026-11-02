@@ -1,3 +1,6 @@
+use crate::LockIgnorePoison;
+use pumpkin_core::entity::player::CustomScoreboard;
+
 use wasmtime::component::Resource;
 
 use crate::pumpkin::{
@@ -23,6 +26,38 @@ fn map_number_format(
             let text = state.get(&tc)?.clone();
             Ok(Some(NumberFormat::Fixed(text)))
         }
+    }
+}
+
+/// Returns the player's Java scoreboard, creating an empty one if needed
+/// Replaces an existing Bedrock scoreboard and discards its contents
+fn java_scoreboard(
+    custom_scoreboard: &mut Option<CustomScoreboard>,
+) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::Scoreboard> {
+    if !matches!(custom_scoreboard, Some(CustomScoreboard::Java(_))) {
+        *custom_scoreboard = Some(CustomScoreboard::Java(
+            pumpkin_core::world::scoreboard::Scoreboard::default(),
+        ));
+    }
+    match custom_scoreboard {
+        Some(CustomScoreboard::Java(sb)) => Ok(sb),
+        _ => Err(wasmtime::Error::msg("Invalid scoreboard state")),
+    }
+}
+
+/// Returns the player's Bedrock scoreboard, creating an empty one if needed
+/// Replaces an existing Java scoreboard and discards its contents
+fn bedrock_scoreboard(
+    custom_scoreboard: &mut Option<CustomScoreboard>,
+) -> wasmtime::Result<&mut pumpkin_core::world::scoreboard::BedrockScoreboard> {
+    if !matches!(custom_scoreboard, Some(CustomScoreboard::Bedrock(_))) {
+        *custom_scoreboard = Some(CustomScoreboard::Bedrock(
+            pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
+        ));
+    }
+    match custom_scoreboard {
+        Some(CustomScoreboard::Bedrock(sb)) => Ok(sb),
+        _ => Err(wasmtime::Error::msg("Invalid scoreboard state")),
     }
 }
 
@@ -52,28 +87,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .add_objective(world.as_ref(), objective);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
-                }
-                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                {
-                    sb.add_objective(player.as_ref(), objective);
-                }
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                let sb = java_scoreboard(&mut custom_guard)?;
+                sb.add_objective(player.as_ref(), objective);
             }
         }
         Ok(())
@@ -102,28 +122,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .update_objective(world.as_ref(), objective);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
-                }
-                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                {
-                    sb.update_objective(player.as_ref(), objective);
-                }
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                let sb = java_scoreboard(&mut custom_guard)?;
+                sb.update_objective(player.as_ref(), objective);
             }
         }
         Ok(())
@@ -139,15 +144,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .remove_objective(world.as_ref(), &name);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -169,30 +170,16 @@ impl scoreboard::HostScoreboard for PluginHostState {
 
         match provider {
             ScoreboardProvider::World(world) => {
-                world
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_display_objective(world.as_ref(), slot, Some(&objective_name));
+                world.scoreboard.lock_ignore_poison().set_display_objective(
+                    world.as_ref(),
+                    slot,
+                    Some(&objective_name),
+                );
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
-                }
-                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                {
-                    sb.set_display_objective(player.as_ref(), slot, Some(&objective_name));
-                }
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                let sb = java_scoreboard(&mut custom_guard)?;
+                sb.set_display_objective(player.as_ref(), slot, Some(&objective_name));
             }
         }
         Ok(())
@@ -210,15 +197,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .clear_display_objective(world.as_ref(), slot);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -244,28 +227,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .update_score(world.as_ref(), score);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
-                }
-                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                {
-                    sb.update_score(player.as_ref(), score);
-                }
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                let sb = java_scoreboard(&mut custom_guard)?;
+                sb.update_score(player.as_ref(), score);
             }
         }
         Ok(())
@@ -279,34 +247,45 @@ impl scoreboard::HostScoreboard for PluginHostState {
         delta: i32,
     ) -> wasmtime::Result<i32> {
         let provider = self.get(&res)?.clone();
-        let new_val = match provider {
+        let new_val =
+            match provider {
+                ScoreboardProvider::World(world) => world
+                    .scoreboard
+                    .lock_ignore_poison()
+                    .add_score(world.as_ref(), entity_name, objective_name, delta),
+                ScoreboardProvider::Player(player) => {
+                    let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                    let sb = java_scoreboard(&mut custom_guard)?;
+                    sb.add_score(player.as_ref(), entity_name, objective_name, delta)
+                }
+            };
+        Ok(new_val)
+    }
+
+    fn get_score(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        entity_name: String,
+        objective_name: String,
+    ) -> wasmtime::Result<Option<i32>> {
+        let provider = self.get(&res)?.clone();
+        let val = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .add_score(world.as_ref(), entity_name, objective_name, delta),
+                .lock_ignore_poison()
+                .get_score_value(&entity_name, &objective_name),
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_score_value(&entity_name, &objective_name)
+                } else {
+                    None
                 }
-                let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                else {
-                    return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-                };
-                sb.add_score(player.as_ref(), entity_name, objective_name, delta)
             }
         };
-        Ok(new_val)
+        Ok(val)
     }
 
     fn remove_score(
@@ -318,17 +297,14 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let provider = self.get(&res)?.clone();
         match provider {
             ScoreboardProvider::World(world) => {
-                world
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove_score(world.as_ref(), &entity_name, &objective_name);
+                world.scoreboard.lock_ignore_poison().remove_score(
+                    world.as_ref(),
+                    &entity_name,
+                    &objective_name,
+                );
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -349,15 +325,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .reset_scores_for_entity(world.as_ref(), &entity_name);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -366,6 +338,33 @@ impl scoreboard::HostScoreboard for PluginHostState {
             }
         }
         Ok(())
+    }
+
+    fn get_objectives(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let provider = self.get(&res)?.clone();
+        let objectives = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock_ignore_poison()
+                .get_objectives()
+                .keys()
+                .cloned()
+                .collect(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_objectives().keys().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        Ok(objectives)
     }
 
     fn create_team(
@@ -380,28 +379,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .add_team(world.as_ref(), team);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !matches!(
-                    *custom_guard,
-                    Some(pumpkin_core::entity::player::CustomScoreboard::Java(_))
-                ) {
-                    *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Java(
-                        pumpkin_core::world::scoreboard::Scoreboard::default(),
-                    ));
-                }
-                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
-                    custom_guard.as_mut()
-                {
-                    sb.add_team(player.as_ref(), team);
-                }
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                let sb = java_scoreboard(&mut custom_guard)?;
+                sb.add_team(player.as_ref(), team);
             }
         }
         Ok(())
@@ -417,15 +401,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .remove_team(world.as_ref(), &name);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -448,15 +428,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .update_team(world.as_ref(), team);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -476,17 +452,14 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let provider = self.get(&res)?.clone();
         match provider {
             ScoreboardProvider::World(world) => {
-                world
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .add_player_to_team(world.as_ref(), &team_name, player_name);
+                world.scoreboard.lock_ignore_poison().add_player_to_team(
+                    world.as_ref(),
+                    &team_name,
+                    player_name,
+                );
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -508,15 +481,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .remove_player_from_team(world.as_ref(), &team_name, &player_name);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -537,15 +506,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
             ScoreboardProvider::World(world) => {
                 world
                     .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .lock_ignore_poison()
                     .clear_team_players(world.as_ref(), &team_name);
             }
             ScoreboardProvider::Player(player) => {
-                let mut custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_mut()
                 {
@@ -564,17 +529,13 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let teams = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .get_teams()
                 .keys()
                 .cloned()
                 .collect(),
             ScoreboardProvider::Player(player) => {
-                let custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_ref()
                 {
@@ -596,15 +557,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let team_opt = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .get_team(&name)
                 .cloned(),
             ScoreboardProvider::Player(player) => {
-                let custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_ref()
                 {
@@ -631,16 +588,12 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let players = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .get_team(&team_name)
                 .map(|t| t.players.clone())
                 .unwrap_or_default(),
             ScoreboardProvider::Player(player) => {
-                let custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_ref()
                 {
@@ -664,15 +617,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let team_name = match provider {
             ScoreboardProvider::World(world) => world
                 .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .lock_ignore_poison()
                 .get_entity_team(&player_name)
                 .map(|t| t.name.clone()),
             ScoreboardProvider::Player(player) => {
-                let custom_guard = player
-                    .custom_scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
                 if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
                     custom_guard.as_ref()
                 {
@@ -910,23 +859,8 @@ impl HostBedrockScoreboard for PluginHostState {
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !matches!(
-            *custom_guard,
-            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-        ) {
-            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-            ));
-        }
-        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-            custom_guard.as_mut()
-        else {
-            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-        };
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        let sb = bedrock_scoreboard(&mut custom_guard)?;
         sb.add_objective(
             player.as_ref(),
             pumpkin_core::world::scoreboard::BedrockObjective {
@@ -953,23 +887,8 @@ impl HostBedrockScoreboard for PluginHostState {
         sort_order: scoreboard::BedrockSortOrder,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !matches!(
-            *custom_guard,
-            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-        ) {
-            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-            ));
-        }
-        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-            custom_guard.as_mut()
-        else {
-            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-        };
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        let sb = bedrock_scoreboard(&mut custom_guard)?;
         sb.update_objective(
             player.as_ref(),
             pumpkin_core::world::scoreboard::BedrockObjective {
@@ -994,10 +913,7 @@ impl HostBedrockScoreboard for PluginHostState {
         name: String,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
         if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
             custom_guard.as_mut()
         {
@@ -1013,23 +929,8 @@ impl HostBedrockScoreboard for PluginHostState {
         objective_name: String,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !matches!(
-            *custom_guard,
-            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-        ) {
-            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-            ));
-        }
-        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-            custom_guard.as_mut()
-        else {
-            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-        };
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        let sb = bedrock_scoreboard(&mut custom_guard)?;
         let b_slot = match slot {
             scoreboard::BedrockDisplaySlot::PlayerList => {
                 pumpkin_core::world::scoreboard::BedrockDisplaySlot::PlayerList
@@ -1051,10 +952,7 @@ impl HostBedrockScoreboard for PluginHostState {
         slot: scoreboard::BedrockDisplaySlot,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
         if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
             custom_guard.as_mut()
         {
@@ -1082,23 +980,8 @@ impl HostBedrockScoreboard for PluginHostState {
         value: i32,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !matches!(
-            *custom_guard,
-            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-        ) {
-            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-            ));
-        }
-        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-            custom_guard.as_mut()
-        else {
-            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-        };
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        let sb = bedrock_scoreboard(&mut custom_guard)?;
         sb.update_score(player.as_ref(), &entity_name, &objective_name, value);
         Ok(())
     }
@@ -1111,25 +994,27 @@ impl HostBedrockScoreboard for PluginHostState {
         delta: i32,
     ) -> wasmtime::Result<i32> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !matches!(
-            *custom_guard,
-            Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(_))
-        ) {
-            *custom_guard = Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(
-                pumpkin_core::world::scoreboard::BedrockScoreboard::default(),
-            ));
-        }
-        let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
-            custom_guard.as_mut()
-        else {
-            return Err(wasmtime::Error::msg("Invalid scoreboard state"));
-        };
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        let sb = bedrock_scoreboard(&mut custom_guard)?;
         let new_val = sb.add_score(player.as_ref(), entity_name, objective_name, delta);
         Ok(new_val)
+    }
+
+    fn get_score(
+        &mut self,
+        res: Resource<scoreboard::BedrockScoreboard>,
+        entity_name: String,
+        objective_name: String,
+    ) -> wasmtime::Result<Option<i32>> {
+        let player = self.get(&res)?.clone();
+        let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_ref()
+        {
+            Ok(sb.scores.get(&(entity_name, objective_name)).copied())
+        } else {
+            Ok(None)
+        }
     }
 
     fn remove_score(
@@ -1139,10 +1024,7 @@ impl HostBedrockScoreboard for PluginHostState {
         objective_name: String,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
         if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
             custom_guard.as_mut()
         {
@@ -1157,10 +1039,7 @@ impl HostBedrockScoreboard for PluginHostState {
         entity_name: String,
     ) -> wasmtime::Result<()> {
         let player = self.get(&res)?.clone();
-        let mut custom_guard = player
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut custom_guard = player.custom_scoreboard.lock_ignore_poison();
         if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
             custom_guard.as_mut()
         {
@@ -1169,7 +1048,22 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(())
     }
 
-    fn drop(&mut self, _res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
-        Ok(())
+    fn get_objectives(
+        &mut self,
+        res: Resource<scoreboard::BedrockScoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let player = self.get(&res)?.clone();
+        let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_ref()
+        {
+            Ok(sb.objectives.keys().cloned().collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
+        self.drop(res)
     }
 }

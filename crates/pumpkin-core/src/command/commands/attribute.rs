@@ -1,9 +1,8 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::attribute::AttributeArgumentType;
+use crate::command::argument_types::client_parsed::IdStringArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
-use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
-use crate::command::argument_types::uuid::UuidArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -22,8 +21,8 @@ const ARG_TARGET: &str = "target";
 const ARG_ATTRIBUTE: &str = "attribute";
 const ARG_SCALE: &str = "scale";
 const ARG_VALUE: &str = "value";
-const ARG_UUID: &str = "uuid";
-const ARG_NAME: &str = "name";
+/// A modifier's `ResourceLocation` id, as vanilla since 1.21.
+const ARG_ID: &str = "id";
 
 const FAILED_ENTITY_ERROR: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_ATTRIBUTE_FAILED_ENTITY,
@@ -230,11 +229,8 @@ impl CommandExecutor for ModifierAddExecutor {
             .ok_or_else(|| FAILED_ENTITY_ERROR.create_without_context(target.get_name()))?;
 
         let attribute = AttributeArgumentType::get(context, ARG_ATTRIBUTE)?;
-        let uuid = UuidArgumentType::get(context, ARG_UUID)?;
-        let _name = StringArgumentType::get(context, ARG_NAME)?;
+        let modifier_id = IdStringArgumentType::get(context, ARG_ID)?.to_owned();
         let value = DoubleArgumentType::get(context, ARG_VALUE)?;
-
-        let modifier_id = uuid.to_string();
 
         let res = {
             let mut map = living
@@ -255,12 +251,11 @@ impl CommandExecutor for ModifierAddExecutor {
                     target.get_name(),
                 ))
             } else {
-                inst.modifiers.push(crate::entity::attributes::Modifier {
+                inst.add_or_replace_permanent_modifier(crate::entity::attributes::Modifier {
                     id: modifier_id.clone(),
                     amount: value,
                     operation: self.operation,
                 });
-                inst.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
                 Ok(())
             }
         };
@@ -298,9 +293,7 @@ impl CommandExecutor for ModifierRemoveExecutor {
             .ok_or_else(|| FAILED_ENTITY_ERROR.create_without_context(target.get_name()))?;
 
         let attribute = AttributeArgumentType::get(context, ARG_ATTRIBUTE)?;
-        let uuid = UuidArgumentType::get(context, ARG_UUID)?;
-
-        let modifier_id = uuid.to_string();
+        let modifier_id = IdStringArgumentType::get(context, ARG_ID)?.to_owned();
 
         let res = {
             let mut map = living
@@ -314,10 +307,9 @@ impl CommandExecutor for ModifierRemoveExecutor {
                 )
             })?;
 
-            let index = inst
-                .modifiers
+            inst.modifiers
                 .iter()
-                .position(|m| m.id == modifier_id)
+                .find(|m| m.id == modifier_id)
                 .ok_or_else(|| {
                     NO_MODIFIER_ERROR.create_without_context(
                         TextComponent::translate(attribute_translation_key(&attribute), []),
@@ -326,8 +318,7 @@ impl CommandExecutor for ModifierRemoveExecutor {
                     )
                 })?;
 
-            inst.modifiers.remove(index);
-            inst.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+            inst.remove_modifier(&modifier_id);
             Ok(())
         };
         res?;
@@ -364,9 +355,7 @@ impl CommandExecutor for ModifierGetExecutor {
             .ok_or_else(|| FAILED_ENTITY_ERROR.create_without_context(target.get_name()))?;
 
         let attribute = AttributeArgumentType::get(context, ARG_ATTRIBUTE)?;
-        let uuid = UuidArgumentType::get(context, ARG_UUID)?;
-
-        let modifier_id = uuid.to_string();
+        let modifier_id = IdStringArgumentType::get(context, ARG_ID)?.to_owned();
 
         let val = {
             let map = living
@@ -394,6 +383,9 @@ impl CommandExecutor for ModifierGetExecutor {
 
             modifier.amount
         };
+        // `getAttributeModifier`: the feedback shows the value, the result
+        // is it times the optional scale.
+        let scale = DoubleArgumentType::get(context, ARG_SCALE).unwrap_or(1.0);
 
         context.source.send_feedback(
             TextComponent::translate_cross(
@@ -409,7 +401,7 @@ impl CommandExecutor for ModifierGetExecutor {
             false,
         );
 
-        Ok(val as i32)
+        Ok((val * scale) as i32)
     }
 }
 
@@ -464,37 +456,44 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         literal("modifier")
                             .then(
                                 literal("add").then(
-                                    argument(ARG_UUID, UuidArgumentType).then(
-                                        argument(ARG_NAME, StringArgumentType::SingleWord).then(
-                                            argument(ARG_VALUE, DoubleArgumentType::any())
-                                                .then(literal("add").executes(
-                                                    ModifierAddExecutor {
-                                                        operation: ModifierOperation::Add,
-                                                    },
-                                                ))
-                                                .then(literal("multiply").executes(
-                                                    ModifierAddExecutor {
-                                                        operation: ModifierOperation::MultiplyTotal,
-                                                    },
-                                                ))
-                                                .then(literal("multiply_base").executes(
-                                                    ModifierAddExecutor {
-                                                        operation: ModifierOperation::MultiplyBase,
-                                                    },
-                                                )),
-                                        ),
+                                    argument(ARG_ID, IdStringArgumentType).then(
+                                        argument(ARG_VALUE, DoubleArgumentType::any())
+                                            .then(literal("add_value").executes(
+                                                ModifierAddExecutor {
+                                                    operation: ModifierOperation::Add,
+                                                },
+                                            ))
+                                            .then(literal("add_multiplied_base").executes(
+                                                ModifierAddExecutor {
+                                                    operation: ModifierOperation::MultiplyBase,
+                                                },
+                                            ))
+                                            .then(literal("add_multiplied_total").executes(
+                                                ModifierAddExecutor {
+                                                    operation: ModifierOperation::MultiplyTotal,
+                                                },
+                                            )),
                                     ),
                                 ),
                             )
                             .then(
                                 literal("remove").then(
-                                    argument(ARG_UUID, UuidArgumentType)
+                                    argument(ARG_ID, IdStringArgumentType)
                                         .executes(ModifierRemoveExecutor),
                                 ),
                             )
-                            .then(literal("value").then(literal("get").then(
-                                argument(ARG_UUID, UuidArgumentType).executes(ModifierGetExecutor),
-                            ))),
+                            .then(
+                                literal("value").then(
+                                    literal("get").then(
+                                        argument(ARG_ID, IdStringArgumentType)
+                                            .executes(ModifierGetExecutor)
+                                            .then(
+                                                argument(ARG_SCALE, DoubleArgumentType::any())
+                                                    .executes(ModifierGetExecutor),
+                                            ),
+                                    ),
+                                ),
+                            ),
                     ),
             ),
         ),

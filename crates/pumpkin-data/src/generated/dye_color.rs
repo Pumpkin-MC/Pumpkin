@@ -20,6 +20,24 @@ pub enum DyeColor {
     Black,
 }
 impl DyeColor {
+    pub const ALL: &'static [Self] = &[
+        Self::White,
+        Self::Orange,
+        Self::Magenta,
+        Self::LightBlue,
+        Self::Yellow,
+        Self::Lime,
+        Self::Pink,
+        Self::Gray,
+        Self::LightGray,
+        Self::Cyan,
+        Self::Purple,
+        Self::Blue,
+        Self::Brown,
+        Self::Green,
+        Self::Red,
+        Self::Black,
+    ];
     #[must_use]
     pub const fn id(&self) -> u8 {
         match self {
@@ -188,6 +206,13 @@ impl DyeColor {
             15u8 => Some(Self::Black),
             _ => None,
         }
+    }
+    #[must_use]
+    pub fn by_id_or_white(id: i32) -> Self {
+        u8::try_from(id)
+            .ok()
+            .and_then(Self::by_id)
+            .unwrap_or(Self::White)
     }
     #[must_use]
     pub fn by_name(name: &str) -> Option<Self> {

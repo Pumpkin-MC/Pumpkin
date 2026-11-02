@@ -27,34 +27,27 @@ impl JavaClient {
         }
 
         let (yaw, pitch) = player.rotation();
-        let hit_result = player.world().raycast(
+        let hit = player.world().clip(&pumpkin_world::clip::ClipContext::new(
             player.eye_position(),
             player
                 .eye_position()
                 .add(&(Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)) * 4.5)),
-            |pos, world| {
-                let block = world.get_block(pos);
-                block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
-            },
-        );
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
 
-        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::LeftClickBlock,
-                player.world().get_block(&hit_pos),
-                Some(hit_pos),
-            )
+        if hit.is_miss {
+            let event =
+                PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None);
+            send_cancellable_blocking! {{
+                &server;
+                event;
+                'after: {
+                    player.swing_hand(hand, false);
+                }
+            }}
         } else {
-            PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
-        };
-
-        send_cancellable_blocking! {{
-            &server;
-            event;
-            'after: {
-                player.swing_hand(hand, false);
-            }
-        }}
+            player.swing_hand(hand, false);
+        }
     }
 }

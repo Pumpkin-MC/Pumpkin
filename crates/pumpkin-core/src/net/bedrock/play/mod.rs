@@ -5,8 +5,7 @@ use std::{
 
 use pumpkin_data::{
     data_component_impl::{
-        BlocksAttacksImpl, ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl,
-        FoodImpl,
+        ConsumableImpl, ConsumeAnimation, EquipmentSlot, EquippableImpl, FoodImpl,
     },
     item_stack::ItemStack,
 };
@@ -139,6 +138,7 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
 
 pub mod actor_event;
 pub mod animate;
+pub mod block_actor_data;
 pub mod block_pick_request;
 pub mod chat_command;
 pub mod chat_message;
@@ -154,7 +154,9 @@ pub mod modal_form_response;
 pub mod player_action;
 pub mod player_auth_input;
 pub mod player_block_action;
+pub mod player_hotbar;
 pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod respawn;
 pub mod set_local_player_as_initialized;
+pub mod stonecutter;

@@ -399,6 +399,10 @@ impl DynamicLightEngine {
             LightingEngineConfig::Default => {}
         }
 
+        if !level.world_gen.load().dimension().has_skylight {
+            return;
+        }
+
         let current_light = self.get_sky_light_level(level, &pos);
         let block_state = level.get_block_state(&pos).to_state();
         let opacity = if block_state.can_occlude() {

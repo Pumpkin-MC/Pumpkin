@@ -27,6 +27,7 @@ pub mod lily_pad;
 pub mod mangrove_propagule;
 pub mod mushroom_plant;
 pub mod nether_sprouts;
+pub mod pale_hanging_moss;
 pub mod roots;
 pub mod sapling;
 pub mod sea_pickles;

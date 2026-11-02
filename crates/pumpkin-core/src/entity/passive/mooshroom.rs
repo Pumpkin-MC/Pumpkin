@@ -4,6 +4,8 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
+use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -12,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -95,11 +98,7 @@ impl MooshroomEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
@@ -130,6 +129,70 @@ impl MooshroomEntity {
             VarInt(variant.id()),
         );
     }
+
+    fn fill_item_stack(
+        player: &Player,
+        world: &Arc<crate::world::World>,
+        item_stack: &mut ItemStack,
+        mut filled: ItemStack,
+    ) {
+        let gamemode = player.gamemode.load();
+        if gamemode != pumpkin_util::GameMode::Creative && item_stack.item_count == 1 {
+            *item_stack = filled;
+        } else {
+            item_stack.decrement_unless_creative(gamemode, 1);
+            if !player.inventory.insert_stack_anywhere(&mut filled) && !filled.is_empty() {
+                world.drop_stack(&player.position().to_block_pos(), filled);
+            }
+        }
+    }
+
+    pub fn shear(&self) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntityMooshroomShear, SoundCategory::Players, &pos);
+
+        let cow_entity = Entity::new(world.clone(), pos, &EntityType::COW);
+        cow_entity.set_rotation(entity.yaw.load(), entity.pitch.load());
+        let cow = crate::entity::passive::cow::CowEntity::new(cow_entity);
+        cow.mob_entity
+            .living_entity
+            .health
+            .store(self.mob_entity.living_entity.health.load());
+        if let Some(custom_name) = &**entity.custom_name.load() {
+            cow.mob_entity
+                .living_entity
+                .entity
+                .set_custom_name(custom_name.clone());
+        }
+        entity.remove();
+        world.spawn_entity(cow);
+
+        let mushroom_item = if self.get_variant() == MooshroomVariant::Brown {
+            &Item::BROWN_MUSHROOM
+        } else {
+            &Item::RED_MUSHROOM
+        };
+
+        let height = f64::from(entity.entity_dimension.load().height);
+        let drop_pos = pos + Vector3::new(0.0, height, 0.0);
+        for _ in 0..5 {
+            let item_entity = Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                ItemStack::new(1, mushroom_item),
+            ));
+            world.spawn_entity(item_entity);
+        }
+
+        world.spawn_particle(
+            pos + Vector3::new(0.0, height * 0.5, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            Particle::Explosion,
+        );
+    }
 }
 
 impl AgeableMob for MooshroomEntity {
@@ -146,6 +209,27 @@ impl Animal for MooshroomEntity {
 }
 
 impl Mob for MooshroomEntity {
+    /// Vanilla `AbstractCow.getSoundSet` is the classic cow for mooshrooms.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound = CowSoundVariant::Classic.step_sound(self.is_baby());
+        self.play_entity_sound(sound, 0.15, 1.0);
+    }
+
+    fn mob_get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        use pumpkin_data::{
+            data_component::DataComponent, data_component_impl::MooshroomVariantImpl,
+        };
+        match component {
+            DataComponent::MooshroomVariant => Some(Box::new(MooshroomVariantImpl {
+                value: self.get_variant().as_str().into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -168,10 +252,6 @@ impl Mob for MooshroomEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-    }
-
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
@@ -188,11 +268,16 @@ impl Mob for MooshroomEntity {
         let item = item_stack.get_item();
 
         if item == &Item::BOWL && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let entity = self.get_entity();
             let world = entity.world.load();
             let pos = entity.pos.load();
             let is_suspicious = self.stew_effect.swap(None).is_some();
+            let stew_item = if is_suspicious {
+                &Item::SUSPICIOUS_STEW
+            } else {
+                &Item::MUSHROOM_STEW
+            };
+            Self::fill_item_stack(player, &world, item_stack, ItemStack::new(1, stew_item));
             let sound = if is_suspicious {
                 Sound::EntityMooshroomSuspiciousMilk
             } else {
@@ -203,9 +288,14 @@ impl Mob for MooshroomEntity {
         }
 
         if item == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let entity = self.get_entity();
             let world = entity.world.load();
+            Self::fill_item_stack(
+                player,
+                &world,
+                item_stack,
+                ItemStack::new(1, &Item::MILK_BUCKET),
+            );
             world.play_sound(
                 Sound::EntityCowMilk,
                 SoundCategory::Neutral,
@@ -217,32 +307,22 @@ impl Mob for MooshroomEntity {
         if item == &Item::SHEARS && !self.is_baby() {
             let entity = self.get_entity();
             let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(Sound::EntityMooshroomShear, SoundCategory::Players, &pos);
-
-            let mushroom_item = if self.get_variant() == MooshroomVariant::Brown {
-                &Item::BROWN_MUSHROOM
-            } else {
-                &Item::RED_MUSHROOM
-            };
-
-            for _ in 0..5 {
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), pos, &EntityType::ITEM),
-                    ItemStack::new(1, mushroom_item),
-                ));
-                world.spawn_entity(item_entity);
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
             }
-
-            world.spawn_particle(
-                pos + Vector3::new(0.0, 0.5, 0.0),
-                Vector3::new(0.5, 0.5, 0.5),
-                0.0,
-                1,
-                Particle::Explosion,
-            );
-
-            player.damage_held_item(1);
+            self.shear();
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item_stack.damage_item(1);
+            }
             return true;
         }
 

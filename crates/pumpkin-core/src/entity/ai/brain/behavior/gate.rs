@@ -77,7 +77,7 @@ impl BehaviorControl for GateBehavior {
     }
 
     fn try_start(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        if !tick.brain.check_all(&self.entry_condition) {
+        if !tick.state.check_all(&self.entry_condition) {
             return false;
         }
         self.status = Status::Running;
@@ -117,7 +117,7 @@ impl BehaviorControl for GateBehavior {
             }
         }
         for id in &self.exit_erased_memories {
-            tick.brain.erase(*id);
+            tick.state.erase(*id);
         }
     }
 

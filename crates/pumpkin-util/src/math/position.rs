@@ -640,6 +640,25 @@ impl BlockPos {
         x + y + z
     }
 
+    /// Packs the offset from this position to `other` into one byte per axis.
+    ///
+    /// Mirrors vanilla's `BlockUtil.packDifferenceInPosition`
+    #[must_use]
+    pub const fn pack_difference_in_position(
+        &self,
+        other: &Self,
+        x_radius: i32,
+        y_radius: i32,
+        z_radius: i32,
+    ) -> i32 {
+        let x_diff = other.0.x - self.0.x;
+        let y_diff = other.0.y - self.0.y;
+        let z_diff = other.0.z - self.0.z;
+        ((x_diff + x_radius) & 0xFF) << 16
+            | ((y_diff + y_radius) & 0xFF) << 8
+            | ((z_diff + z_radius) & 0xFF)
+    }
+
     /// Calculates the squared Euclidean distance between this block position and another.
     ///
     /// # Arguments

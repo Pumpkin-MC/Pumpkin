@@ -114,12 +114,13 @@ pub fn build() -> TokenStream {
                 MatchingBlockTagPredicate, MatchingBlocksBlockPredicate, MatchingBlocksWrapper,
                 MatchingFluidsBlockPredicate, NotBlockPredicate, OffsetBlocksBlockPredicate,
                 ReplaceableBlockPredicate, SolidBlockPredicate, WouldSurviveBlockPredicate,
+                HeightRangeBlockPredicate,
             };
             use crate::generation::height_provider::{
                 HeightProvider, TrapezoidHeightProvider, UniformHeightProvider,
                 VeryBiasedToBottomHeightProvider,
             };
-            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
             use pumpkin_util::math::int_provider::{
                 BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
@@ -149,7 +150,8 @@ pub fn build() -> TokenStream {
                 CountOnEveryLayerPlacementModifier, CountPlacementModifier,
                 EnvironmentScanPlacementModifier, HeightRangePlacementModifier,
                 HeightmapPlacementModifier, NoiseBasedCountPlacementModifier,
-                NoiseThresholdCountPlacementModifier, RandomOffsetPlacementModifier,
+                NoiseThresholdCountPlacementModifier, OffsetPlacementModifier,
+                RandomOffsetPlacementModifier,
                 RarityFilterPlacementModifier, SquarePlacementModifier,
                 SurfaceThresholdFilterPlacementModifier, SurfaceWaterDepthFilterPlacementModifier,
                 PlacedFeatureWrapper,
@@ -162,7 +164,10 @@ pub fn build() -> TokenStream {
                 nether_forest_vegetation::NetherForestVegetationFeature,
                 netherrack_replace_blobs::ReplaceBlobsFeature,
                 ore::{OreFeature, OreTarget},
+                overlay::OverlayFeature,
+                projected_random_patchy_square::ProjectedRandomPatchySquareFeature,
                 random_boolean_selector::RandomBooleanFeature,
+                random_neighbor_spread::RandomNeighborSpreadFeature,
                 random_patch::RandomPatchFeature,
                 random_selector::{RandomFeature, RandomFeatureEntry},
                 weighted_random_selector::{WeightedRandomFeature, WeightedRandomFeatureEntry},
@@ -170,6 +175,7 @@ pub fn build() -> TokenStream {
                 seagrass::SeagrassFeature,
                 simple_block::SimpleBlockFeature,
                 simple_random_selector::SimpleRandomFeature,
+                single_block_pillar::SingleBlockPillarFeature,
                 spring_feature::{BlockWrapper, SpringFeatureFeature},
                 geode::GeodeFeature,
                 tree::TreeFeature,
@@ -997,9 +1003,39 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:dripstone_cluster" | "minecraft:speleothem_cluster" => {
             quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) }
         }
-        // TODO: 26.3 feature types that still need an implementation.
-        "minecraft:sequence" | "minecraft:stepped_column_cluster" => {
+        "minecraft:sequence" => {
             quote! { ConfiguredFeature::NoOp }
+        }
+        "minecraft:stepped_column_cluster" => {
+            let block = value_to_block_state_provider(&config["block"]);
+            let can_replace = value_to_block_predicate(&config["can_replace"]);
+            let cannot_place_on_str = config["cannot_place_on"].as_str().unwrap_or("");
+            let cannot_place_on_ident = if let Some(tag) = cannot_place_on_str.strip_prefix('#') {
+                quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"))
+            } else {
+                panic!(
+                    "Unsupported cannot_place_on in stepped_column_cluster: {cannot_place_on_str}"
+                );
+            };
+            let cluster_reach = value_to_int_provider(&config["cluster_reach"]);
+            let column_count = value_to_int_provider(&config["column_count"]);
+            let column_reach = value_to_int_provider(&config["column_reach"]);
+            let continue_through = value_to_block_predicate(&config["continue_through"]);
+            let height = value_to_int_provider(&config["height"]);
+            quote! {
+                ConfiguredFeature::SteppedColumnCluster(
+                    crate::generation::feature::features::stepped_column_cluster::SteppedColumnClusterFeature {
+                        block: #block,
+                        continue_through: #continue_through,
+                        can_replace: #can_replace,
+                        cannot_place_on: pumpkin_data::tag::Block::#cannot_place_on_ident,
+                        cluster_reach: #cluster_reach,
+                        column_count: #column_count,
+                        column_reach: #column_reach,
+                        height: #height,
+                    }
+                )
+            }
         }
         "minecraft:large_dripstone" => {
             quote! { ConfiguredFeature::LargeDripstone(crate::generation::feature::features::drip_stone::large::LargeDripstoneFeature {}) }
@@ -1057,7 +1093,82 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:desert_well" => {
             quote! { ConfiguredFeature::DesertWell(crate::generation::feature::features::desert_well::DesertWellFeature) }
         }
-        "minecraft:overlay" | "minecraft:random_neighbor_spread" => {
+        "minecraft:overlay" => {
+            let features_arr = config["features"]
+                .as_array()
+                .map(|a| a.as_slice())
+                .unwrap_or(&[]);
+            let features: Vec<TokenStream> = features_arr
+                .iter()
+                .map(value_to_placed_feature_wrapper)
+                .collect();
+            quote! {
+                ConfiguredFeature::Overlay(crate::generation::feature::features::overlay::OverlayFeature {
+                    features: vec![#(#features),*],
+                })
+            }
+        }
+        "minecraft:random_neighbor_spread" => {
+            let block = value_to_block_state_provider(&config["block"]);
+            let accepted_neighbors = value_to_accepted_neighbors(&config["accepted_neighbors"]);
+            let can_replace = value_to_block_predicate(&config["can_replace"]);
+            let attempts = value_to_int_provider(&config["attempts"]);
+            let xz_offset = value_to_int_provider(&config["xz_offset"]);
+            let y_offset = value_to_int_provider(&config["y_offset"]);
+            quote! {
+                ConfiguredFeature::RandomNeighborSpread(crate::generation::feature::features::random_neighbor_spread::RandomNeighborSpreadFeature {
+                    block: #block,
+                    accepted_neighbors: #accepted_neighbors,
+                    can_replace: #can_replace,
+                    attempts: #attempts,
+                    xz_offset: #xz_offset,
+                    y_offset: #y_offset,
+                })
+            }
+        }
+        "minecraft:single_block_pillar" => {
+            let block = value_to_block_state_provider(&config["block"]);
+            let can_replace = if config.get("can_replace").is_some() {
+                value_to_block_predicate(&config["can_replace"])
+            } else {
+                quote! { BlockPredicate::AlwaysTrue }
+            };
+            let direction =
+                value_to_block_direction(config["direction"].as_str().unwrap_or("down"));
+            let chance_to_continue = config["chance_to_continue"].as_f64().unwrap_or(1.0) as f32;
+            let cap_feature =
+                if config.get("cap_feature").is_some() && !config["cap_feature"].is_null() {
+                    let pf = value_to_placed_feature_wrapper(&config["cap_feature"]);
+                    quote! { Some(#pf) }
+                } else {
+                    quote! { None }
+                };
+            quote! {
+                ConfiguredFeature::SingleBlockPillar(crate::generation::feature::features::single_block_pillar::SingleBlockPillarFeature {
+                    block: #block,
+                    can_replace: #can_replace,
+                    direction: #direction,
+                    chance_to_continue: #chance_to_continue,
+                    cap_feature: #cap_feature,
+                })
+            }
+        }
+        "minecraft:projected_random_patchy_square" => {
+            let block = value_to_block_state_provider(&config["block"]);
+            let project_through = value_to_block_predicate(&config["project_through"]);
+            let size = value_to_int_provider(&config["size"]);
+            let max_projection_height =
+                config["max_projection_height"].as_i64().unwrap_or(0) as i32;
+            quote! {
+                ConfiguredFeature::ProjectedRandomPatchySquare(crate::generation::feature::features::projected_random_patchy_square::ProjectedRandomPatchySquareFeature {
+                    block: #block,
+                    project_through: #project_through,
+                    size: #size,
+                    max_projection_height: #max_projection_height,
+                })
+            }
+        }
+        "minecraft:template" => {
             quote! { ConfiguredFeature::NoOp }
         }
         other => {
@@ -1065,6 +1176,27 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { compile_error!(#msg) }
         }
     }
+}
+
+fn value_to_accepted_neighbors(v: &Value) -> TokenStream {
+    let names: Vec<String> = match v {
+        Value::String(s) => vec![s.clone()],
+        Value::Array(arr) => arr
+            .iter()
+            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => Vec::new(),
+    };
+    let block_ids: Vec<TokenStream> = names
+        .iter()
+        .map(|name| {
+            let stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+            let ident =
+                quote::format_ident!("{}", stripped.to_uppercase().replace([':', '-'], "_"));
+            quote! { pumpkin_data::Block::#ident.id }
+        })
+        .collect();
+    quote! { vec![#(#block_ids),*] }
 }
 
 /// Converts a block-state-provider JSON object into its `BlockStateProvider` token stream.
@@ -1075,6 +1207,17 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
 /// # Returns
 /// A `TokenStream` for the appropriate `BlockStateProvider` variant; defaults to `BlockStateProvider::Simple` with air if the type is unrecognised.
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
+    if let Some(s) = v.as_str() {
+        let name = s.strip_prefix("minecraft:").unwrap_or(s);
+        let path = format!(
+            "../../assets/datapack/data/minecraft/worldgen/block_state_provider/{name}.json"
+        );
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
+                return value_to_block_state_provider(&parsed);
+            }
+        }
+    }
     if v.get("type").is_none() && (v.get("id").is_some() || v.get("Name").is_some()) {
         let state = value_to_block_state(v);
         return quote! { BlockStateProvider::Simple(SimpleStateProvider { state: #state }) };
@@ -1174,11 +1317,12 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
         "minecraft:randomized_int_state_provider" | "minecraft:randomized_int" => {
             let src = value_to_block_state_provider(&v["source"]);
             let prop = v["property"].as_str().unwrap_or("");
+            let prop_ident = format_ident!("{}", prop.to_pascal_case());
             let vals = value_to_int_provider(&v["values"]);
             quote! {
                 BlockStateProvider::RandomizedInt(RandomizedIntBlockStateProvider {
                     source: Box::new(#src),
-                    property: #prop.to_string(),
+                    property: pumpkin_data::block_properties::PropertyKey::#prop_ident,
                     values: #vals,
                 })
             }
@@ -1757,8 +1901,8 @@ fn value_to_tree_decorator(v: &Value) -> Option<TokenStream> {
             }
         }
         "minecraft:place_on_ground" => {
-            let tries = v["tries"].as_i64().unwrap_or(1) as i32;
-            let radius = v["radius"].as_i64().unwrap_or(1) as i32;
+            let tries = v["tries"].as_i64().unwrap_or(128) as i32;
+            let radius = v["radius"].as_i64().unwrap_or(2) as i32;
             let height = v["height"].as_i64().unwrap_or(1) as i32;
             let bsp = value_to_block_state_provider(&v["block_state_provider"]);
             quote! {
@@ -1944,12 +2088,13 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
         "minecraft:random_offset" => {
             let xz = value_to_int_provider(&v["xz_spread"]);
             let y = value_to_int_provider(&v["y_spread"]);
-            quote! { PlacementModifier::RandomOffset(RandomOffsetPlacementModifier { xz_spread: #xz, y_spread: #y }) }
+            quote! { PlacementModifier::Offset(OffsetPlacementModifier { x: #xz, y: #y, z: #xz }) }
         }
         "minecraft:offset" => {
-            let xz = value_to_int_provider(&v["x"]);
+            let x = value_to_int_provider(&v["x"]);
             let y = value_to_int_provider(&v["y"]);
-            quote! { PlacementModifier::RandomOffset(RandomOffsetPlacementModifier { xz_spread: #xz, y_spread: #y }) }
+            let z = value_to_int_provider(&v["z"]);
+            quote! { PlacementModifier::Offset(OffsetPlacementModifier { x: #x, y: #y, z: #z }) }
         }
         "minecraft:noise_based_count" => {
             let r = v["noise_to_count_ratio"].as_i64().unwrap_or(0) as i32;
