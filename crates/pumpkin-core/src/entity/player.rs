@@ -241,7 +241,7 @@ use pumpkin_data::data_component_impl::{
     EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
 };
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, MovementEmission};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -584,6 +584,53 @@ struct SkinMetadata {
     model: Option<String>,
 }
 
+fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder.read_info().ok()?;
+    let width = reader.info().width;
+    let height = reader.info().height;
+    if width != 64 || (height != 32 && height != 64) {
+        return None;
+    }
+    let buf_size = reader.output_buffer_size()?;
+    let mut buf = vec![0u8; buf_size];
+    let output_info = reader.next_frame(&mut buf).ok()?;
+    buf.truncate(output_info.buffer_size());
+
+    let rgba = match output_info.color_type {
+        png::ColorType::Rgba => buf,
+        png::ColorType::Rgb => {
+            let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+            for rgb in buf.as_chunks::<3>().0 {
+                rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], u8::MAX]);
+            }
+            rgba
+        }
+        png::ColorType::Grayscale => {
+            let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+            for &gray in &buf {
+                rgba.extend_from_slice(&[gray, gray, gray, u8::MAX]);
+            }
+            rgba
+        }
+        png::ColorType::GrayscaleAlpha => {
+            let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+            for ga in buf.as_chunks::<2>().0 {
+                rgba.extend_from_slice(&[ga[0], ga[0], ga[0], ga[1]]);
+            }
+            rgba
+        }
+        png::ColorType::Indexed => return None,
+    };
+
+    if rgba.len() != (width * height * 4) as usize {
+        return None;
+    }
+
+    Some((width, height, rgba))
+}
+
 impl Player {
     pub async fn fetch_skin(
         properties: &[Property],
@@ -603,16 +650,7 @@ impl Player {
 
         let client = pumpkin_auth::client();
         let bytes = client.get(&url).send().await.ok()?.bytes().await.ok()?;
-        let img = image::load_from_memory(&bytes).ok()?;
-
-        let width = img.width();
-        let height = img.height();
-
-        if width != 64 || (height != 32 && height != 64) {
-            return None;
-        }
-
-        let mut rgba = img.into_rgba8().into_raw();
+        let (width, height, mut rgba) = decode_skin_png(&bytes)?;
 
         let opaque_mask = BASE64_STANDARD
             .decode(if height == 32 {
@@ -1148,6 +1186,7 @@ impl Player {
                 }],
             },
             actor_links: Vec::new(),
+            passenger_of_block: None,
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
@@ -1522,6 +1561,7 @@ impl Player {
                 target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
                 data: 0.0,
                 swing_source: None,
+                hand: 0,
             };
             world.broadcast_editioned(&je_packet, &be_packet);
         }
@@ -3210,6 +3250,16 @@ impl Player {
         }
     }
 
+    /// Vanilla `playMuffledStepSound`: the block under a carpet or under water, quieter and lower.
+    fn play_muffled_step_sound(&self, state: &BlockState) {
+        let sound_type = state.get_sound_type();
+        self.play_entity_sound(
+            sound_type.step_sound,
+            sound_type.volume * 0.05,
+            sound_type.pitch * 0.8,
+        );
+    }
+
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: gliding...
         let entity = &self.living_entity.entity;
@@ -4643,6 +4693,7 @@ impl Player {
         {
             return false;
         }
+        // TODO: Vanilla `Player.hurtServer` difficulty scaling when `scalesWithDifficulty`
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
     }
@@ -6603,6 +6654,7 @@ impl Player {
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
             data: 0.0,
             swing_source: None,
+            hand: u8::from(hand == Hand::Left),
         };
 
         if all {
@@ -7048,6 +7100,85 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn sound_source(&self) -> SoundCategory {
+        SoundCategory::Players
+    }
+
+    /// Vanilla `Player.playSound`: everyone but this player, whose client plays it already.
+    fn play_entity_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        let entity = self.get_entity();
+        if !entity.is_silent() {
+            entity.world.load().play_sound_raw_expect(
+                self,
+                sound as u16,
+                self.sound_source(),
+                &entity.pos.load(),
+                volume,
+                pitch,
+            );
+        }
+    }
+
+    fn movement_emission(&self) -> MovementEmission {
+        let entity = self.get_entity();
+        let flying = self
+            .abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .flying;
+        if flying || entity.on_ground.load(Ordering::Relaxed) && entity.is_sneaking() {
+            MovementEmission::None
+        } else {
+            MovementEmission::All
+        }
+    }
+
+    fn get_swim_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSwim)
+    }
+
+    fn get_swim_splash_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSplash)
+    }
+
+    fn get_swim_high_speed_splash_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityPlayerSplashHighSpeed)
+    }
+
+    fn do_water_splash_effect(&self, caller: &dyn EntityBase) {
+        if !self.is_spectator() {
+            self.get_entity().water_splash_effect(caller);
+        }
+    }
+
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        (Sound::EntityPlayerSmallFall, Sound::EntityPlayerBigFall)
+    }
+
+    fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        let entity = self.get_entity();
+        if entity.is_in_water() {
+            entity.water_swim_sound(self);
+            self.play_muffled_step_sound(state);
+            return;
+        }
+        let primary_pos = entity.get_primary_step_sound_block_pos(pos);
+        if primary_pos == *pos {
+            self.play_block_step_sound(state);
+            return;
+        }
+        let primary_state = entity.world.load().get_block_state(&primary_pos);
+        self.play_block_step_sound(primary_state);
+        // Vanilla `playCombinationStepSounds` adds the muffled block underneath.
+        if primary_state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            self.play_muffled_step_sound(state);
+        }
+    }
+
     fn damage_with_context(
         &self,
         caller: &dyn EntityBase,
@@ -8432,5 +8563,39 @@ mod tests {
         let java_block = 4.5f64;
         let bedrock_block = 5.0f64;
         assert!(bedrock_block > java_block);
+    }
+
+    #[test]
+    fn decode_skin_png_works() {
+        let mut png_bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut png_bytes, 64, 64);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            let data = vec![128u8; 64 * 64 * 4];
+            writer.write_image_data(&data).unwrap();
+        };
+
+        let decoded = super::decode_skin_png(&png_bytes);
+        assert!(decoded.is_some());
+        let (width, height, rgba) = decoded.unwrap();
+        assert_eq!(width, 64);
+        assert_eq!(height, 64);
+        assert_eq!(rgba.len(), 64 * 64 * 4);
+        assert_eq!(rgba[0], 128);
+
+        // Test invalid dimensions
+        let mut invalid_bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut invalid_bytes, 32, 32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            let data = vec![0u8; 32 * 32 * 4];
+            writer.write_image_data(&data).unwrap();
+        };
+        assert!(super::decode_skin_png(&invalid_bytes).is_none());
+        assert!(super::decode_skin_png(&[]).is_none());
     }
 }

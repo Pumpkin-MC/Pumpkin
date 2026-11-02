@@ -101,6 +101,9 @@ pub fn compare_nbt(pattern: &NbtTag, target: &NbtTag) -> bool {
             if pattern_list.is_empty() {
                 return target_list.is_empty();
             }
+            if target_list.len() < pattern_list.len() {
+                return false;
+            }
             for pattern_elem in pattern_list {
                 let mut matched = false;
                 for target_elem in target_list {

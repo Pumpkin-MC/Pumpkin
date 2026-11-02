@@ -1,10 +1,13 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::util::goal_utils;
 use crate::entity::{
@@ -21,6 +24,8 @@ use crate::entity::{
         neutral::{NeutralData, NeutralMob},
     },
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::api::events::entity::pig_zombie_anger::PigZombieAngerEvent;
 use crate::world::World;
 
 /// Vanilla `ALERT_INTERVAL`: 4 to 6 seconds.
@@ -90,7 +95,7 @@ impl ZombifiedPiglinEntity {
                 {
                     continue;
                 }
-                other_mob.set_mob_target(Some(target.clone()));
+                other_mob.set_mob_target(Some(target.clone()), TargetReason::PigZombieTarget);
             }
         }
 
@@ -104,12 +109,27 @@ impl NeutralMob for ZombifiedPiglinEntity {
         &self.neutral_data
     }
 
+    fn approve_grudge(&self, target: &dyn EntityBase, ticks: i32) -> Option<i32> {
+        let entity = &self.mob_entity.living_entity.entity;
+        let Some(server) = entity.world.load().server.upgrade() else {
+            return Some(ticks);
+        };
+        let mut event =
+            PigZombieAngerEvent::new(entity.entity_id, Some(target.get_entity().entity_id), ticks);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.new_anger)
+    }
+
     fn updates_anger_in_ai_step(&self) -> bool {
         true
     }
 }
 
 impl Mob for ZombifiedPiglinEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityZombieStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
