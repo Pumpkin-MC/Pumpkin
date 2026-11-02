@@ -1,9 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::{
-    packet::clientbound::play::SOUND, sound::SoundCategory,
-    sound_id_remap::remap_sound_id_for_version,
-};
+use pumpkin_data::{packet::clientbound::play::SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -51,30 +48,22 @@ impl ClientPacket for CSoundEffect {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if *version >= JavaMinecraftVersion::V_1_19_3 {
-            let sound_event = match &self.sound_event {
-                IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-                IdOr::Value(value) => IdOr::Value(value.clone()),
-            };
-
-            crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+            crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
                 w.write_string(&e.sound_name)?;
                 w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
             })?;
         } else if *version >= JavaMinecraftVersion::V_1_9 {
             let sound_id = match &self.sound_event {
-                IdOr::Id(id) => remap_sound_id_for_version(*id, *version),
+                IdOr::Id(id) => *id,
                 IdOr::Value(_) => 0,
             };
             write.write_var_int(&VarInt(i32::from(sound_id)))?;
         } else {
             let sound_name: &str = match &self.sound_event {
-                IdOr::Id(id) => {
-                    let remapped = remap_sound_id_for_version(*id, *version);
-                    pumpkin_data::sound::Sound::NAMES
-                        .get(usize::from(remapped))
-                        .copied()
-                        .unwrap_or("ambient.cave")
-                }
+                IdOr::Id(id) => pumpkin_data::sound::Sound::NAMES
+                    .get(usize::from(*id))
+                    .copied()
+                    .unwrap_or("ambient.cave"),
                 IdOr::Value(event) => &event.sound_name,
             };
             write.write_string(sound_name)?;
@@ -109,64 +98,14 @@ mod tests {
     use std::io::Cursor;
 
     use pumpkin_data::sound::SoundCategory;
-    use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
     use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
     use crate::{ClientPacket, IdOr, SoundEvent, VarInt, ser::NetworkReadExt};
 
     use super::CSoundEffect;
 
-    fn first_remapped_sound_id(version: JavaMinecraftVersion) -> u16 {
-        (0..=u16::MAX)
-            .find(|id| remap_sound_id_for_version(*id, version) != *id)
-            .expect("sound remap table should contain at least one changed id")
-    }
-
     fn first_var_int(bytes: Vec<u8>) -> VarInt {
         VarInt::decode(&mut Cursor::new(bytes)).unwrap()
-    }
-
-    #[test]
-    fn numeric_sound_id_remaps_for_1_21_11() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CSoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            &Vector3::new(1.0, 2.0, 3.0),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
-            .unwrap();
-
-        assert_eq!(
-            first_var_int(bytes),
-            VarInt::from(remap_sound_id_for_version(sound_id, JavaMinecraftVersion::V_1_21_11) + 1)
-        );
-    }
-
-    #[test]
-    fn numeric_sound_id_stays_latest_for_26_2() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CSoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            &Vector3::new(1.0, 2.0, 3.0),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
-
-        assert_eq!(first_var_int(bytes), VarInt::from(sound_id + 1));
     }
 
     #[test]

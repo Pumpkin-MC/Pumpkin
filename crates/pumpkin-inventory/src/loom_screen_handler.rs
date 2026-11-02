@@ -11,13 +11,15 @@ use crate::slot::Slot;
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
 use crate::window_property::PropertyDelegate;
-use pumpkin_data::data_component_impl::{BannerPatternLayer, BannerPatternsImpl};
+use pumpkin_data::data_component_impl::{
+    BannerPatternLayer, BannerPatternsImpl, DyeImpl, ProvidesBannerPatternsImpl,
+};
 use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
-use pumpkin_data::tag::{BannerPattern, RegistryKey, get_tag_values};
+use pumpkin_data::tag::{self, BannerPattern, RegistryKey, Taggable, get_tag_values};
 use pumpkin_protocol::java::server::play::SlotActionType;
 
 pub const NO_ITEM_REQUIRED_PATTERNS: &[&str] = BannerPattern::MINECRAFT_NO_ITEM_REQUIRED.0;
@@ -28,22 +30,22 @@ pub fn is_banner_item(item: &Item) -> bool {
 }
 
 #[must_use]
-pub fn is_dye_item(item: &Item) -> bool {
-    item.registry_key.ends_with("_dye")
+pub fn is_dye_item(stack: &ItemStack) -> bool {
+    stack.item.has_tag(&tag::Item::MINECRAFT_LOOM_DYES)
+        && stack.get_data_component::<DyeImpl>().is_some()
 }
 
 #[must_use]
-pub fn is_pattern_item(item: &Item) -> bool {
-    item.registry_key.ends_with("_banner_pattern")
+pub fn is_pattern_item(stack: &ItemStack) -> bool {
+    stack.item.has_tag(&tag::Item::MINECRAFT_LOOM_PATTERNS)
+        && stack
+            .get_data_component::<ProvidesBannerPatternsImpl>()
+            .is_some()
 }
 
 #[must_use]
 pub fn get_dye_color(stack: &ItemStack) -> Option<DyeColor> {
-    stack
-        .item
-        .registry_key
-        .strip_suffix("_dye")
-        .and_then(DyeColor::by_name)
+    stack.get_data_component::<DyeImpl>().map(|d| d.color)
 }
 
 #[must_use]
@@ -62,13 +64,11 @@ pub fn get_selectable_patterns(pattern_stack: &ItemStack) -> Vec<String> {
             .collect();
     }
 
-    let item_key = pattern_stack
-        .item
-        .registry_key
-        .strip_suffix("_banner_pattern")
-        .unwrap_or(pattern_stack.item.registry_key);
-    let tag_name = format!("minecraft:pattern_item/{item_key}");
-    get_tag_values(RegistryKey::BannerPattern, &tag_name).map_or_else(Vec::new, |values| {
+    let Some(provides) = pattern_stack.get_data_component::<ProvidesBannerPatternsImpl>() else {
+        return Vec::new();
+    };
+    let tag_name = provides.key.strip_prefix('#').unwrap_or(&provides.key);
+    get_tag_values(RegistryKey::BannerPattern, tag_name).map_or_else(Vec::new, |values| {
         values
             .iter()
             .map(|s| {
@@ -222,6 +222,11 @@ impl LoomScreenHandler {
         }
     }
 
+    pub fn select_pattern(&mut self, pattern: &str) {
+        let clean_pattern = pattern.strip_prefix("minecraft:").unwrap_or(pattern);
+        self.setup_result_slot(clean_pattern);
+    }
+
     fn setup_result_slot(&self, pattern: &str) {
         let mut banner_stack = self.input_inventory.get_stack(0);
         let dye_stack = self.input_inventory.get_stack(1);
@@ -323,11 +328,11 @@ impl ScreenHandler for LoomScreenHandler {
                             if !self.insert_item(&mut slot_stack, 0, 1, false) {
                                 return ItemStack::EMPTY.clone();
                             }
-                        } else if is_dye_item(slot_stack.item) {
+                        } else if is_dye_item(&slot_stack) {
                             if !self.insert_item(&mut slot_stack, 1, 2, false) {
                                 return ItemStack::EMPTY.clone();
                             }
-                        } else if is_pattern_item(slot_stack.item) {
+                        } else if is_pattern_item(&slot_stack) {
                             if !self.insert_item(&mut slot_stack, 2, 3, false) {
                                 return ItemStack::EMPTY.clone();
                             }
@@ -401,8 +406,8 @@ impl Slot for LoomSlot {
     fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.slot_type {
             LoomSlotType::Banner => is_banner_item(stack.item),
-            LoomSlotType::Dye => is_dye_item(stack.item),
-            LoomSlotType::Pattern => is_pattern_item(stack.item),
+            LoomSlotType::Dye => is_dye_item(stack),
+            LoomSlotType::Pattern => is_pattern_item(stack),
         }
     }
 

@@ -37,7 +37,8 @@ pub struct SurfaceHeightEstimateSampler<'a> {
     maximum_y: i32,
     y_level_step_count: usize,
 
-    component_stack: Box<[ChunkNoiseFunctionComponent<'a>]>,
+    base: &'a ProtoSurfaceEstimator,
+    component_stack: Option<Box<[ChunkNoiseFunctionComponent<'a>]>>,
 
     // TODO: Can this be a flat map? I think the aquifer sampler samples outside of the chunk
     cache: FxHashMap<u64, i32>,
@@ -60,24 +61,30 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
 
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
         let pos = Vector3::new(aligned_x, 0, aligned_z);
+        let base = self.base;
+        let component_stack = self
+            .component_stack
+            .get_or_insert_with(|| Self::build_component_stack(base));
 
         // If the top-most component is FindTopSurface, we want to perform a precise search
         // rather than the coarse cell-stepping search it does internally.
         if let Some(ChunkNoiseFunctionComponent::Dependent(
             crate::generation::noise::router::proto_noise_router::DependentProtoNoiseFunctionComponent::FindTopSurface(fts),
-        )) = self.component_stack.last()
+        )) = component_stack.last()
         {
+            let upper_bound_index = fts.upper_bound_index();
+            let density_index = fts.density_index();
+            let cell_height = fts.cell_height();
             let upper = ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut self.component_stack[..=fts.upper_bound_index()],
+                &mut component_stack[..=upper_bound_index],
                 &pos,
             );
 
             // First find the coarse cell that contains the surface
-            let cell_height = fts.cell_height();
             let mut y = (upper / cell_height as f32).floor() as i32 * cell_height;
             while y >= self.minimum_y {
                 let density = ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut self.component_stack[..=fts.density_index()],
+                    &mut component_stack[..=density_index],
                     &Vector3::new(aligned_x, y, aligned_z),
                 );
                 if density > 0.0 {
@@ -89,8 +96,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             return self.minimum_y;
         }
 
-        let surface_y =
-            ChunkNoiseFunctionComponent::sample_from_stack(&mut self.component_stack, &pos);
+        let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(component_stack, &pos);
         surface_y.floor() as i32
     }
 
@@ -99,9 +105,30 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         base: &'a ProtoSurfaceEstimator,
         build_options: &SurfaceHeightSamplerBuilderOptions,
     ) -> Self {
-        // TODO: It seems kind of wasteful to iter over all components (even those we dont need
-        // because they're for chunk population), but this is the best I've got for now.
-        // (Should we traverse the functions and update the indices?)
+        Self::generate_with_cache(base, build_options, FxHashMap::default())
+    }
+
+    #[must_use]
+    pub const fn generate_with_cache(
+        base: &'a ProtoSurfaceEstimator,
+        build_options: &SurfaceHeightSamplerBuilderOptions,
+        cache: FxHashMap<u64, i32>,
+    ) -> Self {
+        Self {
+            base,
+            component_stack: None,
+
+            maximum_y: build_options.maximum_y,
+            minimum_y: build_options.minimum_y,
+            y_level_step_count: build_options.y_level_step_count,
+
+            cache,
+        }
+    }
+
+    fn build_component_stack(
+        base: &'a ProtoSurfaceEstimator,
+    ) -> Box<[ChunkNoiseFunctionComponent<'a>]> {
         let mut component_stack =
             Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
         for base_component in &base.full_component_stack {
@@ -145,14 +172,11 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             component_stack.push(chunk_component);
         }
 
-        Self {
-            component_stack: component_stack.into_boxed_slice(),
+        component_stack.into_boxed_slice()
+    }
 
-            maximum_y: build_options.maximum_y,
-            minimum_y: build_options.minimum_y,
-            y_level_step_count: build_options.y_level_step_count,
-
-            cache: FxHashMap::default(),
-        }
+    #[must_use]
+    pub fn into_cache(self) -> FxHashMap<u64, i32> {
+        self.cache
     }
 }

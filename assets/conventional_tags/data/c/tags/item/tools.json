@@ -1,0 +1,80 @@
+{
+  "values": [
+    {
+      "id": "#minecraft:axes",
+      "required": false
+    },
+    {
+      "id": "#minecraft:hoes",
+      "required": false
+    },
+    {
+      "id": "#minecraft:pickaxes",
+      "required": false
+    },
+    {
+      "id": "#minecraft:shovels",
+      "required": false
+    },
+    {
+      "id": "#minecraft:spears",
+      "required": false
+    },
+    {
+      "id": "#minecraft:swords",
+      "required": false
+    },
+    {
+      "id": "#c:tools/bow",
+      "required": false
+    },
+    {
+      "id": "#c:tools/brush",
+      "required": false
+    },
+    {
+      "id": "#c:tools/crossbow",
+      "required": false
+    },
+    {
+      "id": "#c:tools/fishing_rod",
+      "required": false
+    },
+    {
+      "id": "#c:tools/igniter",
+      "required": false
+    },
+    {
+      "id": "#c:tools/shear",
+      "required": false
+    },
+    {
+      "id": "#c:tools/shield",
+      "required": false
+    },
+    {
+      "id": "#c:tools/trident",
+      "required": false
+    },
+    {
+      "id": "#c:tools/mace",
+      "required": false
+    },
+    {
+      "id": "#c:tools/wrench",
+      "required": false
+    },
+    {
+      "id": "#c:tools/mining_tool",
+      "required": false
+    },
+    {
+      "id": "#c:tools/melee_weapon",
+      "required": false
+    },
+    {
+      "id": "#c:tools/ranged_weapon",
+      "required": false
+    }
+  ]
+}

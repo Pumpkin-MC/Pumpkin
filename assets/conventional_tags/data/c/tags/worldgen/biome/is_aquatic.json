@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:is_ocean",
+      "required": false
+    },
+    {
+      "id": "#c:is_river",
+      "required": false
+    }
+  ]
+}

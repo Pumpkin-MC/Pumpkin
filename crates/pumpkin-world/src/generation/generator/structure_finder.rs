@@ -5,7 +5,7 @@ use pumpkin_data::structures::{
 use pumpkin_util::math::{floor_div, position::BlockPos};
 
 use crate::generation::structure::placement::{
-    GlobalStructureCache, get_structure_chunk_in_region,
+    GlobalStructureCache, StrongholdLayout, get_structure_chunk_in_region,
 };
 
 use super::WorldGenerator;
@@ -30,28 +30,36 @@ pub struct FoundStructure {
 ///    at the first radius that produces any result.
 ///
 /// The best candidate from both passes is returned.
+///
+/// Returns [`StructureSearch::Pending`] while the stronghold positions are still
+/// being computed, so the caller can retry instead of reporting a wrong result.
 pub fn find_nearest_structure(
     origin: BlockPos,
     placements: &[&StructurePlacement],
     max_search_radius: i32,
     world_seed: i64,
     global_cache: &GlobalStructureCache,
-) -> Option<BlockPos> {
+) -> StructureSearch {
     if placements.is_empty() {
-        return None;
+        return StructureSearch::NotFound;
     }
 
     let mut nearest: Option<FoundStructure> = None;
 
     // ── Pass 1: Concentric-rings (strongholds) ──────────────────────────────
     for p in placements {
-        if let StructurePlacementType::ConcentricRings(rings) = &p.placement_type
-            && let Some(found) = find_nearest_concentric(origin, rings, global_cache)
-            && nearest
-                .as_ref()
-                .is_none_or(|n| found.distance_sq < n.distance_sq)
-        {
-            nearest = Some(found);
+        if let StructurePlacementType::ConcentricRings(rings) = &p.placement_type {
+            match find_nearest_concentric(origin, rings, global_cache) {
+                ConcentricSearch::Pending => return StructureSearch::Pending,
+                ConcentricSearch::Done(Some(found))
+                    if nearest
+                        .as_ref()
+                        .is_none_or(|n| found.distance_sq < n.distance_sq) =>
+                {
+                    nearest = Some(found);
+                }
+                ConcentricSearch::Done(_) => {}
+            }
         }
     }
 
@@ -93,12 +101,22 @@ pub fn find_nearest_structure(
         }
     }
 
-    nearest.map(|f| f.pos)
+    nearest.map_or(StructureSearch::NotFound, |f| StructureSearch::Found(f.pos))
+}
+
+/// Result of [`find_nearest_structure`].
+#[derive(Debug, Clone)]
+pub enum StructureSearch {
+    Found(BlockPos),
+    NotFound,
+    Pending,
 }
 
 /// Finds the nearest candidate that actually produces one of `target_structures`.
-/// Explorer maps use this instead of pointing at a placement-only candidate whose
-/// biome may reject the requested structure.
+///
+/// Returns the position along with which of the targets was found. Explorer maps
+/// and `/locate structure` use this instead of pointing at a placement-only
+/// candidate whose biome may reject the requested structure.
 #[must_use]
 #[expect(clippy::too_many_lines)]
 pub fn find_nearest_structure_start(
@@ -107,7 +125,7 @@ pub fn find_nearest_structure_start(
     target_structures: &[pumpkin_data::structures::StructureKeys],
     max_search_radius: i32,
     generator: &WorldGenerator,
-) -> Option<BlockPos> {
+) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
@@ -142,7 +160,7 @@ pub fn find_nearest_structure_start(
     let global_cache = &noise_generator.global_structure_cache;
 
     for radius in 0..=max_search_radius {
-        let mut nearest: Option<FoundStructure> = None;
+        let mut nearest: Option<(FoundStructure, pumpkin_data::structures::StructureKeys)> = None;
         for region_x_offset in -radius..=radius {
             for region_z_offset in -radius..=radius {
                 if region_x_offset.abs() != radius && region_z_offset.abs() != radius {
@@ -207,10 +225,13 @@ pub fn find_nearest_structure_start(
                                 &mut biome_sampler,
                             )
                         });
-                    let Some(start) = start else {
+                    let Some(_start) = start else {
                         continue;
                     };
-                    let position = start.start_pos;
+                    // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+                    let locate_x = chunk_x << 4;
+                    let locate_z = chunk_z << 4;
+                    let position = BlockPos::new(locate_x, 0, locate_z);
                     let dx = f64::from(position.0.x - origin.0.x);
                     let dz = f64::from(position.0.z - origin.0.z);
                     let found = FoundStructure {
@@ -219,15 +240,15 @@ pub fn find_nearest_structure_start(
                     };
                     if nearest
                         .as_ref()
-                        .is_none_or(|current| found.distance_sq < current.distance_sq)
+                        .is_none_or(|(current, _)| found.distance_sq < current.distance_sq)
                     {
-                        nearest = Some(found);
+                        nearest = Some((found, key));
                     }
                 }
             }
         }
-        if let Some(found) = nearest {
-            return Some(found.pos);
+        if let Some((found, key)) = nearest {
+            return Some((found.pos, key));
         }
     }
     None
@@ -238,11 +259,13 @@ fn find_nearest_concentric(
     // Kept for potential future bounds / distance validation.
     _rings: &ConcentricRingsStructurePlacement,
     global_cache: &GlobalStructureCache,
-) -> Option<FoundStructure> {
-    let strongholds = global_cache.get_stronghold_chunks();
-    if strongholds.is_empty() {
-        return None;
-    }
+) -> ConcentricSearch {
+    // No block, callers run in server tasks and the tick, which shutdown waits on
+    let strongholds = match global_cache.try_get_stronghold_chunks() {
+        StrongholdLayout::Ready(strongholds) => strongholds,
+        StrongholdLayout::Pending => return ConcentricSearch::Pending,
+        StrongholdLayout::Failed => return ConcentricSearch::Done(None),
+    };
 
     let ox = origin.0.x as f64;
     let oz = origin.0.z as f64;
@@ -250,9 +273,9 @@ fn find_nearest_concentric(
     strongholds
         .iter()
         .map(|(cx, cz)| {
-            // Centre of the chunk in block coords.
-            let bx = (cx << 4) + 8;
-            let bz = (cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = cx << 4;
+            let bz = cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             FoundStructure {
@@ -261,6 +284,15 @@ fn find_nearest_concentric(
             }
         })
         .min_by(|a, b| a.distance_sq.total_cmp(&b.distance_sq))
+        .map_or(ConcentricSearch::Done(None), |found| {
+            ConcentricSearch::Done(Some(found))
+        })
+}
+
+/// Outcome of a stronghold lookup: the ring positions may still be computing.
+enum ConcentricSearch {
+    Pending,
+    Done(Option<FoundStructure>),
 }
 
 fn find_nearest_random_spread_at_radius(
@@ -290,8 +322,9 @@ fn find_nearest_random_spread_at_radius(
             let (struct_cx, struct_cz) =
                 get_structure_chunk_in_region(placement, world_seed, rx, rz, salt);
 
-            let bx = (struct_cx << 4) + 8;
-            let bz = (struct_cz << 4) + 8;
+            // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+            let bx = struct_cx << 4;
+            let bz = struct_cz << 4;
             let dx = bx as f64 - ox;
             let dz = bz as f64 - oz;
             let dist_sq = dx * dx + dz * dz;

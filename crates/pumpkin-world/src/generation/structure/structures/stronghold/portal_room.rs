@@ -2,7 +2,7 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{
         EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
-        OakStairsLikeProperties,
+        WhiteWoolStairsLikeProperties,
     },
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -18,10 +18,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -75,20 +72,6 @@ impl StructurePieceBase for PortalRoomPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings(
-        &self,
-        _start: &StructurePiece,
-        _random: &mut RandomGenerator,
-        _weights: &mut Vec<PieceWeight>,
-        _last_piece_type: &mut Option<StrongholdPieceType>,
-        has_portal_room: &mut bool,
-
-        _collector: &mut StructurePiecesCollector,
-        _pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        *has_portal_room = true;
     }
 
     #[allow(clippy::too_many_lines)]
@@ -296,7 +279,7 @@ impl StructurePieceBase for PortalRoomPiece {
         );
 
         // Stairs Blocks
-        let mut props = OakStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::STONE_BRICK_STAIRS);
         props.facing = HorizontalFacing::North;
         let stairs_n = BlockState::from_id(props.to_state_id(&Block::STONE_BRICK_STAIRS));
 

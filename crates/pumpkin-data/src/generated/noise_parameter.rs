@@ -5,15 +5,17 @@ pub struct DoublePerlinNoiseParameters {
     pub amplitudes: &'static [f64],
     pub lo: u64,
     pub hi: u64,
+    pub string_hash: i32,
 }
 impl DoublePerlinNoiseParameters {
-    pub const COUNT: usize = 63usize;
+    pub const COUNT: usize = 64usize;
     pub const fn new(
         id: usize,
         first_octave: i32,
         amplitudes: &'static [f64],
         lo: u64,
         hi: u64,
+        string_hash: i32,
     ) -> Self {
         Self {
             id,
@@ -21,6 +23,7 @@ impl DoublePerlinNoiseParameters {
             amplitudes,
             lo,
             hi,
+            string_hash,
         }
     }
     pub fn id_to_parameters(id: &str) -> Option<&'static DoublePerlinNoiseParameters> {
@@ -73,6 +76,7 @@ impl DoublePerlinNoiseParameters {
             "pillar_thickness" => &Self::PILLAR_THICKNESS,
             "powder_snow" => &Self::POWDER_SNOW,
             "ridge" => &Self::RIDGE,
+            "small_patch" => &Self::SMALL_PATCH,
             "soul_sand_layer" => &Self::SOUL_SAND_LAYER,
             "spaghetti_2d" => &Self::SPAGHETTI_2D,
             "spaghetti_2d_elevation" => &Self::SPAGHETTI_2D_ELEVATION,
@@ -101,6 +105,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         16244762748638791999u64,
         1391399305011792652u64,
+        -1572739590i32,
     );
     pub const AQUIFER_FLUID_LEVEL_FLOODEDNESS: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
@@ -109,6 +114,7 @@ impl DoublePerlinNoiseParameters {
             &[1f64],
             1971819648764795038u64,
             2506222294934710214u64,
+            980029895i32,
         );
     pub const AQUIFER_FLUID_LEVEL_SPREAD: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
@@ -117,6 +123,7 @@ impl DoublePerlinNoiseParameters {
             &[1f64],
             644356645385251490u64,
             3919847117419490415u64,
+            1957348544i32,
         );
     pub const AQUIFER_LAVA: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         3usize,
@@ -124,6 +131,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         1031642243090684786u64,
         2820617609049802170u64,
+        -658034819i32,
     );
     pub const BADLANDS_PILLAR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         4usize,
@@ -131,6 +139,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         13493758258311752636u64,
         3411659937350140381u64,
+        1224581145i32,
     );
     pub const BADLANDS_PILLAR_ROOF: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         5usize,
@@ -138,6 +147,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         7795723110176986287u64,
         4566391624864518557u64,
+        77578554i32,
     );
     pub const BADLANDS_SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         6usize,
@@ -145,6 +155,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64],
         18228034071625356340u64,
         8308134076163360455u64,
+        -1976234594i32,
     );
     pub const CALCITE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         7usize,
@@ -152,6 +163,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         4904593190305397776u64,
         1211164448996192585u64,
+        -665343656i32,
     );
     pub const CAVE_CHEESE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         8usize,
@@ -159,6 +171,7 @@ impl DoublePerlinNoiseParameters {
         &[0.5f64, 1f64, 2f64, 1f64, 2f64, 1f64, 0f64, 2f64, 0f64],
         12779255569999112784u64,
         6029128391830109216u64,
+        -1812270212i32,
     );
     pub const CAVE_ENTRANCE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         9usize,
@@ -166,6 +179,7 @@ impl DoublePerlinNoiseParameters {
         &[0.4f64, 0.5f64, 1f64],
         17366031995758287461u64,
         13627013544070811296u64,
+        -1468292069i32,
     );
     pub const CAVE_LAYER: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         10usize,
@@ -173,6 +187,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         5620043451534219907u64,
         6506268541312725510u64,
+        1750777356i32,
     );
     pub const CLAY_BANDS_OFFSET: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         11usize,
@@ -180,6 +195,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         7256644037753960286u64,
         11158743614211970085u64,
+        -1073349723i32,
     );
     pub const CONTINENTALNESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         12usize,
@@ -187,6 +203,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 2f64, 2f64, 2f64, 1f64, 1f64, 1f64, 1f64],
         9477944837549565538u64,
         12656866088844454061u64,
+        -48307223i32,
     );
     pub const CONTINENTALNESS_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         13usize,
@@ -194,6 +211,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 2f64, 2f64, 2f64, 1f64, 1f64, 1f64, 1f64],
         11114692157640599772u64,
         17162581654990867885u64,
+        586198885i32,
     );
     pub const EROSION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         14usize,
@@ -201,6 +219,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 0f64, 1f64, 1f64],
         14998273076172386264u64,
         5157273775208757888u64,
+        1599606346i32,
     );
     pub const EROSION_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         15usize,
@@ -208,6 +227,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 0f64, 1f64, 1f64],
         10130929960551098705u64,
         16922189808605746015u64,
+        123653382i32,
     );
     pub const GRAVEL: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         16usize,
@@ -215,6 +235,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         1153479925840222391u64,
         7756889976470315235u64,
+        -1138481804i32,
     );
     pub const GRAVEL_LAYER: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         17usize,
@@ -232,6 +253,7 @@ impl DoublePerlinNoiseParameters {
         ],
         3700753923770560088u64,
         5824949440647379577u64,
+        -129796410i32,
     );
     pub const ICE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         18usize,
@@ -239,6 +261,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         7994092977778472105u64,
         16301997149661018038u64,
+        1768640318i32,
     );
     pub const ICEBERG_PILLAR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         19usize,
@@ -246,6 +269,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         15167922125944621777u64,
         9215064124946046309u64,
+        1575291283i32,
     );
     pub const ICEBERG_PILLAR_ROOF: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         20usize,
@@ -253,6 +277,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         6714001469876891169u64,
         17524238621251302951u64,
+        -450808832i32,
     );
     pub const ICEBERG_SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         21usize,
@@ -260,6 +285,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64],
         13536647331807014343u64,
         8721275689436799325u64,
+        305845092i32,
     );
     pub const JAGGED: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         22usize,
@@ -270,6 +296,7 @@ impl DoublePerlinNoiseParameters {
         ],
         17943115692276099476u64,
         8209175272455791875u64,
+        -1068129885i32,
     );
     pub const NETHER_TEMPERATURE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         23usize,
@@ -277,6 +304,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64],
         4494007131265727292u64,
         3789417001435421350u64,
+        -662671062i32,
     );
     pub const NETHER_VEGETATION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         24usize,
@@ -284,6 +312,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64],
         10190642735749408132u64,
         11065819044765107400u64,
+        1393870488i32,
     );
     pub const NETHER_STATE_SELECTOR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         25usize,
@@ -291,6 +320,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         5940456273400029989u64,
         11258616162249557280u64,
+        -1772810105i32,
     );
     pub const NETHER_WART: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         26usize,
@@ -298,6 +328,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 0f64, 0f64, 0.9f64],
         17703200590926175663u64,
         17214184263581656775u64,
+        815165382i32,
     );
     pub const NETHERRACK: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         27usize,
@@ -305,6 +336,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 0f64, 0f64, 0.35f64],
         10355412640456601864u64,
         11182414268062555835u64,
+        303935260i32,
     );
     pub const NOODLE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         28usize,
@@ -312,6 +344,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         15149230821572338763u64,
         7399974921363027187u64,
+        -940448324i32,
     );
     pub const NOODLE_RIDGE_A: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         29usize,
@@ -319,6 +352,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         9662238534792077350u64,
         5361047657610944607u64,
+        879940682i32,
     );
     pub const NOODLE_RIDGE_B: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         30usize,
@@ -326,6 +360,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         16943433826535595665u64,
         224869257309605468u64,
+        879940683i32,
     );
     pub const NOODLE_THICKNESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         31usize,
@@ -333,6 +368,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         3433040058802586130u64,
         6882284535972731025u64,
+        -1514283855i32,
     );
     pub const OFFSET: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         32usize,
@@ -340,6 +376,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 0f64],
         577895406318539652u64,
         4557074653038767061u64,
+        -920384768i32,
     );
     pub const ORE_GAP: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         33usize,
@@ -347,6 +384,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         11262595240165106875u64,
         13644046979728391006u64,
+        1874875180i32,
     );
     pub const ORE_VEIN_A: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         34usize,
@@ -354,6 +392,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         5537411705652647497u64,
         14832111794027820525u64,
+        -1210165536i32,
     );
     pub const ORE_VEIN_B: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         35usize,
@@ -361,6 +400,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         7720896042651600585u64,
         12540131182595714753u64,
+        -1210165535i32,
     );
     pub const ORE_VEININESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         36usize,
@@ -368,6 +408,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         7748099570268139889u64,
         15600382243457734180u64,
+        -76277118i32,
     );
     pub const PACKED_ICE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         37usize,
@@ -375,6 +416,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         6678935034624176163u64,
         7587755929013049282u64,
+        1636810289i32,
     );
     pub const PATCH: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         38usize,
@@ -382,6 +424,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 0f64, 0f64, 0f64, 0f64, 0.013333333333333334f64],
         17102750654369557799u64,
         2432978389120904123u64,
+        -1137280965i32,
     );
     pub const PILLAR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         39usize,
@@ -389,6 +432,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64],
         15338975643228066631u64,
         14751109933046868508u64,
+        -888813161i32,
     );
     pub const PILLAR_RARENESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         40usize,
@@ -396,6 +440,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         10222445372526765264u64,
         325922074234395002u64,
+        -1494157407i32,
     );
     pub const PILLAR_THICKNESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         41usize,
@@ -403,6 +448,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64],
         1884979804952342669u64,
         14176101322839234188u64,
+        1463216844i32,
     );
     pub const POWDER_SNOW: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         42usize,
@@ -410,6 +456,7 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 1f64, 1f64, 1f64],
         8439957600881366575u64,
         7128508063779685469u64,
+        42285308i32,
     );
     pub const RIDGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         43usize,
@@ -417,9 +464,18 @@ impl DoublePerlinNoiseParameters {
         &[1f64, 2f64, 1f64, 0f64, 0f64, 0f64],
         17278323085305457460u64,
         2012804684704589034u64,
+        -1135210850i32,
+    );
+    pub const SMALL_PATCH: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        44usize,
+        -3i32,
+        &[3f64],
+        6193992084354502257u64,
+        13263080618768302221u64,
+        -1399894845i32,
     );
     pub const SOUL_SAND_LAYER: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        44usize,
+        45usize,
         -8i32,
         &[
             1f64,
@@ -434,136 +490,155 @@ impl DoublePerlinNoiseParameters {
         ],
         12961541884992915651u64,
         3334122176816136683u64,
+        880346069i32,
     );
     pub const SPAGHETTI_2D: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        45usize,
+        46usize,
         -7i32,
         &[1f64],
         3779800575929599095u64,
         3026987529072654797u64,
+        1684862133i32,
     );
     pub const SPAGHETTI_2D_ELEVATION: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
-            46usize,
+            47usize,
             -8i32,
             &[1f64],
             3016672669024775629u64,
             6607299245856183467u64,
+            -1266909357i32,
         );
     pub const SPAGHETTI_2D_MODULATOR: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(
-            47usize,
-            -11i32,
-            &[1f64],
-            10799755704108864802u64,
-            158433782627262445u64,
-        );
-    pub const SPAGHETTI_2D_THICKNESS: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
             48usize,
             -11i32,
             &[1f64],
+            10799755704108864802u64,
+            158433782627262445u64,
+            1480258277i32,
+        );
+    pub const SPAGHETTI_2D_THICKNESS: DoublePerlinNoiseParameters =
+        DoublePerlinNoiseParameters::new(
+            49usize,
+            -11i32,
+            &[1f64],
             4027848931106223304u64,
             16564638782843236028u64,
+            2024884330i32,
         );
     pub const SPAGHETTI_3D_1: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        49usize,
+        50usize,
         -7i32,
         &[1f64],
         11890980020316756032u64,
         9461961156268492727u64,
+        -50127994i32,
     );
     pub const SPAGHETTI_3D_2: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        50usize,
+        51usize,
         -7i32,
         &[1f64],
         13377439611599507183u64,
         15428434919931579075u64,
+        -50127993i32,
     );
     pub const SPAGHETTI_3D_RARITY: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        51usize,
+        52usize,
         -11i32,
         &[1f64],
         17169833707525350457u64,
         13710596865147759916u64,
+        416709494i32,
     );
     pub const SPAGHETTI_3D_THICKNESS: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
-            52usize,
+            53usize,
             -8i32,
             &[1f64],
             9907390455466502951u64,
             17587734509872338347u64,
+            -2141000247i32,
         );
     pub const SPAGHETTI_ROUGHNESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        53usize,
+        54usize,
         -5i32,
         &[1f64],
         8857832787093054865u64,
         15318329311263287229u64,
+        -2051062035i32,
     );
     pub const SPAGHETTI_ROUGHNESS_MODULATOR: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
-            54usize,
+            55usize,
             -8i32,
             &[1f64],
             16254484819590729386u64,
             14613561992896323587u64,
+            1314250525i32,
         );
     pub const SULFUR_CAVE_GRADIENT: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        55usize,
+        56usize,
         -5i32,
         &[1f64, 0f64, 1f64],
         18337577454901213776u64,
         11718438542783181498u64,
+        13900937i32,
     );
     pub const SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        56usize,
+        57usize,
         -6i32,
         &[1f64, 1f64, 1f64],
         5417997184927261100u64,
         17624099743590321640u64,
+        1228018656i32,
     );
     pub const SURFACE_SECONDARY: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        57usize,
+        58usize,
         -6i32,
         &[1f64, 1f64, 0f64, 1f64],
         2051559389371867033u64,
         2317317634050931280u64,
+        -1432868907i32,
     );
     pub const SURFACE_SWAMP: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        58usize,
+        59usize,
         -2i32,
         &[1f64],
         14388971182144335831u64,
         1415522856927288170u64,
+        607399873i32,
     );
     pub const TEMPERATURE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        59usize,
+        60usize,
         -10i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         6664882324328353151u64,
         17859146487254174088u64,
+        -549971161i32,
     );
     pub const TEMPERATURE_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        60usize,
+        61usize,
         -12i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         10685635038780148187u64,
         5761303799458311062u64,
+        -1798897629i32,
     );
     pub const VEGETATION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        61usize,
+        62usize,
         -8i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         9348150263868561038u64,
         17422373889327170509u64,
+        -403609349i32,
     );
     pub const VEGETATION_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
-        62usize,
+        63usize,
         -10i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         8194488175179944705u64,
         13502879989887892011u64,
+        2101059319i32,
     );
 }

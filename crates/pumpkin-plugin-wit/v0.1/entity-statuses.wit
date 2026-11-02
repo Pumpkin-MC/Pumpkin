@@ -4,6 +4,8 @@ interface entity-statuses {
   enum entity-status {
     armadillo-peek,
     armorstand-wobble,
+    boat-launch,
+    boat-sink,
     body-break,
     cancel-shake-wetness,
     chest-break,

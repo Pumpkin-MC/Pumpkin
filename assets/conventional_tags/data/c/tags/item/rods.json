@@ -1,0 +1,16 @@
+{
+  "values": [
+    {
+      "id": "#c:rods/wooden",
+      "required": false
+    },
+    {
+      "id": "#c:rods/blaze",
+      "required": false
+    },
+    {
+      "id": "#c:rods/breeze",
+      "required": false
+    }
+  ]
+}

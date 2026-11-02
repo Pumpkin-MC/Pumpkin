@@ -13,10 +13,7 @@ use pumpkin_nbt::{
     compound::NbtCompound, deserializer::NbtReadHelper, serializer::NbtWriteHelperJava, tag::NbtTag,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::{
-    text::{TextComponent, sign::remap_block_entity_sign_nbt},
-    version::JavaMinecraftVersion,
-};
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -102,8 +99,7 @@ impl<'a, R: NetworkReadExt + ?Sized> pumpkin_nbt::deserializer::NbtDataSource<'a
                 e.to_string(),
             ))
         })?;
-        let string =
-            cesu8::from_java_cesu8(&buf).map_err(|_| pumpkin_nbt::Error::Cesu8DecodingError)?;
+        let string = pumpkin_nbt::cesu8::from_java_cesu8(&buf)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 
@@ -1075,17 +1071,13 @@ pub trait NetworkWriteExt {
         data: Option<&NbtCompound>,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let tag = data.map(|c| {
-            let mut compound = c.clone();
-            remap_block_entity_sign_nbt(&mut compound, *version);
-            NbtTag::Compound(compound)
-        });
+        let tag = data.cloned().map(NbtTag::Compound);
         self.write_nbt_with_version(tag.as_ref(), version)
     }
 
     #[inline]
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_2)
+        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_3)
     }
 }
 

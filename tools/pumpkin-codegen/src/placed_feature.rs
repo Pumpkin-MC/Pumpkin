@@ -1,13 +1,12 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::fs;
 
 fn load_placed_features() -> BTreeMap<String, Value> {
-    let dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/placed_feature");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/placed_feature");
     let mut map = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing worldgen/placed_feature directory")
@@ -27,7 +26,7 @@ fn load_placed_features() -> BTreeMap<String, Value> {
     map
 }
 
-/// Reads placed_feature files from 26.2 datapack and emits the complete `PlacedFeature` enum `TokenStream`.
+/// Reads placed_feature files from 26.3 datapack and emits the complete `PlacedFeature` enum `TokenStream`.
 pub fn build_enum() -> TokenStream {
     let json = load_placed_features();
 
@@ -84,7 +83,7 @@ pub fn build_enum() -> TokenStream {
     }
 }
 
-/// Reads placed_feature files from 26.2 datapack and emits the complete `build_placed_features()` function `TokenStream`.
+/// Reads placed_feature files from 26.3 datapack and emits the complete `build_placed_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
     let json = load_placed_features();
 
@@ -108,12 +107,13 @@ pub fn build() -> TokenStream {
                 MatchingBlockTagPredicate, MatchingBlocksBlockPredicate, MatchingBlocksWrapper,
                 MatchingFluidsBlockPredicate, NotBlockPredicate, OffsetBlocksBlockPredicate,
                 ReplaceableBlockPredicate, SolidBlockPredicate, WouldSurviveBlockPredicate,
+                HeightRangeBlockPredicate,
             };
             use crate::generation::height_provider::{
                 HeightProvider, TrapezoidHeightProvider, UniformHeightProvider,
                 VeryBiasedToBottomHeightProvider,
             };
-            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+            use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
             use pumpkin_util::math::int_provider::{
                 BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
@@ -325,9 +325,22 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
             let xz = value_to_int_provider(&v["xz_spread"]);
             let y = value_to_int_provider(&v["y_spread"]);
             quote! {
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: #xz,
-                    y_spread: #y,
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: #xz,
+                    y: #y,
+                    z: #xz,
+                })
+            }
+        }
+        "minecraft:offset" => {
+            let x = value_to_int_provider(&v["x"]);
+            let y = value_to_int_provider(&v["y"]);
+            let z = value_to_int_provider(&v["z"]);
+            quote! {
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: #x,
+                    y: #y,
+                    z: #z,
                 })
             }
         }
@@ -363,7 +376,7 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
 
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
-        "minecraft:true" | "" => quote! { BlockPredicate::AlwaysTrue },
+        "minecraft:true" | "minecraft:volume_match" | "" => quote! { BlockPredicate::AlwaysTrue },
         "minecraft:matching_blocks" => {
             let offset = value_to_offset_predicate(&v["offset"]);
             let blocks = value_to_matching_blocks_wrapper(&v["blocks"]);
@@ -473,6 +486,16 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:height_range" => {
+            let min = value_to_y_offset(&v["min_inclusive"]);
+            let max = value_to_y_offset(&v["max_inclusive"]);
+            quote! {
+                BlockPredicate::HeightRange(HeightRangeBlockPredicate {
+                    min_inclusive: #min,
+                    max_inclusive: #max,
+                })
+            }
+        }
         other => {
             let msg = format!("unknown block predicate: {other}");
             quote! { compile_error!(#msg) }
@@ -564,6 +587,9 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
     } else if let Some(bt) = v.get("below_top") {
         let val = bt.as_i64().unwrap_or(0) as i8;
         quote! { YOffset::BelowTop(BelowTop { below_top: #val }) }
+    } else if let Some(sl) = v.get("relative_to_sea_level") {
+        let val = sl.as_i64().unwrap_or(0) as i16;
+        quote! { YOffset::RelativeToSeaLevel(RelativeToSeaLevel { relative_to_sea_level: #val }) }
     } else {
         quote! { YOffset::Absolute(Absolute { absolute: 0 }) }
     }
@@ -739,12 +765,31 @@ fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
 ///
 /// # Returns
 /// A `BlockStateCodec` token stream referencing the corresponding `Block` constant and optional property map.
+fn block_state_name_and_props(v: &Value) -> (&str, Option<&Map<String, Value>>) {
+    match v {
+        Value::String(name) => (name.as_str(), None),
+        Value::Object(object) => {
+            let name = object
+                .get("Name")
+                .or_else(|| object.get("id"))
+                .and_then(Value::as_str)
+                .unwrap_or("minecraft:air");
+            let props = object
+                .get("Properties")
+                .or_else(|| object.get("properties"))
+                .and_then(Value::as_object);
+            (name, props)
+        }
+        _ => ("minecraft:air", None),
+    }
+}
+
 pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
-    let name = v["Name"].as_str().unwrap_or("minecraft:air");
+    let (name, props) = block_state_name_and_props(v);
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
     let block_ident =
         quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
-    if let Some(props) = v["Properties"].as_object() {
+    if let Some(props) = props {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
         quote! {
@@ -768,11 +813,11 @@ pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
 }
 
 pub fn value_to_block_state(v: &Value) -> TokenStream {
-    let name = v["Name"].as_str().unwrap_or("minecraft:air");
+    let (name, props) = block_state_name_and_props(v);
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
     let block_ident =
         quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
-    if let Some(props) = v["Properties"].as_object() {
+    if let Some(props) = props {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
         quote! {

@@ -1,13 +1,11 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    fs,
-    path::Path,
-};
+use std::{collections::HashSet, fs, path::Path};
 
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
+
+use crate::block::BlockAssets;
 
 #[derive(Deserialize, Debug)]
 struct TransformerEntryJson {
@@ -75,12 +73,26 @@ struct PredicateJson {
 
 #[derive(Deserialize, Debug)]
 struct StateProviderJson {
-    #[serde(rename = "type")]
-    provider_type: String,
+    #[serde(rename = "type", default)]
+    provider_type: Option<String>,
     #[serde(default)]
     state: Option<String>,
     #[serde(default)]
     source: Option<Box<StateProviderJson>>,
+    #[serde(default)]
+    id: Option<String>,
+}
+
+impl StateProviderJson {
+    fn provider_type(&self) -> &str {
+        self.provider_type
+            .as_deref()
+            .unwrap_or("minecraft:simple_state_provider")
+    }
+
+    fn state_name(&self) -> Option<&str> {
+        self.state.as_deref().or(self.id.as_deref())
+    }
 }
 
 fn clean_name(name: &str) -> &str {
@@ -127,15 +139,14 @@ fn is_predicate_valid(pred: &PredicateJson, valid_blocks: &HashSet<String>) -> b
 }
 
 fn is_provider_valid(provider: &StateProviderJson, valid_blocks: &HashSet<String>) -> bool {
-    match provider.provider_type.as_str() {
+    match provider.provider_type() {
         "minecraft:simple_state_provider" => provider
-            .state
-            .as_deref()
+            .state_name()
             .is_some_and(|s| valid_blocks.contains(clean_name(s))),
-        "minecraft:copy_properties_provider" => provider
+        "minecraft:copy_properties_provider" | "minecraft:copy_properties" => provider
             .source
             .as_ref()
-            .and_then(|s| s.state.as_deref())
+            .and_then(|s| s.state_name())
             .is_some_and(|s| valid_blocks.contains(clean_name(s))),
         _ => false,
     }
@@ -193,42 +204,36 @@ fn predicate_to_tokens(pred: &PredicateJson, valid_blocks: &HashSet<String>) -> 
 }
 
 fn state_provider_to_tokens(provider: &StateProviderJson) -> TokenStream {
-    match provider.provider_type.as_str() {
+    match provider.provider_type() {
         "minecraft:simple_state_provider" => {
-            let state_name = provider
-                .state
-                .as_deref()
-                .expect("simple_state missing state");
+            let state_name = provider.state_name().expect("simple_state missing state");
             let id = block_ident(state_name);
             quote! {
                 BlockTransformerStateProvider::SimpleState(BlockId::#id)
             }
         }
-        "minecraft:copy_properties_provider" => {
+        "minecraft:copy_properties_provider" | "minecraft:copy_properties" => {
             let src = provider
                 .source
                 .as_ref()
                 .expect("copy_properties missing source");
-            let state_name = src.state.as_deref().expect("copy_properties missing state");
+            let state_name = src.state_name().expect("copy_properties missing state");
             let id = block_ident(state_name);
             quote! {
                 BlockTransformerStateProvider::CopyProperties(BlockId::#id)
             }
         }
-        _ => panic!(
-            "Unsupported state provider type: {}",
-            provider.provider_type
-        ),
+        other => panic!("Unsupported state provider type: {other}"),
     }
 }
 
 pub fn build() -> TokenStream {
-    let blocks_file: BTreeMap<String, serde_json::Value> =
+    let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
-    let valid_blocks: HashSet<String> = blocks_file.into_keys().collect();
+    let valid_blocks: HashSet<String> = blocks_assets.blocks.into_iter().map(|b| b.name).collect();
 
-    let dir = Path::new("../../assets/datapacks/26_2/data/minecraft/block_transformer");
+    let dir = Path::new("../../assets/datapack/data/minecraft/block_transformer");
     let mut files: Vec<(String, Vec<TransformerEntryJson>)> = Vec::new();
 
     if dir.is_dir() {

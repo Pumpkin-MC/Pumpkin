@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{HorizontalFacing, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, WhiteWoolStairsLikeProperties},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -72,7 +72,7 @@ pub struct DesertPyramidPiece {
 
 impl DesertPyramidPiece {
     fn sandstone_stairs(facing: HorizontalFacing) -> &'static BlockState {
-        let mut props = OakStairsLikeProperties::default(&Block::SANDSTONE_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::SANDSTONE_STAIRS);
         props.facing = facing;
         BlockState::from_id(props.to_state_id(&Block::SANDSTONE_STAIRS))
     }
