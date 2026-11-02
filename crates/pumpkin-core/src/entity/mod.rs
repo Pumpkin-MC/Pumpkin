@@ -226,8 +226,25 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
 
+    fn get_max_air_supply(&self) -> i32 {
+        self.get_mob()
+            .map_or(breath::MAX_AIR, mob::Mob::mob_max_air_supply)
+    }
+
+    fn increase_air_supply(&self, current: i32) -> i32 {
+        self.get_mob().map_or_else(
+            || {
+                current
+                    .wrapping_add(breath::AIR_RECOVERY_RATE)
+                    .min(self.get_max_air_supply())
+            },
+            |mob| mob.mob_increase_air_supply(current),
+        )
+    }
+
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.get_entity().read_nbt_non_mut(nbt);
+        self.get_entity()
+            .read_nbt_with_max_air_supply(nbt, self.get_max_air_supply());
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
         }
@@ -627,6 +644,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
+    /// Vanilla `getSwimSplashSound`.
+    fn get_swim_splash_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_splash_sound
+    }
+
+    /// Vanilla `getSwimHighSpeedSplashSound`.
+    fn get_swim_high_speed_splash_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_high_speed_splash_sound
+    }
+
+    /// Vanilla `doWaterSplashEffect`, run when the entity enters water.
+    fn do_water_splash_effect(&self, caller: &dyn EntityBase) {
+        self.get_entity().water_splash_effect(caller);
+    }
+
     /// Vanilla `LivingEntity.getFallSounds`: the small and big fall damage sounds.
     fn get_fall_sounds(&self) -> (Sound, Sound) {
         let entity_type = self.get_entity().entity_type;
@@ -721,7 +753,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 float_entries_list: std::collections::HashMap::new(),
             },
             actor_links: Vec::new(),
-            has_passenger_block_data: false,
+            passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
             client.try_enqueue_packet(data);
@@ -1289,6 +1321,8 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    /// Vanilla `firstTick`: true until the first base tick has run.
+    pub first_tick: AtomicBool,
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
@@ -1529,6 +1563,7 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            first_tick: AtomicBool::new(true),
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -2408,9 +2443,10 @@ impl Entity {
                 living.fall_distance.store(0.0);
             }
 
-            if !self.touching_water.load(Ordering::SeqCst) {
-
-                // TODO: Spawn splash particles
+            if !self.touching_water.load(Ordering::SeqCst)
+                && !self.first_tick.load(Ordering::Relaxed)
+            {
+                caller.do_water_splash_effect(caller);
             }
         }
 
@@ -2841,6 +2877,32 @@ impl Entity {
             + velocity.z * velocity.z * 0.2)
             .sqrt() as f32;
         caller.play_swim_sound((speed * volume_modifier).min(1.0));
+    }
+
+    /// The base `Entity.doWaterSplashEffect`. Clients spawn the bubble and splash particles
+    /// themselves.
+    pub fn water_splash_effect(&self, caller: &dyn EntityBase) {
+        let rider = caller.get_controlling_passenger();
+        let (velocity, volume_modifier) = rider.as_ref().map_or_else(
+            || (self.velocity.load(), 0.2),
+            |rider| (rider.get_entity().velocity.load(), 0.9),
+        );
+        let speed = ((velocity.x * velocity.x * 0.2
+            + velocity.y * velocity.y
+            + velocity.z * velocity.z * 0.2)
+            .sqrt() as f32
+            * volume_modifier)
+            .min(1.0);
+        let sound = if speed < 0.25 {
+            caller.get_swim_splash_sound()
+        } else {
+            caller.get_swim_high_speed_splash_sound()
+        };
+        if let Some(sound) = sound {
+            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
+            caller.play_entity_sound(sound, speed, pitch);
+        }
+        self.emit_own_game_event(caller, GameEvent::Splash);
     }
 
     /// Vanilla `gameEvent(event)`: at the entity, with itself as the source.
@@ -5120,6 +5182,10 @@ impl Entity {
     }
 
     pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_max_air_supply(nbt, breath::MAX_AIR);
+    }
+
+    fn read_nbt_with_max_air_supply(&self, nbt: &NbtCompound, max_air_supply: i32) {
         self.read_placement_nbt(nbt);
         self.fire_ticks.store(
             i32::from(nbt.get_numeric_short("Fire").unwrap_or(0)),
@@ -5128,10 +5194,9 @@ impl Entity {
         self.on_ground
             .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
         if self.entity_type != &EntityType::PLAYER {
-            let air = i32::from(
-                nbt.get_numeric_short("Air")
-                    .unwrap_or(breath::MAX_AIR as i16),
-            );
+            let air = nbt
+                .get_numeric_short("Air")
+                .map_or(max_air_supply, i32::from);
             self.air_supply.store(air, Relaxed);
             self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
@@ -5268,6 +5333,7 @@ impl EntityBase for Entity {
             self.riding_cooldown
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
+        self.first_tick.store(false, Ordering::Relaxed);
     }
 
     fn get_entity(&self) -> &Entity {

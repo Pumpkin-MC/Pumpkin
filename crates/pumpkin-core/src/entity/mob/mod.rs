@@ -196,6 +196,7 @@ impl MobEntity {
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE: f32 = 0.1087;
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
+    pub const ITEM_PICKUP_REACH: Vector3<f64> = Vector3::new(1.0, 0.0, 1.0);
     pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
     pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
     pub const GUARANTEED_DROP_CHANCE: f32 = 2.0;
@@ -1014,10 +1015,78 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
+    let living = &mob.get_mob_entity().living_entity;
+    let entity = &living.entity;
+    let world = entity.world.load();
+    if !mob.can_pick_up_loot(None)
+        || !living.is_alive()
+        || living.dead.load(Relaxed)
+        || !world.level_info.load().game_rules.mob_griefing
+    {
+        return;
+    }
+    let reach = mob.get_pickup_reach();
+    let area = entity.bounding_box.load().expand(reach.x, reach.y, reach.z);
+    for candidate in world.get_entities_at_box(&area) {
+        let Some(item) = candidate.get_item_entity() else {
+            continue;
+        };
+        if item.get_entity().is_removed() || item.get_pickup_delay() != 0 {
+            continue;
+        }
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if !stack.is_empty() && mob.wants_to_pick_up(&stack) {
+            mob.pick_up_item(item);
+        }
+    }
+}
+
 fn has_game_event_listener(mob: &dyn Mob) -> bool {
     let mut listens = false;
     mob.for_each_game_event_listener(&mut |_| listens = true);
     listens
+}
+
+/// Links the listener mobs that an entity's game events can reach from anywhere in `moved`:
+/// the splash of entering water, plus step, swim and flap when its movement emits events.
+pub(crate) fn game_event_listener_links(
+    world: &World,
+    emits_movement_events: bool,
+    moved: &BoundingBox,
+    links: &mut Vec<i32>,
+) {
+    let emitted: &[GameEvent] = if emits_movement_events {
+        &[
+            GameEvent::Splash,
+            GameEvent::Step,
+            GameEvent::Swim,
+            GameEvent::Flap,
+        ]
+    } else {
+        &[GameEvent::Splash]
+    };
+    let radius = emitted
+        .iter()
+        .copied()
+        .map(GameEvent::notification_radius)
+        .max()
+        .unwrap_or(0);
+    let area = BoundingBox::new(
+        notified_area(moved.min, radius).min,
+        notified_area(moved.max, radius).max,
+    );
+    links.extend(
+        world
+            .entity_index
+            .query(world.entities.load_full(), area)
+            .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+            .map(|other| other.get_entity().entity_id),
+    );
 }
 
 impl MobEntity {
@@ -1095,29 +1164,16 @@ impl MobEntity {
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
-        if mob.movement_emission().emits_events() {
-            // Step, swim and flap events reach listeners around wherever the mob ends up.
-            let moved = entity
-                .bounding_box
-                .load()
-                .expand(horizontal, vertical, horizontal);
-            let radius = [GameEvent::Step, GameEvent::Swim, GameEvent::Flap]
-                .into_iter()
-                .map(GameEvent::notification_radius)
-                .max()
-                .unwrap_or(0);
-            let area = BoundingBox::new(
-                notified_area(moved.min, radius).min,
-                notified_area(moved.max, radius).max,
-            );
-            links.extend(
-                world
-                    .entity_index
-                    .query(world.entities.load_full(), area)
-                    .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
-                    .map(|other| other.get_entity().entity_id),
-            );
-        }
+        let moved = entity
+            .bounding_box
+            .load()
+            .expand(horizontal, vertical, horizontal);
+        game_event_listener_links(
+            &world,
+            mob.movement_emission().emits_events(),
+            &moved,
+            &mut links,
+        );
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
             motion: (horizontal, vertical),
@@ -1151,6 +1207,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        self.can_attack_base(target)
+    }
+
+    fn can_attack_base(&self, target: &dyn EntityBase) -> bool {
         let target_entity = target.get_entity();
         if target_entity.entity_type == &EntityType::GHAST {
             return false;
@@ -1324,6 +1384,16 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
+    fn mob_max_air_supply(&self) -> i32 {
+        crate::entity::breath::MAX_AIR
+    }
+
+    fn mob_increase_air_supply(&self, current: i32) -> i32 {
+        current
+            .wrapping_add(crate::entity::breath::AIR_RECOVERY_RATE)
+            .min(self.mob_max_air_supply())
+    }
+
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
     }
@@ -1374,8 +1444,20 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
-    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
-        false
+    fn can_hold_item(&self, _stack: &ItemStack) -> bool {
+        true
+    }
+
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        self.can_hold_item(stack)
+    }
+
+    fn get_pickup_reach(&self) -> Vector3<f64> {
+        MobEntity::ITEM_PICKUP_REACH
+    }
+
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        equipment::pick_up_item_as_equipment(self, item);
     }
 
     fn can_pick_up_loot(&self, _brain: Option<&crate::entity::ai::brain::BrainState>) -> bool {
@@ -1390,6 +1472,21 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn has_global_tick_reach(&self) -> bool {
         false
+    }
+
+    /// Retained entities accessed regardless of their distance from the mob.
+    fn tick_links(&self) -> Vec<i32> {
+        Vec::new()
+    }
+
+    /// Additional player search range for the conservative island bound.
+    fn player_tick_range(&self) -> f64 {
+        0.0
+    }
+
+    /// Movement before normal travel that the conservative island bound must include.
+    fn additional_tick_movement(&self) -> f64 {
+        0.0
     }
 
     fn mob_considers_entity_as_ally(
@@ -1604,9 +1701,20 @@ pub trait Mob: EntityBase + Send + Sync {
     /// `add_pending_rider` are added by the world together with the mob.
     fn finalize_spawn(
         &self,
-        _world: &Arc<World>,
+        world: &Arc<World>,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
+        let entity = self.get_entity();
+        if equipment::EQUIPMENT_REGISTRY
+            .get(entity.entity_type.resource_name)
+            .is_some_and(|def| def.can_pick_up_loot)
+        {
+            let difficulty = equipment::RegionalDifficulty::at(world, entity.pos.load());
+            self.get_mob_entity().set_can_pick_up_loot(
+                rand::random::<f32>()
+                    < MobEntity::MAX_PICKUP_LOOT_CHANCE * difficulty.special_multiplier,
+            );
+        }
         self.finalize_spawn_super(group_data)
     }
 
@@ -2062,19 +2170,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_init_data_tracker();
         let world = self.get_mob_entity().living_entity.entity.world.load();
         crate::entity::mob::equipment::equip_mob_on_spawn(self as &dyn EntityBase, &world);
-
-        let entity_name = self.get_entity().entity_type.resource_name;
-        if let Some(def) = crate::entity::mob::equipment::EQUIPMENT_REGISTRY.get(entity_name)
-            && def.can_pick_up_loot
-        {
-            let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(
-                &world,
-                self.get_entity().pos.load(),
-            );
-            let pickup_chance = 0.55 * difficulty.special_multiplier;
-            self.get_mob_entity()
-                .set_can_pick_up_loot(rand::random::<f32>() < pickup_chance);
-        }
     }
 
     fn set_variant_name(&self, name: &str) {

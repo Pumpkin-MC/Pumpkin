@@ -220,6 +220,9 @@ pub struct EffectSource<'a> {
 }
 
 impl LivingEntity {
+    pub(crate) const DEFAULT_OFF_GROUND_SPEED: f64 = 0.02;
+    pub(crate) const FRICTION_SPEED_THRESHOLD: f64 = 0.6;
+
     pub fn is_dead_or_dying(&self) -> bool {
         self.health.load() <= 0.0 || self.dead.load(Relaxed)
     }
@@ -705,7 +708,29 @@ impl LivingEntity {
         }
     }
 
-    /// Picks up an Item entity or XP Orb
+    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity) {
+        let Some(owner) = item.get_owner_entity() else {
+            return;
+        };
+        let Some(player) = owner.get_player() else {
+            return;
+        };
+        let item_id = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .registry_key
+            .to_string();
+        player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
+            entity_type: format!("minecraft:{}", self.entity.entity_type.resource_name),
+            item_id,
+            is_baby: self.is_baby(),
+            player_wearing_safe_armor: crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(&player.living_entity),
+        });
+    }
+
+    /// Picks up an item entity or XP orb.
     pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         if self.entity.world.load().cancelled_by_plugin(|| {
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
@@ -1675,6 +1700,7 @@ impl LivingEntity {
 
         if let Some(mob) = caller.get_mob() {
             mob.mob_ai_step();
+            crate::entity::mob::pick_up_nearby_items(mob);
             mob.get_mob_entity()
                 .body_rotation_control
                 .lock()
@@ -1733,7 +1759,7 @@ impl LivingEntity {
 
     /// `getFrictionInfluencedSpeed`.
     pub(crate) fn friction_influenced_speed(speed: f64, block_friction: f64) -> f64 {
-        if block_friction > 0.6 {
+        if block_friction > Self::FRICTION_SPEED_THRESHOLD {
             speed * 0.216_000_02 / block_friction.powi(3)
         } else {
             speed
@@ -1790,9 +1816,10 @@ impl LivingEntity {
         let speed = if self.entity.on_ground.load(Relaxed) {
             Self::friction_influenced_speed(effective_speed, block_friction)
         } else {
-            caller
-                .get_player()
-                .map_or(0.02, super::player::Player::get_off_ground_speed)
+            caller.get_player().map_or(
+                Self::DEFAULT_OFF_GROUND_SPEED,
+                super::player::Player::get_off_ground_speed,
+            )
         };
         let friction = block_friction * air_drag;
 
@@ -2934,6 +2961,55 @@ impl LivingEntity {
     #[must_use]
     pub fn should_take_drowning_damage(&self) -> bool {
         self.entity.air_supply.load(Relaxed) <= -DROWNING_INTERVAL
+    }
+
+    pub(crate) fn tick_air_supply(&self, caller: &dyn crate::entity::mob::Mob) {
+        if !self.is_alive() {
+            return;
+        }
+        let entity = &self.entity;
+        let current = entity.air_supply.load(Relaxed);
+        let max_air = caller.get_max_air_supply();
+        let water_breathing = self.has_effect(&StatusEffect::WATER_BREATHING)
+            || self.has_effect(&StatusEffect::CONDUIT_POWER);
+        let nautilus_breathing = self.has_effect(&StatusEffect::BREATH_OF_THE_NAUTILUS);
+        if entity.is_submerged_in_water()
+            && entity
+                .world
+                .load()
+                .get_block(&entity.get_eye_pos().to_block_pos())
+                != &Block::BUBBLE_COLUMN
+        {
+            if !entity
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
+                && !water_breathing
+                && !nautilus_breathing
+            {
+                let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
+                let mut random = caller.get_random();
+                if oxygen_bonus <= 0.0 || random.random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
+                    entity.set_air_supply(current.wrapping_sub(1));
+                }
+                if self.should_take_drowning_damage() {
+                    entity.set_air_supply(0);
+                    entity.world.load().send_entity_status(
+                        entity,
+                        EntityStatus::DrownParticles,
+                        ActorEventID::None,
+                    );
+                    caller.damage(
+                        caller,
+                        crate::entity::breath::DROWNING_DAMAGE,
+                        DamageType::DROWN,
+                    );
+                }
+            } else if current < max_air && (!nautilus_breathing || water_breathing) {
+                entity.set_air_supply(caller.increase_air_supply(current));
+            }
+        } else if current < max_air {
+            entity.set_air_supply(caller.increase_air_supply(current));
+        }
     }
 
     #[must_use]
