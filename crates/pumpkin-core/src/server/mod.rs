@@ -483,6 +483,16 @@ impl Server {
         self.tasks.spawn_on(task, &self.runtime)
     }
 
+    /// Returns whether the dimension is enabled in the server configuration.
+    #[must_use]
+    pub fn is_dimension_enabled(&self, dimension: &Dimension) -> bool {
+        match dimension.minecraft_name {
+            name if name == Dimension::THE_NETHER.minecraft_name => self.basic_config.allow_nether,
+            name if name == Dimension::THE_END.minecraft_name => self.basic_config.allow_end,
+            _ => true,
+        }
+    }
+
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         let worlds = self.worlds.load();
         worlds
@@ -496,7 +506,16 @@ impl Server {
             })
     }
 
+    /// Creates a world, or returns the overworld if its dimension is disabled.
     pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        if !self.is_dimension_enabled(&dimension) {
+            warn!(
+                "Cannot create world '{name}': dimension {} is disabled",
+                dimension.minecraft_name
+            );
+            return self.get_world_from_dimension(&Dimension::OVERWORLD);
+        }
+
         {
             let worlds = self.worlds.load();
             let world = worlds

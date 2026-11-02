@@ -3032,6 +3032,8 @@ impl Entity {
         }
     }
 
+    /// Starts or updates the portal processor for an entity standing in a portal, which performs the
+    /// teleport once the portal delay has passed.
     pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
         let mut portal_event =
             crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
@@ -3062,9 +3064,7 @@ impl Entity {
             return;
         };
 
-        if (portal_world.dimension == Dimension::THE_NETHER && !server.basic_config.allow_nether)
-            || (portal_world.dimension == Dimension::THE_END && !server.basic_config.allow_end)
-        {
+        if !server.is_dimension_enabled(&portal_world.dimension) {
             return;
         }
 
