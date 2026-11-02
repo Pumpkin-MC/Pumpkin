@@ -28,6 +28,11 @@ pub enum SpawnGroupData {
     },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// A llama spawn group sharing the first llama's variant.
+    Llama {
+        variant: pumpkin_data::entity_variant::LlamaVariant,
+        group_size: u32,
+    },
     /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
     Fox {
         variant: FoxVariant,

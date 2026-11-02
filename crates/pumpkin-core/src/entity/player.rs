@@ -20,7 +20,6 @@ use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_inventory::Inventory;
-use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
@@ -248,12 +247,13 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
+use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
 use pumpkin_inventory::screen_handler::{
     ClickType, InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
-    ScreenHandlerListener,
+    ScreenHandlerListener, SharedScreenHandler,
 };
 use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
@@ -262,6 +262,7 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
+use pumpkin_protocol::bedrock::client::{CUpdateEquip, HORSE_CONTAINER_TYPE};
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
@@ -270,13 +271,13 @@ use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
     CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
-    COpenBook, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
-    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
-    PreviousMessage, Statistic,
+    COpenBook, COpenMountScreen, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks,
+    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
+    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
+    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
+    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags,
+    PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -524,6 +525,21 @@ const fn bedrock_container_slot(
     }
 }
 
+/// Bedrock shows one mount equipment slot, then the chest slots from 1.
+const fn bedrock_mount_slot(
+    equip_slot: usize,
+    slot_idx: usize,
+) -> Option<(pumpkin_protocol::bedrock::network_item::ContainerName, u8)> {
+    use pumpkin_protocol::bedrock::network_item::ContainerName;
+    if slot_idx == equip_slot {
+        Some((ContainerName::HorseEquip, 0))
+    } else if slot_idx >= MountScreenHandler::SLOT_INVENTORY_START {
+        Some((ContainerName::LevelEntity, (slot_idx - 1) as u8))
+    } else {
+        None
+    }
+}
+
 fn bedrock_container_type(window_type: Option<WindowType>, block: Option<&'static Block>) -> u8 {
     match window_type {
         Some(WindowType::Crafting) => 1,
@@ -613,6 +629,8 @@ pub struct Player {
     pub open_container: AtomicCell<Option<u64>>,
     /// The block position of the currently open container screen (if any).
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
+    /// Sync id and Bedrock equipment slot of an open mount screen.
+    bedrock_mount_screen: AtomicCell<Option<(u8, usize)>>,
     /// The village position where Raid Omen was triggered.
     pub raid_omen_position: AtomicCell<Option<BlockPos>>,
     /// Starting position when riding a vehicle in lava (for advancement tracking).
@@ -951,6 +969,7 @@ impl Player {
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
+            bedrock_mount_screen: AtomicCell::new(None),
             raid_omen_position: AtomicCell::new(None),
             entered_lava_pos: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
@@ -3096,10 +3115,7 @@ impl Player {
             drop(current_screen_handler_guard);
             let is_invalid = current_screen_handler
                 .try_lock()
-                .is_ok_and(|screen_handler| {
-                    screen_handler.as_any().is::<MerchantScreenHandler>()
-                        && !screen_handler.can_use(self)
-                });
+                .is_ok_and(|screen_handler| !screen_handler.can_use(self));
 
             if is_invalid {
                 if let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id) {
@@ -6153,7 +6169,12 @@ impl Player {
                 .open_container_pos
                 .load()
                 .map(|pos| self.world().get_block(&pos));
-            let bedrock_window_type = bedrock_container_type(window_type, block);
+            let bedrock_window_type = if self.bedrock_mount_equip_slot(u32::from(sync_id)).is_some()
+            {
+                HORSE_CONTAINER_TYPE
+            } else {
+                bedrock_container_type(window_type, block)
+            };
             (sync_id, bedrock_window_type)
         };
 
@@ -6213,6 +6234,7 @@ impl Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             self.player_screen_handler.clone();
         self.open_container_pos.store(None);
+        self.bedrock_mount_screen.store(None);
     }
 
     pub fn on_screen_handler_opened<T: ScreenHandler + ?Sized>(
@@ -6337,6 +6359,84 @@ impl Player {
             }
             None
         }
+    }
+
+    /// Opens the inventory of the horse this player rides. `false` if it isn't riding one.
+    pub fn open_vehicle_inventory(self: &Arc<Self>) -> bool {
+        let Some(vehicle) = self.get_entity().get_vehicle() else {
+            return false;
+        };
+        let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) else {
+            return false;
+        };
+        horse.open_custom_inventory_screen(self);
+        true
+    }
+
+    pub fn open_mount_screen(
+        &self,
+        inventory_columns: i32,
+        mount_id: i32,
+        bedrock_equip_slot: usize,
+        bedrock_slots: NbtCompound,
+        create_handler: impl FnOnce(u8, &Arc<PlayerInventory>) -> SharedScreenHandler,
+    ) -> bool {
+        if !self
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen();
+        }
+
+        let world = self.world();
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
+                    player_arc,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+
+        self.increment_screen_handler_sync_id();
+        let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
+        let screen_handler = create_handler(sync_id, &self.inventory);
+        self.bedrock_mount_screen
+            .store(Some((sync_id, bedrock_equip_slot)));
+        self.try_enqueue_packet_editioned(
+            &COpenMountScreen::new(sync_id, inventory_columns.into(), mount_id),
+            &CUpdateEquip {
+                container_id: sync_id,
+                container_type: HORSE_CONTAINER_TYPE,
+                size: VarInt(0),
+                entity_unique_id: VarLong(i64::from(mount_id)),
+                data: bedrock_slots,
+            },
+        );
+        self.on_screen_handler_opened(&screen_handler);
+        *self
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = screen_handler;
+        self.open_container_pos.store(None);
+        true
+    }
+
+    /// The Java slot shown in the single Bedrock equipment slot, if `window_id` is a mount screen.
+    fn bedrock_mount_equip_slot(&self, window_id: u32) -> Option<usize> {
+        self.bedrock_mount_screen
+            .load()
+            .filter(|(sync_id, _)| u32::from(*sync_id) == window_id)
+            .map(|(_, equip_slot)| equip_slot)
     }
 
     pub fn open_handled_screen_direct(
@@ -8349,12 +8449,15 @@ impl InventoryPlayer for Player {
                         .slot_data
                         .len()
                         .saturating_sub(PlayerInventory::MAIN_SIZE);
+                    let mount_equip_slot = self.bedrock_mount_equip_slot(window_id);
                     for (slot_idx, stack) in
                         packet.slot_data[..container_slot_count].iter().enumerate()
                     {
-                        if let Some((container_name, slot_id)) =
-                            bedrock_container_slot(window_type, slot_idx)
-                        {
+                        let bedrock_slot = mount_equip_slot.map_or_else(
+                            || bedrock_container_slot(window_type, slot_idx),
+                            |equip_slot| bedrock_mount_slot(equip_slot, slot_idx),
+                        );
+                        if let Some((container_name, slot_id)) = bedrock_slot {
                             let bedrock_packet = CInventorySlot {
                                 container_id: VarUInt(window_id),
                                 slot: VarUInt(u32::from(slot_id)),
@@ -8421,11 +8524,14 @@ impl InventoryPlayer for Player {
                     let bedrock_info = if total_slots >= 36 {
                         let container_slots = total_slots - 36;
                         if slot_idx < container_slots {
-                            bedrock_container_slot(window_type, slot_idx).map(
-                                |(container_name, slot_id)| {
+                            self.bedrock_mount_equip_slot(u32::from(window_id as u8))
+                                .map_or_else(
+                                    || bedrock_container_slot(window_type, slot_idx),
+                                    |equip_slot| bedrock_mount_slot(equip_slot, slot_idx),
+                                )
+                                .map(|(container_name, slot_id)| {
                                     (window_id as u32, container_name, slot_id)
-                                },
-                            )
+                                })
                         } else {
                             let inv_slot = slot_idx - container_slots;
                             if inv_slot < 27 {

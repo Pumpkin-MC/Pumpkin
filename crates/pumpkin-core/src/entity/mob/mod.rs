@@ -1781,6 +1781,12 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_abstract_horse(
+        &self,
+    ) -> Option<&dyn crate::entity::passive::abstract_horse::AbstractHorse> {
+        None
+    }
+
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
     fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
         self.as_animal()

@@ -67,6 +67,7 @@ pub mod transfer;
 pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
+pub mod update_equip;
 pub mod update_trade;
 pub mod voxel_shapes;
 
@@ -137,5 +138,6 @@ pub use transfer::*;
 pub use update_abilities::*;
 pub use update_attributes::*;
 pub use update_block::*;
+pub use update_equip::*;
 pub use update_trade::*;
 pub use voxel_shapes::*;

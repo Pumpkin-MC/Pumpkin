@@ -5,6 +5,9 @@ impl BedrockClient {
     pub fn handle_interaction(&self, player: &Arc<Player>, packet: &SInteract) {
         match packet.action {
             Action::OpenInventory => {
+                if player.open_vehicle_inventory() {
+                    return;
+                }
                 if self.inventory_opened.load(Ordering::Relaxed) {
                     return;
                 }
