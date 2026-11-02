@@ -2,10 +2,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -19,7 +20,7 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     item_steerable::{ItemBasedSteering, ItemSteerable},
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::equip_on_target},
     passive::animal::Animal,
     player::Player,
 };
@@ -30,7 +31,6 @@ pub struct StriderEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
     pub steering: ItemBasedSteering,
-    pub saddled: AtomicBool,
     pub suffocating: AtomicBool,
 }
 
@@ -41,7 +41,6 @@ impl StriderEntity {
             mob_entity,
             ageable_data: AgeableData::default(),
             steering: ItemBasedSteering::default(),
-            saddled: AtomicBool::new(false),
             suffocating: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(strider);
@@ -102,6 +101,10 @@ impl Animal for StriderEntity {
 }
 
 impl Mob for StriderEntity {
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.saddled_controlling_passenger(Some(&Item::WARPED_FUNGUS_ON_A_STICK))
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         let sound = if self.get_entity().touching_lava.load(Ordering::Relaxed) {
             Sound::EntityStriderStepLava
@@ -121,16 +124,12 @@ impl Mob for StriderEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_ageable_nbt(nbt);
-        nbt.put_bool("Saddle", self.is_saddled());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.read_ageable_nbt(nbt);
-        if let Some(saddle) = nbt.get_bool("Saddle") {
-            self.set_saddled(saddle);
-        } else if let Some(saddle_byte) = nbt.get_byte("Saddle") {
-            self.set_saddled(saddle_byte == 1);
-        }
+        self.mob_entity
+            .read_legacy_saddle(nbt.get_bool("Saddle") == Some(true));
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -141,16 +140,13 @@ impl Mob for StriderEntity {
         Some(self)
     }
 
-    fn is_saddled(&self) -> bool {
-        self.saddled.load(Ordering::Relaxed)
+    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
+        *slot != EquipmentSlot::SADDLE
+            || (self.mob_entity.living_entity.entity.is_alive() && !self.is_baby())
     }
 
-    fn can_be_saddled(&self) -> bool {
-        self.mob_entity.living_entity.entity.is_alive() && !self.is_baby()
-    }
-
-    fn set_saddled(&self, saddled: bool) {
-        self.saddled.store(saddled, Ordering::Relaxed);
+    fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
+        (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityStriderSaddle)
     }
 
     fn mob_init_data_tracker(&self) {
@@ -166,30 +162,26 @@ impl Mob for StriderEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if item == &Item::SADDLE && self.can_be_saddled() && !self.is_saddled() {
-            self.set_saddled(true);
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            world.play_sound(Sound::EntityStriderSaddle, SoundCategory::Neutral, &pos);
-            return true;
-        }
-
-        if self.is_saddled() && !self.is_food(item_stack) {
+        if !self.is_food(item_stack)
+            && self.is_saddled()
+            && !self.get_entity().has_passengers()
+            && !player.get_entity().is_sneaking()
+        {
             let world = player.world();
             let ent = &self.mob_entity.living_entity.entity;
             if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
                 && let Some(passenger) = world.get_player_by_id(player.entity_id())
             {
                 ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-                return true;
             }
+            return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityStriderAmbient)
+        if self.animal_interact(player, item_stack, Sound::EntityStriderAmbient) {
+            return true;
+        }
+        self.is_equippable_in_slot(item_stack, &EquipmentSlot::SADDLE)
+            && equip_on_target(self, player, item_stack)
     }
 }
 
