@@ -38,6 +38,7 @@ pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
+pub mod wandering_trader_spawner;
 
 use crate::block::RandomTickArgs;
 use crate::world::chunker::is_within_chebyshev_distance;
@@ -259,6 +260,7 @@ pub struct World {
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
     /// Villager job sites and their current owners.
     pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
+    pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -418,6 +420,7 @@ impl World {
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
+            wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
@@ -2203,6 +2206,10 @@ impl World {
                     world.tick_spawning_chunk(*pos, chunk, &s_list, &s_state);
                 }
             });
+        }
+
+        if spawn_mobs && self.dimension == Dimension::OVERWORLD {
+            self.wandering_trader_spawner.tick(self);
         }
 
         // Batch these cheap lookups and atomic increments to avoid waking Rayon
