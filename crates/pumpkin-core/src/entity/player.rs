@@ -1186,7 +1186,7 @@ impl Player {
                 }],
             },
             actor_links: Vec::new(),
-            has_passenger_block_data: false,
+            passenger_of_block: None,
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };

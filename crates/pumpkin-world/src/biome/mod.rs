@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet;
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
+use std::sync::LazyLock;
 
 use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE};
 
@@ -17,6 +18,202 @@ pub use pumpkin_data::chunk::{
     Parameter, ParameterPoint, ParameterRange, TargetPoint, quantize_coord, unquantize_coord,
 };
 
+#[repr(C, align(64))]
+#[derive(Clone, Copy, Default)]
+struct FlatNode {
+    min: [i32; 7],
+    max: [i32; 7],
+    child_or_leaf: i32,
+    len: u32,
+}
+
+impl FlatNode {
+    #[inline]
+    fn squared_distance(&self, p: &[i32; 7]) -> i64 {
+        let d0 = (p[0] - self.max[0]).max(self.min[0] - p[0]).max(0) as i64;
+        let d1 = (p[1] - self.max[1]).max(self.min[1] - p[1]).max(0) as i64;
+        let d2 = (p[2] - self.max[2]).max(self.min[2] - p[2]).max(0) as i64;
+        let d3 = (p[3] - self.max[3]).max(self.min[3] - p[3]).max(0) as i64;
+        let d4 = (p[4] - self.max[4]).max(self.min[4] - p[4]).max(0) as i64;
+        let d5 = (p[5] - self.max[5]).max(self.min[5] - p[5]).max(0) as i64;
+        let d6 = (p[6] - self.max[6]).max(self.min[6] - p[6]).max(0) as i64;
+        d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6
+    }
+}
+
+struct FlatBiomeTree {
+    nodes: Box<[FlatNode]>,
+    leaves: Box<[&'static Biome]>,
+    root_len: usize,
+}
+
+#[derive(Clone, Copy)]
+struct CachedFlatLeaf {
+    kind: FlatTreeKind,
+    node_idx: usize,
+    point: [i32; 7],
+    biome: &'static Biome,
+}
+
+impl FlatBiomeTree {
+    fn from_tree(root: &'static BiomeTree) -> Self {
+        fn build_children(
+            children: &'static [BiomeTree],
+            nodes: &mut Vec<FlatNode>,
+            leaves: &mut Vec<&'static Biome>,
+        ) -> usize {
+            let start = nodes.len();
+            nodes.resize(start + children.len(), FlatNode::default());
+            for (i, child) in children.iter().enumerate() {
+                let params = match child {
+                    BiomeTree::Leaf { parameters, .. } | BiomeTree::Branch { parameters, .. } => {
+                        parameters
+                    }
+                };
+                let min = std::array::from_fn(|d| params[d].min as i32);
+                let max = std::array::from_fn(|d| params[d].max as i32);
+                match child {
+                    BiomeTree::Leaf { biome, .. } => {
+                        let leaf_idx = leaves.len();
+                        leaves.push(biome);
+                        nodes[start + i] = FlatNode {
+                            min,
+                            max,
+                            child_or_leaf: !(leaf_idx as i32),
+                            len: 0,
+                        };
+                    }
+                    BiomeTree::Branch {
+                        nodes: grand_children,
+                        ..
+                    } => {
+                        let child_start = build_children(grand_children, nodes, leaves);
+                        nodes[start + i] = FlatNode {
+                            min,
+                            max,
+                            child_or_leaf: child_start as i32,
+                            len: grand_children.len() as u32,
+                        };
+                    }
+                }
+            }
+            start
+        }
+
+        let BiomeTree::Branch {
+            nodes: root_children,
+            ..
+        } = root
+        else {
+            unreachable!()
+        };
+        let mut nodes = Vec::with_capacity(8192);
+        let mut leaves = Vec::with_capacity(8192);
+        build_children(root_children, &mut nodes, &mut leaves);
+        Self {
+            nodes: nodes.into_boxed_slice(),
+            leaves: leaves.into_boxed_slice(),
+            root_len: root_children.len(),
+        }
+    }
+
+    #[inline]
+    fn get(
+        &self,
+        kind: FlatTreeKind,
+        p64: &[i64; 7],
+        cache: &mut Option<CachedFlatLeaf>,
+    ) -> &'static Biome {
+        let p: [i32; 7] = [
+            p64[0].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[1].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[2].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[3].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[4].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[5].clamp(-1_000_000_000, 1_000_000_000) as i32,
+            p64[6].clamp(-1_000_000_000, 1_000_000_000) as i32,
+        ];
+        if let Some(prev) = cache
+            && prev.kind == kind
+            && p == prev.point
+        {
+            return prev.biome;
+        }
+        let (mut best_dist, mut best_idx) = if let Some(prev) = *cache
+            && prev.kind == kind
+        {
+            let node = &self.nodes[prev.node_idx];
+            let dist = node.squared_distance(&p);
+            if dist == 0 {
+                if let Some(c) = cache {
+                    c.point = p;
+                }
+                return prev.biome;
+            }
+            (dist, prev.node_idx)
+        } else {
+            (i64::MAX, 0)
+        };
+        self.search(0, self.root_len, &p, &mut best_dist, &mut best_idx);
+        let leaf_idx = (!self.nodes[best_idx].child_or_leaf) as usize;
+        let biome = self.leaves[leaf_idx];
+        *cache = Some(CachedFlatLeaf {
+            kind,
+            node_idx: best_idx,
+            point: p,
+            biome,
+        });
+        biome
+    }
+
+    #[inline]
+    fn search(
+        &self,
+        start: usize,
+        len: usize,
+        p: &[i32; 7],
+        best_dist: &mut i64,
+        best_node: &mut usize,
+    ) {
+        let children = &self.nodes[start..start + len];
+        for (i, node) in children.iter().enumerate() {
+            let dist = node.squared_distance(p);
+            if dist >= *best_dist {
+                continue;
+            }
+            if node.child_or_leaf < 0 {
+                *best_dist = dist;
+                *best_node = start + i;
+                if dist == 0 {
+                    return;
+                }
+            } else {
+                self.search(
+                    node.child_or_leaf as usize,
+                    node.len as usize,
+                    p,
+                    best_dist,
+                    best_node,
+                );
+                if *best_dist == 0 {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FlatTreeKind {
+    Overworld,
+    Nether,
+}
+
+static OVERWORLD_FLAT_TREE: LazyLock<FlatBiomeTree> =
+    LazyLock::new(|| FlatBiomeTree::from_tree(&OVERWORLD_BIOME_SOURCE));
+static NETHER_FLAT_TREE: LazyLock<FlatBiomeTree> =
+    LazyLock::new(|| FlatBiomeTree::from_tree(&NETHER_BIOME_SOURCE));
+
 thread_local! {
     /// A shortcut; check if last used biome is what we should use.
     ///
@@ -24,7 +221,7 @@ thread_local! {
     /// this leaf and only accepts strictly closer nodes, so a leaf cached from one dimension's
     /// tree would otherwise beat every node of another's and be returned unchanged. Vanilla
     /// stores `lastResult` on the `RTree` itself rather than sharing one across all of them.
-    static LAST_RESULT_NODE: RefCell<Option<(&'static BiomeTree, &'static BiomeTree)>> =
+    static LAST_FLAT_LEAF: RefCell<Option<CachedFlatLeaf>> =
         const { RefCell::new(None) };
 }
 
@@ -35,11 +232,12 @@ pub trait BiomeSupplier {
 #[derive(Clone, Copy)]
 pub struct MultiNoiseBiomeSupplier {
     source: &'static BiomeTree,
+    flat_kind: FlatTreeKind,
 }
 
 impl MultiNoiseBiomeSupplier {
-    pub const OVERWORLD: Self = Self::new(&OVERWORLD_BIOME_SOURCE);
-    pub const NETHER: Self = Self::new(&NETHER_BIOME_SOURCE);
+    pub const OVERWORLD: Self = Self::new(&OVERWORLD_BIOME_SOURCE, FlatTreeKind::Overworld);
+    pub const NETHER: Self = Self::new(&NETHER_BIOME_SOURCE, FlatTreeKind::Nether);
 
     #[must_use]
     pub fn from_preset(preset: &str) -> Option<Self> {
@@ -51,8 +249,8 @@ impl MultiNoiseBiomeSupplier {
         }
     }
 
-    const fn new(source: &'static BiomeTree) -> Self {
-        Self { source }
+    const fn new(source: &'static BiomeTree, flat_kind: FlatTreeKind) -> Self {
+        Self { source, flat_kind }
     }
 }
 
@@ -60,13 +258,12 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| {
-            let mut node = last_result
-                .and_then(|(tree, node)| std::ptr::eq(tree, self.source).then_some(node));
-            let biome = self.source.get(&point_list, &mut node);
-            *last_result = node.map(|node| (self.source, node));
-            biome
-        })
+        let flat_tree = match self.flat_kind {
+            FlatTreeKind::Overworld => &*OVERWORLD_FLAT_TREE,
+            FlatTreeKind::Nether => &*NETHER_FLAT_TREE,
+        };
+        LAST_FLAT_LEAF
+            .with_borrow_mut(|last_result| flat_tree.get(self.flat_kind, &point_list, last_result))
     }
 }
 

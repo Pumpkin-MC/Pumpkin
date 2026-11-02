@@ -11,6 +11,7 @@ use super::{
     common::{ActorLink, BuildPlatform, SerializedAbilitiesData},
     set_actor_data::PropertySyncData,
     set_actor_data::SyncedActorDataList,
+    set_passenger_of_block::PassengerOfBlockData,
 };
 
 /// Sent by the server to spawn another player client-side into the world.
@@ -48,8 +49,8 @@ pub struct CAddPlayer {
     pub abilities_data: SerializedAbilitiesData,
     /// Vehicle and attachment links.
     pub actor_links: Vec<ActorLink>,
-    /// Whether passenger block data is present.
-    pub has_passenger_block_data: bool,
+    /// Optional block that the player is riding.
+    pub passenger_of_block: Option<PassengerOfBlockData>,
     /// Unique device ID of the client device.
     pub device_id: String,
     /// Operating system platform of the player.

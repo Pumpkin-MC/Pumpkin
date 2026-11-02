@@ -796,6 +796,16 @@ interface bedrock-packets {
     /// Whether the server should select this slot immediately.
     should-select-slot: bool,
   }
+  /// Registration entry for service-signed audio content.
+  record audio-content-registration-entry {
+    audio-content-id: string,
+    shared-metadata: string,
+    server-content: string,
+  }
+  /// Sent by the client to register service-signed audio content for the authenticated player session.
+  record s-register-audio-content {
+    registrations: list<audio-content-registration-entry>,
+  }
   /// Typed value payload for an ability toggle request.
   variant ability-value {
     /// Boolean flag value (e.g. enabling or disabling flight).
@@ -875,6 +885,13 @@ interface bedrock-packets {
     /// Layout style of the crafting section.
     layout-craft: s32,
   }
+  /// Sent by the client when selecting a recipe in the stonecutter container.
+  record s-stonecutter-set-recipe {
+    /// Container ID of the stonecutter.
+    container-id: u8,
+    /// Selected recipe index.
+    recipe-index: s32,
+  }
   /// Transmits in-game chat messages, system alerts, popups, and raw JSON text between client and server.
   record s-text {
     /// Whether translation is requested for localization strings in the message.
@@ -949,8 +966,8 @@ interface bedrock-packets {
     synced-properties: property-sync-data,
     /// Entity attachment links (e.g. passenger or leash connections).
     actor-links: list<actor-link>,
-    /// Whether passenger block data is present.
-    has-passenger-block-data: bool,
+    /// Optional block that the entity is riding.
+    passenger-of-block: option<passenger-of-block-data>,
   }
   /// Synchronized numeric entity attribute with min, current, and max bounds.
   record synced-attribute {
@@ -1014,8 +1031,8 @@ interface bedrock-packets {
     abilities-data: serialized-abilities-data,
     /// Vehicle and attachment links.
     actor-links: list<actor-link>,
-    /// Whether passenger block data is present.
-    has-passenger-block-data: bool,
+    /// Optional block that the player is riding.
+    passenger-of-block: option<passenger-of-block-data>,
     /// Unique device ID of the client device.
     device-id: string,
     /// Operating system platform of the player.
@@ -1510,6 +1527,33 @@ interface bedrock-packets {
     /// Optional explicit override position where the event should trigger.
     fire-at-position: option<tuple<f64, f64, f64>>,
   }
+  /// Matchmaking state reported to the client.
+  enum matchmaking-state {
+    idle,
+    matchmaking,
+    match-found,
+    canceled,
+    player-left-party,
+    player-left-server,
+    server-shutdown,
+    timed-out,
+    requeue-as-party,
+  }
+  /// Optional details regarding the matchmaking transition.
+  record matchmaking-state-options {
+    triggering-player-net-id: string,
+    result-code: s32,
+    error-reason: string,
+    estimated-wait-seconds: s32,
+    match-id: string,
+    session-id: string,
+  }
+  /// Sent by the server to inform the client of matchmaking status.
+  record c-matchmaking-state {
+    state: u8,
+    destination-name: string,
+    options: option<matchmaking-state-options>,
+  }
   /// Sent by the server to add, modify, or remove potion/status effects on an entity.
   record c-mob-effect {
     /// Runtime entity ID of the target actor.
@@ -1638,6 +1682,20 @@ interface bedrock-packets {
     position: tuple<s32, s32, s32>,
     /// Whether the front side of the sign is being edited.
     front-side: bool,
+  }
+  /// Sound playback options for signed audio content.
+  record audio-content-sound {
+    sound-name: string,
+    position: tuple<s32, s32, s32>,
+    volume: f32,
+    pitch: f32,
+  }
+  /// Sent by the server to instruct the client to play signed audio content.
+  record c-play-audio-content {
+    shared-metadata: string,
+    playback-content: string,
+    playback-type: string,
+    sound: audio-content-sound,
   }
   /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
   enum c-play-status {
@@ -1906,6 +1964,32 @@ interface bedrock-packets {
     /// New health value assigned to the player.
     health: s32,
   }
+  /// Pose/emote the entity displays while riding the block.
+  enum passenger-of-block-emote {
+    standing,
+    riding,
+    laying,
+  }
+  /// Data for a block that an entity is riding.
+  record passenger-of-block-data {
+    /// World position of the block.
+    block-position: tuple<s32, s32, s32>,
+    /// Offset relative to the block position.
+    offset: tuple<f64, f64, f64>,
+    /// Rotation in degrees from 0 to 360.
+    rotation: f32,
+    /// Rotation limit in degrees from 0 to 360.
+    rotation-limit: f32,
+    /// Visual riding emote/pose.
+    emote-type: u8,
+  }
+  /// Sent by the server to attach or detach an entity to/from a block.
+  record c-set-passenger-of-block {
+    /// Unique entity ID of the passenger.
+    passenger-unique-id: s64,
+    /// Block passenger data, or None to stop riding.
+    passenger-of-block: option<passenger-of-block-data>,
+  }
   /// Updates the player's active game mode (e.g. Survival, Creative, Spectator).
   record c-set-player-game-type {
     /// Target game mode to apply.
@@ -2171,6 +2255,15 @@ interface bedrock-packets {
     /// NBT compound containing properties defining the unique block state.
     properties: nbt-tree,
   }
+  /// Sent by the server to synchronize the selected stonecutter recipe index to the client.
+  record c-stonecutter-set-recipe {
+    /// Entity unique ID of the player owning the container.
+    player-unique-id: s64,
+    /// Container ID of the stonecutter.
+    container-id: u8,
+    /// Selected recipe index.
+    recipe-index: s32,
+  }
   /// Sent by the server when an entity or player picks up a dropped item, playing the pickup animation.
   record c-take-item-actor {
     /// Runtime entity ID of the item entity being collected.
@@ -2427,6 +2520,10 @@ interface bedrock-packets {
     recipe-food,
     recipe-blocks,
     recipe-furnace-items,
+    container-reserved-a,
+    container-reserved-b,
+    container-reserved-c,
+    container-reserved-d,
   }
   /// Compact representation of an item stack in network transactions with raw extra data bytes.
   record network-item-stack {
@@ -2474,6 +2571,8 @@ interface bedrock-packets {
     s-loading-screen(s-loading-screen),
     /// Sent by the client to initiate the login handshake, containing authentication tokens and device information.
     s-login(s-login),
+    /// Sent by the client to request cancellation of the matchmaking ticket it currently holds.
+    s-matchmaking-cancel,
     /// Sent by the client to update the item held or equipped in a mob or player slot.
     s-mob-equipment(s-mob-equipment),
     /// Sent by the client in response to a server-sent modal form dialog.
@@ -2486,6 +2585,8 @@ interface bedrock-packets {
     s-player-auth-input(s-player-auth-input),
     /// Sent by the Bedrock client when the player changes their active hotbar slot.
     s-player-hotbar(s-player-hotbar),
+    /// Sent by the client to register service-signed audio content for the authenticated player session.
+    s-register-audio-content(s-register-audio-content),
     /// Sent by the client to request permission to modify a player ability (such as flying).
     s-request-ability(s-request-ability),
     /// Sent by the client to request a specific chunk render distance from the server.
@@ -2502,6 +2603,8 @@ interface bedrock-packets {
     s-set-local-player-as-initialized(s-set-local-player-as-initialized),
     /// Sent by the client to sync inventory UI layout options and selected crafting tabs.
     s-set-player-inventory-options(s-set-player-inventory-options),
+    /// Sent by the client when selecting a recipe in the stonecutter container.
+    s-stonecutter-set-recipe(s-stonecutter-set-recipe),
     /// Transmits in-game chat messages, system alerts, popups, and raw JSON text between client and server.
     s-text(s-text),
     unknown,
@@ -2557,6 +2660,8 @@ interface bedrock-packets {
     c-level-event(c-level-event),
     /// Plays a sound effect at a designated world position or associated with an actor.
     c-level-sound-event(c-level-sound-event),
+    /// Sent by the server to inform the client of matchmaking status.
+    c-matchmaking-state(c-matchmaking-state),
     /// Sent by the server to add, modify, or remove potion/status effects on an entity.
     c-mob-effect(c-mob-effect),
     /// Sent by the server to show the item equipped or held by a mob or other player.
@@ -2575,6 +2680,8 @@ interface bedrock-packets {
     c-network-settings(c-network-settings),
     /// Sent by the server to open the sign text editor on the Bedrock client.
     c-open-sign(c-open-sign),
+    /// Sent by the server to instruct the client to play signed audio content.
+    c-play-audio-content(c-play-audio-content),
     /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
     c-play-status(c-play-status),
     /// Sent by the server to update the active selected hotbar slot of the player.
@@ -2605,6 +2712,8 @@ interface bedrock-packets {
     c-set-display-objective(c-set-display-objective),
     /// Updates player health (legacy packet; attribute updates are typically preferred).
     c-set-health(c-set-health),
+    /// Sent by the server to attach or detach an entity to/from a block.
+    c-set-passenger-of-block(c-set-passenger-of-block),
     /// Updates the player's active game mode (e.g. Survival, Creative, Spectator).
     c-set-player-game-type(c-set-player-game-type),
     /// Updates or removes scoreboard entries displayed to the client.
@@ -2619,6 +2728,8 @@ interface bedrock-packets {
     c-show-credits(c-show-credits),
     /// Sent by the server to initialize the client's world, spawn coordinates, gamerules, and entity runtime ID.
     c-start-game(c-start-game),
+    /// Sent by the server to synchronize the selected stonecutter recipe index to the client.
+    c-stonecutter-set-recipe(c-stonecutter-set-recipe),
     /// Sent by the server when an entity or player picks up a dropped item, playing the pickup animation.
     c-take-item-actor(c-take-item-actor),
     /// Instructs the client to disconnect and reconnect to another server address and port.
