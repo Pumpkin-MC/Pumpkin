@@ -289,7 +289,7 @@ impl Mob for ChickenEntity {
         if self.is_chicken_jockey() {
             CHICKEN_JOCKEY_EXPERIENCE_REWARD
         } else {
-            self.get_entity().entity_type.experience_reward
+            crate::entity::passive::animal::experience_reward(self)
         }
     }
 

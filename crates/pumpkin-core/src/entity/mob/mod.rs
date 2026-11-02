@@ -2252,7 +2252,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_base_experience_reward(&self) -> u32 {
-        self.get_entity().entity_type.experience_reward
+        // The extracted value is a single roll for animals.
+        if self.as_animal().is_some() {
+            crate::entity::passive::animal::experience_reward(self)
+        } else {
+            self.get_entity().entity_type.experience_reward
+        }
     }
 
     fn should_drop_loot(&self) -> bool {

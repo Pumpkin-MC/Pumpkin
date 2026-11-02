@@ -7,6 +7,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
@@ -151,4 +152,9 @@ pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
         }
     }
     None
+}
+
+/// Base experience of animals and water creatures, rolled on every death.
+pub fn experience_reward<M: Mob + ?Sized>(mob: &M) -> u32 {
+    1 + mob.get_random().random_range(0..3)
 }
