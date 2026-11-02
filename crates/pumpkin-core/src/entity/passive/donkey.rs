@@ -1,9 +1,5 @@
-use std::sync::{
-    Arc, Weak,
-    atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
-};
+use std::sync::{Arc, Weak};
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
@@ -13,7 +9,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -24,6 +19,9 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, equipment::equip_on_target},
+    passive::abstract_horse::{
+        AbstractHorse, AbstractHorseData, CHESTED_INVENTORY_COLUMNS, play_horse_step_sound,
+    },
     passive::animal::Animal,
     player::Player,
 };
@@ -34,19 +32,10 @@ const TEMPT_ITEMS: &[&Item] = &[
     &Item::GOLDEN_CARROT,
 ];
 
-pub const FLAG_TAME: u8 = 2;
-pub const FLAG_BRED: u8 = 8;
-pub const FLAG_EATING: u8 = 16;
-pub const FLAG_STANDING: u8 = 32;
-pub const FLAG_OPEN_MOUTH: u8 = 64;
-
 pub struct DonkeyEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
-    pub flags: AtomicU8,
-    pub has_chest: AtomicBool,
-    pub temper: AtomicI32,
-    pub owner: AtomicCell<Option<Uuid>>,
+    horse_data: AbstractHorseData,
 }
 
 impl DonkeyEntity {
@@ -55,10 +44,7 @@ impl DonkeyEntity {
         let donkey = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            flags: AtomicU8::new(0),
-            has_chest: AtomicBool::new(false),
-            temper: AtomicI32::new(0),
-            owner: AtomicCell::new(None),
+            horse_data: AbstractHorseData::default(),
         };
         let mob_arc = Arc::new(donkey);
         let mob_weak: Weak<dyn Mob> = {
@@ -84,53 +70,17 @@ impl DonkeyEntity {
 
         mob_arc
     }
-
-    #[must_use]
-    pub fn has_flag(&self, flag: u8) -> bool {
-        (self.flags.load(Ordering::Relaxed) & flag) != 0
-    }
-
-    pub fn set_flag(&self, flag: u8, val: bool) {
-        let current = self.flags.load(Ordering::Relaxed);
-        let new_flags = if val { current | flag } else { current & !flag };
-        self.flags.store(new_flags, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::donkey::DATA_ID_FLAGS,
-            new_flags as i8,
-        );
-    }
-
-    #[must_use]
-    pub fn is_tame(&self) -> bool {
-        self.has_flag(FLAG_TAME)
-    }
-
-    pub fn set_tame(&self, val: bool) {
-        self.set_flag(FLAG_TAME, val);
-    }
-
-    #[must_use]
-    pub fn has_chest(&self) -> bool {
-        self.has_chest.load(Ordering::Relaxed)
-    }
-
-    pub fn set_has_chest(&self, val: bool) {
-        self.has_chest.store(val, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(pumpkin_data::tracked_data::donkey::DATA_ID_CHEST, val);
-    }
 }
 
-impl AgeableMob for DonkeyEntity {
-    fn get_ageable_data(&self) -> &AgeableData {
-        &self.ageable_data
+crate::impl_abstract_horse!(DonkeyEntity, {
+    fn get_inventory_columns(&self) -> i32 {
+        if self.has_chest() {
+            CHESTED_INVENTORY_COLUMNS
+        } else {
+            0
+        }
     }
-
-    fn default_baby_spawn_chance(&self) -> f32 {
-        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
-    }
-}
+});
 
 impl Animal for DonkeyEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
@@ -146,117 +96,37 @@ impl Animal for DonkeyEntity {
 }
 
 impl Mob for DonkeyEntity {
-    fn mob_support_quad_leash(&self) -> bool {
-        true
-    }
-
-    fn can_dispenser_equip_into_slot(
-        &self,
-        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
-    ) -> bool {
-        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
-    }
-
-    fn cause_fall_damage(
-        &self,
-        caller: &dyn EntityBase,
-        fall_distance: f32,
-        damage_modifier: f32,
-    ) -> bool {
-        crate::entity::passive::abstract_horse::cause_fall_damage(
-            self,
-            caller,
-            fall_distance,
-            damage_modifier,
-        )
-    }
-
-    fn mob_is_pushable(&self) -> bool {
-        !self.get_entity().has_passengers()
-    }
-
-    fn is_tamed(&self) -> bool {
-        self.is_tame()
-    }
-
-    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
-        self.saddled_controlling_passenger(None)
-    }
+    crate::abstract_horse_mob_hooks!();
 
     fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
-        *slot != EquipmentSlot::SADDLE
-            || (self.mob_entity.living_entity.entity.is_alive()
-                && !self.is_baby()
-                && self.is_tame())
-    }
-
-    fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
-        (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityHorseSaddle)
+        crate::entity::passive::abstract_horse::can_use_slot(self, slot)
     }
 
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
-        super::horse::play_horse_step_sound(self, pos, state, false);
-    }
-
-    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
-        Some(self)
-    }
-
-    fn as_animal(&self) -> Option<&dyn Animal> {
-        Some(self)
+        play_horse_step_sound(self, pos, state, false);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-        nbt.put_bool("ChestedHorse", self.has_chest());
-        nbt.put_bool("Tame", self.is_tame());
-        nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
-        if let Some(owner) = self.owner.load() {
-            nbt.put_uuid("Owner", owner);
-        }
+        self.write_horse_nbt(nbt);
+        self.write_chested_horse_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
-        if let Some(chested) = nbt.get_bool("ChestedHorse") {
-            self.set_has_chest(chested);
-        }
-        if let Some(tame) = nbt.get_bool("Tame") {
-            self.set_tame(tame);
-        }
-        if let Some(temper) = nbt.get_int("Temper") {
-            self.temper.store(temper, Ordering::Relaxed);
-        }
-        if let Some(owner) = nbt.get_uuid("Owner") {
-            self.owner.store(Some(owner));
-        }
-    }
-
-    fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
+        self.read_horse_nbt(nbt);
+        self.read_chested_horse_nbt(nbt);
     }
 
     fn mob_init_data_tracker(&self) {
-        let entity = self.get_entity();
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        if is_baby {
-            entity.set_synced_data(pumpkin_data::tracked_data::donkey::DATA_BABY_ID, true);
-        }
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::donkey::DATA_ID_CHEST,
-            self.has_chest(),
-        );
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::donkey::DATA_ID_FLAGS,
-            self.flags.load(Ordering::Relaxed) as i8,
-        );
+        self.init_horse_data_tracker();
+        self.init_chested_horse_data_tracker();
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let item = item_stack.get_item();
 
-        if self.is_tame() && item == &Item::CHEST && !self.has_chest() && !self.is_baby() {
-            self.set_has_chest(true);
+        if self.is_tamed() && item == &Item::CHEST && !self.has_chest() && !self.is_baby() {
+            self.set_chest(true);
+            self.create_inventory();
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let entity = self.get_entity();
             let world = entity.world.load();

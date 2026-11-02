@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::block_state::SoundType;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityStatus;
@@ -11,12 +12,14 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::inventory::{SimpleInventory, sync_read_items_from_nbt};
 use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{SyncedActorDataList, entity_data_flag};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
@@ -36,6 +39,7 @@ pub const FLAG_STANDING: i8 = 32;
 pub const FLAG_OPEN_MOUTH: i8 = 64;
 pub const SOUND_VOLUME: f32 = 0.8;
 pub const AMBIENT_SOUND_INTERVAL: i32 = 400;
+pub const CHESTED_INVENTORY_COLUMNS: i32 = 5;
 const MOMMY_RANGE: f64 = 16.0;
 const MOMMY_MIN_DISTANCE_SQ: f64 = 4.0;
 
@@ -59,7 +63,7 @@ impl Default for AbstractHorseData {
     }
 }
 
-pub trait AbstractHorse: Animal {
+pub trait AbstractHorse: Animal + AgeableMob {
     fn horse_data(&self) -> &AbstractHorseData;
 
     fn get_max_temper(&self) -> i32 {
@@ -112,7 +116,9 @@ pub trait AbstractHorse: Animal {
         self.set_flag(FLAG_TAME, tamed);
         let entity = self.get_entity();
         entity.set_bedrock_flag(entity_data_flag::TAMED, tamed);
-        entity.send_bedrock_actor_data(&self.bedrock_container_data());
+        if let Some(data) = self.bedrock_container_data() {
+            entity.send_bedrock_actor_data(&data);
+        }
     }
 
     fn is_bred(&self) -> bool {
@@ -169,21 +175,33 @@ pub trait AbstractHorse: Animal {
             has_chest,
         );
         entity.set_bedrock_flag(entity_data_flag::CHESTED, has_chest);
-        entity.send_bedrock_actor_data(&self.bedrock_container_data());
+        if let Some(data) = self.bedrock_container_data() {
+            entity.send_bedrock_actor_data(&data);
+        }
     }
 
     fn get_inventory_columns(&self) -> i32 {
         0
     }
 
+    fn get_saddle_equip_sound(&self) -> Sound {
+        Sound::EntityHorseSaddle
+    }
+
     /// The Java mount screen slot Bedrock shows as its one equipment slot.
-    fn bedrock_equip_slot(&self) -> usize;
+    fn bedrock_equip_slot(&self) -> usize {
+        MountScreenHandler::SLOT_SADDLE
+    }
 
     /// The `UpdateEquip` slot list Bedrock uses to draw the equipment slot.
-    fn bedrock_equip_slots(&self) -> NbtCompound;
+    fn bedrock_equip_slots(&self) -> NbtCompound {
+        NbtCompound::new()
+    }
 
     /// The actor data Bedrock reads to size and open the mount inventory.
-    fn bedrock_container_data(&self) -> SyncedActorDataList;
+    fn bedrock_container_data(&self) -> Option<SyncedActorDataList> {
+        None
+    }
 
     fn inventory(&self) -> Arc<SimpleInventory> {
         self.horse_data()
@@ -280,11 +298,17 @@ pub trait AbstractHorse: Animal {
 
     fn init_horse_data_tracker(&self) {
         let entity = self.get_entity();
+        if self.is_baby() {
+            entity.set_synced_data(tracked_data::abstract_horse::DATA_BABY_ID, true);
+        }
         entity.set_synced_data(
             tracked_data::abstract_horse::DATA_ID_FLAGS,
             self.horse_data().flags.load(Relaxed),
         );
-        entity.set_synced_data(
+    }
+
+    fn init_chested_horse_data_tracker(&self) {
+        self.get_entity().set_synced_data(
             tracked_data::abstract_chested_horse::DATA_ID_CHEST,
             self.has_chest(),
         );
@@ -294,7 +318,7 @@ pub trait AbstractHorse: Animal {
         nbt.put_bool("EatingHaystack", self.is_eating());
         nbt.put_bool("Bred", self.is_bred());
         nbt.put_int("Temper", self.get_temper());
-        nbt.put_bool("Tame", self.get_flag(FLAG_TAME));
+        nbt.put_bool("Tame", self.is_tamed());
         if let Some(owner) = self.get_owner() {
             nbt.put_uuid("Owner", owner);
         }
@@ -369,9 +393,47 @@ pub fn cause_fall_damage(
     true
 }
 
+/// Step sound for every horse that doesn't pick its own.
+pub fn play_horse_step_sound(
+    horse: &dyn Mob,
+    pos: &BlockPos,
+    state: &BlockState,
+    can_gallop: bool,
+) {
+    if state.is_liquid() {
+        return;
+    }
+    let entity = horse.get_entity();
+    let above = entity.world.load().get_block_state(&pos.up());
+    let sound_type = if above.id.to_block() == &Block::SNOW {
+        above.get_sound_type()
+    } else {
+        state.get_sound_type()
+    };
+    let volume = sound_type.volume * 0.15;
+    // TODO: gallop once ridden horses move: `tickRidden` resets the gallop counter while the
+    // rider isn't pressing forward, which is always the case without ridden movement.
+    let ridden = entity.has_passengers() && can_gallop;
+    let sound = if ridden || is_wood_sound_type(sound_type) {
+        Sound::EntityHorseStepWood
+    } else if entity.age.load(Relaxed) < 0 {
+        Sound::EntityBabyHorseStep
+    } else {
+        Sound::EntityHorseStep
+    };
+    horse.play_entity_sound(sound, volume, sound_type.pitch);
+}
+
+fn is_wood_sound_type(sound_type: &SoundType) -> bool {
+    matches!(
+        sound_type.name,
+        "WOOD" | "NETHER_WOOD" | "STEM" | "CHERRY_WOOD" | "BAMBOO_WOOD"
+    )
+}
+
 /// The path is dropped on purpose; only the navigator target is kept, so the foal heads for
 /// its parent on the next path recompute.
-pub fn follow_mommy<H: AbstractHorse + AgeableMob>(horse: &H) {
+pub fn follow_mommy<H: AbstractHorse>(horse: &H) {
     if !horse.is_bred() || !horse.is_baby() || horse.is_eating() {
         return;
     }
@@ -412,7 +474,141 @@ pub fn follow_mommy<H: AbstractHorse + AgeableMob>(horse: &H) {
     }
 }
 
+/// Only a living, tamed adult takes a saddle.
+pub fn can_use_slot<H: AbstractHorse>(horse: &H, slot: &EquipmentSlot) -> bool {
+    *slot != EquipmentSlot::SADDLE
+        || (horse.get_entity().is_alive() && !horse.is_baby() && horse.is_tamed())
+}
+
 pub fn can_dispenser_equip_into_slot(mob: &dyn Mob, slot: &EquipmentSlot) -> bool {
     ((*slot == EquipmentSlot::BODY || *slot == EquipmentSlot::SADDLE) && mob.is_tamed())
         || mob.get_mob_entity().can_pick_up_loot()
+}
+
+/// Generates the `AgeableMob` and `AbstractHorse` impls. The type needs `ageable_data` and
+/// `horse_data` fields; extra `AbstractHorse` methods go in the braces.
+#[macro_export]
+macro_rules! impl_abstract_horse {
+    ($horse:ty) => {
+        $crate::impl_abstract_horse!($horse, {});
+    };
+    ($horse:ty, { $($extra:tt)* }) => {
+        impl $crate::entity::ageable::AgeableMob for $horse {
+            fn get_ageable_data(&self) -> &$crate::entity::ageable::AgeableData {
+                &self.ageable_data
+            }
+
+            fn default_baby_spawn_chance(&self) -> f32 {
+                $crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
+            }
+        }
+
+        impl $crate::entity::passive::abstract_horse::AbstractHorse for $horse {
+            fn horse_data(&self) -> &$crate::entity::passive::abstract_horse::AbstractHorseData {
+                &self.horse_data
+            }
+
+            $($extra)*
+        }
+    };
+}
+
+/// Generates the `Mob` methods every horse shares. Use inside `impl Mob for ...`; camels pass
+/// `always_tamed`.
+#[macro_export]
+macro_rules! abstract_horse_mob_hooks {
+    () => {
+        fn is_tamed(&self) -> bool {
+            $crate::entity::passive::abstract_horse::AbstractHorse::get_flag(
+                self,
+                $crate::entity::passive::abstract_horse::FLAG_TAME,
+            )
+        }
+
+        $crate::abstract_horse_mob_hooks!(@shared);
+    };
+    (always_tamed) => {
+        fn is_tamed(&self) -> bool {
+            true
+        }
+
+        $crate::abstract_horse_mob_hooks!(@shared);
+    };
+    (@shared) => {
+        fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
+            &self.mob_entity
+        }
+
+        fn as_ageable(&self) -> Option<&dyn $crate::entity::ageable::AgeableMob> {
+            Some(self)
+        }
+
+        fn as_animal(&self) -> Option<&dyn $crate::entity::passive::animal::Animal> {
+            Some(self)
+        }
+
+        fn as_abstract_horse(
+            &self,
+        ) -> Option<&dyn $crate::entity::passive::abstract_horse::AbstractHorse> {
+            Some(self)
+        }
+
+        fn get_owner_uuid(&self) -> Option<uuid::Uuid> {
+            $crate::entity::passive::abstract_horse::AbstractHorse::get_owner(self)
+        }
+
+        fn mob_support_quad_leash(&self) -> bool {
+            true
+        }
+
+        fn mob_is_pushable(&self) -> bool {
+            !$crate::entity::EntityBase::get_entity(self).has_passengers()
+        }
+
+        fn mob_controlling_passenger(
+            &self,
+        ) -> Option<std::sync::Arc<dyn $crate::entity::EntityBase>> {
+            self.saddled_controlling_passenger(None)
+        }
+
+        fn get_equip_sound(
+            &self,
+            slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+        ) -> Option<pumpkin_data::sound::Sound> {
+            (*slot == pumpkin_data::data_component_impl::EquipmentSlot::SADDLE).then(|| {
+                $crate::entity::passive::abstract_horse::AbstractHorse::get_saddle_equip_sound(
+                    self,
+                )
+            })
+        }
+
+        fn can_dispenser_equip_into_slot(
+            &self,
+            slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+        ) -> bool {
+            $crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+        }
+
+        fn cause_fall_damage(
+            &self,
+            caller: &dyn $crate::entity::EntityBase,
+            fall_distance: f32,
+            damage_modifier: f32,
+        ) -> bool {
+            $crate::entity::passive::abstract_horse::cause_fall_damage(
+                self,
+                caller,
+                fall_distance,
+                damage_modifier,
+            )
+        }
+
+        fn get_ambient_sound_interval(&self) -> i32 {
+            $crate::entity::passive::abstract_horse::AMBIENT_SOUND_INTERVAL
+        }
+
+        fn drop_inventory(&self) {
+            $crate::entity::passive::abstract_horse::AbstractHorse::drop_horse_inventory(self);
+        }
+    };
 }

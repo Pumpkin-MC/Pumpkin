@@ -589,7 +589,7 @@ impl AbstractHorse for LlamaEntity {
         data
     }
 
-    fn bedrock_container_data(&self) -> SyncedActorDataList {
+    fn bedrock_container_data(&self) -> Option<SyncedActorDataList> {
         let mut data = SyncedActorDataList::new();
         let container_type = if self.is_tamed() {
             HORSE_CONTAINER_TYPE as i8
@@ -612,7 +612,7 @@ impl AbstractHorse for LlamaEntity {
             entity_data_key::STRENGTH,
             MetadataValue::Int(self.get_strength()),
         );
-        data
+        Some(data)
     }
 
     fn get_inventory_columns(&self) -> i32 {
@@ -831,17 +831,16 @@ impl Mob for LlamaEntity {
             .mob_metadata()
             .map(|meta| meta.to_bedrock_actor_data())
             .unwrap_or_default();
-        data.0.extend(self.bedrock_container_data().0);
+        data.0
+            .extend(self.bedrock_container_data().unwrap_or_default().0);
         data.0.extend(self.bedrock_variant_data().0);
         Some(data)
     }
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        if self.is_baby() {
-            entity.set_synced_data(tracked_data::llama::DATA_BABY_ID, true);
-        }
         self.init_horse_data_tracker();
+        self.init_chested_horse_data_tracker();
         entity.set_synced_data(
             tracked_data::llama::DATA_STRENGTH_ID,
             VarInt(self.get_strength()),
