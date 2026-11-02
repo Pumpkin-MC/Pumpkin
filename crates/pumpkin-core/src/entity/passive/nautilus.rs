@@ -205,6 +205,21 @@ impl Mob for NautilusEntity {
         Some(self)
     }
 
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .filter(|passenger| {
+                (self.is_saddled.load(Ordering::Relaxed) && passenger.get_player().is_some())
+                    || (!self.mob_entity.is_no_ai()
+                        && passenger.get_mob().is_some()
+                        && passenger.can_control_vehicle())
+            })
+            .cloned()
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }
