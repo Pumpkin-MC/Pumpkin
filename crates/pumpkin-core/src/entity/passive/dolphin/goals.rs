@@ -818,7 +818,7 @@ mod tests {
             0,
         );
         world.add_entity_silent(Arc::new(item));
-        dolphin.pick_up_items();
+        crate::entity::mob::pick_up_nearby_items(dolphin.as_ref());
         assert!(drop_item(dolphin.as_ref()));
         let thrown = world
             .entities

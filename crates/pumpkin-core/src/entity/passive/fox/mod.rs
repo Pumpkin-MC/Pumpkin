@@ -428,6 +428,11 @@ fn is_thundering(world: &World) -> bool {
 }
 
 impl Mob for FoxEntity {
+    // Needs fox eating first.
+    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,

@@ -160,55 +160,6 @@ impl DolphinEntity {
             dimensions
         });
     }
-
-    fn pick_up_items(&self) {
-        let living = &self.mob_entity.living_entity;
-        let entity = &living.entity;
-        let world = entity.world.load();
-        if !self.mob_entity.can_pick_up_loot()
-            || !living.is_alive()
-            || !world.level_info.load().game_rules.mob_griefing
-        {
-            return;
-        }
-        let area = entity.bounding_box.load().expand(1.0, 0.0, 1.0);
-        for candidate in world.get_entities_at_box(&area) {
-            let Some(item) = candidate.get_item_entity() else {
-                continue;
-            };
-            if !item.get_entity().is_alive() || item.get_pickup_delay() != 0 {
-                continue;
-            }
-            if !living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get(&EquipmentSlot::MAIN_HAND)
-                .is_empty()
-            {
-                continue;
-            }
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if stack.is_empty() || !living.pickup(item.get_entity(), u32::from(stack.item_count)) {
-                continue;
-            }
-            living.on_item_pickup(item);
-            let taken = std::mem::replace(
-                &mut *item
-                    .get_item_stack()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-                ItemStack::EMPTY.clone(),
-            );
-            self.mob_entity
-                .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, taken);
-            item.get_entity().remove();
-        }
-    }
 }
 
 impl AgeableMob for DolphinEntity {
@@ -307,8 +258,36 @@ impl Mob for DolphinEntity {
         .flatten()
         .collect()
     }
-    fn mob_ai_step(&self) {
-        self.pick_up_items();
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        let living = &self.mob_entity.living_entity;
+        if !living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EquipmentSlot::MAIN_HAND)
+            .is_empty()
+        {
+            return;
+        }
+        let count = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item_count;
+        if !living.pickup(item.get_entity(), u32::from(count)) {
+            return;
+        }
+        living.on_item_pickup(item);
+        let taken = std::mem::replace(
+            &mut *item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            ItemStack::EMPTY.clone(),
+        );
+        self.mob_entity
+            .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, taken);
+        item.get_entity().remove();
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {

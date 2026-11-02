@@ -18,6 +18,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -141,6 +142,17 @@ impl ZombieEntityBase {
     pub fn is_baby(&self) -> bool {
         self.is_baby.load(Ordering::Relaxed)
     }
+
+    #[must_use]
+    pub fn can_hold_item(&self, stack: &ItemStack) -> bool {
+        !(stack.item.has_tag(&pumpkin_data::tag::Item::MINECRAFT_EGGS)
+            && self.is_baby()
+            && self.mob_entity.living_entity.entity.has_vehicle())
+    }
+}
+
+pub fn wants_to_pick_up<M: Mob + ?Sized>(mob: &M, stack: &ItemStack) -> bool {
+    stack.item.id != Item::GLOW_INK_SAC.id && mob.can_hold_item(stack)
 }
 
 impl Mob for ZombieEntityBase {
