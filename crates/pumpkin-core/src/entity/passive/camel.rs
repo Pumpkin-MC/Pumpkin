@@ -115,8 +115,18 @@ impl Animal for CamelEntity {
     }
 }
 
-// TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
+    fn is_tamed(&self) -> bool {
+        true
+    }
+
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

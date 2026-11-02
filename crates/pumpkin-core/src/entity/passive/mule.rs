@@ -145,6 +145,13 @@ impl Animal for MuleEntity {
 }
 
 impl Mob for MuleEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

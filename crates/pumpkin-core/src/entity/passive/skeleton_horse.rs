@@ -113,6 +113,13 @@ impl Animal for SkeletonHorseEntity {
 }
 
 impl Mob for SkeletonHorseEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

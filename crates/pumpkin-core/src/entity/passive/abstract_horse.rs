@@ -365,3 +365,8 @@ pub fn cause_fall_damage(
     living.play_block_fall_sound(caller);
     true
 }
+
+pub fn can_dispenser_equip_into_slot(mob: &dyn Mob, slot: &EquipmentSlot) -> bool {
+    ((*slot == EquipmentSlot::BODY || *slot == EquipmentSlot::SADDLE) && mob.is_tamed())
+        || mob.get_mob_entity().can_pick_up_loot()
+}

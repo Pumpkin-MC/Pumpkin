@@ -692,8 +692,7 @@ impl Mob for LlamaEntity {
     }
 
     fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
-        ((*slot == EquipmentSlot::BODY || *slot == EquipmentSlot::SADDLE) && self.is_tamed())
-            || self.mob_entity.can_pick_up_loot()
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
     }
 
     fn is_mob_immobile(&self) -> bool {

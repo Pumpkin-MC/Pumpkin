@@ -191,6 +191,12 @@ impl CustomSound for NautilusEntity {
 }
 
 impl Mob for NautilusEntity {
+    fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
+        *slot == EquipmentSlot::BODY
+            || *slot == EquipmentSlot::SADDLE
+            || self.mob_entity.can_pick_up_loot()
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }

@@ -1694,7 +1694,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn drop_inventory(&self) {}
 
     fn can_dispenser_equip_into_slot(&self, _slot: &EquipmentSlot) -> bool {
-        true
+        self.get_mob_entity().can_pick_up_loot()
     }
 
     fn cause_fall_damage(

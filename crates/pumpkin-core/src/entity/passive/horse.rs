@@ -198,6 +198,13 @@ fn is_wood_sound_type(sound_type: &SoundType) -> bool {
 
 // TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

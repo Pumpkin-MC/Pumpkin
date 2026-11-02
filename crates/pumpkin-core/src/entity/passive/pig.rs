@@ -143,6 +143,10 @@ impl Animal for PigEntity {
 }
 
 impl Mob for PigEntity {
+    fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
+        *slot == EquipmentSlot::SADDLE || self.mob_entity.can_pick_up_loot()
+    }
+
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         self.saddled_controlling_passenger(Some(&Item::CARROT_ON_A_STICK))
     }
