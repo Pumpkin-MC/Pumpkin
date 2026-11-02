@@ -174,6 +174,7 @@ pub mod block_placer;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod custom_spawner;
 pub mod dragon_fight;
 pub mod end_podium;
 pub mod entity_tracker;
@@ -185,6 +186,8 @@ pub mod weather;
 
 pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
+
+pub use custom_spawner::CustomSpawner;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -262,9 +265,8 @@ pub struct World {
     pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
-    /// Vanilla `WanderingTraderSpawner`; only ticked in the overworld.
-    pub wandering_trader_spawner:
-        std::sync::Mutex<wandering_trader_spawner::WanderingTraderSpawner>,
+    /// Vanilla `ServerLevel.customSpawners`; empty outside the overworld.
+    pub custom_spawners: Vec<std::sync::Mutex<Box<dyn CustomSpawner + Send>>>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
@@ -395,12 +397,12 @@ impl World {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
 
-        let wandering_trader_spawner =
-            std::sync::Mutex::new(wandering_trader_spawner::WanderingTraderSpawner::new(
-                pumpkin_world::world_info::data_files::minecraft_data_dir(
-                    &level.level_folder.dim_folder,
-                ),
-            ));
+        let custom_spawners = custom_spawner::create_custom_spawners(
+            &dimension,
+            pumpkin_world::world_info::data_files::minecraft_data_dir(
+                &level.level_folder.dim_folder,
+            ),
+        );
 
         Self {
             uuid: Uuid::new_v4(),
@@ -430,7 +432,7 @@ impl World {
             portal_poi: std::sync::Mutex::new(portal_poi),
             villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
             raids: std::sync::Mutex::new(raid::Raids::default()),
-            wandering_trader_spawner,
+            custom_spawners,
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: RwLock::new(Arc::default()),
@@ -2186,6 +2188,8 @@ impl World {
         };
         let spawn_passives = self.get_time_of_day() % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
+        // Vanilla `ServerLevel.isSpawningMonsters`.
+        let custom_spawn_enemies = spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
 
         let spawn_list = Arc::new(natural_spawner::get_filtered_spawning_categories(
@@ -2231,11 +2235,13 @@ impl World {
             });
 
         // Vanilla `ServerChunkCache.tickChunks` ticks custom spawners after the chunks.
-        if spawn_mobs && self.dimension == Dimension::OVERWORLD {
-            self.wandering_trader_spawner
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .tick(self);
+        if spawn_mobs {
+            for spawner in &self.custom_spawners {
+                spawner
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .tick(self, custom_spawn_enemies);
+            }
         }
     }
 

@@ -21,9 +21,9 @@ use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::passive::trader_llama::TraderLlamaEntity;
 use crate::entity::passive::wandering_trader::WanderingTraderEntity;
 use crate::entity::{Entity, EntityBase};
-use crate::world::World;
 use crate::world::natural_spawner;
 use crate::world::villager_poi::POI_TYPE_MEETING;
+use crate::world::{CustomSpawner, World};
 
 const DEFAULT_TICK_DELAY: i32 = 1200;
 pub const DEFAULT_SPAWN_DELAY: i32 = 24_000;
@@ -58,15 +58,6 @@ impl WanderingTraderSpawner {
             data,
             data_dir,
         }
-    }
-
-    pub fn tick(&mut self, world: &Arc<World>) {
-        if !world.level_info.load().game_rules.spawn_wandering_traders {
-            return;
-        }
-
-        let mut rng = rand::rng();
-        self.tick_with(&mut rng, |rng| Self::spawn(world, rng));
     }
 
     /// Vanilla `WanderingTraderSpawner.tick`: the schedule and chance bookkeeping around one
@@ -253,6 +244,17 @@ impl WanderingTraderSpawner {
                 .next()
                 .is_none()
         })
+    }
+}
+
+impl CustomSpawner for WanderingTraderSpawner {
+    fn tick(&mut self, world: &Arc<World>, _spawn_enemies: bool) {
+        if !world.level_info.load().game_rules.spawn_wandering_traders {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        self.tick_with(&mut rng, |rng| Self::spawn(world, rng));
     }
 }
 
