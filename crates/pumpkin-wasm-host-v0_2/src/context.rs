@@ -953,6 +953,11 @@ fn register_world_event(
                 pumpkin_core::plugin::api::events::world::weather_change::ThunderChangeEvent,
             >(resource, handler, priority, blocking);
         }
+        EventType::WeatherPhaseChangeEvent => {
+            register_typed_event::<
+                pumpkin_core::plugin::api::events::world::weather_change::WeatherPhaseChangeEvent,
+            >(resource, handler, priority, blocking);
+        }
         EventType::WorldLoadEvent => {
             register_typed_event::<
                 pumpkin_core::plugin::api::events::world::world_load::WorldLoadEvent,
@@ -1469,6 +1474,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::ChunkSendEvent
             | EventType::WeatherChangeEvent
             | EventType::ThunderChangeEvent
+            | EventType::WeatherPhaseChangeEvent
             | EventType::WorldLoadEvent
             | EventType::WorldUnloadEvent
             | EventType::AsyncStructureGenerateEvent

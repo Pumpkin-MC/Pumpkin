@@ -224,6 +224,8 @@ impl ToFromWasmEvent
             Event::WeatherChangeEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
                 to_weather_state: data.to_weather_state,
+                cause:
+                    pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -251,6 +253,8 @@ impl ToFromWasmEvent
             Event::ThunderChangeEvent(data) => Self {
                 world: consume_world(state, &data.target_world),
                 to_thunder_state: data.to_thunder_state,
+                cause:
+                    pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

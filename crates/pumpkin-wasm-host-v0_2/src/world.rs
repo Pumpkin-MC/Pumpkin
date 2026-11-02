@@ -747,6 +747,85 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self.get(&world)?.is_thundering())
     }
 
+    fn has_weather(&mut self, world: Resource<World>) -> wasmtime::Result<bool> {
+        Ok(self.get(&world)?.can_have_weather())
+    }
+
+    fn get_weather(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<pumpkin::plugin::world::WeatherState> {
+        let state = self.get(&world)?.weather_state();
+        Ok(pumpkin::plugin::world::WeatherState {
+            clear_time: state.clear_weather_time,
+            rain_time: state.rain_time,
+            thunder_time: state.thunder_time,
+            raining: state.raining,
+            thundering: state.thundering,
+            rain_level: state.rain_level,
+            thunder_level: state.thunder_level,
+            phases: state
+                .phases
+                .into_iter()
+                .map(|(id, phase)| pumpkin::plugin::world::WeatherPhaseState {
+                    id,
+                    active: phase.active,
+                    ticks_left: phase.time,
+                })
+                .collect(),
+        })
+    }
+
+    fn set_weather(
+        &mut self,
+        world: Resource<World>,
+        clear_time: i32,
+        rain_time: i32,
+        raining: bool,
+        thundering: bool,
+    ) -> wasmtime::Result<()> {
+        self.get(&world)?.set_weather(
+            pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
+            clear_time,
+            rain_time,
+            raining,
+            thundering,
+        );
+        Ok(())
+    }
+
+    fn set_clear_weather_duration(
+        &mut self,
+        world: Resource<World>,
+        ticks: i32,
+    ) -> wasmtime::Result<()> {
+        self.get(&world)?
+            .set_weather_durations(Some(ticks), None, None);
+        Ok(())
+    }
+
+    fn set_rain_duration(&mut self, world: Resource<World>, ticks: i32) -> wasmtime::Result<()> {
+        self.get(&world)?
+            .set_weather_durations(None, Some(ticks), None);
+        Ok(())
+    }
+
+    fn set_thunder_duration(&mut self, world: Resource<World>, ticks: i32) -> wasmtime::Result<()> {
+        self.get(&world)?
+            .set_weather_durations(None, None, Some(ticks));
+        Ok(())
+    }
+
+    fn set_weather_phase(
+        &mut self,
+        world: Resource<World>,
+        id: String,
+        active: bool,
+        ticks: Option<i32>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        Ok(self.get(&world)?.set_weather_phase(&id, active, ticks))
+    }
+
     fn broadcast_system_message(
         &mut self,
         world: Resource<World>,

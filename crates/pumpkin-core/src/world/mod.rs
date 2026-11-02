@@ -181,6 +181,7 @@ pub mod environment;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
+pub mod weather_profile;
 
 pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
@@ -191,6 +192,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
 use uuid::Uuid;
 use weather::Weather;
+use weather_profile::WeatherCycle;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 
@@ -249,6 +251,10 @@ pub struct World {
     pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: std::sync::Mutex<Weather>,
+    /// The weather cycle, shared with every other world
+    pub weather_data: weather::SharedWeatherData,
+    pub weather_cycle: WeatherCycle,
+    weather_enabled: bool,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
@@ -361,6 +367,7 @@ impl World {
         level_info: Arc<ArcSwap<LevelData>>,
         dimension: Dimension,
         block_registry: Arc<BlockRegistry>,
+        weather_setup: weather::WeatherSetup,
         server: Weak<Server>,
     ) -> Self {
         // TODO
@@ -391,6 +398,20 @@ impl World {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
 
+        let weather_enabled = weather_setup
+            .enabled
+            .unwrap_or_else(|| weather::can_have_weather(&dimension));
+        let weather = if weather_enabled {
+            Weather::prepared(
+                &weather_setup
+                    .data
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            )
+        } else {
+            Weather::default()
+        };
+
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -410,7 +431,10 @@ impl World {
             )),
             level_time: std::sync::Mutex::new(LevelTime::new()),
             dimension,
-            weather: std::sync::Mutex::new(Weather::new()),
+            weather: std::sync::Mutex::new(weather),
+            weather_data: weather_setup.data,
+            weather_cycle: weather_setup.cycle,
+            weather_enabled,
             block_registry,
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
@@ -612,6 +636,7 @@ impl World {
             error!("Failed to save portal POI: {e}");
         }
 
+        self.save_own_weather();
         self.level.shutdown().await;
     }
 
@@ -2029,23 +2054,14 @@ impl World {
                 let autosave = self.level.autosave_ticks as i64;
                 if autosave > 0 && level_time.world_age % autosave == 0 {
                     self.level.should_save.store(true, Relaxed);
+                    self.save_own_weather();
                     self.level.level_channel.notify();
                 }
             }
             (level_time.is_night(), level_time.time_of_day)
         };
 
-        let (should_reset_weather, weather_cycle_enabled) = {
-            let mut weather = self
-                .weather
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            weather.tick_weather(self);
-            (
-                weather.raining || weather.thundering,
-                weather.weather_cycle_enabled,
-            )
-        };
+        self.tick_weather();
 
         if self.should_skip_night() && is_night {
             let level_time = {
@@ -2063,13 +2079,7 @@ impl World {
                 player.wake_up();
             }
 
-            if weather_cycle_enabled && should_reset_weather {
-                let mut weather = self
-                    .weather
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                weather.reset_weather_cycle(self);
-            }
+            self.reset_weather_after_sleep();
         }
     }
 
@@ -2654,13 +2664,6 @@ impl World {
         level_time.send_time(self);
     }
 
-    pub fn is_raining(&self) -> bool {
-        self.weather
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .raining
-    }
-
     pub fn is_raining_at(&self, pos: &BlockPos) -> bool {
         if !self.is_raining() {
             return false;
@@ -2673,57 +2676,6 @@ impl World {
                 .get_biome(pos)
                 .weather
                 .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
-    }
-
-    pub fn set_raining(&self, raining: bool) {
-        if let Some(server) = self.server.upgrade() {
-            let world_arc = server.get_world_from_dimension(&self.dimension);
-            let mut event =
-                crate::plugin::api::events::world::weather_change::WeatherChangeEvent::new(
-                    world_arc, raining,
-                );
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-        }
-        let mut weather = self
-            .weather
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if weather.raining != raining {
-            let thunder = weather.thundering;
-            weather.set_weather_parameters(self, 0, 0, raining, thunder);
-        }
-    }
-
-    pub fn is_thundering(&self) -> bool {
-        self.weather
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .thundering
-    }
-
-    pub fn set_thundering(&self, thundering: bool) {
-        if let Some(server) = self.server.upgrade() {
-            let world_arc = server.get_world_from_dimension(&self.dimension);
-            let mut event =
-                crate::plugin::api::events::world::weather_change::ThunderChangeEvent::new(
-                    world_arc, thundering,
-                );
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
-        }
-        let mut weather = self
-            .weather
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if weather.thundering != thundering {
-            let raining = weather.raining;
-            weather.set_weather_parameters(self, 0, 0, raining, thundering);
-        }
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -2790,13 +2742,7 @@ impl World {
         )> = std::sync::OnceLock::new();
 
         let level_info = server.level_info.load();
-        let (rain_level, lightning_level) = {
-            let weather = self
-                .weather
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (weather.rain_level, weather.thunder_level)
-        };
+        let (rain_level, lightning_level) = self.weather_levels();
         let runtime_id = player.entity_id() as u64;
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
@@ -3747,29 +3693,22 @@ impl World {
             .await;
 
         // Send initial weather state
-        let (is_raining, rain_level, thunder_level) = {
-            let weather = self
-                .weather
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (
-                weather.raining,
-                weather.rain_level.clamp(0.0, 1.0),
-                weather.thunder_level.clamp(0.0, 1.0),
-            )
-        };
-        if is_raining {
+        let (rain_level, thunder_level) = self.weather_levels();
+        if self.is_raining() {
             client
                 .enqueue_client_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
                 .await;
 
             client
-                .enqueue_client_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
+                .enqueue_client_packet(&CGameEvent::new(
+                    GameEvent::RainLevelChange,
+                    rain_level.clamp(0.0, 1.0),
+                ))
                 .await;
             client
                 .enqueue_client_packet(&CGameEvent::new(
                     GameEvent::ThunderLevelChange,
-                    thunder_level,
+                    thunder_level.clamp(0.0, 1.0),
                 ))
                 .await;
         }

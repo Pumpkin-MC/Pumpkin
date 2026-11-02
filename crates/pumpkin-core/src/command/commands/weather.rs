@@ -8,6 +8,7 @@ use crate::command::argument_types::time::TimeArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::plugin::api::events::world::weather_change::WeatherCause;
 
 const DESCRIPTION: &str = "Changes the weather.";
 const PERMISSION: &str = "minecraft:command.weather";
@@ -34,17 +35,12 @@ impl CommandExecutor for WeatherExecutor {
 
         let world = context.source.world();
         let (message, return_val) = {
-            let mut weather = world
-                .weather
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
             match self.mode {
                 WeatherMode::Clear => {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
 
-                    weather.set_weather_parameters(world, processed_duration, 0, false, false);
+                    world.set_weather(WeatherCause::Command, processed_duration, 0, false, false);
                     (
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_CLEAR,
@@ -58,7 +54,7 @@ impl CommandExecutor for WeatherExecutor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
 
-                    weather.set_weather_parameters(world, 0, processed_duration, true, false);
+                    world.set_weather(WeatherCause::Command, 0, processed_duration, true, false);
                     (
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_RAIN,
@@ -72,7 +68,7 @@ impl CommandExecutor for WeatherExecutor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(3600..=15_600));
 
-                    weather.set_weather_parameters(world, 0, processed_duration, true, true);
+                    world.set_weather(WeatherCause::Command, 0, processed_duration, true, true);
                     (
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_THUNDER,

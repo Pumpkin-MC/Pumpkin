@@ -97,6 +97,25 @@ pub struct LevelData {
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(rename = "clearWeatherTime", skip_serializing, default)]
     pub clear_weather_time: i32,
+
+    /// Whether it rains, and the ticks until that flips.
+    /// Persisted to `data/minecraft/weather.dat`.
+    #[serde(skip_serializing, default)]
+    pub raining: bool,
+    #[serde(skip_serializing, default)]
+    pub rain_time: i32,
+
+    /// Whether it thunders, and the ticks until that flips.
+    /// Persisted to `data/minecraft/weather.dat`.
+    #[serde(skip_serializing, default)]
+    pub thundering: bool,
+    #[serde(skip_serializing, default)]
+    pub thunder_time: i32,
+
+    /// The state of the custom weather phases of the server's weather profile.
+    /// Persisted to `data/minecraft/weather.dat`.
+    #[serde(skip_serializing, default)]
+    pub weather_phases: Vec<data_files::SavedWeatherPhase>,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -556,6 +575,11 @@ impl LevelData {
             world_gen_settings: WorldGenSettings::new(seed),
             day_time: 0,
             clear_weather_time: -1,
+            raining: false,
+            rain_time: 0,
+            thundering: false,
+            thunder_time: 0,
+            weather_phases: Vec::new(),
         }
     }
 

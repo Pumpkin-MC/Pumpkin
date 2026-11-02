@@ -42,6 +42,7 @@ bindgen!({
         "pumpkin:plugin/server@0.2.0.[method]op-manager.op-player": async | store | trappable,
         "pumpkin:plugin/server@0.2.0.[method]server.broadcast": async | store | trappable,
         "pumpkin:plugin/server@0.2.0.[method]server.create-world": async | store | trappable,
+        "pumpkin:plugin/server@0.2.0.[method]server.create-world-with-weather": async | store | trappable,
         "pumpkin:plugin/server@0.2.0.[method]server.execute-command": async | store | trappable,
         "pumpkin:plugin/server@0.2.0.[method]server.save-all": async | store | trappable,
         "pumpkin:plugin/server@0.2.0.[method]server.unload-world": async | store | trappable,

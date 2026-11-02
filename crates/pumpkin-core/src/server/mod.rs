@@ -14,6 +14,10 @@ use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
+use crate::world::weather::{SharedWeatherData, WeatherData, WeatherSetup};
+use crate::world::weather_profile::{
+    DEFAULT_WEATHER_PROFILE, WeatherCycle, WeatherProfile, WeatherProfiles, WorldWeatherSettings,
+};
 use crate::{
     command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
     world::map::MapManager,
@@ -38,6 +42,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
+use pumpkin_world::world_info::data_files::read_weather;
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
@@ -164,6 +169,10 @@ pub struct Server {
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
+    /// The weather cycle every world follows.
+    pub weather_data: SharedWeatherData,
+    /// Weather profiles, loaded from `<world>/weather_profiles` and registered by plugins.
+    pub weather_profiles: WeatherProfiles,
     world_info_writer: Arc<dyn WorldInfoWriter>,
 }
 
@@ -238,6 +247,15 @@ impl Server {
         };
 
         let seed = level_info.world_gen_settings.seed;
+        let weather_profiles = WeatherProfiles::default();
+        weather_profiles.load_folder(&basic_config.get_world_path().join("weather_profiles"));
+        // The `default` profile, if there is one, shapes the cycle the worlds share.
+        let mut weather_data = WeatherData::from_level_data(&level_info);
+        if let Some(profile) = weather_profiles.get(DEFAULT_WEATHER_PROFILE) {
+            weather_data = weather_data.with_profile(profile);
+            weather_data.restore_phases(&level_info.weather_phases);
+        }
+        let weather_data = Arc::new(std::sync::Mutex::new(weather_data));
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
         let listing = std::sync::Mutex::new(CachedStatus::new(
@@ -354,6 +372,8 @@ impl Server {
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
+            weather_data,
+            weather_profiles,
             level_info,
             management_hub,
         };
@@ -433,6 +453,10 @@ impl Server {
                 server.level_info.clone(),
                 dim.clone(),
                 block_registry.clone(),
+                WeatherSetup {
+                    data: server.weather_data.clone(),
+                    ..WeatherSetup::default()
+                },
                 Arc::downgrade(&server),
             ));
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
@@ -497,6 +521,40 @@ impl Server {
     }
 
     pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        self.spawn_world(name, dimension, &WorldWeatherSettings::default(), None)
+    }
+
+    /// Creates or loads a world with its own weather handling. An already loaded world of
+    /// that name and dimension is returned as it is.
+    pub fn create_world_with_weather(
+        self: &Arc<Self>,
+        name: String,
+        dimension: Dimension,
+        weather: &WorldWeatherSettings,
+    ) -> Result<Arc<World>, String> {
+        let profile = match &weather.profile {
+            Some(id) if weather.cycle == WeatherCycle::Shared => {
+                return Err(format!(
+                    "weather profile '{id}' needs an own or fixed weather cycle"
+                ));
+            }
+            Some(id) => Some(
+                self.weather_profiles
+                    .get(id)
+                    .ok_or_else(|| format!("unknown weather profile '{id}'"))?,
+            ),
+            None => None,
+        };
+        Ok(self.spawn_world(name, dimension, weather, profile))
+    }
+
+    fn spawn_world(
+        self: &Arc<Self>,
+        name: String,
+        dimension: Dimension,
+        weather: &WorldWeatherSettings,
+        profile: Option<Arc<WeatherProfile>>,
+    ) -> Arc<World> {
         {
             let worlds = self.worlds.load();
             let world = worlds
@@ -517,7 +575,42 @@ impl Server {
 
         let level =
             pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
-        let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+        let data = match weather.cycle {
+            WeatherCycle::Shared => self.weather_data.clone(),
+            WeatherCycle::Own | WeatherCycle::Fixed { .. } => {
+                let saved = (weather.cycle == WeatherCycle::Own)
+                    .then(|| read_weather(&level.level_folder.root_folder));
+                let mut data = saved
+                    .as_ref()
+                    .map_or_else(WeatherData::default, WeatherData::from_file);
+                if let Some(profile) = profile {
+                    data = data.with_profile(profile);
+                    if let Some(saved) = &saved {
+                        data.restore_phases(&saved.custom_phases);
+                    }
+                }
+                if let WeatherCycle::Fixed {
+                    raining,
+                    thundering,
+                } = weather.cycle
+                {
+                    data.set_parameters(0, 0, raining, thundering);
+                }
+                Arc::new(std::sync::Mutex::new(data))
+            }
+        };
+        let world: World = World::load(
+            level.clone(),
+            l_info,
+            dimension,
+            registry,
+            WeatherSetup {
+                data,
+                cycle: weather.cycle,
+                enabled: weather.enabled,
+            },
+            weak,
+        );
         let world = Arc::new(world);
         let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
         level.world_portal.store(Arc::new(Some(portal)));
@@ -565,8 +658,18 @@ impl Server {
         Ok(())
     }
 
+    /// The level data with, which only the world keeps.
+    fn level_data_to_save(&self) -> LevelData {
+        let mut level_data = (**self.level_info.load()).clone();
+        self.weather_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .store_in(&mut level_data);
+        level_data
+    }
+
     pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
-        let level_data = self.level_info.load();
+        let level_data = self.level_data_to_save();
         self.world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
     }
@@ -845,7 +948,7 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
-        let level_data = self.level_info.load();
+        let level_data = self.level_data_to_save();
         // then lets save the world info
 
         if let Err(err) = self

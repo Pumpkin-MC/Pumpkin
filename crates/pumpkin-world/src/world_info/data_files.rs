@@ -17,6 +17,14 @@ pub struct DataFileRoot<T> {
     pub data: T,
 }
 
+/// A custom weather phase kept in `weather.dat` (a Pumpkin addition vanilla ignores).
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct SavedWeatherPhase {
+    pub id: String,
+    pub time: i32,
+    pub active: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WeatherData {
     #[serde(rename = "rain_time", default)]
@@ -31,6 +39,12 @@ pub struct WeatherData {
     pub clear_weather_time: i32,
     #[serde(rename = "DataVersion", default)]
     pub data_version: i32,
+    #[serde(
+        rename = "pumpkin_phases",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub custom_phases: Vec<SavedWeatherPhase>,
 }
 
 impl Default for WeatherData {
@@ -42,6 +56,7 @@ impl Default for WeatherData {
             thunder_time: 0,
             clear_weather_time: -1,
             data_version: 0,
+            custom_phases: Vec::new(),
         }
     }
 }
@@ -141,6 +156,21 @@ pub fn read_weather(level_folder: &Path) -> WeatherData {
                     raining: c.get_bool("raining").unwrap_or(false),
                     thundering: c.get_bool("thundering").unwrap_or(false),
                     data_version: c.get_int("DataVersion").unwrap_or(0),
+                    custom_phases: c
+                        .get_list("pumpkin_phases")
+                        .unwrap_or_default()
+                        .iter()
+                        .filter_map(|tag| {
+                            let NbtTag::Compound(phase) = tag else {
+                                return None;
+                            };
+                            Some(SavedWeatherPhase {
+                                id: phase.get_string("id")?.to_owned(),
+                                time: phase.get_int("time").unwrap_or(0),
+                                active: phase.get_bool("active").unwrap_or(false),
+                            })
+                        })
+                        .collect(),
                 }
             }
             Err(e) => {
@@ -165,6 +195,20 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
     data_comp.put_int("thunder_time", data.thunder_time);
     data_comp.put_bool("raining", data.raining);
     data_comp.put_bool("thundering", data.thundering);
+    if !data.custom_phases.is_empty() {
+        let phases = data
+            .custom_phases
+            .iter()
+            .map(|phase| {
+                let mut tag = NbtCompound::new();
+                tag.put_string("id", phase.id.clone());
+                tag.put_int("time", phase.time);
+                tag.put_bool("active", phase.active);
+                NbtTag::Compound(tag)
+            })
+            .collect();
+        data_comp.put_list("pumpkin_phases", phases);
+    }
     let mut root = NbtCompound::new();
     root.put_int("DataVersion", data.data_version);
     root.put_compound("data", data_comp);
@@ -709,4 +753,29 @@ pub fn write_stopwatches_stub(
     let file = File::create(&path)?;
     pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn weather_phases_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut weather = WeatherData::default();
+        weather.custom_phases.push(SavedWeatherPhase {
+            id: "blood_moon".to_owned(),
+            time: 1234,
+            active: true,
+        });
+        write_weather(dir.path(), &weather).unwrap();
+        assert_eq!(
+            read_weather(dir.path()).custom_phases,
+            weather.custom_phases
+        );
+
+        // Without phases the file stays the vanilla layout.
+        write_weather(dir.path(), &WeatherData::default()).unwrap();
+        assert!(read_weather(dir.path()).custom_phases.is_empty());
+    }
 }
