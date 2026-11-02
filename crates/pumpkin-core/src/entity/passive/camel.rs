@@ -116,6 +116,10 @@ impl Animal for CamelEntity {
 }
 
 impl Mob for CamelEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
     fn is_tamed(&self) -> bool {
         true
     }

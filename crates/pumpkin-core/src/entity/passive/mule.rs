@@ -145,6 +145,10 @@ impl Animal for MuleEntity {
 }
 
 impl Mob for MuleEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
     fn can_dispenser_equip_into_slot(
         &self,
         slot: &pumpkin_data::data_component_impl::EquipmentSlot,

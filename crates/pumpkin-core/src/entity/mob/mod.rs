@@ -317,10 +317,14 @@ impl MobEntity {
     /// Runs the mob side of [`Entity::tick_leash`].
     fn tick_leash(&self, mob: &dyn Mob) {
         let entity = &self.living_entity.entity;
-        match entity.tick_leash() {
+        match entity.tick_leash(mob) {
             LeashTick::NotLeashed => {}
             LeashTick::Snapped => self.goals_selector.disable_control(Controls::MOVE),
-            LeashTick::Elastic(holder) => self.when_leashed_to(&*holder),
+            LeashTick::Elastic(holder) => {
+                self.when_leashed_to(&*holder);
+                entity.check_fall_distance_accumulation(&self.living_entity);
+                mob.on_elastic_leash_pull();
+            }
             LeashTick::CloseRange(holder) => {
                 self.when_leashed_to(&*holder);
                 self.close_range_leash_behaviour(mob, &*holder);
@@ -1364,6 +1368,16 @@ pub trait Mob: EntityBase + Send + Sync {
     fn should_stay_close_to_leash_holder(&self) -> bool {
         true
     }
+
+    fn mob_support_quad_leash(&self) -> bool {
+        false
+    }
+
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        false
+    }
+
+    fn on_elastic_leash_pull(&self) {}
 
     fn follow_leash_speed(&self) -> f64 {
         1.0
@@ -2413,6 +2427,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn is_pushable(&self) -> bool {
         self.mob_is_pushable()
+    }
+
+    fn support_quad_leash(&self) -> bool {
+        self.mob_support_quad_leash()
+    }
+
+    fn support_quad_leash_as_holder(&self) -> bool {
+        self.mob_support_quad_leash_as_holder()
     }
 
     fn on_lightning_strike(

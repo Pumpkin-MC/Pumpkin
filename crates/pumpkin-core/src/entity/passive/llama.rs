@@ -656,6 +656,12 @@ impl CustomSound for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn on_elastic_leash_pull(&self) {
+        if self.is_eating() {
+            self.set_eating(false);
+        }
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

@@ -146,6 +146,10 @@ impl Animal for DonkeyEntity {
 }
 
 impl Mob for DonkeyEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
     fn can_dispenser_equip_into_slot(
         &self,
         slot: &pumpkin_data::data_component_impl::EquipmentSlot,

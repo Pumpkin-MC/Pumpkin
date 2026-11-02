@@ -519,6 +519,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         );
     }
 
+    /// Leashed by four points when the holder supports it (horses, sniffers).
+    fn support_quad_leash(&self) -> bool {
+        false
+    }
+
+    /// Holds a leash by four points (ghasts).
+    fn support_quad_leash_as_holder(&self) -> bool {
+        false
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -1189,6 +1199,55 @@ struct SpawnState {
     head_yaw: u8,
 }
 
+const LEASH_AXIS_ELASTICITY: Vector3<f64> = Vector3::new(0.8, 0.2, 0.8);
+const LEASH_TORSIONAL_ELASTICITY: f64 = 10.0;
+const LEASH_STIFFNESS: f64 = 0.11;
+const ENTITY_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.5);
+const LEASHER_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.0);
+const SHARED_QUAD_ATTACHMENT_POINTS: [Vector3<f64>; 4] = [
+    Vector3::new(-0.5, 0.5, 0.5),
+    Vector3::new(-0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, 0.5),
+];
+
+/// Rotates `vector` around the Y axis.
+fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
+    let cos = f64::from(angle.cos());
+    let sin = f64::from(angle.sin());
+    Vector3::new(
+        vector.x * cos + vector.z * sin,
+        vector.y,
+        vector.z * cos - vector.x * sin,
+    )
+}
+
+/// The movement the server knows about: a player's last reported step, otherwise velocity.
+fn known_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    let base = entity.get_entity();
+    if let Some(controller) = entity.get_controlling_passenger()
+        && controller.get_player().is_some()
+        && base.is_alive()
+    {
+        return controller.get_entity().movement.load();
+    }
+    if entity.get_player().is_some() {
+        return base.movement.load();
+    }
+    base.velocity.load()
+}
+
+fn holder_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    if entity
+        .get_mob()
+        .is_some_and(|mob| mob.get_mob_entity().is_no_ai())
+    {
+        Vector3::new(0.0, 0.0, 0.0)
+    } else {
+        known_movement(entity)
+    }
+}
+
 /// What a leash did this tick, see [`Entity::tick_leash`].
 pub enum LeashTick {
     NotLeashed,
@@ -1288,6 +1347,8 @@ pub struct Entity {
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub delayed_leash: std::sync::Mutex<Option<DelayedLeash>>,
+    /// Spin a taut leash gives the leashed entity, applied to its yaw each tick.
+    leash_angular_momentum: AtomicCell<f64>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
@@ -1470,6 +1531,10 @@ impl Entity {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per field of the struct literal"
+    )]
     pub fn from_uuid_with_id(
         entity_id: i32,
         entity_uuid: uuid::Uuid,
@@ -1549,6 +1614,7 @@ impl Entity {
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
             delayed_leash: std::sync::Mutex::new(None),
+            leash_angular_momentum: AtomicCell::new(0.0),
 
             riding_cooldown: AtomicI32::new(0),
             tick_count: AtomicI32::new(0),
@@ -4385,6 +4451,7 @@ impl Entity {
 
     pub fn attach_leash(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
+        self.leash_angular_momentum.store(0.0);
         *self
             .delayed_leash
             .lock()
@@ -4567,7 +4634,7 @@ impl Entity {
     }
 
     /// Applies leash snapping and the elastic pull. Mobs handle the other outcomes.
-    pub fn tick_leash(&self) -> LeashTick {
+    pub fn tick_leash(&self, caller: &dyn EntityBase) -> LeashTick {
         let delayed = *self
             .delayed_leash
             .lock()
@@ -4606,15 +4673,126 @@ impl Entity {
                 .drop_stack(&self.block_pos.load(), lead_item);
             return LeashTick::Snapped;
         }
-        if distance > Self::LEASH_ELASTIC_DISTANCE {
-            let dir = (holder_entity.pos.load() - self.pos.load()).normalize();
-            let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
-            let current_vel = self.velocity.load();
-            self.velocity.store(current_vel + dir * pull_strength);
-            self.velocity_dirty.store(true, Relaxed);
-            return LeashTick::Elastic(holder);
+        let elastic_threshold = Self::LEASH_ELASTIC_DISTANCE
+            - f64::from(holder_entity.width())
+            - f64::from(self.width());
+        let result = if distance > elastic_threshold
+            && self.check_elastic_interactions(caller, holder.as_ref())
+        {
+            LeashTick::Elastic(holder)
+        } else {
+            LeashTick::CloseRange(holder)
+        };
+
+        let momentum = self.leash_angular_momentum.load();
+        self.yaw.store(self.yaw.load() - momentum as f32);
+        self.leash_angular_momentum
+            .store(momentum * f64::from(self.leash_angular_friction()));
+        result
+    }
+
+    /// Pulls the entity back with a damped spring on each attachment point beyond the slack.
+    fn check_elastic_interactions(&self, caller: &dyn EntityBase, holder: &dyn EntityBase) -> bool {
+        let quad_connection = holder.support_quad_leash_as_holder() && caller.support_quad_leash();
+        let (entity_points, holder_points): (&[Vector3<f64>], &[Vector3<f64>]) = if quad_connection
+        {
+            (
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+            )
+        } else {
+            (&[ENTITY_ATTACHMENT_POINT], &[LEASHER_ATTACHMENT_POINT])
+        };
+
+        let holder_entity = holder.get_entity();
+        let entity_movement = holder_movement(caller);
+        let entity_dimensions = Vector3::new(
+            f64::from(self.width()),
+            f64::from(self.height()),
+            f64::from(self.width()),
+        );
+        let holder_dimensions = Vector3::new(
+            f64::from(holder_entity.width()),
+            f64::from(holder_entity.height()),
+            f64::from(holder_entity.width()),
+        );
+        let entity_yaw = self.yaw.load().to_radians();
+        let holder_yaw = holder_entity.yaw.load().to_radians();
+        let entity_pos = self.pos.load();
+        let holder_pos = holder_entity.pos.load();
+
+        let mut force = Vector3::new(0.0, 0.0, 0.0);
+        let mut torque = 0.0;
+        let mut pulled = false;
+        for (entity_point, holder_point) in entity_points.iter().zip(holder_points) {
+            let lever_arm = y_rot(
+                entity_point.multiply(
+                    entity_dimensions.x,
+                    entity_dimensions.y,
+                    entity_dimensions.z,
+                ),
+                -entity_yaw,
+            );
+            let entity_attach = entity_pos + lever_arm;
+            let holder_attach = holder_pos
+                + y_rot(
+                    holder_point.multiply(
+                        holder_dimensions.x,
+                        holder_dimensions.y,
+                        holder_dimensions.z,
+                    ),
+                    -holder_yaw,
+                );
+            let attach_distance = (holder_attach - entity_attach).length();
+            if attach_distance < Self::LEASH_ELASTIC_DISTANCE {
+                continue;
+            }
+            let mut displacement = (holder_attach - entity_attach).normalize()
+                * (attach_distance - Self::LEASH_ELASTIC_DISTANCE);
+            torque += lever_arm.z * displacement.x - lever_arm.x * displacement.z;
+            if entity_movement.dot(&displacement) >= 0.0 {
+                displacement = displacement * f64::from(0.3f32);
+            }
+            force += displacement;
+            pulled = true;
         }
-        LeashTick::CloseRange(holder)
+        if !pulled {
+            return false;
+        }
+
+        let scale = if quad_connection { 0.25 } else { 1.0 };
+        self.leash_angular_momentum.store(
+            self.leash_angular_momentum.load() + LEASH_TORSIONAL_ELASTICITY * torque * scale,
+        );
+        let relative_velocity = holder_movement(holder) - known_movement(caller);
+        let pull = (force * scale).multiply(
+            LEASH_AXIS_ELASTICITY.x,
+            LEASH_AXIS_ELASTICITY.y,
+            LEASH_AXIS_ELASTICITY.z,
+        ) + relative_velocity * LEASH_STIFFNESS;
+        self.velocity.store(self.velocity.load() + pull);
+        self.velocity_dirty.store(true, Relaxed);
+        true
+    }
+
+    fn leash_angular_friction(&self) -> f32 {
+        if self.on_ground.load(Ordering::Relaxed) {
+            let below = self.get_block_pos_below_that_affects_my_movement();
+            self.world.load().get_block(&below).slipperiness * 0.91
+        } else if self.touching_water.load(Ordering::Relaxed)
+            || self.touching_lava.load(Ordering::Relaxed)
+        {
+            0.8
+        } else {
+            0.91
+        }
+    }
+
+    /// Caps a fall a taut leash has caught.
+    pub fn check_fall_distance_accumulation(&self, living: &LivingEntity) {
+        if self.velocity.load().y > -0.5 && living.fall_distance.load() > 1.0 {
+            living.fall_distance.store(1.0);
+        }
     }
 
     fn leash_distance_to(&self, other: &Self) -> f64 {

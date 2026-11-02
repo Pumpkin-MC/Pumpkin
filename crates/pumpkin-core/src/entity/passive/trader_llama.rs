@@ -200,6 +200,10 @@ impl Goal for DefendWanderingTraderGoal {
 }
 
 impl Mob for TraderLlamaEntity {
+    fn on_elastic_leash_pull(&self) {
+        self.llama.on_elastic_leash_pull();
+    }
+
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,

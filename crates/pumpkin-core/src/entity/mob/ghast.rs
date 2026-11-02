@@ -107,6 +107,10 @@ impl GhastEntity {
 }
 
 impl Mob for GhastEntity {
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -127,6 +127,10 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        true
+    }
+
     fn can_dispenser_equip_into_slot(
         &self,
         slot: &pumpkin_data::data_component_impl::EquipmentSlot,
