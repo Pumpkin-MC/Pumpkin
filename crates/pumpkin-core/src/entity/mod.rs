@@ -2072,8 +2072,163 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    /// Block collisions, then stepping up onto what was hit.
     #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
+        let was_on_ground = self.on_ground.load(Ordering::SeqCst);
+        let bounding_box = self.bounding_box.load();
+        let movement_step = self.collide_bounding_box(movement, caller);
+
+        let max_up_step = Self::max_up_step(caller);
+        let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
+        let on_ground_after_collision = movement.y != movement_step.y && movement.y < 0.0;
+        if max_up_step <= 0.0
+            || !(on_ground_after_collision || was_on_ground)
+            || !horizontal_collision
+        {
+            return movement_step;
+        }
+
+        let grounded_box = if on_ground_after_collision {
+            bounding_box.shift(Vector3::new(0.0, movement_step.y, 0.0))
+        } else {
+            bounding_box
+        };
+        let mut step_up_box =
+            grounded_box.expand_towards(movement.x, f64::from(max_up_step), movement.z);
+        if !on_ground_after_collision {
+            step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
+        }
+        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+
+        for step_height in Self::candidate_step_up_heights(
+            &grounded_box,
+            &colliders,
+            max_up_step,
+            movement_step.y as f32,
+        ) {
+            let step_from_ground = Self::collide_with_boxes(
+                Vector3::new(movement.x, f64::from(step_height), movement.z),
+                grounded_box,
+                &colliders,
+            );
+            if step_from_ground.horizontal_length_squared()
+                > movement_step.horizontal_length_squared()
+            {
+                let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
+                let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                self.vertical_collision
+                    .store(movement.y != stepped.y, Ordering::SeqCst);
+                self.on_ground.store(
+                    movement.y != stepped.y && movement.y < 0.0,
+                    Ordering::SeqCst,
+                );
+                self.horizontal_collision.store(
+                    movement.x != stepped.x || movement.z != stepped.z,
+                    Ordering::SeqCst,
+                );
+                return stepped;
+            }
+        }
+
+        movement_step
+    }
+
+    /// Only living entities step up, and a player-ridden mob steps at least one block.
+    fn max_up_step(caller: &dyn EntityBase) -> f32 {
+        let Some(living) = caller.get_living_entity() else {
+            return 0.0;
+        };
+        let step_height =
+            living.get_attribute_value(&pumpkin_data::attributes::Attributes::STEP_HEIGHT) as f32;
+        if caller
+            .get_controlling_passenger()
+            .is_some_and(|passenger| passenger.get_player().is_some())
+        {
+            step_height.max(1.0)
+        } else {
+            step_height
+        }
+    }
+
+    fn candidate_step_up_heights(
+        bounding_box: &BoundingBox,
+        colliders: &[BoundingBox],
+        max_step_height: f32,
+        step_height_to_skip: f32,
+    ) -> Vec<f32> {
+        let mut candidates: Vec<f32> = Vec::with_capacity(4);
+        for collider in colliders {
+            for coord in [collider.min.y, collider.max.y] {
+                let relative_coord = (coord - bounding_box.min.y) as f32;
+                if relative_coord < 0.0 || relative_coord == step_height_to_skip {
+                    continue;
+                }
+                if relative_coord > max_step_height {
+                    break;
+                }
+                if !candidates.contains(&relative_coord) {
+                    candidates.push(relative_coord);
+                }
+            }
+        }
+        candidates.sort_by(f32::total_cmp);
+        candidates
+    }
+
+    /// Resolves Y first, then the larger horizontal axis last.
+    fn collide_with_boxes(
+        movement: Vector3<f64>,
+        bounding_box: BoundingBox,
+        colliders: &[BoundingBox],
+    ) -> Vector3<f64> {
+        let axes = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut resolved = Vector3::new(0.0, 0.0, 0.0);
+        for axis in axes {
+            let mut amount = movement.get_axis(axis);
+            if amount == 0.0 {
+                continue;
+            }
+            let moved = bounding_box.shift(resolved);
+            for collider in colliders {
+                amount = Self::collide_axis(&moved, collider, axis, amount);
+            }
+            resolved.set_axis(axis, amount);
+        }
+        resolved
+    }
+
+    /// How far `moving` can travel along `axis` before it hits `other`.
+    fn collide_axis(moving: &BoundingBox, other: &BoundingBox, axis: Axis, amount: f64) -> f64 {
+        const EPSILON: f64 = 1.0E-7;
+        let overlaps = [Axis::X, Axis::Y, Axis::Z]
+            .into_iter()
+            .filter(|&other_axis| other_axis != axis)
+            .all(|other_axis| {
+                moving.max.get_axis(other_axis) - EPSILON > other.min.get_axis(other_axis)
+                    && moving.min.get_axis(other_axis) + EPSILON < other.max.get_axis(other_axis)
+            });
+        if !overlaps {
+            return amount;
+        }
+        if amount > 0.0 && other.min.get_axis(axis) >= moving.max.get_axis(axis) - EPSILON {
+            amount.min(other.min.get_axis(axis) - moving.max.get_axis(axis))
+        } else if amount < 0.0 && other.max.get_axis(axis) <= moving.min.get_axis(axis) + EPSILON {
+            amount.max(other.max.get_axis(axis) - moving.min.get_axis(axis))
+        } else {
+            amount
+        }
+    }
+
+    fn collide_bounding_box(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
