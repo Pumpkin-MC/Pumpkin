@@ -2305,6 +2305,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
     fn mob_set_sound_variant_name(&self, _name: &str) {}
 
+    fn mob_is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -2349,7 +2353,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        self.mob_is_pushable()
     }
 
     fn on_lightning_strike(

@@ -117,6 +117,10 @@ impl Animal for CamelEntity {
 
 // TODO: tame state (`AbstractHorse.isTamed`), so `is_tamed` sees tamed camels.
 impl Mob for CamelEntity {
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         self.saddled_controlling_passenger(None)
     }

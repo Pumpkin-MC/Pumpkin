@@ -198,6 +198,10 @@ fn is_wood_sound_type(sound_type: &SoundType) -> bool {
 
 // TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }

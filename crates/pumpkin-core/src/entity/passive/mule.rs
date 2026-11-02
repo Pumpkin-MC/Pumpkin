@@ -145,6 +145,10 @@ impl Animal for MuleEntity {
 }
 
 impl Mob for MuleEntity {
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }

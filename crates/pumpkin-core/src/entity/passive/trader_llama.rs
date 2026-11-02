@@ -200,6 +200,10 @@ impl Goal for DefendWanderingTraderGoal {
 }
 
 impl Mob for TraderLlamaEntity {
+    fn mob_is_pushable(&self) -> bool {
+        self.llama.mob_is_pushable()
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.llama.mob_entity
     }

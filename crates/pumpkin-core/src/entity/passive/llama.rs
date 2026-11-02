@@ -654,6 +654,10 @@ impl CustomSound for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
     fn is_tamed(&self) -> bool {
         self.get_flag(FLAG_TAME)
     }

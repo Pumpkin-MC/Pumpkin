@@ -113,6 +113,10 @@ impl Animal for SkeletonHorseEntity {
 }
 
 impl Mob for SkeletonHorseEntity {
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
     fn is_tamed(&self) -> bool {
         self.is_tame()
     }
