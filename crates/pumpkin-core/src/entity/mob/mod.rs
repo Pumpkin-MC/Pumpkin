@@ -160,6 +160,17 @@ pub struct MobEntity {
 
 const FOLLOW_LEASH_WANTED_DISTANCE: f32 = 2.0;
 
+/// Slots whose equipment adds experience: every slot but the saddle.
+const EXPERIENCE_EQUIPMENT_SLOTS: [EquipmentSlot; 7] = [
+    EquipmentSlot::MAIN_HAND,
+    EquipmentSlot::OFF_HAND,
+    EquipmentSlot::FEET,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::HEAD,
+    EquipmentSlot::BODY,
+];
+
 impl MobEntity {
     /// Vanilla `Mob.getNavigation`/`getMoveControl`: a rider steering a mob drives that mob.
     /// Only the mob's own AI step ticks its own navigator and move control directly.
@@ -2270,13 +2281,42 @@ pub trait Mob: EntityBase + Send + Sync {
             .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_tame)
     }
 
+    /// Experience before the equipment bonus.
+    fn xp_reward(&self) -> u32 {
+        self.get_entity().entity_type.experience_reward
+    }
+
     fn get_base_experience_reward(&self) -> u32 {
         // The extracted value is a single roll for animals.
         if self.as_animal().is_some() {
-            crate::entity::passive::animal::experience_reward(self)
-        } else {
-            self.get_entity().entity_type.experience_reward
+            return crate::entity::passive::animal::experience_reward(self);
         }
+        let xp_reward = self.xp_reward();
+        if xp_reward == 0 {
+            return 0;
+        }
+        let living = &self.get_mob_entity().living_entity;
+        let drop_chances = living
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let equipment = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut rng = self.get_random();
+        let mut result = xp_reward;
+        for slot in &EXPERIENCE_EQUIPMENT_SLOTS {
+            let drop_chance = drop_chances
+                .get(slot)
+                .copied()
+                .unwrap_or(equipment::DEFAULT_EQUIPMENT_DROP_CHANCE);
+            if !equipment.get(slot).is_empty() && drop_chance <= 1.0 {
+                result += 1 + rng.random_range(0..3);
+            }
+        }
+        result
     }
 
     fn should_drop_loot(&self) -> bool {
