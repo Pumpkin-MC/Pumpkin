@@ -1,23 +1,24 @@
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::projectile::owner::ProjectileOwner;
+use crate::entity::projectile::{ProjectileHit, ThrownItemEntity};
+use crate::entity::{Entity, EntityBase};
+use crate::server::Server;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
-use crate::entity::experience_orb::ExperienceOrbEntity;
-use crate::entity::projectile::{ProjectileHit, ThrownItemEntity};
-use crate::entity::{Entity, EntityBase};
-use crate::server::Server;
-
 const GRAVITY: f64 = 0.07;
-const SPLASH_COLOR: i32 = -13_083_194;
+const WATER_COLOR: i32 = -13_083_194; // 0xFF385DC6
 
 pub struct ExperienceBottleEntity {
     pub thrown: ThrownItemEntity,
-    item_stack: RwLock<ItemStack>,
+    pub item_stack: RwLock<ItemStack>,
 }
 
 impl ExperienceBottleEntity {
@@ -25,7 +26,7 @@ impl ExperienceBottleEntity {
         Self {
             thrown: ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner: ProjectileOwner::none(),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
@@ -41,33 +42,28 @@ impl ExperienceBottleEntity {
         }
     }
 
-    pub fn set_item_stack(&self, stack: ItemStack) {
-        *self
+    pub fn set_item_stack(&self, item_stack: ItemStack) {
+        let mut write = self
             .item_stack
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *write = item_stack;
     }
 }
 
 impl EntityBase for ExperienceBottleEntity {
-    fn get_entity(&self) -> &Entity {
-        &self.thrown.entity
-    }
-
-    fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
-        None
-    }
-
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {
+        let entity = self.get_entity();
         let stack = self
             .item_stack
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.get_entity().set_synced_data(
+
+        entity.set_synced_data(
             pumpkin_data::tracked_data::experience_bottle::ITEM_STACK,
             ItemStackSerializer::from(stack.clone()),
         );
@@ -77,26 +73,32 @@ impl EntityBase for ExperienceBottleEntity {
         self.thrown.process_tick(caller);
     }
 
+    fn get_entity(&self) -> &Entity {
+        self.thrown.get_entity()
+    }
+
+    fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
+        None
+    }
+
     fn on_hit(&self, hit: ProjectileHit) {
         let entity = self.get_entity();
-        entity.set_pos(hit.hit_pos());
         let world = entity.world.load();
-        let position = entity.block_pos.load();
+        let hit_pos = hit.hit_pos();
+        let block_pos = BlockPos::floored(hit_pos.x, hit_pos.y, hit_pos.z);
+
         world.sync_world_event(
             WorldEvent::ParticlesSpellPotionSplash,
-            position,
-            SPLASH_COLOR,
+            block_pos,
+            WATER_COLOR,
         );
-        if !entity.is_silent() {
-            world.sync_world_event(WorldEvent::SoundSpellPotionSplash, position, 0);
+        if !entity.silent.load(Ordering::Relaxed) {
+            world.sync_world_event(WorldEvent::SoundSpellPotionSplash, block_pos, 0);
         }
-        let mut random = rand::rng();
-        let amount = 3 + random.random_range(0..5) + random.random_range(0..5);
-        let direction = match &hit {
-            ProjectileHit::Block { face, .. } => face.to_offset().to_f64(),
-            ProjectileHit::Entity { .. } => entity.velocity.load().multiply(-1.0, -1.0, -1.0),
-        };
-        ExperienceOrbEntity::spawn_with_direction(&world, hit.hit_pos(), direction, amount);
+
+        let mut rng = rand::rng();
+        let xp_count = 3 + rng.random_range(0..5) + rng.random_range(0..5);
+        ExperienceOrbEntity::spawn(&world, hit_pos, xp_count);
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

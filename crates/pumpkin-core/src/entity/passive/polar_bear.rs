@@ -3,25 +3,24 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal,
-        revenge::RevengeGoal,
-        swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -34,6 +33,9 @@ use crate::entity::{
 fn is_baby(mob: &dyn Mob) -> bool {
     mob.as_ageable().is_some_and(AgeableMob::is_baby)
 }
+
+const POLAR_BEAR_HUNTS: &[Hunt] =
+    &[Hunt::new(4, TargetMatch::Type(&EntityType::FOX), true).when(TargetCondition::Adult)];
 
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
@@ -85,11 +87,7 @@ impl PolarBearEntity {
             );
             // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
             apply_targets(target_selector, &mob_arc.mob_entity, 3, 5, false);
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true)
-                    .when(TargetCondition::Adult),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, POLAR_BEAR_HUNTS);
         };
 
         mob_arc
@@ -133,6 +131,10 @@ impl NeutralMob for PolarBearEntity {
 }
 
 impl Mob for PolarBearEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityPolarBearStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

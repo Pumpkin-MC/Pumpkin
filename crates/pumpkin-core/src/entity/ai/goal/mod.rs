@@ -8,6 +8,7 @@ pub mod beg;
 pub mod blaze_attack;
 pub mod bow_attack;
 pub mod break_door;
+pub mod breath_air;
 pub mod breed;
 pub mod chase_player;
 pub mod creeper_ignite;

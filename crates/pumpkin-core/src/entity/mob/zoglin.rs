@@ -1,11 +1,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::boundingbox::EntityDimensions;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -130,6 +133,10 @@ impl ZoglinEntity {
 }
 
 impl Mob for ZoglinEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityZoglinStep, 0.15, 1.0);
+    }
+
     fn mob_metadata(&self) -> Option<MobMetadata> {
         self.is_baby().then(|| MobMetadata::new().baby(true))
     }

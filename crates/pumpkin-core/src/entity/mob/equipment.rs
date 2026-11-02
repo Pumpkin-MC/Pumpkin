@@ -1023,49 +1023,93 @@ pub fn can_replace_equal_item(new_item: &ItemStack, current_item: &ItemStack) ->
 
 #[must_use]
 /// Equips `stack` if it beats what is worn, returning what got equipped.
-pub fn equip_item_if_possible(mob: &dyn Mob, stack: ItemStack) -> ItemStack {
+pub fn equip_item_if_possible<M: Mob + ?Sized>(mob: &M, stack: ItemStack) -> ItemStack {
+    let Some(slot) = equip_slot_if_possible(mob, &stack) else {
+        return ItemStack::EMPTY.clone();
+    };
+    let mut stack = stack;
+    let to_equip = limit_for_slot(&slot, &mut stack);
+    equip_in_slot(mob, &slot, to_equip.clone());
+    to_equip
+}
+
+pub fn pick_up_item_as_equipment<M: Mob + ?Sized>(mob: &M, item: &crate::entity::item::ItemEntity) {
+    let mut stack = item
+        .get_item_stack()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let Some(slot) = equip_slot_if_possible(mob, &stack) else {
+        return;
+    };
+    let to_equip = limit_for_slot(&slot, &mut stack);
+    let living = &mob.get_mob_entity().living_entity;
+    if !living.pickup(item.get_entity(), u32::from(to_equip.item_count)) {
+        return;
+    }
+    living.on_item_pickup(item);
+    let emptied = {
+        let mut ground = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ground.item_count = ground.item_count.saturating_sub(to_equip.item_count);
+        ground.is_empty()
+    };
+    equip_in_slot(mob, &slot, to_equip);
+    if emptied {
+        item.get_entity().remove();
+    } else {
+        item.init_data_tracker();
+    }
+}
+
+#[must_use]
+pub fn equip_slot_if_possible<M: Mob + ?Sized>(
+    mob: &M,
+    stack: &ItemStack,
+) -> Option<EquipmentSlot> {
     let mob_entity = mob.get_mob_entity();
     let entity = &mob_entity.living_entity.entity;
-    let mut slot = get_equipment_slot_for_item(&stack);
-    if !is_equippable_in_slot(entity.entity_type, &stack, &slot) {
-        return ItemStack::EMPTY.clone();
+    let mut slot = get_equipment_slot_for_item(stack);
+    if !is_equippable_in_slot(entity.entity_type, stack, &slot) {
+        return None;
     }
 
-    let item_in = |slot: &EquipmentSlot| {
-        mob_entity
-            .living_entity
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(slot)
-    };
-    let mut current = item_in(&slot);
-    let mut can_replace = mob.can_replace_current_item(&stack, &current, &slot);
+    let current = item_in(mob_entity, &slot);
+    let mut can_replace = mob.can_replace_current_item(stack, &current, &slot);
     if slot.is_armor_slot() && !can_replace {
         slot = EquipmentSlot::MAIN_HAND;
-        current = item_in(&slot);
-        can_replace = current.is_empty();
+        can_replace = item_in(mob_entity, &slot).is_empty();
     }
-    if !can_replace {
-        return ItemStack::EMPTY.clone();
-    }
+    (can_replace && mob.can_hold_item(stack)).then_some(slot)
+}
 
-    let drop_chance = mob_entity.drop_chance(&slot);
+pub fn equip_in_slot<M: Mob + ?Sized>(mob: &M, slot: &EquipmentSlot, to_equip: ItemStack) {
+    let mob_entity = mob.get_mob_entity();
+    let current = item_in(mob_entity, slot);
+    let drop_chance = mob_entity.drop_chance(slot);
     if !current.is_empty() && (rand::random::<f32>() - 0.1).max(0.0) < drop_chance {
         mob_entity.living_entity.entity.spawn_at_location(current);
     }
 
-    let mut stack = stack;
-    let to_equip = limit_for_slot(&slot, &mut stack);
-    mob_entity.set_item_slot_and_drop_when_killed(&slot, to_equip.clone());
+    mob_entity.set_item_slot_and_drop_when_killed(slot, to_equip);
     mob_entity
         .persistence_required
         .store(true, std::sync::atomic::Ordering::Relaxed);
-    to_equip
+}
+
+fn item_in(mob_entity: &MobEntity, slot: &EquipmentSlot) -> ItemStack {
+    mob_entity
+        .living_entity
+        .entity_equipment
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(slot)
 }
 
 // Hand slots have no count limit, every other slot holds one item.
-fn limit_for_slot(slot: &EquipmentSlot, stack: &mut ItemStack) -> ItemStack {
+pub fn limit_for_slot(slot: &EquipmentSlot, stack: &mut ItemStack) -> ItemStack {
     if slot.slot_type() == EquipmentType::Hand {
         std::mem::replace(stack, ItemStack::EMPTY.clone())
     } else {

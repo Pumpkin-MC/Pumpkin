@@ -18,8 +18,8 @@ use pumpkin_world::level::{Level, SyncChunk};
 
 use crate::net::ClientPlatform;
 
-const MIN_CHUNKS_PER_TICK: f32 = 0.1;
-const MAX_CHUNKS_PER_TICK: f32 = 500.0;
+const MIN_CHUNKS_PER_TICK: f32 = 0.01;
+const MAX_CHUNKS_PER_TICK: f32 = 64.0;
 const INITIAL_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_CONCURRENT_BATCHES: u16 = 10;
 
