@@ -1022,7 +1022,7 @@ pub fn is_spawn_position_ok(
                 return false;
             }
             let above_state = world.get_block_state(&block_pos.up());
-            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_full_cube()
+            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_solid_block()
         }
         SpawnLocation::OnGround => {
             if !within_bounds {
@@ -1063,7 +1063,7 @@ pub fn is_spawn_position_ok_cache(
 
             state.is_liquid()
                 && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
-                && !above_state.is_full_cube()
+                && !above_state.is_solid_block()
         }
         SpawnLocation::OnGround => {
             let down_pos = block_pos.down().0;
