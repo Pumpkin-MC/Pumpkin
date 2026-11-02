@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     ffi::{CString, NulError},
     net::SocketAddr,
-    sync::{Arc, atomic::Ordering},
+    sync::Arc,
     time::Duration,
 };
 
@@ -15,7 +15,7 @@ use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 use tracing::{error, info};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::server::Server;
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let Ok(socket) = UdpSocket::bind(query_addr).await else {
@@ -28,11 +28,15 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let valid_challenge_tokens = Arc::new(RwLock::new(HashMap::new()));
     let valid_challenge_tokens_clone = valid_challenge_tokens.clone();
     // All challenge tokens ever created are expired every 30 seconds
+    let expiry_stop = server.stop_token.clone();
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(30));
 
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {}
+                () = expiry_stop.cancelled() => break,
+            }
             valid_challenge_tokens_clone.write().await.clear();
         }
     });
@@ -46,7 +50,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         );
     }
 
-    while !SHOULD_STOP.load(Ordering::Relaxed) {
+    loop {
         let socket = socket.clone();
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
@@ -54,7 +58,7 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
 
         let recv_result = tokio::select! {
             result = socket.recv_from(&mut buf) => Some(result),
-            () = STOP_INTERRUPT.cancelled() => None,
+            () = server.stop_token.cancelled() => None,
         };
 
         let Some(Ok((length, addr))) = recv_result else {

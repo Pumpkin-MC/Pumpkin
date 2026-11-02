@@ -2,13 +2,19 @@ use std::{
     collections::HashMap,
     io::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Weak,
 };
 
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
-use crate::{STOP_INTERRUPT, net::bedrock::status::IceSocket};
+use super::discovery::{
+    Packet as DiscoveryPacket, decode_packet, encode_discovery_response, encode_message,
+};
+use super::ice_socket::IceSocket;
+use crate::server::Server;
 
 enum Command {
     Register {
@@ -51,12 +57,17 @@ impl Drop for Registration {
 }
 
 impl IceRouter {
-    pub(super) async fn bind(public: IceSocket) -> Result<Self, Error> {
+    pub(super) async fn bind(
+        public: IceSocket,
+        server: Weak<Server>,
+        server_guid: u64,
+        stop: CancellationToken,
+    ) -> Result<Self, Error> {
         let public_addr = public.local_addr()?;
         let internal = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
         let internal_addr = internal.local_addr()?;
         let (commands, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(run(public, internal, receiver));
+        tokio::spawn(run(public, internal, receiver, server, server_guid, stop));
         Ok(Self {
             internal_addr,
             public_addr,
@@ -95,7 +106,11 @@ async fn run(
     public: IceSocket,
     internal_socket: UdpSocket,
     mut commands: mpsc::UnboundedReceiver<Command>,
+    server: Weak<Server>,
+    server_guid: u64,
+    stop: CancellationToken,
 ) {
+    let advertisement_id: u64 = rand::random();
     let mut routes = HashMap::<SocketAddr, Route>::new();
     let mut by_ufrag = HashMap::<String, SocketAddr>::new();
     let mut by_remote = HashMap::<SocketAddr, SocketAddr>::new();
@@ -104,7 +119,7 @@ async fn run(
 
     loop {
         tokio::select! {
-            () = STOP_INTERRUPT.cancelled() => break,
+            () = stop.cancelled() => break,
             Some(command) = commands.recv() => match command {
                 Command::Register { ufrag, internal, candidates } => {
                     if let Some(old) = routes.insert(internal, Route {
@@ -144,11 +159,15 @@ async fn run(
                             trace!(%remote, %internal, %error, "Failed to route inbound NetherNet ICE packet");
                         }
                     } else {
-                        trace!(
-                            %remote,
-                            length,
-                            "Dropped unroutable NetherNet ICE packet"
-                        );
+                        handle_unroutable(
+                            packet,
+                            remote,
+                            &public,
+                            &server,
+                            server_guid,
+                            advertisement_id,
+                        )
+                        .await;
                     }
                 }
                 Err(error) => trace!(%error, "Failed to receive NetherNet ICE packet"),
@@ -169,6 +188,42 @@ async fn run(
                 Err(error) => trace!(%error, "Failed to receive internal NetherNet ICE packet"),
             },
         }
+    }
+}
+
+async fn handle_unroutable(
+    packet: &[u8],
+    remote: SocketAddr,
+    public: &IceSocket,
+    server: &Weak<Server>,
+    server_guid: u64,
+    advertisement_id: u64,
+) {
+    let Some(discovery_packet) = decode_packet(packet) else {
+        trace!(%remote, length = packet.len(), "Dropped unroutable NetherNet ICE packet");
+        return;
+    };
+    match discovery_packet {
+        DiscoveryPacket::Request => {
+            if let Some(server) = server.upgrade()
+                && let Ok(response) =
+                    encode_discovery_response(&server, server_guid, advertisement_id)
+            {
+                trace!(%remote, "Received NetherNet discovery request on ICE UDP socket");
+                let _ = public.send_to(&response, remote).await;
+            }
+        }
+        DiscoveryPacket::Message {
+            sender_id,
+            recipient_id,
+            data,
+        } if recipient_id == server_guid && data.eq_ignore_ascii_case("ping") => {
+            trace!(%remote, sender_id, "Received NetherNet Ping signal on ICE UDP socket");
+            if let Ok(response) = encode_message(server_guid, sender_id, "Pong") {
+                let _ = public.send_to(&response, remote).await;
+            }
+        }
+        DiscoveryPacket::Message { .. } => {}
     }
 }
 

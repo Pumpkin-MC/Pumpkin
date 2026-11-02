@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -11,20 +12,27 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
+use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, RangedAttackMob},
-    passive::animal::{Animal, get_carpet_color_from_item},
+    passive::{
+        animal::{Animal, get_carpet_color_from_item},
+        trader_llama::TraderLlamaEntity,
+    },
     player::Player,
     projectile::llama_spit::LlamaSpitEntity,
 };
@@ -75,6 +83,25 @@ impl LlamaVariant {
     }
 }
 
+/// Vanilla `Wolf.avoidLlama`: the stronger the llama, the likelier a wolf flees.
+pub fn scares_wolves(threat: &dyn EntityBase) -> bool {
+    let any = threat.cast_any();
+    let strength = any
+        .downcast_ref::<LlamaEntity>()
+        .map(LlamaEntity::get_strength)
+        .or_else(|| {
+            any.downcast_ref::<TraderLlamaEntity>()
+                .map(TraderLlamaEntity::get_strength)
+        });
+    strength.is_some_and(|strength| strength >= rand::rng().random_range(0..5))
+}
+
+/// Vanilla `LlamaAttackWolfGoal`: untamed wolves within a quarter of the follow range.
+pub const LLAMA_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::WOLF), false)
+    .every(16)
+    .only_mobs(is_untamed)
+    .range_scale(0.25)];
+
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -92,6 +119,7 @@ impl LlamaEntity {
         let mob_entity = MobEntity::new(entity);
         let mut rng = rand::rng();
         let variant = LlamaVariant::random_variant();
+        // TODO: vanilla rolls 1..=3, and 1..=5 with 4% chance.
         let strength = rng.random_range(1..=5);
 
         let llama = Self {
@@ -116,16 +144,8 @@ impl LlamaEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
@@ -144,10 +164,7 @@ impl LlamaEntity {
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WOLF, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
         };
 
         mob_arc
@@ -264,6 +281,14 @@ impl Animal for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityLlamaStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -308,10 +333,6 @@ impl Mob for LlamaEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

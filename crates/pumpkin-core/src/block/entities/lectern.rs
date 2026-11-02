@@ -102,6 +102,21 @@ impl BlockEntity for LecternBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let book_guard = self.book.lock().ok();
+        let book = book_guard.as_deref();
+        let total_pages = book.map_or(0, Self::page_count_of);
+        Some(crate::block::entities::bedrock::build_lectern_actor(
+            self.position,
+            book,
+            self.page.load(Ordering::Relaxed) as i32,
+            total_pages,
+        ))
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

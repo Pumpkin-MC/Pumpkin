@@ -1,4 +1,4 @@
-use crate::entity::ai::control::move_control::Operation;
+use crate::entity::ai::control::move_control::{MoveControl, Operation};
 use crate::entity::ai::control::{Control, MoveControlTrait};
 use crate::entity::mob::Mob;
 use pumpkin_data::attributes::Attributes;
@@ -48,17 +48,20 @@ impl MoveControlTrait for FlyingMoveControl {
             let zd = self.wanted_z - pos.z;
             let dd = xd * xd + yd * yd + zd * zd;
 
-            if dd < 2.5000003E-7 {
+            if dd < f64::from(MoveControl::MIN_SPEED_SQR) {
+                let input = living_entity.movement_input.load();
                 living_entity
                     .movement_input
-                    .store(Vector3::new(0.0, 0.0, 0.0));
+                    .store(Vector3::new(input.x, 0.0, 0.0));
                 return;
             }
 
             let y_rot_d = (zd.atan2(xd).to_degrees() as f32) - 90.0;
-            entity
-                .yaw
-                .store(self.change_angle(entity.yaw.load(), y_rot_d, 90.0));
+            entity.yaw.store(MoveControl::rotlerp(
+                entity.yaw.load(),
+                y_rot_d,
+                MoveControl::MAX_TURN,
+            ));
 
             let speed = if entity.on_ground.load(Ordering::Relaxed) {
                 let movement_speed = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -68,10 +71,11 @@ impl MoveControlTrait for FlyingMoveControl {
                 (self.speed_modifier * flying_speed) as f32
             };
 
+            mob_entity.set_speed(speed);
             let sd = xd.hypot(zd);
             if yd.abs() > 1.0E-5 || sd > 1.0E-5 {
                 let x_rot_d = -((yd.atan2(sd).to_degrees()) as f32);
-                entity.pitch.store(self.change_angle(
+                entity.pitch.store(MoveControl::rotlerp(
                     entity.pitch.load(),
                     x_rot_d,
                     self.max_turn as f32,
@@ -81,21 +85,20 @@ impl MoveControlTrait for FlyingMoveControl {
                 } else {
                     -(speed as f64)
                 };
-                living_entity
-                    .movement_input
-                    .store(Vector3::new(0.0, yya, speed as f64));
-            } else {
-                living_entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, speed as f64));
+                living_entity.movement_input.store(Vector3::new(
+                    living_entity.movement_input.load().x,
+                    yya,
+                    f64::from(speed),
+                ));
             }
         } else {
             if !self.hovers_in_place {
                 entity.set_has_no_gravity(false);
             }
+            let input = living_entity.movement_input.load();
             living_entity
                 .movement_input
-                .store(Vector3::new(0.0, 0.0, 0.0));
+                .store(Vector3::new(input.x, 0.0, 0.0));
         }
     }
 
@@ -105,6 +108,11 @@ impl MoveControlTrait for FlyingMoveControl {
         self.wanted_z = z;
         self.speed_modifier = speed_modifier;
         self.operation = Operation::MoveTo;
+    }
+
+    fn strafe(&mut self, _forward: f32, _right: f32) {
+        self.operation = Operation::Strafe;
+        self.speed_modifier = 0.25;
     }
 
     fn has_wanted(&self) -> bool {

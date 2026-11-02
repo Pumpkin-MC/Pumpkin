@@ -1,10 +1,10 @@
-use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
 
 use super::FoliagePlacer;
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -23,7 +23,7 @@ impl PoplarFoliagePlacer {
         foliage_height: i32,
         leaf_radius: i32,
         offset: i32,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         let pos = node.center.up_height(offset);
@@ -122,7 +122,7 @@ impl PoplarFoliagePlacer {
         radius: i32,
         y: i32,
         giant_trunk: bool,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
         foliage_height: i32,
         flipped: bool,
     ) {
@@ -134,7 +134,7 @@ impl PoplarFoliagePlacer {
                     continue;
                 }
                 let pos = BlockPos(center_pos.0.add_raw(x, y, z));
-                if FoliagePlacer::place_foliage_block(chunk, pos, foliage_provider) {
+                if FoliagePlacer::place_foliage_block(chunk, random, pos, foliage_provider) {
                     foliage_positions.push(pos);
                 }
             }

@@ -3,12 +3,14 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -92,11 +94,7 @@ impl SnifferEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, BreedGoal::new(1.0));
@@ -190,7 +188,11 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
             VarInt(drop_tick),
         );
-        world.send_entity_status(entity, EntityStatus::SnifferDiggingSound, None);
+        world.send_entity_status(
+            entity,
+            EntityStatus::SnifferDiggingSound,
+            ActorEventID::None,
+        );
     }
 
     pub fn on_digging_complete(&self, success: bool) {
@@ -321,6 +323,10 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -351,7 +357,6 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
         let state = self.get_state();
         match state {
             SnifferState::Searching => {

@@ -13,7 +13,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::position::BlockPos;
 
-use crate::bot::HeadlessBot;
+use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
 pub async fn run_block_tuning_and_invert_tests(
     server: &Arc<Server>,
@@ -69,7 +69,7 @@ pub async fn run_block_tuning_and_invert_tests(
     let mut detector_inverted = false;
     let mut lever_powered = false;
 
-    for _ in 0..25 {
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
 

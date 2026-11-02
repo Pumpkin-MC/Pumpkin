@@ -88,7 +88,7 @@ impl<W: Write> NbtWriteHelper for NbtWriteHelperJava<W> {
     define_write_number_be!(write_f64, f64);
 
     fn write_string(&mut self, value: &str) -> Result<()> {
-        let java_string = cesu8::to_java_cesu8(value);
+        let java_string = crate::cesu8::to_java_cesu8(value);
         let len = java_string.len();
         if len > u16::MAX as usize {
             return Err(Error::LargeLength(len));

@@ -5,6 +5,7 @@ use std::sync::{
 };
 use uuid::Uuid;
 
+use pumpkin_data::BlockState;
 use pumpkin_data::{
     effect::StatusEffect,
     entity::EntityStatus,
@@ -14,6 +15,8 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -140,21 +143,6 @@ impl NautilusEntity {
             Sound::EntityNautilusEat
         }
     }
-
-    pub fn get_swim_sound(&self) -> Sound {
-        let is_baby = self
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0;
-        if is_baby {
-            Sound::EntityBabyNautilusSwim
-        } else {
-            Sound::EntityNautilusSwim
-        }
-    }
 }
 
 impl Animal for NautilusEntity {
@@ -204,6 +192,32 @@ impl CustomSound for NautilusEntity {
 }
 
 impl Mob for NautilusEntity {
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        self.owner.load()
+    }
+
+    fn mob_get_swim_sound(&self) -> Option<Sound> {
+        let is_baby = self
+            .mob_entity
+            .living_entity
+            .entity
+            .age
+            .load(Ordering::Relaxed)
+            < 0;
+        Some(if is_baby {
+            Sound::EntityBabyNautilusSwim
+        } else {
+            Sound::EntityNautilusSwim
+        })
+    }
+
+    /// Vanilla `AbstractNautilus` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }
@@ -316,13 +330,26 @@ impl Mob for NautilusEntity {
 
         if !self.is_tame() && self.is_food(item_stack) {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            if rand::random::<u32>().is_multiple_of(3) {
+            if rand::random::<u32>().is_multiple_of(3) && self.approve_taming(player) {
                 self.set_tame(true, Some(player.gameprofile.id));
+                mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .stop();
                 let world = entity.world.load();
-                world.send_entity_status(entity, EntityStatus::TamingSucceeded, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::TamingSucceeded,
+                    ActorEventID::TamingSucceeded,
+                );
             } else {
                 let world = entity.world.load();
-                world.send_entity_status(entity, EntityStatus::TamingFailed, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::TamingFailed,
+                    ActorEventID::TamingFailed,
+                );
             }
             let world = entity.world.load();
             world.play_sound(

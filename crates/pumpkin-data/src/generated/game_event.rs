@@ -1,4 +1,16 @@
 /* This file is generated. Do not edit manually. */
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum PositionSourceType {
+    Block,
+    Entity,
+}
+impl PositionSourceType {
+    #[must_use]
+    pub const fn to_id(self) -> i32 {
+        self as i32
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GameEvent {
     BlockActivate,
@@ -64,6 +76,72 @@ pub enum GameEvent {
     Resonate15,
 }
 impl GameEvent {
+    #[must_use]
+    pub const fn notification_radius(self) -> i32 {
+        match self {
+            Self::BlockActivate => 16i32,
+            Self::BlockAttach => 16i32,
+            Self::BlockChange => 16i32,
+            Self::BlockClose => 16i32,
+            Self::BlockDeactivate => 16i32,
+            Self::BlockDestroy => 16i32,
+            Self::BlockDetach => 16i32,
+            Self::BlockOpen => 16i32,
+            Self::BlockPlace => 16i32,
+            Self::Bounce => 16i32,
+            Self::ContainerClose => 16i32,
+            Self::ContainerOpen => 16i32,
+            Self::Drink => 16i32,
+            Self::Eat => 16i32,
+            Self::ElytraGlide => 16i32,
+            Self::EntityDamage => 16i32,
+            Self::EntityDie => 16i32,
+            Self::EntityDismount => 16i32,
+            Self::EntityInteract => 16i32,
+            Self::EntityMount => 16i32,
+            Self::EntityPlace => 16i32,
+            Self::EntityAction => 16i32,
+            Self::Equip => 16i32,
+            Self::Explode => 16i32,
+            Self::Flap => 16i32,
+            Self::FluidPickup => 16i32,
+            Self::FluidPlace => 16i32,
+            Self::HitGround => 16i32,
+            Self::InstrumentPlay => 16i32,
+            Self::ItemInteractFinish => 16i32,
+            Self::ItemInteractStart => 16i32,
+            Self::JukeboxPlay => 10i32,
+            Self::JukeboxStopPlay => 10i32,
+            Self::LightningStrike => 16i32,
+            Self::NoteBlockPlay => 16i32,
+            Self::PrimeFuse => 16i32,
+            Self::ProjectileLand => 16i32,
+            Self::ProjectileShoot => 16i32,
+            Self::SculkSensorTendrilsClicking => 16i32,
+            Self::Shear => 16i32,
+            Self::Shriek => 32i32,
+            Self::Splash => 16i32,
+            Self::Step => 16i32,
+            Self::Swim => 16i32,
+            Self::Teleport => 16i32,
+            Self::Unequip => 16i32,
+            Self::Resonate1 => 16i32,
+            Self::Resonate2 => 16i32,
+            Self::Resonate3 => 16i32,
+            Self::Resonate4 => 16i32,
+            Self::Resonate5 => 16i32,
+            Self::Resonate6 => 16i32,
+            Self::Resonate7 => 16i32,
+            Self::Resonate8 => 16i32,
+            Self::Resonate9 => 16i32,
+            Self::Resonate10 => 16i32,
+            Self::Resonate11 => 16i32,
+            Self::Resonate12 => 16i32,
+            Self::Resonate13 => 16i32,
+            Self::Resonate14 => 16i32,
+            Self::Resonate15 => 16i32,
+        }
+    }
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {

@@ -369,7 +369,8 @@ impl SpawnState {
         let active_chunks = world
             .active_chunks
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         for entity in entities.load().iter() {
             if let Some(mob) = entity.get_mob()
                 && (mob.get_mob_entity().persistence_required.load(Relaxed)
@@ -829,13 +830,16 @@ pub fn spawn_category_for_position(
                         group_data = finalize_spawn(&entity, world, group_data);
                         cluster_size += 1;
                         group_size += 1;
+                        let max_group_size_reached = entity
+                            .get_mob()
+                            .is_some_and(|mob| mob.is_max_group_size_reached(group_size));
                         batch_buffer.push(entity);
                         spawn_state.after_spawn(entity_type, &check_pos, world);
                         if cluster_size >= entity_type.limit_per_chunk {
                             return batch_buffer;
                         }
 
-                        if entity_type.resource_name == "tropical_fish" && group_size >= 8 {
+                        if max_group_size_reached {
                             break;
                         }
                     }

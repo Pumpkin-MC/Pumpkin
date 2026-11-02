@@ -77,7 +77,7 @@ impl CropBlockBase for NetherWartBlock {
             world.set_block_state(
                 pos,
                 self.state_with_age(block, state, age + 1),
-                BlockFlags::NOTIFY_NEIGHBORS,
+                BlockFlags::NOTIFY_LISTENERS,
             );
         }
     }

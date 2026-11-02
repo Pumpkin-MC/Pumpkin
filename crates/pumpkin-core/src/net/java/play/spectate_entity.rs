@@ -1,6 +1,5 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_protocol::java::server::play::SSpectateEntity;
 use pumpkin_util::GameMode;
 
@@ -39,15 +38,7 @@ impl JavaClient {
         }
 
         // Vanilla allows a 3 block buffer beyond the entity interaction range.
-        let max_range = player
-            .living_entity
-            .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
-            + 3.0;
-        if entity
-            .bounding_box
-            .load()
-            .squared_magnitude(player.eye_position())
-            >= max_range * max_range
+        if !player.can_interact_with_entity(target.as_ref(), 3.0)
             || entity.is_removed()
             || !target.can_hit()
         {

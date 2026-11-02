@@ -52,6 +52,7 @@ mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod entity_variant;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
@@ -203,6 +204,7 @@ pub fn main() {
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (entity_variant::build, "entity_variant.rs"),
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
         (banner_pattern::build, "banner_pattern.rs"),

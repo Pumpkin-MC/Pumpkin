@@ -21,6 +21,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Enchantment, tag};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -35,7 +36,14 @@ impl ItemMetadata for SpearItem {
 }
 
 impl ItemBehaviour for SpearItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
         if player
             .living_entity
             .item_in_use
@@ -47,11 +55,6 @@ impl ItemBehaviour for SpearItem {
         }
 
         let inventory = player.inventory();
-        let hand = if inventory.held_item().item.id == item.id {
-            Hand::Right
-        } else {
-            Hand::Left
-        };
         let stack = inventory.get_stack_in_hand(hand);
         let sound = stack
             .get_data_component::<KineticWeaponImpl>()
@@ -86,9 +89,9 @@ impl ItemBehaviour for SpearItem {
         }
 
         let damage = Self::attack_damage(player, stack) as f32;
-        let mut hit_something = false;
+        let mut hit_count = 0;
         for target in Self::targets_in_range(player, &server, stack) {
-            hit_something |= Self::stab_attack(
+            if Self::stab_attack(
                 player,
                 &server,
                 Hand::Right,
@@ -99,6 +102,16 @@ impl ItemBehaviour for SpearItem {
                     damage: true,
                     knockback: piercing.deals_knockback,
                     dismount: piercing.dismounts,
+                },
+            ) {
+                hit_count += 1;
+            }
+        }
+        let hit_something = hit_count > 0;
+        if hit_something {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SpearMobs {
+                    count: hit_count,
                 },
             );
         }
@@ -216,7 +229,7 @@ impl SpearItem {
             .last_attacking_id
             .store(target_entity.entity_id, Ordering::Relaxed);
         player.living_entity.last_attack_time.store(
-            player.get_entity().age.load(Ordering::Relaxed),
+            player.get_entity().tick_count.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         if was_hurt {
@@ -254,7 +267,7 @@ impl SpearItem {
         let base_damage = player
             .living_entity
             .get_attribute_base(&Attributes::ATTACK_DAMAGE) as f32;
-        let now = player.get_entity().age.load(Ordering::Relaxed);
+        let now = player.get_entity().tick_count.load(Ordering::Relaxed);
         let mut affected = false;
 
         for target in Self::targets_in_range(player, &server, stack) {
@@ -299,7 +312,11 @@ impl SpearItem {
         }
 
         if affected {
-            world.send_entity_status(player.get_entity(), EntityStatus::KineticHit, None);
+            world.send_entity_status(
+                player.get_entity(),
+                EntityStatus::KineticHit,
+                ActorEventID::KineticDamageDealt,
+            );
         }
     }
 
@@ -626,17 +643,7 @@ impl SpearItem {
                 return false;
             }
         }
-        Self::root_vehicle_id(player.get_entity()) != Self::root_vehicle_id(entity)
-    }
-
-    fn root_vehicle_id(entity: &Entity) -> i32 {
-        let mut id = entity.entity_id;
-        let mut vehicle = entity.get_vehicle();
-        while let Some(current) = vehicle {
-            id = current.get_entity().entity_id;
-            vehicle = current.get_entity().get_vehicle();
-        }
-        id
+        player.get_entity().root_vehicle_id() != entity.root_vehicle_id()
     }
 }
 

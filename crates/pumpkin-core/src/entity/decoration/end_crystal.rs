@@ -17,7 +17,8 @@ pub struct EndCrystalEntity {
 
 impl EndCrystalEntity {
     #[must_use]
-    pub const fn new(entity: Entity) -> Self {
+    pub const fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         Self {
             entity,
             beam_target: Mutex::new(None),

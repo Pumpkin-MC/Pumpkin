@@ -56,7 +56,7 @@ impl FlyNodeEvaluator {
             if path_type == PathType::Walkable {
                 best.cost_malus += 1.0;
             }
-            best
+            self.walk.base.update_node(best)
         })
     }
 

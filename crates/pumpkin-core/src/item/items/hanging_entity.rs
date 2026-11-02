@@ -11,6 +11,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::data_component_impl::PaintingVariantImpl;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::painting_variant::PaintingVariant;
@@ -59,15 +60,15 @@ impl ItemBehaviour for HangingEntityItem {
             let variant = if let Some(comp) = item.get_data_component::<PaintingVariantImpl>() {
                 if let Some(v) = PaintingVariant::from_name(&comp.value) {
                     if !PaintingEntity::painting_fits(&world, location, face, v) {
-                        return BlockActionResult::Fail;
+                        return BlockActionResult::Consume;
                     }
                     v
                 } else {
-                    return BlockActionResult::Fail;
+                    return BlockActionResult::Consume;
                 }
             } else {
                 let Some(v) = PaintingEntity::choose_variant(&world, location, face) else {
-                    return BlockActionResult::Fail;
+                    return BlockActionResult::Consume;
                 };
                 v
             };
@@ -88,20 +89,38 @@ impl ItemBehaviour for HangingEntityItem {
                 SoundCategory::Blocks,
                 &spawn_pos,
             );
+            world.emit_game_event(GameEvent::EntityPlace.name(), spawn_pos);
             world.spawn_entity(painting);
         } else {
+            if !world.is_in_build_limit(target_pos) {
+                return BlockActionResult::Fail;
+            }
+            let (support_block, support_state) = world.get_block_and_state(&location);
+            let is_diode = face.is_horizontal()
+                && (support_block == &Block::REPEATER || support_block == &Block::COMPARATOR);
+            if !support_state.is_side_solid(face) && !support_state.is_solid() && !is_diode {
+                return BlockActionResult::Consume;
+            }
+
             let entity_type = if item.item.id == Item::GLOW_ITEM_FRAME.id {
                 &EntityType::GLOW_ITEM_FRAME
             } else {
                 &EntityType::ITEM_FRAME
             };
 
-            let entity = Entity::new(world.clone(), pos, entity_type);
+            let frame_pos = pos.sub(
+                &face
+                    .to_offset()
+                    .to_f64()
+                    .multiply(0.46875, 0.46875, 0.46875),
+            );
+            let entity = Entity::new(world.clone(), frame_pos, entity_type);
             let frame = ItemFrameEntity::new(entity);
             frame.set_facing(face);
             let sound = frame.get_place_sound();
             let frame_arc = Arc::new(frame);
-            world.play_sound(sound, SoundCategory::Blocks, &pos);
+            world.play_sound(sound, SoundCategory::Blocks, &frame_pos);
+            world.emit_game_event(GameEvent::EntityPlace.name(), frame_pos);
             world.spawn_entity(frame_arc);
         }
         item.decrement_unless_creative(player.gamemode.load(), 1);

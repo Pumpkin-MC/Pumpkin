@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::cow_variant::CowVariant;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,6 +11,8 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -20,10 +23,12 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     custom_sound::CustomSound,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::SpawnGroupData},
     passive::animal::Animal,
     player::Player,
 };
+use crate::item::items::bucket::fill_bucket_stack;
+use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -39,14 +44,11 @@ pub struct CowEntity {
 
 impl CowEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let world = entity.world.load();
-        let biome = world.get_biome(&entity.block_pos.load());
-        let variant = CowVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let cow = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
-            variant: AtomicU8::new(variant.id()),
+            variant: AtomicU8::new(CowVariant::default().id()),
             sound_variant: AtomicU8::new(CowSoundVariant::Classic as u8),
         };
         let mob_arc = Arc::new(cow);
@@ -56,18 +58,14 @@ impl CowEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
@@ -79,11 +77,15 @@ impl CowEntity {
     }
 
     pub fn set_variant(&self, variant: CowVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::cow::DATA_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 
@@ -128,9 +130,52 @@ impl Animal for CowEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
             || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::COW,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            let parent = if self.get_random().random::<bool>() {
+                self
+            } else {
+                partner
+            };
+            baby.variant
+                .store(parent.variant.load(Ordering::Relaxed), Ordering::Relaxed);
+        }
+        baby
+    }
 }
 
 impl Mob for CowEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let biome = world.get_biome(&self.get_entity().block_pos.load());
+        self.set_variant(CowVariant::select_for_biome(biome.registry_id));
+        let sound_variants = CowSoundVariant::ALL;
+        self.set_sound_variant(
+            sound_variants[self.get_random().random_range(0..sound_variants.len())],
+        );
+        self.finalize_spawn_super(group_data)
+    }
+
+    fn has_audited_tick(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -164,8 +209,11 @@ impl Mob for CowEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        if let Some(v) = CowVariant::from_name(name) {
-            self.set_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:cow_variant", name, |n| {
+            CowVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant_id(variant_id);
         }
     }
 
@@ -176,8 +224,13 @@ impl Mob for CowEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant = CowVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
-        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:cow_variant", variant_id, |id| {
+                let variant = CowVariant::from_id(id as u8).unwrap_or_default();
+                format!("minecraft:{}", variant.to_name())
+            });
+        nbt.put_string("variant", variant_str);
         let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
         nbt.put_string(
@@ -188,9 +241,13 @@ impl Mob for CowEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(variant_str) = nbt.get_string("variant")
-            && let Some(variant) = CowVariant::from_name(variant_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:cow_variant", variant_str, |n| {
+                    CowVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
         {
-            self.variant.store(variant.id(), Ordering::Relaxed);
+            self.variant.store(variant_id, Ordering::Relaxed);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = CowSoundVariant::from_name(sound_str)
@@ -202,14 +259,13 @@ impl Mob for CowEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = &self.mob_entity.living_entity.entity;
-            let world = entity.world.load();
-            world.play_sound(
+            self.get_entity().world.load().play_sound_expect(
+                player,
                 Sound::EntityCowMilk,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &entity.pos.load(),
+                pumpkin_data::sound::SoundCategory::Players,
+                &player.position(),
             );
+            fill_bucket_stack(item_stack, player, &Item::MILK_BUCKET);
             return true;
         }
         let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))

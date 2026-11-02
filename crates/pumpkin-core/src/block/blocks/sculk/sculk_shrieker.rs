@@ -3,7 +3,8 @@ use std::sync::atomic::Ordering;
 
 use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, OnEntityStepArgs, OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityStepArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::Entity;
 use crate::entity::mob::warden::WardenEntity;
@@ -12,9 +13,10 @@ use crate::entity::player::Player;
 use crate::entity::spawn_util::{SpawnStrategy, try_spawn_mob};
 use crate::world::World;
 use pumpkin_data::{
-    BlockId, BlockStateId,
+    Block, BlockId, BlockStateId,
     block_properties::SculkShriekerLikeProperties,
     entity::EntityType,
+    fluid::Fluid,
     game_event::GameEvent,
     sound::{Sound, SoundCategory},
     world::WorldEvent,
@@ -186,6 +188,40 @@ impl BlockBehaviour for SculkShriekerBlock {
         props.shrieking = false;
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
+    }
+
+    fn placed(&self, args: PlacedArgs<'_>) {
+        if Block::from_state_id(args.old_state_id) != args.block {
+            let mut props = SculkShriekerLikeProperties::from_state_id(args.state_id);
+            if props.shrieking
+                && !args
+                    .world
+                    .is_block_tick_scheduled(args.position, args.block)
+            {
+                props.shrieking = false;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                );
+            }
+        }
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let props = SculkShriekerLikeProperties::from_state_id(args.state_id);
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        args.state_id
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
