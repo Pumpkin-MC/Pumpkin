@@ -31,6 +31,10 @@ impl HuskEntity {
 }
 
 impl Mob for HuskEntity {
+    fn xp_reward(&self) -> u32 {
+        self.entity.xp_reward()
+    }
+
     fn can_hold_item(&self, stack: &ItemStack) -> bool {
         self.entity.can_hold_item(stack)
     }

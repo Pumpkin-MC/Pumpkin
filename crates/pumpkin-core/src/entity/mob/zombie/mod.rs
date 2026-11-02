@@ -128,8 +128,7 @@ impl ZombieEntityBase {
 
 impl ZombieEntityBase {
     /// Vanilla `Zombie.setBaby`: the baby state is only the synced flag, it never ages up.
-    // TODO: vanilla baby zombies get the +50% SPEED_MODIFIER_BABY and 2.5x XP
-    // (`Zombie.getBaseExperienceReward`), unlike passive babies which drop none.
+    // TODO: vanilla baby zombies get the +50% SPEED_MODIFIER_BABY.
     pub fn set_baby(&self, baby: bool) {
         self.mob_entity.set_baby_flag(
             &self.is_baby,
@@ -156,6 +155,13 @@ pub fn wants_to_pick_up<M: Mob + ?Sized>(mob: &M, stack: &ItemStack) -> bool {
 }
 
 impl Mob for ZombieEntityBase {
+    fn xp_reward(&self) -> u32 {
+        zombie_xp_reward(
+            self.mob_entity.living_entity.entity.entity_type.experience_reward,
+            self.is_baby(),
+        )
+    }
+
     fn mob_metadata(&self) -> Option<MobMetadata> {
         self.is_baby().then(|| MobMetadata::new().baby(true))
     }
@@ -246,5 +252,15 @@ impl Mob for ZombieEntityBase {
         if let Some(can_break_doors) = nbt.get_bool("CanBreakDoors") {
             self.set_can_break_doors(can_break_doors, self);
         }
+    }
+}
+
+/// Baby zombies are worth two and a half times the experience.
+#[must_use]
+pub fn zombie_xp_reward(xp_reward: u32, is_baby: bool) -> u32 {
+    if is_baby {
+        (f64::from(xp_reward) * 2.5) as u32
+    } else {
+        xp_reward
     }
 }
