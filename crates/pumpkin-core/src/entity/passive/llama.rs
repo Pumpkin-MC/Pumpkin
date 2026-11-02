@@ -39,8 +39,8 @@ use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::passive::abstract_horse::{
-    AbstractHorse, AbstractHorseData, FLAG_TAME, generate_jump_strength, generate_max_health,
-    generate_speed,
+    AbstractHorse, AbstractHorseData, FLAG_TAME, follow_mommy, generate_jump_strength,
+    generate_max_health, generate_speed,
 };
 use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
@@ -742,13 +742,15 @@ impl Mob for LlamaEntity {
     }
 
     fn mob_ai_step(&self) {
-        let mut rng = self.get_random();
         let living = &self.mob_entity.living_entity;
-        if living.is_alive()
-            && rng.random_range(0..900) == 0
-            && living.death_time.load(Relaxed) == 0
-        {
+        if !living.is_alive() {
+            return;
+        }
+        if self.get_random().random_range(0..900) == 0 && living.death_time.load(Relaxed) == 0 {
             living.heal(1.0);
+        }
+        if !self.in_caravan() && self.is_baby() {
+            follow_mommy(self);
         }
     }
 

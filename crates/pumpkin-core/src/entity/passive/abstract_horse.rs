@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use crate::entity::EntityBase;
 use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::prevents_equipment_drop;
 use crate::entity::mob::Mob;
 use crate::entity::mob::equipment::EquipmentSlotContainer;
@@ -35,6 +36,8 @@ pub const FLAG_STANDING: i8 = 32;
 pub const FLAG_OPEN_MOUTH: i8 = 64;
 pub const SOUND_VOLUME: f32 = 0.8;
 pub const AMBIENT_SOUND_INTERVAL: i32 = 400;
+const MOMMY_RANGE: f64 = 16.0;
+const MOMMY_MIN_DISTANCE_SQ: f64 = 4.0;
 
 pub struct AbstractHorseData {
     flags: AtomicI8,
@@ -364,6 +367,49 @@ pub fn cause_fall_damage(
     living.propagate_fall_to_passengers(fall_distance, damage_modifier);
     living.play_block_fall_sound(caller);
     true
+}
+
+/// The path is dropped on purpose; only the navigator target is kept, so the foal heads for
+/// its parent on the next path recompute.
+pub fn follow_mommy<H: AbstractHorse + AgeableMob>(horse: &H) {
+    if !horse.is_bred() || !horse.is_baby() || horse.is_eating() {
+        return;
+    }
+    let entity = horse.get_entity();
+    let world = entity.world.load();
+    let pos = entity.pos.load();
+    let mommy_targeting = TargetPredicate::create_non_attackable()
+        .set_base_max_distance(MOMMY_RANGE)
+        .ignore_visibility();
+    let area = entity
+        .bounding_box
+        .load()
+        .expand(MOMMY_RANGE, MOMMY_RANGE, MOMMY_RANGE);
+    let mommy = world
+        .get_entities_at_box(&area)
+        .into_iter()
+        .filter(|candidate| {
+            candidate
+                .get_mob()
+                .and_then(Mob::as_abstract_horse)
+                .is_some_and(AbstractHorse::is_bred)
+                && mommy_targeting.test(&world, Some(horse), candidate.as_ref())
+        })
+        .min_by(|a, b| {
+            let a = a.get_entity().pos.load().squared_distance_to_vec(&pos);
+            let b = b.get_entity().pos.load().squared_distance_to_vec(&pos);
+            a.total_cmp(&b)
+        });
+    if let Some(mommy) = mommy {
+        let mommy_pos = mommy.get_entity().pos.load();
+        if pos.squared_distance_to_vec(&mommy_pos) > MOMMY_MIN_DISTANCE_SQ {
+            let mob_entity = horse.get_mob_entity();
+            mob_entity
+                .steered()
+                .navigator()
+                .create_path(&mob_entity.living_entity, mommy_pos, 0);
+        }
+    }
 }
 
 pub fn can_dispenser_equip_into_slot(mob: &dyn Mob, slot: &EquipmentSlot) -> bool {
