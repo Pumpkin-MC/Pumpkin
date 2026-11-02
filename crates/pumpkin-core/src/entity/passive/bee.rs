@@ -3,12 +3,16 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
@@ -17,17 +21,10 @@ use crate::entity::{
         look_control::LookControl,
     },
     ai::goal::{
-        active_target::{ActiveTargetGoal, TargetCondition},
-        breed::BreedGoal,
-        follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal,
-        reset_universal_anger::ResetUniversalAngerGoal,
-        revenge::RevengeGoal,
-        swim::SwimGoal,
-        tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        active_target::TargetCondition, breed::BreedGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, reset_universal_anger::ResetUniversalAngerGoal,
+        revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::Navigator,
     mob::{
@@ -42,6 +39,9 @@ pub const FLAG_ROLL: u8 = 2;
 pub const FLAG_HAS_STUNG: u8 = 4;
 pub const FLAG_HAS_NECTAR: u8 = 8;
 
+/// Vanilla `Bee.TICKS_PER_FLAP`, `Mth.ceil(1.4959966F)`.
+const TICKS_PER_FLAP: i32 = 2;
+
 fn is_angry(mob: &dyn Mob) -> bool {
     mob.as_neutral().is_some_and(NeutralMob::is_angry)
 }
@@ -54,6 +54,10 @@ fn can_sting(mob: &dyn Mob) -> bool {
             .downcast_ref::<BeeEntity>()
             .is_some_and(BeeEntity::has_stung)
 }
+
+const BEE_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)
+    .when(TargetCondition::AngryAt)
+    .gated_by(can_sting)];
 
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
@@ -135,12 +139,7 @@ impl BeeEntity {
                         .continuing_while(is_angry),
                 ),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                    .when(TargetCondition::AngryAt)
-                    .gated_by(can_sting),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, BEE_HUNTS);
             target_selector.add_goal(3, ResetUniversalAngerGoal::new(true));
         };
 
@@ -245,6 +244,15 @@ impl LookControlTrait for BeeLookControl {
 }
 
 impl Mob for BeeEntity {
+    fn mob_is_flapping(&self) -> bool {
+        let entity = self.get_entity();
+        !entity.on_ground.load(Ordering::Relaxed)
+            && entity.tick_count.load(Ordering::Relaxed) % TICKS_PER_FLAP == 0
+    }
+
+    /// Vanilla `Bee` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn omnidirectional_air_mover(&self) -> bool {
         true
     }

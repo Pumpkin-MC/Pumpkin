@@ -1,5 +1,15 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::block::entities::beacon::BeaconBlockEntity;
+use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::{
+    anvil::anvil_screen_handler::AnvilScreenHandler, beacon_screen_handler::BeaconScreenHandler,
+    cartography_table_screen_handler::CartographyTableScreenHandler,
+    grindstone_screen_handler::GrindstoneScreenHandler, loom_screen_handler::LoomScreenHandler,
+    smithing_table_screen_handler::SmithingTableScreenHandler,
+    stonecutter_screen_handler::StonecutterScreenHandler,
+};
+use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo;
 
 impl BedrockClient {
     #[allow(clippy::too_many_lines)]
@@ -111,6 +121,19 @@ impl BedrockClient {
                                     break;
                                 }
 
+                                if let Some(dest_screen_slot) = map_bedrock_container_slot(
+                                    &*screen_handler,
+                                    destination.container_name.container_name,
+                                    destination.slot_id,
+                                ) {
+                                    let slot =
+                                        &screen_handler.get_behaviour().slots[dest_screen_slot];
+                                    if !slot.can_insert(&dest_stack) {
+                                        result = 1;
+                                        break;
+                                    }
+                                }
+
                                 let merchant_result = screen_handler.window_type()
                                     == Some(pumpkin_data::screen::WindowType::Merchant)
                                     && matches!(
@@ -174,6 +197,23 @@ impl BedrockClient {
                                     continue;
                                 }
 
+                                if let Some(out_slot) =
+                                    get_output_screen_slot(&*screen_handler, &source)
+                                    && !crafting_inputs_consumed
+                                {
+                                    let slot =
+                                        screen_handler.get_behaviour().slots[out_slot].clone();
+                                    if !slot.can_take_items(player.as_ref()) {
+                                        result = 1;
+                                        break;
+                                    }
+                                    slot.on_take_item(player.as_ref(), &source_stack);
+                                    record_specialized_container_input_updates(
+                                        &*screen_handler,
+                                        &mut updates,
+                                    );
+                                }
+
                                 source_stack.decrement(count);
                                 if source.container_name.container_name
                                     == ContainerName::CreatedOutput
@@ -218,6 +258,13 @@ impl BedrockClient {
                             }
                         }
                         ItemStackRequestAction::Swap { slot1, slot2 } => {
+                            if get_output_screen_slot(&*screen_handler, &slot1).is_some()
+                                || get_output_screen_slot(&*screen_handler, &slot2).is_some()
+                            {
+                                result = 1;
+                                break;
+                            }
+
                             let stack1 =
                                 get_slot_stack(&*screen_handler, &slot1, created_item.as_ref());
                             let stack2 =
@@ -249,6 +296,21 @@ impl BedrockClient {
                             if source_stack.is_empty() {
                                 result = 1;
                                 break;
+                            }
+                            if let Some(out_slot) =
+                                get_output_screen_slot(&*screen_handler, &source)
+                                && !crafting_inputs_consumed
+                            {
+                                let slot = screen_handler.get_behaviour().slots[out_slot].clone();
+                                if !slot.can_take_items(player.as_ref()) {
+                                    result = 1;
+                                    break;
+                                }
+                                slot.on_take_item(player.as_ref(), &source_stack);
+                                record_specialized_container_input_updates(
+                                    &*screen_handler,
+                                    &mut updates,
+                                );
                             }
                             let count = count.min(source_stack.item_count);
                             if count > 0 {
@@ -385,6 +447,137 @@ impl BedrockClient {
                                 continue;
                             }
 
+                            if screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Stonecutter)
+                            {
+                                let Some(handler) = screen_handler
+                                    .as_any_mut()
+                                    .downcast_mut::<StonecutterScreenHandler>()
+                                else {
+                                    result = 1;
+                                    break;
+                                };
+                                let input_stack = handler.input_inventory.get_stack(0);
+                                if input_stack.is_empty() {
+                                    result = 1;
+                                    break;
+                                }
+                                let available = handler.get_available_recipes(&input_stack);
+                                let recipe_idx = crate::net::bedrock::recipe::static_recipes()
+                                    .iter()
+                                    .find_map(|r| match r {
+                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(s)
+                                            if s.block == "stonecutter"
+                                                && s.recipe_network_id == recipe_id =>
+                                        {
+                                            s.output.first().and_then(|out| {
+                                                let out_id = out.id.0;
+                                                available.iter().position(|r| {
+                                                    let item_id = r
+                                                        .result_id
+                                                        .strip_prefix("minecraft:")
+                                                        .unwrap_or(&r.result_id);
+                                                    pumpkin_data::item::Item::from_registry_key(
+                                                        item_id,
+                                                    )
+                                                    .and_then(|item| {
+                                                        pumpkin_data::item::JavaToBedrockItemMapping::from_java_item_id(
+                                                            item.id,
+                                                        )
+                                                    })
+                                                    .is_some_and(|m| {
+                                                        (m.bedrock_item.id as i32) == out_id
+                                                    })
+                                                })
+                                            })
+                                        }
+                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(_)
+                                        | pumpkin_protocol::bedrock::client::BedrockRecipe::Shaped(_) => None,
+                                    })
+                                    .or_else(|| {
+                                        ((recipe_id.0 as usize) < available.len())
+                                            .then_some(recipe_id.0 as usize)
+                                    });
+
+                                let Some(idx) = recipe_idx else {
+                                    result = 1;
+                                    break;
+                                };
+
+                                handler.set_selected_recipe(idx as u8);
+                                handler.update_output();
+
+                                let output_slot = handler.get_behaviour().slots[1].clone();
+                                let output_stack = output_slot.get_cloned_stack();
+                                if output_stack.is_empty() {
+                                    result = 1;
+                                    break;
+                                }
+
+                                let reps = repetitions.max(1);
+                                let mut total_crafted = output_stack.clone();
+                                total_crafted.item_count =
+                                    total_crafted.item_count.saturating_mul(reps);
+                                created_item = Some(total_crafted);
+
+                                for _ in 0..reps {
+                                    output_slot.on_take_item(player.as_ref(), &output_stack);
+                                }
+                                crafting_inputs_consumed = true;
+
+                                record_specialized_container_input_updates(
+                                    &*screen_handler,
+                                    &mut updates,
+                                );
+                                record_preview_update(
+                                    &mut updates,
+                                    ContainerName::StonecutterResultPreview,
+                                    1,
+                                    &output_stack,
+                                );
+                                continue;
+                            }
+
+                            if screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Enchantment)
+                            {
+                                let button_id = if recipe_id.0 < 3 {
+                                    recipe_id.0 as i32
+                                } else {
+                                    recipe_id.0.saturating_sub(1) as i32
+                                };
+                                if (0..3).contains(&button_id)
+                                    && screen_handler.on_button_click(player.as_ref(), button_id)
+                                {
+                                    let enchanted_item =
+                                        screen_handler.get_behaviour().slots[0].get_cloned_stack();
+                                    let lapis_item =
+                                        screen_handler.get_behaviour().slots[1].get_cloned_stack();
+                                    record_update(
+                                        &mut updates,
+                                        FullContainerName {
+                                            container_name: ContainerName::EnchantingInput,
+                                            dynamic_id: None,
+                                        },
+                                        0,
+                                        &enchanted_item,
+                                    );
+                                    record_update(
+                                        &mut updates,
+                                        FullContainerName {
+                                            container_name: ContainerName::EnchantingMaterial,
+                                            dynamic_id: None,
+                                        },
+                                        1,
+                                        &lapis_item,
+                                    );
+                                } else {
+                                    result = 1;
+                                    break;
+                                }
+                                continue;
+                            }
+
                             if repetitions > 0 {
                                 screen_handler.update_to_client();
 
@@ -446,18 +639,180 @@ impl BedrockClient {
                                 }
                             }
                         }
+                        ItemStackRequestAction::BeaconPayment {
+                            primary_effect_id,
+                            secondary_effect_id,
+                        } => {
+                            let Some(beacon_handler) = screen_handler
+                                .as_any_mut()
+                                .downcast_mut::<BeaconScreenHandler>()
+                            else {
+                                result = 1;
+                                break;
+                            };
+                            let Some(beacon_entity) = beacon_handler
+                                .inventory
+                                .as_any()
+                                .downcast_ref::<BeaconBlockEntity>()
+                            else {
+                                result = 1;
+                                break;
+                            };
+                            if beacon_entity
+                                .payment
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .is_empty()
+                            {
+                                result = 1;
+                                break;
+                            }
+                            let levels = beacon_entity.levels.load(Ordering::Relaxed);
+                            let primary_id =
+                                (primary_effect_id.0 > 0).then_some(primary_effect_id.0);
+                            let secondary_id =
+                                (secondary_effect_id.0 > 0).then_some(secondary_effect_id.0);
+
+                            if BeaconBlockEntity::validate_effects(primary_id, secondary_id, levels)
+                            {
+                                beacon_entity
+                                    .primary_effect
+                                    .store(primary_id.unwrap_or(-1), Ordering::Relaxed);
+                                beacon_entity
+                                    .secondary_effect
+                                    .store(secondary_id.unwrap_or(-1), Ordering::Relaxed);
+
+                                beacon_entity.remove_stack_specific(0, 1);
+                                beacon_entity.mark_dirty();
+                                let payment_stack = beacon_entity.get_stack(0);
+                                beacon_handler.sync_state();
+                                record_update(
+                                    &mut updates,
+                                    FullContainerName {
+                                        container_name: ContainerName::BeaconPayment,
+                                        dynamic_id: None,
+                                    },
+                                    0,
+                                    &payment_stack,
+                                );
+                            } else {
+                                result = 1;
+                                break;
+                            }
+                        }
+                        ItemStackRequestAction::MineBlock {
+                            hotbar_slot,
+                            predicted_durability: _,
+                            stack_id: _,
+                        } => {
+                            if (0..9).contains(&hotbar_slot.0)
+                                && let Some(screen_slot) = map_bedrock_container_slot(
+                                    &*screen_handler,
+                                    ContainerName::HotBar,
+                                    hotbar_slot.0 as u8,
+                                )
+                            {
+                                let current_stack = screen_handler.get_behaviour().slots
+                                    [screen_slot]
+                                    .get_cloned_stack();
+                                record_update(
+                                    &mut updates,
+                                    FullContainerName {
+                                        container_name: ContainerName::HotBar,
+                                        dynamic_id: None,
+                                    },
+                                    hotbar_slot.0 as u8,
+                                    &current_stack,
+                                );
+                            }
+                        }
+                        ItemStackRequestAction::Optional {
+                            recipe_id: _,
+                            filter_string_index,
+                        } => {
+                            if screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Anvil)
+                                && let Some(anvil) = screen_handler
+                                    .as_any_mut()
+                                    .downcast_mut::<AnvilScreenHandler>()
+                            {
+                                let name = if filter_string_index >= 0
+                                    && (filter_string_index as usize) < request.filter_strings.len()
+                                {
+                                    &request.filter_strings[filter_string_index as usize]
+                                } else if let Some(first) = request.filter_strings.first() {
+                                    first
+                                } else {
+                                    ""
+                                };
+                                anvil.set_item_name(name, player.has_infinite_materials());
+                                let result_stack = anvil.inventory.get_stack(2);
+                                record_preview_update(
+                                    &mut updates,
+                                    ContainerName::AnvilResultPreview,
+                                    2,
+                                    &result_stack,
+                                );
+                            }
+                        }
+                        ItemStackRequestAction::Grindstone {
+                            recipe_id: _,
+                            repair_cost: _,
+                            repetitions: _,
+                        } => {
+                            if screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Grindstone)
+                                && let Some(grindstone) = screen_handler
+                                    .as_any_mut()
+                                    .downcast_mut::<GrindstoneScreenHandler>()
+                            {
+                                grindstone.create_result();
+                                let result_stack = grindstone.inventory.get_stack(2);
+                                record_preview_update(
+                                    &mut updates,
+                                    ContainerName::GrindstoneResultPreview,
+                                    2,
+                                    &result_stack,
+                                );
+                            }
+                        }
+                        ItemStackRequestAction::Loom {
+                            pattern_id,
+                            repetitions: _,
+                        } => {
+                            if screen_handler.window_type()
+                                == Some(pumpkin_data::screen::WindowType::Loom)
+                                && let Some(loom) = screen_handler
+                                    .as_any_mut()
+                                    .downcast_mut::<LoomScreenHandler>()
+                            {
+                                loom.select_pattern(&pattern_id);
+                                let result_stack = loom.output_inventory.get_stack(0);
+                                record_preview_update(
+                                    &mut updates,
+                                    ContainerName::LoomResultPreview,
+                                    3,
+                                    &result_stack,
+                                );
+                            }
+                        }
                         ItemStackRequestAction::CraftResultsDeprecated { .. }
-                        | ItemStackRequestAction::MineBlock { .. }
-                        | ItemStackRequestAction::BeaconPayment { .. }
+                        | ItemStackRequestAction::CraftReserved { .. }
                         | ItemStackRequestAction::Create { .. }
                         | ItemStackRequestAction::LabTableCombine
-                        | ItemStackRequestAction::Optional { .. }
-                        | ItemStackRequestAction::Grindstone { .. }
-                        | ItemStackRequestAction::Loom { .. }
                         | ItemStackRequestAction::CraftNonImplemented => {
                             // Successful no-ops to prevent client-side transaction rollbacks
                         }
                     }
+                }
+
+                if result == 0 {
+                    refresh_specialized_screen_results(
+                        player.as_ref(),
+                        &mut *screen_handler,
+                        &request.filter_strings,
+                        &mut updates,
+                    );
                 }
 
                 let mut container_infos = Vec::new();
@@ -523,6 +878,7 @@ impl BedrockClient {
         self.try_enqueue_client_packet(&CItemStackResponse { responses });
 
         if inventory_updated {
+            player.update_bedrock_shield_sneaking();
             let slots = player
                 .inventory()
                 .main_inventory
@@ -620,7 +976,8 @@ pub(crate) fn map_bedrock_container_slot(
                     | pumpkin_data::screen::WindowType::BlastFurnace
                     | pumpkin_data::screen::WindowType::Smoker
                     | pumpkin_data::screen::WindowType::Grindstone
-                    | pumpkin_data::screen::WindowType::Merchant => Some(2),
+                    | pumpkin_data::screen::WindowType::Merchant
+                    | pumpkin_data::screen::WindowType::CartographyTable => Some(2),
                     pumpkin_data::screen::WindowType::Loom
                     | pumpkin_data::screen::WindowType::Smithing => Some(3),
                     _ => None,
@@ -918,12 +1275,366 @@ fn update_slot_stack(
     }
 }
 
+fn get_output_screen_slot(
+    screen_handler: &dyn ScreenHandler,
+    source: &ItemStackRequestSlotInfo,
+) -> Option<usize> {
+    match source.container_name.container_name {
+        ContainerName::CreatedOutput | ContainerName::CraftingOutputPreview => {
+            map_bedrock_container_slot(
+                screen_handler,
+                source.container_name.container_name,
+                source.slot_id,
+            )
+        }
+        ContainerName::AnvilResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Anvil)).then_some(2)
+        }
+        ContainerName::GrindstoneResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Grindstone)).then_some(2)
+        }
+        ContainerName::StonecutterResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Stonecutter)).then_some(1)
+        }
+        ContainerName::LoomResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Loom)).then_some(3)
+        }
+        ContainerName::SmithingTableResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Smithing)).then_some(3)
+        }
+        ContainerName::CartographyResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::CartographyTable)).then_some(2)
+        }
+        ContainerName::FurnaceResult => matches!(
+            screen_handler.window_type(),
+            Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker)
+        )
+        .then_some(2),
+        ContainerName::TradeResultPreview | ContainerName::Trade2ResultPreview => {
+            (screen_handler.window_type() == Some(WindowType::Merchant)).then_some(2)
+        }
+        ContainerName::BrewingStandResult => {
+            (matches!(screen_handler.window_type(), Some(WindowType::BrewingStand))
+                && source.slot_id < 3)
+                .then_some(source.slot_id as usize)
+        }
+        _ => None,
+    }
+}
+
+fn record_preview_update(
+    updates: &mut Vec<SlotUpdate>,
+    container_name: ContainerName,
+    screen_slot: u8,
+    stack: &ItemStack,
+) {
+    for slot_id in [0, screen_slot, 50] {
+        record_update(
+            updates,
+            FullContainerName {
+                container_name,
+                dynamic_id: None,
+            },
+            slot_id,
+            stack,
+        );
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn record_specialized_container_input_updates(
+    screen_handler: &dyn ScreenHandler,
+    updates: &mut Vec<SlotUpdate>,
+) {
+    let Some(window_type) = screen_handler.window_type() else {
+        return;
+    };
+    match window_type {
+        WindowType::Anvil => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            for slot_id in [0, 1] {
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::AnvilInput,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot0,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::AnvilMaterial,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot1,
+                );
+            }
+        }
+        WindowType::Grindstone => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            for slot_id in [0, 1] {
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::GrindstoneInput,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot0,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::GrindstoneAdditional,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot1,
+                );
+            }
+        }
+        WindowType::Stonecutter => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            record_update(
+                updates,
+                FullContainerName {
+                    container_name: ContainerName::StonecutterInput,
+                    dynamic_id: None,
+                },
+                0,
+                &slot0,
+            );
+        }
+        WindowType::Loom => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            let slot2 = screen_handler.get_behaviour().slots[2].get_cloned_stack();
+            for slot_id in [0, 1, 2] {
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::LoomInput,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot0,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::LoomDye,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot1,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::LoomMaterial,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot2,
+                );
+            }
+        }
+        WindowType::Smithing => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            let slot2 = screen_handler.get_behaviour().slots[2].get_cloned_stack();
+            for slot_id in [0, 1, 2] {
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::SmithingTableTemplate,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot0,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::SmithingTableInput,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot1,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::SmithingTableMaterial,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot2,
+                );
+            }
+        }
+        WindowType::CartographyTable => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            for slot_id in [0, 1] {
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::CartographyInput,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot0,
+                );
+                record_update(
+                    updates,
+                    FullContainerName {
+                        container_name: ContainerName::CartographyAdditional,
+                        dynamic_id: None,
+                    },
+                    slot_id,
+                    &slot1,
+                );
+            }
+        }
+        WindowType::Merchant => {
+            let slot0 = screen_handler.get_behaviour().slots[0].get_cloned_stack();
+            let slot1 = screen_handler.get_behaviour().slots[1].get_cloned_stack();
+            record_update(
+                updates,
+                FullContainerName {
+                    container_name: ContainerName::Trade2Ingredient1,
+                    dynamic_id: None,
+                },
+                4,
+                &slot0,
+            );
+            record_update(
+                updates,
+                FullContainerName {
+                    container_name: ContainerName::Trade2Ingredient2,
+                    dynamic_id: None,
+                },
+                5,
+                &slot1,
+            );
+        }
+        _ => {}
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn refresh_specialized_screen_results(
+    player: &Player,
+    screen_handler: &mut dyn ScreenHandler,
+    filter_strings: &[String],
+    updates: &mut Vec<SlotUpdate>,
+) {
+    let Some(window_type) = screen_handler.window_type() else {
+        return;
+    };
+    match window_type {
+        WindowType::Anvil => {
+            if let Some(anvil) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<AnvilScreenHandler>()
+            {
+                let has_infinite = player.has_infinite_materials();
+                if let Some(name) = filter_strings.first() {
+                    anvil.set_item_name(name, has_infinite);
+                } else {
+                    anvil.create_result(has_infinite);
+                }
+                let result_stack = anvil.inventory.get_stack(2);
+                record_preview_update(updates, ContainerName::AnvilResultPreview, 2, &result_stack);
+            }
+        }
+        WindowType::Grindstone => {
+            if let Some(grindstone) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<GrindstoneScreenHandler>()
+            {
+                grindstone.create_result();
+                let result_stack = grindstone.inventory.get_stack(2);
+                record_preview_update(
+                    updates,
+                    ContainerName::GrindstoneResultPreview,
+                    2,
+                    &result_stack,
+                );
+            }
+        }
+        WindowType::Stonecutter => {
+            if let Some(stonecutter) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<StonecutterScreenHandler>()
+            {
+                stonecutter.update_output();
+                let result_stack = stonecutter.output_inventory.get_stack(0);
+                record_preview_update(
+                    updates,
+                    ContainerName::StonecutterResultPreview,
+                    1,
+                    &result_stack,
+                );
+            }
+        }
+        WindowType::Loom => {
+            if let Some(loom) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<LoomScreenHandler>()
+            {
+                loom.slots_changed();
+                let result_stack = loom.output_inventory.get_stack(0);
+                record_preview_update(updates, ContainerName::LoomResultPreview, 3, &result_stack);
+            }
+        }
+        WindowType::Smithing => {
+            if let Some(smithing) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<SmithingTableScreenHandler>()
+            {
+                smithing.update_output();
+                let result_stack = smithing.output_inventory.get_stack(0);
+                record_preview_update(
+                    updates,
+                    ContainerName::SmithingTableResultPreview,
+                    3,
+                    &result_stack,
+                );
+            }
+        }
+        WindowType::CartographyTable => {
+            if let Some(cartography) = screen_handler
+                .as_any_mut()
+                .downcast_mut::<CartographyTableScreenHandler>()
+            {
+                cartography.slots_changed();
+                let result_stack = cartography.output_inventory.get_stack(0);
+                record_preview_update(
+                    updates,
+                    ContainerName::CartographyResultPreview,
+                    2,
+                    &result_stack,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use pumpkin_data::item::Item;
     use pumpkin_inventory::{
-        build_equipment_slots, crafting::crafting_screen_handler::CraftingTableScreenHandler,
+        SimpleInventory, build_equipment_slots,
+        crafting::crafting_screen_handler::CraftingTableScreenHandler,
         entity_equipment::EntityEquipment,
     };
     use std::sync::Mutex;
@@ -970,5 +1681,110 @@ mod tests {
         record_update(&mut updates, container, 0, ItemStack::EMPTY);
         assert_eq!(updates[0].count, 0);
         assert_eq!(updates[0].stack_id, VarInt(0));
+    }
+
+    #[tokio::test]
+    async fn specialized_containers_map_output_slots_correctly() {
+        let inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+
+        let make_slot = |container_name: ContainerName, slot_id: u8| ItemStackRequestSlotInfo {
+            container_name: FullContainerName {
+                container_name,
+                dynamic_id: None,
+            },
+            slot_id,
+            stack_id: 0,
+        };
+
+        // Stonecutter
+        let stonecutter = StonecutterScreenHandler::new(1, &inventory, None);
+        assert_eq!(
+            get_output_screen_slot(
+                &stonecutter,
+                &make_slot(ContainerName::StonecutterResultPreview, 0)
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            get_output_screen_slot(&stonecutter, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(1)
+        );
+        assert_eq!(
+            get_output_screen_slot(&stonecutter, &make_slot(ContainerName::StonecutterInput, 0)),
+            None
+        );
+
+        // Anvil
+        let anvil_inv = Arc::new(SimpleInventory::new(3));
+        let anvil = AnvilScreenHandler::new(1, &inventory, anvil_inv);
+        assert_eq!(
+            get_output_screen_slot(&anvil, &make_slot(ContainerName::AnvilResultPreview, 0)),
+            Some(2)
+        );
+        assert_eq!(
+            get_output_screen_slot(&anvil, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(2)
+        );
+        assert_eq!(
+            get_output_screen_slot(&anvil, &make_slot(ContainerName::AnvilInput, 0)),
+            None
+        );
+
+        // Grindstone
+        let grindstone_inv = Arc::new(SimpleInventory::new(3));
+        let grindstone = GrindstoneScreenHandler::new(1, &inventory, grindstone_inv);
+        assert_eq!(
+            get_output_screen_slot(
+                &grindstone,
+                &make_slot(ContainerName::GrindstoneResultPreview, 0)
+            ),
+            Some(2)
+        );
+        assert_eq!(
+            get_output_screen_slot(&grindstone, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(2)
+        );
+
+        // Loom
+        let loom = LoomScreenHandler::new(1, &inventory);
+        assert_eq!(
+            get_output_screen_slot(&loom, &make_slot(ContainerName::LoomResultPreview, 0)),
+            Some(3)
+        );
+        assert_eq!(
+            get_output_screen_slot(&loom, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(3)
+        );
+
+        // Smithing Table
+        let smithing = SmithingTableScreenHandler::new(1, &inventory, None);
+        assert_eq!(
+            get_output_screen_slot(
+                &smithing,
+                &make_slot(ContainerName::SmithingTableResultPreview, 0)
+            ),
+            Some(3)
+        );
+        assert_eq!(
+            get_output_screen_slot(&smithing, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(3)
+        );
+
+        // Cartography Table
+        let cartography = CartographyTableScreenHandler::new(1, &inventory);
+        assert_eq!(
+            get_output_screen_slot(
+                &cartography,
+                &make_slot(ContainerName::CartographyResultPreview, 0)
+            ),
+            Some(2)
+        );
+        assert_eq!(
+            get_output_screen_slot(&cartography, &make_slot(ContainerName::CreatedOutput, 0)),
+            Some(2)
+        );
     }
 }

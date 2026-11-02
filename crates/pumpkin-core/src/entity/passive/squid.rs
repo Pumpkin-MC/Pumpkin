@@ -8,6 +8,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     tag::{self, Taggable},
 };
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::math::{boundingbox::EntityDimensions, cos, sin, vector3::Vector3};
 use rand::RngExt;
 
@@ -104,10 +105,11 @@ pub trait Squid: AgeableWaterCreature {
                 data.tentacle_speed
                     .store(1.0 / (self.get_random().random::<f32>() + 1.0) * TENTACLE_SPEED_SCALE);
             }
-            entity
-                .world
-                .load()
-                .send_entity_status(entity, EntityStatus::SquidAnimSynch, None);
+            entity.world.load().send_entity_status(
+                entity,
+                EntityStatus::SquidAnimSynch,
+                ActorEventID::None,
+            );
         }
         data.tentacle_movement.store(tentacle_movement);
         if entity.is_in_water() {

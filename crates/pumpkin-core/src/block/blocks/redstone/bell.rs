@@ -287,8 +287,8 @@ impl BlockBehaviour for BellBlock {
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         let player = args
             .projectile
-            .get_owner_id()
-            .and_then(|id| args.world.get_player_by_id(id));
+            .get_projectile_owner()
+            .and_then(|owner| owner.get_player(args.world));
         if ring_bell(
             *args.position,
             args.world,

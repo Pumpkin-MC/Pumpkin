@@ -9,6 +9,7 @@ use rand::RngExt;
 use crate::entity::EntityBase;
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::mob::MobEntity;
+use crate::entity::passive::fox::FoxVariant;
 use crate::world::World;
 
 const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
@@ -27,6 +28,11 @@ pub enum SpawnGroupData {
     },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
+    Fox {
+        variant: FoxVariant,
+        size: u32,
+    },
 }
 
 impl MobEntity {
@@ -45,7 +51,7 @@ impl MobEntity {
                     .iter()
                     .any(|modifier| modifier.id == RANDOM_SPAWN_BONUS_ID)
             {
-                follow_range.add_or_replace_modifier(Modifier {
+                follow_range.add_or_replace_permanent_modifier(Modifier {
                     id: RANDOM_SPAWN_BONUS_ID.to_string(),
                     // Triangle distribution around 0.
                     amount: 0.114_85 * f64::from(rng.random::<f32>() - rng.random::<f32>()),

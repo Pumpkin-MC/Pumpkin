@@ -180,6 +180,9 @@ impl CLevelChunk<'_> {
             writer.write_all(&chunk_data)?;
         }
 
+        // client_biome_update: false
+        false.write(&mut writer)?;
+
         Ok((writer, blobs))
     }
 }
@@ -269,8 +272,9 @@ mod tests {
         offset += 2;
         assert_eq!(read_var_uint(&encoded, &mut offset), 0);
         let raw_len = read_var_uint(&encoded, &mut offset) as usize;
-        let raw = &encoded[offset..];
-        assert_eq!(raw.len(), raw_len);
+        let raw = &encoded[offset..offset + raw_len];
+        assert_eq!(encoded[offset + raw_len], 0); // client_biome_update: false
+        assert_eq!(offset + raw_len + 1, encoded.len());
 
         let mut raw_offset = 0;
         for y in -4i8..20 {
