@@ -1,7 +1,8 @@
+use std::io::Read;
+
 use aes::cipher::KeyIvInit;
-use async_compression::tokio::bufread::ZlibDecoder;
 use bytes::BytesMut;
-use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::{
     Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE, PacketDecodeError,
@@ -9,31 +10,6 @@ use crate::{
 };
 
 // decrypt -> decompress -> raw
-
-pub enum DecompressionReader<R: AsyncRead + Unpin> {
-    Decompress(ZlibDecoder<BufReader<R>>),
-    None(R),
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for DecompressionReader<R> {
-    #[inline]
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Decompress(reader) => {
-                let reader = std::pin::Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-            Self::None(reader) => {
-                let reader = std::pin::Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-        }
-    }
-}
 
 pub enum DecryptionReader<R: AsyncRead + Unpin> {
     Decrypt(Box<StreamDecryptor<R>>),
@@ -77,6 +53,7 @@ pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: Option<DecryptionReader<R>>,
     compression: Option<CompressionThreshold>,
     payload_scratch: BytesMut,
+    compressed_scratch: Vec<u8>,
 }
 
 impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
@@ -85,6 +62,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             reader: Some(DecryptionReader::None(reader)),
             compression: None,
             payload_scratch: BytesMut::new(),
+            compressed_scratch: Vec::new(),
         }
     }
 
@@ -108,6 +86,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn get_raw_packet(&mut self) -> Result<RawPacket, PacketDecodeError> {
         let reader = self
             .reader
@@ -128,10 +107,8 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         }
 
         let mut bounded_reader = reader.take(packet_len);
-        let mut expected_packet_data_len = packet_len as usize;
-        let mut expected_uncompressed_packet_data_len = None;
 
-        let mut reader = if let Some(threshold) = self.compression {
+        if let Some(threshold) = self.compression {
             let decompressed_length = VarInt::decode_async(&mut bounded_reader).await?;
             let raw_packet_length = packet_len - decompressed_length.written_size() as u64;
             let decompressed_length = decompressed_length.0 as usize;
@@ -141,35 +118,105 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             }
 
             if decompressed_length > 0 {
-                expected_packet_data_len = decompressed_length;
-                expected_uncompressed_packet_data_len = Some(decompressed_length);
-                DecompressionReader::Decompress(ZlibDecoder::new(BufReader::new(bounded_reader)))
-            } else {
-                // Validate that we are not less than the compression threshold
-                if raw_packet_length > threshold as u64 {
-                    Err(PacketDecodeError::NotCompressed)?;
+                self.compressed_scratch.clear();
+                self.compressed_scratch.reserve(raw_packet_length as usize);
+                bounded_reader
+                    .read_to_end(&mut self.compressed_scratch)
+                    .await
+                    .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+
+                self.payload_scratch.clear();
+                self.payload_scratch.reserve(decompressed_length);
+                let mut decoder = flate2::read::ZlibDecoder::new(&self.compressed_scratch[..])
+                    .take(decompressed_length as u64 + 1);
+
+                let mut temp_buf = [0u8; 8192];
+                loop {
+                    let n = decoder
+                        .read(&mut temp_buf)
+                        .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+                    if n == 0 {
+                        break;
+                    }
+                    self.payload_scratch.extend_from_slice(&temp_buf[..n]);
                 }
 
-                expected_packet_data_len = raw_packet_length as usize;
-                DecompressionReader::None(bounded_reader)
-            }
-        } else {
-            DecompressionReader::None(bounded_reader)
-        };
+                if self.payload_scratch.len() != decompressed_length {
+                    return Err(PacketDecodeError::FailedDecompression(format!(
+                        "Declared decompressed length {decompressed_length} but decoded {} bytes",
+                        self.payload_scratch.len()
+                    )));
+                }
 
-        let packet_id = VarInt::decode_async(&mut reader)
+                let mut cursor = std::io::Cursor::new(&self.payload_scratch[..]);
+                let packet_id = VarInt::decode(&mut cursor)
+                    .map_err(|_| PacketDecodeError::DecodeID)?
+                    .0;
+                let packet_id_len = cursor.position() as usize;
+
+                let _ = self.payload_scratch.split_to(packet_id_len);
+                let payload = self
+                    .payload_scratch
+                    .split_to(self.payload_scratch.len())
+                    .freeze();
+
+                return Ok(RawPacket {
+                    id: packet_id,
+                    payload,
+                });
+            }
+
+            // Validate that we are not less than the compression threshold
+            if raw_packet_length > threshold as u64 {
+                Err(PacketDecodeError::NotCompressed)?;
+            }
+
+            let packet_id = VarInt::decode_async(&mut bounded_reader)
+                .await
+                .map_err(|_| PacketDecodeError::DecodeID)?
+                .0;
+            let packet_id_len = VarInt(packet_id).written_size();
+
+            let payload_len_hint = (raw_packet_length as usize).saturating_sub(packet_id_len);
+            self.payload_scratch.clear();
+            self.payload_scratch.reserve(payload_len_hint);
+
+            let mut total_read = 0;
+            while total_read < payload_len_hint {
+                let bytes_read = bounded_reader
+                    .read_buf(&mut self.payload_scratch)
+                    .await
+                    .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+                if bytes_read == 0 {
+                    break;
+                }
+                total_read += bytes_read;
+            }
+
+            let payload = self
+                .payload_scratch
+                .split_to(self.payload_scratch.len())
+                .freeze();
+
+            return Ok(RawPacket {
+                id: packet_id,
+                payload,
+            });
+        }
+
+        let packet_id = VarInt::decode_async(&mut bounded_reader)
             .await
             .map_err(|_| PacketDecodeError::DecodeID)?
             .0;
         let packet_id_len = VarInt(packet_id).written_size();
 
-        let payload_len_hint = expected_packet_data_len.saturating_sub(packet_id_len);
+        let payload_len_hint = (packet_len as usize).saturating_sub(packet_id_len);
         self.payload_scratch.clear();
         self.payload_scratch.reserve(payload_len_hint);
 
         let mut total_read = 0;
         while total_read < payload_len_hint {
-            let bytes_read = reader
+            let bytes_read = bounded_reader
                 .read_buf(&mut self.payload_scratch)
                 .await
                 .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
@@ -177,15 +224,6 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
                 break;
             }
             total_read += bytes_read;
-        }
-
-        if let Some(expected_uncompressed_packet_data_len) = expected_uncompressed_packet_data_len {
-            let decoded_packet_data_len = packet_id_len + self.payload_scratch.len();
-            if decoded_packet_data_len != expected_uncompressed_packet_data_len {
-                return Err(PacketDecodeError::FailedDecompression(format!(
-                    "Declared decompressed length {expected_uncompressed_packet_data_len} but decoded {decoded_packet_data_len} bytes"
-                )));
-            }
         }
 
         let payload = self

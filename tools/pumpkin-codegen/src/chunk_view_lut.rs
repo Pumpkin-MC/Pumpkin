@@ -58,6 +58,8 @@ pub fn build() -> TokenStream {
                 all_chebyshev_offsets.push((r_i, z));
                 current_idx += 2;
             }
+            all_chebyshev_offsets[start..current_idx]
+                .sort_by_key(|&(x, z)| i32::from(x).pow(2) + i32::from(z).pow(2));
         }
         let end = current_idx;
         ring_ranges.push((start, end));

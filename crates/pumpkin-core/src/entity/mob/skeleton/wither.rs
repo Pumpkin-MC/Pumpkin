@@ -1,13 +1,22 @@
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::Taggable;
 use std::sync::Arc;
 
+use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
+    ai::behavior::hunting::Hunt,
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
     projectile::arrow::ArrowEntity,
 };
+
+const WITHER_SKELETON_HUNTS: &[Hunt] = &[Hunt::new(3, TargetMatch::PIGLIN_LIKE, true)];
 
 pub struct WitherSkeletonEntity {
     entity: Arc<SkeletonEntityBase>,
@@ -15,13 +24,27 @@ pub struct WitherSkeletonEntity {
 
 impl WitherSkeletonEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity);
+        let entity = SkeletonEntityBase::with_hunts(entity, WITHER_SKELETON_HUNTS);
         let skeleton = Self { entity };
         Arc::new(skeleton)
     }
 }
 
 impl Mob for WitherSkeletonEntity {
+    fn can_hold_item(&self, stack: &ItemStack) -> bool {
+        !stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_WITHER_SKELETON_DISLIKED_WEAPONS)
+    }
+
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        super::wants_to_pick_up(self, stack)
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityWitherSkeletonStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }

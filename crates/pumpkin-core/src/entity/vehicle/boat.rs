@@ -52,6 +52,16 @@ impl BoatEntity {
 }
 
 impl EntityBase for BoatEntity {
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .filter(|passenger| passenger.get_living_entity().is_some())
+            .cloned()
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.vehicle.entity
     }

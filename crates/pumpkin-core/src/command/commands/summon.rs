@@ -15,7 +15,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::mob::spawn::finalize_spawn;
-use crate::entity::r#type::from_type;
+use crate::entity::r#type::{from_type, load_entity, self_and_passengers};
 use crate::world::World;
 
 const DESCRIPTION: &str = "Spawns an entity at position.";
@@ -65,22 +65,21 @@ impl CommandExecutor for SummonExecutor {
             None
         };
 
-        let uuid = nbt
-            .and_then(|nbt| nbt.get_uuid("UUID"))
-            .unwrap_or_else(Uuid::new_v4);
+        let entity = nbt.map_or_else(
+            || from_type(entity_type, pos, world, Uuid::new_v4()),
+            |nbt| {
+                let entity = load_entity(entity_type, pos, nbt, world);
+                entity.get_entity().set_pos(pos);
+                entity
+            },
+        );
+        let entities = self_and_passengers(&entity);
 
-        let entity = from_type(entity_type, pos, world, uuid);
-        if let Some(nbt) = nbt {
-            entity.read_nbt_non_mut(nbt);
-            entity.get_entity().set_pos(pos);
-        }
-
-        if world
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == entity.get_entity().entity_uuid)
-        {
+        if world.entities.load().iter().any(|existing| {
+            entities
+                .iter()
+                .any(|e| e.get_entity().entity_uuid == existing.get_entity().entity_uuid)
+        }) {
             return Err(ERROR_DUPLICATE_UUID.create_without_context());
         }
 
@@ -89,7 +88,9 @@ impl CommandExecutor for SummonExecutor {
         if !self.has_nbt {
             finalize_spawn(&entity, world, None);
         }
-        world.spawn_entity(entity);
+        for entity in entities {
+            world.spawn_entity(entity);
+        }
 
         context.source.send_feedback(
             TextComponent::translate_cross(

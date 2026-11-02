@@ -225,13 +225,34 @@ pub struct StructureTemplate {
 }
 
 /// A single entry in the template's block palette.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct PaletteEntry {
     /// The block name (e.g., "`minecraft:stone_bricks`").
     pub name: String,
 
     /// Block state properties.
     pub properties: Vec<pumpkin_data::Property>,
+
+    /// Pre-resolved unrotated/unmirrored block state ID, if known.
+    pub state_id: Option<pumpkin_data::BlockStateId>,
+}
+
+impl PartialEq for PaletteEntry {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Some(a), Some(b)) = (self.state_id, other.state_id) {
+            return a == b;
+        }
+        self.name == other.name && self.properties == other.properties
+    }
+}
+
+impl Eq for PaletteEntry {}
+
+impl std::hash::Hash for PaletteEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.properties.hash(state);
+    }
 }
 
 impl PaletteEntry {
@@ -241,18 +262,40 @@ impl PaletteEntry {
         Self {
             name,
             properties: Vec::new(),
+            state_id: None,
         }
     }
 
     /// Creates a new palette entry with the given properties.
     #[must_use]
     pub const fn with_properties(name: String, properties: Vec<pumpkin_data::Property>) -> Self {
-        Self { name, properties }
+        Self {
+            name,
+            properties,
+            state_id: None,
+        }
+    }
+
+    /// Creates a palette entry from a pre-parsed static palette entry.
+    #[must_use]
+    pub fn from_static(entry: &pumpkin_data::structure_template::StaticPaletteEntry) -> Self {
+        Self {
+            name: entry.name.to_string(),
+            properties: entry.properties.to_vec(),
+            state_id: Some(entry.state_id),
+        }
     }
 
     /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
     #[must_use]
     pub fn from_string(s: &str) -> Self {
+        if s == "minecraft:air" || s == "air" {
+            return Self {
+                name: s.to_string(),
+                properties: Vec::new(),
+                state_id: Some(pumpkin_data::Block::AIR.default_state.id),
+            };
+        }
         s.find('[').map_or_else(
             || Self::new(s.to_string()),
             |bracket_pos| {
@@ -268,7 +311,11 @@ impl PaletteEntry {
                         pumpkin_data::Property::from_str_pair(key, value)
                     })
                     .collect();
-                Self { name, properties }
+                Self {
+                    name,
+                    properties,
+                    state_id: None,
+                }
             },
         )
     }
@@ -302,6 +349,7 @@ impl PaletteEntry {
         Self {
             name: self.name.clone(),
             properties,
+            state_id: None,
         }
     }
 
@@ -347,7 +395,11 @@ impl PaletteEntry {
                     .collect()
             });
 
-        Ok(Self { name, properties })
+        Ok(Self {
+            name,
+            properties,
+            state_id: None,
+        })
     }
 }
 
@@ -991,7 +1043,7 @@ impl StructureTemplate {
         for static_palette in static_template.palettes {
             let palette_entries: Vec<PaletteEntry> = static_palette
                 .iter()
-                .map(|p| PaletteEntry::with_properties(p.name.to_string(), p.properties.to_vec()))
+                .map(PaletteEntry::from_static)
                 .collect();
 
             let mut block_info_list = Vec::with_capacity(block_count);
