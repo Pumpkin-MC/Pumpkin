@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
@@ -293,7 +294,7 @@ pub fn from_type(
         id if id == EntityType::WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner: ProjectileOwner::none(),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
@@ -303,7 +304,7 @@ pub fn from_type(
         id if id == EntityType::BREEZE_WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner: ProjectileOwner::none(),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,

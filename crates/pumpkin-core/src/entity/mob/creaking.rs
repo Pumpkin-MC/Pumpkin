@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -378,6 +379,10 @@ impl CreakingEntity {
 }
 
 impl Mob for CreakingEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityCreakingStep, 0.15, 1.0);
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         if let Some(pos) = self.get_home_pos() {
             let mut sub = NbtCompound::new();

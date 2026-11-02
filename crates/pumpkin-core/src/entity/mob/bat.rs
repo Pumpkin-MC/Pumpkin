@@ -207,6 +207,10 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn mob_is_flapping(&self) -> bool {
+        !self.is_roosting() && self.get_entity().tick_count.load(Relaxed) % 10 == 0
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };

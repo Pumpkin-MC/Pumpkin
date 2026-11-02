@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
@@ -30,7 +31,7 @@ const SPEED: f64 = 0.15;
 
 pub struct ShulkerBulletEntity {
     pub entity: Entity,
-    pub owner_id: i32,
+    pub owner: ProjectileOwner,
     /// Entity id of the final target; -1 = no target, 0+ = valid target
     target_id: AtomicI32,
     /// Current movement direction (direction ordinal, or `DIR_NONE`)
@@ -74,7 +75,7 @@ impl ShulkerBulletEntity {
 
         let bullet = Self {
             entity,
-            owner_id: owner.entity_id,
+            owner: ProjectileOwner::new(Some(owner)),
             target_id: AtomicI32::new(target_id),
             current_dir: AtomicU8::new(DIR_UP),
             flight_steps: AtomicI32::new(0),
@@ -257,7 +258,7 @@ impl ShulkerBulletEntity {
     pub const fn orphan(entity: Entity) -> Self {
         Self {
             entity,
-            owner_id: 0,
+            owner: ProjectileOwner::none(),
             target_id: AtomicI32::new(-1),
             current_dir: AtomicU8::new(DIR_NONE),
             flight_steps: AtomicI32::new(0),
@@ -271,8 +272,8 @@ impl ShulkerBulletEntity {
 }
 
 impl EntityBase for ShulkerBulletEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        Some(self.owner_id)
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.owner)
     }
 
     fn get_entity(&self) -> &Entity {
@@ -325,6 +326,7 @@ impl EntityBase for ShulkerBulletEntity {
         if self.has_hit.load(Ordering::Relaxed) {
             return;
         }
+        self.owner.check_left_owner(&self.entity);
 
         // Discard bullet after 150 ticks if it never hits anything
         let age = self.age.fetch_add(1, Ordering::Relaxed) + 1;
@@ -457,8 +459,7 @@ impl EntityBase for ShulkerBulletEntity {
             if he.entity_id == entity.entity_id {
                 continue;
             }
-            // Never hit the owner shulker
-            if he.entity_id == self.owner_id {
+            if !self.owner.can_hit(&world, he) {
                 continue;
             }
             // Must be alive
@@ -478,14 +479,14 @@ impl EntityBase for ShulkerBulletEntity {
             }
 
             // Deal 4 (MOB_PROJECTILE) damage
-            let owner_arc = world.get_entity_by_id(self.owner_id);
+            let owner = self.owner.get(&world);
             let damaged = hit_entity.damage_with_context(
                 hit_entity.as_ref(),
                 4.0,
                 DamageType::MOB_PROJECTILE,
                 None,
-                owner_arc.as_deref(),
-                None,
+                Some(self),
+                owner.as_deref(),
             );
 
             if damaged && let Some(living) = hit_entity.get_living_entity() {

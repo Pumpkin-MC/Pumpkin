@@ -6,7 +6,9 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::client_parsed::IdStringArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::function::FunctionArgumentType;
 use crate::command::argument_types::time::TimeArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
@@ -171,7 +173,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .requires(PERMISSION)
             .then(
                 literal("function").then(
-                    argument("function", StringArgumentType::SingleWord)
+                    argument("function", FunctionArgumentType)
                         .suggests(FunctionSuggestionProvider)
                         .then(
                             argument("time", TimeArgumentType::any())
@@ -187,7 +189,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             )
             .then(
                 literal("clear").then(
-                    argument("function", StringArgumentType::GreedyPhrase)
+                    argument("function", IdStringArgumentType)
                         .suggests(ScheduleSuggestionProvider)
                         .executes(ClearExecutor),
                 ),

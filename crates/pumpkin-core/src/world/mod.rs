@@ -1617,11 +1617,12 @@ impl World {
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
         let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = self
-            .island_schedule
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .should_plan(tickable.len());
+        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
+            && self
+                .island_schedule
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .should_plan(tickable.len());
         let islands = if plan_islands {
             let islands = (|| {
                 let reports: Vec<_> = tickable
@@ -4556,12 +4557,9 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
+        self.entity_index
+            .by_uuid(&self.entities.load_full(), id)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
-            .cloned()
     }
 
     /// Gets a list of players whose location equals the given position in the world.
@@ -6380,6 +6378,34 @@ impl World {
             && level_data.difficulty != Difficulty::Peaceful
     }
 
+    /// The saved NBT of the block entity at the position, if any.
+    pub fn get_block_entity_nbt(&self, block_pos: &BlockPos) -> Option<NbtCompound> {
+        self.get_block_entity(block_pos)
+            .map(|be| block_entity_nbt(be.as_ref()))
+    }
+
+    /// Like [`Self::get_block_entity_nbt`], for a caller already inside `read_chunk_sync`
+    /// of the chunk holding `block_pos`. Reading that chunk again could deadlock.
+    pub fn get_block_entity_nbt_in_chunk(
+        &self,
+        chunk: &ChunkData,
+        block_pos: &BlockPos,
+    ) -> Option<NbtCompound> {
+        if let Some(nbt) = self
+            .block_entities
+            .get(&block_pos.chunk_position())
+            .and_then(|m| m.get(block_pos).map(|be| block_entity_nbt(be.as_ref())))
+        {
+            return Some(nbt);
+        }
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(block_pos)
+            .cloned()
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self
@@ -7642,6 +7668,12 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
         }
         data.push(record);
     }
+}
+
+fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
+    let mut nbt = NbtCompound::new();
+    block_entity.write_internal(&mut nbt);
+    nbt
 }
 
 #[cfg(test)]

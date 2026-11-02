@@ -159,3 +159,4 @@ pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod respawn;
 pub mod set_local_player_as_initialized;
+pub mod stonecutter;
