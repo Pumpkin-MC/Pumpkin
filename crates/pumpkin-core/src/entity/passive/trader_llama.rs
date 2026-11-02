@@ -66,11 +66,6 @@ impl TraderLlamaEntity {
         })
     }
 
-    /// Trader llamas from the wandering trader spawner always start as adults.
-    pub fn on_event_spawn(&self) {
-        self.llama.set_age(0);
-    }
-
     pub fn set_despawn_delay(&self, despawn_delay: i32) {
         self.despawn_delay.store(despawn_delay, Relaxed);
     }
@@ -286,9 +281,13 @@ impl Mob for TraderLlamaEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        self.llama.finalize_spawn(world, group_data)
+        if reason == crate::entity::mob::spawn::EntitySpawnReason::Event {
+            self.llama.set_age(0);
+        }
+        self.llama.finalize_spawn(world, reason, group_data)
     }
 
     fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {

@@ -623,7 +623,12 @@ pub fn spawn_mobs_for_chunk_generation(
                         entity
                             .get_entity()
                             .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-                        group_data = finalize_spawn(&entity, world, group_data);
+                        group_data = finalize_spawn(
+                            &entity,
+                            world,
+                            crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
+                            group_data,
+                        );
                         world.spawn_entity_non_save(entity);
                         success = true;
                     }
@@ -827,7 +832,12 @@ pub fn spawn_category_for_position(
                     });
 
                     if is_valid_for_mob {
-                        group_data = finalize_spawn(&entity, world, group_data);
+                        group_data = finalize_spawn(
+                            &entity,
+                            world,
+                            crate::entity::mob::spawn::EntitySpawnReason::Natural,
+                            group_data,
+                        );
                         cluster_size += 1;
                         group_size += 1;
                         let max_group_size_reached = entity

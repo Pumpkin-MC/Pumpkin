@@ -444,6 +444,7 @@ impl Mob for FoxEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let (variant, size) = if let Some(SpawnGroupData::Fox { variant, size }) = group_data {

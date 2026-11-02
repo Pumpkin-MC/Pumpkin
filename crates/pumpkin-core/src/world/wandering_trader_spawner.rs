@@ -15,8 +15,7 @@ use rand::seq::IndexedRandom;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
-use crate::entity::mob::spawn::finalize_spawn;
-use crate::entity::passive::trader_llama::TraderLlamaEntity;
+use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
 use crate::entity::passive::wandering_trader::WanderingTraderEntity;
 use crate::entity::r#type::from_type;
 use crate::world::World;
@@ -154,10 +153,7 @@ impl WanderingTraderSpawner {
         let entity = from_type(entity_type, spawn_pos, world, Uuid::new_v4());
         let yaw = rand::rng().random::<f32>() * 360.0;
         entity.get_entity().set_rotation(yaw, 0.0);
-        if let Some(trader_llama) = entity.cast_any().downcast_ref::<TraderLlamaEntity>() {
-            trader_llama.on_event_spawn();
-        }
-        finalize_spawn(&entity, world, None);
+        finalize_spawn(&entity, world, EntitySpawnReason::Event, None);
         world.spawn_entity(entity.clone());
         entity
     }

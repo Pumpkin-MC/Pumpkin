@@ -592,7 +592,13 @@ impl DispenserBlock {
         let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
         // A dispenser has no acting player, matching vanilla's null `user` for this source.
-        prepare_egg_mob(item, &mob, ctx.world, None);
+        prepare_egg_mob(
+            item,
+            &mob,
+            ctx.world,
+            crate::entity::mob::spawn::EntitySpawnReason::Dispenser,
+            None,
+        );
 
         // Vanilla SpawnEggItemBehavior keeps the egg when nothing spawned.
         if ctx

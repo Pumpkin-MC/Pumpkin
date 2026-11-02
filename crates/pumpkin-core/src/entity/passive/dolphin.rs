@@ -344,6 +344,7 @@ impl Mob for DolphinEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         self.get_entity().set_air_supply(TOTAL_AIR_SUPPLY);

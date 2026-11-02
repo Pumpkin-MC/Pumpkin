@@ -1946,6 +1946,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
         let entity = self.get_entity();

@@ -755,6 +755,7 @@ impl Mob for LlamaEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         self.set_random_strength();

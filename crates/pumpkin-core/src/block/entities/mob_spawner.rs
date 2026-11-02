@@ -194,7 +194,12 @@ impl BlockEntity for MobSpawnerBlockEntity {
                 }
 
                 // TODO: support SpawnData NBT (`entity` tag, custom_spawn_rules, equipment).
-                finalize_spawn(&entity, world, None);
+                finalize_spawn(
+                    &entity,
+                    world,
+                    crate::entity::mob::spawn::EntitySpawnReason::Spawner,
+                    None,
+                );
                 world.spawn_entity(entity);
                 world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                 spawned_any = true;

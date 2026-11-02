@@ -245,6 +245,7 @@ impl Mob for ChickenEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
