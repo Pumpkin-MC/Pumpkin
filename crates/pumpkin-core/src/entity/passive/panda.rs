@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,6 +11,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::{
@@ -239,6 +241,10 @@ impl AgeableMob for PandaEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::PANDA_BABY_SPAWN_CHANCE
+    }
 }
 
 impl Animal for PandaEntity {
@@ -250,6 +256,10 @@ impl Animal for PandaEntity {
 }
 
 impl Mob for PandaEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityPandaStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

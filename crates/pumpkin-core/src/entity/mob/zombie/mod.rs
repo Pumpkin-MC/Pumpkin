@@ -9,7 +9,9 @@ use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::{
     Entity,
-    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::behavior::hunting::{self, Hunt},
+    ai::goal::look_at_entity::LookAtEntityGoal,
+    ai::target_match::TargetMatch,
 };
 use crate::world::World;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -27,6 +29,13 @@ pub mod husk;
 pub mod zombie;
 pub mod zombie_villager;
 
+const ZOMBIE_HUNTS: &[Hunt] = &[
+    Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true),
+    Hunt::new(3, TargetMatch::VILLAGER_LIKE, false),
+    Hunt::new(3, TargetMatch::Type(&EntityType::IRON_GOLEM), true),
+    hunting::baby_turtles(5, true),
+];
+
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
     pub can_break_doors: AtomicBool,
@@ -39,6 +48,23 @@ impl ZombieEntityBase {
     }
 
     pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
+        Self::with_targets(entity, can_break_doors, Self::revenge_goal(), ZOMBIE_HUNTS)
+    }
+
+    /// Vanilla `HurtByTargetGoal(this).setAlertOthers(ZombifiedPiglin.class)`.
+    #[must_use]
+    pub fn revenge_goal() -> RevengeGoal {
+        RevengeGoal::new(true)
+            .alerting_others_except(|entity_type| entity_type == &EntityType::ZOMBIFIED_PIGLIN)
+    }
+
+    /// For subclasses that replace the target goals, like the drowned.
+    pub fn with_targets(
+        entity: Entity,
+        can_break_doors: bool,
+        revenge: RevengeGoal,
+        hunts: &[Hunt],
+    ) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self {
             mob_entity,
@@ -68,30 +94,8 @@ impl ZombieEntityBase {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                Box::new(
-                    RevengeGoal::new(true).alerting_others_except(|entity_type| {
-                        entity_type == &EntityType::ZOMBIFIED_PIGLIN
-                    }),
-                ),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
-            );
+            target_selector.add_goal(1, Box::new(revenge));
+            hunting::apply(target_selector, &mob_arc.mob_entity, hunts);
         };
 
         mob_arc

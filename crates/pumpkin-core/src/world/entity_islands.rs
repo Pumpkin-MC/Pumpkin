@@ -1,7 +1,7 @@
 //! Splits a tick's entities into islands that touch disjoint state. Each island ticks in list
 //! order on its own thread, which gives the same result as ticking the whole list in order.
 
-use std::{collections::VecDeque, sync::atomic::Ordering::Relaxed};
+use std::collections::VecDeque;
 
 #[cfg(debug_assertions)]
 use std::sync::Arc;
@@ -17,10 +17,15 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::plugin::api::events::entity::{
+    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
+    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+};
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
+use crate::server::Server;
 use crate::world::World;
 
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
@@ -119,6 +124,17 @@ impl Schedule {
         };
         parallel
     }
+}
+
+/// A plugin listens to an event an entity tick can fire: targeting, breeding, anger, or a
+/// sit order dropped on damage. Its handler may touch anything, so the tick runs in list order.
+#[must_use]
+pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
+    let plugins = &server.plugin_manager;
+    plugins.has_handlers::<EntityTargetEvent>()
+        || plugins.has_handlers::<EntityBreedEvent>()
+        || plugins.has_handlers::<PigZombieAngerEvent>()
+        || plugins.has_handlers::<EntityToggleSitEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -309,9 +325,12 @@ impl EntityReach {
             TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity
-            .cast_any()
-            .downcast_ref::<TNTEntity>()
-            .is_some_and(TNTEntity::is_about_to_explode);
+            .get_mob()
+            .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+            || entity
+                .cast_any()
+                .downcast_ref::<TNTEntity>()
+                .is_some_and(TNTEntity::is_about_to_explode);
         Self::Conservative(reach)
     }
 }
@@ -336,7 +355,31 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
             links.push(other.get_entity().entity_id);
         }
     }
-    links.extend(entity.get_owner_id());
+    if let Some(DelayedLeash::Entity(uuid)) = *base
+        .delayed_leash
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        let world = base.world.load();
+        links.extend(
+            world
+                .get_entity_by_uuid(uuid)
+                .map(|holder| holder.get_entity().entity_id)
+                .or_else(|| {
+                    world
+                        .get_player_by_uuid(uuid)
+                        .map(|player| player.entity_id())
+                }),
+        );
+    }
+    if let Some(owner) = entity.get_owner_entity() {
+        links.push(owner.get_entity().entity_id);
+    }
+    if let Some(fish) = entity.get_mob().and_then(|mob| mob.as_schooling_fish())
+        && let Some(leader) = fish.leader()
+    {
+        links.push(leader.get_entity().entity_id);
+    }
     if let Some(mob) = entity.get_mob()
         && let Some(target) = mob.get_mob_entity().get_target()
     {
@@ -344,14 +387,12 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     }
     if let Some(living) = entity.get_living_entity() {
         // Kill credit on death.
-        for attacker in [
-            living.last_hurt_by_player_id.load(Relaxed),
-            living.last_hurt_by_mob_id.load(Relaxed),
-        ] {
-            if attacker != 0 {
-                links.push(attacker);
-            }
-        }
+        links.extend(
+            living
+                .get_last_hurt_by_player()
+                .map(|player| player.entity_id()),
+        );
+        links.extend(living.get_last_hurt_by_mob_id().filter(|id| *id != 0));
     }
     links
 }

@@ -1,6 +1,7 @@
-use crate::block::{BlockBehaviour, BlockMetadata, GetComparatorOutputArgs};
-use pumpkin_data::BlockId;
+use crate::block::{BlockBehaviour, BlockMetadata, GetComparatorOutputArgs, OnPlaceArgs};
+use crate::entity::EntityBase;
 use pumpkin_data::block_properties::BeeNestLikeProperties;
+use pumpkin_data::{BlockId, BlockStateId};
 
 pub struct BeehiveBlock;
 
@@ -11,11 +12,15 @@ impl BlockMetadata for BeehiveBlock {
 }
 
 impl BlockBehaviour for BeehiveBlock {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = BeeNestLikeProperties::default(args.block);
+        props.facing = args.player.get_entity().get_horizontal_facing().opposite();
+        props.to_state_id(args.block)
+    }
+
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        {
-            let state_id = args.world.get_block_state_id(args.position);
-            let props = BeeNestLikeProperties::from_state_id(state_id);
-            Some(props.honey_level)
-        }
+        let state_id = args.world.get_block_state_id(args.position);
+        let props = BeeNestLikeProperties::from_state_id(state_id);
+        Some(props.honey_level)
     }
 }

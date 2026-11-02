@@ -7,12 +7,13 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
-    RandomTickArgs,
+use crate::{
+    block::{
+        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
+        RandomTickArgs,
+    },
+    world::World,
 };
-use crate::world::World;
-
 #[pumpkin_block("minecraft:sugar_cane")]
 pub struct SugarCaneBlock;
 
@@ -32,20 +33,23 @@ impl BlockBehaviour for SugarCaneBlock {
             let state_id = args.world.get_block_state(args.position).id;
             let age = CactusLikeProperties::from_state_id(state_id).age;
             if age == 15 {
-                args.world
-                    .set_block_state(&args.position.up(), state_id, BlockFlags::NOTIFY_ALL);
+                args.world.set_block_state(
+                    &args.position.up(),
+                    args.block.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
                 let props = CactusLikeProperties { age: 0 };
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
+                    BlockFlags::NOTIFY_ALL,
                 );
             } else {
                 let props = CactusLikeProperties { age: age + 1 };
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
+                    BlockFlags::NOTIFY_ALL,
                 );
             }
         }
@@ -75,8 +79,9 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
     }
 
     if block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
+        let below = block_pos.down();
         for direction in HorizontalFacing::all() {
-            let adj_pos = block_pos.down().offset(direction.to_offset());
+            let adj_pos = below.offset(direction.to_offset());
             // During world generation, adjacent water is in the generation cache.
             let state_id = block_accessor.get_block_state_id(&adj_pos);
             let block = state_id.to_block();

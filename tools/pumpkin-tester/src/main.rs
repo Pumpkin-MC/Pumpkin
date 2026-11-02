@@ -51,6 +51,8 @@ async fn main() -> ExitCode {
         }
     };
 
+    harness::prepare_spawn_chunk(&server).await;
+
     let listener = match TcpListener::bind("127.0.0.1:0").await {
         Ok(l) => l,
         Err(err) => {

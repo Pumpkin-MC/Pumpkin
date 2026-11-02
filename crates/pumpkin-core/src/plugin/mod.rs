@@ -1232,11 +1232,15 @@ impl PluginManager {
             }
         }
 
-        // Process non-blocking handlers
-        for handler in handlers {
-            if !handler.is_blocking() {
-                handler.handle_dyn(server, event).await;
-            }
+        // Run non-blocking handlers concurrently
+        let non_blocking: Vec<_> = handlers
+            .iter()
+            .filter(|h| !h.is_blocking())
+            .map(|h| h.handle_dyn(server, event))
+            .collect();
+
+        if !non_blocking.is_empty() {
+            futures::future::join_all(non_blocking).await;
         }
     }
 

@@ -14,9 +14,9 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetRedstonePowerArgs,
-    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
-    PrepareArgs,
+    BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    OnStateReplacedArgs, PlacedArgs, PrepareArgs,
 };
 use crate::world::World;
 
@@ -49,13 +49,16 @@ impl BlockBehaviour for RedstoneWireBlock {
         update_neighbors_of_neighboring_wires(args.world, args.position);
     }
 
-    fn broken(&self, args: BrokenArgs<'_>) {
-        for direction in BlockDirection::all() {
-            let neighbor_pos = args.position.offset(direction.to_offset());
-            update_neighbors_at(args.world, &neighbor_pos, &Block::REDSTONE_WIRE);
-        }
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        if !args.moved {
+            for direction in BlockDirection::all() {
+                let neighbor_pos = args.position.offset(direction.to_offset());
+                update_neighbors_at(args.world, &neighbor_pos, &Block::REDSTONE_WIRE);
+            }
 
-        update_neighbors_of_neighboring_wires(args.world, args.position);
+            update_power_strength(args.world, args.position);
+            update_neighbors_of_neighboring_wires(args.world, args.position);
+        }
     }
 
     fn get_state_for_neighbor_update(
@@ -133,6 +136,9 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if !args.player.may_build() {
+            return BlockActionResult::Pass;
+        }
         let state = args.world.get_block_state(args.position);
         let wire = RedstoneWireProperties::from_state_id(state.id);
 
@@ -183,6 +189,10 @@ impl BlockBehaviour for RedstoneWireBlock {
         }
     }
 
+    fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
+        true
+    }
+
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         let wire = RedstoneWireProperties::from_state_id(args.state.id);
         if wire.power == 0 || args.direction == BlockDirection::Down {
@@ -191,6 +201,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         if args.direction == BlockDirection::Up {
             return wire.power;
         }
+        let wire = get_connection_state(args.world, wire, args.position);
         if let Some(horizontal) = args.direction.opposite().to_horizontal_facing()
             && is_side_connected_prop(wire, horizontal)
         {
@@ -200,19 +211,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let wire = RedstoneWireProperties::from_state_id(args.state.id);
-        if wire.power == 0 || args.direction == BlockDirection::Down {
-            return 0;
-        }
-        if args.direction == BlockDirection::Up {
-            return wire.power;
-        }
-        if let Some(horizontal) = args.direction.opposite().to_horizontal_facing()
-            && is_side_connected_prop(wire, horizontal)
-        {
-            return wire.power;
-        }
-        0
+        self.get_weak_redstone_power(args)
     }
 
     fn rotate(

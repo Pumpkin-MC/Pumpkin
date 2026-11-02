@@ -195,6 +195,12 @@ impl BeaconBlockEntity {
                 continue;
             }
 
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ConstructBeacon {
+                    level: levels,
+                },
+            );
+
             if let Some(effect) = primary_effect {
                 player.add_effect(pumpkin_data::potion::Effect {
                     effect_type: effect,

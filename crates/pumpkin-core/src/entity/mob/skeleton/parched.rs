@@ -1,7 +1,10 @@
+use pumpkin_data::BlockState;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
@@ -17,7 +20,12 @@ impl ParchedSkeletonEntity {
     }
 }
 
+// TODO: arrows inflict Weakness for 600 ticks, immune to Weakness.
 impl Mob for ParchedSkeletonEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityParchedStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }

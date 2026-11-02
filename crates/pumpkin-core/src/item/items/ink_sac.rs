@@ -29,6 +29,9 @@ impl InkSacItem {
         block_entity: &Arc<dyn BlockEntity>,
         text: &Text,
     ) -> BlockActionResult {
+        if !text.has_message(args.player.is_text_filtering_enabled()) {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
         let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
 
         if !changed {

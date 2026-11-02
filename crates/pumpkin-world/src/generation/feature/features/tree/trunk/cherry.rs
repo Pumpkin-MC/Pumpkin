@@ -84,9 +84,9 @@ impl CherryTrunkPlacer {
 
         let directions = [
             BlockPos::new(0, 0, -1), // North
+            BlockPos::new(1, 0, 0),  // East
             BlockPos::new(0, 0, 1),  // South
             BlockPos::new(-1, 0, 0), // West
-            BlockPos::new(1, 0, 0),  // East
         ];
         let branch_direction = directions[random.next_bounded_i32(4) as usize];
 

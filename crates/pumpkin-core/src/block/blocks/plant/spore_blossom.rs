@@ -1,8 +1,8 @@
 use crate::block::{BlockBehaviour, CanPlaceAtArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
-use pumpkin_data::BlockStateId;
+use crate::world::World;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
@@ -18,12 +18,12 @@ impl BlockBehaviour for SporeBlossomBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
-            self,
-            args.world,
-            args.position,
-            args.state_id,
-        )
+        if args.direction == BlockDirection::Up
+            && !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position)
+        {
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
     }
 }
 impl PlantBlockBase for SporeBlossomBlock {
@@ -35,10 +35,9 @@ impl PlantBlockBase for SporeBlossomBlock {
         false
     }
     fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        let ceiling_block = block_accessor.get_block(&block_pos.up());
-        supports_spore_blossom(ceiling_block)
+        let ceiling_state = block_accessor.get_block_state(&block_pos.up());
+        let here_state = block_accessor.get_block_state(block_pos);
+        ceiling_state.is_center_solid(BlockDirection::Down)
+            && !World::get_fluid_from_state_id(here_state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
     }
-}
-fn supports_spore_blossom(block: &Block) -> bool {
-    !block.has_tag(&tag::Block::MINECRAFT_LEAVES) && block.is_solid()
 }

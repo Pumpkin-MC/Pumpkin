@@ -1,7 +1,8 @@
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
     DynamicRecipe, OwnedBrewingRecipe, OwnedCookingRecipe, OwnedCookingRecipeType,
-    OwnedCraftingRecipe, OwnedRecipeIngredient, OwnedRecipeResult,
+    OwnedCraftingRecipe, OwnedRecipeIngredient, OwnedRecipeResult, OwnedSmithingTransformRecipe,
+    OwnedSmithingTrimRecipe, OwnedSpecialCraftingRecipe, OwnedStonecutterRecipe,
 };
 use serde_json::Value;
 
@@ -14,6 +15,24 @@ pub fn parse_recipe(namespace: &str, name: &str, json_str: &str) -> Option<Dynam
     match recipe_type {
         "crafting_shaped" => parse_shaped(recipe_id, &value).map(DynamicRecipe::Crafting),
         "crafting_shapeless" => parse_shapeless(recipe_id, &value).map(DynamicRecipe::Crafting),
+        "crafting_transmute" => parse_transmute(recipe_id, &value).map(DynamicRecipe::Crafting),
+        "crafting_dye" => parse_dye(recipe_id, &value).map(DynamicRecipe::Crafting),
+        "crafting_decorated_pot" => {
+            parse_decorated_pot(recipe_id, &value).map(DynamicRecipe::Crafting)
+        }
+        "crafting_imbue" => parse_imbue(recipe_id, &value).map(DynamicRecipe::Crafting),
+        "stonecutting" => parse_stonecutting(recipe_id, &value).map(DynamicRecipe::Stonecutting),
+        "smithing_transform" => {
+            parse_smithing_transform(recipe_id, &value).map(DynamicRecipe::SmithingTransform)
+        }
+        "smithing_trim" => parse_smithing_trim(recipe_id, &value).map(DynamicRecipe::SmithingTrim),
+        s if s.starts_with("crafting_special_") => {
+            let category = parse_category(value.get("category"));
+            Some(DynamicRecipe::SpecialCrafting(OwnedSpecialCraftingRecipe {
+                recipe_id,
+                category,
+            }))
+        }
         "smelting" => parse_cooking(recipe_id, &value, 200)
             .map(|c| DynamicRecipe::Cooking(OwnedCookingRecipeType::Smelting(c))),
         "blasting" => parse_cooking(recipe_id, &value, 100)
@@ -225,6 +244,133 @@ fn parse_brewing(recipe_id: String, value: &Value) -> Option<OwnedBrewingRecipe>
         reagent,
         output_item,
         output_potion,
+    })
+}
+
+fn parse_transmute(recipe_id: String, value: &Value) -> Option<OwnedCraftingRecipe> {
+    let category = parse_category(value.get("category"));
+    let group = value
+        .get("group")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let input = parse_ingredient(value.get("input")?)?;
+    let material = parse_ingredient(value.get("material")?)?;
+    let result = parse_result(value.get("result")?).unwrap_or(OwnedRecipeResult {
+        item_id: "minecraft:filled_map".to_string(),
+        count: 1,
+    });
+    Some(OwnedCraftingRecipe::Shapeless {
+        recipe_id: Some(recipe_id),
+        category,
+        group,
+        ingredients: vec![input, material],
+        result,
+    })
+}
+
+fn parse_dye(recipe_id: String, value: &Value) -> Option<OwnedCraftingRecipe> {
+    let category = parse_category(value.get("category"));
+    let group = value
+        .get("group")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let target = parse_ingredient(value.get("target")?)?;
+    let dye = parse_ingredient(value.get("dye")?)?;
+    let result = parse_result(value.get("result")?)?;
+    Some(OwnedCraftingRecipe::Shapeless {
+        recipe_id: Some(recipe_id),
+        category,
+        group,
+        ingredients: vec![target, dye],
+        result,
+    })
+}
+
+fn parse_decorated_pot(recipe_id: String, value: &Value) -> Option<OwnedCraftingRecipe> {
+    let category = parse_category(value.get("category"));
+    let group = value
+        .get("group")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let back = parse_ingredient(value.get("back")?)?;
+    let left = parse_ingredient(value.get("left")?)?;
+    let right = parse_ingredient(value.get("right")?)?;
+    let front = parse_ingredient(value.get("front")?)?;
+    let result = parse_result(value.get("result")?)?;
+    Some(OwnedCraftingRecipe::Shaped {
+        recipe_id: Some(recipe_id),
+        category,
+        group,
+        show_notification: true,
+        key: vec![('B', back), ('L', left), ('R', right), ('F', front)],
+        pattern: vec![" B ".to_string(), "L R".to_string(), " F ".to_string()],
+        result,
+    })
+}
+
+fn parse_imbue(recipe_id: String, value: &Value) -> Option<OwnedCraftingRecipe> {
+    let category = parse_category(value.get("category"));
+    let group = value
+        .get("group")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let material = parse_ingredient(value.get("material")?)?;
+    let source = parse_ingredient(value.get("source")?)?;
+    let result = parse_result(value.get("result")?)?;
+    Some(OwnedCraftingRecipe::Shaped {
+        recipe_id: Some(recipe_id),
+        category,
+        group,
+        show_notification: true,
+        key: vec![('#', material), ('X', source)],
+        pattern: vec!["###".to_string(), "#X#".to_string(), "###".to_string()],
+        result,
+    })
+}
+
+fn parse_stonecutting(recipe_id: String, value: &Value) -> Option<OwnedStonecutterRecipe> {
+    let group = value
+        .get("group")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let ingredient = parse_ingredient(value.get("ingredient")?)?;
+    let result = parse_result(value.get("result")?)?;
+    Some(OwnedStonecutterRecipe {
+        recipe_id,
+        group,
+        ingredient,
+        result,
+    })
+}
+
+fn parse_smithing_transform(
+    recipe_id: String,
+    value: &Value,
+) -> Option<OwnedSmithingTransformRecipe> {
+    let template = parse_ingredient(value.get("template")?)?;
+    let base = parse_ingredient(value.get("base")?)?;
+    let addition = parse_ingredient(value.get("addition")?)?;
+    let result = parse_result(value.get("result")?)?;
+    Some(OwnedSmithingTransformRecipe {
+        recipe_id,
+        template,
+        base,
+        addition,
+        result,
+    })
+}
+
+fn parse_smithing_trim(recipe_id: String, value: &Value) -> Option<OwnedSmithingTrimRecipe> {
+    let template = parse_ingredient(value.get("template")?)?;
+    let base = parse_ingredient(value.get("base")?)?;
+    let addition = parse_ingredient(value.get("addition")?)?;
+    let pattern = value.get("pattern")?.as_str()?.to_string();
+    Some(OwnedSmithingTrimRecipe {
+        recipe_id,
+        template,
+        base,
+        addition,
+        pattern: normalize_id(&pattern),
     })
 }
 

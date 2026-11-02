@@ -77,7 +77,7 @@ impl BambooFeature {
                     stage: 1,
                 };
                 chunk.set_block_state(
-                    &bpos.down().0,
+                    &bpos.0,
                     BlockState::from_id(final_large_props.to_state_id(&Block::BAMBOO)),
                 );
 
@@ -87,7 +87,7 @@ impl BambooFeature {
                     stage: 0,
                 };
                 chunk.set_block_state(
-                    &bpos.down().down().0,
+                    &bpos.down().0,
                     BlockState::from_id(top_large_props.to_state_id(&Block::BAMBOO)),
                 );
 
@@ -97,7 +97,7 @@ impl BambooFeature {
                     stage: 0,
                 };
                 chunk.set_block_state(
-                    &bpos.down().down().down().0,
+                    &bpos.down().down().0,
                     BlockState::from_id(top_small_props.to_state_id(&Block::BAMBOO)),
                 );
             }

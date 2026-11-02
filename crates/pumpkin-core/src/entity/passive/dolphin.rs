@@ -11,6 +11,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::{
     Entity, EntityBase,
     ai::control::{
@@ -24,11 +25,14 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     ai::pathfinder::Navigator,
+    ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     player::Player,
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON, &Item::TROPICAL_FISH];
+
+const DOLPHIN_FLEES: &[Flee] = &[Flee::new(9, TargetMatch::GUARDIAN_LIKE, 8.0, 1.0, 1.0)];
 
 pub struct DolphinEntity {
     pub mob_entity: MobEntity,
@@ -78,12 +82,20 @@ impl DolphinEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            fleeing::apply(goal_selector, DOLPHIN_FLEES);
         };
 
         {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                1,
+                Box::new(
+                    RevengeGoal::new(true)
+                        .ignoring(|entity_type| TargetMatch::GUARDIAN_LIKE.matches(entity_type))
+                        .alerting_others(),
+                ),
+            );
         };
 
         mob_arc

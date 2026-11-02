@@ -1,7 +1,7 @@
 use pumpkin_util::Difficulty;
 
 use crate::entity::EntityBase;
-use crate::entity::living::{LivingEntity, can_be_seen_as_enemy};
+use crate::entity::living::LivingEntity;
 use crate::world::World;
 use std::sync::Arc;
 
@@ -89,6 +89,18 @@ impl TargetPredicate {
         tester: Option<&dyn EntityBase>,
         target: &dyn EntityBase,
     ) -> bool {
+        self.test_with_alliance(world, tester, target, |tester, target| {
+            tester.is_allied_to(target)
+        })
+    }
+
+    pub fn test_with_alliance(
+        &self,
+        world: &World,
+        tester: Option<&dyn EntityBase>,
+        target: &dyn EntityBase,
+        is_allied: impl FnOnce(&dyn EntityBase, &dyn EntityBase) -> bool,
+    ) -> bool {
         let Some(target_living) = target.get_living_entity() else {
             return false;
         };
@@ -97,14 +109,21 @@ impl TargetPredicate {
             return false;
         }
 
-        if !target_living.is_part_of_game() {
+        if !target.can_be_seen_by_anyone() {
+            return false;
+        }
+
+        // Vanilla runs the selector before the attack, range and sight checks.
+        if let Some(predicate) = &self.predicate
+            && !predicate(target_living, world)
+        {
             return false;
         }
 
         let Some(tester) = tester else {
             // Without a tester only the plain "can be seen as enemy" rule applies.
             return !(self.attackable
-                && (!can_be_seen_as_enemy(target)
+                && (!target.can_be_seen_as_enemy()
                     || world.level_info.load().difficulty == Difficulty::Peaceful));
         };
         let Some(tester_living) = tester.get_living_entity() else {
@@ -115,7 +134,7 @@ impl TargetPredicate {
             && (!tester.get_mob().map_or_else(
                 || tester_living.can_attack(target),
                 |mob| mob.can_attack(target),
-            ) || tester.is_allied_to(target))
+            ) || is_allied(tester, target))
         {
             return false;
         }
@@ -141,14 +160,6 @@ impl TargetPredicate {
         if self.respects_visibility
             && let Some(mob) = tester.get_mob()
             && !mob.has_line_of_sight(target.get_entity())
-        {
-            return false;
-        }
-
-        // Mirrors vanilla `TargetingConditions.test`, which runs the custom
-        // selector last, after the generic attackability/range/visibility checks.
-        if let Some(predicate) = &self.predicate
-            && !predicate(target_living, world)
         {
             return false;
         }

@@ -293,9 +293,9 @@ impl PathfindingContext {
 
     #[must_use]
     pub fn is_water(&self, pos: &BlockPos) -> bool {
-        let state_id = self.world.get_block_state_id(pos);
-        let fluid = Fluid::from_state_id(state_id);
-        fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+        self.world
+            .get_fluid(pos)
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
     }
 
     #[must_use]

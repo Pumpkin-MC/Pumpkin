@@ -1,7 +1,6 @@
 pub mod nethernet;
 pub mod play;
 pub(crate) mod recipe;
-pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
     collections::HashMap,
@@ -32,18 +31,21 @@ use pumpkin_protocol::{
             block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
-            interact::SInteract, inventory_transaction::SInventoryTransaction,
-            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
+            container_close::SContainerClose, cursor_item_drag::SCursorItemDrag, emote::SEmote,
+            emote_list::SEmoteList, interact::SInteract,
+            inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
+            loading_screen::SLoadingScreen, login::SLogin, matchmaking_cancel::SMatchmakingCancel,
             mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
-            player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
+            player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
+            register_audio_content::SRegisterAudioContent, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
-            set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
+            set_player_inventory_options::SSetPlayerInventoryOptions,
+            stonecutter_set_recipe::SStonecutterSetRecipe, text::SText,
         },
     },
     packet::Packet,
@@ -323,6 +325,10 @@ impl BedrockClient {
         warn!("Closing connection for {}: {message}", self.address);
         self.send_packet(&CDisconnect::new(reason as i32, message))
             .await;
+        let _ = self
+            .session
+            .flush_reliable(std::time::Duration::from_secs(1))
+            .await;
         self.close().await;
     }
 
@@ -343,6 +349,10 @@ impl BedrockClient {
                 filtered_message,
             })
             .await;
+            let _ = self
+                .session
+                .flush_reliable(std::time::Duration::from_secs(1))
+                .await;
         }
         self.close().await;
     }
@@ -387,7 +397,7 @@ impl BedrockClient {
 
         let world = player.world();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let mut encoded_payloads = Vec::with_capacity(valid_chunks.len());
             let mut new_blobs = Vec::new();
             for chunk in valid_chunks {
@@ -811,6 +821,22 @@ impl BedrockClient {
                 let _ = SSetPlayerInventoryOptions::read(reader)?;
                 // Ignore for now
             }
+            SCursorItemDrag::PACKET_ID => {
+                let _ = SCursorItemDrag::read(reader)?;
+                // Ignore for now
+            }
+            SStonecutterSetRecipe::PACKET_ID => {
+                let packet = SStonecutterSetRecipe::read(reader)?;
+                self.handle_stonecutter_set_recipe(player, &packet);
+            }
+            SMatchmakingCancel::PACKET_ID => {
+                let _ = SMatchmakingCancel::read(reader)?;
+                // Ignore for now
+            }
+            SRegisterAudioContent::PACKET_ID => {
+                let _ = SRegisterAudioContent::read(reader)?;
+                // Ignore for now
+            }
             SPlayerAction::PACKET_ID => {
                 let packet = SPlayerAction::read(reader)?;
                 self.handle_player_action(player, server, &packet);
@@ -852,6 +878,10 @@ impl BedrockClient {
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;
                 self.handle_mob_equipment(server, player, &packet);
+            }
+            SPlayerHotbar::PACKET_ID => {
+                let packet = SPlayerHotbar::read(reader)?;
+                self.handle_player_hotbar(server, player, &packet);
             }
             SPacketViolationWarning::PACKET_ID => {
                 let warning = SPacketViolationWarning::read(reader)?;
@@ -932,8 +962,7 @@ impl BedrockClient {
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
     }
 }

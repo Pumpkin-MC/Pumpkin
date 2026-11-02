@@ -21,8 +21,7 @@ impl PaleHangingMossBlock {
     pub fn can_stay_at_position(accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let above_pos = pos.up();
         let (above_block, above_state) = accessor.get_block_and_state(&above_pos);
-        (above_state.is_side_solid(BlockDirection::Down) && above_block.is_solid())
-            || above_block == &Block::PALE_HANGING_MOSS
+        above_state.is_side_solid(BlockDirection::Down) || above_block == &Block::PALE_HANGING_MOSS
     }
 
     #[must_use]

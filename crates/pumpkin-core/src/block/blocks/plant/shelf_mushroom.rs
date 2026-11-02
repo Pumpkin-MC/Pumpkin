@@ -1,4 +1,5 @@
 use pumpkin_data::block_properties::{HorizontalFacing, ShelfMushroomLikeProperties};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, FacingExt, HorizontalFacingExt, Mirror,
@@ -9,8 +10,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
-    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnLandedUponArgs,
-    OnPlaceArgs, UpdateEntityMovementAfterFallOnArgs, bounce_entity_after_fall,
+    BlockBehaviour, BlockIsReplacing, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnLandedUponArgs, OnPlaceArgs, PathComputationType, UpdateEntityMovementAfterFallOnArgs,
+    bounce_entity_after_fall,
 };
 use crate::entity::EntityBase;
 
@@ -23,18 +25,17 @@ pub struct ShelfMushroomBlock;
 
 impl ShelfMushroomBlock {
     fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos, facing: HorizontalFacing) -> bool {
-        let support_pos = pos.offset(facing.to_offset());
+        let support_pos = pos.offset(facing.opposite().to_offset());
         world
             .get_block_state(&support_pos)
-            .is_center_solid(facing.opposite().to_block_direction())
+            .is_side_solid(facing.to_block_direction())
     }
 }
 
 impl BlockBehaviour for ShelfMushroomBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let state_id = args.block_accessor.get_block_state_id(args.position);
-        if state_id != Block::AIR.default_state.id {
-            let props = ShelfMushroomProperties::from_state_id(state_id);
+        if args.player.is_none() {
+            let props = ShelfMushroomProperties::from_state_id(args.state.id);
             return Self::can_survive(args.block_accessor, args.position, props.facing);
         }
         for facing in [
@@ -54,9 +55,10 @@ impl BlockBehaviour for ShelfMushroomBlock {
         let mut props = ShelfMushroomProperties::default(args.block);
         props.age = 0;
 
-        if args.direction != BlockDirection::Up
+        if args.replacing == BlockIsReplacing::None
+            && args.direction != BlockDirection::Up
             && args.direction != BlockDirection::Down
-            && let Some(facing) = args.direction.to_horizontal_facing()
+            && let Some(facing) = args.direction.opposite().to_horizontal_facing()
             && Self::can_survive(args.world, args.position, facing)
         {
             props.facing = facing;
@@ -65,7 +67,7 @@ impl BlockBehaviour for ShelfMushroomBlock {
 
         let directions = args.player.get_entity().get_entity_facing_order();
         for dir in directions {
-            if let Some(facing) = dir.to_horizontal_facing()
+            if let Some(facing) = dir.opposite().to_horizontal_facing()
                 && Self::can_survive(args.world, args.position, facing)
             {
                 props.facing = facing;
@@ -81,7 +83,7 @@ impl BlockBehaviour for ShelfMushroomBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let props = ShelfMushroomProperties::from_state_id(args.state_id);
-        if args.direction == props.facing.to_block_direction()
+        if args.direction == props.facing.opposite().to_block_direction()
             && !Self::can_survive(args.world, args.position, props.facing)
         {
             return Block::AIR.default_state.id;
@@ -117,8 +119,8 @@ impl BlockBehaviour for ShelfMushroomBlock {
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
         bounce_entity_after_fall(args.entity, 0.8);
-        if args.entity.get_living_entity().is_some() {
-            let entity = args.entity.get_entity();
+        let entity = args.entity.get_entity();
+        if entity.entity_type != &EntityType::ITEM && entity.entity_type != &EntityType::TNT {
             entity.world.load().play_sound(
                 Sound::BlockShelfMushroomBounce,
                 SoundCategory::Blocks,
@@ -142,5 +144,9 @@ impl BlockBehaviour for ShelfMushroomBlock {
         let mut props = ShelfMushroomProperties::from_state_id(state_id);
         props.facing = mirror.mirror_horizontal(props.facing);
         BlockState::from_id(props.to_state_id(block))
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
