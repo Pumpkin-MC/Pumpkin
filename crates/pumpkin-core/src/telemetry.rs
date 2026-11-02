@@ -375,33 +375,32 @@ pub fn build_heartbeat_payload(
     server: &Server,
     telemetry_config: &TelemetryConfig,
 ) -> HeartbeatPayload {
-    let os = sysinfo::System::long_os_version().unwrap_or_else(|| {
-        let name = sysinfo::System::name().unwrap_or_else(|| std::env::consts::OS.to_string());
+    let os = sysinfo::System::long_os_version().unwrap_or_else(|_| {
+        let name = sysinfo::System::name().unwrap_or_else(|_| std::env::consts::OS.to_string());
         sysinfo::System::os_version().map_or(name.clone(), |ver| format!("{name} {ver}"))
     });
     let arch = std::env::consts::ARCH.to_string();
     let cpu_cores = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
 
-    let (ram_allocated_mb, total_ram_mb, cpu_model) = if sysinfo::IS_SUPPORTED_SYSTEM {
-        let mut sys = sysinfo::System::new_all();
-        sys.refresh_all();
-        let ram_allocated = sys.used_memory() / (1024 * 1024);
-        let total_ram = sys.total_memory() / (1024 * 1024);
-        let cpu_model = sys.cpus().first().map_or_else(
-            || "Unknown".to_string(),
-            |c| {
-                let brand = c.brand().trim();
-                if brand.is_empty() {
-                    "Unknown".to_string()
-                } else {
-                    brand.to_string()
-                }
-            },
-        );
-        (ram_allocated, total_ram, cpu_model)
-    } else {
-        (0, 0, "Unknown".to_string())
-    };
+    let (ram_allocated_mb, total_ram_mb, cpu_model) = sysinfo::System::new_all().map_or_else(
+        |_| (0, 0, "Unknown".to_string()),
+        |sys| {
+            let ram_allocated = sys.used_memory() / (1024 * 1024);
+            let total_ram = sys.total_memory() / (1024 * 1024);
+            let cpu_model = sys.cpus().first().map_or_else(
+                || "Unknown".to_string(),
+                |c| {
+                    let brand = c.brand().trim();
+                    if brand.is_empty() {
+                        "Unknown".to_string()
+                    } else {
+                        brand.to_string()
+                    }
+                },
+            );
+            (ram_allocated, total_ram, cpu_model)
+        },
+    );
 
     let plugins = server
         .plugin_manager

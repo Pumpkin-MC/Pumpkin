@@ -18,7 +18,6 @@ pub mod function;
 pub mod game_profile;
 pub mod objective;
 pub mod operation;
-pub mod pool;
 pub mod resource_key;
 pub mod score_holder;
 pub mod team;

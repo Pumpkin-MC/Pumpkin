@@ -17,9 +17,9 @@ use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_protocol::java::server::play::SlotActionType;
 
-struct StonecutterRecipeChoice {
-    result_id: String,
-    count: u8,
+pub struct StonecutterRecipeChoice {
+    pub result_id: String,
+    pub count: u8,
 }
 
 pub struct StonecutterScreenHandler {
@@ -65,7 +65,7 @@ impl StonecutterScreenHandler {
         handler
     }
 
-    fn update_output(&self) {
+    pub fn update_output(&self) {
         let input_lock = self.input_inventory.get_stack(0);
 
         if input_lock.is_empty() {
@@ -91,7 +91,13 @@ impl StonecutterScreenHandler {
         }
     }
 
-    fn get_available_recipes(&self, input: &ItemStack) -> Vec<StonecutterRecipeChoice> {
+    pub fn set_selected_recipe(&self, index: u8) {
+        self.selected_recipe.store(index, Ordering::Relaxed);
+        self.update_output();
+    }
+
+    #[must_use]
+    pub fn get_available_recipes(&self, input: &ItemStack) -> Vec<StonecutterRecipeChoice> {
         let item = input.item;
         let mut results = Vec::new();
         for r in RECIPES_STONECUTTING {

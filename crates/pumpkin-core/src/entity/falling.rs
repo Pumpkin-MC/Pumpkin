@@ -136,7 +136,21 @@ impl EntityBase for FallingEntity {
         0.04
     }
 
-    // TODO: Bedrock spawn metadata lacks the block variant (renders grey while falling)
+    fn entity_bedrock_spawn_metadata(
+        &self,
+    ) -> Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList> {
+        let mut meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+        let runtime_id = BlockState::to_be_network_id(self.block_state_id);
+        meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::VARIANT,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int(
+                runtime_id as i32,
+            ),
+        );
+        Some(meta)
+    }
+
     fn bedrock_y_offset(&self) -> f64 {
         0.49
     }
