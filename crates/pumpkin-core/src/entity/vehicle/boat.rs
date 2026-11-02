@@ -58,7 +58,7 @@ impl EntityBase for BoatEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .first()
-            .filter(|passenger| passenger.get_player().is_some())
+            .filter(|passenger| passenger.get_living_entity().is_some())
             .cloned()
     }
 
