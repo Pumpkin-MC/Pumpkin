@@ -15,7 +15,7 @@ proc-macro2.workspace = true
 proc-macro-error2.workspace = true
 
 [dev-dependencies]
-pumpkin-core = { path = "../pumpkin-core" }
+pumpkin = { package = "pumpkin-core", path = "../pumpkin-core" }
 tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 
 [lints]

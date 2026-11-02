@@ -735,7 +735,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 float_entries_list: std::collections::HashMap::new(),
             },
             actor_links: Vec::new(),
-            has_passenger_block_data: false,
+            passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
             client.try_enqueue_packet(data);

@@ -252,7 +252,7 @@ toml = { version = "1.1", default-features = false, features = ["parse", "displa
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "json"] }
 notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
 
-sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
 wasmtime = { version = "50.0.1", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }

@@ -34,16 +34,18 @@ use pumpkin_protocol::{
             container_close::SContainerClose, cursor_item_drag::SCursorItemDrag, emote::SEmote,
             emote_list::SEmoteList, interact::SInteract,
             inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
-            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
-            modal_form_response::SModalFormResponse,
+            loading_screen::SLoadingScreen, login::SLogin, matchmaking_cancel::SMatchmakingCancel,
+            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
-            request_ability::SRequestAbility, request_chunk_radius::SRequestChunkRadius,
+            register_audio_content::SRegisterAudioContent, request_ability::SRequestAbility,
+            request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
-            set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
+            set_player_inventory_options::SSetPlayerInventoryOptions,
+            stonecutter_set_recipe::SStonecutterSetRecipe, text::SText,
         },
     },
     packet::Packet,
@@ -821,6 +823,18 @@ impl BedrockClient {
             }
             SCursorItemDrag::PACKET_ID => {
                 let _ = SCursorItemDrag::read(reader)?;
+                // Ignore for now
+            }
+            SStonecutterSetRecipe::PACKET_ID => {
+                let packet = SStonecutterSetRecipe::read(reader)?;
+                self.handle_stonecutter_set_recipe(player, &packet);
+            }
+            SMatchmakingCancel::PACKET_ID => {
+                let _ = SMatchmakingCancel::read(reader)?;
+                // Ignore for now
+            }
+            SRegisterAudioContent::PACKET_ID => {
+                let _ = SRegisterAudioContent::read(reader)?;
                 // Ignore for now
             }
             SPlayerAction::PACKET_ID => {
