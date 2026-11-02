@@ -76,10 +76,16 @@ async fn negotiate_inner(
                 .cloned()
         };
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        let compute_pool = state.server.upgrade().map(|s| s.compute_pool.clone());
+        let compute_task = move || {
             let res = authenticate_client_offer(&offer, require_identity, oidc_verifier.as_ref());
             let _ = tx.send(res);
-        });
+        };
+        if let Some(pool) = compute_pool {
+            pool.spawn(compute_task);
+        } else {
+            rayon::spawn(compute_task);
+        }
         rx.await.map_err(|_| "Task cancelled".to_string())?
     }?;
 
@@ -161,10 +167,16 @@ async fn negotiate_inner(
 
         let identity_key = state.identity_key.clone();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        let compute_pool = state.server.upgrade().map(|s| s.compute_pool.clone());
+        let compute_task = move || {
             let res = add_server_identity(&answer, &identity_key);
             let _ = tx.send(res);
-        });
+        };
+        if let Some(pool) = compute_pool {
+            pool.spawn(compute_task);
+        } else {
+            rayon::spawn(compute_task);
+        }
         rx.await.map_err(|_| "Task cancelled".to_string())?
     }
     .await;

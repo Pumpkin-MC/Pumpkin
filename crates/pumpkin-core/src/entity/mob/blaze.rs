@@ -5,14 +5,19 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::goal::revenge::RevengeGoal;
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
+
+const BLAZE_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)];
 
 pub struct BlazeEntity {
     pub entity: Arc<MobEntity>,
@@ -32,16 +37,8 @@ impl BlazeEntity {
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc
-                .entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.entity.goals_selector;
+            let target_selector = &mob_arc.entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
 
@@ -61,10 +58,8 @@ impl BlazeEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            hunting::apply(target_selector, &mob_arc.entity, BLAZE_HUNTS);
         };
 
         mob_arc

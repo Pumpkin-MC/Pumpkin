@@ -4,6 +4,8 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
+use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -12,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -95,11 +98,7 @@ impl MooshroomEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
@@ -210,6 +209,27 @@ impl Animal for MooshroomEntity {
 }
 
 impl Mob for MooshroomEntity {
+    /// Vanilla `AbstractCow.getSoundSet` is the classic cow for mooshrooms.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound = CowSoundVariant::Classic.step_sound(self.is_baby());
+        self.play_entity_sound(sound, 0.15, 1.0);
+    }
+
+    fn mob_get_component(
+        &self,
+        component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        use pumpkin_data::{
+            data_component::DataComponent, data_component_impl::MooshroomVariantImpl,
+        };
+        match component {
+            DataComponent::MooshroomVariant => Some(Box::new(MooshroomVariantImpl {
+                value: self.get_variant().as_str().into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -230,10 +250,6 @@ impl Mob for MooshroomEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
     }
 
     fn mob_init_data_tracker(&self) {

@@ -67,6 +67,18 @@ impl BlockEntity for DecoratedPotBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let sherds_guard = self.sherds.lock().ok();
+        let sherds = sherds_guard.as_ref().and_then(|s| s.as_deref());
+        Some(crate::block::entities::bedrock::build_decorated_pot_actor(
+            self.position,
+            sherds,
+        ))
+    }
+
     fn collect_item_components(&self, stack: &mut ItemStack) {
         if let Ok(sherds) = self.sherds.lock()
             && let Some(sh) = sherds.as_ref()

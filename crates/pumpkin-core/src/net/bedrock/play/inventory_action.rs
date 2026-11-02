@@ -299,7 +299,7 @@ impl BedrockClient {
                             player.world().send_entity_status(
                                 player.get_entity(),
                                 crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                None,
+                                ActorEventID::None,
                             );
                         }
                         player.inventory().set_held_item(stack);
@@ -363,8 +363,7 @@ impl BedrockClient {
                                             item.are_items_and_components_equal(&held)
                                         });
                             if !already_using
-                                && (held.get_data_component::<ConsumableImpl>().is_some()
-                                    || held.get_data_component::<BlocksAttacksImpl>().is_some())
+                                && held.get_data_component::<ConsumableImpl>().is_some()
                             {
                                 if held
                                     .get_data_component::<FoodImpl>()
@@ -450,6 +449,9 @@ impl BedrockClient {
                 let Some(target) = world.get_entity_by_id(target_runtime_id) else {
                     return;
                 };
+                if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+                    return;
+                }
                 let Some(server) = world.server.upgrade() else {
                     return;
                 };
@@ -471,12 +473,19 @@ impl BedrockClient {
                         let mut stack = player.inventory().held_item();
                         let item_id = stack.item.id;
                         let before = stack.clone();
-                        if !event.target.interact(player, &mut stack) {
+                        let native_interaction = event.target.interact_with_hand(
+                            player,
+                            &mut stack,
+                            pumpkin_util::Hand::Right,
+                        );
+                        if !native_interaction
+                            .unwrap_or_else(|| event.target.interact(player, &mut stack))
+                        {
                             server
                                 .item_registry
                                 .use_on_entity(&mut stack, player, event.target);
                         }
-                        if !stack.are_equal(&before) {
+                        if native_interaction.is_none() && !stack.are_equal(&before) {
                             player.increment_stat(
                                 pumpkin_data::statistic::StatisticCategory::Used,
                                 item_id as i32,
@@ -493,7 +502,7 @@ impl BedrockClient {
                                     crate::entity::equipment_break_status(
                                         &EquipmentSlot::MAIN_HAND,
                                     ),
-                                    None,
+                                    ActorEventID::None,
                                 );
                             }
                         }

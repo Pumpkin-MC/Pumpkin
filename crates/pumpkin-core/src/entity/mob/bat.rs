@@ -207,6 +207,10 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn mob_is_flapping(&self) -> bool {
+        !self.is_roosting() && self.get_entity().tick_count.load(Relaxed) % 10 == 0
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
@@ -224,18 +228,29 @@ impl Mob for BatEntity {
         self.set_roosting(roosting);
     }
 
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new();
+        if self.is_roosting() {
+            meta = meta.bat_roosting(true);
+        }
+        Some(meta)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
+        self.tick_ambient_sound(&entity.world.load(), &entity.pos.load());
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
         let block_pos = entity.block_pos.load();
         let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
         let world = entity.world.load();
         let pos = entity.pos.load();
-
-        self.tick_ambient_sound(&world, &pos);
 
         if self.is_roosting() {
             self.tick_roosting(&world, &above_pos, &pos);

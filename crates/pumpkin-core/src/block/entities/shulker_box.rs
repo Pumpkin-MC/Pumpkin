@@ -136,6 +136,28 @@ impl BlockEntity for ShulkerBoxBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let facing =
+            match pumpkin_data::block_properties::ShulkerBoxProperties::from_state_id(state_id)
+                .facing
+            {
+                pumpkin_data::block_properties::Facing::Down => 0,
+                pumpkin_data::block_properties::Facing::Up => 1,
+                pumpkin_data::block_properties::Facing::North => 2,
+                pumpkin_data::block_properties::Facing::South => 3,
+                pumpkin_data::block_properties::Facing::West => 4,
+                pumpkin_data::block_properties::Facing::East => 5,
+            };
+        Some(crate::block::entities::bedrock::build_shulker_box_actor(
+            self.position,
+            facing,
+            None,
+        ))
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

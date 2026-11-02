@@ -60,7 +60,9 @@ impl ItemRegistry {
             pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
         }
 
-        if let Some(cooldown) = cooldown {
+        if let Some(cooldown) = cooldown
+            && self.get_use_duration(item.id).is_none()
+        {
             player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
     }
@@ -118,7 +120,11 @@ impl ItemRegistry {
             pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server)
         });
 
-        if let Some(cooldown) = cooldown {
+        if matches!(
+            result,
+            BlockActionResult::Success | BlockActionResult::SuccessServer
+        ) && let Some(cooldown) = cooldown
+        {
             player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
 
@@ -131,23 +137,9 @@ impl ItemRegistry {
         player: &Player,
         entity: Arc<dyn EntityBase>,
     ) {
-        let cooldown = stack.get_use_cooldown().cloned();
-        let cooldown_group = cooldown
-            .as_ref()
-            .and_then(|c| c.cooldown_group.clone())
-            .unwrap_or_else(|| stack.item.registry_key.to_string());
-
-        if player.is_on_cooldown(&cooldown_group) {
-            return;
-        }
-
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.use_on_entity(stack, player, entity);
-        }
-
-        if let Some(cooldown) = cooldown {
-            player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
     }
 

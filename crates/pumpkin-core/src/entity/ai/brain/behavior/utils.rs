@@ -8,11 +8,11 @@ use crate::world::World;
 use super::super::memory::position_tracker::{BlockPosTracker, EntityTracker, PositionTracker};
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryModuleType, types};
-use super::super::{Brain, VisibilityContext};
+use super::super::{BrainState, VisibilityContext};
 
 #[must_use]
 pub fn entity_is_visible(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
-    ctx.brain
+    ctx.state
         .get(types::NEAREST_VISIBLE_LIVING_ENTITIES)
         .is_some_and(|visible| visible.contains(target, ctx))
 }
@@ -28,14 +28,14 @@ pub fn target_is_valid(
     memory: MemoryModuleType<Arc<dyn EntityBase>>,
     predicate: impl Fn(&Arc<dyn EntityBase>) -> bool,
 ) -> bool {
-    ctx.brain.get(memory).is_some_and(|target| {
+    ctx.state.get(memory).is_some_and(|target| {
         predicate(target)
             && target.get_entity().is_alive()
             && entity_is_visible(ctx, target.as_ref())
     })
 }
 
-pub fn look_at_entity(brain: &mut Brain, target: Arc<dyn EntityBase>) {
+pub fn look_at_entity(brain: &mut BrainState, target: Arc<dyn EntityBase>) {
     brain.set(
         types::LOOK_TARGET,
         Arc::new(EntityTracker::new(target, true)) as Arc<dyn PositionTracker>,
@@ -43,7 +43,7 @@ pub fn look_at_entity(brain: &mut Brain, target: Arc<dyn EntityBase>) {
 }
 
 pub fn set_walk_and_look_target_memories(
-    brain: &mut Brain,
+    brain: &mut BrainState,
     target: Arc<dyn PositionTracker>,
     speed_modifier: f32,
     close_enough_dist: i32,
@@ -56,7 +56,7 @@ pub fn set_walk_and_look_target_memories(
 }
 
 pub fn set_walk_and_look_target_memories_to_entity(
-    brain: &mut Brain,
+    brain: &mut BrainState,
     target: Arc<dyn EntityBase>,
     speed_modifier: f32,
     close_enough_dist: i32,
@@ -70,7 +70,7 @@ pub fn set_walk_and_look_target_memories_to_entity(
 }
 
 pub fn set_walk_and_look_target_memories_to_block(
-    brain: &mut Brain,
+    brain: &mut BrainState,
     target: pumpkin_util::math::position::BlockPos,
     speed_modifier: f32,
     close_enough_dist: i32,
@@ -113,7 +113,7 @@ pub fn get_nearest_target(
 
 #[must_use]
 pub fn get_living_entity_from_uuid_memory(
-    brain: &Brain,
+    brain: &BrainState,
     world: &World,
     memory: MemoryModuleType<Uuid>,
 ) -> Option<Arc<dyn EntityBase>> {
@@ -124,7 +124,7 @@ pub fn get_living_entity_from_uuid_memory(
 
 #[must_use]
 pub fn is_other_target_much_further_away_than_current_attack_target(
-    brain: &Brain,
+    brain: &BrainState,
     body: &dyn EntityBase,
     other_target: &dyn EntityBase,
     how_much_further_away: f64,
@@ -139,6 +139,6 @@ pub fn is_other_target_much_further_away_than_current_attack_target(
 }
 
 #[must_use]
-pub fn is_breeding(brain: &Brain) -> bool {
+pub fn is_breeding(brain: &BrainState) -> bool {
     brain.has_memory_value(types::BREED_TARGET.id())
 }

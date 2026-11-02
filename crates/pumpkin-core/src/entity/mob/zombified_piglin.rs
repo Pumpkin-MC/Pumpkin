@@ -1,10 +1,13 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::util::goal_utils;
 use crate::entity::{
@@ -21,6 +24,8 @@ use crate::entity::{
         neutral::{NeutralData, NeutralMob},
     },
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::api::events::entity::pig_zombie_anger::PigZombieAngerEvent;
 use crate::world::World;
 
 /// Vanilla `ALERT_INTERVAL`: 4 to 6 seconds.
@@ -52,11 +57,7 @@ impl ZombifiedPiglinEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -67,13 +68,9 @@ impl ZombifiedPiglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
-            apply_targets(&mut target_selector, &mob_arc.mob_entity, 2, 3, true);
+            apply_targets(target_selector, &mob_arc.mob_entity, 2, 3, true);
         };
 
         mob_arc
@@ -98,7 +95,7 @@ impl ZombifiedPiglinEntity {
                 {
                     continue;
                 }
-                other_mob.set_mob_target(Some(target.clone()));
+                other_mob.set_mob_target(Some(target.clone()), TargetReason::PigZombieTarget);
             }
         }
 
@@ -107,9 +104,32 @@ impl ZombifiedPiglinEntity {
     }
 }
 
-crate::impl_neutral_mob!(ZombifiedPiglinEntity, neutral_data);
+impl NeutralMob for ZombifiedPiglinEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+
+    fn approve_grudge(&self, target: &dyn EntityBase, ticks: i32) -> Option<i32> {
+        let entity = &self.mob_entity.living_entity.entity;
+        let Some(server) = entity.world.load().server.upgrade() else {
+            return Some(ticks);
+        };
+        let mut event =
+            PigZombieAngerEvent::new(entity.entity_id, Some(target.get_entity().entity_id), ticks);
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        (!event.cancelled).then_some(event.new_anger)
+    }
+
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
+}
 
 impl Mob for ZombifiedPiglinEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityZombieStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -142,7 +162,8 @@ impl Mob for ZombifiedPiglinEntity {
         equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        self.update_persistent_anger();
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;

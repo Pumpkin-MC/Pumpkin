@@ -36,24 +36,18 @@ impl JavaClient {
             pumpkin_world::clip::ClipFluid::None,
         ));
 
-        let event = if hit.is_miss {
-            PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
+        if hit.is_miss {
+            let event =
+                PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None);
+            send_cancellable_blocking! {{
+                &server;
+                event;
+                'after: {
+                    player.swing_hand(hand, false);
+                }
+            }}
         } else {
-            let hit_pos = hit.block_pos;
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::LeftClickBlock,
-                player.world().get_block(&hit_pos),
-                Some(hit_pos),
-            )
-        };
-
-        send_cancellable_blocking! {{
-            &server;
-            event;
-            'after: {
-                player.swing_hand(hand, false);
-            }
-        }}
+            player.swing_hand(hand, false);
+        }
     }
 }

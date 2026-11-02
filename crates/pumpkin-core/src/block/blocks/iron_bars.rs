@@ -1,6 +1,7 @@
 use crate::block::blocks::weathering_copper::change_over_time;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType, RandomTickArgs,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    RandomTickArgs, is_exception_for_connection,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -61,7 +62,8 @@ pub fn compute_bars_state(
 
         let connected = other_block == block
             || other_block.has_tag(&tag::Block::MINECRAFT_BARS)
-            || other_block_state.is_side_solid(direction.opposite().to_block_direction())
+            || (!is_exception_for_connection(other_block)
+                && other_block_state.is_side_solid(direction.opposite().to_block_direction()))
             || other_block.has_tag(&tag::Block::C_GLASS_PANES)
             || other_block.has_tag(&tag::Block::MINECRAFT_WALLS);
 

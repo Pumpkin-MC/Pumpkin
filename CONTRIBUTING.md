@@ -91,6 +91,56 @@ Note: Pumpkin's clippy settings are relatively strict, this can be frustrating b
 - **Working with Tokio and Rayon:**
   When dealing with CPU-intensive tasks, it's recommended to utilize Rayon's thread pool (`rayon::spawn`), parallel iterators, or similar mechanisms instead of the Tokio runtime. However, it's crucial to avoid blocking the Tokio runtime on Rayon calls. Instead, use asynchronous methods like `tokio::sync::mpsc` to transfer data between the two runtimes. Refer to `pumpkin_world::level::Level::fetch_chunks` for an example of this approach.
 
+### Mob AI
+
+Mob AI uses goals, selectors, navigation and movement controls, or the Brain's sensors, memories and behaviors. Start with the closest existing implementation and check the official source for the Minecraft version Pumpkin targets, including superclass methods and navigation or control overrides. Preserve vanilla's behavior, ordering and side effects. The Rust implementation does not have to use the same internal design as Java.
+
+#### Behavior and lifecycle
+
+Register goals with the appropriate selector and preserve their priorities, control flags and interruption rules. Check all five lifecycle methods: `can_start`, `should_continue`, `start`, `tick` and `stop`. Target selection includes query order and tie-breaking, not just the final distance check.
+
+Goal callbacks do not all run every server tick. Use `should_run_every_tick()`, `get_tick_count()` and `to_goal_ticks()` according to the goal's timing, and preserve cooldowns and random decisions. A stopped goal can leave navigation running; only stop the route if vanilla does so. Any remaining route and its speed still matter to movement and scheduling.
+
+Use the existing navigation and controls to move, look and jump. Do not add a separate scheduler or movement loop inside a mob. Read attributes and game data through their existing APIs, follow [No Hardcoded Vanilla Values](#coding-guidelines), and keep existing plugin events working.
+
+#### Entity island reach
+
+Entity islands let the server tick independent groups of entities in parallel while keeping entities within each group in list order. To form those groups, the scheduler needs bounds on what each entity can read or change during its turn. Missing an interaction can put dependent entities on different threads; reporting too much can merge groups that could have run independently. The implementation is in [`world::entity_islands`](crates/pumpkin-core/src/world/entity_islands.rs).
+
+An *audited reach* uses bounds derived from the mob's reviewed behavior. Mobs without one use a broader conservative estimate. New AI can use that fallback until its access patterns have been checked.
+
+For goals, [`Goal::tick_reach()`](crates/pumpkin-core/src/entity/ai/goal/mod.rs) returns a `GoalReach` describing access during the upcoming entity tick. Include searches and reads, not just writes or attacks. Include callbacks that may run when an inactive goal starts or an active goal stops, as well as its normal `tick` callback.
+
+| `GoalReach` field | What it must cover |
+| --- | --- |
+| `entities` | Distance from the mob's body within which it may search, read or affect other entities. |
+| `players` | The corresponding distance for players. |
+| `speed` | The highest speed modifier the goal may pass to navigation. |
+| `changes_blocks` | Whether it may change blocks during the tick. This does not describe an arbitrary distant write location. |
+| `links` | Entity and player IDs it may access regardless of distance, including retained references. |
+
+Calculate the report from existing state. Reporting reach must not consume randomness, select targets, advance timers, invoke goal callbacks or change the world.
+
+Leave `tick_reach()` returning `None` if the goal's reach has not been audited. The selector checks every registered goal, including inactive ones; a `None` result makes the mob use the conservative fallback. An empty `GoalReach` means no additional access, not unknown access.
+
+Return true from `Mob::has_audited_tick()` only after checking the species' own tick code against [`MobEntity::audited_reach`](crates/pumpkin-core/src/entity/mob/mod.rs). That includes custom AI and Brain callbacks, movement, block reads and writes, spawns and remote interactions. Check it again when those behaviors change. Implementing `GoalReach` only covers the goal's contribution.
+
+`MobEntity::audited_reach` includes common movement and active-route information. If a new behavior can access state outside those bounds, extend the calculation before marking it audited. The conservative fallback also has finite margins. Effects outside them, such as long-range explosions, teleports or chained block updates, need explicit dependency or global reach handling. Setting `changes_blocks` alone does not describe a distant write location.
+
+#### State ownership and queries
+
+AI runs synchronously inside the entity tick. Do not launch independent Tokio or Rayon tasks that mutate it after its scheduled turn. While holding a navigator guard, do not call a helper that locks the navigator again. Brain sensors and behaviors use the supplied `BrainTick` state; calling `MobEntity::with_brain` from them would lock the same brain again. Never hold synchronous guards across `.await`.
+
+Use the existing world entity-query APIs. When replacing a query, preserve whether it includes players, its exact filtering and its result order. Unordered iteration can change which target wins a tie. Move entities through `Entity::set_pos` and the existing pose, size and index-aware bounding-box APIs so position, bounds and spatial-index membership stay consistent.
+
+#### Validation
+
+Test the transitions the behavior supports: starting, stopping, interruption, target loss, age changes and retained navigation. Add focused regressions for subtle lifecycle, ordering or reach bugs, and check that a bug regression fails without its fix. For audited behavior, verify that actual accesses and movement stay inside the reported reach through those transitions. Repeating the reach formula in a test does not verify the bound.
+
+Run the affected package checks, boot the server, and test visible behavior with a real client. Attach a recording for movement or behavior over time, and say what remains unverified.
+
+For performance claims, compare the same build profile and scenario before and after. Keep the population, seed, view distance, player position and warmup consistent. Choose relevant cases from small populations, dense and spread groups, mixed mob types, and spawn/remove churn. Wait for the fixture to settle, and discard runs affected by unrelated machine load.
+
 ### Additional Information
 
 We encourage you to comment on existing issues and pull requests to share your thoughts and provide feedback.

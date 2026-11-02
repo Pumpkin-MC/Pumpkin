@@ -72,7 +72,7 @@ impl Rail {
         let rail_position = place_pos.offset(direction.to_offset());
         let rail = Self::find_with_elevation(world, rail_position)?;
 
-        if rail.is_locked(world) {
+        if !rail.properties.directions().contains(&direction.opposite()) && rail.is_locked(world) {
             return None;
         }
 
@@ -241,6 +241,13 @@ impl RailProperties {
         match self {
             Self::Rail(props) => props.to_state_id(block),
             Self::StraightRail(props) => props.to_state_id(block),
+        }
+    }
+
+    const fn is_waterlogged(&self) -> bool {
+        match self {
+            Self::Rail(props) => props.waterlogged,
+            Self::StraightRail(props) => props.waterlogged,
         }
     }
 

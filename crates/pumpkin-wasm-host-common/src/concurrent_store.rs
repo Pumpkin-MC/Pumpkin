@@ -5,7 +5,7 @@ use wasmtime::Store;
 
 use super::state::PluginHostState;
 
-pub use pumpkin_plugin_runtime::LegacySyncReentry;
+pub use pumpkin_plugin_runtime::{LegacySyncReentry, StoreMode};
 
 pub type LegacyStore = StoreExecutor<PluginHostState, LegacySyncReentry>;
 
@@ -36,6 +36,7 @@ pub async fn start_legacy_store(
     store: Store<PluginHostState>,
     policy: LegacySyncReentry,
     spawner: Arc<dyn RuntimeSpawner>,
+    mode: StoreMode,
 ) -> wasmtime::Result<LegacyStore> {
-    StoreExecutor::start(store, policy, spawner).await
+    StoreExecutor::start(store, policy, spawner, mode).await
 }

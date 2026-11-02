@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::block::{
     EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, OnStateReplacedArgs,
+    OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use pumpkin_data::{Block, BlockStateId, FacingExt, block_properties::ObserverLikeProperties};
@@ -81,16 +81,33 @@ impl BlockBehaviour for ObserverBlock {
         self.get_weak_redstone_power(args)
     }
 
-    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        if !args.moved {
-            let props = ObserverLikeProperties::from_state_id(args.old_state_id);
+    fn placed(&self, args: PlacedArgs<'_>) {
+        if args.old_state_id != args.state_id {
+            let mut props = ObserverLikeProperties::from_state_id(args.state_id);
             if props.powered
-                && args
+                && !args
                     .world
-                    .is_block_tick_scheduled(args.position, &Block::OBSERVER)
+                    .is_block_tick_scheduled(args.position, args.block)
             {
+                props.powered = false;
+                args.world.set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+                );
                 Self::update_neighbors(args.world, args.block, args.position, props);
             }
+        }
+    }
+
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        let props = ObserverLikeProperties::from_state_id(args.old_state_id);
+        if props.powered
+            && args
+                .world
+                .is_block_tick_scheduled(args.position, &Block::OBSERVER)
+        {
+            Self::update_neighbors(args.world, args.block, args.position, props);
         }
     }
 }

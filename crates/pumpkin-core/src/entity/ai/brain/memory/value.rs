@@ -35,7 +35,7 @@ pub enum SpearStatus {
 
 #[derive(Clone)]
 pub struct DamageSourceMemory {
-    pub damage_type: &'static DamageType,
+    pub damage_type: DamageType,
     pub attacker: Option<Arc<dyn EntityBase>>,
 }
 

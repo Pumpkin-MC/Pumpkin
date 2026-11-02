@@ -32,6 +32,7 @@ use super::{EventPriority, Payload};
 /// - `metadata`: Metadata of the plugin.
 /// - `server`: A reference to the server on which the plugin operates.
 /// - `handlers`: A map of event handlers, wrapped in `ArcSwap` for lock-free read access across threads.
+#[repr(C)]
 pub struct Context {
     metadata: PluginMetadata,
     pub server: Arc<Server>,
@@ -380,9 +381,10 @@ impl Context {
             let fmt_layer = fmt::layer()
                 .with_writer(std::io::stderr)
                 .with_ansi(config.color)
-                .with_target(true)
+                .with_ansi_sanitization(false)
+                .with_target(config.target)
                 .with_thread_names(config.threads)
-                .with_thread_ids(config.threads);
+                .with_thread_ids(config.thread_ids);
 
             if config.timestamp {
                 let fmt_layer = fmt_layer.with_timer(fmt::time::UtcTime::new(
@@ -390,16 +392,16 @@ impl Context {
                         "[year]-[month]-[day] [hour]:[minute]:[second]"
                     ),
                 ));
-                tracing_subscriber::registry()
+                let _ = tracing_subscriber::registry()
                     .with(*level)
                     .with(fmt_layer)
-                    .init();
+                    .try_init();
             } else {
                 let fmt_layer = fmt_layer.without_time();
-                tracing_subscriber::registry()
+                let _ = tracing_subscriber::registry()
                     .with(*level)
                     .with(fmt_layer)
-                    .init();
+                    .try_init();
             }
         }
     }

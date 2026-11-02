@@ -123,6 +123,13 @@ macro_rules! impl_block_entity_for_chest {
                 Some(nbt)
             }
 
+            fn bedrock_block_actor_data(
+                &self,
+                state_id: pumpkin_data::BlockStateId,
+            ) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                $crate::block::entities::bedrock::build_chest_actor(self.position, state_id, None)
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }

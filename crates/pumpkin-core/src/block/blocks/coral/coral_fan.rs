@@ -11,9 +11,11 @@ use pumpkin_data::{
     block_properties::{
         Facing, HorizontalFacing, LadderLikeProperties, MangroveRootsLikeProperties,
     },
+    fluid::Fluid,
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 pub struct CoralFanBlock;
@@ -49,7 +51,7 @@ impl BlockBehaviour for CoralFanBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
+            if support_block.is_side_solid(BlockDirection::Up) {
                 return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
             }
         }
@@ -68,7 +70,7 @@ impl BlockBehaviour for CoralFanBlock {
             }
         } else if directions[0] == Facing::Down {
             let support_block = args.world.get_block_state(&args.position.down());
-            if support_block.is_center_solid(BlockDirection::Up) {
+            if support_block.is_side_solid(BlockDirection::Up) {
                 return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
             }
         }
@@ -90,24 +92,27 @@ impl BlockBehaviour for CoralFanBlock {
         }
 
         let support_block = args.world.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
+        if support_block.is_side_solid(BlockDirection::Up) {
             return get_default_coral_fan_state_id(args.block, args.replacing.water_source());
         }
         BlockStateId::AIR
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
+        if !is_waterlogged(args.block, args.state_id)
+            && !scan_for_water(args.world, args.position)
+            && !is_dead_coral(args.block)
         {
-            if !scan_for_water(args.world, args.position) {
-                try_schedule_die_tick(args.block, args.world, args.position);
-            }
+            try_schedule_die_tick(args.block, args.world, args.position);
         }
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
-            let current_state = args.world.get_block_state(args.position);
-
+        let current_state = args.world.get_block_state(args.position);
+        if !is_waterlogged(args.block, current_state.id)
+            && !scan_for_water(args.world, args.position)
+            && !is_dead_coral(args.block)
+        {
             let Some(dead_block) = get_dead_type(args.block.id) else {
                 return;
             };
@@ -130,7 +135,7 @@ impl BlockBehaviour for CoralFanBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let support_block = args.block_accessor.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
+        if support_block.is_side_solid(BlockDirection::Up) && !is_wall_fan(args.block) {
             return true;
         }
         for dir in BlockDirection::horizontal() {
@@ -154,12 +159,34 @@ impl BlockBehaviour for CoralFanBlock {
             }
         } else if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
-            if !support_block.is_center_solid(BlockDirection::Up) {
+            if !support_block.is_side_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }
         }
 
+        let waterlogged = is_waterlogged(args.block, args.state_id);
+        if waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        if !is_dead_coral(args.block) && !waterlogged && !scan_for_water(args.world, args.position)
+        {
+            try_schedule_die_tick(args.block, args.world, args.position);
+        }
+
         args.state_id
+    }
+}
+
+fn is_waterlogged(block: &Block, state_id: BlockStateId) -> bool {
+    if is_wall_fan(block) {
+        CoralWallFanLikeProperties::from_state_id(state_id).waterlogged
+    } else {
+        CoralFanLikeProperties::from_state_id(state_id).waterlogged
     }
 }
 

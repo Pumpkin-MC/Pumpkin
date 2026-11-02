@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use super::JavaBlockPosHashSet;
 
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3, vertical_surface_type::VerticalSurfaceType},
@@ -85,8 +85,8 @@ impl VegetationPatchFeature {
         replaceable: &BlockPredicate,
         x_radius: i32,
         z_radius: i32,
-    ) -> HashSet<BlockPos> {
-        let mut surface = HashSet::new();
+    ) -> JavaBlockPosHashSet {
+        let mut surface = JavaBlockPosHashSet::new();
 
         // Determine "inwards" and "outwards" directions based on the surface
         let inwards = self.surface_direction();
@@ -203,7 +203,7 @@ impl VegetationPatchFeature {
         min_y: i8,
         height: u16,
         feature_name: pumpkin_data::placed_feature::PlacedFeature,
-        surface: &HashSet<BlockPos>,
+        surface: &JavaBlockPosHashSet,
     ) {
         let opposite_dir = self.surface_direction().opposite();
 

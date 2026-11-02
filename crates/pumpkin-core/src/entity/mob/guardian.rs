@@ -4,15 +4,40 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::{damage::DamageType, sound::Sound};
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
+use crate::entity::living::LivingEntity;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
+
+const GUARDIAN_PREY: TargetMatch = TargetMatch::AnyOf(&[
+    &EntityType::PLAYER,
+    &EntityType::SQUID,
+    &EntityType::GLOW_SQUID,
+    &EntityType::AXOLOTL,
+]);
+
+/// Vanilla `GuardianAttackSelector`: nothing within 3 blocks.
+fn outside_melee_range(hunter: &dyn Mob, target: &LivingEntity, _world: &World) -> bool {
+    let hunter_pos = hunter.get_mob_entity().living_entity.entity.pos.load();
+    target
+        .entity
+        .pos
+        .load()
+        .squared_distance_to_vec(&hunter_pos)
+        > 9.0
+}
+
+pub const GUARDIAN_HUNTS: &[Hunt] =
+    &[Hunt::new(1, GUARDIAN_PREY, true).matching(outside_melee_range)];
 
 pub struct GuardianEntity {
     pub mob_entity: MobEntity,
@@ -29,11 +54,7 @@ impl GuardianEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
@@ -43,27 +64,8 @@ impl GuardianEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SQUID, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::GLOW_SQUID, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::AXOLOTL, true),
-            );
+            let target_selector = &mob_arc.mob_entity.target_selector;
+            hunting::apply(target_selector, &mob_arc.mob_entity, GUARDIAN_HUNTS);
         };
 
         mob_arc

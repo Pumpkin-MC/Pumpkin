@@ -262,6 +262,32 @@ impl scoreboard::HostScoreboard for PluginHostState {
         Ok(new_val)
     }
 
+    fn get_score(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        entity_name: String,
+        objective_name: String,
+    ) -> wasmtime::Result<Option<i32>> {
+        let provider = self.get(&res)?.clone();
+        let val = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock_ignore_poison()
+                .get_score_value(&entity_name, &objective_name),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_score_value(&entity_name, &objective_name)
+                } else {
+                    None
+                }
+            }
+        };
+        Ok(val)
+    }
+
     fn remove_score(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
@@ -312,6 +338,33 @@ impl scoreboard::HostScoreboard for PluginHostState {
             }
         }
         Ok(())
+    }
+
+    fn get_objectives(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let provider = self.get(&res)?.clone();
+        let objectives = match provider {
+            ScoreboardProvider::World(world) => world
+                .scoreboard
+                .lock_ignore_poison()
+                .get_objectives()
+                .keys()
+                .cloned()
+                .collect(),
+            ScoreboardProvider::Player(player) => {
+                let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+                if let Some(pumpkin_core::entity::player::CustomScoreboard::Java(sb)) =
+                    custom_guard.as_ref()
+                {
+                    sb.get_objectives().keys().cloned().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        Ok(objectives)
     }
 
     fn create_team(
@@ -947,6 +1000,23 @@ impl HostBedrockScoreboard for PluginHostState {
         Ok(new_val)
     }
 
+    fn get_score(
+        &mut self,
+        res: Resource<scoreboard::BedrockScoreboard>,
+        entity_name: String,
+        objective_name: String,
+    ) -> wasmtime::Result<Option<i32>> {
+        let player = self.get(&res)?.clone();
+        let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_ref()
+        {
+            Ok(sb.scores.get(&(entity_name, objective_name)).copied())
+        } else {
+            Ok(None)
+        }
+    }
+
     fn remove_score(
         &mut self,
         res: Resource<scoreboard::BedrockScoreboard>,
@@ -976,6 +1046,21 @@ impl HostBedrockScoreboard for PluginHostState {
             sb.reset_scores_for_entity(player.as_ref(), &entity_name);
         }
         Ok(())
+    }
+
+    fn get_objectives(
+        &mut self,
+        res: Resource<scoreboard::BedrockScoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let player = self.get(&res)?.clone();
+        let custom_guard = player.custom_scoreboard.lock_ignore_poison();
+        if let Some(pumpkin_core::entity::player::CustomScoreboard::Bedrock(sb)) =
+            custom_guard.as_ref()
+        {
+            Ok(sb.objectives.keys().cloned().collect())
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     fn drop(&mut self, res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {

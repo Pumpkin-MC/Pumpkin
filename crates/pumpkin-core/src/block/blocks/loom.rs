@@ -2,9 +2,9 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
 
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
-use pumpkin_data::{BlockStateId, FacingExt};
 use pumpkin_inventory::loom_screen_handler::LoomScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -21,15 +21,7 @@ pub struct LoomBlock;
 impl BlockBehaviour for LoomBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = WallTorchLikeProperties::default(args.block);
-        if let Some(facing) = args
-            .player
-            .get_entity()
-            .get_facing()
-            .opposite()
-            .to_horizontal_facing()
-        {
-            props.facing = facing;
-        }
+        props.facing = args.player.get_entity().get_horizontal_facing().opposite();
         props.to_state_id(args.block)
     }
 

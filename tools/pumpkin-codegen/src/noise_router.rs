@@ -839,8 +839,17 @@ impl DensityFunctionRepr {
             return;
         }
         let axes = self.domain_axes();
-        let child_parent_axes = if self.is_cache() { AXES_ALL } else { axes };
-        self.for_each_child(&mut |child| child.slice_uniform_axes(child_parent_axes));
+        if let Self::FindTopSurface {
+            density,
+            upper_bound,
+            ..
+        } = self
+        {
+            density.slice_uniform_axes(axes | AXIS_Y);
+            upper_bound.slice_uniform_axes(axes);
+        } else {
+            self.for_each_child(&mut |child| child.slice_uniform_axes(axes));
+        }
         if parent_axes != axes {
             self.remove_axes(parent_axes & !axes);
         }
@@ -2048,7 +2057,12 @@ impl NoiseRouterRepr {
         let mut noise_nodes = Vec::new();
         let mut noise_lookup_map = BTreeMap::new();
 
-        let final_density = self.final_density.get_index_for_component(
+        let noise_erosion = self.erosion.get_index_for_component(
+            &mut noise_component_stack,
+            &mut noise_nodes,
+            &mut noise_lookup_map,
+        );
+        let noise_depth = self.depth.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
             &mut noise_lookup_map,
@@ -2074,6 +2088,11 @@ impl NoiseRouterRepr {
             &mut noise_nodes,
             &mut noise_lookup_map,
         );
+        let final_density = self.final_density.get_index_for_component(
+            &mut noise_component_stack,
+            &mut noise_nodes,
+            &mut noise_lookup_map,
+        );
         let vein_toggle = self.vein_toggle.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
@@ -2085,16 +2104,6 @@ impl NoiseRouterRepr {
             &mut noise_lookup_map,
         );
         let vein_gap = self.vein_gap.get_index_for_component(
-            &mut noise_component_stack,
-            &mut noise_nodes,
-            &mut noise_lookup_map,
-        );
-        let noise_erosion = self.erosion.get_index_for_component(
-            &mut noise_component_stack,
-            &mut noise_nodes,
-            &mut noise_lookup_map,
-        );
-        let noise_depth = self.depth.get_index_for_component(
             &mut noise_component_stack,
             &mut noise_nodes,
             &mut noise_lookup_map,
@@ -2143,6 +2152,25 @@ impl NoiseRouterRepr {
             &mut multinoise_lookup_map,
         );
 
+        let mut vein_component_stack = Vec::new();
+        let mut vein_nodes = Vec::new();
+        let mut vein_lookup_map = BTreeMap::new();
+        let vein_router_toggle = self.vein_toggle.get_index_for_component(
+            &mut vein_component_stack,
+            &mut vein_nodes,
+            &mut vein_lookup_map,
+        );
+        let vein_router_ridged = self.vein_ridged.get_index_for_component(
+            &mut vein_component_stack,
+            &mut vein_nodes,
+            &mut vein_lookup_map,
+        );
+        let vein_router_gap = self.vein_gap.get_index_for_component(
+            &mut vein_component_stack,
+            &mut vein_nodes,
+            &mut vein_lookup_map,
+        );
+
         let mut compiled_fns = Vec::new();
         let fn_prefix = format!("eval_{}", dim_name);
         for (i, node) in noise_nodes.iter().enumerate() {
@@ -2184,6 +2212,12 @@ impl NoiseRouterRepr {
                     erosion: #multi_erosion,
                     depth: #multi_depth,
                     ridges: #ridges,
+                },
+                vein: BaseVeinRouter {
+                    full_component_stack: &[#(#vein_component_stack),*],
+                    vein_toggle: #vein_router_toggle,
+                    vein_ridged: #vein_router_ridged,
+                    vein_gap: #vein_router_gap,
                 },
             }
         };
@@ -3364,10 +3398,18 @@ pub fn build() -> TokenStream {
             pub ridges: usize,
         }
 
+        pub struct BaseVeinRouter {
+            pub full_component_stack: &'static [BaseNoiseFunctionComponent],
+            pub vein_toggle: usize,
+            pub vein_ridged: usize,
+            pub vein_gap: usize,
+        }
+
         pub struct BaseNoiseRouters {
             pub noise: BaseNoiseRouter,
             pub surface_estimator: BaseSurfaceEstimator,
             pub multi_noise: BaseMultiNoiseRouter,
+            pub vein: BaseVeinRouter,
         }
 
         pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = #overworld_router;

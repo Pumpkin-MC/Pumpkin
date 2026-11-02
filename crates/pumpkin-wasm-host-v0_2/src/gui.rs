@@ -87,17 +87,7 @@ impl gui::HostGui for PluginHostState {
         let title = self.take(title)?;
         let window_type = from_wit_screen(screen);
 
-        let size = match window_type {
-            pumpkin_data::screen::WindowType::Generic9x2 => 18,
-            pumpkin_data::screen::WindowType::Generic9x4 => 36,
-            pumpkin_data::screen::WindowType::Generic9x5 => 45,
-            pumpkin_data::screen::WindowType::Generic9x6 => 54,
-            pumpkin_data::screen::WindowType::Generic9x1
-            | pumpkin_data::screen::WindowType::Generic3x3
-            | pumpkin_data::screen::WindowType::Crafter3x3 => 9,
-            pumpkin_data::screen::WindowType::Hopper => 5,
-            _ => 27, // Default
-        };
+        let size = PluginGui::inventory_size(window_type);
 
         let gui = Arc::new(Mutex::new(PluginGui {
             window_type,

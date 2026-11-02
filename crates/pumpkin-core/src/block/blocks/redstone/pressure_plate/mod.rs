@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{
+    tick::TickPriority,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::{
     block::{OnEntityCollisionArgs, OnStateReplacedArgs},
@@ -71,15 +76,29 @@ pub(crate) trait PressurePlate {
             world.set_block_state(pos, state, BlockFlags::NOTIFY_LISTENERS);
             world.update_neighbors(pos, None);
             world.update_neighbors(&pos.down(), None);
+
+            let was_pressed = output > 0;
+            let is_pressed = next_output > 0;
+            if !is_pressed && was_pressed {
+                let (_, click_off) = self.click_sounds(block);
+                world.play_block_sound(click_off, SoundCategory::Blocks, *pos);
+                world.emit_game_event(GameEvent::BlockDeactivate.name(), pos.to_centered_f64());
+            } else if is_pressed && !was_pressed {
+                let (click_on, _) = self.click_sounds(block);
+                world.play_block_sound(click_on, SoundCategory::Blocks, *pos);
+                world.emit_game_event(GameEvent::BlockActivate.name(), pos.to_centered_f64());
+            }
         }
         if has_output {
             world.schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal);
         }
     }
 
-    fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
-        let floor = world.get_block_state(&block_pos.down());
+    fn can_pressure_plate_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        let down_pos = block_pos.down();
+        let floor = world.get_block_state(&down_pos);
         floor.is_side_solid(BlockDirection::Up)
+            || crate::block::can_support_center(world, &down_pos, BlockDirection::Up)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
@@ -87,6 +106,8 @@ pub(crate) trait PressurePlate {
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId;
 
     fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8;
+
+    fn click_sounds(&self, block: &Block) -> (Sound, Sound);
 
     fn tick_rate(&self) -> u8 {
         20
