@@ -1,6 +1,8 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{SlabType, WhiteWoolSlabLikeProperties},
+    block_properties::{
+        HorizontalFacing, SlabType, WallTorchLikeProperties, WhiteWoolSlabLikeProperties,
+    },
 };
 use pumpkin_util::{
     BlockDirection,
@@ -15,7 +17,7 @@ use crate::{
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
             stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
+                EntranceType, PendingChild, StoneBrickRandomizer, StrongholdPiece,
                 StrongholdPieceType,
             },
         },
@@ -41,7 +43,7 @@ impl FiveWayCrossingPiece {
         z: i32,
         orientation: BlockDirection,
         chain_length: u32,
-    ) -> Option<Box<dyn StructurePieceBase>> {
+    ) -> Option<(Box<dyn StructurePieceBase>, PendingChild)> {
         let bounding_box = BlockBox::rotated(x, y, z, -4, -3, 0, 10, 9, 11, &orientation);
 
         if !StrongholdPiece::is_in_bounds(&bounding_box)
@@ -58,13 +60,35 @@ impl FiveWayCrossingPiece {
         piece.piece.set_facing(Some(orientation));
         piece.entry_door = EntranceType::get_random(random);
 
-        Some(Box::new(Self {
-            piece,
-            lower_left_exists: random.next_bool(),
-            upper_left_exists: random.next_bool(),
-            lower_right_exists: random.next_bool(),
-            upper_right_exists: random.next_bounded_i32(3) > 0,
-        }))
+        let lower_left = random.next_bool();
+        let upper_left = random.next_bool();
+        let lower_right = random.next_bool();
+        let upper_right = random.next_bounded_i32(3) > 0;
+
+        let child = PendingChild {
+            piece_type: StrongholdPieceType::FiveWayCrossing,
+            bbox: bounding_box,
+            orientation,
+            depth: chain_length,
+            is_source: false,
+            lower_left,
+            upper_left,
+            lower_right,
+            upper_right,
+            left_child: false,
+            right_child: false,
+        };
+
+        Some((
+            Box::new(Self {
+                piece,
+                lower_left_exists: lower_left,
+                upper_left_exists: upper_left,
+                lower_right_exists: lower_right,
+                upper_right_exists: upper_right,
+            }),
+            child,
+        ))
     }
 }
 
@@ -78,89 +102,6 @@ impl StructurePieceBase for FiveWayCrossingPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut i = 3;
-        let mut j = 5;
-        let facing = self.piece.piece.facing.unwrap_or(BlockDirection::North);
-
-        if facing == BlockDirection::West || facing == BlockDirection::North {
-            i = 8 - i;
-            j = 8 - j;
-        }
-
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            5,
-            1,
-            pieces_to_process,
-            None,
-        );
-
-        if self.lower_left_exists {
-            self.piece.fill_nw_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                i,
-                1,
-                pieces_to_process,
-            );
-        }
-        if self.upper_left_exists {
-            self.piece.fill_nw_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                j,
-                7,
-                pieces_to_process,
-            );
-        }
-
-        if self.lower_right_exists {
-            self.piece.fill_se_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                i,
-                1,
-                pieces_to_process,
-            );
-        }
-        if self.upper_right_exists {
-            self.piece.fill_se_opening(
-                start,
-                collector,
-                random,
-                weights,
-                last_piece_type,
-                j,
-                7,
-                pieces_to_process,
-            );
-        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -316,7 +257,9 @@ impl StructurePieceBase for FiveWayCrossingPiece {
             double_slab,
         );
 
-        // let torch = Block::WALL_TORCH.default_state.with("facing", "south");
-        // inner.add_block(chunk, &torch, 6, 5, 6, &box_limit);
+        let mut torch_props = WallTorchLikeProperties::default(&Block::WALL_TORCH);
+        torch_props.facing = HorizontalFacing::South;
+        let torch = BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH));
+        inner.add_block(chunk, torch, 6, 5, 6, &box_limit);
     }
 }

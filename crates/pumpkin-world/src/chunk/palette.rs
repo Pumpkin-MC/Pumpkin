@@ -209,42 +209,141 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
     }
 
     /// Builds a complete palette without paying the bookkeeping cost of individual mutations.
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn from_fn(mut value_at: impl FnMut(usize, usize, usize) -> V) -> Self {
-        let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
-        let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
-        let mut palette = Vec::new();
-        let mut counts = Vec::<u16>::new();
+        let first = value_at(0, 0, 0);
+        let mut first_count: u16 = 1;
+        let mut first_diff = None;
 
-        for y in 0..DIM {
+        'homogeneous: for y in 0..DIM {
             for z in 0..DIM {
-                for x in 0..DIM {
+                let x_start = usize::from(y == 0 && z == 0);
+                for x in x_start..DIM {
                     let value = value_at(x, y, z);
-                    cube[y][z][x] = value;
-                    let index =
-                        if let Some(index) = palette.iter().position(|entry| *entry == value) {
-                            counts[index] += 1;
-                            index
-                        } else {
-                            palette.push(value);
-                            counts.push(1);
-                            palette.len() - 1
-                        };
-                    if let Ok(index) = u8::try_from(index) {
-                        indices[y][z][x] = index;
+                    if value == first {
+                        first_count += 1;
+                    } else {
+                        first_diff = Some((x, y, z, value));
+                        break 'homogeneous;
                     }
                 }
             }
         }
 
-        if palette.len() == 1 {
-            return Self::Homogeneous(palette[0]);
+        let Some((diff_x, diff_y, diff_z, second)) = first_diff else {
+            return Self::Homogeneous(first);
+        };
+
+        let mut palette = Vec::with_capacity(16);
+        palette.push(first);
+        palette.push(second);
+        let mut counts = Vec::<u16>::with_capacity(16);
+        counts.push(first_count);
+        counts.push(1);
+
+        if std::mem::size_of::<V>() <= 1 {
+            let mut cube = Box::new([[[first; DIM]; DIM]; DIM]);
+            cube[diff_y][diff_z][diff_x] = second;
+            let mut last_val = second;
+            let mut last_idx = 1usize;
+
+            for y in diff_y..DIM {
+                let z_start = if y == diff_y { diff_z } else { 0 };
+                for z in z_start..DIM {
+                    let x_start = if y == diff_y && z == diff_z {
+                        diff_x + 1
+                    } else {
+                        0
+                    };
+                    for x in x_start..DIM {
+                        let value = value_at(x, y, z);
+                        cube[y][z][x] = value;
+                        let index = if value == last_val {
+                            last_idx
+                        } else if let Some(idx) = palette.iter().position(|&e| e == value) {
+                            last_val = value;
+                            last_idx = idx;
+                            idx
+                        } else {
+                            palette.push(value);
+                            counts.push(0);
+                            last_val = value;
+                            last_idx = palette.len() - 1;
+                            last_idx
+                        };
+                        counts[index] += 1;
+                    }
+                }
+            }
+
+            return Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                storage: PaletteStorage::Dense(cube),
+                palette,
+                counts,
+            }));
         }
 
-        let storage = if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
-            PaletteStorage::Indexed(indices)
-        } else {
-            PaletteStorage::Dense(cube)
-        };
+        let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
+        indices[diff_y][diff_z][diff_x] = 1;
+        let mut dense_cube: Option<Box<[[[V; DIM]; DIM]; DIM]>> = None;
+        let mut last_val = second;
+        let mut last_idx = 1usize;
+
+        for y in diff_y..DIM {
+            let z_start = if y == diff_y { diff_z } else { 0 };
+            for z in z_start..DIM {
+                let x_start = if y == diff_y && z == diff_z {
+                    diff_x + 1
+                } else {
+                    0
+                };
+                for x in x_start..DIM {
+                    let value = value_at(x, y, z);
+                    let index = if value == last_val {
+                        counts[last_idx] += 1;
+                        last_idx
+                    } else if value == first {
+                        counts[0] += 1;
+                        last_val = first;
+                        last_idx = 0;
+                        0
+                    } else if let Some(idx) = palette.iter().position(|&e| e == value) {
+                        counts[idx] += 1;
+                        last_val = value;
+                        last_idx = idx;
+                        idx
+                    } else {
+                        palette.push(value);
+                        counts.push(1);
+                        let idx = palette.len() - 1;
+                        last_val = value;
+                        last_idx = idx;
+                        if idx == 256 {
+                            let mut cube = Box::new([[[first; DIM]; DIM]; DIM]);
+                            for cy in 0..=y {
+                                let cz_end = if cy == y { z + 1 } else { DIM };
+                                for cz in 0..cz_end {
+                                    let cx_end = if cy == y && cz == z { x } else { DIM };
+                                    for cx in 0..cx_end {
+                                        cube[cy][cz][cx] = palette[indices[cy][cz][cx] as usize];
+                                    }
+                                }
+                            }
+                            dense_cube = Some(cube);
+                        }
+                        idx
+                    };
+
+                    if let Some(cube) = &mut dense_cube {
+                        cube[y][z][x] = value;
+                    } else {
+                        indices[y][z][x] = index as u8;
+                    }
+                }
+            }
+        }
+
+        let storage = dense_cube.map_or(PaletteStorage::Indexed(indices), PaletteStorage::Dense);
         Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
             storage,
             palette,
@@ -352,11 +451,9 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                     counts[idx] += 1;
                 } else {
                     warn!("Lookup index out of bounds! Defaulting...");
-                    // value is already 0, and counts[0] will be updated correctly if we track it
+                    counts[0] += 1;
                 }
             }
-            // fix counts[0] if it was skipped in out-of-bounds cases (rare)
-            // But actually we should just ensure it's correct.
 
             return Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
                 storage: PaletteStorage::Indexed(indices),
@@ -447,6 +544,19 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 }
                 original
             }
+        }
+    }
+
+    /// Returns whether any stored value matches the predicate.
+    #[must_use]
+    pub fn contains_matching(&self, mut predicate: impl FnMut(V) -> bool) -> bool {
+        match self {
+            Self::Homogeneous(value) => predicate(*value),
+            Self::Heterogeneous(data) => data
+                .palette
+                .iter()
+                .zip(&data.counts)
+                .any(|(&value, &count)| count > 0 && predicate(value)),
         }
     }
 
@@ -948,6 +1058,205 @@ impl BlockPalette {
             palette,
         }
     }
+
+    pub(crate) fn write_pump_binary(&self, out: &mut Vec<u8>) {
+        use bytes::BufMut;
+
+        match self {
+            Self::Homogeneous(id) => {
+                out.put_u8(0);
+                out.put_u16(id.as_u16());
+            }
+            Self::Heterogeneous(data) => match &data.storage {
+                PaletteStorage::Indexed(indices) => {
+                    out.put_u8(1);
+                    out.put_u16(data.palette.len() as u16);
+                    for (&id, &count) in data.palette.iter().zip(&data.counts) {
+                        out.put_u16(id.as_u16());
+                        out.put_u16(count);
+                    }
+                    out.extend_from_slice(indices.as_flattened().as_flattened());
+                }
+                PaletteStorage::Dense(cube) => {
+                    out.put_u8(2);
+                    for &id in cube.as_flattened().as_flattened() {
+                        out.put_u16(id.as_u16());
+                    }
+                }
+            },
+        }
+    }
+
+    pub(crate) fn read_pump_binary(buf: &mut &[u8]) -> Result<Self, super::ChunkParsingError> {
+        use bytes::Buf;
+
+        if !buf.has_remaining() {
+            return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading block palette mode".into(),
+            ));
+        }
+        match buf.get_u8() {
+            0 => {
+                if buf.remaining() < 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading homogeneous block palette".into(),
+                    ));
+                }
+                Ok(Self::Homogeneous(BlockStateId::new_or_air(buf.get_u16())))
+            }
+            1 => {
+                if buf.remaining() < 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading indexed block palette length".into(),
+                    ));
+                }
+                let palette_len = buf.get_u16() as usize;
+                if !(1..=256).contains(&palette_len)
+                    || buf.remaining() < palette_len * 4 + Self::VOLUME
+                {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Invalid indexed block palette length".into(),
+                    ));
+                }
+                let mut palette = Vec::with_capacity(palette_len);
+                for _ in 0..palette_len {
+                    palette.push(BlockStateId::new_or_air(buf.get_u16()));
+                    buf.advance(2);
+                }
+                if palette_len == 1 {
+                    buf.advance(Self::VOLUME);
+                    return Ok(Self::Homogeneous(palette[0]));
+                }
+                let mut indices = Box::new([[[0u8; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                let flat = indices.as_flattened_mut().as_flattened_mut();
+                flat.copy_from_slice(&buf[..Self::VOLUME]);
+                buf.advance(Self::VOLUME);
+
+                let mut counts = vec![0; palette_len];
+                for idx in flat.iter_mut() {
+                    if *idx as usize >= palette_len {
+                        *idx = 0;
+                    }
+                    counts[*idx as usize] += 1;
+                }
+                Ok(Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Indexed(indices),
+                    palette,
+                    counts,
+                })))
+            }
+            2 => {
+                if buf.remaining() < Self::VOLUME * 2 {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading dense block palette".into(),
+                    ));
+                }
+                let mut cube =
+                    Box::new([[[BlockStateId::AIR; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                for slot in cube.as_flattened_mut().as_flattened_mut() {
+                    *slot = BlockStateId::new_or_air(buf.get_u16());
+                }
+                Ok(Self::from_cube(cube))
+            }
+            mode => Err(super::ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unknown block palette mode {mode}"
+            ))),
+        }
+    }
+}
+
+impl BiomePalette {
+    pub(crate) fn write_pump_binary(&self, out: &mut Vec<u8>) {
+        use bytes::BufMut;
+
+        match self {
+            Self::Homogeneous(id) => {
+                out.put_u8(0);
+                out.put_u8(*id);
+            }
+            Self::Heterogeneous(data) => {
+                out.put_u8(1);
+                out.put_u8(data.palette.len() as u8);
+                for (&id, &count) in data.palette.iter().zip(&data.counts) {
+                    out.put_u8(id);
+                    out.put_u16(count);
+                }
+                match &data.storage {
+                    PaletteStorage::Dense(cube) => {
+                        out.extend_from_slice(cube.as_flattened().as_flattened());
+                    }
+                    PaletteStorage::Indexed(indices) => {
+                        for &idx in indices.as_flattened().as_flattened() {
+                            out.put_u8(data.palette.get(idx as usize).copied().unwrap_or(0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn read_pump_binary(buf: &mut &[u8]) -> Result<Self, super::ChunkParsingError> {
+        use bytes::Buf;
+
+        if !buf.has_remaining() {
+            return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading biome palette mode".into(),
+            ));
+        }
+        match buf.get_u8() {
+            0 => {
+                if !buf.has_remaining() {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading homogeneous biome palette".into(),
+                    ));
+                }
+                Ok(Self::Homogeneous(buf.get_u8()))
+            }
+            1 => {
+                if !buf.has_remaining() {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading heterogeneous biome palette length".into(),
+                    ));
+                }
+                let palette_len = buf.get_u8() as usize;
+                if !(1..=Self::VOLUME).contains(&palette_len)
+                    || buf.remaining() < palette_len * 3 + Self::VOLUME
+                {
+                    return Err(super::ChunkParsingError::ErrorDeserializingChunk(
+                        "Invalid heterogeneous biome palette length".into(),
+                    ));
+                }
+                let mut palette = Vec::with_capacity(palette_len);
+                let mut counts = Vec::with_capacity(palette_len);
+                let mut count_sum = 0u32;
+                for _ in 0..palette_len {
+                    palette.push(buf.get_u8());
+                    let c = buf.get_u16();
+                    counts.push(c);
+                    count_sum += u32::from(c);
+                }
+                let mut cube = Box::new([[[0u8; Self::SIZE]; Self::SIZE]; Self::SIZE]);
+                cube.as_flattened_mut()
+                    .as_flattened_mut()
+                    .copy_from_slice(&buf[..Self::VOLUME]);
+                buf.advance(Self::VOLUME);
+                if palette_len == 1 {
+                    return Ok(Self::Homogeneous(palette[0]));
+                }
+                if count_sum != Self::VOLUME as u32 {
+                    return Ok(Self::from_cube(cube));
+                }
+                Ok(Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Dense(cube),
+                    palette,
+                    counts,
+                })))
+            }
+            mode => Err(super::ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unknown biome palette mode {mode}"
+            ))),
+        }
+    }
 }
 
 /// Represents the different types of data encoding used in Minecraft's bit-packed chunk sections.
@@ -1004,8 +1313,69 @@ pub(crate) const BIOME_NETWORK_MAX_BITS: u8 = 7;
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockPalette, NetworkPalette};
+    use super::{BlockPalette, NetworkPalette, PalettedContainer};
     use pumpkin_data::{Block, BlockStateId};
+
+    #[test]
+    fn matching_visits_distinct_values_after_mutations() {
+        let mut palette = BlockPalette::default();
+        let plate = Block::STONE_PRESSURE_PLATE.default_state.id;
+        assert!(!palette.contains_matching(|state| state == plate));
+        palette.set(1, 2, 3, plate);
+        assert!(palette.contains_matching(|state| state == plate));
+        let mut visited = Vec::new();
+        assert!(!palette.contains_matching(|state| {
+            visited.push(state);
+            false
+        }));
+        assert_eq!(visited.len(), 2);
+        palette.set(1, 2, 3, Block::AIR.default_state.id);
+        assert!(!palette.contains_matching(|state| state == plate));
+    }
+
+    #[test]
+    fn matching_ignores_unused_entries_in_packed_palettes() {
+        let indexed =
+            PalettedContainer::<u16, 2>::from_palette_and_packed_data(&[10, 20, 30], &[2], 2);
+        assert!(indexed.contains_matching(|value| value == 10));
+        assert!(indexed.contains_matching(|value| value == 30));
+        assert!(!indexed.contains_matching(|value| value == 20));
+
+        let dense =
+            PalettedContainer::<u8, 2>::from_palette_and_packed_data(&[10, 20, 30], &[2], 2);
+        assert!(dense.contains_matching(|value| value == 10));
+        assert!(dense.contains_matching(|value| value == 30));
+        assert!(!dense.contains_matching(|value| value == 20));
+    }
+
+    #[test]
+    fn matching_includes_fallback_for_invalid_packed_indices() {
+        let palette =
+            PalettedContainer::<u16, 2>::from_palette_and_packed_data(&[10, 20, 30], &[0xffff], 2);
+        assert!(palette.iter().all(|value| value == 10));
+        assert!(palette.contains_matching(|value| value == 10));
+        assert!(!palette.contains_matching(|value| value == 20 || value == 30));
+    }
+
+    #[test]
+    fn matching_uses_stored_indices_when_binary_counts_are_incorrect()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use bytes::BufMut;
+
+        let plate = Block::STONE_PRESSURE_PLATE.default_state.id;
+        let air = Block::AIR.default_state.id;
+        let mut encoded = vec![1, 0, 2];
+        encoded.put_u16(plate.as_u16());
+        encoded.put_u16(0);
+        encoded.put_u16(air.as_u16());
+        encoded.put_u16(BlockPalette::VOLUME as u16);
+        encoded.resize(encoded.len() + BlockPalette::VOLUME, 0);
+        let palette = BlockPalette::read_pump_binary(&mut encoded.as_slice())?;
+        assert!(palette.iter().all(|value| value == plate));
+        assert!(palette.contains_matching(|value| value == plate));
+        assert!(!palette.contains_matching(|value| value == air));
+        Ok(())
+    }
 
     fn network_palette_values(palette: NetworkPalette<u16>) -> Option<Box<[u16]>> {
         match palette {

@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:stonecutting",
-  "ingredient": "minecraft:lime_concrete",
-  "result": {
-    "id": "minecraft:lime_concrete_stairs"
-  }
-}

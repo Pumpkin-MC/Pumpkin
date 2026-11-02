@@ -19,9 +19,12 @@ pub enum BlockWrapper {
 
 impl BlockWrapper {
     fn contains(&self, name: &str) -> bool {
+        let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
         match self {
-            Self::Single(s) => s == name,
-            Self::Multi(h) => h.iter().any(|s| s == name),
+            Self::Single(s) => s.strip_prefix("minecraft:").unwrap_or(s) == name_stripped,
+            Self::Multi(h) => h
+                .iter()
+                .any(|s| s.strip_prefix("minecraft:").unwrap_or(s) == name_stripped),
         }
     }
 }

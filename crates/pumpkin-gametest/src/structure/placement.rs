@@ -10,7 +10,7 @@ use crate::world::GameTestWorld;
 
 const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GameTestPosition {
     x: i32,
     y: Option<i32>,
@@ -24,7 +24,7 @@ impl GameTestPosition {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TestStructureInstance {
     test_instance_pos: BlockPos,
     origin: BlockPos,
@@ -62,6 +62,11 @@ impl TestStructureInstance {
     }
 
     #[must_use]
+    pub const fn source_size(&self) -> [i32; 3] {
+        self.source_size
+    }
+
+    #[must_use]
     pub const fn size(&self) -> [i32; 3] {
         self.size
     }
@@ -85,6 +90,23 @@ impl TestStructureInstance {
             self.origin.0.x + transformed.x,
             self.origin.0.y + transformed.y,
             self.origin.0.z + transformed.z,
+        )
+    }
+
+    #[must_use]
+    pub fn transform_vec(&self, relative: Vector3<f64>) -> Vector3<f64> {
+        let sx = f64::from(self.source_size[0]);
+        let sz = f64::from(self.source_size[2]);
+        let (rx, rz) = match self.rotation {
+            GameTestRotation::None => (relative.x, relative.z),
+            GameTestRotation::Clockwise90 => (sz - relative.z, relative.x),
+            GameTestRotation::Clockwise180 => (sx - relative.x, sz - relative.z),
+            GameTestRotation::Counterclockwise90 => (relative.z, sx - relative.x),
+        };
+        Vector3::new(
+            f64::from(self.origin.0.x) + rx,
+            f64::from(self.origin.0.y) + relative.y,
+            f64::from(self.origin.0.z) + rz,
         )
     }
 }
@@ -214,6 +236,13 @@ pub async fn place_structure_with_controller_rotation(
 
         if let Some(nbt) = &block.nbt {
             world.set_block_entity_nbt(&position, nbt).await?;
+        } else if let Some(mode) = block.test_mode {
+            let mut nbt = NbtCompound::new();
+            nbt.put_string("id", "minecraft:test_block".to_string());
+            nbt.put_string("mode", mode.serialized_name().to_string());
+            nbt.put_string("message", String::new());
+            nbt.put_bool("powered", false);
+            world.set_block_entity_nbt(&position, &nbt).await?;
         }
     }
 

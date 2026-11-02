@@ -1,0 +1,1 @@
+interface entity { use %world.{entity, living-entity, mob, path-node-type, dye-color, villager-profession, mob-data, sheep-data, wolf-data, cat-data, villager-data, creeper-data, slime-data, enderman-data, iron-golem-data, fox-data, ageable-data, zombie-data, shulker-data, raycast-result, ray-trace-block-result, ray-trace-entity-result, block-direction}; }

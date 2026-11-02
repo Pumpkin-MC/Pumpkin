@@ -28,15 +28,16 @@ impl PoplarTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        TrunkPlacer::set_dirt(
+        let mut logs = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &start_pos.down(),
             below_trunk_provider,
-        );
-
-        let mut logs = Vec::new();
+        ) {
+            logs.push(start_pos.down());
+        }
         let branch_height = height as i32 - self.trunk_height_above_branches.get(random);
 
         for y in 0..height as i32 {

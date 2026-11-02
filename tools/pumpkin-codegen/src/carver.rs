@@ -115,7 +115,7 @@ pub fn build() -> TokenStream {
             BiasedToBottomIntProvider, ConstantIntProvider, IntProvider, NormalIntProvider,
             UniformIntProvider, VeryBiasedToBottomIntProvider,
         };
-        use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+        use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
 
         #[derive(Clone, Debug)]
         pub enum HeightProvider {
@@ -323,6 +323,9 @@ fn value_to_y_offset(v: &Value) -> TokenStream {
         } else if let Some(bt) = v.get("below_top") {
             let val = bt.as_i64().unwrap_or(0) as i8;
             quote! { YOffset::BelowTop(BelowTop { below_top: #val }) }
+        } else if let Some(sl) = v.get("relative_to_sea_level") {
+            let val = sl.as_i64().unwrap_or(0) as i16;
+            quote! { YOffset::RelativeToSeaLevel(RelativeToSeaLevel { relative_to_sea_level: #val }) }
         } else {
             quote! { YOffset::Absolute(Absolute { absolute: 0 }) }
         }

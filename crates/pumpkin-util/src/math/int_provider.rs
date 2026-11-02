@@ -295,7 +295,7 @@ impl BiasedToBottomIntProvider {
     /// # Returns
     /// A random integer in the range [`min_inclusive`, `max_inclusive`], with lower values more likely.
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        if self.min_inclusive >= self.max_inclusive {
+        if self.min_inclusive > self.max_inclusive {
             return self.min_inclusive;
         }
         let range = self.max_inclusive - self.min_inclusive + 1;
@@ -361,15 +361,13 @@ impl VeryBiasedToBottomIntProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        if self.min_inclusive >= self.max_inclusive {
+        if self.min_inclusive > self.max_inclusive {
             return self.min_inclusive;
         }
         let range = self.max_inclusive - self.min_inclusive + 1;
-        let mut bound = range;
-        for _ in 0..=self.inner {
-            bound = random.next_bounded_i32(bound) + 1;
-        }
-        self.min_inclusive + bound - 1
+        let b1 = random.next_bounded_i32(range) + 1;
+        let b2 = random.next_bounded_i32(b1) + 1;
+        self.min_inclusive + random.next_bounded_i32(b2)
     }
 
     #[must_use]
@@ -516,8 +514,12 @@ impl TrapezoidIntProvider {
     /// # Returns
     /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        if self.min_inclusive >= self.max_inclusive {
+        if self.min_inclusive > self.max_inclusive {
             return self.min_inclusive;
+        }
+        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
+            return random.next_bounded_i32(self.max_inclusive + 1)
+                - random.next_bounded_i32(self.max_inclusive + 1);
         }
         let range = self.max_inclusive - self.min_inclusive;
         if self.plateau >= range {
@@ -609,10 +611,8 @@ impl ClampedNormalIntProvider {
     /// # Returns
     /// A random integer from a normal distribution, rounded and clamped to [`min_inclusive`, `max_inclusive`].
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        // NOTE: Generate a normal distribution value and clamp to range
-        let gaussian = random.next_gaussian() as f32;
-        let value = gaussian.mul_add(self.deviation, self.mean).round() as i32;
-        value.clamp(self.min_inclusive, self.max_inclusive)
+        let normal = self.mean + (random.next_gaussian() as f32) * self.deviation;
+        normal.clamp(self.min_inclusive as f32, self.max_inclusive as f32) as i32
     }
 
     /// Returns the maximum inclusive clamp value.
