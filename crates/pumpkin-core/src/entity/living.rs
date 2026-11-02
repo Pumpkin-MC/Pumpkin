@@ -511,15 +511,17 @@ impl LivingEntity {
             })
             .collect();
         let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
+        let world = self.entity.world.load();
+        world.send_to_tracking_players(&self.entity, &je_packet);
 
-        let mut sent_editioned = false;
+        let mut armor_changed = false;
         for (slot, stack) in equipment {
             if *slot == EquipmentSlot::MAIN_HAND {
                 self.update_weapon_attributes(stack);
             }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
-                    120
+                    119
                 } else {
                     0
                 };
@@ -533,21 +535,48 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().send_to_tracking_players_editioned(
-                    &self.entity,
-                    &je_packet,
-                    &be_packet,
-                );
-                sent_editioned = true;
+                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
+            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
+                armor_changed = true;
             }
         }
 
-        if !sent_editioned {
-            self.entity
-                .world
-                .load()
-                .send_to_tracking_players(&self.entity, &je_packet);
+        if armor_changed {
+            let armor_packet = self.bedrock_armor_packet(equipment);
+            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
         }
+    }
+
+    #[must_use]
+    pub fn bedrock_armor_packet(
+        &self,
+        overrides: &[(EquipmentSlot, ItemStack)],
+    ) -> pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+        use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+
+        let equipment_guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot_desc = |target: &EquipmentSlot| -> NetworkItemStackDescriptor {
+            if let Some((_, stack)) = overrides.iter().rfind(|(slot, _)| slot == target) {
+                NetworkItemStackDescriptor::from(stack)
+            } else {
+                let stack = equipment_guard.get(target);
+                NetworkItemStackDescriptor::from(&stack)
+            }
+        };
+
+        let packet = pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            head: slot_desc(&EquipmentSlot::HEAD),
+            chest: slot_desc(&EquipmentSlot::CHEST),
+            legs: slot_desc(&EquipmentSlot::LEGS),
+            feet: slot_desc(&EquipmentSlot::FEET),
+            body: slot_desc(&EquipmentSlot::BODY),
+        };
+        drop(equipment_guard);
+        packet
     }
 
     /// Applies the held item's attack attribute modifiers to this entity's

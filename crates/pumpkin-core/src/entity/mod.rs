@@ -751,7 +751,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: Vec::new(),
+            actor_links: entity.bedrock_actor_links(),
             passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
@@ -1622,7 +1622,11 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimensions.height),
         );
-        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        let is_baby = self.age.load(Relaxed) < 0;
+        metadata.set(
+            entity_data_key::SCALE,
+            MetadataValue::Float(if is_baby { 0.5 } else { 1.0 }),
+        );
         metadata.set(
             entity_data_key::FLAGS,
             MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
@@ -1631,6 +1635,35 @@ impl Entity {
             entity_data_key::FLAGS_TWO,
             MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
         );
+        if is_baby {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
+        }
+        if self.silent.load(Relaxed) {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::SILENT as u8, true);
+        }
+        if self.has_no_gravity.load(Relaxed) {
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::HAS_GRAVITY as u8,
+                false,
+            );
+        }
+        if self.has_vehicle() {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::RIDING as u8, true);
+        }
+        if let Ok(leash_guard) = self.leashed_to.try_lock()
+            && let Some(holder) = leash_guard.as_ref()
+        {
+            metadata.set(
+                entity_data_key::LEASH_HOLDER,
+                MetadataValue::Int64(i64::from(holder.get_entity().entity_id)),
+            );
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::LEASHED as u8,
+                true,
+            );
+        }
 
         if let Some(name) = &**self.custom_name.load() {
             metadata.set(
@@ -1652,6 +1685,27 @@ impl Entity {
         }
 
         metadata
+    }
+
+    #[must_use]
+    pub fn bedrock_actor_links(&self) -> Vec<pumpkin_protocol::bedrock::client::common::ActorLink> {
+        let Ok(passengers) = self.passengers.try_lock() else {
+            return Vec::new();
+        };
+        passengers
+            .iter()
+            .enumerate()
+            .map(
+                |(idx, p)| pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(p.get_entity().entity_id)),
+                    link_type: if idx == 0 { 1 } else { 2 },
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            )
+            .collect()
     }
 
     /// The type's default size, vanilla `EntityType.getDimensions`.
@@ -4172,17 +4226,22 @@ impl Entity {
             holder_entity_id,
             true,
         );
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(
-                    holder_entity_id as i64,
-                ),
-                link_type: 1, // Leash link
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::LEASHED, Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(
+            entity_data_key::LEASH_HOLDER,
+            MetadataValue::Int64(i64::from(holder_entity_id)),
+        );
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -4245,15 +4304,19 @@ impl Entity {
     fn send_leash_removed(&self) {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
-                link_type: 0, // Unlink
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_and(!(1i64 << entity_data_flag::LEASHED), Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::LEASH_HOLDER, MetadataValue::Int64(-1));
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -4506,18 +4569,43 @@ impl Entity {
             }
         }
 
+        let passenger_entity_id = passenger_entity.entity_id;
+        passenger_entity
+            .bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::RIDING, Ordering::Relaxed);
+        let mut rider_meta = SyncedActorDataList::new();
+        rider_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        passenger_entity.send_bedrock_actor_data(&rider_meta);
+
         passengers.push(passenger);
+        let link_type = if passengers.len() == 1 { 1 } else { 2 };
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
+        drop(passengers);
+
+        let be_link = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_entity_id)),
+                link_type,
+                immediate: true,
+                rider_initiated: true,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
 
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
+        world.broadcast_to_chunk_editioned(
             chunk_pos,
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_link,
         );
     }
 
@@ -4582,9 +4670,21 @@ impl Entity {
             .collect();
         drop(passengers);
 
-        self.world.load().broadcast_to_chunk(
+        let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_id)),
+                link_type: 0,
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+
+        self.world.load().broadcast_to_chunk_editioned(
             self.chunk_pos.load(),
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_unlink,
         );
     }
 
@@ -4681,18 +4781,39 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
+            passenger_entity
+                .bedrock_flags
+                .fetch_and(!(1i64 << entity_data_flag::RIDING), Ordering::Relaxed);
+            let mut rider_meta = SyncedActorDataList::new();
+            rider_meta.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+            );
+            passenger_entity.send_bedrock_actor_data(&rider_meta);
+
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+                link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(passenger_id)),
+                    link_type: 0,
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            };
             if let Some(player) = passenger.get_player() {
-                player.try_send_client_packet(&passengers_packet);
-                world.broadcast_to_chunk_except(
+                player.try_enqueue_packet_editioned(&passengers_packet, &be_unlink);
+                world.broadcast_to_chunk_except_editioned(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
                     &passengers_packet,
+                    &be_unlink,
                 );
             } else {
-                world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+                world.broadcast_to_chunk_editioned(chunk_pos, &passengers_packet, &be_unlink);
             }
 
             if !reposition {

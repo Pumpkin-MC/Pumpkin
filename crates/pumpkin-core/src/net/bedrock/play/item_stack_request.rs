@@ -1266,6 +1266,8 @@ fn update_slot_stack(
                         let equipment = &[(EquipmentSlot::MAIN_HAND, new_stack.clone())];
                         player.living_entity.send_equipment_changes(equipment);
                     }
+                } else if screen_slot == 45 {
+                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &new_stack);
                 }
             }
         }

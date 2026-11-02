@@ -195,7 +195,7 @@ use weather::Weather;
 const MAX_LIGHT_LEVEL: u8 = 15;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
-    crate::block::entities::bedrock::build_chest_actor(position, state_id, None)
+    crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -3854,8 +3854,21 @@ impl World {
             selected_slot: 0,
             container_id: 0,
         };
+        let be_offhand_equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+            target_runtime_id: (from.entity_id() as u64).into(),
+            item: (&from.inventory.get_slot(
+                pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT,
+            ))
+                .into(),
+            slot: 0,
+            selected_slot: 0,
+            container_id: 119,
+        };
+        let be_armor_equipment = from.living_entity.bedrock_armor_packet(&[]);
 
         self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
+        self.send_to_tracking_players_bedrock(from.get_entity(), &be_offhand_equipment);
+        self.send_to_tracking_players_bedrock(from.get_entity(), &be_armor_equipment);
     }
 
     pub fn send_world_info(&self, player: &Arc<Player>) {
