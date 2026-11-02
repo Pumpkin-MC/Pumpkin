@@ -121,13 +121,6 @@ impl Mob for SkeletonHorseEntity {
         self.saddled_controlling_passenger(None)
     }
 
-    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
-        *slot != EquipmentSlot::SADDLE
-            || (self.mob_entity.living_entity.entity.is_alive()
-                && !self.is_baby()
-                && self.is_tame())
-    }
-
     fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
         (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityHorseSaddle)
     }

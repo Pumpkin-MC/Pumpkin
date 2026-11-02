@@ -121,13 +121,6 @@ impl Mob for ZombieHorseEntity {
         self.saddled_controlling_passenger(None)
     }
 
-    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
-        *slot != EquipmentSlot::SADDLE
-            || (self.mob_entity.living_entity.entity.is_alive()
-                && !self.is_baby()
-                && self.is_tame())
-    }
-
     fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
         (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityHorseSaddle)
     }
@@ -187,6 +180,17 @@ impl Mob for ZombieHorseEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        // Vanilla `ZombieHorse.mobInteract`: an untamed one gets mad instead of taking the item.
+        if !self.is_tame()
+            && !self.get_entity().has_passengers()
+            && !item_stack.is_empty()
+            && !self.is_food(item_stack)
+        {
+            let pitch = self.mob_entity.living_entity.get_pitch();
+            self.play_entity_sound(Sound::EntityZombieHorseAngry, 0.8, pitch);
+            return true;
+        }
+
         if equip_on_target(self, player, item_stack) {
             return true;
         }
