@@ -60,16 +60,17 @@ impl HopperMinecart {
                 }
                 source.set_stack(slot, backup);
             }
-            return;
+        } else {
+            // `Hopper.SUCK_AABB` around the cart; never blocked, the cart isn't grid aligned.
+            let suction_box = BoundingBox::new(
+                Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
+                Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
+            );
+            if Self::pick_up_item_internal(&world, inventory, &suction_box) {
+                return;
+            }
         }
-
-        let suction_box = BoundingBox::new(
-            Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
-            Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
-        );
-        if Self::pick_up_item_internal(&world, inventory, &suction_box) {
-            return;
-        }
+        // Vanilla `MinecartHopper.suckInItems` falls back to its own box either way.
         Self::pick_up_item_internal(&world, inventory, &cart_box);
     }
 
@@ -82,34 +83,11 @@ impl HopperMinecart {
             let Some(item) = entity.get_item_entity() else {
                 continue;
             };
-            let (backup, one) = {
-                let mut stack = item
-                    .get_item_stack()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if stack.is_empty() {
-                    continue;
-                }
-                (stack.clone(), stack.split(1))
-            };
-            if HopperBlockEntity::add_one_item(inventory.as_ref(), inventory.as_ref(), &one) {
-                let is_empty = {
-                    let stack = item
-                        .get_item_stack()
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    stack.is_empty()
-                };
-                if is_empty {
-                    item.get_entity().remove();
-                }
+            if item
+                .insert_into(|stack| HopperBlockEntity::add_stack(None, inventory.as_ref(), stack))
+            {
                 return true;
             }
-            let mut stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *stack = backup;
         }
         false
     }
