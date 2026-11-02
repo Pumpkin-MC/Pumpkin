@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, LeashTick, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
 use crate::entity::ai::brain::Brain;
@@ -9,7 +9,9 @@ use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
-use crate::entity::ai::goal::{Controls, GoalReach, goal_selector::GoalSelector};
+use crate::entity::ai::goal::{
+    Controls, GoalReach, escape_danger::EscapeDangerGoal, goal_selector::GoalSelector,
+};
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::living::prevents_armor_change;
 use crate::entity::player::Player;
@@ -143,6 +145,8 @@ pub struct MobEntity {
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
+    /// Set while a leash holds the home, so dropping the leash clears it.
+    was_leashed: AtomicBool,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
@@ -153,6 +157,9 @@ pub struct MobEntity {
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
+
+const FOLLOW_LEASH_WANTED_DISTANCE: f32 = 2.0;
+
 impl MobEntity {
     /// Vanilla `Mob.getNavigation`/`getMoveControl`: a rider steering a mob drives that mob.
     /// Only the mob's own AI step ticks its own navigator and move control directly.
@@ -274,6 +281,7 @@ impl MobEntity {
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
+            was_leashed: AtomicBool::new(false),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
@@ -284,6 +292,60 @@ impl MobEntity {
             pending_riders: std::sync::Mutex::new(Vec::new()),
             mob_flags: AtomicU8::new(0),
         }
+    }
+
+    pub fn set_home_to(&self, center: BlockPos, radius: i32) {
+        self.position_target.store(center);
+        self.position_target_range.store(radius, Relaxed);
+    }
+
+    pub fn clear_home(&self) {
+        self.position_target_range.store(-1, Relaxed);
+    }
+
+    /// Runs the mob side of [`Entity::tick_leash`].
+    fn tick_leash(&self, mob: &dyn Mob) {
+        let entity = &self.living_entity.entity;
+        match entity.tick_leash() {
+            LeashTick::NotLeashed => {}
+            LeashTick::Snapped => self.goals_selector.disable_control(Controls::MOVE),
+            LeashTick::Elastic(holder) => self.when_leashed_to(&*holder),
+            LeashTick::CloseRange(holder) => {
+                self.when_leashed_to(&*holder);
+                self.close_range_leash_behaviour(mob, &*holder);
+            }
+        }
+        if !entity.is_leashed() && self.was_leashed.swap(false, Relaxed) {
+            self.clear_home();
+        }
+    }
+
+    fn when_leashed_to(&self, holder: &dyn EntityBase) {
+        self.was_leashed.store(true, Relaxed);
+        self.set_home_to(
+            holder.get_entity().block_pos.load(),
+            Entity::LEASH_ELASTIC_DISTANCE as i32 - 1,
+        );
+    }
+
+    fn close_range_leash_behaviour(&self, mob: &dyn Mob, holder: &dyn EntityBase) {
+        if !mob.should_stay_close_to_leash_holder() || mob.is_panicking() {
+            return;
+        }
+        self.goals_selector.enable_control(Controls::MOVE);
+        let pos = self.living_entity.entity.pos.load();
+        let holder_pos = holder.get_entity().pos.load();
+        let distance = pos.squared_distance_to_vec(&holder_pos).sqrt() as f32;
+        let delta = (holder_pos - pos).normalize()
+            * f64::from((distance - FOLLOW_LEASH_WANTED_DISTANCE).max(0.0));
+        let target = pos + delta;
+        self.steered().navigator().move_to_coords(
+            target.x,
+            target.y,
+            target.z,
+            mob.follow_leash_speed(),
+            &self.living_entity,
+        );
     }
 
     pub fn has_position_target(&self) -> bool {
@@ -1286,6 +1348,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn can_be_leashed(&self) -> bool {
         true
+    }
+
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        true
+    }
+
+    fn follow_leash_speed(&self) -> f64 {
+        1.0
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
@@ -2322,7 +2392,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.process_navigation_updates();
-        mob_entity.living_entity.entity.tick_leash();
+        mob_entity.tick_leash(self);
         sun_burn::tick(self);
 
         if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
@@ -2468,6 +2538,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_panicking(&self) -> bool {
         self.get_path_aware_entity()
             .is_some_and(PathAwareEntity::is_panicking)
+            || self
+                .get_mob_entity()
+                .goals_selector
+                .is_running::<EscapeDangerGoal>()
     }
 
     fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
@@ -2577,22 +2651,6 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     // TODO: implement
     fn is_panicking(&self) -> bool {
         false
-    }
-
-    fn should_follow_leash(&self) -> bool {
-        true
-    }
-
-    fn on_short_leash_tick(&self) {
-        // TODO: implement
-    }
-
-    fn before_leash_tick(&self) {
-        // TODO: implement
-    }
-
-    fn get_follow_leash_speed(&self) -> f32 {
-        1.0
     }
 }
 

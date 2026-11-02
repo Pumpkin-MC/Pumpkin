@@ -113,9 +113,9 @@ impl WanderingTraderSpawner {
         if let Some(wandering_trader) = trader.cast_any().downcast_ref::<WanderingTraderEntity>() {
             wandering_trader.set_despawn_delay(TRADER_DESPAWN_DELAY);
             wandering_trader.set_wander_target(Some(reference_pos));
-            let mob = &wandering_trader.mob_entity;
-            mob.position_target.store(reference_pos);
-            mob.position_target_range.store(HOME_RADIUS, Relaxed);
+            wandering_trader
+                .mob_entity
+                .set_home_to(reference_pos, HOME_RADIUS);
         }
         true
     }

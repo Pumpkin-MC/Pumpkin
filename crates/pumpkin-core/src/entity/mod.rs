@@ -1189,6 +1189,14 @@ struct SpawnState {
     head_yaw: u8,
 }
 
+/// What a leash did this tick, see [`Entity::tick_leash`].
+pub enum LeashTick {
+    NotLeashed,
+    Snapped,
+    Elastic(Arc<dyn EntityBase>),
+    CloseRange(Arc<dyn EntityBase>),
+}
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 #[repr(C)]
 pub struct Entity {
@@ -4558,7 +4566,8 @@ impl Entity {
         }
     }
 
-    pub fn tick_leash(&self) {
+    /// Applies leash snapping and the elastic pull. Mobs handle the other outcomes.
+    pub fn tick_leash(&self) -> LeashTick {
         let delayed = *self
             .delayed_leash
             .lock()
@@ -4569,42 +4578,51 @@ impl Entity {
 
         let holder = {
             let Ok(guard) = self.leashed_to.try_lock() else {
-                return;
+                return LeashTick::NotLeashed;
             };
             guard.clone()
         };
+        let Some(holder) = holder else {
+            return LeashTick::NotLeashed;
+        };
+        let holder_entity = holder.get_entity();
 
-        if let Some(holder) = holder {
-            let holder_entity = holder.get_entity();
-
-            // Drop leash if entity or holder is removed or dead
-            if !self.is_alive() || !holder_entity.is_alive() {
-                self.unleash();
-                return;
-            }
-
-            let self_pos = self.pos.load();
-            let holder_pos = holder_entity.pos.load();
-            let diff = self_pos - holder_pos;
-            let distance = diff.length();
-
-            if distance > Self::LEASH_SNAP_DISTANCE {
-                // Too far: snap/break leash and drop lead item
-                self.unleash();
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item);
-            } else if distance > Self::LEASH_ELASTIC_DISTANCE {
-                // Elastic pull force towards leash holder
-                let dir = (holder_pos - self_pos).normalize();
-                let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
-                let current_vel = self.velocity.load();
-                self.velocity.store(current_vel + dir * pull_strength);
-                self.velocity_dirty.store(true, Relaxed);
-            }
+        if !self.is_alive() || !holder_entity.is_alive() {
+            self.unleash();
+            return LeashTick::NotLeashed;
         }
+
+        let distance = self.leash_distance_to(holder_entity);
+        if distance > Self::LEASH_SNAP_DISTANCE {
+            let holder_pos = holder_entity.pos.load();
+            self.world
+                .load()
+                .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
+            self.unleash();
+            let lead_item =
+                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+            self.world
+                .load()
+                .drop_stack(&self.block_pos.load(), lead_item);
+            return LeashTick::Snapped;
+        }
+        if distance > Self::LEASH_ELASTIC_DISTANCE {
+            let dir = (holder_entity.pos.load() - self.pos.load()).normalize();
+            let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
+            let current_vel = self.velocity.load();
+            self.velocity.store(current_vel + dir * pull_strength);
+            self.velocity_dirty.store(true, Relaxed);
+            return LeashTick::Elastic(holder);
+        }
+        LeashTick::CloseRange(holder)
+    }
+
+    fn leash_distance_to(&self, other: &Self) -> f64 {
+        let center = |entity: &Self| {
+            let bounding_box = entity.bounding_box.load();
+            (bounding_box.min + bounding_box.max) * 0.5
+        };
+        (center(other) - center(self)).length()
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {

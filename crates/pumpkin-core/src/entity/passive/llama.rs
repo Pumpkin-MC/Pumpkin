@@ -61,6 +61,7 @@ use crate::world::World;
 const MAX_STRENGTH: i32 = 5;
 const MAX_TEMPER: i32 = 30;
 const FOLLOW_CARAVAN_SPEED: f64 = 2.1;
+const FOLLOW_LEASH_SPEED: f64 = 2.0;
 const BABY_SCALE: f32 = 0.5;
 const BEDROCK_CONTAINER_SIZE: i32 = 16;
 const BEDROCK_CONTAINER_STRENGTH_MODIFIER: i32 = 3;
@@ -659,6 +660,10 @@ impl Mob for LlamaEntity {
 
     fn get_owner_uuid(&self) -> Option<uuid::Uuid> {
         self.get_owner()
+    }
+
+    fn follow_leash_speed(&self) -> f64 {
+        FOLLOW_LEASH_SPEED
     }
 
     fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {

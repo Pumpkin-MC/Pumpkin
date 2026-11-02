@@ -212,6 +212,10 @@ impl Mob for TraderLlamaEntity {
         self.llama.get_owner_uuid()
     }
 
+    fn follow_leash_speed(&self) -> f64 {
+        self.llama.follow_leash_speed()
+    }
+
     fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
         self.llama.can_dispenser_equip_into_slot(slot)
     }

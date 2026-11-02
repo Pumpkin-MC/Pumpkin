@@ -127,6 +127,10 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
     /// Vanilla `HappyGhast` steps silently.
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 
