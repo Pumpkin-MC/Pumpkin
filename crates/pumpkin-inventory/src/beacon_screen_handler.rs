@@ -1,10 +1,3 @@
-//! Beacon screen handler, mirroring vanilla `BeaconMenu`.
-//!
-//! Layout: slot 0 is the payment slot (owned by the menu, returned to the player on
-//! close), slots 1..28 are the player's main inventory, 28..37 the hotbar.
-//! Three container properties are tracked: power level, primary effect, secondary
-//! effect. Effects are encoded as `registry id + 1`, with `0` meaning "no effect".
-
 use std::{
     any::Any,
     sync::{
