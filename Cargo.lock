@@ -2944,6 +2944,7 @@ dependencies = [
 name = "pumpkin"
 version = "0.2.2+26.3-26.60"
 dependencies = [
+ "clap",
  "console-subscriber",
  "pumpkin-config",
  "pumpkin-core",
