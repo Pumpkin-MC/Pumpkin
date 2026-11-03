@@ -1,18 +1,21 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, PathComputationType,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Half;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -29,6 +32,13 @@ fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
         SoundCategory::Blocks,
         *block_pos,
     );
+
+    let game_event = if trapdoor_props.open {
+        pumpkin_data::game_event::GameEvent::BlockOpen
+    } else {
+        pumpkin_data::game_event::GameEvent::BlockClose
+    };
+    world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
 
     world.set_block_state(
         block_pos,
@@ -97,10 +107,13 @@ impl BlockBehaviour for TrapDoorBlock {
         trapdoor_props.half = match args.direction {
             BlockDirection::Up => Half::Top,
             BlockDirection::Down => Half::Bottom,
-            _ => match args.use_item_on.cursor_pos.y {
-                0.0..0.5 => Half::Bottom,
-                _ => Half::Top,
-            },
+            _ => {
+                if args.use_item_on.cursor_pos.y > 0.5 {
+                    Half::Top
+                } else {
+                    Half::Bottom
+                }
+            }
         };
 
         trapdoor_props.powered = powered;
@@ -109,25 +122,46 @@ impl BlockBehaviour for TrapDoorBlock {
         trapdoor_props.to_state_id(args.block)
     }
 
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let trapdoor_props = TrapDoorProperties::from_state_id(args.state_id);
+        if trapdoor_props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        args.state_id
+    }
+
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        {
-            let block_state = args.world.get_block_state(args.position);
-            let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id);
-            let powered = block_receives_redstone_power(args.world, args.position);
+        let block_state = args.world.get_block_state(args.position);
+        let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id);
+        let powered = block_receives_redstone_power(args.world, args.position);
 
-            if powered != trapdoor_props.powered {
-                trapdoor_props.powered = !trapdoor_props.powered;
+        if powered != trapdoor_props.powered {
+            if powered != trapdoor_props.open {
+                trapdoor_props.open = powered;
 
-                if powered != trapdoor_props.open {
-                    trapdoor_props.open = trapdoor_props.powered;
-
-                    args.world.play_block_sound(
-                        get_sound(args.block, powered),
-                        SoundCategory::Blocks,
-                        *args.position,
-                    );
-                }
+                args.world.play_block_sound(
+                    get_sound(args.block, powered),
+                    SoundCategory::Blocks,
+                    *args.position,
+                );
+                let game_event = if powered {
+                    pumpkin_data::game_event::GameEvent::BlockOpen
+                } else {
+                    pumpkin_data::game_event::GameEvent::BlockClose
+                };
+                args.world
+                    .emit_game_event(game_event.name(), args.position.to_centered_f64());
             }
+
+            trapdoor_props.powered = powered;
 
             args.world.set_block_state(
                 args.position,

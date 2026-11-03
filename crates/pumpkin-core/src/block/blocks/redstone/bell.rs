@@ -4,20 +4,21 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs,
+    BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType,
+    PlacedArgs,
 };
+use crate::entity::EntityBase;
 use crate::world::World;
-use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
+use pumpkin_data::HorizontalFacingExt;
+use pumpkin_data::block_properties::{Axis, BellAttachment, BellLikeProperties, HorizontalFacing};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
-use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 fn ring_bell(
     position: BlockPos,
@@ -54,11 +55,11 @@ fn ring_bell(
         Sound::BlockBellUse,
         SoundCategory::Blocks,
         &position.to_centered_f64(),
-        1.0,
         2.0,
+        1.0,
     );
+    world.emit_game_event(GameEvent::BlockChange.name(), position.to_centered_f64());
 
-    //TODO Emit game event: BLOCK_CHANGE -> Send block update Packet
     true
 }
 
@@ -85,14 +86,23 @@ fn is_point_on_bell(
     }
 }
 
-fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -> bool {
-    !world
-        .get_block(&position.offset(facing.to_offset()))
-        .is_solid()
-}
-
 #[pumpkin_block("minecraft:bell")]
 pub struct BellBlock;
+
+impl BellBlock {
+    fn can_survive_dir(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        position: &BlockPos,
+        direction: BlockDirection,
+    ) -> bool {
+        if direction == BlockDirection::Up {
+            crate::block::can_support_center(block_accessor, &position.up(), BlockDirection::Down)
+        } else {
+            WallMountedBlock::can_place_at(self, block_accessor, position, direction)
+        }
+    }
+}
 
 impl WallMountedBlock for BellBlock {
     fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
@@ -109,26 +119,12 @@ impl WallMountedBlock for BellBlock {
 
 impl BlockBehaviour for BellBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        if let Some(direction) = args.direction
-            && let Some(world) = args.world
-        {
-            if direction == BlockDirection::Up {
-                let block: &Block = world.get_block(args.position);
-
-                if block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
-                    false
-                } else {
-                    let block_pos = args.position.offset(direction.to_offset());
-                    let block_state = world.get_block_state(&block_pos);
-                    block_state.is_center_solid(direction)
-                }
-            } else {
-                WallMountedBlock::can_place_at(self, world, args.position, direction)
-            }
-        } else {
-            false
-        }
+        let direction = args
+            .direction
+            .unwrap_or_else(|| self.get_direction(args.state.id, args.block).opposite());
+        self.can_survive_dir(args.block_accessor, args.position, direction)
     }
+
     fn broken(&self, args: BrokenArgs<'_>) {
         let world: &World = args.world;
         world.remove_block_entity(args.position);
@@ -138,6 +134,7 @@ impl BlockBehaviour for BellBlock {
         args.world
             .add_block_entity(Arc::new(BellBlockEntity::new(*args.position)));
     }
+
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
 
@@ -166,30 +163,102 @@ impl BlockBehaviour for BellBlock {
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = BellLikeProperties::default(args.block);
+        let axis = args.direction.to_axis();
 
-        let block_face;
-        let facing;
-        (block_face, facing) =
-            WallMountedBlock::get_placement_face(self, args.player, args.direction);
-
-        props.facing = match block_face {
-            AttachFace::Floor | AttachFace::Ceiling => facing,
-            AttachFace::Wall => facing.opposite(),
-        };
-
-        props.attachment = match block_face {
-            AttachFace::Wall => {
-                if is_single_wall(*args.position, props.facing.opposite(), args.world) {
-                    BellAttachment::SingleWall
-                } else {
-                    BellAttachment::DoubleWall
-                }
+        if axis == Axis::Y {
+            props.attachment = if args.direction == BlockDirection::Up {
+                BellAttachment::Ceiling
+            } else {
+                BellAttachment::Floor
+            };
+            props.facing = args.player.get_entity().get_horizontal_facing();
+        } else {
+            let double_attached = (axis == Axis::X
+                && args
+                    .world
+                    .get_block_state(&args.position.west())
+                    .is_side_solid(BlockDirection::East)
+                && args
+                    .world
+                    .get_block_state(&args.position.east())
+                    .is_side_solid(BlockDirection::West))
+                || (axis == Axis::Z
+                    && args
+                        .world
+                        .get_block_state(&args.position.north())
+                        .is_side_solid(BlockDirection::South)
+                    && args
+                        .world
+                        .get_block_state(&args.position.south())
+                        .is_side_solid(BlockDirection::North));
+            props.facing = args.direction.to_cardinal_direction();
+            props.attachment = if double_attached {
+                BellAttachment::DoubleWall
+            } else {
+                BellAttachment::SingleWall
+            };
+            let state_id = props.to_state_id(args.block);
+            if self.can_survive_dir(
+                args.world,
+                args.position,
+                self.get_direction(state_id, args.block).opposite(),
+            ) {
+                return state_id;
             }
-            AttachFace::Floor => BellAttachment::Floor,
-            AttachFace::Ceiling => BellAttachment::Ceiling,
-        };
 
-        props.to_state_id(args.block)
+            let can_attach_below = args
+                .world
+                .get_block_state(&args.position.down())
+                .is_side_solid(BlockDirection::Up);
+            props.attachment = if can_attach_below {
+                BellAttachment::Floor
+            } else {
+                BellAttachment::Ceiling
+            };
+        }
+
+        let state_id = props.to_state_id(args.block);
+        if self.can_survive_dir(
+            args.world,
+            args.position,
+            self.get_direction(state_id, args.block).opposite(),
+        ) {
+            return state_id;
+        }
+
+        Block::AIR.default_state.id
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut props = BellLikeProperties::from_state_id(args.state_id);
+        let connected_dir = self.get_direction(args.state_id, args.block).opposite();
+        if connected_dir == args.direction
+            && !self.can_survive_dir(args.world, args.position, connected_dir)
+            && props.attachment != BellAttachment::DoubleWall
+        {
+            return Block::AIR.default_state.id;
+        }
+        if args.direction.to_axis() == props.facing.to_block_direction().to_axis() {
+            let neighbor_state = BlockState::from_id(args.neighbor_state_id);
+            if props.attachment == BellAttachment::DoubleWall
+                && !neighbor_state.is_side_solid(args.direction.opposite())
+            {
+                props.attachment = BellAttachment::SingleWall;
+                props.facing = args.direction.opposite().to_cardinal_direction();
+                return props.to_state_id(args.block);
+            }
+            if props.attachment == BellAttachment::SingleWall
+                && connected_dir.opposite() == args.direction
+                && neighbor_state.is_side_solid(props.facing.to_block_direction())
+            {
+                props.attachment = BellAttachment::DoubleWall;
+                return props.to_state_id(args.block);
+            }
+        }
+        args.state_id
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -218,8 +287,8 @@ impl BlockBehaviour for BellBlock {
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         let player = args
             .projectile
-            .get_owner_id()
-            .and_then(|id| args.world.get_player_by_id(id));
+            .get_projectile_owner()
+            .and_then(|owner| owner.get_player(args.world));
         if ring_bell(
             *args.position,
             args.world,

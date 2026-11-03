@@ -48,6 +48,7 @@ const OVERWORLD_BIOMES: &[&Biome] = &[
     &Biome::FROZEN_RIVER,
     &Biome::RIVER,
     &Biome::ICE_SPIKES,
+    &Biome::DAPPLED_FOREST,
     &Biome::OLD_GROWTH_PINE_TAIGA,
     &Biome::SUNFLOWER_PLAINS,
     &Biome::OLD_GROWTH_BIRCH_FOREST,
@@ -61,7 +62,6 @@ const OVERWORLD_BIOMES: &[&Biome] = &[
     &Biome::LUSH_CAVES,
     &Biome::SULFUR_CAVES,
     &Biome::DEEP_DARK,
-    &Biome::DAPPLED_FOREST,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

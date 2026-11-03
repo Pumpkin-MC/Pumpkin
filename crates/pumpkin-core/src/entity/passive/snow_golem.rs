@@ -7,18 +7,21 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, RangedAttackMob},
     player::Player,
     projectile::snowball::SnowballEntity,
 };
+
+const SNOW_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Enemy, true)];
 
 pub struct SnowGolemEntity {
     pub mob_entity: MobEntity,
@@ -57,10 +60,7 @@ impl SnowGolemEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, SNOW_GOLEM_HUNTS);
         };
 
         mob_arc

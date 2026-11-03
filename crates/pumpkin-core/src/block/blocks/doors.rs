@@ -56,6 +56,13 @@ fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
         *block_pos,
     );
 
+    let game_event = if door_props.open {
+        pumpkin_data::game_event::GameEvent::BlockOpen
+    } else {
+        pumpkin_data::game_event::GameEvent::BlockClose
+    };
+    world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
+
     world.set_block_state(
         block_pos,
         door_props.to_state_id(block),
@@ -107,12 +114,12 @@ fn get_hinge(
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_offset());
     let (_left_block, left_state) = world.get_block_and_state(&left_pos);
-    let top_facing = top_pos.offset(facing.to_offset());
-    let top_state = world.get_block_state(&top_facing);
+    let top_left = top_pos.offset(left_dir.to_offset());
+    let top_state = world.get_block_state(&top_left);
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_offset());
     let (_right_block, right_state) = world.get_block_and_state(&right_pos);
-    let top_right = top_pos.offset(facing.to_offset());
+    let top_right = top_pos.offset(right_dir.to_offset());
     let top_right_state = world.get_block_state(&top_right);
 
     let has_left_door = world
@@ -191,6 +198,13 @@ impl DoorBlock {
 
         world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
 
+        let game_event = if open {
+            pumpkin_data::game_event::GameEvent::BlockOpen
+        } else {
+            pumpkin_data::game_event::GameEvent::BlockClose
+        };
+        world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
+
         world.set_block_state(
             block_pos,
             door_props.to_state_id(block),
@@ -213,11 +227,13 @@ impl BlockBehaviour for DoorBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut door_props = DoorProperties::default(args.block);
         let facing = args.player.living_entity.entity.get_horizontal_facing();
+        let powered = block_receives_redstone_power(args.world, args.position)
+            || block_receives_redstone_power(args.world, &args.position.up());
         door_props.facing = facing;
         door_props.half = DoubleBlockHalf::Lower;
         door_props.hinge = get_hinge(args.world, args.position, args.use_item_on, facing);
-        door_props.open = false;
-        door_props.powered = false;
+        door_props.open = powered;
+        door_props.powered = powered;
         door_props.to_state_id(args.block)
     }
 
@@ -315,14 +331,21 @@ impl BlockBehaviour for DoorBlock {
             if door_props.open != powered {
                 door_props.open = powered;
                 other_door_props.open = powered;
-            }
 
-            if door_props.half == sound_half {
-                args.world.play_block_sound(
-                    get_sound(args.block, powered),
-                    SoundCategory::Blocks,
-                    *args.position,
-                );
+                if door_props.half == sound_half {
+                    args.world.play_block_sound(
+                        get_sound(args.block, powered),
+                        SoundCategory::Blocks,
+                        *args.position,
+                    );
+                    let game_event = if powered {
+                        pumpkin_data::game_event::GameEvent::BlockOpen
+                    } else {
+                        pumpkin_data::game_event::GameEvent::BlockClose
+                    };
+                    args.world
+                        .emit_game_event(game_event.name(), args.position.to_centered_f64());
+                }
             }
 
             args.world.set_block_state(

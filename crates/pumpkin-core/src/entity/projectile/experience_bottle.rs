@@ -2,6 +2,7 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::projectile::owner::ProjectileOwner;
 use crate::entity::projectile::{ProjectileHit, ThrownItemEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::server::Server;
@@ -10,7 +11,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 const GRAVITY: f64 = 0.07;
@@ -23,27 +23,21 @@ pub struct ExperienceBottleEntity {
 
 impl ExperienceBottleEntity {
     pub fn new(entity: Entity) -> Self {
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
-        let thrown = ThrownItemEntity {
-            entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
-            gravity: GRAVITY,
-        };
-
         Self {
-            thrown,
+            thrown: ThrownItemEntity {
+                entity,
+                owner: ProjectileOwner::none(),
+                collides_with_projectiles: false,
+                has_hit: AtomicBool::new(false),
+                gravity: GRAVITY,
+            },
             item_stack: RwLock::new(ItemStack::new(1, &Item::EXPERIENCE_BOTTLE)),
         }
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
-        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
-
         Self {
-            thrown,
+            thrown: ThrownItemEntity::new(entity, shooter, GRAVITY),
             item_stack: RwLock::new(ItemStack::new(1, &Item::EXPERIENCE_BOTTLE)),
         }
     }
@@ -58,8 +52,8 @@ impl ExperienceBottleEntity {
 }
 
 impl EntityBase for ExperienceBottleEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {

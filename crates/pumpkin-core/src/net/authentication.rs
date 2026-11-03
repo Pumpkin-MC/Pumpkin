@@ -314,13 +314,17 @@ pub async fn lookup_profile_by_name(
 pub fn lookup_profile_by_name_blocking(
     name: &str,
     auth_config: &AuthenticationConfig,
+    handle: Option<&tokio::runtime::Handle>,
 ) -> Result<Option<(Uuid, String)>, AuthError> {
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+    let current_handle = tokio::runtime::Handle::try_current().ok();
+    let Some(handle) = handle.or(current_handle.as_ref()) else {
+        return Err(AuthError::FailedParse);
+    };
+
+    if tokio::runtime::Handle::try_current().is_ok() {
         tokio::task::block_in_place(|| handle.block_on(lookup_profile_by_name(name, auth_config)))
     } else {
-        tokio::runtime::Runtime::new()
-            .map_err(|_e| AuthError::FailedParse)?
-            .block_on(lookup_profile_by_name(name, auth_config))
+        handle.block_on(lookup_profile_by_name(name, auth_config))
     }
 }
 

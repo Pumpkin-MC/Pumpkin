@@ -65,15 +65,14 @@ impl BlockEntity for BannerBlockEntity {
         state_id: pumpkin_data::BlockStateId,
     ) -> Option<NbtCompound> {
         let (block, _) = pumpkin_data::BlockState::from_id_with_block(state_id);
-        let base_color =
-            crate::block::entities::bedrock::banner_base_color_from_block_name(block.name)
-                .unwrap_or(pumpkin_data::dye_color::DyeColor::White);
+        let base_color = banner_base_color_from_block_name(block.name)
+            .unwrap_or(pumpkin_data::dye_color::DyeColor::White);
         let patterns_guard = self.patterns.lock().ok();
         let patterns = patterns_guard.as_ref().and_then(|p| p.as_deref());
         let name_guard = self.custom_name.lock().ok();
         let name = name_guard.as_ref().and_then(|n| n.as_deref());
 
-        Some(crate::block::entities::bedrock::build_banner_actor(
+        Some(build_banner_actor(
             self.position,
             base_color,
             patterns,
@@ -138,5 +137,141 @@ impl BannerBlockEntity {
             custom_name: Mutex::new(None),
             patterns: Mutex::new(None),
         }
+    }
+}
+
+/// Converts a Java [`pumpkin_data::dye_color::DyeColor`] to Bedrock's inverted wool/banner metadata color index.
+#[must_use]
+pub const fn dye_color_to_bedrock_wool_color(color: pumpkin_data::dye_color::DyeColor) -> i32 {
+    15 - (color.id() as i32)
+}
+
+/// Translates a Java banner pattern name (bare or namespaced) into a Bedrock short code.
+#[must_use]
+pub fn banner_pattern_to_bedrock_code(pattern_name: &str) -> &'static str {
+    let name = pattern_name
+        .strip_prefix("minecraft:")
+        .unwrap_or(pattern_name);
+    match name {
+        "border" | "bo" => "bo",
+        "bricks" | "bri" => "bri",
+        "circle" | "mc" => "mc",
+        "creeper" | "cre" => "cre",
+        "cross" | "cr" => "cr",
+        "curly_border" | "cbo" => "cbo",
+        "diagonal_left" | "ld" => "ld",
+        "diagonal_right" | "rd" => "rd",
+        "diagonal_up_left" | "lud" => "lud",
+        "diagonal_up_right" | "rud" => "rud",
+        "flow" | "flw" => "flw",
+        "flower" | "flo" => "flo",
+        "globe" | "glb" => "glb",
+        "gradient" | "gra" => "gra",
+        "gradient_up" | "gru" => "gru",
+        "guster" | "gus" => "gus",
+        "half_horizontal" | "hh" => "hh",
+        "half_horizontal_bottom" | "hhb" => "hhb",
+        "half_vertical" | "vh" => "vh",
+        "half_vertical_right" | "vhr" => "vhr",
+        "mojang" | "moj" => "moj",
+        "piglin" | "pig" => "pig",
+        "rhombus" | "mr" => "mr",
+        "skull" | "sku" => "sku",
+        "small_stripes" | "ss" => "ss",
+        "square_bottom_left" | "bl" => "bl",
+        "square_bottom_right" | "br" => "br",
+        "square_top_left" | "tl" => "tl",
+        "square_top_right" | "tr" => "tr",
+        "straight_cross" | "sc" => "sc",
+        "stripe_bottom" | "bs" => "bs",
+        "stripe_center" | "cs" => "cs",
+        "stripe_downleft" | "dls" => "dls",
+        "stripe_downright" | "drs" => "drs",
+        "stripe_left" | "ls" => "ls",
+        "stripe_middle" | "ms" => "ms",
+        "stripe_right" | "rs" => "rs",
+        "stripe_top" | "ts" => "ts",
+        "triangle_bottom" | "bt" => "bt",
+        "triangle_top" | "tt" => "tt",
+        "triangles_bottom" | "bts" => "bts",
+        "triangles_top" | "tts" => "tts",
+        _ => "b",
+    }
+}
+
+/// Extracts the base [`pumpkin_data::dye_color::DyeColor`] of a banner block from its registry name.
+#[must_use]
+pub fn banner_base_color_from_block_name(
+    block_name: &str,
+) -> Option<pumpkin_data::dye_color::DyeColor> {
+    let stripped = block_name.strip_prefix("minecraft:").unwrap_or(block_name);
+    let color_name = stripped
+        .strip_suffix("_wall_banner")
+        .or_else(|| stripped.strip_suffix("_banner"))?;
+    pumpkin_data::dye_color::DyeColor::by_name(color_name)
+}
+
+/// Builds the Bedrock block-actor NBT for banners.
+#[must_use]
+pub fn build_banner_actor(
+    position: BlockPos,
+    base_color: pumpkin_data::dye_color::DyeColor,
+    patterns: Option<&[NbtTag]>,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    let mut builder = super::bedrock::BedrockBlockActorBuilder::new("Banner", position)
+        .custom_name(custom_name)
+        .put_int("Base", dye_color_to_bedrock_wool_color(base_color))
+        .put_int("Type", 0);
+
+    if let Some(pats) = patterns {
+        let mut bedrock_pats = Vec::new();
+        for tag in pats {
+            if let Some(compound) = tag.extract_compound() {
+                let pattern_name = compound.get_string("pattern").unwrap_or("b");
+                let color_idx = compound
+                    .get_string("color")
+                    .and_then(pumpkin_data::dye_color::DyeColor::by_name)
+                    .map_or(0, dye_color_to_bedrock_wool_color);
+
+                let mut pat_comp = NbtCompound::new();
+                pat_comp.put_string(
+                    "Pattern",
+                    banner_pattern_to_bedrock_code(pattern_name).to_string(),
+                );
+                pat_comp.put_int("Color", color_idx);
+                bedrock_pats.push(NbtTag::Compound(pat_comp));
+            }
+        }
+        builder = builder.put_list("Patterns", bedrock_pats);
+    }
+
+    builder.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::dye_color::DyeColor;
+
+    #[test]
+    fn banner_actor_builder() {
+        let pos = BlockPos::new(3, 64, 3);
+        let mut pat_comp = NbtCompound::new();
+        pat_comp.put_string("pattern", "stripe_top".to_string());
+        pat_comp.put_string("color", "black".to_string());
+        let patterns = vec![NbtTag::Compound(pat_comp)];
+
+        let nbt = build_banner_actor(pos, DyeColor::Red, Some(&patterns), None);
+        assert_eq!(nbt.get_string("id"), Some("Banner"));
+        assert_eq!(
+            nbt.get_int("Base"),
+            Some(dye_color_to_bedrock_wool_color(DyeColor::Red))
+        );
+
+        let pat_list = nbt.get_list("Patterns").expect("Patterns missing");
+        assert_eq!(pat_list.len(), 1);
+        let first = pat_list[0].extract_compound().expect("compound");
+        assert_eq!(first.get_string("Pattern"), Some("ts"));
     }
 }

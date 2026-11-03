@@ -8,16 +8,52 @@ use super::surface_biomes;
 
 pub(crate) struct TestBlockRegistry;
 impl crate::world::WorldPortalExt for TestBlockRegistry {
+    #[expect(clippy::too_many_lines, reason = "test block registry placement rules")]
     fn can_place_at(
         &self,
         block: &pumpkin_data::Block,
-        _state: &pumpkin_data::BlockState,
+        state: &pumpkin_data::BlockState,
         block_accessor: &dyn crate::world::BlockAccessor,
         block_pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         use pumpkin_data::Block;
         use pumpkin_data::tag::Taggable;
         let block_below = block_accessor.get_block(&block_pos.down());
+        if block == &Block::MANGROVE_PROPAGULE {
+            let props =
+                pumpkin_data::block_properties::MangrovePropaguleLikeProperties::from_state_id(
+                    state.id,
+                );
+            if props.hanging {
+                return block_accessor.get_block(&block_pos.up()).has_tag(
+                    &pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_HANGING_MANGROVE_PROPAGULE,
+                );
+            }
+            return block_below
+                .has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_MANGROVE_PROPAGULE);
+        }
+        if block == &Block::TALL_GRASS
+            || block == &Block::LARGE_FERN
+            || block == &Block::SUNFLOWER
+            || block == &Block::LILAC
+            || block == &Block::ROSE_BUSH
+            || block == &Block::PEONY
+            || block == &Block::PITCHER_PLANT
+        {
+            let props =
+                pumpkin_data::block_properties::TallSeagrassLikeProperties::from_state_id(state.id);
+            if props.half == pumpkin_data::block_properties::DoubleBlockHalf::Upper {
+                let (below_block, below_state) =
+                    block_accessor.get_block_and_state(&block_pos.down());
+                return below_block == block
+                    && pumpkin_data::block_properties::TallSeagrassLikeProperties::from_state_id(
+                        below_state.id,
+                    )
+                    .half
+                        == pumpkin_data::block_properties::DoubleBlockHalf::Lower;
+            }
+            return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_VEGETATION);
+        }
         if block == &Block::SHORT_GRASS
             || block == &Block::FERN
             || block == &Block::POPPY
@@ -34,28 +70,81 @@ impl crate::world::WorldPortalExt for TestBlockRegistry {
             || block == &Block::LILY_OF_THE_VALLEY
             || block == &Block::WITHER_ROSE
             || block == &Block::SWEET_BERRY_BUSH
-            || block == &Block::TALL_GRASS
-            || block == &Block::LARGE_FERN
-            || block == &Block::SUNFLOWER
-            || block == &Block::LILAC
-            || block == &Block::ROSE_BUSH
-            || block == &Block::PEONY
             || block == &Block::WILDFLOWERS
+            || block == &Block::PINK_PETALS
             || block == &Block::BUSH
+            || block == &Block::RED_SHRUB
+            || block == &Block::FIREFLY_BUSH
+            || block == &Block::CLOSED_EYEBLOSSOM
+            || block == &Block::OPEN_EYEBLOSSOM
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SMALL_FLOWERS)
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SAPLINGS)
         {
             return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_VEGETATION);
         }
-        if block == &Block::DEAD_BUSH {
+        if block == &Block::DEAD_BUSH
+            || block == &Block::SHORT_DRY_GRASS
+            || block == &Block::TALL_DRY_GRASS
+        {
             return block_below
                 .has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_DRY_VEGETATION);
         }
+        if block == &Block::AZALEA || block == &Block::FLOWERING_AZALEA {
+            return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_AZALEA);
+        }
+        if block == &Block::LEAF_LITTER {
+            return block_accessor
+                .get_block_state(&block_pos.down())
+                .is_side_solid(pumpkin_data::BlockDirection::Up);
+        }
+        if block == &Block::CACTUS_FLOWER {
+            let below_state = block_accessor.get_block_state(&block_pos.down());
+            return block_below
+                .has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORT_OVERRIDE_CACTUS_FLOWER)
+                || below_state.is_center_solid(pumpkin_data::BlockDirection::Up);
+        }
         if block == &Block::CACTUS {
-            return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_CACTUS);
+            for direction in pumpkin_data::BlockDirection::horizontal() {
+                let (n_block, n_state) =
+                    block_accessor.get_block_and_state(&block_pos.offset(direction.to_offset()));
+                if n_state.is_solid() || n_block == &Block::LAVA {
+                    return false;
+                }
+            }
+            return (block_below == &Block::CACTUS
+                || block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_CACTUS))
+                && !block_accessor.get_block_state(&block_pos.up()).is_liquid();
         }
         if block == &Block::SUGAR_CANE {
-            return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE);
+            if block_below == &Block::SUGAR_CANE {
+                return true;
+            }
+            if block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
+                let below = block_pos.down();
+                for direction in pumpkin_data::BlockDirection::horizontal() {
+                    let n_pos = below.offset(direction.to_offset());
+                    let n_id = block_accessor.get_block_state_id(&n_pos);
+                    let n_block = n_id.to_block();
+                    let is_water = n_block == &Block::WATER
+                        || n_id.is_waterlogged()
+                        || matches!(
+                            n_block.id,
+                            pumpkin_data::BlockId::KELP
+                                | pumpkin_data::BlockId::KELP_PLANT
+                                | pumpkin_data::BlockId::SEAGRASS
+                                | pumpkin_data::BlockId::TALL_SEAGRASS
+                                | pumpkin_data::BlockId::BUBBLE_COLUMN
+                        );
+                    if is_water
+                        || n_block.has_tag(
+                            &pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY,
+                        )
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
         if block == &Block::BAMBOO || block == &Block::BAMBOO_SAPLING {
             return block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO);
@@ -88,9 +177,116 @@ impl crate::world::WorldPortalExt for TestBlockRegistry {
                 &pumpkin_data::tag::Block::MINECRAFT_OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT,
             ) || below_state.is_solid_render();
         }
+        if block == &Block::SMALL_DRIPLEAF {
+            if block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_SMALL_DRIPLEAF) {
+                return true;
+            }
+            let here_id = block_accessor.get_block_state_id(block_pos);
+            let is_water_source =
+                here_id == Block::WATER.default_state.id || here_id.is_waterlogged();
+            return is_water_source
+                && block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_VEGETATION);
+        }
+        if block == &Block::BIG_DRIPLEAF {
+            return block_below == &Block::BIG_DRIPLEAF
+                || block_below == &Block::BIG_DRIPLEAF_STEM
+                || block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF);
+        }
+        if block == &Block::SPORE_BLOSSOM {
+            let above_state = block_accessor.get_block_state(&block_pos.up());
+            let here_id = block_accessor.get_block_state_id(block_pos);
+            let is_water = here_id.is_waterlogged()
+                || matches!(
+                    pumpkin_data::fluid::Fluid::from_state_id(here_id),
+                    Some(f) if *f == pumpkin_data::fluid::Fluid::WATER
+                        || *f == pumpkin_data::fluid::Fluid::FLOWING_WATER
+                );
+            return above_state.is_center_solid(pumpkin_data::BlockDirection::Down) && !is_water;
+        }
+        if block == &Block::HANGING_ROOTS {
+            let above_state = block_accessor.get_block_state(&block_pos.up());
+            return above_state.is_side_solid(pumpkin_data::BlockDirection::Down);
+        }
+        if block == &Block::PALE_MOSS_CARPET || block == &Block::MOSS_CARPET {
+            return !block_accessor.get_block_state(&block_pos.down()).is_air();
+        }
+        if block == &Block::SEAGRASS {
+            let below_state = block_accessor.get_block_state(&block_pos.down());
+            return below_state.is_side_solid(pumpkin_data::BlockDirection::Up)
+                && !block_below
+                    .has_tag(&pumpkin_data::tag::Block::MINECRAFT_CANNOT_SUPPORT_SEAGRASS);
+        }
+        if block == &Block::TALL_SEAGRASS {
+            let props =
+                pumpkin_data::block_properties::TallSeagrassLikeProperties::from_state_id(state.id);
+            if props.half == pumpkin_data::block_properties::DoubleBlockHalf::Upper {
+                let (below_block, below_state) =
+                    block_accessor.get_block_and_state(&block_pos.down());
+                return below_block == &Block::TALL_SEAGRASS
+                    && pumpkin_data::block_properties::TallSeagrassLikeProperties::from_state_id(
+                        below_state.id,
+                    )
+                    .half
+                        == pumpkin_data::block_properties::DoubleBlockHalf::Lower;
+            }
+            let here_id = block_accessor.get_block_state_id(block_pos);
+            let is_full_water = here_id == Block::WATER.default_state.id
+                || here_id.is_waterlogged()
+                || matches!(
+                    here_id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                );
+            let below_state = block_accessor.get_block_state(&block_pos.down());
+            return is_full_water
+                && below_state.is_side_solid(pumpkin_data::BlockDirection::Up)
+                && !block_below
+                    .has_tag(&pumpkin_data::tag::Block::MINECRAFT_CANNOT_SUPPORT_SEAGRASS);
+        }
+        if block == &Block::COCOA {
+            let props =
+                pumpkin_data::block_properties::CocoaLikeProperties::from_state_id(state.id);
+            let support_pos = block_pos.offset(props.facing.to_offset());
+            let support_block = block_accessor.get_block(&support_pos);
+            return support_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_COCOA);
+        }
+        if block == &Block::SEA_PICKLE {
+            let below_pos = block_pos.down();
+            let below_state = block_accessor.get_block_state(&below_pos);
+            return below_state.is_side_solid(pumpkin_data::BlockDirection::Up)
+                || !below_state.collision_shapes.is_empty();
+        }
         if block == &Block::LILY_PAD {
-            return block_below == &Block::WATER
-                || block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_LILY_PAD);
+            let below_pos = block_pos.down();
+            let below_id = block_accessor.get_block_state_id(&below_pos);
+            let here_id = block_accessor.get_block_state_id(block_pos);
+            let is_source_water = (block_below == &Block::WATER
+                && below_id == Block::WATER.default_state.id)
+                || below_id.is_waterlogged()
+                || matches!(
+                    block_below.id,
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                );
+            let here_has_fluid = here_id.is_waterlogged()
+                || pumpkin_data::fluid::Fluid::from_state_id(here_id).is_some()
+                || matches!(
+                    here_id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                );
+            return (is_source_water
+                || block_below.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
+                && !here_has_fluid;
         }
         true
     }
@@ -198,21 +394,29 @@ impl crate::generation::proto_chunk::GenerationCache for TestGridCache {
     }
     fn get_fluid_and_fluid_state(
         &self,
-        _pos: &pumpkin_util::math::vector3::Vector3<i32>,
+        pos: &pumpkin_util::math::vector3::Vector3<i32>,
     ) -> (pumpkin_data::fluid::Fluid, pumpkin_data::fluid::FluidState) {
-        (
-            pumpkin_data::fluid::Fluid::EMPTY,
-            pumpkin_data::fluid::FluidState {
-                height: 0.0,
-                level: 0,
-                is_empty: true,
-                blast_resistance: 0.0,
-                block_state_id: pumpkin_data::BlockStateId::AIR,
-                is_still: false,
-                is_source: false,
-                falling: false,
-            },
-        )
+        use pumpkin_data::fluid::Fluid;
+        let id = crate::generation::proto_chunk::GenerationCache::get_block_state(self, pos);
+        let Some(fluid) = Fluid::from_state_id(id) else {
+            let fluid = if id.is_waterlogged()
+                || matches!(
+                    id.to_block_id(),
+                    pumpkin_data::BlockId::KELP
+                        | pumpkin_data::BlockId::KELP_PLANT
+                        | pumpkin_data::BlockId::SEAGRASS
+                        | pumpkin_data::BlockId::TALL_SEAGRASS
+                        | pumpkin_data::BlockId::BUBBLE_COLUMN
+                ) {
+                Fluid::WATER
+            } else {
+                Fluid::EMPTY
+            };
+            let state = fluid.states[0].clone();
+            return (fluid, state);
+        };
+        let state = fluid.states[0].clone();
+        (fluid.clone(), state)
     }
     fn set_block_state(
         &mut self,
@@ -221,6 +425,9 @@ impl crate::generation::proto_chunk::GenerationCache for TestGridCache {
     ) {
         let cx = pos.x >> 4;
         let cz = pos.z >> 4;
+        if (cx - self.center_pos.0).abs() > 1 || (cz - self.center_pos.1).abs() > 1 {
+            return;
+        }
         if let Some(chunk) = self.chunks.get_mut(&(cx, cz)) {
             chunk.set_block_state(pos.x, pos.y, pos.z, block_state);
         }
@@ -414,6 +621,7 @@ fn assert_stage_hashes(
     expected: &StageEntry,
 ) {
     if actual_hash == expected.hash {
+        assert_eq!(actual_sections, expected.sections);
         println!("[{stage_name} ({cx}, {cz})] 1:1 MATCH (hash: {actual_hash})");
         return;
     }
@@ -462,17 +670,6 @@ fn verify_stage_parity(seed: u64, stage_dumps: &[ChunkStageDump]) {
                 nchunk.step_to_biomes(generator);
                 nchunk.set_structure_starts(generator);
                 nchunk.set_structure_references(generator);
-                for (id, inst) in &nchunk.structure_starts {
-                    if let crate::generation::structure::structures::StructureInstance::Start(s) =
-                        inst
-                    {
-                        println!(
-                            "[({cx}, {cz})] Found structure start at ({nx}, {nz}): {:?}, bb: {:?}",
-                            id,
-                            s.get_bounding_box()
-                        );
-                    }
-                }
                 chunks_3x3.insert((nx, nz), nchunk);
             }
         }
@@ -505,7 +702,7 @@ fn verify_stage_parity(seed: u64, stage_dumps: &[ChunkStageDump]) {
         // Stage 4: Features
         // Advance 3x3 neighbors to carvers for feature decoration context
         for (&(nx, nz), nchunk) in &mut chunks_3x3 {
-            if (nx, nz) == (cx, cz) {
+            if (nx, nz) == (cx, cz) || (nx - cx).abs() > 1 || (nz - cz).abs() > 1 {
                 continue;
             }
             nchunk.step_to_noise(generator);

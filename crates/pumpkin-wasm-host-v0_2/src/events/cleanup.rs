@@ -518,6 +518,7 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::EntityPotionEffectEvent(_) => {}
         Event::EntitySpellCastEvent(_) => {}
         Event::EntityTargetLivingEntityEvent(_) => {}
+        Event::EntityToggleSitEvent(_) => {}
         Event::EntityToggleSwimEvent(_) => {}
         Event::ExplosionPrimeEvent(_) => {}
         Event::FireworkExplodeEvent(_) => {}

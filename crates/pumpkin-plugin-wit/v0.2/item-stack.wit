@@ -46,6 +46,43 @@ interface item-stack {
         /// Returns the maximum number of items that can be in this stack.
         get-max-count: async func() -> u8;
 
+        /// Creates an independent copy of this item stack.
+        clone: async func() -> item-stack;
+
+        /// Creates a copy of this item stack with the specified count.
+        with-count: async func(count: u8) -> item-stack;
+
+        /// Checks whether this item stack has the same item type and data components as another stack (ignoring count).
+        is-similar: async func(other: item-stack) -> bool;
+
+        /// Returns the current durability damage on this item stack (0 if undamaged).
+        get-damage: async func() -> s32;
+        /// Sets the durability damage on this item stack.
+        set-damage: async func(damage: s32);
+        /// Returns the maximum durability damage this item stack can take (0 if not damageable).
+        get-max-damage: async func() -> s32;
+        /// Returns whether this item stack can take durability damage.
+        is-damageable: async func() -> bool;
+        /// Returns whether this item stack has the unbreakable component.
+        is-unbreakable: async func() -> bool;
+        /// Sets or removes the unbreakable component on this item stack.
+        set-unbreakable: async func(unbreakable: bool);
+
+        /// Returns the anvil repair cost of this item stack.
+        get-repair-cost: async func() -> s32;
+        /// Sets the anvil repair cost of this item stack.
+        set-repair-cost: async func(cost: s32);
+
+        /// Returns the custom item model resource location override, if set.
+        get-item-model: async func() -> option<string>;
+        /// Sets or clears the custom item model resource location override.
+        set-item-model: async func(model: option<string>);
+
+        /// Returns the enchantment glint override, if set.
+        get-enchantment-glint-override: async func() -> option<bool>;
+        /// Sets or clears the enchantment glint override.
+        set-enchantment-glint-override: async func(glint: option<bool>);
+
         /// Returns all enchantments on this item stack.
         get-enchantments: async func() -> list<enchantment-value>;
         /// Adds an enchantment to this item stack.

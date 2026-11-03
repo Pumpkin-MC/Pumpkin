@@ -3,14 +3,15 @@ use std::sync::Arc;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockStateId, block_properties::HorizontalFacing};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, BrokenArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
+        BlockBehaviour, BrokenArgs, GetInsideCollisionShapeArgs, GetStateForNeighborUpdateArgs,
+        OnEntityCollisionArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -23,9 +24,28 @@ type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikePr
 pub struct TripwireBlock;
 
 impl BlockBehaviour for TripwireBlock {
+    fn get_inside_collision_shape(&self, args: GetInsideCollisionShapeArgs<'_>) -> BoundingBox {
+        let props = TripwireProperties::from_state_id(args.state.id);
+        if props.attached {
+            BoundingBox::new(
+                Vector3::new(0.0, 0.0625, 0.0),
+                Vector3::new(1.0, 0.15625, 1.0),
+            )
+        } else {
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.5, 1.0))
+        }
+    }
+
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if args.entity.get_entity().is_spectator() {
+            return;
+        }
         let mut props = TripwireProperties::from_state_id(args.state.id);
-        if props.powered {
+        if props.powered
+            || args
+                .world
+                .is_block_tick_scheduled(args.position, args.block)
+        {
             return;
         }
         props.powered = true;
@@ -81,7 +101,10 @@ impl BlockBehaviour for TripwireBlock {
                 props.to_state_id(args.block),
                 BlockFlags::empty(),
             );
-            // TODO world.emitGameEvent(player, GameEvent.SHEAR, pos);
+            args.world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::Shear.name(),
+                args.position.to_centered_f64(),
+            );
             // TODO: Deduct 1 durability from held shears (skip in Creative mode).
         }
     }
@@ -114,17 +137,25 @@ impl BlockBehaviour for TripwireBlock {
 
         let aabb = BoundingBox::from_block(args.position);
         // TODO entity.canAvoidTraps()
-        if args.world.get_entities_at_box(&aabb).is_empty()
-            && args.world.get_players_at_box(&aabb).is_empty()
-        {
+        let has_entity = args
+            .world
+            .get_entities_at_box(&aabb)
+            .iter()
+            .any(|e| !e.get_entity().is_spectator())
+            || args
+                .world
+                .get_players_at_box(&aabb)
+                .iter()
+                .any(|p| !p.get_entity().is_spectator());
+        if has_entity {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal);
+        } else {
             props.powered = false;
             let state_id = props.to_state_id(args.block);
             args.world
                 .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL);
             Self::update(args.world, args.position, state_id);
-        } else {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal);
         }
     }
 
@@ -132,8 +163,10 @@ impl BlockBehaviour for TripwireBlock {
         if args.moved || Block::from_state_id(args.old_state_id) == args.block {
             return;
         }
-        let state_id = args.world.get_block_state_id(args.position);
-        Self::update(args.world, args.position, state_id);
+        let mut props = TripwireProperties::from_state_id(args.old_state_id);
+        props.powered = true;
+        let removed_state_id = props.to_state_id(args.block);
+        Self::update(args.world, args.position, removed_state_id);
     }
 }
 
