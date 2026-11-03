@@ -1734,11 +1734,13 @@ impl LivingEntity {
         if let Some(mob) = caller.get_mob() {
             mob.mob_ai_step();
             crate::entity::mob::pick_up_nearby_items(mob);
-            mob.get_mob_entity()
-                .body_rotation_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .client_tick(mob);
+            if mob.ticks_body_rotation() {
+                mob.get_mob_entity()
+                    .body_rotation_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .client_tick(mob);
+            }
         }
     }
 

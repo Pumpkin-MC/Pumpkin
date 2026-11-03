@@ -563,6 +563,10 @@ impl Mob for CamelEntity {
         self.get_controlling_passenger().is_none()
     }
 
+    fn ticks_body_rotation(&self) -> bool {
+        !self.refuse_to_move()
+    }
+
     fn make_brain(&self, packed: &PackedMemories) -> Brain {
         ai::make_brain(self, packed)
     }

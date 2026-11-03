@@ -1442,6 +1442,10 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn ticks_body_rotation(&self) -> bool {
+        true
+    }
+
     /// Vanilla `LookControl.resetXRotOnTick`: the look control levels the pitch each tick.
     fn look_resets_pitch(&self) -> bool {
         true
