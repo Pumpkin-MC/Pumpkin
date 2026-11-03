@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::TAKE_ITEM_ENTITY;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(TAKE_ITEM_ENTITY)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,34 +31,18 @@ impl ClientPacket for CTakeItemEntity {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.entity_id.0)?;
-            write.write_i32_be(self.collector_entity_id.0)?;
-        } else {
-            write.write_var_int(&self.entity_id)?;
-            write.write_var_int(&self.collector_entity_id)?;
-        }
-        if *version >= JavaMinecraftVersion::V_1_11 {
-            write.write_var_int(&self.stack_amount)?;
-        }
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&self.collector_entity_id)?;
+        write.write_var_int(&self.stack_amount)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CTakeItemEntity {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let (entity_id, collector_entity_id) = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            (VarInt(bytebuf.get_i32_be()?), VarInt(bytebuf.get_i32_be()?))
-        } else {
-            (bytebuf.get_var_int()?, bytebuf.get_var_int()?)
-        };
-        let stack_amount = if *version >= JavaMinecraftVersion::V_1_11 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(1)
-        };
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let (entity_id, collector_entity_id) = (bytebuf.get_var_int()?, bytebuf.get_var_int()?);
+        let stack_amount = bytebuf.get_var_int()?;
         Ok(Self {
             entity_id,
             collector_entity_id,

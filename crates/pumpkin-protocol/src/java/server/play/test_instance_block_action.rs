@@ -8,7 +8,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[java_packet(TEST_INSTANCE_BLOCK_ACTION)]
@@ -19,9 +18,9 @@ pub struct STestInstanceBlockAction<'a> {
 }
 
 impl<'a> ServerPacket<'a> for STestInstanceBlockAction<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             action: TestInstanceBlockAction::read(bytebuf)?,
             data: TestInstanceBlockData::read(bytebuf)?,
         })
@@ -32,10 +31,9 @@ impl crate::ClientPacket for STestInstanceBlockAction<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         self.action.write(&mut write)?;
         self.data.write(&mut write)?;
         Ok(())

@@ -161,14 +161,15 @@ impl DisplayEntityExt for DisplayEntity {
 }
 
 /// Extension trait for [`ItemDisplayEntity`] providing convenience methods.
+#[allow(async_fn_in_trait)]
 pub trait ItemDisplayEntityExt {
     /// Sets the displayed item stack.
-    fn set_item_stack(&self, item: Option<ItemStack>);
+    async fn set_item_stack(&self, item: Option<ItemStack>);
 }
 
 impl ItemDisplayEntityExt for ItemDisplayEntity {
-    fn set_item_stack(&self, item: Option<ItemStack>) {
-        self.set_item(item);
+    async fn set_item_stack(&self, item: Option<ItemStack>) {
+        self.set_item(item).await;
     }
 }
 

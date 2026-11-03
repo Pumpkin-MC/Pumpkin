@@ -1,6 +1,5 @@
 use pumpkin_data::packet::clientbound::play::BLOCK_UPDATE;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use pumpkin_macros::java_packet;
 use std::io::Write;
@@ -30,13 +29,9 @@ impl CBlockUpdate {
 }
 
 impl ClientPacket for CBlockUpdate {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_var_int(&self.state_id)?;
 
         Ok(())

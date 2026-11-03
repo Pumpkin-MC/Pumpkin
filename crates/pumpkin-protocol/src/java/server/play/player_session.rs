@@ -1,6 +1,5 @@
 use pumpkin_data::packet::serverbound::play::CHAT_SESSION_UPDATE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -17,7 +16,7 @@ pub struct SPlayerSession {
 }
 
 impl<'a> ServerPacket<'a> for SPlayerSession {
-    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let session_id = read.get_uuid()?;
         let expires_at = read.get_i64_be()?;
 
@@ -50,7 +49,6 @@ impl crate::ClientPacket for SPlayerSession {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::{VarInt, ser::NetworkWriteExt};
         write.write_uuid(&self.session_id)?;

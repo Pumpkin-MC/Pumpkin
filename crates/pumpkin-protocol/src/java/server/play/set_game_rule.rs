@@ -6,7 +6,6 @@ use crate::{
     codec::var_int::VarInt,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 pub struct GameRuleEntry<'a> {
     pub game_rule_key: &'a str,
@@ -19,7 +18,7 @@ pub struct SSetGameRule<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SSetGameRule<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let count = bytebuf.get_var_int()?.0 as usize;
         let mut entries = Vec::with_capacity(count);
         for _ in 0..count {
@@ -38,7 +37,6 @@ impl crate::ClientPacket for SSetGameRule<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&VarInt(self.entries.len() as i32))?;

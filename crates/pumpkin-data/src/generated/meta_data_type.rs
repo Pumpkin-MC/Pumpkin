@@ -60,8 +60,4 @@ impl MetaDataType {
     pub const COPPER_GOLEM_STATE: MetaDataType = Self::WEATHERING_COPPER_STATE;
     pub const PROFILE: MetaDataType = Self::RESOLVABLE_PROFILE;
     pub const ARM: MetaDataType = Self::HUMANOID_ARM;
-    #[must_use]
-    pub const fn id(&self, _version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
-        self.id
-    }
 }

@@ -2,7 +2,6 @@ use pumpkin_data::packet::clientbound::play::MOUNT_SCREEN_OPEN;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(MOUNT_SCREEN_OPEN)]
 pub struct COpenMountScreen {
@@ -26,7 +25,6 @@ impl ClientPacket for COpenMountScreen {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_u8(self.window_id)?;
         write.write_var_int(&self.slot_count)?;

@@ -125,9 +125,7 @@ impl DatapackManager {
             loot_tables: RwLock::new(HashMap::new()),
             dynamic_registries: RwLock::new(HashMap::new()),
             dynamic_registry_manager: Arc::new(
-                dynamic_registry_manager::DynamicRegistryManager::new(
-                    pumpkin_data::packet::CURRENT_MC_VERSION,
-                ),
+                dynamic_registry_manager::DynamicRegistryManager::new(),
             ),
             trade_registry: RwLock::new(TradeRegistry::new()),
             advancements: RwLock::new(HashMap::new()),

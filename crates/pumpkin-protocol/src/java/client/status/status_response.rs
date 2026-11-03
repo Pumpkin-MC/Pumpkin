@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server in response to a `SStatusRequest`.
 ///
@@ -28,7 +27,6 @@ impl ClientPacket for CStatusResponse {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.json_response)?;
         Ok(())
@@ -36,10 +34,7 @@ impl ClientPacket for CStatusResponse {
 }
 
 impl<'a> crate::ServerPacket<'a> for CStatusResponse {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
         Ok(Self {
             json_response: bytebuf.get_str()?.into_string(),

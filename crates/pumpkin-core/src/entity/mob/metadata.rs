@@ -1,12 +1,10 @@
 use pumpkin_data::dye_color::DyeColor;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::tracked_data::{self, TrackedData};
 use pumpkin_protocol::VarInt;
 use pumpkin_protocol::bedrock::client::set_actor_data::{
     MetadataValue, SyncedActorDataList, entity_data_flag, entity_data_key,
 };
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::entity::Entity;
 use crate::entity::passive::villager::VillagerData;
@@ -23,25 +21,25 @@ pub enum JavaMetadataEntry {
 }
 
 impl JavaMetadataEntry {
-    pub fn write(&self, writer: &mut Vec<u8>, version: &JavaMinecraftVersion) {
+    pub fn write(&self, writer: &mut Vec<u8>) {
         match self {
             Self::Bool(tracked, val) => {
-                let _ = Metadata::new(*tracked, *val).write(writer, version);
+                let _ = Metadata::new(*tracked, *val).write(writer);
             }
             Self::Byte(tracked, val) => {
-                let _ = Metadata::new(*tracked, *val).write(writer, version);
+                let _ = Metadata::new(*tracked, *val).write(writer);
             }
             Self::VarInt(tracked, val) => {
-                let _ = Metadata::new(*tracked, VarInt(*val)).write(writer, version);
+                let _ = Metadata::new(*tracked, VarInt(*val)).write(writer);
             }
             Self::Int(tracked, val) => {
-                let _ = Metadata::new(*tracked, *val).write(writer, version);
+                let _ = Metadata::new(*tracked, *val).write(writer);
             }
             Self::Float(tracked, val) => {
-                let _ = Metadata::new(*tracked, *val).write(writer, version);
+                let _ = Metadata::new(*tracked, *val).write(writer);
             }
             Self::VillagerData(tracked, val) => {
-                let _ = Metadata::new(*tracked, *val).write(writer, version);
+                let _ = Metadata::new(*tracked, *val).write(writer);
             }
         }
     }
@@ -413,15 +411,15 @@ impl MobMetadata {
         self.bedrock_data.clone()
     }
 
-    /// Serializes all Java metadata entries for the target Java version, ending with 255.
+    /// Serializes all Java metadata entries, ending with 255.
     #[must_use]
-    pub fn to_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 || self.java_entries.is_empty() {
+    pub fn to_java_spawn_metadata(&self) -> Option<Box<[u8]>> {
+        if self.java_entries.is_empty() {
             return None;
         }
         let mut buf = Vec::new();
         for entry in &self.java_entries {
-            entry.write(&mut buf, &version);
+            entry.write(&mut buf);
         }
         buf.push(255);
         Some(buf.into_boxed_slice())
@@ -432,7 +430,7 @@ impl MobMetadata {
         if !self.bedrock_data.0.is_empty() {
             entity.send_bedrock_actor_data(&self.bedrock_data);
         }
-        if let Some(java_bytes) = self.to_java_spawn_metadata(CURRENT_MC_VERSION) {
+        if let Some(java_bytes) = self.to_java_spawn_metadata() {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), java_bytes);
             entity
                 .world
@@ -466,9 +464,7 @@ mod tests {
             Some(0.55)
         );
 
-        let java = meta
-            .to_java_spawn_metadata(JavaMinecraftVersion::V_26_3)
-            .expect("java metadata");
+        let java = meta.to_java_spawn_metadata().expect("java metadata");
         assert!(!java.is_empty());
         assert_eq!(*java.last().unwrap(), 255);
     }

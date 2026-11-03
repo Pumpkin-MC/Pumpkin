@@ -6,7 +6,6 @@ use pumpkin_data::packet::clientbound::config::RESOURCE_PACK_PUSH;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
@@ -40,17 +39,14 @@ impl ClientPacket for CConfigAddResourcePack<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_20_3 {
-            write.write_uuid(self.uuid)?;
-        }
+        write.write_uuid(self.uuid)?;
         write.write_string(self.url)?;
         write.write_string(self.hash)?;
         write.write_bool(self.forced)?;
         if let Some(prompt) = &self.prompt_message {
             write.write_bool(true)?;
-            write.write_component(prompt, version)?;
+            write.write_component(prompt)?;
         } else {
             write.write_bool(false)?;
         }

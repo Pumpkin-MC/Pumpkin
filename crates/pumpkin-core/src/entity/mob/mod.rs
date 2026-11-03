@@ -46,7 +46,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
-use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, Ordering};
@@ -1535,9 +1534,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// Metadata which must accompany this mob whenever it is spawned for a Java client.
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        self.mob_metadata()
-            .and_then(|m| m.to_java_spawn_metadata(version))
+    fn mob_java_spawn_metadata(&self) -> Option<Box<[u8]>> {
+        self.mob_metadata().and_then(|m| m.to_java_spawn_metadata())
     }
 
     /// Metadata which must accompany this mob whenever it is spawned for a Bedrock client.

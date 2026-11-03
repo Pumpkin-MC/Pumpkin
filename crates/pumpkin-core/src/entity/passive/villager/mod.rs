@@ -2441,7 +2441,6 @@ mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
     use pumpkin_protocol::java::client::play::Metadata;
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;
 
@@ -2451,9 +2450,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::VILLAGER_DATA, data);
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [19, 18, 2, 9, 1]);
     }
@@ -2492,9 +2489,7 @@ mod tests {
         let metadata = Metadata::new(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         let mut bytes = Vec::new();
 
-        metadata
-            .write(&mut bytes, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        metadata.write(&mut bytes).unwrap();
 
         assert_eq!(bytes, [18, 1, 40]);
     }

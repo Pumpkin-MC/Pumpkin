@@ -583,17 +583,10 @@ impl Server {
             .execute_function(server, &source, "#minecraft:load");
 
         let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
-        for player in self.get_all_players() {
-            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
-                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
-                    true,
-                    &dynamic_recipes,
-                );
-                if let Ok(data) = java_client.serialize_packet(&add_packet) {
-                    java_client.try_enqueue_packet(data);
-                }
-            }
-        }
+        World::broadcast_java_players(
+            &pumpkin_protocol::java::client::play::CRecipeBookAdd::new(true, &dynamic_recipes),
+            self.get_all_players().iter(),
+        );
     }
 
     #[must_use]
@@ -721,18 +714,11 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
-        let player_clone = player.clone();
-        self.spawn_task(async move {
-            let properties = player_clone.gameprofile.properties.load().clone();
-            if let Some(mut skin) = Player::fetch_skin(&properties).await {
-                if skin.skin_id == "Standard_Custom" {
-                    let skin_id = format!("pumpkin:{}", player_clone.gameprofile.id);
-                    skin.skin_id.clone_from(&skin_id);
-                    skin.full_id = skin_id;
-                }
-                player_clone.bedrock_skin.store(Arc::new(skin));
-            }
-        });
+        // Joining already sends play packets (entity spawns), which must reach `PacketSentEvent`
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
+            client.set_player(player.clone());
+        }
+        self.spawn_skin_fetch(&player);
         {
             let mut advancements = player
                 .advancements
@@ -748,12 +734,8 @@ impl Server {
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                player.screen_handler_sync_handler.store_player(player.clone());
-                if !self.admit_player(&world, &player) {
-                    player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
-                    return None;
-                }
-                Some({
+                if self.admit_player(&world, &player) {
+                    player.screen_handler_sync_handler.store_player(player.clone());
                     {
                         let mut user_cache = self
                             .data
@@ -780,12 +762,21 @@ impl Server {
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
 
-                    (player, world)
-                })
+                    Some((player, world))
+                } else {
+                    player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
+                    if let ClientPlatform::Java(client) = player.client.as_ref() {
+                        client.clear_player();
+                    }
+                    None
+                }
             }
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.clear_player();
+                }
                 None
             }
         }}
@@ -811,6 +802,22 @@ impl Server {
     }
 
     /// Adds player to `world` unless shutdown already closed admission.
+    /// Loads the player's skin in the background.
+    fn spawn_skin_fetch(&self, player: &Arc<Player>) {
+        let player = player.clone();
+        self.spawn_task(async move {
+            let properties = player.gameprofile.properties.load().clone();
+            if let Some(mut skin) = Player::fetch_skin(&properties).await {
+                if skin.skin_id == "Standard_Custom" {
+                    let skin_id = format!("pumpkin:{}", player.gameprofile.id);
+                    skin.skin_id.clone_from(&skin_id);
+                    skin.full_id = skin_id;
+                }
+                player.bedrock_skin.store(Arc::new(skin));
+            }
+        });
+    }
+
     fn admit_player(&self, world: &World, player: &Arc<Player>) -> bool {
         let closed = self
             .admission_closed
