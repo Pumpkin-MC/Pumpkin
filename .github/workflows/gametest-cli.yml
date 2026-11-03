@@ -1,6 +1,7 @@
 name: GameTest CLI
 
 on:
+  push:
   workflow_dispatch:
 
 env:
