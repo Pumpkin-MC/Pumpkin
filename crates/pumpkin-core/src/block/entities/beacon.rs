@@ -410,9 +410,35 @@ impl BlockEntity for BeaconBlockEntity {
     }
 }
 
+/// Builds the Bedrock block-actor NBT for beacons.
+#[must_use]
+pub fn build_beacon_actor(
+    position: BlockPos,
+    primary: i32,
+    secondary: i32,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("Beacon", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_int("primary", primary.max(0))
+        .put_int("secondary", secondary.max(0))
+        .finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn beacon_actor_builder() {
+        let pos = BlockPos::new(5, 64, 5);
+        let nbt = build_beacon_actor(pos, 1, 1, None);
+        assert_eq!(nbt.get_string("id"), Some("Beacon"));
+        assert_eq!(nbt.get_int("primary"), Some(1));
+        assert_eq!(nbt.get_int("secondary"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
+    }
 
     #[test]
     fn bedrock_actor_uses_bedrock_effect_ids() {
@@ -442,36 +468,5 @@ mod tests {
                 Some("Beacon")
             );
         }
-    }
-}
-
-/// Builds the Bedrock block-actor NBT for beacons.
-#[must_use]
-pub fn build_beacon_actor(
-    position: BlockPos,
-    primary: i32,
-    secondary: i32,
-    custom_name: Option<&str>,
-) -> NbtCompound {
-    super::bedrock::BedrockBlockActorBuilder::new("Beacon", position)
-        .movable(false)
-        .custom_name(custom_name)
-        .put_int("primary", primary.max(0))
-        .put_int("secondary", secondary.max(0))
-        .finish()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn beacon_actor_builder() {
-        let pos = BlockPos::new(5, 64, 5);
-        let nbt = build_beacon_actor(pos, 1, 1, None);
-        assert_eq!(nbt.get_string("id"), Some("Beacon"));
-        assert_eq!(nbt.get_int("primary"), Some(1));
-        assert_eq!(nbt.get_int("secondary"), Some(1));
-        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }
