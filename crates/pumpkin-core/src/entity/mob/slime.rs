@@ -263,6 +263,10 @@ impl CustomSound for SlimeEntity {
 }
 
 impl Mob for SlimeEntity {
+    fn xp_reward(&self) -> u32 {
+        u32::try_from(self.get_size()).unwrap_or(0)
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }

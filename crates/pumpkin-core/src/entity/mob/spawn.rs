@@ -28,6 +28,11 @@ pub enum SpawnGroupData {
     },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// A llama spawn group sharing the first llama's variant.
+    Llama {
+        variant: pumpkin_data::entity_variant::LlamaVariant,
+        group_size: u32,
+    },
     /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
     Fox {
         variant: FoxVariant,
@@ -80,14 +85,39 @@ impl MobEntity {
     }
 }
 
+/// Why a mob is being spawned, passed to [`finalize_spawn`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EntitySpawnReason {
+    Natural,
+    ChunkGeneration,
+    Spawner,
+    Structure,
+    Breeding,
+    MobSummoned,
+    Jockey,
+    Event,
+    Conversion,
+    Reinforcement,
+    Triggered,
+    Bucket,
+    SpawnItemUse,
+    Command,
+    Dispenser,
+    Patrol,
+    TrialSpawner,
+    Load,
+    DimensionTravel,
+}
+
 /// Finalizes `entity` if it is a mob, and returns the group data for the next mob of the group.
 pub fn finalize_spawn(
     entity: &Arc<dyn EntityBase>,
     world: &Arc<World>,
+    reason: EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
 ) -> Option<SpawnGroupData> {
     match entity.get_mob() {
-        Some(mob) => mob.finalize_spawn(world, group_data),
+        Some(mob) => mob.finalize_spawn(world, reason, group_data),
         None => group_data,
     }
 }

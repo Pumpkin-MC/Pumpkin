@@ -1,7 +1,7 @@
 use pumpkin_data::{
     chunk::DoublePerlinNoiseParameters,
     noise_router::{
-        BaseNoiseFunctionComponent, BaseNoiseRouters, BinaryOperation, LinearOperation, SplineRepr,
+        BaseNoiseFunctionComponent, BaseNoiseRouters, BinaryOperation, LinearOperation,
         UnaryOperation,
     },
 };
@@ -27,7 +27,7 @@ use super::{
             Slice,
         },
         noise::{InterpolatedNoiseSampler, Noise, ShiftA, ShiftB, ShiftedNoise},
-        spline::{Spline, SplineFunction, SplinePoint, SplineValue},
+        spline::SplineFunction,
     },
     density_volume::DensityVolume,
 };
@@ -280,11 +280,19 @@ pub struct ProtoMultiNoiseRouter {
     pub ridges: usize,
 }
 
+pub struct ProtoVeinRouter {
+    pub full_component_stack: Box<[ProtoNoiseFunctionComponent]>,
+    pub vein_toggle: usize,
+    pub vein_ridged: usize,
+    pub vein_gap: usize,
+}
+
 pub struct ProtoNoiseRouters {
     pub noise: ProtoNoiseRouter,
     pub surface_estimator: ProtoSurfaceEstimator,
     /// Shared with the background stronghold ring search.
     pub multi_noise: Arc<ProtoMultiNoiseRouter>,
+    pub vein: ProtoVeinRouter,
 }
 
 pub struct DoublePerlinNoiseBuilder;
@@ -320,28 +328,9 @@ impl DoublePerlinNoiseBuilder {
     }
 }
 
-fn build_spline_recursive(spline: &SplineRepr) -> SplineValue {
-    match spline {
-        SplineRepr::Fixed { value } => SplineValue::Fixed(*value),
-        SplineRepr::Standard {
-            location_function_index,
-            points,
-        } => {
-            let mut points_vec = Vec::with_capacity(points.len());
-
-            for point in *points {
-                let value = build_spline_recursive(point.value);
-                points_vec.push(SplinePoint::new(point.location, value, point.derivative));
-            }
-
-            SplineValue::Spline(Spline::new(*location_function_index, points_vec.into()))
-        }
-    }
-}
-
 impl ProtoNoiseRouters {
     #[must_use]
-    #[expect(clippy::unreachable, clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub fn generate_proto_stack(
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
@@ -354,11 +343,6 @@ impl ProtoNoiseRouters {
         for component in base_stack {
             let converted = match component {
                 BaseNoiseFunctionComponent::Spline { spline } => {
-                    let spline = match build_spline_recursive(spline) {
-                        SplineValue::Spline(spline) => spline,
-                        SplineValue::Fixed(_) => unreachable!(),
-                    };
-
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::Spline(SplineFunction::new(
                             spline, &stack,
@@ -811,6 +795,7 @@ impl ProtoNoiseRouters {
             Self::generate_proto_stack(base.surface_estimator.full_component_stack, random_config);
         let multi_noise_stack =
             Self::generate_proto_stack(base.multi_noise.full_component_stack, random_config);
+        let vein_stack = Self::generate_proto_stack(base.vein.full_component_stack, random_config);
 
         Self {
             noise: ProtoNoiseRouter {
@@ -838,6 +823,12 @@ impl ProtoNoiseRouters {
                 depth: base.multi_noise.depth,
                 ridges: base.multi_noise.ridges,
             }),
+            vein: ProtoVeinRouter {
+                full_component_stack: vein_stack,
+                vein_toggle: base.vein.vein_toggle,
+                vein_ridged: base.vein.vein_ridged,
+                vein_gap: base.vein.vein_gap,
+            },
         }
     }
 }

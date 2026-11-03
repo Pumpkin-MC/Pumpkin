@@ -16,8 +16,15 @@ impl JavaClient {
             .clone();
         if let Some(vehicle) = vehicle {
             let vehicle_entity = vehicle.get_entity();
+            let old_y = vehicle_entity.pos.load().y;
             vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+            vehicle_entity
+                .on_ground
+                .store(packet.on_ground, Ordering::Relaxed);
+            if let Some(living) = vehicle.get_living_entity() {
+                living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground, false);
+            }
 
             let world = player.world();
             let vehicle_pos = pos.to_block_pos();

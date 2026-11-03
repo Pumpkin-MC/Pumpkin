@@ -207,6 +207,10 @@ impl BatEntity {
 }
 
 impl Mob for BatEntity {
+    fn mob_is_pushable(&self) -> bool {
+        false
+    }
+
     fn mob_is_flapping(&self) -> bool {
         !self.is_roosting() && self.get_entity().tick_count.load(Relaxed) % 10 == 0
     }

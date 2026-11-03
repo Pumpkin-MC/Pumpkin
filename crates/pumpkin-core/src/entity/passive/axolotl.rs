@@ -103,7 +103,7 @@ impl AxolotlEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
