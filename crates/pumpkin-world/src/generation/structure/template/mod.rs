@@ -120,40 +120,6 @@ pub fn place_template_with_options(
     let mut context = processor::ProcessorContext::new(origin, processors, &mut context_rng);
 
     for block in &template.blocks {
-        let palette_entry = &template.palette[block.state as usize];
-
-        // Structure blocks are data markers.
-        if palette_entry.name == "minecraft:structure_block" {
-            continue;
-        }
-
-        let mut block_entity_nbt = block.nbt.clone();
-        let mut placed_entry = palette_entry.clone();
-
-        // Jigsaw blocks are replaced during template processing, before block entities are
-        // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
-        if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
-            let final_state = block_entity_nbt
-                .as_ref()
-                .and_then(|nbt| nbt.get_string("final_state"))
-                .unwrap_or("minecraft:air");
-            placed_entry = PaletteEntry::from_string(final_state);
-            block_entity_nbt = None;
-        }
-
-        // Structure void preserves the existing block, both from the palette itself and from a
-        // jigsaw final state.
-        if placed_entry.name == "minecraft:structure_void" {
-            continue;
-        }
-
-        // Resolve block state with rotation applied to directional properties
-        let Some(mut state) =
-            BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
-        else {
-            continue;
-        };
-
         // Rotate block position within template bounds
         let local_pos = rotation.transform_pos(block.pos, template.size);
 
@@ -172,21 +138,49 @@ pub fn place_template_with_options(
             continue;
         }
 
+        let palette_entry = &template.palette[block.state as usize];
+
+        // Structure blocks are data markers.
+        if palette_entry.name == "minecraft:structure_block" {
+            continue;
+        }
+
+        let mut block_entity_nbt = block.nbt.clone();
+        let jigsaw_entry: PaletteEntry;
+        let placed_entry = if !keep_jigsaws && palette_entry.name == "minecraft:jigsaw" {
+            // Jigsaw blocks are replaced during template processing, before block entities are
+            // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
+            let final_state = block_entity_nbt
+                .as_ref()
+                .and_then(|nbt| nbt.get_string("final_state"))
+                .unwrap_or("minecraft:air");
+            jigsaw_entry = PaletteEntry::from_string(final_state);
+            block_entity_nbt = None;
+            &jigsaw_entry
+        } else {
+            palette_entry
+        };
+
+        // Structure void preserves the existing block, both from the palette itself and from a
+        // jigsaw final state.
+        if placed_entry.name == "minecraft:structure_void" {
+            continue;
+        }
+
+        // Resolve block state with rotation applied to directional properties
+        let Some(mut state) =
+            BlockStateResolver::resolve(placed_entry, rotation, Mirror::default())
+        else {
+            continue;
+        };
+
         let world_pos = Vector3::new(wx, wy, wz);
 
         if apply_waterlogging
             && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-            && let Some(waterlogged) = placed_entry.properties.iter_mut().find_map(|p| match p {
-                pumpkin_data::Property::Waterlogged(w) => Some(w),
-                _ => None,
-            })
+            && let Some(waterlogged_state) = state.set_waterlogged(true)
         {
-            *waterlogged = true;
-            if let Some(waterlogged_state) =
-                BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
-            {
-                state = waterlogged_state;
-            }
+            state = waterlogged_state;
         }
 
         // Apply processors

@@ -1,3 +1,5 @@
+use crate::entity::EntityBase;
+use pumpkin_data::sound::Sound;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
@@ -26,11 +28,7 @@ impl BreezeEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
@@ -40,11 +38,7 @@ impl BreezeEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
@@ -56,6 +50,20 @@ impl BreezeEntity {
 }
 
 impl Mob for BreezeEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        if fall_distance > 3.0 {
+            caller.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0);
+        }
+        self.mob_entity
+            .living_entity
+            .cause_fall_damage(caller, fall_distance, damage_modifier)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

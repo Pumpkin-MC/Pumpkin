@@ -4,6 +4,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::game_profile::GameProfileArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -114,7 +115,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             argument("targets", GameProfileArgumentType)
                 .executes(BanExecutor { has_reason: false })
                 .then(
-                    argument("reason", StringArgumentType::GreedyPhrase)
+                    argument("reason", MessageArgumentType)
                         .executes(BanExecutor { has_reason: true }),
                 ),
         ),

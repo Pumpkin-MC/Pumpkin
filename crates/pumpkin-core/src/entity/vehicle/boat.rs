@@ -23,7 +23,8 @@ pub struct BoatEntity {
 }
 
 impl BoatEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub const fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         Self {
             vehicle: VehicleEntity::new(entity),
             ticks_underwater: AtomicCell::new(0.0),
@@ -51,6 +52,16 @@ impl BoatEntity {
 }
 
 impl EntityBase for BoatEntity {
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .filter(|passenger| passenger.get_living_entity().is_some())
+            .cloned()
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.vehicle.entity
     }

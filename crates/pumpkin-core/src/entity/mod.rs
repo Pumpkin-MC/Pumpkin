@@ -1,5 +1,9 @@
 use crate::{
-    entity::item::ItemEntity,
+    entity::{
+        ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
+        decoration::leash_knot::LeashKnotEntity,
+        item::ItemEntity,
+    },
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
@@ -27,7 +31,8 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
-    entity::{EntityPose, EntityType},
+    entity::{EntityPose, EntityType, MovementEmission},
+    game_event::GameEvent,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -74,6 +79,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
+pub mod bucketable;
 pub mod custom_sound;
 pub mod decoration;
 pub mod effect;
@@ -102,8 +108,48 @@ pub use lightning::LightningBoltEntity;
 pub(crate) mod combat;
 pub mod predicate;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DelayedLeash {
+    Entity(Uuid),
+    Knot(BlockPos),
+}
+
+const LEASH_RESTORE_TIMEOUT: i32 = 100;
+
 /// The maximum number of scoreboard tags an entity can carry, matching Vanilla.
 pub const MAX_SCOREBOARD_TAGS: usize = 1024;
+
+/// Push strength per axis in `Entity.push`.
+pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+
+const MAX_LOADED_MOTION: f64 = 10.0;
+const MAX_HORIZONTAL_POSITION: f64 = 3.000_051_2E7;
+const MAX_VERTICAL_POSITION: f64 = 2.0E7;
+
+/// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
+const WATER_PUSH_SPEED: f64 = 0.014;
+const FAST_LAVA_PUSH_SPEED: f64 = 0.007;
+const LAVA_PUSH_SPEED: f64 = 0.002_333_333;
+
+/// Speed range of `moveTowardsClosestSpace`.
+const PUSH_OUT_MIN_SPEED: f64 = 0.1;
+const PUSH_OUT_RANDOM_SPEED: f64 = 0.2;
+pub(crate) const MAX_PUSH_OUT_SPEED: f64 = PUSH_OUT_MIN_SPEED + PUSH_OUT_RANDOM_SPEED;
+
+#[must_use]
+pub(crate) const fn lava_push_speed(fast_lava: bool) -> f64 {
+    if fast_lava {
+        FAST_LAVA_PUSH_SPEED
+    } else {
+        LAVA_PUSH_SPEED
+    }
+}
+
+/// Speed water and lava currents can add together in one tick.
+#[must_use]
+pub(crate) const fn max_fluid_push_speed(fast_lava: bool) -> f64 {
+    WATER_PUSH_SPEED + lava_push_speed(fast_lava)
+}
 
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
@@ -129,6 +175,39 @@ impl dyn EntityBase + '_ {
             || self.considers_entity_as_ally(other)
             || other.considers_entity_as_ally(self)
     }
+
+    #[must_use]
+    pub fn do_teams_allow_damage(&self, other: &dyn EntityBase) -> bool {
+        let Some(team) = self.get_team_name() else {
+            return true;
+        };
+        other.get_team_name().as_ref() != Some(&team)
+            || self
+                .get_team()
+                .is_some_and(|team| team.is_allow_friendly_fire())
+    }
+}
+
+/// Maps Java entity types to Bedrock runtime entity identifiers where the naming differs.
+#[must_use]
+pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'static str {
+    if entity_type.id == EntityType::EXPERIENCE_ORB.id {
+        "minecraft:xp_orb"
+    } else if entity_type.id == EntityType::FISHING_BOBBER.id {
+        "minecraft:fishing_hook"
+    } else if entity_type.id == EntityType::EVOKER_FANGS.id {
+        "minecraft:evocation_fang"
+    } else if entity_type.id == EntityType::TRIDENT.id {
+        "minecraft:thrown_trident"
+    } else if entity_type.id == EntityType::FIREWORK_ROCKET.id {
+        "minecraft:fireworks_rocket"
+    } else if entity_type.id == EntityType::EYE_OF_ENDER.id {
+        "minecraft:eye_of_ender_signal"
+    } else if entity_type.id == EntityType::ZOMBIE_VILLAGER.id {
+        "minecraft:zombie_villager_v2"
+    } else {
+        entity_type.resource_name
+    }
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -137,20 +216,54 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if let Some(living) = self.get_living_entity() {
             living.write_living_nbt(nbt);
         }
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.write_nbt(nbt);
+        }
         self.write_custom_nbt(nbt);
+        self.get_entity().write_passengers(nbt);
     }
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
 
+    fn get_max_air_supply(&self) -> i32 {
+        self.get_mob()
+            .map_or(breath::MAX_AIR, mob::Mob::mob_max_air_supply)
+    }
+
+    fn increase_air_supply(&self, current: i32) -> i32 {
+        self.get_mob().map_or_else(
+            || {
+                current
+                    .wrapping_add(breath::AIR_RECOVERY_RATE)
+                    .min(self.get_max_air_supply())
+            },
+            |mob| mob.mob_increase_air_supply(current),
+        )
+    }
+
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.get_entity().read_nbt_non_mut(nbt);
+        self.get_entity()
+            .read_nbt_with_max_air_supply(nbt, self.get_max_air_supply());
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
+        }
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.read_nbt(nbt);
         }
         self.read_custom_nbt(nbt);
     }
 
     fn read_custom_nbt(&self, _nbt: &NbtCompound) {}
+
+    /// Explicit removal of top-level keys, since a missing key on read keeps the field.
+    fn remove_nbt(&self, removed: &[Box<str>]) {
+        if let Some(owner) = self.get_projectile_owner() {
+            owner.remove_nbt(removed);
+        }
+        self.remove_custom_nbt(removed);
+    }
+
+    fn remove_custom_nbt(&self, _removed: &[Box<str>]) {}
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -174,6 +287,34 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    #[must_use]
+    fn resolve_dynamic_raw_id(
+        &self,
+        registry: &str,
+        name: &str,
+        static_fallback: impl FnOnce(&str) -> Option<u32>,
+    ) -> Option<u32>
+    where
+        Self: Sized,
+    {
+        self.get_entity()
+            .resolve_dynamic_raw_id(registry, name, static_fallback)
+    }
+
+    #[must_use]
+    fn resolve_dynamic_entry_id(
+        &self,
+        registry: &str,
+        raw_id: u32,
+        static_fallback: impl FnOnce(u32) -> String,
+    ) -> String
+    where
+        Self: Sized,
+    {
+        self.get_entity()
+            .resolve_dynamic_entry_id(registry, raw_id, static_fallback)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any
     where
         Self: Sized,
@@ -185,8 +326,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
-    fn get_owner_id(&self) -> Option<i32> {
+    /// Who shot or threw this, for projectiles.
+    fn get_projectile_owner(&self) -> Option<&projectile::owner::ProjectileOwner> {
         None
+    }
+
+    /// Vanilla `Projectile.getOwner`.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_projectile_owner()?
+            .get(&self.get_entity().world.load())
     }
 
     fn get_eye_pos(&self) -> Vector3<f64> {
@@ -196,6 +344,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn get_looking_vector(&self) -> Vector3<f64> {
         let entity = self.get_entity();
         Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())
+    }
+
+    fn get_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
+        None
     }
 
     fn init_data_tracker(&self) {
@@ -212,6 +367,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
     fn set_variant_name(&self, _name: &str) {}
+    fn apply_implicit_component(
+        &self,
+        _component: pumpkin_data::data_component::DataComponent,
+        _value: &str,
+    ) {
+    }
     fn set_sound_variant_name(&self, _name: &str) {}
 
     fn teleport(
@@ -237,6 +398,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         0.0
     }
 
+    /// Extra metadata to accompany this entity when spawned for Bedrock clients (e.g. falling block variant, TNT fuse).
+    fn entity_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
+        None
+    }
+
     /// Bedrock network Y above the feet. Endstone `getBaseOffset`.
     fn bedrock_y_offset(&self) -> f64 {
         0.0
@@ -247,6 +413,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .pos
             .load()
             .add_raw(0.0, self.bedrock_y_offset(), 0.0)
+    }
+
+    /// What this entity can touch next tick; `None` means a conservative reach.
+    fn audited_reach(&self) -> Option<crate::world::entity_islands::AuditedReach> {
+        self.get_mob()
+            .and_then(|mob| mob.get_mob_entity().audited_reach(mob))
     }
 
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
@@ -299,11 +471,21 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
+        if let Some(considered) = self
+            .get_mob()
+            .and_then(|mob| mob.mob_considers_entity_as_ally(other, None))
+        {
+            return considered;
+        }
         if let Some(tamable) = self.get_mob().and_then(mob::Mob::as_tamable)
             && let Some(considered) = tamable.tamable_considers_entity_as_ally(other)
         {
             return considered;
         }
+        self.is_on_same_team(other)
+    }
+
+    fn is_on_same_team(&self, other: &dyn EntityBase) -> bool {
         let Some(team) = self.get_team_name() else {
             return false;
         };
@@ -337,7 +519,32 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         );
     }
 
+    /// Leashed by four points when the holder supports it (horses, sniffers).
+    fn support_quad_leash(&self) -> bool {
+        false
+    }
+
+    /// Holds a leash by four points (ghasts).
+    fn support_quad_leash_as_holder(&self) -> bool {
+        false
+    }
+
     fn is_spectator(&self) -> bool {
+        false
+    }
+
+    fn can_be_seen_by_anyone(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !self.is_spectator() && living.is_alive())
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(|living| !living.entity.invulnerable.load(Ordering::Relaxed))
+            && self.can_be_seen_by_anyone()
+    }
+
+    fn dampens_vibrations(&self) -> bool {
         false
     }
 
@@ -347,6 +554,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn can_hit(&self) -> bool {
         false
+    }
+
+    fn is_immobile(&self) -> bool {
+        self.get_living_entity()
+            .is_some_and(LivingEntity::is_dead_or_dying)
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        None
+    }
+
+    fn can_control_vehicle(&self) -> bool {
+        !self
+            .get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_NON_CONTROLLING_RIDER)
     }
 
     fn is_flutterer(&self) -> bool {
@@ -366,6 +589,109 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             || self.get_entity().get_block_speed_factor(),
             LivingEntity::get_block_speed_factor,
         )
+    }
+
+    /// Vanilla `getSoundSource`.
+    fn sound_source(&self) -> SoundCategory {
+        self.get_entity().entity_type.sound_source
+    }
+
+    /// Vanilla `Entity.playSound`: at the entity, in its sound source, unless it is silent.
+    fn play_entity_sound(&self, sound: Sound, volume: f32, pitch: f32) {
+        let entity = self.get_entity();
+        if !entity.is_silent() {
+            entity.world.load().play_sound_fine(
+                sound,
+                self.sound_source(),
+                &entity.pos.load(),
+                volume,
+                pitch,
+            );
+        }
+    }
+
+    /// Vanilla `getMovementEmission`.
+    fn movement_emission(&self) -> MovementEmission {
+        self.get_entity().entity_type.movement_emission
+    }
+
+    /// Vanilla `nextStep`: the `move_dist` at which the next step sound and event happen.
+    fn next_step(&self) -> f32 {
+        (self.get_entity().move_dist.load() as i32 + 1) as f32
+    }
+
+    /// Vanilla `playStepSound`.
+    fn play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
+        self.play_block_step_sound(state);
+    }
+
+    /// The base `Entity.playStepSound`: the step sound of the block walked on.
+    fn play_block_step_sound(&self, state: &BlockState) {
+        let sound_type = state.get_sound_type();
+        self.play_entity_sound(
+            sound_type.step_sound,
+            sound_type.volume * 0.15,
+            sound_type.pitch,
+        );
+    }
+
+    /// Vanilla `getSwimSound`.
+    fn get_swim_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_sound
+    }
+
+    /// Vanilla `playSwimSound`.
+    fn play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume);
+    }
+
+    /// The base `Entity.playSwimSound`.
+    fn play_default_swim_sound(&self, volume: f32) {
+        if let Some(sound) = self.get_swim_sound() {
+            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
+            self.play_entity_sound(sound, volume, pitch);
+        }
+    }
+
+    /// Vanilla `getSwimSplashSound`.
+    fn get_swim_splash_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_splash_sound
+    }
+
+    /// Vanilla `getSwimHighSpeedSplashSound`.
+    fn get_swim_high_speed_splash_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.swim_high_speed_splash_sound
+    }
+
+    /// Vanilla `doWaterSplashEffect`, run when the entity enters water.
+    fn do_water_splash_effect(&self, caller: &dyn EntityBase) {
+        self.get_entity().water_splash_effect(caller);
+    }
+
+    /// Vanilla `LivingEntity.getFallSounds`: the small and big fall damage sounds.
+    fn get_fall_sounds(&self) -> (Sound, Sound) {
+        let entity_type = self.get_entity().entity_type;
+        (
+            entity_type
+                .small_fall_sound
+                .unwrap_or(Sound::EntityGenericSmallFall),
+            entity_type
+                .big_fall_sound
+                .unwrap_or(Sound::EntityGenericBigFall),
+        )
+    }
+
+    /// Vanilla `isFlapping`: whether moving through the air plays `on_flap` and emits `FLAP`.
+    fn is_flapping(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `onFlap`.
+    fn on_flap(&self) {}
+
+    /// Vanilla `isOnRails`: rail-riding entities step even when not on the ground.
+    fn is_on_rails(&self) -> bool {
+        false
     }
 
     /// Custom Y-axis velocity drag multiplier applied during `travel_in_air`.
@@ -408,9 +734,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let identifier = self
             .get_mob()
             .and_then(mob::Mob::mob_bedrock_identifier)
-            .unwrap_or(entity.entity_type.resource_name);
-        // TODO: non-mob spawn metadata hook like `mob_bedrock_spawn_metadata` (falling block, TNT).
+            .unwrap_or_else(|| entity_type_to_bedrock_identifier(entity.entity_type));
         let mut metadata = entity.bedrock_metadata();
+        if let Some(extra_meta) = self.entity_bedrock_spawn_metadata() {
+            metadata.0.extend(extra_meta.0);
+        }
         if let Some(mob) = self.get_mob()
             && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
         {
@@ -433,7 +761,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: Vec::new(),
+            actor_links: entity.bedrock_actor_links(),
+            passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
             client.try_enqueue_packet(data);
@@ -451,6 +780,22 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                 client.try_enqueue_packet(meta_data);
+            }
+        }
+        let holder = entity
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|holder| holder.get_entity().entity_id);
+        if let Some(holder_id) = holder {
+            let link_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
+                entity.entity_id,
+                holder_id,
+                true,
+            );
+            if let Ok(link_data) = client.serialize_packet(&link_packet) {
+                client.try_enqueue_packet(link_data);
             }
         }
     }
@@ -482,6 +827,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// Returns true if the interaction was handled.
     fn interact(&self, _player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
         false
+    }
+
+    fn interact_with_hand(
+        &self,
+        _player: &Arc<Player>,
+        _item_stack: &mut ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        None
     }
 
     fn set_on_fire_for(&self, seconds: f32) {
@@ -563,8 +917,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             }
             dx *= d2;
             dz *= d2;
-            dx *= 0.05;
-            dz *= 0.05;
+            dx *= PUSH_STRENGTH;
+            dz *= PUSH_STRENGTH;
 
             if !self_entity.has_passengers() && self.is_pushable() {
                 let mut vel = self_entity.velocity.load();
@@ -789,6 +1143,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         0
     }
 
+    fn should_drop_loot(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_loot)
+    }
+
+    fn should_drop_experience(&self) -> bool {
+        self.get_living_entity()
+            .is_none_or(LivingEntity::should_drop_experience)
+    }
+
     fn get_base_experience_reward(&self) -> u32 {
         0
     }
@@ -835,7 +1199,65 @@ struct SpawnState {
     head_yaw: u8,
 }
 
+const LEASH_AXIS_ELASTICITY: Vector3<f64> = Vector3::new(0.8, 0.2, 0.8);
+const LEASH_TORSIONAL_ELASTICITY: f64 = 10.0;
+const LEASH_STIFFNESS: f64 = 0.11;
+const ENTITY_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.5);
+const LEASHER_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.0);
+const SHARED_QUAD_ATTACHMENT_POINTS: [Vector3<f64>; 4] = [
+    Vector3::new(-0.5, 0.5, 0.5),
+    Vector3::new(-0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, 0.5),
+];
+
+/// Rotates `vector` around the Y axis.
+fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
+    let cos = f64::from(angle.cos());
+    let sin = f64::from(angle.sin());
+    Vector3::new(
+        vector.x * cos + vector.z * sin,
+        vector.y,
+        vector.z * cos - vector.x * sin,
+    )
+}
+
+/// The movement the server knows about: a player's last reported step, otherwise velocity.
+fn known_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    let base = entity.get_entity();
+    if let Some(controller) = entity.get_controlling_passenger()
+        && controller.get_player().is_some()
+        && base.is_alive()
+    {
+        return controller.get_entity().movement.load();
+    }
+    if entity.get_player().is_some() {
+        return base.movement.load();
+    }
+    base.velocity.load()
+}
+
+fn holder_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    if entity
+        .get_mob()
+        .is_some_and(|mob| mob.get_mob_entity().is_no_ai())
+    {
+        Vector3::new(0.0, 0.0, 0.0)
+    } else {
+        known_movement(entity)
+    }
+}
+
+/// What a leash did this tick, see [`Entity::tick_leash`].
+pub enum LeashTick {
+    NotLeashed,
+    Snapped,
+    Elastic(Arc<dyn EntityBase>),
+    CloseRange(Arc<dyn EntityBase>),
+}
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
+#[repr(C)]
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: i32,
@@ -868,12 +1290,15 @@ pub struct Entity {
     pub invisible: AtomicBool,
     /// Indicates whether the entity is glowing
     pub glowing: AtomicBool,
+    pub has_glowing_tag: AtomicBool,
+    pub glowing_from_effect: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Tracks a horizontal collision
     pub horizontal_collision: AtomicBool,
+    pub vertical_collision: AtomicBool,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
@@ -895,9 +1320,10 @@ pub struct Entity {
     /// The entity's current pose (e.g., standing, sitting, swimming).
     pub pose: AtomicCell<EntityPose>,
     /// The bounding box of an entity (hitbox)
-    pub bounding_box: AtomicCell<BoundingBox>,
+    pub bounding_box: EntityBoundingBox,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
+    default_dimensions: AtomicCell<Option<EntityDimensions>>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -920,9 +1346,20 @@ pub struct Entity {
     pub vehicle: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    pub delayed_leash: std::sync::Mutex<Option<DelayedLeash>>,
+    /// Spin a taut leash gives the leashed entity, applied to its yaw each tick.
+    leash_angular_momentum: AtomicCell<f64>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
-    /// The age of the entity in ticks. Negative values indicate a baby.
+    /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
+    pub tick_count: AtomicI32,
+    /// Vanilla `moveDist`, `flyDist` and `nextStep`, which pace step sounds and movement game events.
+    pub move_dist: AtomicCell<f32>,
+    pub fly_dist: AtomicCell<f32>,
+    pub next_step: AtomicCell<f32>,
+    crystal_sound_intensity: AtomicCell<f32>,
+    last_crystal_sound_play_tick: AtomicI32,
+    /// Vanilla `AgeableMob.age`. Negative values indicate a baby.
     pub age: AtomicI32,
 
     pub current_biome: ArcSwap<&'static Biome>,
@@ -935,7 +1372,9 @@ pub struct Entity {
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: AtomicBool,
+    pub blocks_building: bool,
     pub silent: AtomicBool,
+    pub air_supply: AtomicI32,
     pub has_no_gravity: AtomicBool,
     /// Scoreboard tags attached to this entity, managed with `/tag`.
     /// Vanilla allows at most [`MAX_SCOREBOARD_TAGS`] tags per entity.
@@ -950,6 +1389,8 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    /// Vanilla `firstTick`: true until the first base tick has run.
+    pub first_tick: AtomicBool,
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
@@ -971,7 +1412,98 @@ pub struct Entity {
     pub custom_data: std::sync::Mutex<NbtCompound>,
 }
 
+/// Entity bounds that keep the world's spatial queries current when written.
+pub struct EntityBoundingBox {
+    value: AtomicCell<BoundingBox>,
+    index: std::sync::RwLock<std::sync::Weak<crate::world::EntityIndex>>,
+    indexed: bool,
+    entity_id: i32,
+}
+
+impl EntityBoundingBox {
+    fn new(world: &World, entity_id: i32, entity_type: &EntityType, bounds: BoundingBox) -> Self {
+        let index = if entity_type == &EntityType::PLAYER {
+            std::sync::Weak::new()
+        } else {
+            Arc::downgrade(&world.entity_index)
+        };
+        Self {
+            value: AtomicCell::new(bounds),
+            index: std::sync::RwLock::new(index),
+            indexed: entity_type != &EntityType::PLAYER,
+            entity_id,
+        }
+    }
+
+    /// Returns the current bounds.
+    #[must_use]
+    pub fn load(&self) -> BoundingBox {
+        self.value.load()
+    }
+
+    /// Publishes bounds and their spatial index membership together.
+    pub fn store(&self, bounds: BoundingBox) {
+        if !self.indexed {
+            self.value.store(bounds);
+            return;
+        }
+        let index = self
+            .index
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(index) = index.upgrade() {
+            index.set_bounds(self.entity_id, &self.value, bounds);
+        } else {
+            self.value.store(bounds);
+        }
+    }
+
+    fn set_index(&self, index: &Arc<crate::world::EntityIndex>) {
+        let mut owner = self
+            .index
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *owner = Arc::downgrade(index);
+        index.set_bounds(self.entity_id, &self.value, self.value.load());
+    }
+}
+
 impl Entity {
+    #[must_use]
+    pub fn get_server(&self) -> Option<std::sync::Arc<Server>> {
+        self.world.load().server.upgrade()
+    }
+
+    #[must_use]
+    pub fn resolve_dynamic_raw_id(
+        &self,
+        registry: &str,
+        name: &str,
+        static_fallback: impl FnOnce(&str) -> Option<u32>,
+    ) -> Option<u32> {
+        self.get_server()
+            .and_then(|s| {
+                s.datapack_manager
+                    .get_dynamic_registry_raw_id(registry, name)
+            })
+            .or_else(|| static_fallback(name))
+    }
+
+    #[must_use]
+    pub fn resolve_dynamic_entry_id(
+        &self,
+        registry: &str,
+        raw_id: u32,
+        static_fallback: impl FnOnce(u32) -> String,
+    ) -> String {
+        self.get_server()
+            .and_then(|s| {
+                s.datapack_manager
+                    .get_dynamic_registry_entry_id(registry, raw_id)
+            })
+            .unwrap_or_else(|| static_fallback(raw_id))
+    }
+
     pub fn new(
         world: Arc<World>,
         position: Vector3<f64>,
@@ -999,6 +1531,10 @@ impl Entity {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per field of the struct literal"
+    )]
     pub fn from_uuid_with_id(
         entity_id: i32,
         entity_uuid: uuid::Uuid,
@@ -1016,6 +1552,13 @@ impl Entity {
             .level
             .get_rough_biome(&BlockPos::new(floor_x, floor_y, floor_z));
 
+        let bounding_box = EntityBoundingBox::new(
+            &world,
+            entity_id,
+            entity_type,
+            BoundingBox::new_from_pos(position.x, position.y, position.z, &bounding_box_size),
+        );
+
         Self {
             entity_id,
             entity_uuid,
@@ -1026,6 +1569,7 @@ impl Entity {
             touching_lava: AtomicBool::new(false),
             lava_height: AtomicCell::new(0.0),
             horizontal_collision: AtomicBool::new(false),
+            vertical_collision: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
             movement: AtomicCell::new(Vector3::default()),
@@ -1039,6 +1583,8 @@ impl Entity {
             swimming: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
+            has_glowing_tag: AtomicBool::new(false),
+            glowing_from_effect: AtomicBool::new(false),
             world: ArcSwap::new(world),
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -1048,13 +1594,9 @@ impl Entity {
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             pose: AtomicCell::new(EntityPose::Standing),
-            bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
-                position.x,
-                position.y,
-                position.z,
-                &bounding_box_size,
-            )),
+            bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
+            default_dimensions: AtomicCell::new(None),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
@@ -1071,8 +1613,16 @@ impl Entity {
             passengers: std::sync::Mutex::new(Vec::new()),
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
+            delayed_leash: std::sync::Mutex::new(None),
+            leash_angular_momentum: AtomicCell::new(0.0),
 
             riding_cooldown: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
+            move_dist: AtomicCell::new(0.0),
+            fly_dist: AtomicCell::new(0.0),
+            next_step: AtomicCell::new(1.0),
+            crystal_sound_intensity: AtomicCell::new(0.0),
+            last_crystal_sound_play_tick: AtomicI32::new(0),
             age: AtomicI32::new(0),
             current_biome: ArcSwap::new(Arc::new(current_biome)),
             last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
@@ -1080,10 +1630,13 @@ impl Entity {
             portal_manager: std::sync::Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
             custom_name_visible: AtomicBool::new(false),
+            blocks_building: false,
             silent: AtomicBool::new(false),
+            air_supply: AtomicI32::new(breath::MAX_AIR),
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            first_tick: AtomicBool::new(true),
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -1113,10 +1666,13 @@ impl Entity {
         let biome = world.level.get_rough_biome(&block_pos);
         self.current_biome.store(Arc::new(biome));
         self.last_biome_update_pos.store(block_pos);
+        if self.entity_type != &EntityType::PLAYER {
+            self.bounding_box.set_index(&world.entity_index);
+        }
         self.world.store(world);
     }
 
-    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
+    fn init_bedrock_flags(&self) {
         if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
             self.bedrock_flags.fetch_or(
                 (1i64 << entity_data_flag::HAS_GRAVITY)
@@ -1126,17 +1682,29 @@ impl Entity {
                 Ordering::Relaxed,
             );
         }
+    }
+
+    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
+        self.init_bedrock_flags();
 
         let mut metadata = SyncedActorDataList::new();
+        let dimensions = self
+            .default_dimensions
+            .load()
+            .unwrap_or_else(|| Self::type_dimensions(self.entity_type));
         metadata.set(
             entity_data_key::WIDTH,
-            MetadataValue::Float(self.entity_type.dimension[0]),
+            MetadataValue::Float(dimensions.width),
         );
         metadata.set(
             entity_data_key::HEIGHT,
-            MetadataValue::Float(self.entity_type.dimension[1]),
+            MetadataValue::Float(dimensions.height),
         );
-        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        let is_baby = self.age.load(Relaxed) < 0;
+        metadata.set(
+            entity_data_key::SCALE,
+            MetadataValue::Float(if is_baby { 0.5 } else { 1.0 }),
+        );
         metadata.set(
             entity_data_key::FLAGS,
             MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
@@ -1145,6 +1713,35 @@ impl Entity {
             entity_data_key::FLAGS_TWO,
             MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
         );
+        if is_baby {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
+        }
+        if self.silent.load(Relaxed) {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::SILENT as u8, true);
+        }
+        if self.has_no_gravity.load(Relaxed) {
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::HAS_GRAVITY as u8,
+                false,
+            );
+        }
+        if self.has_vehicle() {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::RIDING as u8, true);
+        }
+        if let Ok(leash_guard) = self.leashed_to.try_lock()
+            && let Some(holder) = leash_guard.as_ref()
+        {
+            metadata.set(
+                entity_data_key::LEASH_HOLDER,
+                MetadataValue::Int64(i64::from(holder.get_entity().entity_id)),
+            );
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::LEASHED as u8,
+                true,
+            );
+        }
 
         if let Some(name) = &**self.custom_name.load() {
             metadata.set(
@@ -1168,6 +1765,27 @@ impl Entity {
         metadata
     }
 
+    #[must_use]
+    pub fn bedrock_actor_links(&self) -> Vec<pumpkin_protocol::bedrock::client::common::ActorLink> {
+        let Ok(passengers) = self.passengers.try_lock() else {
+            return Vec::new();
+        };
+        passengers
+            .iter()
+            .enumerate()
+            .map(
+                |(idx, p)| pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(p.get_entity().entity_id)),
+                    link_type: if idx == 0 { 1 } else { 2 },
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            )
+            .collect()
+    }
+
     /// The type's default size, vanilla `EntityType.getDimensions`.
     #[must_use]
     pub const fn type_dimensions(entity_type: &EntityType) -> EntityDimensions {
@@ -1178,8 +1796,7 @@ impl Entity {
         }
     }
 
-    /// Sets the entity's age in ticks.
-    /// Negative values indicate that the entity is a baby.
+    /// Sets the entity's growth age. Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
         self.age.store(age, Relaxed);
     }
@@ -1229,6 +1846,20 @@ impl Entity {
         self.send_bedrock_actor_data(&bedrock_meta);
     }
 
+    pub fn clear_custom_name(&self) {
+        if self.custom_name.load().is_none() {
+            return;
+        }
+        self.custom_name.store(Arc::new(None));
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::NAME, MetadataValue::String(String::new()));
+        self.set_synced_data(
+            tracked_data::entity::DATA_CUSTOM_NAME,
+            None::<TextComponent>,
+        );
+        self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
     pub fn set_custom_name_visible(&self, visible: bool) {
         self.custom_name_visible.store(visible, Ordering::Relaxed);
         let mut bedrock_meta = SyncedActorDataList::new();
@@ -1250,6 +1881,26 @@ impl Entity {
         );
         self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE, visible);
         self.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    pub fn set_air_supply(&self, mut air: i32) {
+        if air == self.air_supply.load(Relaxed) {
+            return;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                    self.entity_id,
+                    air,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            air = event.amount;
+        }
+        self.air_supply.store(air, Relaxed);
+        self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
     }
 
     pub fn is_silent(&self) -> bool {
@@ -1302,7 +1953,94 @@ impl Entity {
                 _ => {}
             }
         }
-        Self::type_dimensions(self.entity_type)
+        self.default_dimensions
+            .load()
+            .unwrap_or_else(|| Self::type_dimensions(self.entity_type))
+    }
+
+    pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
+        self.default_dimensions.store(Some(dimensions));
+        self.refresh_dimensions();
+    }
+
+    pub fn refresh_dimensions(&self) {
+        let mut metadata = SyncedActorDataList::new();
+        self.refresh_dimensions_into(&mut metadata);
+        self.send_bedrock_actor_data(&metadata);
+    }
+
+    fn refresh_dimensions_into(&self, metadata: &mut SyncedActorDataList) {
+        let old_dimensions = self.entity_dimension.load();
+        let dimensions = self.get_dimensions(self.pose.load());
+        self.entity_dimension.store(dimensions);
+        let pos = self.pos.load();
+        self.bounding_box
+            .store(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions));
+        metadata.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimensions.width),
+        );
+        metadata.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimensions.height),
+        );
+        let is_small = dimensions.width <= 4.0 && dimensions.height <= 4.0;
+        if self.tick_count.load(Relaxed) > 0
+            && !self.no_physics.load(Relaxed)
+            && is_small
+            && (dimensions.width > old_dimensions.width
+                || dimensions.height > old_dimensions.height)
+            && self.entity_type != &EntityType::PLAYER
+        {
+            self.fudge_position_after_size_change(old_dimensions);
+        }
+    }
+
+    pub fn fudge_position_after_size_change(&self, previous_dimensions: EntityDimensions) -> bool {
+        let world = self.world.load();
+        let Some(this) = world.get_entity_by_id(self.entity_id) else {
+            return false;
+        };
+        let new_dimensions = self.get_dimensions(self.pose.load());
+        let old_center =
+            self.pos
+                .load()
+                .add_raw(0.0, f64::from(previous_dimensions.height) / 2.0, 0.0);
+        let width_delta =
+            f64::from((new_dimensions.width - previous_dimensions.width).max(0.0)) + 1.0E-6;
+        let height_delta =
+            f64::from((new_dimensions.height - previous_dimensions.height).max(0.0)) + 1.0E-6;
+        let new_width = f64::from(new_dimensions.width);
+        let new_height = f64::from(new_dimensions.height);
+        let previous_height = f64::from(previous_dimensions.height);
+
+        let allowed_centers =
+            BoundingBox::of_size(old_center, width_delta, height_delta, width_delta);
+        if let Some(free_position) = world.find_free_position(
+            this.as_ref(),
+            &allowed_centers,
+            old_center,
+            Vector3::new(new_width, new_height, new_width),
+        ) {
+            self.set_pos(free_position.add_raw(0.0, -new_height / 2.0, 0.0));
+            return true;
+        }
+        if new_dimensions.width > previous_dimensions.width
+            && new_dimensions.height > previous_dimensions.height
+        {
+            let allowed_centers_ignoring_y =
+                BoundingBox::of_size(old_center, width_delta, 1.0E-6, width_delta);
+            if let Some(free_position) = world.find_free_position(
+                this.as_ref(),
+                &allowed_centers_ignoring_y,
+                old_center,
+                Vector3::new(new_width, previous_height, new_width),
+            ) {
+                self.set_pos(free_position.add_raw(0.0, -previous_height / 2.0 + 1.0E-6, 0.0));
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_eye_height(&self) -> f64 {
@@ -1387,6 +2125,17 @@ impl Entity {
         }
     }
 
+    #[must_use]
+    pub fn root_vehicle_id(&self) -> i32 {
+        let mut id = self.entity_id;
+        let mut vehicle = self.get_vehicle();
+        while let Some(current) = vehicle {
+            id = current.get_entity().entity_id;
+            vehicle = current.get_entity().get_vehicle();
+        }
+        id
+    }
+
     /// Returns the block position of the block the (non-player) entity is standing on, if any.
     pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         // Check if the entity is on the ground
@@ -1397,12 +2146,168 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    /// Block collisions, then stepping up onto what was hit.
     #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
+        let was_on_ground = self.on_ground.load(Ordering::SeqCst);
+        let bounding_box = self.bounding_box.load();
+        let movement_step = self.collide_bounding_box(movement, caller);
+
+        let max_up_step = Self::max_up_step(caller);
+        let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
+        let on_ground_after_collision = movement.y != movement_step.y && movement.y < 0.0;
+        if max_up_step <= 0.0
+            || !(on_ground_after_collision || was_on_ground)
+            || !horizontal_collision
+        {
+            return movement_step;
+        }
+
+        let grounded_box = if on_ground_after_collision {
+            bounding_box.shift(Vector3::new(0.0, movement_step.y, 0.0))
+        } else {
+            bounding_box
+        };
+        let mut step_up_box =
+            grounded_box.expand_towards(movement.x, f64::from(max_up_step), movement.z);
+        if !on_ground_after_collision {
+            step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
+        }
+        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+
+        for step_height in Self::candidate_step_up_heights(
+            &grounded_box,
+            &colliders,
+            max_up_step,
+            movement_step.y as f32,
+        ) {
+            let step_from_ground = Self::collide_with_boxes(
+                Vector3::new(movement.x, f64::from(step_height), movement.z),
+                grounded_box,
+                &colliders,
+            );
+            if step_from_ground.horizontal_length_squared()
+                > movement_step.horizontal_length_squared()
+            {
+                let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
+                let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                self.vertical_collision
+                    .store(movement.y != stepped.y, Ordering::SeqCst);
+                self.on_ground.store(
+                    movement.y != stepped.y && movement.y < 0.0,
+                    Ordering::SeqCst,
+                );
+                self.horizontal_collision.store(
+                    movement.x != stepped.x || movement.z != stepped.z,
+                    Ordering::SeqCst,
+                );
+                return stepped;
+            }
+        }
+
+        movement_step
+    }
+
+    /// Only living entities step up, and a player-ridden mob steps at least one block.
+    fn max_up_step(caller: &dyn EntityBase) -> f32 {
+        let Some(living) = caller.get_living_entity() else {
+            return 0.0;
+        };
+        let step_height =
+            living.get_attribute_value(&pumpkin_data::attributes::Attributes::STEP_HEIGHT) as f32;
+        if caller
+            .get_controlling_passenger()
+            .is_some_and(|passenger| passenger.get_player().is_some())
+        {
+            step_height.max(1.0)
+        } else {
+            step_height
+        }
+    }
+
+    fn candidate_step_up_heights(
+        bounding_box: &BoundingBox,
+        colliders: &[BoundingBox],
+        max_step_height: f32,
+        step_height_to_skip: f32,
+    ) -> Vec<f32> {
+        let mut candidates: Vec<f32> = Vec::with_capacity(4);
+        for collider in colliders {
+            for coord in [collider.min.y, collider.max.y] {
+                let relative_coord = (coord - bounding_box.min.y) as f32;
+                if relative_coord < 0.0 || relative_coord == step_height_to_skip {
+                    continue;
+                }
+                if relative_coord > max_step_height {
+                    break;
+                }
+                if !candidates.contains(&relative_coord) {
+                    candidates.push(relative_coord);
+                }
+            }
+        }
+        candidates.sort_by(f32::total_cmp);
+        candidates
+    }
+
+    /// Resolves Y first, then the larger horizontal axis last.
+    fn collide_with_boxes(
+        movement: Vector3<f64>,
+        bounding_box: BoundingBox,
+        colliders: &[BoundingBox],
+    ) -> Vector3<f64> {
+        let axes = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut resolved = Vector3::new(0.0, 0.0, 0.0);
+        for axis in axes {
+            let mut amount = movement.get_axis(axis);
+            if amount == 0.0 {
+                continue;
+            }
+            let moved = bounding_box.shift(resolved);
+            for collider in colliders {
+                amount = Self::collide_axis(&moved, collider, axis, amount);
+            }
+            resolved.set_axis(axis, amount);
+        }
+        resolved
+    }
+
+    /// How far `moving` can travel along `axis` before it hits `other`.
+    fn collide_axis(moving: &BoundingBox, other: &BoundingBox, axis: Axis, amount: f64) -> f64 {
+        const EPSILON: f64 = 1.0E-7;
+        let overlaps = [Axis::X, Axis::Y, Axis::Z]
+            .into_iter()
+            .filter(|&other_axis| other_axis != axis)
+            .all(|other_axis| {
+                moving.max.get_axis(other_axis) - EPSILON > other.min.get_axis(other_axis)
+                    && moving.min.get_axis(other_axis) + EPSILON < other.max.get_axis(other_axis)
+            });
+        if !overlaps {
+            return amount;
+        }
+        if amount > 0.0 && other.min.get_axis(axis) >= moving.max.get_axis(axis) - EPSILON {
+            amount.min(other.min.get_axis(axis) - moving.max.get_axis(axis))
+        } else if amount < 0.0 && other.max.get_axis(axis) <= moving.min.get_axis(axis) + EPSILON {
+            amount.max(other.max.get_axis(axis) - moving.min.get_axis(axis))
+        } else {
+            amount
+        }
+    }
+
+    fn collide_bounding_box(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
+        self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
@@ -1456,6 +2361,7 @@ impl Entity {
                 }
 
                 if max_time != 1.0 {
+                    self.vertical_collision.store(true, Ordering::SeqCst);
                     let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
                     adjusted_movement.set_axis(Axis::Y, changed_component);
                 }
@@ -1800,13 +2706,9 @@ impl Entity {
             }
         }
 
-        let lava_speed = if world.dimension.fast_lava {
-            0.007
-        } else {
-            0.002_333_333
-        };
+        let lava_speed = lava_push_speed(world.dimension.fast_lava);
 
-        self.push_by_fluid(0.014, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(WATER_PUSH_SPEED, fluid_push[0], fluid_n[0]);
 
         self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
 
@@ -1819,9 +2721,10 @@ impl Entity {
                 living.fall_distance.store(0.0);
             }
 
-            if !self.touching_water.load(Ordering::SeqCst) {
-
-                // TODO: Spawn splash particles
+            if !self.touching_water.load(Ordering::SeqCst)
+                && !self.first_tick.load(Ordering::Relaxed)
+            {
+                caller.do_water_splash_effect(caller);
             }
         }
 
@@ -2019,6 +2922,7 @@ impl Entity {
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
+            self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
             return;
@@ -2049,13 +2953,232 @@ impl Entity {
             living.fall(caller, final_move.y, on_ground, false);
         }
 
+        let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
         if motion.y != final_move.y {
             let world = self.world.load();
-            let block = self.get_block_with_y_offset(0.2).1;
             world
                 .block_registry
-                .update_entity_movement_after_fall_on(block, caller);
+                .update_entity_movement_after_fall_on(effect_block, caller);
         }
+
+        if self.is_removed() {
+            return;
+        }
+        self.emit_movement(caller, final_move, &effect_pos, effect_state);
+    }
+
+    /// The emission part of vanilla `Entity.move` for movement the client already resolved,
+    /// which is how players move.
+    pub fn emit_client_movement(&self, caller: &dyn EntityBase, movement: Vector3<f64>) {
+        let (effect_pos, _, effect_state) = self.get_block_with_y_offset(0.2);
+        self.emit_movement(caller, movement, &effect_pos, effect_state);
+    }
+
+    fn emit_movement(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+        effect_pos: &BlockPos,
+        effect_state: &'static BlockState,
+    ) {
+        let emission = caller.movement_emission();
+        if emission.emits_anything() && !caller.is_passenger() {
+            self.apply_movement_emission(caller, emission, movement, effect_pos, effect_state);
+        }
+    }
+
+    /// Vanilla `applyMovementEmissionAndPlaySound`.
+    fn apply_movement_emission(
+        &self,
+        caller: &dyn EntityBase,
+        emission: MovementEmission,
+        movement: Vector3<f64>,
+        effect_pos: &BlockPos,
+        effect_state: &'static BlockState,
+    ) {
+        let moved_distance = (movement.length() * 0.6) as f32;
+        let horizontal_moved_distance = (movement.horizontal_length() * 0.6) as f32;
+        let supporting_pos = self.get_pos_with_y_offset(1.0e-5).0;
+        let (supporting_block, supporting_state) =
+            self.world.load().get_block_and_state(&supporting_pos);
+        let climbing = Self::is_state_climbable(supporting_block);
+        self.move_dist.store(
+            self.move_dist.load()
+                + if climbing {
+                    moved_distance
+                } else {
+                    horizontal_moved_distance
+                },
+        );
+        self.fly_dist.store(self.fly_dist.load() + moved_distance);
+
+        if self.move_dist.load() > self.next_step.load() && !supporting_state.is_air() {
+            let only_effect_state = supporting_pos == *effect_pos;
+            let mut produced_side_effects = self.vibration_and_sound_effects_from_block(
+                caller,
+                effect_pos,
+                effect_state,
+                emission.emits_sounds(),
+                only_effect_state,
+                movement,
+            );
+            if !only_effect_state {
+                produced_side_effects |= self.vibration_and_sound_effects_from_block(
+                    caller,
+                    &supporting_pos,
+                    supporting_state,
+                    false,
+                    emission.emits_events(),
+                    movement,
+                );
+            }
+
+            if produced_side_effects {
+                self.next_step.store(caller.next_step());
+            } else if self.is_in_water() {
+                self.next_step.store(caller.next_step());
+                if emission.emits_sounds() {
+                    self.water_swim_sound(caller);
+                }
+                if emission.emits_events() {
+                    self.emit_own_game_event(caller, GameEvent::Swim);
+                }
+            }
+        } else if supporting_state.is_air() && caller.is_flapping() {
+            // Vanilla `processFlappingMovement`.
+            caller.on_flap();
+            if emission.emits_events() {
+                self.emit_own_game_event(caller, GameEvent::Flap);
+            }
+        }
+    }
+
+    /// Vanilla `isStateClimbable`.
+    fn is_state_climbable(block: &Block) -> bool {
+        block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) || block == &Block::POWDER_SNOW
+    }
+
+    /// Vanilla `vibrationAndSoundEffectsFromBlock`.
+    fn vibration_and_sound_effects_from_block(
+        &self,
+        caller: &dyn EntityBase,
+        pos: &BlockPos,
+        state: &'static BlockState,
+        should_sound: bool,
+        should_vibrate: bool,
+        movement: Vector3<f64>,
+    ) -> bool {
+        if state.is_air() {
+            return false;
+        }
+        let climbable = Self::is_state_climbable(state.id.to_block());
+        let crouching = self.pose.load() == EntityPose::Crouching;
+        if !(self.on_ground.load(Ordering::Relaxed)
+            || climbable
+            || crouching && movement.y == 0.0
+            || caller.is_on_rails())
+            || self.is_swimming()
+        {
+            return false;
+        }
+        if should_sound {
+            caller.play_step_sound(pos, state);
+            if self.should_play_amethyst_step_sound(state) {
+                self.play_amethyst_step_sound(caller);
+            }
+        }
+        if should_vibrate {
+            self.emit_own_game_event(caller, GameEvent::Step);
+        }
+        true
+    }
+
+    fn should_play_amethyst_step_sound(&self, state: &BlockState) -> bool {
+        state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_CRYSTAL_SOUND_BLOCKS)
+            && self.tick_count.load(Ordering::Relaxed)
+                >= self.last_crystal_sound_play_tick.load(Ordering::Relaxed) + 20
+    }
+
+    /// Vanilla `playAmethystStepSound`.
+    fn play_amethyst_step_sound(&self, caller: &dyn EntityBase) {
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        let ticks_since = tick_count - self.last_crystal_sound_play_tick.load(Ordering::Relaxed);
+        let intensity = (self.crystal_sound_intensity.load() * 0.997f64.powi(ticks_since) as f32
+            + 0.07)
+            .min(1.0);
+        self.crystal_sound_intensity.store(intensity);
+        let pitch = (intensity * rand::random::<f32>()).mul_add(1.2, 0.5);
+        let volume = intensity.mul_add(1.2, 0.1);
+        caller.play_entity_sound(Sound::BlockAmethystBlockChime, volume, pitch);
+        self.last_crystal_sound_play_tick
+            .store(tick_count, Ordering::Relaxed);
+    }
+
+    /// Vanilla `getPrimaryStepSoundBlockPos`: the block above when it sounds from inside, like snow.
+    pub fn get_primary_step_sound_block_pos(&self, affecting_pos: &BlockPos) -> BlockPos {
+        let above_pos = affecting_pos.up();
+        let above = self.world.load().get_block_state(&above_pos).id.to_block();
+        if above.has_tag(&tag::Block::MINECRAFT_INSIDE_STEP_SOUND_BLOCKS)
+            || above.has_tag(&tag::Block::MINECRAFT_COMBINATION_STEP_SOUND_BLOCKS)
+        {
+            above_pos
+        } else {
+            *affecting_pos
+        }
+    }
+
+    /// Vanilla `waterSwimSound`: louder the faster the entity, or its controlling rider, swims.
+    pub fn water_swim_sound(&self, caller: &dyn EntityBase) {
+        let rider = caller.get_controlling_passenger();
+        let (velocity, volume_modifier) = rider.as_ref().map_or_else(
+            || (self.velocity.load(), 0.35),
+            |rider| (rider.get_entity().velocity.load(), 0.4),
+        );
+        let speed = (velocity.x * velocity.x * 0.2
+            + velocity.y * velocity.y
+            + velocity.z * velocity.z * 0.2)
+            .sqrt() as f32;
+        caller.play_swim_sound((speed * volume_modifier).min(1.0));
+    }
+
+    /// The base `Entity.doWaterSplashEffect`. Clients spawn the bubble and splash particles
+    /// themselves.
+    pub fn water_splash_effect(&self, caller: &dyn EntityBase) {
+        let rider = caller.get_controlling_passenger();
+        let (velocity, volume_modifier) = rider.as_ref().map_or_else(
+            || (self.velocity.load(), 0.2),
+            |rider| (rider.get_entity().velocity.load(), 0.9),
+        );
+        let speed = ((velocity.x * velocity.x * 0.2
+            + velocity.y * velocity.y
+            + velocity.z * velocity.z * 0.2)
+            .sqrt() as f32
+            * volume_modifier)
+            .min(1.0);
+        let sound = if speed < 0.25 {
+            caller.get_swim_splash_sound()
+        } else {
+            caller.get_swim_high_speed_splash_sound()
+        };
+        if let Some(sound) = sound {
+            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
+            caller.play_entity_sound(sound, speed, pitch);
+        }
+        self.emit_own_game_event(caller, GameEvent::Splash);
+    }
+
+    /// Vanilla `gameEvent(event)`: at the entity, with itself as the source.
+    fn emit_own_game_event(&self, caller: &dyn EntityBase, event: GameEvent) {
+        self.world.load().emit_game_event_with_context(
+            event.name(),
+            self.pos.load(),
+            &crate::world::game_event::GameEventContext {
+                source_entity: Some(caller),
+            },
+        );
     }
 
     pub fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {
@@ -2098,7 +3221,7 @@ impl Entity {
             }
         }
 
-        let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
+        let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
 
@@ -2133,38 +3256,40 @@ impl Entity {
                 let entity_id = self.entity_id;
                 let yaw = self.yaw.load();
 
-                let rt_handle = world_clone.server.upgrade().map(|s| s.runtime.clone());
-                rayon::spawn(move || {
-                    let _guard = rt_handle.as_ref().map(tokio::runtime::Handle::enter);
-                    let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
-                        return;
-                    };
-                    let transition = portal_type.get_portal_destination(
-                        &world_clone,
-                        dest_world_opt,
-                        entity_arc.as_ref(),
-                        src_portal.as_ref(),
-                    );
+                if let Some(server) = world_clone.server.upgrade() {
+                    server.spawn_task(async move {
+                        let Some(entity_arc) = world_clone.get_entity_by_id(entity_id) else {
+                            return;
+                        };
+                        let transition = portal_type
+                            .get_portal_destination(
+                                &world_clone,
+                                dest_world_opt,
+                                entity_arc.as_ref(),
+                                src_portal.as_ref(),
+                            )
+                            .await;
 
-                    if let Some(transition) = transition {
-                        let dest_world = transition.new_world.clone();
-                        let yaw_val = transition.yaw;
-                        let pitch = transition.pitch;
-                        let teleport_pos = transition.position;
+                        if let Some(transition) = transition {
+                            let dest_world = transition.new_world.clone();
+                            let yaw_val = transition.yaw;
+                            let pitch = transition.pitch;
+                            let teleport_pos = transition.position;
 
-                        // Teleport the main entity
-                        entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            // Teleport the main entity
+                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
 
-                        // Teleport all passengers recursively along with the vehicle
-                        let yaw_delta = yaw_val.map(|y| y - yaw);
-                        Self::teleport_passengers_recursive(
-                            entity_arc.get_entity(),
-                            teleport_pos,
-                            yaw_delta,
-                            &dest_world,
-                        );
-                    }
-                });
+                            // Teleport all passengers recursively along with the vehicle
+                            let yaw_delta = yaw_val.map(|y| y - yaw);
+                            Self::teleport_passengers_recursive(
+                                entity_arc.get_entity(),
+                                teleport_pos,
+                                yaw_delta,
+                                &dest_world,
+                            );
+                        }
+                    });
+                }
             } else if portal_processor.portal_time == 0 {
                 should_remove = true;
             }
@@ -2393,7 +3518,7 @@ impl Entity {
         // Vanilla parity: full-freeze damage is tick-phase based.
         if can_freeze
             && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
-            && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
+            && self.tick_count.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             let world = self.world.load_full();
             if world.level_info.load().game_rules.freeze_damage
@@ -2599,8 +3724,19 @@ impl Entity {
         }
     }
 
-    /// Sets whether the entity is glowing and sends updated metadata.
     pub fn set_glowing(&self, glowing: bool) {
+        self.has_glowing_tag.store(glowing, Ordering::Relaxed);
+        self.update_glowing_flag();
+    }
+
+    pub fn set_glowing_from_effect(&self, glowing: bool) {
+        self.glowing_from_effect.store(glowing, Ordering::Relaxed);
+        self.update_glowing_flag();
+    }
+
+    fn update_glowing_flag(&self) {
+        let glowing = self.has_glowing_tag.load(Ordering::Relaxed)
+            || self.glowing_from_effect.load(Ordering::Relaxed);
         if self.glowing.load(Ordering::Relaxed) != glowing {
             self.glowing.store(glowing, Ordering::Relaxed);
             self.set_flag(Flag::Glowing, glowing);
@@ -2759,50 +3895,56 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_SHARED_FLAGS_ID, new_je_flags);
 
         if let Some(bedrock_flag) = flag.to_bedrock() {
-            let (key, index) = if bedrock_flag >= 64 {
-                (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
-            } else {
-                (entity_data_key::FLAGS, bedrock_flag as u8)
-            };
-
-            if value {
-                let mask = 1i64 << index;
-                if key == entity_data_key::FLAGS {
-                    self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
-                } else {
-                    self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
-                }
-            } else {
-                let mask = !(1i64 << index);
-                if key == entity_data_key::FLAGS {
-                    self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
-                } else {
-                    self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
-                }
-            }
-
-            let world = self.world.load();
-            let chunk_pos = self.chunk_pos.load();
-            let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
-            metadata.set(
-                entity_data_key::FLAGS,
-                MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
-            );
-            metadata.set(
-                entity_data_key::FLAGS_TWO,
-                MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
-            );
-            let packet = CSetActorData {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                actor_data: metadata,
-                synced_properties: PropertySyncData {
-                    int_entries_list: std::collections::HashMap::new(),
-                    float_entries_list: std::collections::HashMap::new(),
-                },
-                tick: VarULong(0),
-            };
-            world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
+            self.set_bedrock_flag(bedrock_flag, value);
         }
+    }
+
+    /// Sets an actor flag only Bedrock has and sends the flag words to Bedrock viewers.
+    pub fn set_bedrock_flag(&self, bedrock_flag: u32, value: bool) {
+        self.init_bedrock_flags();
+        let (key, index) = if bedrock_flag >= 64 {
+            (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
+        } else {
+            (entity_data_key::FLAGS, bedrock_flag as u8)
+        };
+
+        if value {
+            let mask = 1i64 << index;
+            if key == entity_data_key::FLAGS {
+                self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+            } else {
+                self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
+            }
+        } else {
+            let mask = !(1i64 << index);
+            if key == entity_data_key::FLAGS {
+                self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
+            } else {
+                self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
+            }
+        }
+
+        let world = self.world.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+        let packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: metadata,
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -2831,7 +3973,7 @@ impl Entity {
                 return;
             }
             for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
@@ -2880,7 +4022,7 @@ impl Entity {
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
             for player in players {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
+                if (tracked.is_seen_by(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
@@ -2960,7 +4102,7 @@ impl Entity {
             && world
                 .entity_tracker
                 .get_tracked_entity(self.entity_id)
-                .is_some_and(|tracked| tracked.seen_by.is_empty())
+                .is_some_and(|tracked| !tracked.has_viewers())
         {
             self.synched_data.clear_dirty();
             return;
@@ -3047,23 +4189,11 @@ impl Entity {
             }
         }
 
-        let dimension = self.get_dimensions(pose);
-        let position = self.pos.load();
-        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
-        self.bounding_box.store(aabb);
-        self.entity_dimension.store(dimension);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-        bedrock_meta.set(
-            entity_data_key::WIDTH,
-            MetadataValue::Float(dimension.width),
-        );
-        bedrock_meta.set(
-            entity_data_key::HEIGHT,
-            MetadataValue::Float(dimension.height),
-        );
+        self.refresh_dimensions_into(&mut bedrock_meta);
         self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
         self.send_bedrock_actor_data(&bedrock_meta);
     }
@@ -3316,6 +4446,16 @@ impl Entity {
             }
         }
 
+        self.attach_leash(holder);
+    }
+
+    pub fn attach_leash(&self, holder: Arc<dyn EntityBase>) {
+        let holder_entity_id = holder.get_entity().entity_id;
+        self.leash_angular_momentum.store(0.0);
+        *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         *self
             .leashed_to
             .lock()
@@ -3326,17 +4466,22 @@ impl Entity {
             holder_entity_id,
             true,
         );
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(
-                    holder_entity_id as i64,
-                ),
-                link_type: 1, // Leash link
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::LEASHED, Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(
+            entity_data_key::LEASH_HOLDER,
+            MetadataValue::Int64(i64::from(holder_entity_id)),
+        );
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -3382,17 +4527,36 @@ impl Entity {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
+        self.send_leash_removed();
+    }
+
+    pub fn remove_leash(&self) {
+        let old_holder = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if old_holder.is_some() {
+            self.send_leash_removed();
+        }
+    }
+
+    fn send_leash_removed(&self) {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
-                link_type: 0, // Unlink
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_and(!(1i64 << entity_data_flag::LEASHED), Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::LEASH_HOLDER, MetadataValue::Int64(-1));
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -3402,45 +4566,241 @@ impl Entity {
         );
     }
 
-    pub fn tick_leash(&self) {
+    pub fn write_leash_data(&self, nbt: &mut NbtCompound) {
+        let holder = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let leash = match holder {
+            Some(holder) if holder.get_entity().entity_type == &EntityType::LEASH_KNOT => {
+                Some(DelayedLeash::Knot(holder.get_entity().block_pos.load()))
+            }
+            Some(holder) => Some(DelayedLeash::Entity(holder.get_entity().entity_uuid)),
+            None => *self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        };
+        match leash {
+            Some(DelayedLeash::Entity(uuid)) => {
+                let mut tag = NbtCompound::new();
+                tag.put_uuid("UUID", uuid);
+                nbt.put_compound("leash", tag);
+            }
+            Some(DelayedLeash::Knot(pos)) => nbt.put("leash", block_pos_to_tag(pos)),
+            None => {}
+        }
+    }
+
+    pub fn read_leash_data(&self, nbt: &NbtCompound) {
+        let leash = match nbt.get("leash") {
+            Some(NbtTag::Compound(tag)) => tag.get_uuid("UUID").map(DelayedLeash::Entity),
+            Some(pos @ NbtTag::IntArray(_)) => block_pos_from_tag(pos).map(DelayedLeash::Knot),
+            _ => None,
+        };
+        if leash.is_none() {
+            self.remove_leash();
+        }
+        *self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = leash;
+    }
+
+    fn restore_leash_from_save(&self, delayed: DelayedLeash) {
+        let world = self.world.load();
+        let holder = match delayed {
+            DelayedLeash::Entity(uuid) => world.get_entity_by_uuid(uuid).or_else(|| {
+                world
+                    .get_player_by_uuid(uuid)
+                    .map(|p| p as Arc<dyn EntityBase>)
+            }),
+            DelayedLeash::Knot(pos) => Some(LeashKnotEntity::get_or_create(&world, pos)),
+        };
+        if let Some(holder) = holder {
+            self.attach_leash(holder);
+        } else if self.tick_count.load(Relaxed) > LEASH_RESTORE_TIMEOUT {
+            self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+            *self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        }
+    }
+
+    /// Applies leash snapping and the elastic pull. Mobs handle the other outcomes.
+    pub fn tick_leash(&self, caller: &dyn EntityBase) -> LeashTick {
+        let delayed = *self
+            .delayed_leash
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(delayed) = delayed {
+            self.restore_leash_from_save(delayed);
+        }
+
         let holder = {
             let Ok(guard) = self.leashed_to.try_lock() else {
-                return;
+                return LeashTick::NotLeashed;
             };
             guard.clone()
         };
+        let Some(holder) = holder else {
+            return LeashTick::NotLeashed;
+        };
+        let holder_entity = holder.get_entity();
 
-        if let Some(holder) = holder {
-            let holder_entity = holder.get_entity();
-
-            // Drop leash if entity or holder is removed or dead
-            if !self.is_alive() || !holder_entity.is_alive() {
-                self.unleash();
-                return;
-            }
-
-            let self_pos = self.pos.load();
-            let holder_pos = holder_entity.pos.load();
-            let diff = self_pos - holder_pos;
-            let distance = diff.length();
-
-            if distance > Self::LEASH_SNAP_DISTANCE {
-                // Too far: snap/break leash and drop lead item
-                self.unleash();
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item);
-            } else if distance > Self::LEASH_ELASTIC_DISTANCE {
-                // Elastic pull force towards leash holder
-                let dir = (holder_pos - self_pos).normalize();
-                let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
-                let current_vel = self.velocity.load();
-                self.velocity.store(current_vel + dir * pull_strength);
-                self.velocity_dirty.store(true, Relaxed);
-            }
+        if !self.is_alive() || !holder_entity.is_alive() {
+            self.unleash();
+            return LeashTick::NotLeashed;
         }
+
+        let distance = self.leash_distance_to(holder_entity);
+        if distance > Self::LEASH_SNAP_DISTANCE {
+            let holder_pos = holder_entity.pos.load();
+            self.world
+                .load()
+                .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
+            self.unleash();
+            let lead_item =
+                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+            self.world
+                .load()
+                .drop_stack(&self.block_pos.load(), lead_item);
+            return LeashTick::Snapped;
+        }
+        let elastic_threshold = Self::LEASH_ELASTIC_DISTANCE
+            - f64::from(holder_entity.width())
+            - f64::from(self.width());
+        let result = if distance > elastic_threshold
+            && self.check_elastic_interactions(caller, holder.as_ref())
+        {
+            LeashTick::Elastic(holder)
+        } else {
+            LeashTick::CloseRange(holder)
+        };
+
+        let momentum = self.leash_angular_momentum.load();
+        self.yaw.store(self.yaw.load() - momentum as f32);
+        self.leash_angular_momentum
+            .store(momentum * f64::from(self.leash_angular_friction()));
+        result
+    }
+
+    /// Pulls the entity back with a damped spring on each attachment point beyond the slack.
+    fn check_elastic_interactions(&self, caller: &dyn EntityBase, holder: &dyn EntityBase) -> bool {
+        let quad_connection = holder.support_quad_leash_as_holder() && caller.support_quad_leash();
+        let (entity_points, holder_points): (&[Vector3<f64>], &[Vector3<f64>]) = if quad_connection
+        {
+            (
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+            )
+        } else {
+            (&[ENTITY_ATTACHMENT_POINT], &[LEASHER_ATTACHMENT_POINT])
+        };
+
+        let holder_entity = holder.get_entity();
+        let entity_movement = holder_movement(caller);
+        let entity_dimensions = Vector3::new(
+            f64::from(self.width()),
+            f64::from(self.height()),
+            f64::from(self.width()),
+        );
+        let holder_dimensions = Vector3::new(
+            f64::from(holder_entity.width()),
+            f64::from(holder_entity.height()),
+            f64::from(holder_entity.width()),
+        );
+        let entity_yaw = self.yaw.load().to_radians();
+        let holder_yaw = holder_entity.yaw.load().to_radians();
+        let entity_pos = self.pos.load();
+        let holder_pos = holder_entity.pos.load();
+
+        let mut force = Vector3::new(0.0, 0.0, 0.0);
+        let mut torque = 0.0;
+        let mut pulled = false;
+        for (entity_point, holder_point) in entity_points.iter().zip(holder_points) {
+            let lever_arm = y_rot(
+                entity_point.multiply(
+                    entity_dimensions.x,
+                    entity_dimensions.y,
+                    entity_dimensions.z,
+                ),
+                -entity_yaw,
+            );
+            let entity_attach = entity_pos + lever_arm;
+            let holder_attach = holder_pos
+                + y_rot(
+                    holder_point.multiply(
+                        holder_dimensions.x,
+                        holder_dimensions.y,
+                        holder_dimensions.z,
+                    ),
+                    -holder_yaw,
+                );
+            let attach_distance = (holder_attach - entity_attach).length();
+            if attach_distance < Self::LEASH_ELASTIC_DISTANCE {
+                continue;
+            }
+            let mut displacement = (holder_attach - entity_attach).normalize()
+                * (attach_distance - Self::LEASH_ELASTIC_DISTANCE);
+            torque += lever_arm.z * displacement.x - lever_arm.x * displacement.z;
+            if entity_movement.dot(&displacement) >= 0.0 {
+                displacement = displacement * f64::from(0.3f32);
+            }
+            force += displacement;
+            pulled = true;
+        }
+        if !pulled {
+            return false;
+        }
+
+        let scale = if quad_connection { 0.25 } else { 1.0 };
+        self.leash_angular_momentum.store(
+            self.leash_angular_momentum.load() + LEASH_TORSIONAL_ELASTICITY * torque * scale,
+        );
+        let relative_velocity = holder_movement(holder) - known_movement(caller);
+        let pull = (force * scale).multiply(
+            LEASH_AXIS_ELASTICITY.x,
+            LEASH_AXIS_ELASTICITY.y,
+            LEASH_AXIS_ELASTICITY.z,
+        ) + relative_velocity * LEASH_STIFFNESS;
+        self.velocity.store(self.velocity.load() + pull);
+        self.velocity_dirty.store(true, Relaxed);
+        true
+    }
+
+    fn leash_angular_friction(&self) -> f32 {
+        if self.on_ground.load(Ordering::Relaxed) {
+            let below = self.get_block_pos_below_that_affects_my_movement();
+            self.world.load().get_block(&below).slipperiness * 0.91
+        } else if self.touching_water.load(Ordering::Relaxed)
+            || self.touching_lava.load(Ordering::Relaxed)
+        {
+            0.8
+        } else {
+            0.91
+        }
+    }
+
+    /// Caps a fall a taut leash has caught.
+    pub fn check_fall_distance_accumulation(&self, living: &LivingEntity) {
+        if self.velocity.load().y > -0.5 && living.fall_distance.load() > 1.0 {
+            living.fall_distance.store(1.0);
+        }
+    }
+
+    fn leash_distance_to(&self, other: &Self) -> f64 {
+        let center = |entity: &Self| {
+            let bounding_box = entity.bounding_box.load();
+            (bounding_box.min + bounding_box.max) * 0.5
+        };
+        (center(other) - center(self)).length()
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {
@@ -3485,6 +4845,21 @@ impl Entity {
             .clone()
     }
 
+    /// Vanilla `getRootVehicle`, `None` when not riding.
+    pub fn get_root_vehicle(&self) -> Option<Arc<dyn EntityBase>> {
+        let mut root = self.get_vehicle()?;
+        while let Some(vehicle) = root.get_entity().get_vehicle() {
+            root = vehicle;
+        }
+        Some(root)
+    }
+
+    /// Vanilla `isPassengerOfSameVehicle`: same root vehicle, or the same entity.
+    #[must_use]
+    pub fn is_passenger_of_same_vehicle(&self, other: &Self) -> bool {
+        self.root_vehicle_id() == other.root_vehicle_id()
+    }
+
     pub fn is_leashed(&self) -> bool {
         self.leashed_to
             .lock()
@@ -3525,19 +4900,112 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        if let Some(player) = passenger.get_player() {
+            let other_passenger_type = passengers
+                .first()
+                .map(|p| format!("minecraft:{}", p.get_entity().entity_type.resource_name));
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                    vehicle_type: Some(format!("minecraft:{}", self.entity_type.resource_name)),
+                    passenger_type: other_passenger_type,
+                },
+            );
+        } else {
+            for p in passengers.iter() {
+                if let Some(player) = p.get_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+                            vehicle_type: Some(format!(
+                                "minecraft:{}",
+                                self.entity_type.resource_name
+                            )),
+                            passenger_type: Some(format!(
+                                "minecraft:{}",
+                                passenger_entity.entity_type.resource_name
+                            )),
+                        },
+                    );
+                }
+            }
+        }
+
+        let passenger_entity_id = passenger_entity.entity_id;
+        passenger_entity
+            .bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::RIDING, Ordering::Relaxed);
+        let mut rider_meta = SyncedActorDataList::new();
+        rider_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        passenger_entity.send_bedrock_actor_data(&rider_meta);
+
         passengers.push(passenger);
+        let link_type = if passengers.len() == 1 { 1 } else { 2 };
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
+        drop(passengers);
+
+        let be_link = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_entity_id)),
+                link_type,
+                immediate: true,
+                rider_initiated: true,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
 
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
+        world.broadcast_to_chunk_editioned(
             chunk_pos,
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_link,
         );
+    }
+
+    pub fn add_passenger_silently(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) {
+        *passenger
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(vehicle);
+        self.passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(passenger);
+    }
+
+    fn write_passengers(&self, nbt: &mut NbtCompound) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let passengers: Vec<NbtTag> = passengers
+            .iter()
+            .filter(|passenger| {
+                passenger.get_player().is_none() && !passenger.get_entity().is_removed()
+            })
+            .map(|passenger| {
+                let mut tag = NbtCompound::new();
+                passenger.write_nbt(&mut tag);
+                NbtTag::Compound(tag)
+            })
+            .collect();
+        if !passengers.is_empty() {
+            nbt.put_list("Passengers", passengers);
+        }
     }
 
     pub(crate) fn remove_passenger_on_disconnect(&self, passenger_id: i32) {
@@ -3563,9 +5031,21 @@ impl Entity {
             .collect();
         drop(passengers);
 
-        self.world.load().broadcast_to_chunk(
+        let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_id)),
+                link_type: 0,
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+
+        self.world.load().broadcast_to_chunk_editioned(
             self.chunk_pos.load(),
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_unlink,
         );
     }
 
@@ -3662,18 +5142,39 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
+            passenger_entity
+                .bedrock_flags
+                .fetch_and(!(1i64 << entity_data_flag::RIDING), Ordering::Relaxed);
+            let mut rider_meta = SyncedActorDataList::new();
+            rider_meta.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+            );
+            passenger_entity.send_bedrock_actor_data(&rider_meta);
+
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+                link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(passenger_id)),
+                    link_type: 0,
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            };
             if let Some(player) = passenger.get_player() {
-                player.try_send_client_packet(&passengers_packet);
-                world.broadcast_to_chunk_except(
+                player.try_enqueue_packet_editioned(&passengers_packet, &be_unlink);
+                world.broadcast_to_chunk_except_editioned(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
                     &passengers_packet,
+                    &be_unlink,
                 );
             } else {
-                world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+                world.broadcast_to_chunk_editioned(chunk_pos, &passengers_packet, &be_unlink);
             }
 
             if !reposition {
@@ -4004,13 +5505,15 @@ impl Entity {
             format!("minecraft:{}", self.entity_type.resource_name),
         );
         nbt.put_uuid("UUID", self.entity_uuid);
+        let (x, z) = self
+            .get_vehicle()
+            .map_or((position.x, position.z), |vehicle| {
+                let vehicle_pos = vehicle.get_entity().pos.load();
+                (vehicle_pos.x, vehicle_pos.z)
+            });
         nbt.put(
             "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
+            NbtTag::List(vec![x.into(), position.y.into(), z.into()]),
         );
         let velocity = self.velocity.load();
         nbt.put(
@@ -4025,14 +5528,13 @@ impl Entity {
             "Rotation",
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
+        if self.entity_type != &EntityType::PLAYER {
+            nbt.put_short("Air", self.air_supply.load(Relaxed) as i16);
+        }
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
-        if self.has_visual_fire.load(Relaxed) {
-            nbt.put_bool("HasVisualFire", true);
-        }
-        nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
         if let Some(custom_name) = &**self.custom_name.load() {
             let mut tag = custom_name
                 .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_3);
@@ -4046,7 +5548,25 @@ impl Entity {
             }
             nbt.put("CustomName", tag);
         }
-        nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+        if self.custom_name_visible.load(Relaxed) {
+            nbt.put_bool("CustomNameVisible", true);
+        }
+        if self.is_silent() {
+            nbt.put_bool("Silent", true);
+        }
+        if self.has_no_gravity() {
+            nbt.put_bool("NoGravity", true);
+        }
+        if self.has_glowing_tag.load(Relaxed) {
+            nbt.put_bool("Glowing", true);
+        }
+        let frozen_ticks = self.frozen_ticks.load(Relaxed);
+        if frozen_ticks > 0 {
+            nbt.put_int("TicksFrozen", frozen_ticks);
+        }
+        if self.has_visual_fire.load(Relaxed) {
+            nbt.put_bool("HasVisualFire", true);
+        }
 
         let tags = self
             .scoreboard_tags
@@ -4068,29 +5588,38 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !custom_data.is_empty() {
-            nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            nbt.put_compound("data", custom_data.clone());
         }
-
-        // todo more...
     }
 
-    pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+    fn read_placement_nbt(&self, nbt: &NbtCompound) {
         if let Some(position) = nbt.get_list("Pos")
             && position.len() >= 3
         {
             let x = position[0].extract_double().unwrap_or(0.0);
             let y = position[1].extract_double().unwrap_or(0.0);
             let z = position[2].extract_double().unwrap_or(0.0);
-            let pos = Vector3::new(x, y, z);
-            self.set_pos(pos);
-            self.last_sent_pos.store(pos);
+            let pos = Vector3::new(
+                x.clamp(-MAX_HORIZONTAL_POSITION, MAX_HORIZONTAL_POSITION),
+                y.clamp(-MAX_VERTICAL_POSITION, MAX_VERTICAL_POSITION),
+                z.clamp(-MAX_HORIZONTAL_POSITION, MAX_HORIZONTAL_POSITION),
+            );
+            if pos.x.is_finite() && pos.y.is_finite() && pos.z.is_finite() {
+                self.set_pos(pos);
+                self.last_sent_pos.store(pos);
+            }
         }
         if let Some(velocity) = nbt.get_list("Motion")
             && velocity.len() >= 3
         {
-            let x = velocity[0].extract_double().unwrap_or(0.0);
-            let y = velocity[1].extract_double().unwrap_or(0.0);
-            let z = velocity[2].extract_double().unwrap_or(0.0);
+            let [x, y, z] = [0, 1, 2].map(|axis| {
+                let motion = velocity[axis].extract_double().unwrap_or(0.0);
+                if motion.abs() > MAX_LOADED_MOTION {
+                    0.0
+                } else {
+                    motion
+                }
+            });
             self.velocity.store(Vector3::new(x, y, z));
         }
         if let Some(rotation) = nbt.get_list("Rotation")
@@ -4098,34 +5627,42 @@ impl Entity {
         {
             let yaw = rotation[0].extract_float().unwrap_or(0.0);
             let pitch = rotation[1].extract_float().unwrap_or(0.0);
-            self.set_rotation(yaw, pitch);
-            // TODO: use `pumpkin_util::math::pack_degrees`.
-            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            self.last_sent_yaw.store(yaw_byte, Relaxed);
-            self.last_sent_pitch.store(pitch_byte, Relaxed);
-            self.head_yaw.store(yaw);
-            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            if yaw.is_finite() && pitch.is_finite() {
+                self.set_rotation(yaw, pitch);
+                // TODO: use `pumpkin_util::math::pack_degrees`.
+                let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                self.last_sent_yaw.store(yaw_byte, Relaxed);
+                self.last_sent_pitch.store(pitch_byte, Relaxed);
+                self.head_yaw.store(yaw);
+                self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            }
         }
-        // Only keys present are applied, so partial NBT leaves the rest untouched.
-        if let Some(fire) = nbt.get_short("Fire") {
-            self.fire_ticks.store(i32::from(fire), Relaxed);
+    }
+
+    pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_max_air_supply(nbt, breath::MAX_AIR);
+    }
+
+    fn read_nbt_with_max_air_supply(&self, nbt: &NbtCompound, max_air_supply: i32) {
+        self.read_placement_nbt(nbt);
+        self.fire_ticks.store(
+            i32::from(nbt.get_numeric_short("Fire").unwrap_or(0)),
+            Relaxed,
+        );
+        self.on_ground
+            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
+        if self.entity_type != &EntityType::PLAYER {
+            let air = nbt
+                .get_numeric_short("Air")
+                .map_or(max_air_supply, i32::from);
+            self.air_supply.store(air, Relaxed);
+            self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
-        if let Some(on_ground) = nbt.get_bool("OnGround") {
-            self.on_ground.store(on_ground, Relaxed);
-        }
-        if let Some(invulnerable) = nbt.get_bool("Invulnerable") {
-            self.invulnerable.store(invulnerable, Relaxed);
-        }
-        if let Some(cooldown) = nbt.get_int("PortalCooldown") {
-            self.portal_cooldown.store(cooldown as u32, Relaxed);
-        }
-        if let Some(visual_fire) = nbt.get_bool("HasVisualFire") {
-            self.has_visual_fire.store(visual_fire, Relaxed);
-        }
-        if let Some(frozen) = nbt.get_int("TicksFrozen") {
-            self.frozen_ticks.store(frozen, Relaxed);
-        }
+        self.invulnerable
+            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+        self.portal_cooldown
+            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
         if let Some(name) = nbt.get("CustomName") {
             // Vanilla stores a text component tag; a string is literal text. Older
             // Pumpkin saves hold a JSON string (same data version, so it can't be told
@@ -4139,37 +5676,78 @@ impl Entity {
             };
             // set_custom_name also updates the synced tracked data
             self.set_custom_name(component);
+        } else {
+            self.clear_custom_name();
         }
-        if let Some(visible) = nbt.get_bool("CustomNameVisible") {
-            self.set_custom_name_visible(visible);
+        let custom_name_visible = nbt.get_bool("CustomNameVisible").unwrap_or(false);
+        if self.custom_name_visible.load(Relaxed) != custom_name_visible {
+            self.set_custom_name_visible(custom_name_visible);
         }
+        self.set_silent(nbt.get_bool("Silent").unwrap_or(false));
+        self.set_has_no_gravity(nbt.get_bool("NoGravity").unwrap_or(false));
+        self.set_glowing(nbt.get_bool("Glowing").unwrap_or(false));
+        self.frozen_ticks
+            .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
+        self.has_visual_fire
+            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
 
-        if let Some(tag_list) = nbt.get_list("Tags") {
+        let custom_data = nbt
+            .get_compound("data")
+            .or_else(|| nbt.get_compound("PumpkinCustomData"))
+            .or_else(|| nbt.get_compound("BukkitValues"));
+        *self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            custom_data.cloned().unwrap_or_default();
+
+        {
             let mut tags = self
                 .scoreboard_tags
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             tags.clear();
-            tags.extend(
-                tag_list
-                    .iter()
-                    .filter_map(|tag| tag.extract_string().map(str::to_owned))
-                    .take(MAX_SCOREBOARD_TAGS),
+            if let Some(tag_list) = nbt.get_list("Tags") {
+                tags.extend(
+                    tag_list
+                        .iter()
+                        .filter_map(|tag| tag.extract_string().map(str::to_owned))
+                        .take(MAX_SCOREBOARD_TAGS),
+                );
+            }
+        }
+
+        if let Some(team_name) = nbt.get_string("Team") {
+            self.join_team(team_name);
+        }
+    }
+
+    fn join_team(&self, team_name: &str) {
+        if self.entity_type == &EntityType::PLAYER {
+            return;
+        }
+        let world = self.world.load();
+        let scoreboard_name = self.entity_uuid.to_string();
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if scoreboard.get_team(team_name).is_none() {
+            tracing::warn!(
+                "Unable to add entity to team \"{team_name}\" (that team probably doesn't exist)"
             );
+            return;
         }
-
-        if let Some(custom_data) = nbt
-            .get_compound("PumpkinCustomData")
-            .or_else(|| nbt.get_compound("BukkitValues"))
+        if let Some(previous_team) = scoreboard
+            .get_entity_team(&scoreboard_name)
+            .map(|team| team.name.clone())
         {
-            let mut data = self
-                .custom_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *data = custom_data.clone();
+            if previous_team == team_name {
+                return;
+            }
+            scoreboard.remove_player_from_team(&*world, &previous_team, &scoreboard_name);
         }
-
-        // todo more...
+        scoreboard.add_player_to_team(&*world, team_name, scoreboard_name);
     }
 }
 
@@ -4214,6 +5792,7 @@ impl EntityBase for Entity {
             self.riding_cooldown
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
+        self.first_tick.store(false, Ordering::Relaxed);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -4320,5 +5899,38 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn entity_type_bedrock_identifier_mappings() {
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EXPERIENCE_ORB),
+            "minecraft:xp_orb"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FISHING_BOBBER),
+            "minecraft:fishing_hook"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EVOKER_FANGS),
+            "minecraft:evocation_fang"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::TRIDENT),
+            "minecraft:thrown_trident"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::FIREWORK_ROCKET),
+            "minecraft:fireworks_rocket"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::EYE_OF_ENDER),
+            "minecraft:eye_of_ender_signal"
+        );
+        assert_eq!(
+            entity_type_to_bedrock_identifier(&EntityType::ZOMBIE_VILLAGER),
+            "minecraft:zombie_villager_v2"
+        );
+        assert_eq!(entity_type_to_bedrock_identifier(&EntityType::COW), "cow");
     }
 }

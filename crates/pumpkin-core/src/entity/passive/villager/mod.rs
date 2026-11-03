@@ -26,20 +26,19 @@ use pumpkin_protocol::bedrock::{
     server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
+use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 
+use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         goal::{
-            avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, open_door::OpenDoorGoal, swim::SwimGoal,
-            trade_with_player::TradeWithPlayerGoal, wander_around::WanderAroundGoal,
-            work_at_job_site::WorkAtJobSiteGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            open_door::OpenDoorGoal, swim::SwimGoal, trade_with_player::TradeWithPlayerGoal,
+            wander_around::WanderAroundGoal, work_at_job_site::WorkAtJobSiteGoal,
         },
         pathfinder::Navigator,
     },
@@ -330,6 +329,28 @@ fn explorer_map_target(
     })
 }
 
+/// Vanilla `VillagerHostilesSensor` distances; panic runs at 0.5 * 1.5.
+const INVENTORY_SIZE: usize = 8;
+
+const VILLAGER_FLEES: &[Flee] = &[Flee::nearest_of(
+    1,
+    &[
+        (&EntityType::DROWNED, 8.0),
+        (&EntityType::EVOKER, 12.0),
+        (&EntityType::HUSK, 8.0),
+        (&EntityType::ILLUSIONER, 12.0),
+        (&EntityType::PILLAGER, 15.0),
+        (&EntityType::RAVAGER, 12.0),
+        (&EntityType::VEX, 8.0),
+        (&EntityType::VINDICATOR, 10.0),
+        (&EntityType::ZOGLIN, 10.0),
+        (&EntityType::ZOMBIE, 8.0),
+        (&EntityType::ZOMBIE_VILLAGER, 8.0),
+    ],
+    0.75,
+    0.75,
+)];
+
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub villager_data: std::sync::Mutex<VillagerData>,
@@ -437,61 +458,12 @@ impl VillagerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, Box::new(OpenDoorGoal::new(true)));
             // Villagers avoid threats
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ZOMBIE, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::ZOMBIE_VILLAGER,
-                    8.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::HUSK, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::DROWNED, 8.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::PILLAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(
-                    &EntityType::VINDICATOR,
-                    12.0,
-                    0.5,
-                    0.5,
-                )),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::EVOKER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::RAVAGER, 12.0, 0.5, 0.5)),
-            );
-            goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
-            );
+            fleeing::apply(goal_selector, VILLAGER_FLEES);
 
             goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
@@ -518,6 +490,19 @@ impl VillagerEntity {
             .send_bedrock_actor_data(&bedrock_metadata);
 
         mob_arc
+    }
+
+    fn can_add_item(&self, stack: &ItemStack) -> bool {
+        let inventory = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inventory.len() < INVENTORY_SIZE
+            || inventory.iter().any(|slot| {
+                slot.is_empty()
+                    || (slot.are_items_and_components_equal(stack)
+                        && slot.item_count < slot.get_max_stack_size())
+            })
     }
 
     pub fn count_food_points_in_inventory(&self) -> i32 {
@@ -1303,7 +1288,7 @@ impl VillagerEntity {
                 world.send_entity_status(
                     self.get_entity(),
                     pumpkin_data::entity::EntityStatus::VillagerHappy,
-                    Some(ActorEventID::VillagerHappy),
+                    ActorEventID::VillagerHappy,
                 );
                 self.job_site_pending.store(false, Ordering::Relaxed);
                 if profession == VillagerProfession::None {
@@ -1325,7 +1310,7 @@ impl VillagerEntity {
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
-            Some(ActorEventID::VillagerAngry),
+            ActorEventID::VillagerAngry,
         );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
@@ -1616,7 +1601,7 @@ impl VillagerEntity {
             world.send_entity_status(
                 self.get_entity(),
                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                Some(ActorEventID::VillagerHappy),
+                ActorEventID::VillagerHappy,
             );
         }
 
@@ -1657,7 +1642,7 @@ impl VillagerEntity {
         self.decay_gossips(game_time);
         self.work_at_job_site(game_time, day_time, day);
 
-        let age = self.get_entity().age.load(Ordering::Relaxed);
+        let age = self.get_entity().tick_count.load(Ordering::Relaxed);
         if age % 20 != 0 {
             return;
         }
@@ -1868,7 +1853,7 @@ impl VillagerEntity {
                             world.send_entity_status(
                                 self.get_entity(),
                                 pumpkin_data::entity::EntityStatus::VillagerHappy,
-                                Some(ActorEventID::VillagerHappy),
+                                ActorEventID::VillagerHappy,
                             );
                         }
                     }
@@ -1878,7 +1863,95 @@ impl VillagerEntity {
     }
 }
 
+fn add_to_inventory(inventory: &mut Vec<ItemStack>, stack: &mut ItemStack) {
+    for slot in inventory.iter_mut() {
+        if stack.is_empty() {
+            return;
+        }
+        if !slot.is_empty() && slot.are_items_and_components_equal(stack) {
+            let count = stack
+                .item_count
+                .min(slot.get_max_stack_size().saturating_sub(slot.item_count));
+            stack.decrement(count);
+            slot.increment(count);
+        }
+    }
+    for slot in inventory.iter_mut() {
+        if stack.is_empty() {
+            return;
+        }
+        if slot.is_empty() {
+            *slot = std::mem::replace(stack, ItemStack::EMPTY.clone());
+        }
+    }
+    if !stack.is_empty() && inventory.len() < INVENTORY_SIZE {
+        inventory.push(std::mem::replace(stack, ItemStack::EMPTY.clone()));
+    }
+}
+
 impl Mob for VillagerEntity {
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        let profession = self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .profession_enum();
+        (stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_VILLAGER_PICKS_UP)
+            || stack
+                .get_data_component::<pumpkin_data::data_component_impl::VillagerFoodImpl>()
+                .is_some()
+            || profession
+                .requested_items()
+                .iter()
+                .any(|item| item.id == stack.item.id))
+            && self.can_add_item(stack)
+    }
+
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if !self.wants_to_pick_up(&stack) {
+            return;
+        }
+        let mut remainder = stack.clone();
+        add_to_inventory(
+            &mut self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+            &mut remainder,
+        );
+        let taken = stack.item_count - remainder.item_count;
+        let living = &self.mob_entity.living_entity;
+        if taken == 0 || !living.pickup(item.get_entity(), u32::from(taken)) {
+            return;
+        }
+        let mut remainder = stack;
+        add_to_inventory(
+            &mut self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            &mut remainder,
+        );
+        living.on_item_pickup(item);
+        if remainder.is_empty() {
+            item.get_entity().remove();
+        } else {
+            *item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = remainder;
+            item.init_data_tracker();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         {
@@ -2189,32 +2262,17 @@ impl Mob for VillagerEntity {
         Some("minecraft:villager_v2")
     }
 
-    fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
-        if version < JavaMinecraftVersion::V_1_9 {
-            return None;
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let xp = self.xp.load(Ordering::Relaxed);
+        let mut meta = crate::entity::mob::MobMetadata::new().villager_data(data, xp);
+        if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            meta = meta.baby(true);
         }
-        let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::villager::VILLAGER_DATA,
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
-        .write(&mut metadata, &version)
-        .ok()?;
-        metadata.push(255);
-        Some(metadata.into_boxed_slice())
-    }
-
-    fn mob_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
-        Some(Self::bedrock_metadata(
-            *self
-                .villager_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            self.xp.load(Ordering::Relaxed),
-        ))
+        Some(meta)
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -2382,6 +2440,7 @@ impl Mob for VillagerEntity {
 mod tests {
     use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
     use pumpkin_data::villager::VillagerTradeModifier;
+    use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use super::*;

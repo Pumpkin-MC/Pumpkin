@@ -70,10 +70,8 @@ impl GoToWantedItemGoal {
         let item_pos = target.get_entity().pos.load();
         let target_block = BlockPos::floored_v(item_pos);
         let mob_block = mob_entity.living_entity.entity.block_pos.load();
-        let mut navigator = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob_entity.steered();
+        let mut navigator = steered.navigator();
 
         let reached = (target_block.0.x - mob_block.0.x).abs()
             + (target_block.0.y - mob_block.0.y).abs()
@@ -127,11 +125,7 @@ impl Goal for GoToWantedItemGoal {
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
         self.last_target_block = None;
         self.remaining_cooldown = 0;
     }

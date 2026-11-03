@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use super::{Controls, Goal, to_goal_ticks};
+use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
+use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 
 const DEFAULT_STOP_DISTANCE: f64 = 2.5;
@@ -13,10 +15,15 @@ const SCARE_RANGE_SQ: f64 = 36.0;
 const SCARE_MOVE_SQ: f64 = 0.010_000_000_000_000_002;
 const SCARE_ROTATION: f32 = 5.0;
 
+enum TemptItems {
+    Items(&'static [&'static Item]),
+    Tag(&'static Tag),
+}
+
 pub struct TemptGoal {
     goal_control: Controls,
     speed: f64,
-    tempt_items: &'static [&'static Item],
+    tempt_items: TemptItems,
     can_scare: bool,
     stop_distance: f64,
     target_player: Option<Arc<Player>>,
@@ -34,6 +41,14 @@ impl TemptGoal {
     }
 
     #[must_use]
+    pub fn with_tag(speed: f64, tag: &'static Tag, can_scare: bool) -> Self {
+        Self {
+            tempt_items: TemptItems::Tag(tag),
+            ..Self::new(speed, &[], can_scare)
+        }
+    }
+
+    #[must_use]
     pub fn with_stop_distance(
         speed: f64,
         tempt_items: &'static [&'static Item],
@@ -43,7 +58,7 @@ impl TemptGoal {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
             speed,
-            tempt_items,
+            tempt_items: TemptItems::Items(tempt_items),
             can_scare,
             stop_distance,
             target_player: None,
@@ -61,7 +76,11 @@ impl TemptGoal {
     }
 
     fn is_tempt_item(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
-        stack.item_count > 0 && self.tempt_items.iter().any(|i| i.id == stack.item.id)
+        stack.item_count > 0
+            && match self.tempt_items {
+                TemptItems::Items(items) => items.iter().any(|i| i.id == stack.item.id),
+                TemptItems::Tag(tag) => stack.item.has_tag(tag),
+            }
     }
 
     fn is_holding_tempt_item(&self, player: &Player) -> bool {
@@ -76,11 +95,18 @@ impl TemptGoal {
             .living_entity
             .get_attribute_value(&Attributes::TEMPT_RANGE);
         let world = mob_entity.living_entity.entity.world.load();
+        let conditions = TargetPredicate::create_non_attackable()
+            .ignore_visibility()
+            .set_base_max_distance(range);
 
+        // The conditions scale the range down, so sneaking shortens it.
         world.get_nearest_player(
             mob_entity.living_entity.entity.pos.load(),
             range,
-            |player| player.living_entity.is_part_of_game() && self.is_holding_tempt_item(player),
+            |player| {
+                self.is_holding_tempt_item(player)
+                    && conditions.test(&world, Some(mob), player.as_ref())
+            },
         )
     }
 
@@ -93,6 +119,31 @@ impl TemptGoal {
 }
 
 impl Goal for TemptGoal {
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        let mob_entity = mob.get_mob_entity();
+        let range = mob_entity
+            .living_entity
+            .get_attribute_value(&Attributes::TEMPT_RANGE);
+        let tempted = running
+            || !mob_entity
+                .living_entity
+                .entity
+                .world
+                .load()
+                .get_nearby_players(mob_entity.living_entity.entity.pos.load(), range)
+                .is_empty();
+        Some(GoalReach {
+            players: range,
+            speed: if tempted { self.speed } else { 0.0 },
+            links: self
+                .target_player
+                .iter()
+                .map(|player| player.entity_id())
+                .collect(),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if self.cooldown > 0 {
             self.cooldown -= 1;
@@ -158,10 +209,8 @@ impl Goal for TemptGoal {
             );
 
         let mob_pos = mob_entity.living_entity.entity.pos.load();
-        let mut navigator = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob_entity.steered();
+        let mut navigator = steered.navigator();
         if mob_pos.squared_distance_to_vec(&player_pos) < self.stop_distance * self.stop_distance {
             navigator.stop();
         } else {
@@ -171,11 +220,7 @@ impl Goal for TemptGoal {
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target_player = None;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
         self.cooldown = to_goal_ticks(100);
         self.running = false;
     }

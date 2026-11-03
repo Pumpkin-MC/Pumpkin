@@ -35,7 +35,7 @@ impl JukeboxBlock {
         world.set_block_state(
             position,
             new_state.to_state_id(block),
-            BlockFlags::NOTIFY_LISTENERS,
+            BlockFlags::NOTIFY_ALL,
         );
     }
 
@@ -170,9 +170,13 @@ impl BlockBehaviour for JukeboxBlock {
     }
 
     /// Vanilla: `JukeboxBlock.onStateReplaced()` -> `ItemScatterer.onStateReplaced()`
-    fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {
-        // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
-        // TODO: world.updateComparators(pos, block) when implemented
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::JukeboxStopPlay.name(),
+            args.position.to_centered_f64(),
+        );
+        args.world
+            .update_neighbour_for_output_signal(args.position, args.block);
     }
 
     /// Vanilla: `JukeboxBlock.emitsRedstonePower()` returns true

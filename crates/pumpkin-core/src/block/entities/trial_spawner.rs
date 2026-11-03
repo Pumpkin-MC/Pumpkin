@@ -1061,7 +1061,13 @@ impl TrialSpawner {
             && let Some(living) = entity.get_living_entity()
         {
             let seed = rand::random::<i64>();
-            let items = loot_table.generate_loot(seed);
+            let items = loot_table.generate_loot_with_context(
+                seed,
+                &crate::world::loot::LootContextParameters {
+                    world: Some(world),
+                    ..Default::default()
+                },
+            );
             let mut equipment = living
                 .entity_equipment
                 .lock()
@@ -1092,7 +1098,12 @@ impl TrialSpawner {
 
         // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
         if only_id {
-            crate::entity::mob::spawn::finalize_spawn(&entity, world, None);
+            crate::entity::mob::spawn::finalize_spawn(
+                &entity,
+                world,
+                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
+                None,
+            );
         }
         world.spawn_entity(entity);
 
@@ -1134,7 +1145,13 @@ impl TrialSpawner {
             && let Some(loot_table) = world.get_loot_table(key)
         {
             let seed = rand::random::<i64>();
-            let items = loot_table.generate_loot(seed);
+            let items = loot_table.generate_loot_with_context(
+                seed,
+                &crate::world::loot::LootContextParameters {
+                    world: Some(world),
+                    ..Default::default()
+                },
+            );
             for stack in items {
                 world.drop_stack(&spawner_pos, stack);
                 dropped_any = true;

@@ -30,6 +30,24 @@ impl JavaClient {
                     let (block, state) = world.get_block_and_state(&position);
 
                     if let Some(server_arc) = world.server.upgrade() {
+                        let mut interact_event = PlayerInteractEvent::new(
+                            player,
+                            InteractAction::LeftClickBlock,
+                            block,
+                            Some(position),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut interact_event);
+                        if interact_event.cancelled {
+                            player.try_send_client_packet(&CBlockUpdate::new(
+                                position,
+                                VarInt(i32::from(state.id.as_u16())),
+                            ));
+                            self.update_sequence(player_action.sequence.0);
+                            return;
+                        }
+
                         let mut event =
                             crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
                                 player.clone(),

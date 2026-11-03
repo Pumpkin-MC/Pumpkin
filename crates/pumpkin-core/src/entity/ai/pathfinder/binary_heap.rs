@@ -19,11 +19,9 @@ pub struct BinaryHeap {
 impl BinaryHeap {
     #[must_use]
     pub fn new() -> Self {
-        let mut heap = Vec::with_capacity(1024);
-        heap.push(None);
-
+        // Not preallocated: every mob owns one, most rarely search, and `insert` grows it.
         Self {
-            heap,
+            heap: vec![None],
             position_map: FxHashMap::default(),
             size: 0,
         }
@@ -77,7 +75,8 @@ impl BinaryHeap {
             return None;
         }
 
-        let min_node = self.heap[1].take()?;
+        let mut min_node = self.heap[1].take()?;
+        min_node.heap_idx = -1;
         self.position_map.remove(&min_node.as_vector3());
 
         if self.size == 1 {
@@ -205,7 +204,7 @@ impl BinaryHeap {
 
             if right_child <= self.size
                 && let (Some(node), Some(right)) = (&self.heap[smallest], &self.heap[right_child])
-                && right.f < node.f
+                && (right.f < node.f || (smallest == left_child && right.f == node.f))
             {
                 smallest = right_child;
             }
@@ -236,5 +235,25 @@ impl BinaryHeap {
 impl Default for BinaryHeap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn equal_children_choose_the_right_branch_when_removing_the_minimum() {
+        let mut heap = BinaryHeap::new();
+        for (x, f) in [(0, 0.0), (1, 1.0), (2, 1.0), (3, 2.0)] {
+            let mut node = Node::new(BlockPos::new(x, 0, 0));
+            node.f = f;
+            heap.insert(node);
+        }
+        let order: Vec<_> = std::iter::from_fn(|| heap.pop())
+            .map(|node| node.pos.0.x)
+            .collect();
+        assert_eq!(order, [0, 2, 1, 3]);
     }
 }

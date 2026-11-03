@@ -10,6 +10,56 @@ use pumpkin_data::item_stack::ItemStack;
 pub struct EnchantmentHelper;
 
 impl EnchantmentHelper {
+    /// Returns the highest level on equipment slots allowed by the enchantment.
+    #[must_use]
+    pub fn get_enchantment_level(
+        enchantment: &'static Enchantment,
+        caller: &dyn crate::entity::EntityBase,
+    ) -> i32 {
+        use crate::entity::living::attribute_modifier_slot_matches;
+        use pumpkin_data::data_component_impl::EquipmentSlot;
+        use pumpkin_inventory::Inventory;
+        let Some(living) = caller.get_living_entity() else {
+            return 0;
+        };
+        let level = |slot: &EquipmentSlot, stack: &ItemStack| {
+            if !stack.is_empty()
+                && enchantment
+                    .slots
+                    .iter()
+                    .any(|group| attribute_modifier_slot_matches(group, slot))
+            {
+                stack.get_enchantment_level(enchantment)
+            } else {
+                0
+            }
+        };
+        caller.get_player().map_or_else(
+            || {
+                living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment
+                    .iter()
+                    .map(|(slot, stack)| level(slot, stack))
+                    .max()
+                    .unwrap_or(0)
+            },
+            |player| {
+                let main_hand = level(&EquipmentSlot::MAIN_HAND, &living.held_item(caller));
+                player
+                    .inventory
+                    .equipment_slots
+                    .iter()
+                    .map(|(index, slot)| level(slot, &player.inventory.get_stack(*index)))
+                    .max()
+                    .unwrap_or(0)
+                    .max(main_hand)
+            },
+        )
+    }
+
     /// Iterates through enchantments on an item stack, matching vanilla `runIterationOnItem`.
     pub fn run_iteration_on_item<F>(item_stack: &ItemStack, mut visitor: F)
     where

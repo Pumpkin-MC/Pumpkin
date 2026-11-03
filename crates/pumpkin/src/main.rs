@@ -172,10 +172,11 @@ async fn main() {
         config.telemetry,
         vanilla_data,
         plugin_loaders,
+        true,
     )
     .await
     .unwrap_or_else(|error| {
-        tracing::error!("Failed to initialize world storage: {error}");
+        tracing::error!("{error}");
         exit(1);
     });
     let plugin_wait_time = pumpkin_server.init_plugins().await;

@@ -4,13 +4,17 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::block_state::SoundType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -22,7 +26,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::equip_on_target},
     passive::animal::Animal,
     player::Player,
 };
@@ -34,7 +38,6 @@ const TEMPT_ITEMS: &[&Item] = &[
 ];
 
 pub const FLAG_TAME: u8 = 2;
-pub const FLAG_SADDLE: u8 = 4;
 pub const FLAG_BRED: u8 = 8;
 pub const FLAG_EATING: u8 = 16;
 pub const FLAG_STANDING: u8 = 32;
@@ -72,12 +75,9 @@ impl HorseEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
+            // TODO: RunAroundLikeCrazyGoal at 1, the only way to tame by riding.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -132,20 +132,15 @@ impl HorseEntity {
     pub fn set_tame(&self, val: bool) {
         self.set_flag(FLAG_TAME, val);
     }
-
-    #[must_use]
-    pub fn is_saddled(&self) -> bool {
-        self.has_flag(FLAG_SADDLE)
-    }
-
-    pub fn set_saddled(&self, val: bool) {
-        self.set_flag(FLAG_SADDLE, val);
-    }
 }
 
 impl AgeableMob for HorseEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
+    }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
     }
 }
 
@@ -162,7 +157,99 @@ impl Animal for HorseEntity {
     }
 }
 
+/// Vanilla `AbstractHorse.playStepSound`, shared by every horse that doesn't override it.
+pub(crate) fn play_horse_step_sound(
+    horse: &dyn Mob,
+    pos: &BlockPos,
+    state: &BlockState,
+    can_gallop: bool,
+) {
+    if state.is_liquid() {
+        return;
+    }
+    let entity = horse.get_entity();
+    let above = entity.world.load().get_block_state(&pos.up());
+    let sound_type = if above.id.to_block() == &Block::SNOW {
+        above.get_sound_type()
+    } else {
+        state.get_sound_type()
+    };
+    let volume = sound_type.volume * 0.15;
+    // TODO: gallop once ridden horses move: `tickRidden` resets the gallop counter while the
+    // rider isn't pressing forward, which is always the case without ridden movement.
+    let ridden = entity.has_passengers() && can_gallop;
+    let sound = if ridden || is_wood_sound_type(sound_type) {
+        Sound::EntityHorseStepWood
+    } else if entity.age.load(Ordering::Relaxed) < 0 {
+        Sound::EntityBabyHorseStep
+    } else {
+        Sound::EntityHorseStep
+    };
+    horse.play_entity_sound(sound, volume, sound_type.pitch);
+}
+
+/// Vanilla `AbstractHorse.isWoodSoundType`.
+fn is_wood_sound_type(sound_type: &SoundType) -> bool {
+    matches!(
+        sound_type.name,
+        "WOOD" | "NETHER_WOOD" | "STEM" | "CHERRY_WOOD" | "BAMBOO_WOOD"
+    )
+}
+
+// TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::can_dispenser_equip_into_slot(self, slot)
+    }
+
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        crate::entity::passive::abstract_horse::cause_fall_damage(
+            self,
+            caller,
+            fall_distance,
+            damage_modifier,
+        )
+    }
+
+    fn mob_is_pushable(&self) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.is_tame()
+    }
+
+    fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.saddled_controlling_passenger(None)
+    }
+
+    fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
+        *slot != EquipmentSlot::SADDLE
+            || (self.mob_entity.living_entity.entity.is_alive()
+                && !self.is_baby()
+                && self.is_tame())
+    }
+
+    fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
+        (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityHorseSaddle)
+    }
+
+    fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        play_horse_step_sound(self, pos, state, true);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -201,10 +288,6 @@ impl Mob for HorseEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-    }
-
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
@@ -222,18 +305,7 @@ impl Mob for HorseEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if self.is_tame() && item == &Item::SADDLE && !self.is_saddled() && !self.is_baby() {
-            self.set_saddled(true);
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityHorseSaddle,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
+        if equip_on_target(self, player, item_stack) {
             return true;
         }
 

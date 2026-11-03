@@ -136,6 +136,24 @@ impl BlockEntity for ShulkerBoxBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let facing =
+            match pumpkin_data::block_properties::ShulkerBoxProperties::from_state_id(state_id)
+                .facing
+            {
+                pumpkin_data::block_properties::Facing::Down => 0,
+                pumpkin_data::block_properties::Facing::Up => 1,
+                pumpkin_data::block_properties::Facing::North => 2,
+                pumpkin_data::block_properties::Facing::South => 3,
+                pumpkin_data::block_properties::Facing::West => 4,
+                pumpkin_data::block_properties::Facing::East => 5,
+            };
+        Some(build_shulker_box_actor(self.position, facing, None))
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -269,5 +287,34 @@ impl Clearable for ShulkerBoxBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for shulker boxes.
+#[must_use]
+pub fn build_shulker_box_actor(
+    position: BlockPos,
+    facing: u8,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("ShulkerBox", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_byte("facing", facing as i8)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shulker_box_actor_builder() {
+        let pos = BlockPos::new(4, 64, 4);
+        let nbt = build_shulker_box_actor(pos, 1, Some("Box"));
+        assert_eq!(nbt.get_string("id"), Some("ShulkerBox"));
+        assert_eq!(nbt.get_byte("facing"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
+        assert_eq!(nbt.get_string("CustomName"), Some("Box"));
     }
 }

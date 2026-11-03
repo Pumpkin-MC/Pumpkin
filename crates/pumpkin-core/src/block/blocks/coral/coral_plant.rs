@@ -1,6 +1,8 @@
 use pumpkin_data::{
-    BlockDirection, BlockId, BlockStateId, block_properties::MangroveRootsLikeProperties, tag,
+    BlockDirection, BlockId, BlockStateId, block_properties::MangroveRootsLikeProperties,
+    fluid::Fluid, tag,
 };
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
@@ -30,29 +32,31 @@ impl BlockBehaviour for CoralPlantBlock {
         props.to_state_id(args.block)
     }
     fn placed(&self, args: PlacedArgs<'_>) {
+        let props = CoralPlantLikeProperties::from_state_id(args.state_id);
+        if !props.waterlogged
+            && !scan_for_water(args.world, args.position)
+            && !is_dead_coral(args.block)
         {
-            if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
-                try_schedule_die_tick(args.block, args.world, args.position);
-            }
+            try_schedule_die_tick(args.block, args.world, args.position);
         }
     }
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !scan_for_water(args.world, args.position) && !is_dead_coral(args.block) {
-            let current_state = args.world.get_block_state(args.position);
-            let dead_block_state_id = {
-                let props = CoralPlantLikeProperties::from_state_id(current_state.id);
-                props.to_state_id(get_dead_type(args.block.id).unwrap_or_default().to_block())
-            };
+        let current_state = args.world.get_block_state(args.position);
+        let mut props = CoralPlantLikeProperties::from_state_id(current_state.id);
+        if !props.waterlogged
+            && !scan_for_water(args.world, args.position)
+            && !is_dead_coral(args.block)
+        {
+            props.waterlogged = false;
+            let dead_block_state_id =
+                props.to_state_id(get_dead_type(args.block.id).unwrap_or_default().to_block());
             args.world
                 .set_block_state(args.position, dead_block_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let support_block = args.block_accessor.get_block_state(&args.position.down());
-        if support_block.is_center_solid(BlockDirection::Up) {
-            return true;
-        }
-        false
+        support_block.is_side_solid(BlockDirection::Up)
     }
 
     fn get_state_for_neighbor_update(
@@ -61,9 +65,24 @@ impl BlockBehaviour for CoralPlantBlock {
     ) -> BlockStateId {
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
-            if !support_block.is_center_solid(BlockDirection::Up) {
+            if !support_block.is_side_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }
+        }
+        let props = CoralPlantLikeProperties::from_state_id(args.state_id);
+        if !is_dead_coral(args.block)
+            && !props.waterlogged
+            && !scan_for_water(args.world, args.position)
+        {
+            try_schedule_die_tick(args.block, args.world, args.position);
+        }
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
         }
         args.state_id
     }
