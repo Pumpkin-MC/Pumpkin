@@ -9,9 +9,10 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
-use pumpkin_util::GameMode;
+use pumpkin_util::{GameMode, Hand};
 
 pub struct BowItem;
 
@@ -22,7 +23,14 @@ impl ItemMetadata for BowItem {
 }
 
 impl ItemBehaviour for BowItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        _yaw: f32,
+        _pitch: f32,
+        hand: Hand,
+    ) {
         // Check if player has arrows (or is in creative mode)
         let has_arrows = Self::has_arrows(player);
         let gamemode = player.gamemode.load();
@@ -32,13 +40,12 @@ impl ItemBehaviour for BowItem {
         }
 
         // Get the held item stack
-        let inventory = player.inventory();
-        let stack = inventory.held_item();
+        let stack = player.inventory.get_stack_in_hand(hand);
 
         // Start the bow drawing animation
         player
             .living_entity
-            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
+            .set_active_hand(hand, stack, Self::USE_DURATION);
     }
 
     fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
@@ -90,6 +97,7 @@ impl BowItem {
 
         // Calculate power and fire
         let power = Self::get_power_for_time(use_ticks);
+        let is_creative = gamemode == GameMode::Creative;
 
         // Check for Infinity enchantment
         let has_infinity = weapon
@@ -101,26 +109,35 @@ impl BowItem {
                     .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY)
             });
 
+        let fired_projectiles = ProjectileWeaponItem::draw(weapon, &projectile, is_creative);
+        if fired_projectiles.is_empty() {
+            return;
+        }
+
         let is_crit = (power - 1.0).abs() < f32::EPSILON;
-        Self::shoot(
-            player,
-            weapon,
-            std::slice::from_ref(&projectile),
-            power,
-            1.0,
-            is_crit,
-        );
+        Self::shoot(player, weapon, &fired_projectiles, power, 1.0, is_crit);
 
         // Consume arrow (if not creative and no Infinity)
         if let Some(slot) = arrow_slot
-            && gamemode != GameMode::Creative
+            && !is_creative
             && !(has_infinity && infinite_projectile)
         {
             player.consume_arrow(slot);
         }
 
         // Damage bow
-        player.damage_held_item(1);
+        let active_hand = *player
+            .living_entity
+            .active_hand
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot = if active_hand == Some(Hand::Left) {
+            pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND
+        } else {
+            pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
+        };
+        player.damage_item_in_slot(&slot, 1);
+        player.increment_stat(StatisticCategory::Used, i32::from(weapon.item.id), 1);
     }
 
     /// Check if player has arrows in their inventory
@@ -189,7 +206,7 @@ impl BowItem {
         let sound_pitch = 1.0 / (rand::random::<f32>() * 0.4 + 1.2) + power * 0.5;
         let sound_packet = CSoundEffect::new(
             IdOr::Id(Sound::EntityArrowShoot as u16),
-            SoundCategory::Neutral,
+            SoundCategory::Players,
             &player.position(),
             1.0,
             sound_pitch,

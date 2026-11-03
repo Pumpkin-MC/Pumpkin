@@ -1,15 +1,20 @@
+use std::sync::Arc;
+
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::blocks::weathering_copper::{
     ChangeOverTimeBlock, WeatherState, WeatheringCopper, change_over_time, get_chance_modifier,
     get_first, get_next, get_previous, get_weather_state,
 };
 use crate::block::{
-    BlockBehaviour, BlockMetadata, GetComparatorOutputArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, BlockMetadata, GetComparatorOutputArgs, OnNeighborUpdateArgs, PlacedArgs,
     RandomTickArgs,
 };
+use crate::world::World;
+use pumpkin_data::Block;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 type CopperBulbLikeProperties = pumpkin_data::block_properties::CopperBulbLikeProperties;
@@ -56,48 +61,45 @@ impl BlockMetadata for CopperBulbBlock {
     }
 }
 
-impl BlockBehaviour for CopperBulbBlock {
-    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = CopperBulbLikeProperties::default(args.block);
-        let is_receiving_power = block_receives_redstone_power(args.world, args.position);
-        if is_receiving_power {
-            props.lit = true;
-            args.world.play_block_sound(
-                Sound::BlockCopperBulbTurnOn,
-                SoundCategory::Blocks,
-                *args.position,
-            );
-            props.powered = true;
+impl CopperBulbBlock {
+    pub fn check_and_flip(
+        &self,
+        state_id: BlockStateId,
+        world: &Arc<World>,
+        position: &BlockPos,
+        block: &Block,
+    ) {
+        let mut props = CopperBulbLikeProperties::from_state_id(state_id);
+        let is_receiving_power = block_receives_redstone_power(world, position);
+        if props.powered != is_receiving_power {
+            if !props.powered {
+                props.lit = !props.lit;
+                world.play_block_sound(
+                    if props.lit {
+                        Sound::BlockCopperBulbTurnOn
+                    } else {
+                        Sound::BlockCopperBulbTurnOff
+                    },
+                    SoundCategory::Blocks,
+                    *position,
+                );
+            }
+            props.powered = is_receiving_power;
+            world.set_block_state(position, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         }
-        props.to_state_id(args.block)
+    }
+}
+
+impl BlockBehaviour for CopperBulbBlock {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        if Block::from_state_id(args.old_state_id) != args.block {
+            self.check_and_flip(args.state_id, args.world, args.position, args.block);
+        }
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        {
-            let state = args.world.get_block_state(args.position);
-            let mut props = CopperBulbLikeProperties::from_state_id(state.id);
-            let is_receiving_power = block_receives_redstone_power(args.world, args.position);
-            if props.powered != is_receiving_power {
-                if !props.powered {
-                    props.lit = !props.lit;
-                    args.world.play_block_sound(
-                        if props.lit {
-                            Sound::BlockCopperBulbTurnOn
-                        } else {
-                            Sound::BlockCopperBulbTurnOff
-                        },
-                        SoundCategory::Blocks,
-                        *args.position,
-                    );
-                }
-                props.powered = is_receiving_power;
-                args.world.set_block_state(
-                    args.position,
-                    props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_ALL,
-                );
-            }
-        }
+        let state = args.world.get_block_state(args.position);
+        self.check_and_flip(state.id, args.world, args.position, args.block);
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {

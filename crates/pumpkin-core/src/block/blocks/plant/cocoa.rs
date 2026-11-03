@@ -8,8 +8,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
-    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    PathComputationType, RandomTickArgs,
+    BlockBehaviour, BlockIsReplacing, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs, PathComputationType, RandomTickArgs,
 };
 use crate::entity::EntityBase;
 
@@ -35,9 +35,8 @@ impl CocoaBlock {
 
 impl BlockBehaviour for CocoaBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let state_id = args.block_accessor.get_block_state_id(args.position);
-        if state_id != Block::AIR.default_state.id {
-            let props = CocoaProperties::from_state_id(state_id);
+        if args.player.is_none() {
+            let props = CocoaProperties::from_state_id(args.state.id);
             return Self::can_survive(args.block_accessor, args.position, props.facing);
         }
         for facing in [
@@ -56,6 +55,14 @@ impl BlockBehaviour for CocoaBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CocoaProperties::default(args.block);
         props.age = 0;
+
+        if args.replacing == BlockIsReplacing::None
+            && let Some(facing) = args.direction.to_horizontal_facing()
+            && Self::can_survive(args.world, args.position, facing)
+        {
+            props.facing = facing;
+            return props.to_state_id(args.block);
+        }
 
         let directions = args.player.get_entity().get_entity_facing_order();
         for dir in directions {

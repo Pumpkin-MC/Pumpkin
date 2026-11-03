@@ -23,14 +23,15 @@ use crate::{
         EntityRemoveEventData, EntityResurrectEventData, EntityShootBowEventData,
         EntitySpawnEventData, EntitySpellCastEventData, EntityTameEventData,
         EntityTargetBlockEventData, EntityTargetEventData, EntityTargetLivingEntityEventData,
-        EntityTeleportEventData, EntityToggleGlideEventData, EntityToggleSwimEventData,
-        EntityTransformEventData, EntityUnleashEventData, Event, ExpBottleEventData,
-        ExplosionPrimeEventData, FireworkExplodeEventData, FoodLevelChangeEventData,
-        HorseJumpEventData, ItemDespawnEventData, ItemMergeEventData, ItemSpawnEventData,
-        LingeringPotionSplashEventData, PigZapEventData, PigZombieAngerEventData,
-        PiglinBarterEventData, PlayerDeathEventData, PotionSplashEventData, ProjectileHitEventData,
-        ProjectileLaunchEventData, SheepDyeWoolEventData, SheepRegrowWoolEventData,
-        SlimeSplitEventData, SpawnerSpawnEventData, StriderTemperatureChangeEventData,
+        EntityTeleportEventData, EntityToggleGlideEventData, EntityToggleSitEventData,
+        EntityToggleSwimEventData, EntityTransformEventData, EntityUnleashEventData, Event,
+        ExpBottleEventData, ExplosionPrimeEventData, FireworkExplodeEventData,
+        FoodLevelChangeEventData, HorseJumpEventData, ItemDespawnEventData, ItemMergeEventData,
+        ItemSpawnEventData, LingeringPotionSplashEventData, PigZapEventData,
+        PigZombieAngerEventData, PiglinBarterEventData, PlayerDeathEventData,
+        PotionSplashEventData, ProjectileHitEventData, ProjectileLaunchEventData,
+        SheepDyeWoolEventData, SheepRegrowWoolEventData, SlimeSplitEventData,
+        SpawnerSpawnEventData, StriderTemperatureChangeEventData, TargetReason as WitTargetReason,
         TrialSpawnerSpawnEventData, VillagerAcquireTradeEventData, VillagerCareerChangeEventData,
         VillagerReplenishTradeEventData, VillagerReputationChangeEventData,
         WardenAngerChangeEventData,
@@ -67,8 +68,10 @@ use pumpkin_core::plugin::entity::{
     entity_remove::EntityRemoveEvent,
     entity_spawn::EntitySpawnEvent,
     entity_spell_cast::EntitySpellCastEvent,
+    entity_target::TargetReason,
     entity_target_block::EntityTargetBlockEvent,
     entity_target_living_entity::EntityTargetLivingEntityEvent,
+    entity_toggle_sit::EntityToggleSitEvent,
     entity_toggle_swim::EntityToggleSwimEvent,
     entity_unleash::EntityUnleashEvent,
     exp_bottle::ExpBottleEvent,
@@ -281,6 +284,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed
             father_id: self.father_id,
             mother_id: self.mother_id,
             child_id: self.child_id,
+            experience: self.experience,
             cancelled: self.cancelled,
         })
     }
@@ -291,6 +295,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed
                 father_id: data.father_id,
                 mother_id: data.mother_id,
                 child_id: data.child_id,
+                experience: data.experience,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -545,6 +550,7 @@ impl ToFromWasmEvent
         Event::EntityTargetEvent(EntityTargetEventData {
             entity_id: self.entity_id,
             target_id: self.target_id,
+            reason: to_wit_target_reason(self.reason),
             cancelled: self.cancelled,
         })
     }
@@ -554,10 +560,45 @@ impl ToFromWasmEvent
             Event::EntityTargetEvent(data) => Self {
                 entity_id: data.entity_id,
                 target_id: data.target_id,
+                reason: from_wit_target_reason(data.reason),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
         }
+    }
+}
+
+const fn to_wit_target_reason(reason: TargetReason) -> WitTargetReason {
+    match reason {
+        TargetReason::ClosestPlayer => WitTargetReason::ClosestPlayer,
+        TargetReason::ClosestEntity => WitTargetReason::ClosestEntity,
+        TargetReason::RandomTarget => WitTargetReason::RandomTarget,
+        TargetReason::TargetAttackedEntity => WitTargetReason::TargetAttackedEntity,
+        TargetReason::TargetAttackedNearbyEntity => WitTargetReason::TargetAttackedNearbyEntity,
+        TargetReason::TargetAttackedOwner => WitTargetReason::TargetAttackedOwner,
+        TargetReason::OwnerAttackedTarget => WitTargetReason::OwnerAttackedTarget,
+        TargetReason::PigZombieTarget => WitTargetReason::PigZombieTarget,
+        TargetReason::Angry => WitTargetReason::Angry,
+        TargetReason::ForgotTarget => WitTargetReason::ForgotTarget,
+        TargetReason::Fleeing => WitTargetReason::Fleeing,
+        TargetReason::Unknown => WitTargetReason::Unknown,
+    }
+}
+
+const fn from_wit_target_reason(reason: WitTargetReason) -> TargetReason {
+    match reason {
+        WitTargetReason::ClosestPlayer => TargetReason::ClosestPlayer,
+        WitTargetReason::ClosestEntity => TargetReason::ClosestEntity,
+        WitTargetReason::RandomTarget => TargetReason::RandomTarget,
+        WitTargetReason::TargetAttackedEntity => TargetReason::TargetAttackedEntity,
+        WitTargetReason::TargetAttackedNearbyEntity => TargetReason::TargetAttackedNearbyEntity,
+        WitTargetReason::TargetAttackedOwner => TargetReason::TargetAttackedOwner,
+        WitTargetReason::OwnerAttackedTarget => TargetReason::OwnerAttackedTarget,
+        WitTargetReason::PigZombieTarget => TargetReason::PigZombieTarget,
+        WitTargetReason::Angry => TargetReason::Angry,
+        WitTargetReason::ForgotTarget => TargetReason::ForgotTarget,
+        WitTargetReason::Fleeing => TargetReason::Fleeing,
+        WitTargetReason::Unknown => TargetReason::Unknown,
     }
 }
 
@@ -1134,6 +1175,27 @@ impl ToFromWasmEvent for EntityTargetLivingEntityEvent {
                 entity_id: data.entity_id,
                 target_id: data.target_id,
                 reason: data.reason,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for EntityToggleSitEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::EntityToggleSitEvent(EntityToggleSitEventData {
+            entity_id: self.entity_id,
+            sitting: self.sitting,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::EntityToggleSitEvent(data) => Self {
+                entity_id: data.entity_id,
+                sitting: data.sitting,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

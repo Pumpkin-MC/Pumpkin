@@ -568,6 +568,34 @@ impl BlockIsReplacing {
     }
 }
 
+/// Vanilla `Block.isExceptionForConnection`.
+#[must_use]
+pub fn is_exception_for_connection(block: &Block) -> bool {
+    block.has_tag(&tag::Block::MINECRAFT_LEAVES)
+        || block == &Block::BARRIER
+        || block == &Block::CARVED_PUMPKIN
+        || block == &Block::JACK_O_LANTERN
+        || block == &Block::MELON
+        || block == &Block::PUMPKIN
+        || block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES)
+}
+
+/// Vanilla `Block.canSupportCenter`.
+#[must_use]
+pub fn can_support_center(
+    block_accessor: &dyn BlockAccessor,
+    pos: &BlockPos,
+    direction: BlockDirection,
+) -> bool {
+    let (block, state) = block_accessor.get_block_and_state(pos);
+    if direction == BlockDirection::Down
+        && block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
+    {
+        return false;
+    }
+    state.is_center_solid(direction)
+}
+
 /// Vanilla `AbstractContainerMenu.getRedstoneSignalFromBlockEntity`: read a block
 /// entity's own inventory as a comparator would.
 #[must_use]

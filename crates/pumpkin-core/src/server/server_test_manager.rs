@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
 
 use async_trait::async_trait;
@@ -14,7 +14,6 @@ use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
-use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::{
@@ -26,9 +25,15 @@ use crate::{
     world::World,
 };
 
-static GAME_TEST_QUEUE: LazyLock<Mutex<Vec<GameTestQueueEntry>>> =
-    LazyLock::new(|| Mutex::new(Vec::new()));
+static GAME_TEST_QUEUE: LazyLock<StdMutex<Vec<GameTestQueueEntry>>> =
+    LazyLock::new(|| StdMutex::new(Vec::new()));
 static STOP_GAME_TESTS: AtomicBool = AtomicBool::new(false);
+static PENDING_GAME_TESTS: AtomicUsize = AtomicUsize::new(0);
+
+#[must_use]
+pub fn has_pending_game_tests() -> bool {
+    STOP_GAME_TESTS.load(Ordering::Acquire) || PENDING_GAME_TESTS.load(Ordering::Acquire) > 0
+}
 
 #[derive(Clone, Copy)]
 struct ForcedGameTestChunk {
@@ -109,16 +114,23 @@ impl GameTestReporter for GameTestWorldReporter {
     }
 }
 
-pub async fn enqueue_game_test(request: GameTestQueueEntry) {
-    GAME_TEST_QUEUE.lock().await.push(request);
+pub fn enqueue_game_test(request: GameTestQueueEntry) {
+    let mut queue = GAME_TEST_QUEUE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    queue.push(request);
+    PENDING_GAME_TESTS.store(queue.len(), Ordering::Release);
 }
 
-pub async fn stop_game_tests() {
+pub fn stop_game_tests() {
     // Keep the queue mutex held while publishing the stop request. drain_game_test_queue
     // takes the same mutex before consuming STOP_GAME_TESTS, so a stop+new-run command
     // cannot race between the runner-clear and queue-drain phases.
-    let mut queue = GAME_TEST_QUEUE.lock().await;
+    let mut queue = GAME_TEST_QUEUE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     queue.clear();
+    PENDING_GAME_TESTS.store(0, Ordering::Release);
     STOP_GAME_TESTS.store(true, Ordering::Release);
 }
 
@@ -127,10 +139,13 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     // flag and draining requests. This closes the async race where a new /test run
     // could otherwise be drained before the old runner was cleared.
     let queued = {
-        let mut queue = GAME_TEST_QUEUE.lock().await;
+        let mut queue = GAME_TEST_QUEUE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if STOP_GAME_TESTS.swap(false, Ordering::AcqRel) {
             runner.clear();
         }
+        PENDING_GAME_TESTS.store(0, Ordering::Release);
         std::mem::take(&mut *queue)
     };
 

@@ -8,7 +8,10 @@ use rand::RngExt;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
-use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+    RandomTickArgs,
+};
 
 type TorchFlowerProperties = TorchflowerCropLikeProperties;
 
@@ -25,14 +28,14 @@ impl BlockBehaviour for TorchFlowerBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+        <Self as CropBlockBase>::can_place_at(self, &args)
     }
 
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+        <Self as CropBlockBase>::get_state_for_neighbor_update(
             self,
             args.world,
             args.position,
@@ -40,8 +43,12 @@ impl BlockBehaviour for TorchFlowerBlock {
         )
     }
 
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        <Self as CropBlockBase>::on_entity_collision(self, &args);
+    }
+
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if rand::rng().random_range(0..2) != 0 {
+        if rand::rng().random_range(0..3) != 0 {
             <Self as CropBlockBase>::random_tick(self, args.world, args.position);
         }
     }

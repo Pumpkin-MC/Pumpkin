@@ -84,6 +84,7 @@ impl GameProfileResult {
                     match lookup_profile_by_name_blocking(
                         name,
                         &server.advanced_config.networking.java.authentication,
+                        Some(&server.runtime),
                     ) {
                         Ok(Some((uuid, resolved_name))) => {
                             server

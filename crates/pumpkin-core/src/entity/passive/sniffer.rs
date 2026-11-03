@@ -3,15 +3,18 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -186,7 +189,11 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
             VarInt(drop_tick),
         );
-        world.send_entity_status(entity, EntityStatus::SnifferDiggingSound, None);
+        world.send_entity_status(
+            entity,
+            EntityStatus::SnifferDiggingSound,
+            ActorEventID::None,
+        );
     }
 
     pub fn on_digging_complete(&self, success: bool) {
@@ -310,6 +317,11 @@ impl AgeableMob for SnifferEntity {
 }
 
 impl Animal for SnifferEntity {
+    fn play_eating_sound(&self) {
+        let pitch = 0.8 + self.get_random().random::<f32>() * 0.4;
+        self.play_entity_sound(Sound::EntitySnifferEat, 1.0, pitch);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
             || SNIFFER_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -317,6 +329,14 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -385,6 +405,6 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntitySnifferEat)
+        self.animal_interact(player, item_stack)
     }
 }

@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use super::{Controls, Goal, GoalReach};
 use crate::entity::ai::goal::try_find_water::TryFindWaterGoal;
 use crate::entity::ai::util::default_random_pos;
+use crate::entity::passive::abstract_horse::AbstractHorse;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 
 const WATER_SEARCH_XZ: i32 = 5;
@@ -19,6 +20,7 @@ pub struct EscapeDangerGoal {
     goal_control: Controls,
     target: Option<Vector3<f64>>,
     running: bool,
+    calm_while_mob_controlled: bool,
 }
 
 impl EscapeDangerGoal {
@@ -29,7 +31,16 @@ impl EscapeDangerGoal {
             goal_control: Controls::MOVE,
             target: None,
             running: false,
+            calm_while_mob_controlled: false,
         })
+    }
+
+    /// Horses don't panic while they count as mob controlled.
+    #[must_use]
+    pub fn mount(speed: f64) -> Box<Self> {
+        let mut goal = Self::new(speed);
+        goal.calm_while_mob_controlled = true;
+        goal
     }
 
     #[must_use]
@@ -107,7 +118,12 @@ impl Goal for EscapeDangerGoal {
     }
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !Self::should_panic(mob) {
+        if !Self::should_panic(mob)
+            || (self.calm_while_mob_controlled
+                && mob
+                    .as_abstract_horse()
+                    .is_some_and(AbstractHorse::is_mob_controlled))
+        {
             return false;
         }
 

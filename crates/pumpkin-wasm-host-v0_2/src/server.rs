@@ -39,22 +39,30 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
         let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
 
-        let mut sys = sysinfo::System::new_all();
-        sys.refresh_all();
+        let sys = sysinfo::System::new_all().ok();
 
-        let cpu_count = (has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU))
-            .then(|| sys.cpus().len() as u32);
+        let cpu_count = if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU) {
+            sys.as_ref().map(|s| s.cpus().len() as u32)
+        } else {
+            None
+        };
 
         let (total_memory, used_memory) =
             if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM) {
-                (Some(sys.total_memory()), Some(sys.used_memory()))
+                (
+                    sys.as_ref().map(sysinfo::System::total_memory),
+                    sys.as_ref().map(sysinfo::System::used_memory),
+                )
             } else {
                 (None, None)
             };
 
         let (os_name, os_version) =
             if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_OS) {
-                (sysinfo::System::name(), sysinfo::System::os_version())
+                (
+                    sysinfo::System::name().ok(),
+                    sysinfo::System::os_version().ok(),
+                )
             } else {
                 (None, None)
             };

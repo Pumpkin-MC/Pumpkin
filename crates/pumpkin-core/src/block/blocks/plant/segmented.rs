@@ -76,7 +76,7 @@ pub trait Segmented: BlockBehaviour {
 
     fn can_update_at(&self, ctx: CanUpdateAtArgs<'_>) -> bool {
         let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
-        self.can_add_segment(&current_props)
+        !ctx.player.get_entity().is_sneaking() && self.can_add_segment(&current_props)
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
