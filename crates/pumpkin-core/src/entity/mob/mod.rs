@@ -905,10 +905,10 @@ impl MobEntity {
         pos: &BlockPos,
         reason: spawn::EntitySpawnReason,
     ) -> bool {
-        reason.is_spawner()
-            || world
-                .get_block_state(&pos.down())
-                .is_side_solid(BlockDirection::Up)
+        reason.is_spawner() || {
+            let state = world.get_block_state(&pos.down());
+            state.is_side_solid(BlockDirection::Up) && state.luminance < 14
+        }
     }
 
     pub fn check_monster_spawn_rules(
@@ -1687,6 +1687,14 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn mob_is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
+    fn pushes_entities(&self) -> bool {
+        true
+    }
+
     /// See [`EntityBase::sound_source`].
     fn mob_sound_source(&self) -> SoundCategory {
         self.get_entity().entity_type.sound_source
@@ -1815,6 +1823,10 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn ignores_block_triggers(&self) -> bool {
+        false
+    }
+
     fn on_removed(&self) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
@@ -1920,13 +1932,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn make_sound(&self, sound: pumpkin_data::sound::Sound) {
         let custom_sound = self.as_custom_sound();
-        self.get_mob_entity().living_entity.make_sound(
+        let living_entity = &self.get_mob_entity().living_entity;
+        living_entity.make_sound(
             sound,
             custom_sound.map_or_else(
                 || self.sound_source(),
                 crate::entity::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, crate::entity::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || living_entity.get_pitch(),
+                crate::entity::custom_sound::CustomSound::voice_pitch,
+            ),
         );
     }
 
