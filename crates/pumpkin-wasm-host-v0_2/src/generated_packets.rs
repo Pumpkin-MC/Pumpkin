@@ -3107,6 +3107,16 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CContainerSetData(data) => {
+            let p = pumpkin_protocol::bedrock::client::CContainerSetData {
+                container_id: data.container_id.try_into().unwrap(),
+                id: VarInt(data.id),
+                value: VarInt(data.value),
+            };
+            let mut buf = Vec::new();
+            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CDisconnect(data) => {
             let p = pumpkin_protocol::bedrock::client::CDisconnect {
                 reason: VarInt(data.reason),
@@ -3581,6 +3591,18 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CContainerOp
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CContainerSetData {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CContainerSetData(
+            crate::pumpkin::plugin::bedrock_packets::CContainerSetData {
+                container_id: self.container_id.try_into().unwrap(),
+                id: self.id.0.try_into().unwrap(),
+                value: self.value.0.try_into().unwrap(),
+            },
+        )
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CDisconnect {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CDisconnect(crate::pumpkin::plugin::bedrock_packets::CDisconnect {
@@ -3900,6 +3922,9 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CContainerOpen>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CContainerSetData>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CDisconnect>() {

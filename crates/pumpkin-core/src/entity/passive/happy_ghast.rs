@@ -127,6 +127,21 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        true
+    }
+
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        *slot == pumpkin_data::data_component_impl::EquipmentSlot::BODY
+    }
+
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
     /// Vanilla `HappyGhast` steps silently.
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 

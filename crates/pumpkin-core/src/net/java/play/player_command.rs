@@ -44,8 +44,11 @@ impl JavaClient {
             }
             Action::LeaveBed => player.wake_up(),
 
-            Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
+            Action::StartHorseJump | Action::StopHorseJump => {
                 debug!("todo");
+            }
+            Action::OpenVehicleInventory => {
+                player.open_vehicle_inventory();
             }
             Action::StartFlyingElytra => {
                 player.try_start_fall_flying(server);

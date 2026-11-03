@@ -181,12 +181,12 @@ pub trait AgeableMob: Mob {
     fn age_up(&self, seconds: i32, forced: bool) {
         let mut age = self.get_age();
         let old_age = age;
-        age += seconds * 20;
+        age = age.wrapping_add(seconds.wrapping_mul(20));
         if age > 0 {
             age = 0;
         }
 
-        let delta = age - old_age;
+        let delta = age.wrapping_sub(old_age);
         self.set_age(age);
 
         let data = self.get_ageable_data();

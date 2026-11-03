@@ -7,6 +7,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
@@ -19,6 +20,27 @@ pub trait Animal: Mob {
             &entity.world.load(),
             uuid::Uuid::new_v4(),
         )
+    }
+
+    /// Extra partner checks on top of the type and love checks in `BreedGoal`.
+    fn can_mate(&self, _partner: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Returns `false` when a plugin cancels.
+    fn set_in_love(&self, player: &Arc<Player>) -> bool {
+        let Some(ticks) = self.approve_love(Some(player.entity_id()), 600) else {
+            return false;
+        };
+        let mob_entity = self.get_mob_entity();
+        mob_entity.set_love_ticks(ticks, Some(player.gameprofile.id));
+        let entity = &mob_entity.living_entity.entity;
+        entity.world.load().send_entity_status(
+            entity,
+            pumpkin_data::entity::EntityStatus::InLoveHearts,
+            ActorEventID::InLoveHearts,
+        );
+        true
     }
 
     /// Animals prefer grass, then bright spots.
@@ -72,19 +94,12 @@ pub trait Animal: Mob {
             if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
 
-                let Some(ticks) = self.approve_love(Some(player.entity_id()), 600) else {
+                if !self.set_in_love(player) {
                     return true;
-                };
-                mob_entity.set_love_ticks(ticks, Some(player.gameprofile.id));
+                }
                 let entity = &mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.pos.load();
-
-                world.send_entity_status(
-                    entity,
-                    pumpkin_data::entity::EntityStatus::InLoveHearts,
-                    ActorEventID::InLoveHearts,
-                );
 
                 world.spawn_particle(
                     pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
@@ -139,25 +154,7 @@ pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
     None
 }
 
-#[must_use]
-pub fn get_carpet_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
-    match item.registry_key {
-        "white_carpet" => Some(0),
-        "orange_carpet" => Some(1),
-        "magenta_carpet" => Some(2),
-        "light_blue_carpet" => Some(3),
-        "yellow_carpet" => Some(4),
-        "lime_carpet" => Some(5),
-        "pink_carpet" => Some(6),
-        "gray_carpet" => Some(7),
-        "light_gray_carpet" => Some(8),
-        "cyan_carpet" => Some(9),
-        "purple_carpet" => Some(10),
-        "blue_carpet" => Some(11),
-        "brown_carpet" => Some(12),
-        "green_carpet" => Some(13),
-        "red_carpet" => Some(14),
-        "black_carpet" => Some(15),
-        _ => None,
-    }
+/// Base experience of animals and water creatures, rolled on every death.
+pub fn experience_reward<M: Mob + ?Sized>(mob: &M) -> u32 {
+    1 + mob.get_random().random_range(0..3)
 }

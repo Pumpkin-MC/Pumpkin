@@ -127,7 +127,11 @@ macro_rules! impl_block_entity_for_chest {
                 &self,
                 state_id: pumpkin_data::BlockStateId,
             ) -> Option<pumpkin_nbt::compound::NbtCompound> {
-                $crate::block::entities::bedrock::build_chest_actor(self.position, state_id, None)
+                $crate::block::entities::chest_like_block_entity::build_chest_actor(
+                    self.position,
+                    state_id,
+                    None,
+                )
             }
 
             fn as_any(&self) -> &dyn std::any::Any {
@@ -407,4 +411,62 @@ macro_rules! impl_chest_helper_methods {
             }
         }
     };
+}
+
+/// Builds the Bedrock block-actor NBT for chests and trapped chests with double-chest pairing.
+#[must_use]
+pub fn build_chest_actor(
+    position: pumpkin_util::math::position::BlockPos,
+    state_id: pumpkin_data::BlockStateId,
+    custom_name: Option<&str>,
+) -> Option<pumpkin_nbt::compound::NbtCompound> {
+    use pumpkin_data::{
+        BlockState,
+        block_properties::{ChestLikeProperties, ChestType},
+        tag::Taggable,
+    };
+
+    let (block, _) = BlockState::from_id_with_block(state_id);
+    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
+        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+    {
+        return None;
+    }
+
+    let mut builder =
+        super::bedrock::BedrockBlockActorBuilder::new("Chest", position).custom_name(custom_name);
+
+    let properties = ChestLikeProperties::from_state_id(state_id);
+    if properties.r#type != ChestType::Single {
+        let direction = if properties.r#type == ChestType::Left {
+            properties.facing.rotate_clockwise()
+        } else {
+            properties.facing.rotate_counter_clockwise()
+        };
+        let pair = position.offset(direction.to_offset());
+        builder = builder
+            .put_int("pairx", pair.0.x)
+            .put_int("pairz", pair.0.z);
+        if properties.r#type == ChestType::Right {
+            builder = builder.put_bool("pairlead", true);
+        }
+    }
+
+    Some(builder.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn chest_actor_builder() {
+        let pos = BlockPos::new(7, 64, 7);
+        let single = build_chest_actor(pos, Block::CHEST.default_state.id, None).expect("chest");
+        assert_eq!(single.get_string("id"), Some("Chest"));
+        assert_eq!(single.get_bool("isMovable"), Some(true));
+        assert!(single.get_int("pairx").is_none());
+    }
 }

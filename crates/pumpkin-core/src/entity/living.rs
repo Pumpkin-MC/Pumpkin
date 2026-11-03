@@ -220,6 +220,9 @@ pub struct EffectSource<'a> {
 }
 
 impl LivingEntity {
+    pub(crate) const DEFAULT_OFF_GROUND_SPEED: f64 = 0.02;
+    pub(crate) const FRICTION_SPEED_THRESHOLD: f64 = 0.6;
+
     pub fn is_dead_or_dying(&self) -> bool {
         self.health.load() <= 0.0 || self.dead.load(Relaxed)
     }
@@ -508,15 +511,17 @@ impl LivingEntity {
             })
             .collect();
         let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
+        let world = self.entity.world.load();
+        world.send_to_tracking_players(&self.entity, &je_packet);
 
-        let mut sent_editioned = false;
+        let mut armor_changed = false;
         for (slot, stack) in equipment {
             if *slot == EquipmentSlot::MAIN_HAND {
                 self.update_weapon_attributes(stack);
             }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
-                    120
+                    119
                 } else {
                     0
                 };
@@ -530,21 +535,48 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().send_to_tracking_players_editioned(
-                    &self.entity,
-                    &je_packet,
-                    &be_packet,
-                );
-                sent_editioned = true;
+                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
+            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
+                armor_changed = true;
             }
         }
 
-        if !sent_editioned {
-            self.entity
-                .world
-                .load()
-                .send_to_tracking_players(&self.entity, &je_packet);
+        if armor_changed {
+            let armor_packet = self.bedrock_armor_packet(equipment);
+            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
         }
+    }
+
+    #[must_use]
+    pub fn bedrock_armor_packet(
+        &self,
+        overrides: &[(EquipmentSlot, ItemStack)],
+    ) -> pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+        use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+
+        let equipment_guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot_desc = |target: &EquipmentSlot| -> NetworkItemStackDescriptor {
+            if let Some((_, stack)) = overrides.iter().rfind(|(slot, _)| slot == target) {
+                NetworkItemStackDescriptor::from(stack)
+            } else {
+                let stack = equipment_guard.get(target);
+                NetworkItemStackDescriptor::from(&stack)
+            }
+        };
+
+        let packet = pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            head: slot_desc(&EquipmentSlot::HEAD),
+            chest: slot_desc(&EquipmentSlot::CHEST),
+            legs: slot_desc(&EquipmentSlot::LEGS),
+            feet: slot_desc(&EquipmentSlot::FEET),
+            body: slot_desc(&EquipmentSlot::BODY),
+        };
+        drop(equipment_guard);
+        packet
     }
 
     /// Applies the held item's attack attribute modifiers to this entity's
@@ -705,7 +737,29 @@ impl LivingEntity {
         }
     }
 
-    /// Picks up an Item entity or XP Orb
+    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity) {
+        let Some(owner) = item.get_owner_entity() else {
+            return;
+        };
+        let Some(player) = owner.get_player() else {
+            return;
+        };
+        let item_id = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .registry_key
+            .to_string();
+        player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
+            entity_type: format!("minecraft:{}", self.entity.entity_type.resource_name),
+            item_id,
+            is_baby: self.is_baby(),
+            player_wearing_safe_armor: crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(&player.living_entity),
+        });
+    }
+
+    /// Picks up an item entity or XP orb.
     pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         let mut pickup_event =
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
@@ -1570,6 +1624,10 @@ impl LivingEntity {
         if let Some(mob) = caller.get_mob() {
             mob.before_mob_ai_step();
         }
+        let client_controlled = caller.get_mob().is_some()
+            && caller
+                .get_controlling_passenger()
+                .is_some_and(|rider| rider.get_player().is_some());
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -1592,6 +1650,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
         } else if let Some(mob) = caller.get_mob()
             && !mob.get_mob_entity().is_no_ai()
+            && !client_controlled
         {
             // Prepare old motion before controllers produce this tick's inputs.
             mob.get_mob_entity().server_ai_step(mob, caller);
@@ -1642,11 +1701,14 @@ impl LivingEntity {
         // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
         let effective_ai = caller
             .get_mob()
-            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
+            && !client_controlled;
 
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
+        if client_controlled {
+            self.entity.velocity.store(Vector3::default());
+        } else if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
         } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
@@ -1675,6 +1737,7 @@ impl LivingEntity {
 
         if let Some(mob) = caller.get_mob() {
             mob.mob_ai_step();
+            crate::entity::mob::pick_up_nearby_items(mob);
             mob.get_mob_entity()
                 .body_rotation_control
                 .lock()
@@ -1733,7 +1796,7 @@ impl LivingEntity {
 
     /// `getFrictionInfluencedSpeed`.
     pub(crate) fn friction_influenced_speed(speed: f64, block_friction: f64) -> f64 {
-        if block_friction > 0.6 {
+        if block_friction > Self::FRICTION_SPEED_THRESHOLD {
             speed * 0.216_000_02 / block_friction.powi(3)
         } else {
             speed
@@ -1790,9 +1853,10 @@ impl LivingEntity {
         let speed = if self.entity.on_ground.load(Relaxed) {
             Self::friction_influenced_speed(effective_speed, block_friction)
         } else {
-            caller
-                .get_player()
-                .map_or(0.02, super::player::Player::get_off_ground_speed)
+            caller.get_player().map_or(
+                Self::DEFAULT_OFF_GROUND_SPEED,
+                super::player::Player::get_off_ground_speed,
+            )
         };
         let friction = block_friction * air_drag;
 
@@ -2195,12 +2259,25 @@ impl LivingEntity {
         }
     }
 
+    /// Applies fall damage through the mob's override when it has one.
     pub fn handle_fall_damage(
         &self,
         caller: &dyn EntityBase,
         fall_distance: f32,
-        damage_per_distance: f32,
-    ) {
+        damage_modifier: f32,
+    ) -> bool {
+        caller.get_mob().map_or_else(
+            || self.cause_fall_damage(caller, fall_distance, damage_modifier),
+            |mob| mob.cause_fall_damage(caller, fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
         let may_fly = caller.get_player().is_some_and(|player| {
             player
                 .abilities
@@ -2209,7 +2286,7 @@ impl LivingEntity {
                 .allow_flying
         });
         if may_fly || self.is_immune_to_fall_damage() {
-            return;
+            return false;
         }
 
         // Vanilla parity: the fall_damage gamerule only affects players.
@@ -2223,7 +2300,7 @@ impl LivingEntity {
                 .game_rules
                 .fall_damage
         {
-            return;
+            return false;
         }
 
         if fall_distance >= 2.0
@@ -2236,25 +2313,63 @@ impl LivingEntity {
             );
         }
 
-        let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
-        let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
+        self.propagate_fall_to_passengers(fall_distance, damage_modifier);
+        let damage = self.calculate_fall_damage(caller, fall_distance, damage_modifier);
+        if damage <= 0 {
+            return false;
+        }
+        caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
+        self.play_block_fall_sound(caller);
+        self.damage(caller, damage as f32, DamageType::FALL);
+        true
+    }
 
-        let damage = (unsafe_fall_distance * damage_per_distance).floor();
-        if damage > 0.0 {
-            caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
-            self.play_block_fall_sound(caller);
-            self.damage(caller, damage, DamageType::FALL);
+    fn calculate_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> i32 {
+        caller.get_mob().map_or_else(
+            || self.base_fall_damage(fall_distance, damage_modifier),
+            |mob| mob.calculate_fall_damage(fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn base_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        if self.is_immune_to_fall_damage() {
+            return 0;
+        }
+        let fall_power = f64::from(fall_distance) + 1.0E-6
+            - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+        (fall_power
+            * f64::from(damage_modifier)
+            * self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER))
+        .floor() as i32
+    }
+
+    pub fn propagate_fall_to_passengers(&self, fall_distance: f32, damage_modifier: f32) {
+        let passengers = self
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            if let Some(living) = passenger.get_living_entity() {
+                living.handle_fall_damage(passenger.as_ref(), fall_distance, damage_modifier);
+            }
         }
     }
 
     /// Vanilla `getFallDamageSound`.
-    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: f32) -> Sound {
+    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: i32) -> Sound {
         let (small, big) = caller.get_fall_sounds();
-        if damage as i32 > 4 { big } else { small }
+        if damage > 4 { big } else { small }
     }
 
     /// Vanilla `playBlockFallSound`: the fall sound of the block landed on.
-    fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
+    pub fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
         if self.entity.is_silent() {
             return;
         }
@@ -2467,7 +2582,11 @@ impl LivingEntity {
 
         let slots_to_drop: Vec<EquipmentSlot> = {
             let mut slots: Vec<_> = self.equipment_slots.values().cloned().collect();
-            slots.push(EquipmentSlot::MAIN_HAND);
+            slots.extend([
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]);
             slots
         };
 
@@ -2934,6 +3053,55 @@ impl LivingEntity {
     #[must_use]
     pub fn should_take_drowning_damage(&self) -> bool {
         self.entity.air_supply.load(Relaxed) <= -DROWNING_INTERVAL
+    }
+
+    pub(crate) fn tick_air_supply(&self, caller: &dyn crate::entity::mob::Mob) {
+        if !self.is_alive() {
+            return;
+        }
+        let entity = &self.entity;
+        let current = entity.air_supply.load(Relaxed);
+        let max_air = caller.get_max_air_supply();
+        let water_breathing = self.has_effect(&StatusEffect::WATER_BREATHING)
+            || self.has_effect(&StatusEffect::CONDUIT_POWER);
+        let nautilus_breathing = self.has_effect(&StatusEffect::BREATH_OF_THE_NAUTILUS);
+        if entity.is_submerged_in_water()
+            && entity
+                .world
+                .load()
+                .get_block(&entity.get_eye_pos().to_block_pos())
+                != &Block::BUBBLE_COLUMN
+        {
+            if !entity
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
+                && !water_breathing
+                && !nautilus_breathing
+            {
+                let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
+                let mut random = caller.get_random();
+                if oxygen_bonus <= 0.0 || random.random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
+                    entity.set_air_supply(current.wrapping_sub(1));
+                }
+                if self.should_take_drowning_damage() {
+                    entity.set_air_supply(0);
+                    entity.world.load().send_entity_status(
+                        entity,
+                        EntityStatus::DrownParticles,
+                        ActorEventID::None,
+                    );
+                    caller.damage(
+                        caller,
+                        crate::entity::breath::DROWNING_DAMAGE,
+                        DamageType::DROWN,
+                    );
+                }
+            } else if current < max_air && (!nautilus_breathing || water_breathing) {
+                entity.set_air_supply(caller.increase_air_supply(current));
+            }
+        } else if current < max_air {
+            entity.set_air_supply(caller.increase_air_supply(current));
+        }
     }
 
     #[must_use]
@@ -4485,6 +4653,17 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
         | (1u64 << DamageType::SONIC_BOOM.id)
         | (1u64 << DamageType::OUTSIDE_BORDER.id);
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments
+                .enchantment
+                .iter()
+                .any(|(enchantment, level)| *level > 0 && enchantment.effects.prevent_armor_change)
+        })
 }
 
 pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {

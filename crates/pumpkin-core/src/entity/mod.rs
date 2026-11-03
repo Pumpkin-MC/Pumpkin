@@ -225,8 +225,25 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
 
+    fn get_max_air_supply(&self) -> i32 {
+        self.get_mob()
+            .map_or(breath::MAX_AIR, mob::Mob::mob_max_air_supply)
+    }
+
+    fn increase_air_supply(&self, current: i32) -> i32 {
+        self.get_mob().map_or_else(
+            || {
+                current
+                    .wrapping_add(breath::AIR_RECOVERY_RATE)
+                    .min(self.get_max_air_supply())
+            },
+            |mob| mob.mob_increase_air_supply(current),
+        )
+    }
+
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.get_entity().read_nbt_non_mut(nbt);
+        self.get_entity()
+            .read_nbt_with_max_air_supply(nbt, self.get_max_air_supply());
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
         }
@@ -502,6 +519,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         );
     }
 
+    /// Leashed by four points when the holder supports it (horses, sniffers).
+    fn support_quad_leash(&self) -> bool {
+        false
+    }
+
+    /// Holds a leash by four points (ghasts).
+    fn support_quad_leash_as_holder(&self) -> bool {
+        false
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -734,7 +761,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: Vec::new(),
+            actor_links: entity.bedrock_actor_links(),
             passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
@@ -1172,6 +1199,63 @@ struct SpawnState {
     head_yaw: u8,
 }
 
+const LEASH_AXIS_ELASTICITY: Vector3<f64> = Vector3::new(0.8, 0.2, 0.8);
+const LEASH_TORSIONAL_ELASTICITY: f64 = 10.0;
+const LEASH_STIFFNESS: f64 = 0.11;
+const ENTITY_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.5);
+const LEASHER_ATTACHMENT_POINT: Vector3<f64> = Vector3::new(0.0, 0.5, 0.0);
+const SHARED_QUAD_ATTACHMENT_POINTS: [Vector3<f64>; 4] = [
+    Vector3::new(-0.5, 0.5, 0.5),
+    Vector3::new(-0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, -0.5),
+    Vector3::new(0.5, 0.5, 0.5),
+];
+
+/// Rotates `vector` around the Y axis.
+fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
+    let cos = f64::from(angle.cos());
+    let sin = f64::from(angle.sin());
+    Vector3::new(
+        vector.x * cos + vector.z * sin,
+        vector.y,
+        vector.z * cos - vector.x * sin,
+    )
+}
+
+/// The movement the server knows about: a player's last reported step, otherwise velocity.
+fn known_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    let base = entity.get_entity();
+    if let Some(controller) = entity.get_controlling_passenger()
+        && controller.get_player().is_some()
+        && base.is_alive()
+    {
+        return controller.get_entity().movement.load();
+    }
+    if entity.get_player().is_some() {
+        return base.movement.load();
+    }
+    base.velocity.load()
+}
+
+fn holder_movement(entity: &dyn EntityBase) -> Vector3<f64> {
+    if entity
+        .get_mob()
+        .is_some_and(|mob| mob.get_mob_entity().is_no_ai())
+    {
+        Vector3::new(0.0, 0.0, 0.0)
+    } else {
+        known_movement(entity)
+    }
+}
+
+/// What a leash did this tick, see [`Entity::tick_leash`].
+pub enum LeashTick {
+    NotLeashed,
+    Snapped,
+    Elastic(Arc<dyn EntityBase>),
+    CloseRange(Arc<dyn EntityBase>),
+}
+
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 #[repr(C)]
 pub struct Entity {
@@ -1263,6 +1347,8 @@ pub struct Entity {
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub delayed_leash: std::sync::Mutex<Option<DelayedLeash>>,
+    /// Spin a taut leash gives the leashed entity, applied to its yaw each tick.
+    leash_angular_momentum: AtomicCell<f64>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// Vanilla `Entity.tickCount`: ticks this entity has been ticked.
@@ -1445,6 +1531,10 @@ impl Entity {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per field of the struct literal"
+    )]
     pub fn from_uuid_with_id(
         entity_id: i32,
         entity_uuid: uuid::Uuid,
@@ -1524,6 +1614,7 @@ impl Entity {
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
             delayed_leash: std::sync::Mutex::new(None),
+            leash_angular_momentum: AtomicCell::new(0.0),
 
             riding_cooldown: AtomicI32::new(0),
             tick_count: AtomicI32::new(0),
@@ -1581,7 +1672,7 @@ impl Entity {
         self.world.store(world);
     }
 
-    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
+    fn init_bedrock_flags(&self) {
         if self.bedrock_flags.load(Ordering::Relaxed) == 0 {
             self.bedrock_flags.fetch_or(
                 (1i64 << entity_data_flag::HAS_GRAVITY)
@@ -1591,6 +1682,10 @@ impl Entity {
                 Ordering::Relaxed,
             );
         }
+    }
+
+    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
+        self.init_bedrock_flags();
 
         let mut metadata = SyncedActorDataList::new();
         let dimensions = self
@@ -1605,7 +1700,11 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimensions.height),
         );
-        metadata.set(entity_data_key::SCALE, MetadataValue::Float(1.0));
+        let is_baby = self.age.load(Relaxed) < 0;
+        metadata.set(
+            entity_data_key::SCALE,
+            MetadataValue::Float(if is_baby { 0.5 } else { 1.0 }),
+        );
         metadata.set(
             entity_data_key::FLAGS,
             MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
@@ -1614,6 +1713,35 @@ impl Entity {
             entity_data_key::FLAGS_TWO,
             MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
         );
+        if is_baby {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
+        }
+        if self.silent.load(Relaxed) {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::SILENT as u8, true);
+        }
+        if self.has_no_gravity.load(Relaxed) {
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::HAS_GRAVITY as u8,
+                false,
+            );
+        }
+        if self.has_vehicle() {
+            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::RIDING as u8, true);
+        }
+        if let Ok(leash_guard) = self.leashed_to.try_lock()
+            && let Some(holder) = leash_guard.as_ref()
+        {
+            metadata.set(
+                entity_data_key::LEASH_HOLDER,
+                MetadataValue::Int64(i64::from(holder.get_entity().entity_id)),
+            );
+            metadata.set_flag(
+                entity_data_key::FLAGS,
+                entity_data_flag::LEASHED as u8,
+                true,
+            );
+        }
 
         if let Some(name) = &**self.custom_name.load() {
             metadata.set(
@@ -1635,6 +1763,27 @@ impl Entity {
         }
 
         metadata
+    }
+
+    #[must_use]
+    pub fn bedrock_actor_links(&self) -> Vec<pumpkin_protocol::bedrock::client::common::ActorLink> {
+        let Ok(passengers) = self.passengers.try_lock() else {
+            return Vec::new();
+        };
+        passengers
+            .iter()
+            .enumerate()
+            .map(
+                |(idx, p)| pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(p.get_entity().entity_id)),
+                    link_type: if idx == 0 { 1 } else { 2 },
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            )
+            .collect()
     }
 
     /// The type's default size, vanilla `EntityType.getDimensions`.
@@ -1997,8 +2146,163 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    /// Block collisions, then stepping up onto what was hit.
     #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
+        let was_on_ground = self.on_ground.load(Ordering::SeqCst);
+        let bounding_box = self.bounding_box.load();
+        let movement_step = self.collide_bounding_box(movement, caller);
+
+        let max_up_step = Self::max_up_step(caller);
+        let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
+        let on_ground_after_collision = movement.y != movement_step.y && movement.y < 0.0;
+        if max_up_step <= 0.0
+            || !(on_ground_after_collision || was_on_ground)
+            || !horizontal_collision
+        {
+            return movement_step;
+        }
+
+        let grounded_box = if on_ground_after_collision {
+            bounding_box.shift(Vector3::new(0.0, movement_step.y, 0.0))
+        } else {
+            bounding_box
+        };
+        let mut step_up_box =
+            grounded_box.expand_towards(movement.x, f64::from(max_up_step), movement.z);
+        if !on_ground_after_collision {
+            step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
+        }
+        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+
+        for step_height in Self::candidate_step_up_heights(
+            &grounded_box,
+            &colliders,
+            max_up_step,
+            movement_step.y as f32,
+        ) {
+            let step_from_ground = Self::collide_with_boxes(
+                Vector3::new(movement.x, f64::from(step_height), movement.z),
+                grounded_box,
+                &colliders,
+            );
+            if step_from_ground.horizontal_length_squared()
+                > movement_step.horizontal_length_squared()
+            {
+                let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
+                let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                self.vertical_collision
+                    .store(movement.y != stepped.y, Ordering::SeqCst);
+                self.on_ground.store(
+                    movement.y != stepped.y && movement.y < 0.0,
+                    Ordering::SeqCst,
+                );
+                self.horizontal_collision.store(
+                    movement.x != stepped.x || movement.z != stepped.z,
+                    Ordering::SeqCst,
+                );
+                return stepped;
+            }
+        }
+
+        movement_step
+    }
+
+    /// Only living entities step up, and a player-ridden mob steps at least one block.
+    fn max_up_step(caller: &dyn EntityBase) -> f32 {
+        let Some(living) = caller.get_living_entity() else {
+            return 0.0;
+        };
+        let step_height =
+            living.get_attribute_value(&pumpkin_data::attributes::Attributes::STEP_HEIGHT) as f32;
+        if caller
+            .get_controlling_passenger()
+            .is_some_and(|passenger| passenger.get_player().is_some())
+        {
+            step_height.max(1.0)
+        } else {
+            step_height
+        }
+    }
+
+    fn candidate_step_up_heights(
+        bounding_box: &BoundingBox,
+        colliders: &[BoundingBox],
+        max_step_height: f32,
+        step_height_to_skip: f32,
+    ) -> Vec<f32> {
+        let mut candidates: Vec<f32> = Vec::with_capacity(4);
+        for collider in colliders {
+            for coord in [collider.min.y, collider.max.y] {
+                let relative_coord = (coord - bounding_box.min.y) as f32;
+                if relative_coord < 0.0 || relative_coord == step_height_to_skip {
+                    continue;
+                }
+                if relative_coord > max_step_height {
+                    break;
+                }
+                if !candidates.contains(&relative_coord) {
+                    candidates.push(relative_coord);
+                }
+            }
+        }
+        candidates.sort_by(f32::total_cmp);
+        candidates
+    }
+
+    /// Resolves Y first, then the larger horizontal axis last.
+    fn collide_with_boxes(
+        movement: Vector3<f64>,
+        bounding_box: BoundingBox,
+        colliders: &[BoundingBox],
+    ) -> Vector3<f64> {
+        let axes = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut resolved = Vector3::new(0.0, 0.0, 0.0);
+        for axis in axes {
+            let mut amount = movement.get_axis(axis);
+            if amount == 0.0 {
+                continue;
+            }
+            let moved = bounding_box.shift(resolved);
+            for collider in colliders {
+                amount = Self::collide_axis(&moved, collider, axis, amount);
+            }
+            resolved.set_axis(axis, amount);
+        }
+        resolved
+    }
+
+    /// How far `moving` can travel along `axis` before it hits `other`.
+    fn collide_axis(moving: &BoundingBox, other: &BoundingBox, axis: Axis, amount: f64) -> f64 {
+        const EPSILON: f64 = 1.0E-7;
+        let overlaps = [Axis::X, Axis::Y, Axis::Z]
+            .into_iter()
+            .filter(|&other_axis| other_axis != axis)
+            .all(|other_axis| {
+                moving.max.get_axis(other_axis) - EPSILON > other.min.get_axis(other_axis)
+                    && moving.min.get_axis(other_axis) + EPSILON < other.max.get_axis(other_axis)
+            });
+        if !overlaps {
+            return amount;
+        }
+        if amount > 0.0 && other.min.get_axis(axis) >= moving.max.get_axis(axis) - EPSILON {
+            amount.min(other.min.get_axis(axis) - moving.max.get_axis(axis))
+        } else if amount < 0.0 && other.max.get_axis(axis) <= moving.min.get_axis(axis) + EPSILON {
+            amount.max(other.max.get_axis(axis) - moving.min.get_axis(axis))
+        } else {
+            amount
+        }
+    }
+
+    fn collide_bounding_box(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
@@ -3591,50 +3895,56 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_SHARED_FLAGS_ID, new_je_flags);
 
         if let Some(bedrock_flag) = flag.to_bedrock() {
-            let (key, index) = if bedrock_flag >= 64 {
-                (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
-            } else {
-                (entity_data_key::FLAGS, bedrock_flag as u8)
-            };
-
-            if value {
-                let mask = 1i64 << index;
-                if key == entity_data_key::FLAGS {
-                    self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
-                } else {
-                    self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
-                }
-            } else {
-                let mask = !(1i64 << index);
-                if key == entity_data_key::FLAGS {
-                    self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
-                } else {
-                    self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
-                }
-            }
-
-            let world = self.world.load();
-            let chunk_pos = self.chunk_pos.load();
-            let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
-            metadata.set(
-                entity_data_key::FLAGS,
-                MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
-            );
-            metadata.set(
-                entity_data_key::FLAGS_TWO,
-                MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
-            );
-            let packet = CSetActorData {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                actor_data: metadata,
-                synced_properties: PropertySyncData {
-                    int_entries_list: std::collections::HashMap::new(),
-                    float_entries_list: std::collections::HashMap::new(),
-                },
-                tick: VarULong(0),
-            };
-            world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
+            self.set_bedrock_flag(bedrock_flag, value);
         }
+    }
+
+    /// Sets an actor flag only Bedrock has and sends the flag words to Bedrock viewers.
+    pub fn set_bedrock_flag(&self, bedrock_flag: u32, value: bool) {
+        self.init_bedrock_flags();
+        let (key, index) = if bedrock_flag >= 64 {
+            (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
+        } else {
+            (entity_data_key::FLAGS, bedrock_flag as u8)
+        };
+
+        if value {
+            let mask = 1i64 << index;
+            if key == entity_data_key::FLAGS {
+                self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+            } else {
+                self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
+            }
+        } else {
+            let mask = !(1i64 << index);
+            if key == entity_data_key::FLAGS {
+                self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
+            } else {
+                self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
+            }
+        }
+
+        let world = self.world.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+        let packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: metadata,
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -4141,6 +4451,7 @@ impl Entity {
 
     pub fn attach_leash(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
+        self.leash_angular_momentum.store(0.0);
         *self
             .delayed_leash
             .lock()
@@ -4155,17 +4466,22 @@ impl Entity {
             holder_entity_id,
             true,
         );
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(
-                    holder_entity_id as i64,
-                ),
-                link_type: 1, // Leash link
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::LEASHED, Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(
+            entity_data_key::LEASH_HOLDER,
+            MetadataValue::Int64(i64::from(holder_entity_id)),
+        );
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -4228,15 +4544,19 @@ impl Entity {
     fn send_leash_removed(&self) {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
-        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
-                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
-                link_type: 0, // Unlink
-                immediate: true,
-                rider_initiated: false,
-                vehicle_angular_velocity: 0.0,
-            },
+        self.bedrock_flags
+            .fetch_and(!(1i64 << entity_data_flag::LEASHED), Ordering::Relaxed);
+        let mut bedrock_meta = SyncedActorDataList::new();
+        bedrock_meta.set(entity_data_key::LEASH_HOLDER, MetadataValue::Int64(-1));
+        bedrock_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        let be_packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: bedrock_meta,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
         };
 
         self.world.load().broadcast_to_chunk_editioned(
@@ -4313,7 +4633,8 @@ impl Entity {
         }
     }
 
-    pub fn tick_leash(&self) {
+    /// Applies leash snapping and the elastic pull. Mobs handle the other outcomes.
+    pub fn tick_leash(&self, caller: &dyn EntityBase) -> LeashTick {
         let delayed = *self
             .delayed_leash
             .lock()
@@ -4324,42 +4645,162 @@ impl Entity {
 
         let holder = {
             let Ok(guard) = self.leashed_to.try_lock() else {
-                return;
+                return LeashTick::NotLeashed;
             };
             guard.clone()
         };
+        let Some(holder) = holder else {
+            return LeashTick::NotLeashed;
+        };
+        let holder_entity = holder.get_entity();
 
-        if let Some(holder) = holder {
-            let holder_entity = holder.get_entity();
-
-            // Drop leash if entity or holder is removed or dead
-            if !self.is_alive() || !holder_entity.is_alive() {
-                self.unleash();
-                return;
-            }
-
-            let self_pos = self.pos.load();
-            let holder_pos = holder_entity.pos.load();
-            let diff = self_pos - holder_pos;
-            let distance = diff.length();
-
-            if distance > Self::LEASH_SNAP_DISTANCE {
-                // Too far: snap/break leash and drop lead item
-                self.unleash();
-                let lead_item =
-                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-                self.world
-                    .load()
-                    .drop_stack(&self.block_pos.load(), lead_item);
-            } else if distance > Self::LEASH_ELASTIC_DISTANCE {
-                // Elastic pull force towards leash holder
-                let dir = (holder_pos - self_pos).normalize();
-                let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
-                let current_vel = self.velocity.load();
-                self.velocity.store(current_vel + dir * pull_strength);
-                self.velocity_dirty.store(true, Relaxed);
-            }
+        if !self.is_alive() || !holder_entity.is_alive() {
+            self.unleash();
+            return LeashTick::NotLeashed;
         }
+
+        let distance = self.leash_distance_to(holder_entity);
+        if distance > Self::LEASH_SNAP_DISTANCE {
+            let holder_pos = holder_entity.pos.load();
+            self.world
+                .load()
+                .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
+            self.unleash();
+            let lead_item =
+                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+            self.world
+                .load()
+                .drop_stack(&self.block_pos.load(), lead_item);
+            return LeashTick::Snapped;
+        }
+        let elastic_threshold = Self::LEASH_ELASTIC_DISTANCE
+            - f64::from(holder_entity.width())
+            - f64::from(self.width());
+        let result = if distance > elastic_threshold
+            && self.check_elastic_interactions(caller, holder.as_ref())
+        {
+            LeashTick::Elastic(holder)
+        } else {
+            LeashTick::CloseRange(holder)
+        };
+
+        let momentum = self.leash_angular_momentum.load();
+        self.yaw.store(self.yaw.load() - momentum as f32);
+        self.leash_angular_momentum
+            .store(momentum * f64::from(self.leash_angular_friction()));
+        result
+    }
+
+    /// Pulls the entity back with a damped spring on each attachment point beyond the slack.
+    fn check_elastic_interactions(&self, caller: &dyn EntityBase, holder: &dyn EntityBase) -> bool {
+        let quad_connection = holder.support_quad_leash_as_holder() && caller.support_quad_leash();
+        let (entity_points, holder_points): (&[Vector3<f64>], &[Vector3<f64>]) = if quad_connection
+        {
+            (
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+                &SHARED_QUAD_ATTACHMENT_POINTS,
+            )
+        } else {
+            (&[ENTITY_ATTACHMENT_POINT], &[LEASHER_ATTACHMENT_POINT])
+        };
+
+        let holder_entity = holder.get_entity();
+        let entity_movement = holder_movement(caller);
+        let entity_dimensions = Vector3::new(
+            f64::from(self.width()),
+            f64::from(self.height()),
+            f64::from(self.width()),
+        );
+        let holder_dimensions = Vector3::new(
+            f64::from(holder_entity.width()),
+            f64::from(holder_entity.height()),
+            f64::from(holder_entity.width()),
+        );
+        let entity_yaw = self.yaw.load().to_radians();
+        let holder_yaw = holder_entity.yaw.load().to_radians();
+        let entity_pos = self.pos.load();
+        let holder_pos = holder_entity.pos.load();
+
+        let mut force = Vector3::new(0.0, 0.0, 0.0);
+        let mut torque = 0.0;
+        let mut pulled = false;
+        for (entity_point, holder_point) in entity_points.iter().zip(holder_points) {
+            let lever_arm = y_rot(
+                entity_point.multiply(
+                    entity_dimensions.x,
+                    entity_dimensions.y,
+                    entity_dimensions.z,
+                ),
+                -entity_yaw,
+            );
+            let entity_attach = entity_pos + lever_arm;
+            let holder_attach = holder_pos
+                + y_rot(
+                    holder_point.multiply(
+                        holder_dimensions.x,
+                        holder_dimensions.y,
+                        holder_dimensions.z,
+                    ),
+                    -holder_yaw,
+                );
+            let attach_distance = (holder_attach - entity_attach).length();
+            if attach_distance < Self::LEASH_ELASTIC_DISTANCE {
+                continue;
+            }
+            let mut displacement = (holder_attach - entity_attach).normalize()
+                * (attach_distance - Self::LEASH_ELASTIC_DISTANCE);
+            torque += lever_arm.z * displacement.x - lever_arm.x * displacement.z;
+            if entity_movement.dot(&displacement) >= 0.0 {
+                displacement = displacement * f64::from(0.3f32);
+            }
+            force += displacement;
+            pulled = true;
+        }
+        if !pulled {
+            return false;
+        }
+
+        let scale = if quad_connection { 0.25 } else { 1.0 };
+        self.leash_angular_momentum.store(
+            self.leash_angular_momentum.load() + LEASH_TORSIONAL_ELASTICITY * torque * scale,
+        );
+        let relative_velocity = holder_movement(holder) - known_movement(caller);
+        let pull = (force * scale).multiply(
+            LEASH_AXIS_ELASTICITY.x,
+            LEASH_AXIS_ELASTICITY.y,
+            LEASH_AXIS_ELASTICITY.z,
+        ) + relative_velocity * LEASH_STIFFNESS;
+        self.velocity.store(self.velocity.load() + pull);
+        self.velocity_dirty.store(true, Relaxed);
+        true
+    }
+
+    fn leash_angular_friction(&self) -> f32 {
+        if self.on_ground.load(Ordering::Relaxed) {
+            let below = self.get_block_pos_below_that_affects_my_movement();
+            self.world.load().get_block(&below).slipperiness * 0.91
+        } else if self.touching_water.load(Ordering::Relaxed)
+            || self.touching_lava.load(Ordering::Relaxed)
+        {
+            0.8
+        } else {
+            0.91
+        }
+    }
+
+    /// Caps a fall a taut leash has caught.
+    pub fn check_fall_distance_accumulation(&self, living: &LivingEntity) {
+        if self.velocity.load().y > -0.5 && living.fall_distance.load() > 1.0 {
+            living.fall_distance.store(1.0);
+        }
+    }
+
+    fn leash_distance_to(&self, other: &Self) -> f64 {
+        let center = |entity: &Self| {
+            let bounding_box = entity.bounding_box.load();
+            (bounding_box.min + bounding_box.max) * 0.5
+        };
+        (center(other) - center(self)).length()
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {
@@ -4489,18 +4930,43 @@ impl Entity {
             }
         }
 
+        let passenger_entity_id = passenger_entity.entity_id;
+        passenger_entity
+            .bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::RIDING, Ordering::Relaxed);
+        let mut rider_meta = SyncedActorDataList::new();
+        rider_meta.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        passenger_entity.send_bedrock_actor_data(&rider_meta);
+
         passengers.push(passenger);
+        let link_type = if passengers.len() == 1 { 1 } else { 2 };
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
+        drop(passengers);
+
+        let be_link = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_entity_id)),
+                link_type,
+                immediate: true,
+                rider_initiated: true,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
 
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
+        world.broadcast_to_chunk_editioned(
             chunk_pos,
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_link,
         );
     }
 
@@ -4565,9 +5031,21 @@ impl Entity {
             .collect();
         drop(passengers);
 
-        self.world.load().broadcast_to_chunk(
+        let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                rider_unique_id: VarLong(i64::from(passenger_id)),
+                link_type: 0,
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+
+        self.world.load().broadcast_to_chunk_editioned(
             self.chunk_pos.load(),
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            &be_unlink,
         );
     }
 
@@ -4664,18 +5142,39 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
+            passenger_entity
+                .bedrock_flags
+                .fetch_and(!(1i64 << entity_data_flag::RIDING), Ordering::Relaxed);
+            let mut rider_meta = SyncedActorDataList::new();
+            rider_meta.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
+            );
+            passenger_entity.send_bedrock_actor_data(&rider_meta);
+
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
             let world = self.world.load();
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
+                link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
+                    rider_unique_id: VarLong(i64::from(passenger_id)),
+                    link_type: 0,
+                    immediate: true,
+                    rider_initiated: false,
+                    vehicle_angular_velocity: 0.0,
+                },
+            };
             if let Some(player) = passenger.get_player() {
-                player.try_send_client_packet(&passengers_packet);
-                world.broadcast_to_chunk_except(
+                player.try_enqueue_packet_editioned(&passengers_packet, &be_unlink);
+                world.broadcast_to_chunk_except_editioned(
                     chunk_pos,
                     &[player.get_entity().entity_uuid],
                     &passengers_packet,
+                    &be_unlink,
                 );
             } else {
-                world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+                world.broadcast_to_chunk_editioned(chunk_pos, &passengers_packet, &be_unlink);
             }
 
             if !reposition {
@@ -5142,6 +5641,10 @@ impl Entity {
     }
 
     pub fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_max_air_supply(nbt, breath::MAX_AIR);
+    }
+
+    fn read_nbt_with_max_air_supply(&self, nbt: &NbtCompound, max_air_supply: i32) {
         self.read_placement_nbt(nbt);
         self.fire_ticks.store(
             i32::from(nbt.get_numeric_short("Fire").unwrap_or(0)),
@@ -5150,10 +5653,9 @@ impl Entity {
         self.on_ground
             .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
         if self.entity_type != &EntityType::PLAYER {
-            let air = i32::from(
-                nbt.get_numeric_short("Air")
-                    .unwrap_or(breath::MAX_AIR as i16),
-            );
+            let air = nbt
+                .get_numeric_short("Air")
+                .map_or(max_air_supply, i32::from);
             self.air_supply.store(air, Relaxed);
             self.set_synced_data(tracked_data::entity::DATA_AIR_SUPPLY_ID, VarInt(air));
         }
