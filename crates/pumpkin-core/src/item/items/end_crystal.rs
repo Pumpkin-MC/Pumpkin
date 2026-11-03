@@ -7,6 +7,7 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
@@ -41,18 +42,18 @@ impl ItemBehaviour for EndCrystalItem {
 
         let location = location.up();
         let location_vec = location.0.to_f64();
+        let bounding_box = BoundingBox::new(
+            Vector3::new(location_vec.x, location_vec.y, location_vec.z),
+            Vector3::new(
+                location_vec.x + 1.0,
+                location_vec.y + 2.0,
+                location_vec.z + 1.0,
+            ),
+        );
 
         if !world.get_block_state(&location).is_air()
-            || !world
-                .get_entities_at_box(&BoundingBox::new(
-                    Vector3::new(location_vec.x, location_vec.y, location_vec.z),
-                    Vector3::new(
-                        location_vec.x + 1.0,
-                        location_vec.y + 2.0,
-                        location_vec.z + 1.0,
-                    ),
-                ))
-                .is_empty()
+            || !world.get_entities_at_box(&bounding_box).is_empty()
+            || !world.get_players_at_box(&bounding_box).is_empty()
         {
             return BlockActionResult::Fail;
         }
@@ -60,8 +61,9 @@ impl ItemBehaviour for EndCrystalItem {
         let spawn_pos = Vector3::new(location_vec.x + 0.5, location_vec.y, location_vec.z + 0.5);
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::END_CRYSTAL);
         let end_crystal = Arc::new(EndCrystalEntity::new(entity));
-        world.spawn_entity(end_crystal.clone());
         end_crystal.set_show_bottom(false);
+        world.spawn_entity(end_crystal);
+        world.emit_game_event(GameEvent::EntityPlace.name(), location.to_f64());
         item.decrement_unless_creative(player.gamemode.load(), 1);
 
         if let Some(ref fight_mutex) = world.dragon_fight

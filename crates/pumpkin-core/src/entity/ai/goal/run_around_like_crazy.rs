@@ -1,3 +1,7 @@
+use pumpkin_data::entity::EntityStatus;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use rand::RngExt;
+
 use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::util::default_random_pos;
@@ -56,6 +60,54 @@ impl Goal for RunAroundLikeCrazyGoal {
             Vector3::new(self.pos_x, self.pos_y, self.pos_z),
             self.speed_modifier,
         ));
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        if mob.is_tamed() || mob.get_random().random_range(0..self.get_tick_count(50)) != 0 {
+            return;
+        }
+        let Some(horse) = mob.as_abstract_horse() else {
+            return;
+        };
+        let entity = mob.get_entity();
+        let Some(passenger) = mob.get_mob_entity().first_passenger() else {
+            return;
+        };
+
+        if passenger.get_player().is_some()
+            && let Some(player) = entity
+                .world
+                .load()
+                .get_player_by_id(passenger.get_entity().entity_id)
+        {
+            let temper = horse.get_temper();
+            let max_temper = horse.get_max_temper();
+            if max_temper > 0
+                && mob.get_random().random_range(0..max_temper) < temper
+                && mob.approve_taming(&player)
+            {
+                horse.tame_with_name(&player);
+                return;
+            }
+            horse.modify_temper(5);
+        }
+
+        let passengers: Vec<i32> = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|passenger| passenger.get_entity().entity_id)
+            .collect();
+        for passenger in passengers {
+            entity.remove_passenger(passenger);
+        }
+        horse.make_mad();
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::TamingFailed,
+            ActorEventID::TamingFailed,
+        );
     }
 
     fn controls(&self) -> Controls {

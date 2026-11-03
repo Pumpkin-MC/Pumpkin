@@ -194,6 +194,221 @@ pub struct Criteria {
     pub criterion_id: Arc<str>,
     pub achieve_date: Option<i64>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AdvancementCriterion {
+    pub name: &'static str,
+    pub trigger: &'static str,
+    pub conditions: AdvancementCondition,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum AdvancementCondition {
+    #[default]
+    Empty,
+    InventoryChanged(&'static InventoryChangedCondition),
+    RecipeUnlocked(&'static str),
+    RecipeCrafted(&'static str),
+    PlayerGeneratesContainerLoot(&'static str),
+    ChangedDimension {
+        from: Option<&'static str>,
+        to: Option<&'static str>,
+    },
+    ConsumeItem(ItemCondition),
+    PlacedBlock {
+        block: Option<&'static str>,
+        item: Option<&'static str>,
+    },
+    EnterBlock(&'static str),
+    SlideDownBlock(&'static str),
+    PlayerKilledEntity(EntityCondition),
+    BredAnimals(&'static BredAnimalsCondition),
+    TameAnimal(EntityCondition),
+    FilledBucket(&'static str),
+    FishingRodHooked(ItemCondition),
+    UsingItem {
+        item: ItemCondition,
+        looking_at: Option<&'static str>,
+    },
+    UsedTotem(ItemCondition),
+    EntityHurtPlayer(DamageCondition),
+    PlayerHurtEntity(DamageCondition),
+    TargetHit(TargetHitCondition),
+    ConstructBeacon(BeaconCondition),
+    AllayDropItemOnBlock(&'static ItemUsedOnBlockCondition),
+    ThrownItemPickedUpByPlayer(EntityCondition),
+    ItemUsedOnBlock(&'static ItemUsedOnBlockCondition),
+    Location(&'static LocationCondition),
+    KilledByArrow,
+    SleptInBed,
+    EntityKilledPlayer,
+    UsedEnderEye,
+    CuredZombieVillager,
+    VillagerTrade,
+    EnchantedItem,
+    BrewedPotion,
+    ItemDurabilityChanged {
+        item: ItemCondition,
+        vehicle_type: Option<&'static str>,
+    },
+    Levitation {
+        distance_y_min: Option<f64>,
+    },
+    FallFromHeight {
+        distance_y_min: Option<f64>,
+    },
+    FallAfterExplosion {
+        distance_y_min: Option<f64>,
+        cause_entity: Option<&'static str>,
+    },
+    NetherTravel {
+        distance_horizontal_min: Option<f64>,
+    },
+    RideEntityInLava {
+        distance_horizontal_min: Option<f64>,
+        dimension: Option<&'static str>,
+        vehicle_type: Option<&'static str>,
+    },
+    ShotCrossbow(ItemCondition),
+    AvoidVibration,
+    BeeNestDestroyed {
+        block: Option<&'static str>,
+        num_bees_inside: Option<i32>,
+    },
+    ChanneledLightning {
+        victim_type: Option<&'static str>,
+    },
+    LightningStrike {
+        bystander_type: Option<&'static str>,
+        blocks_set_on_fire: Option<i32>,
+        distance_max: Option<f64>,
+    },
+    KillMobNearSculkCatalyst,
+    HeroOfTheVillage,
+    PlayerInteractedWithEntity {
+        entity: Option<EntityCondition>,
+        item: Option<ItemCondition>,
+        player: Option<EntityCondition>,
+    },
+    ThrownItemPickedUpByEntity {
+        entity: Option<EntityCondition>,
+        item: Option<ItemCondition>,
+        player: Option<EntityCondition>,
+    },
+    PlayerShearedEquipment {
+        entity: Option<EntityCondition>,
+        item: Option<ItemCondition>,
+    },
+    StartedRiding(Option<EntityCondition>),
+    SummonedEntity(EntityCondition),
+    CrafterRecipeCrafted(&'static str),
+    EffectsChanged,
+    SpearMobs {
+        count: Option<i32>,
+    },
+    Impossible,
+    Tick,
+    Custom(&'static str),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct InventoryChangedCondition {
+    pub items: &'static [ItemCondition],
+    pub slots: Option<InventorySlotsCondition>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct ItemCondition {
+    pub items: &'static [&'static str],
+    pub tag: Option<&'static str>,
+    pub count_min: Option<i64>,
+    pub count_max: Option<i64>,
+    pub durability_min: Option<i64>,
+    pub durability_max: Option<i64>,
+    pub enchantments: &'static [EnchantmentCondition],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EnchantmentCondition {
+    pub enchantment: &'static str,
+    pub min_level: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct InventorySlotsCondition {
+    pub empty_min: Option<i64>,
+    pub empty_max: Option<i64>,
+    pub full_min: Option<i64>,
+    pub full_max: Option<i64>,
+    pub occupied_min: Option<i64>,
+    pub occupied_max: Option<i64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct ItemUsedOnBlockCondition {
+    pub blocks: &'static [&'static str],
+    pub block_tag: Option<&'static str>,
+    pub items: &'static [&'static str],
+    pub item_tag: Option<&'static str>,
+    pub state_key: Option<&'static str>,
+    pub state_value: Option<&'static str>,
+    pub smokey: Option<bool>,
+    pub biome: Option<&'static str>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct LocationCondition {
+    pub biome: Option<&'static str>,
+    pub dimension: Option<&'static str>,
+    pub block: Option<&'static str>,
+    pub can_see_sky: Option<bool>,
+    pub smokey: Option<bool>,
+    pub structure: Option<&'static str>,
+    pub stepping_on: Option<&'static str>,
+    pub feet_item: Option<&'static str>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct EntityCondition {
+    pub entity_type: Option<&'static str>,
+    pub tag: Option<&'static str>,
+    pub is_baby: Option<bool>,
+    pub distance_horizontal_min: Option<f64>,
+    pub distance_absolute_min: Option<f64>,
+    pub vehicle_type: Option<&'static str>,
+    pub vehicle_tag: Option<&'static str>,
+    pub passenger_type: Option<&'static str>,
+    pub stepping_on: Option<&'static str>,
+    pub looking_at: Option<&'static str>,
+    pub feet_item: Option<&'static str>,
+    pub safe_armor_disallowed: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct BredAnimalsCondition {
+    pub parent: Option<EntityCondition>,
+    pub partner: Option<EntityCondition>,
+    pub child: Option<EntityCondition>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct DamageCondition {
+    pub blocked: Option<bool>,
+    pub is_projectile: Option<bool>,
+    pub dealt_min: Option<f64>,
+    pub taken_min: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct TargetHitCondition {
+    pub signal_strength: Option<i32>,
+    pub distance_min: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct BeaconCondition {
+    pub level_min: Option<i32>,
+}
 /// Represents the requirements needed to complete an advancement.
 /// To mark as done, at least one criterion from each requirement group must be satisfied.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

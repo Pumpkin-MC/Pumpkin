@@ -12,6 +12,4 @@ pub trait CustomSound: Mob {
     fn sound_category(&self) -> SoundCategory {
         SoundCategory::Players
     }
-
-    fn on_hurt_sound(&self) {}
 }

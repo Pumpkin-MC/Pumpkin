@@ -61,6 +61,10 @@ impl CustomSound for MagmaCubeEntity {
 }
 
 impl Mob for MagmaCubeEntity {
+    fn xp_reward(&self) -> u32 {
+        self.slime.xp_reward()
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         self.slime.get_mob_entity()
     }

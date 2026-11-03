@@ -17,6 +17,10 @@ pub trait Bucketable: Mob {
     fn pickup_sound(&self) -> Sound;
 
     fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
+        self.save_default_data_to_bucket_tag(bucket);
+    }
+
+    fn save_default_data_to_bucket_tag(&self, bucket: &mut ItemStack) {
         let entity = self.get_entity();
         let mob = self.get_mob_entity();
         if let Some(name) = entity.custom_name.load().as_ref() {
@@ -27,7 +31,7 @@ pub trait Bucketable: Mob {
             ("NoAI", mob.is_no_ai()),
             ("Silent", entity.is_silent()),
             ("NoGravity", entity.has_no_gravity()),
-            ("Glowing", entity.glowing.load(Relaxed)),
+            ("Glowing", entity.has_glowing_tag.load(Relaxed)),
             ("Invulnerable", entity.invulnerable.load(Relaxed)),
             (
                 "PersistenceRequired",

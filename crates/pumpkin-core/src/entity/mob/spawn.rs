@@ -9,15 +9,35 @@ use rand::RngExt;
 use crate::entity::EntityBase;
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::mob::MobEntity;
+use crate::entity::passive::fox::FoxVariant;
 use crate::world::World;
 
 const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
 
 /// State shared by every mob of one spawn group (vanilla `SpawnGroupData`).
 pub enum SpawnGroupData {
+    Ageable {
+        group_size: u32,
+        should_spawn_baby: bool,
+        baby_spawn_chance: f32,
+    },
     School(std::sync::Weak<dyn EntityBase>),
+    TropicalFish {
+        leader: std::sync::Weak<dyn EntityBase>,
+        variant: i32,
+    },
     /// The effect the first spider of a group rolled on hard difficulty.
     SpiderEffects(Option<&'static StatusEffect>),
+    /// A llama spawn group sharing the first llama's variant.
+    Llama {
+        variant: pumpkin_data::entity_variant::LlamaVariant,
+        group_size: u32,
+    },
+    /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.
+    Fox {
+        variant: FoxVariant,
+        size: u32,
+    },
 }
 
 impl MobEntity {
@@ -36,7 +56,7 @@ impl MobEntity {
                     .iter()
                     .any(|modifier| modifier.id == RANDOM_SPAWN_BONUS_ID)
             {
-                follow_range.add_or_replace_modifier(Modifier {
+                follow_range.add_or_replace_permanent_modifier(Modifier {
                     id: RANDOM_SPAWN_BONUS_ID.to_string(),
                     // Triangle distribution around 0.
                     amount: 0.114_85 * f64::from(rng.random::<f32>() - rng.random::<f32>()),
@@ -65,14 +85,39 @@ impl MobEntity {
     }
 }
 
+/// Why a mob is being spawned, passed to [`finalize_spawn`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EntitySpawnReason {
+    Natural,
+    ChunkGeneration,
+    Spawner,
+    Structure,
+    Breeding,
+    MobSummoned,
+    Jockey,
+    Event,
+    Conversion,
+    Reinforcement,
+    Triggered,
+    Bucket,
+    SpawnItemUse,
+    Command,
+    Dispenser,
+    Patrol,
+    TrialSpawner,
+    Load,
+    DimensionTravel,
+}
+
 /// Finalizes `entity` if it is a mob, and returns the group data for the next mob of the group.
 pub fn finalize_spawn(
     entity: &Arc<dyn EntityBase>,
     world: &Arc<World>,
+    reason: EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
 ) -> Option<SpawnGroupData> {
     match entity.get_mob() {
-        Some(mob) => mob.finalize_spawn(world, group_data),
+        Some(mob) => mob.finalize_spawn(world, reason, group_data),
         None => group_data,
     }
 }

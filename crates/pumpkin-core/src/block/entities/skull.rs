@@ -131,6 +131,69 @@ impl BlockEntity for SkullBlockEntity {
         }
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        use pumpkin_data::{
+            Block, BlockState,
+            block_properties::{SkeletonSkullLikeProperties, SkeletonWallSkullLikeProperties},
+        };
+
+        let (block, _) = BlockState::from_id_with_block(state_id);
+        let skull_type: i8 = if block == &Block::WITHER_SKELETON_SKULL
+            || block == &Block::WITHER_SKELETON_WALL_SKULL
+        {
+            1
+        } else if block == &Block::ZOMBIE_HEAD || block == &Block::ZOMBIE_WALL_HEAD {
+            2
+        } else if block == &Block::PLAYER_HEAD || block == &Block::PLAYER_WALL_HEAD {
+            3
+        } else if block == &Block::CREEPER_HEAD || block == &Block::CREEPER_WALL_HEAD {
+            4
+        } else if block == &Block::DRAGON_HEAD || block == &Block::DRAGON_WALL_HEAD {
+            5
+        } else if block == &Block::PIGLIN_HEAD || block == &Block::PIGLIN_WALL_HEAD {
+            6
+        } else {
+            0
+        };
+
+        let is_wall = block == &Block::SKELETON_WALL_SKULL
+            || block == &Block::WITHER_SKELETON_WALL_SKULL
+            || block == &Block::ZOMBIE_WALL_HEAD
+            || block == &Block::PLAYER_WALL_HEAD
+            || block == &Block::CREEPER_WALL_HEAD
+            || block == &Block::DRAGON_WALL_HEAD
+            || block == &Block::PIGLIN_WALL_HEAD;
+
+        let (rotation, powered) = if is_wall {
+            let props = SkeletonWallSkullLikeProperties::from_state_id(state_id);
+            (0.0, props.powered)
+        } else if block == &Block::SKELETON_SKULL
+            || block == &Block::WITHER_SKELETON_SKULL
+            || block == &Block::ZOMBIE_HEAD
+            || block == &Block::PLAYER_HEAD
+            || block == &Block::CREEPER_HEAD
+            || block == &Block::DRAGON_HEAD
+            || block == &Block::PIGLIN_HEAD
+        {
+            let props = SkeletonSkullLikeProperties::from_state_id(state_id);
+            (f32::from(props.rotation) * 22.5, props.powered)
+        } else {
+            (0.0, false)
+        };
+
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Skull", self.position)
+                .put_byte("SkullType", skull_type)
+                .put_float("Rotation", rotation)
+                .put_bool("DoingAnimation", powered)
+                .put_int("MouthTickCount", 0)
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

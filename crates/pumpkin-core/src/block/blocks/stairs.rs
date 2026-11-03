@@ -2,13 +2,16 @@ use crate::entity::EntityBase;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairsShape;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, Mirror, Rotation, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::tick::TickPriority;
 
-use crate::block::{BlockBehaviour, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType};
+use crate::block::{
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+};
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::WhiteWoolStairsLikeProperties;
@@ -26,11 +29,8 @@ impl BlockBehaviour for StairBlock {
             BlockDirection::Up => Half::Top,
             BlockDirection::Down => Half::Bottom,
             _ => match args.use_item_on.cursor_pos.y {
-                0.0..0.5 => Half::Bottom,
-                0.5..1.0 => Half::Top,
-
-                // This cannot happen normally
-                _ => Half::Bottom,
+                0.0..=0.5 => Half::Bottom,
+                _ => Half::Top,
             },
         };
 
@@ -44,27 +44,31 @@ impl BlockBehaviour for StairBlock {
         stair_props.to_state_id(args.block)
     }
 
-    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        {
-            let state_id = args.world.get_block_state_id(args.position);
-            let mut stair_props = StairsProperties::from_state_id(state_id);
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut stair_props = StairsProperties::from_state_id(args.state_id);
+        if stair_props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
 
-            let new_shape = compute_stair_shape(
+        if args.direction.is_horizontal() {
+            stair_props.shape = compute_stair_shape(
                 args.world,
                 args.position,
                 stair_props.facing,
                 stair_props.half,
             );
-
-            if stair_props.shape != new_shape {
-                stair_props.shape = new_shape;
-                args.world.set_block_state(
-                    args.position,
-                    stair_props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_ALL,
-                );
-            }
+            return stair_props.to_state_id(args.block);
         }
+
+        args.state_id
     }
 
     fn rotate(

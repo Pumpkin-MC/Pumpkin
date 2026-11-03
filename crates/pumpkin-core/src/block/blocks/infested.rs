@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockId, BlockState, BlockStateId, Rotation,
+    Block, BlockId, BlockState, BlockStateId, Enchantment, Rotation,
     block_properties::{Axis, PaleOakWoodLikeProperties},
     entity::EntityType,
 };
-use pumpkin_util::GameMode;
+use pumpkin_util::{GameMode, math::vector3::Vector3};
 
 use crate::{
     block::{BlockBehaviour, BlockMetadata, BrokenArgs, OnPlaceArgs},
@@ -66,14 +66,23 @@ impl BlockBehaviour for InfestedBlock {
 
     fn broken(&self, args: BrokenArgs<'_>) {
         // TODO: ugly fix, use onStacksDropped
-        if args.player.gamemode.load() == GameMode::Creative {
+        if args.player.gamemode.load() == GameMode::Creative
+            || !args.world.level_info.load().game_rules.block_drops
+            || args
+                .player
+                .inventory()
+                .held_item()
+                .get_enchantment_level(&Enchantment::SILK_TOUCH)
+                > 0
+        {
             return;
         }
-        let entity = Entity::new(
-            args.world.clone(),
-            args.position.0.to_f64(),
-            &EntityType::SILVERFISH,
+        let pos = Vector3::new(
+            f64::from(args.position.0.x) + 0.5,
+            f64::from(args.position.0.y),
+            f64::from(args.position.0.z) + 0.5,
         );
+        let entity = Entity::new(args.world.clone(), pos, &EntityType::SILVERFISH);
 
         args.world.spawn_entity(Arc::new(entity));
     }
