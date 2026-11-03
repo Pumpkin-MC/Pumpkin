@@ -14,9 +14,11 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::structures::StructureSet;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::generation::generator::structure_finder::{
@@ -61,6 +63,7 @@ impl ItemBehaviour for EnderEyeItem {
         let new_state_id = props.to_state_id(block);
 
         world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS);
+        world.update_neighbour_for_output_signal(&location, block);
         // Consume one item.
         item.decrement_unless_creative(player.gamemode.load(), 1);
         world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
@@ -71,10 +74,10 @@ impl ItemBehaviour for EnderEyeItem {
         BlockActionResult::Success
     }
 
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
 
-        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
+        let (start_pos, end_pos) = self.get_start_and_end_pos_with_rotation(player, yaw, pitch);
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
             start_pos,
             end_pos,
@@ -92,11 +95,11 @@ impl ItemBehaviour for EnderEyeItem {
             return;
         };
 
+        let pos = player.get_entity().pos.load();
         let spawn_pos = Vector3::new(
-            player.get_entity().pos.load().x,
-            player.get_entity().pos.load().y
-                + f64::from(EntityType::EYE_OF_ENDER.dimension[1]) * 0.5,
-            player.get_entity().pos.load().z,
+            pos.x,
+            pos.y + f64::from(player.get_entity().entity_dimension.load().height) * 0.5,
+            pos.z,
         );
 
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::EYE_OF_ENDER);
@@ -111,21 +114,22 @@ impl ItemBehaviour for EnderEyeItem {
 
         world.spawn_entity(eye);
 
-        let pitch = 0.33f32 + rand::random::<f32>() * (0.5 - 0.33);
+        let sound_pitch = 0.33f32 + rand::random::<f32>() * (0.5 - 0.33);
         world.play_sound_fine(
             Sound::EntityEnderEyeLaunch,
             SoundCategory::Neutral,
-            &spawn_pos,
+            &player.position(),
             1.0,
-            pitch,
+            sound_pitch,
         );
 
         player.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder,
         );
-        let mut stack = player.inventory.held_item();
+        let mut stack = player.inventory.get_stack_in_hand(hand);
         stack.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory.set_held_item(stack);
+        player.inventory.set_stack_in_hand(hand, stack);
+        player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

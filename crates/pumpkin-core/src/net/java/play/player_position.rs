@@ -174,6 +174,7 @@ impl JavaClient {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, packet.collision & FLAG_ON_GROUND != 0);
                 }
+                player.get_entity().emit_client_movement(player.as_ref(), delta);
                 player.progress_motion(delta);
             }
 
@@ -337,6 +338,7 @@ impl JavaClient {
                     player.update_last_action_time();
                     player.check_location_enchantments(pos, (packet.collision & FLAG_ON_GROUND) != 0);
                 }
+                player.get_entity().emit_client_movement(player.as_ref(), delta);
                 player.progress_motion(delta);
             }
 

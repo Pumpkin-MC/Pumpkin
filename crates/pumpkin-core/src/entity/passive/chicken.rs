@@ -3,14 +3,21 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::chicken_sound_variant::ChickenSoundVariant;
 use pumpkin_data::chicken_variant::ChickenVariant;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    ChickenSoundVariantImpl, ChickenVariantImpl, DataComponentImpl,
+};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::ai::pathfinder::node::PathType;
@@ -29,18 +36,12 @@ use crate::entity::{
 };
 use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
 use crate::world::World;
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 const EGG_LAY_TIME: std::ops::Range<i32> = 6000..12000;
 const CHICKEN_JOCKEY_EXPERIENCE_REWARD: u32 = 10;
 
-const TEMPT_ITEMS: &[&Item] = &[
-    &Item::WHEAT_SEEDS,
-    &Item::MELON_SEEDS,
-    &Item::PUMPKIN_SEEDS,
-    &Item::BEETROOT_SEEDS,
-    &Item::TORCHFLOWER_SEEDS,
-    &Item::PITCHER_POD,
-];
+const CHICKEN_LAY_LOOT_TABLE: &str = "minecraft:gameplay/chicken_lay";
 
 /// Represents a Chicken, a passive mob that lays eggs and is immune to fall damage.
 ///
@@ -51,6 +52,8 @@ pub struct ChickenEntity {
     pub sound_variant: AtomicU8,
     egg_lay_time: AtomicI32,
     is_chicken_jockey: AtomicBool,
+    flap_speed: AtomicCell<f32>,
+    next_flap: AtomicCell<f32>,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
@@ -64,6 +67,8 @@ impl ChickenEntity {
             sound_variant: AtomicU8::new(ChickenSoundVariant::Classic as u8),
             egg_lay_time: AtomicI32::new(egg_lay_time),
             is_chicken_jockey: AtomicBool::new(false),
+            flap_speed: AtomicCell::new(0.0),
+            next_flap: AtomicCell::new(1.0),
             ageable_data: crate::entity::ageable::AgeableData::default(),
         };
         let mob_arc = Arc::new(chicken);
@@ -84,7 +89,14 @@ impl ChickenEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.4));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.0,
+                    &pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
@@ -99,18 +111,48 @@ impl ChickenEntity {
 
     fn lay_egg(&self) -> bool {
         let entity = self.get_entity();
-        let mut drop_event =
-            EntityDropItemEvent::new(entity.entity_id, "minecraft:egg".to_string(), 1);
-        if let Some(server) = entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut drop_event);
-        }
-        if drop_event.cancelled {
+        let world = entity.world.load_full();
+        let Some(table) = world.get_loot_table(CHICKEN_LAY_LOOT_TABLE) else {
             return false;
+        };
+        let params = LootContextParameters {
+            world: Some(&world),
+            position: Some(entity.pos.load()),
+            this_entity: Some(self),
+            ..Default::default()
+        };
+        let drops = generate_loot_from_handle(&table, self.get_random().random(), &params);
+        let mut dropped = false;
+        for stack in drops {
+            let mut drop_event = EntityDropItemEvent::new(
+                entity.entity_id,
+                format!("minecraft:{}", stack.item.registry_key),
+                stack.item_count,
+            );
+            if let Some(server) = world.server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut drop_event);
+            }
+            if drop_event.cancelled {
+                continue;
+            }
+            entity.spawn_at_location(stack);
+            dropped = true;
         }
-        entity.spawn_at_location(ItemStack::new(1, &Item::EGG));
-        true
+        dropped
+    }
+
+    fn variant_name(&self) -> String {
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        self.resolve_dynamic_entry_id("minecraft:chicken_variant", variant_id, |id| {
+            let variant = ChickenVariant::from_id(id as u8).unwrap_or_default();
+            format!("minecraft:{}", variant.to_name())
+        })
+    }
+
+    fn sound_variant(&self) -> ChickenSoundVariant {
+        ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
     }
 
     pub fn is_chicken_jockey(&self) -> bool {
@@ -123,11 +165,15 @@ impl ChickenEntity {
     }
 
     pub fn set_variant(&self, variant: ChickenVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::chicken::DATA_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
     }
 
@@ -144,19 +190,11 @@ impl ChickenEntity {
 
 impl CustomSound for ChickenEntity {
     fn death_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant =
-            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-                .unwrap_or_default();
-        Some(sound_variant.death_sound(is_baby))
+        Some(self.sound_variant().death_sound(self.is_baby()))
     }
 
     fn hurt_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant =
-            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-                .unwrap_or_default();
-        Some(sound_variant.hurt_sound(is_baby))
+        Some(self.sound_variant().hurt_sound(self.is_baby()))
     }
 }
 
@@ -172,7 +210,6 @@ impl Animal for ChickenEntity {
         item_stack
             .item
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_CHICKEN_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -196,20 +233,39 @@ impl Animal for ChickenEntity {
 }
 
 impl Mob for ChickenEntity {
-    fn mob_get_component(
-        &self,
-        component: pumpkin_data::data_component::DataComponent,
-    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
-        use pumpkin_data::{
-            data_component::DataComponent, data_component_impl::ChickenVariantImpl,
-        };
+    fn mob_is_flapping(&self) -> bool {
+        self.get_entity().fly_dist.load() > self.next_flap.load()
+    }
+
+    fn mob_on_flap(&self) {
+        self.next_flap
+            .store(self.get_entity().fly_dist.load() + self.flap_speed.load() / 2.0);
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(self.sound_variant().step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(self.sound_variant().ambient_sound(self.is_baby()))
+    }
+
+    fn mob_on_rider_positioned(&self, passenger: &dyn EntityBase) {
+        if passenger.get_living_entity().is_some() {
+            passenger
+                .get_entity()
+                .body_yaw
+                .store(self.get_entity().body_yaw.load());
+        }
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
         match component {
             DataComponent::ChickenVariant => Some(Box::new(ChickenVariantImpl {
-                value: format!(
-                    "minecraft:{}",
-                    ChickenVariant::from_id(self.variant.load(Ordering::Relaxed))?.to_name()
-                )
-                .into(),
+                value: self.variant_name().into(),
+            })),
+            DataComponent::ChickenSoundVariant => Some(Box::new(ChickenSoundVariantImpl {
+                value: format!("minecraft:{}", self.sound_variant().to_name()).into(),
             })),
             _ => None,
         }
@@ -218,6 +274,7 @@ impl Mob for ChickenEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
@@ -226,8 +283,7 @@ impl Mob for ChickenEntity {
         self.set_sound_variant(
             sound_variants[self.get_random().random_range(0..sound_variants.len())],
         );
-        self.mob_entity.finalize_spawn_base();
-        group_data
+        self.finalize_spawn_super(group_data)
     }
 
     fn has_audited_tick(&self) -> bool {
@@ -263,22 +319,17 @@ impl Mob for ChickenEntity {
         if self.is_chicken_jockey() {
             CHICKEN_JOCKEY_EXPERIENCE_REWARD
         } else {
-            self.get_entity().entity_type.experience_reward
+            crate::entity::passive::animal::experience_reward(self)
         }
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("IsChickenJockey", self.is_chicken_jockey());
         nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
-        let variant =
-            ChickenVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
-        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
-        let sound_variant =
-            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-                .unwrap_or_default();
+        nbt.put_string("variant", self.variant_name());
         nbt.put_string(
             "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
+            format!("minecraft:{}", self.sound_variant().to_name()),
         );
     }
 
@@ -288,9 +339,13 @@ impl Mob for ChickenEntity {
             self.egg_lay_time.store(egg_lay_time, Ordering::Relaxed);
         }
         if let Some(variant_str) = nbt.get_string("variant")
-            && let Some(variant) = ChickenVariant::from_name(variant_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:chicken_variant", variant_str, |n| {
+                    ChickenVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
         {
-            self.variant.store(variant.id(), Ordering::Relaxed);
+            self.variant.store(variant_id, Ordering::Relaxed);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = ChickenSoundVariant::from_name(sound_str)
@@ -305,8 +360,11 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        if let Some(v) = ChickenVariant::from_name(name) {
-            self.set_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:chicken_variant", name, |n| {
+            ChickenVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant_id(variant_id);
         }
     }
 
@@ -335,6 +393,13 @@ impl Mob for ChickenEntity {
     fn mob_ai_step(&self) {
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let flap_change: f32 = if on_ground { -1.0 } else { 4.0 };
+        self.flap_speed.store(
+            flap_change
+                .mul_add(0.3, self.flap_speed.load())
+                .clamp(0.0, 1.0),
+        );
         let velocity = entity.velocity.load();
         if !entity.on_ground.load(Ordering::Relaxed) && velocity.y < 0.0 {
             entity.set_velocity(velocity.multiply(1.0, 0.6, 1.0));
@@ -347,10 +412,8 @@ impl Mob for ChickenEntity {
         {
             let mut rng = self.get_random();
             if self.lay_egg() {
-                entity.world.load().play_sound_fine(
+                self.play_entity_sound(
                     Sound::EntityChickenEgg,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
                     1.0,
                     (rng.random::<f32>() - rng.random::<f32>()).mul_add(0.2, 1.0),
                 );
@@ -365,13 +428,6 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let sound_variant =
-            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-                .unwrap_or_default();
-        self.animal_interact(
-            player,
-            item_stack,
-            sound_variant.ambient_sound(self.is_baby()),
-        )
+        self.animal_interact(player, item_stack)
     }
 }

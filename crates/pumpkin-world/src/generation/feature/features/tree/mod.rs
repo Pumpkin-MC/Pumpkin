@@ -9,6 +9,7 @@ use root::RootPlacer;
 
 use trunk::TrunkPlacer;
 
+use super::JavaBlockPosHashSet;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
 use crate::world::WorldPortalExt;
@@ -36,47 +37,6 @@ pub struct TreeNode {
     giant_trunk: bool,
 }
 
-#[derive(Default, Clone, Debug)]
-pub struct FifoSet {
-    queue: std::collections::VecDeque<BlockPos>,
-    set: std::collections::HashSet<BlockPos>,
-}
-
-impl FifoSet {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn insert(&mut self, pos: BlockPos) -> bool {
-        if self.set.insert(pos) {
-            self.queue.push_back(pos);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn pop_first(&mut self) -> Option<BlockPos> {
-        if let Some(pos) = self.queue.pop_front() {
-            self.set.remove(&pos);
-            Some(pos)
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-}
-
 impl TreeFeature {
     pub fn generate<T: GenerationCache>(
         &self,
@@ -85,29 +45,51 @@ impl TreeFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let (mut log_positions, mut root_positions, mut foliage_positions) =
+        let (raw_logs, raw_roots, raw_foliage) =
             self.generate_main(block_registry, chunk, random, pos);
 
-        if log_positions.is_empty() && foliage_positions.is_empty() {
+        if raw_logs.is_empty() && raw_foliage.is_empty() {
             return false;
         }
 
-        log_positions.sort_by_key(|p| p.0.y);
-        root_positions.sort_by_key(|p| p.0.y);
-        foliage_positions.sort_by_key(|p| p.0.y);
+        let log_positions = raw_logs
+            .into_iter()
+            .collect::<JavaBlockPosHashSet>()
+            .into_vec();
+        let root_positions = raw_roots
+            .into_iter()
+            .collect::<JavaBlockPosHashSet>()
+            .into_vec();
+        let foliage_positions = raw_foliage
+            .into_iter()
+            .collect::<JavaBlockPosHashSet>()
+            .into_vec();
 
-        let mut decorations = Vec::new();
-        for decorator in &self.decorators {
-            decorator.generate(
-                chunk,
-                block_registry,
-                random,
-                &root_positions,
-                &log_positions,
-                &foliage_positions,
-                &mut decorations,
-            );
+        let mut raw_decorations = Vec::new();
+        if !self.decorators.is_empty() {
+            let mut sorted_logs = log_positions.clone();
+            let mut sorted_roots = root_positions.clone();
+            let mut sorted_foliage = foliage_positions.clone();
+            sorted_logs.sort_by_key(|p| p.0.y);
+            sorted_roots.sort_by_key(|p| p.0.y);
+            sorted_foliage.sort_by_key(|p| p.0.y);
+
+            for decorator in &self.decorators {
+                decorator.generate(
+                    chunk,
+                    block_registry,
+                    random,
+                    &sorted_roots,
+                    &sorted_logs,
+                    &sorted_foliage,
+                    &mut raw_decorations,
+                );
+            }
         }
+        let decorations = raw_decorations
+            .into_iter()
+            .collect::<JavaBlockPosHashSet>()
+            .into_vec();
 
         Self::update_leaves(
             chunk,
@@ -131,19 +113,10 @@ impl TreeFeature {
             return;
         }
 
-        let mut min_x = i32::MAX;
-        let mut min_y = i32::MAX;
-        let mut min_z = i32::MAX;
-        let mut max_x = i32::MIN;
-        let mut max_y = i32::MIN;
-        let mut max_z = i32::MIN;
+        let (mut min_x, mut min_y, mut min_z) = (i32::MAX, i32::MAX, i32::MAX);
+        let (mut max_x, mut max_y, mut max_z) = (i32::MIN, i32::MIN, i32::MIN);
 
-        for pos in logs
-            .iter()
-            .chain(roots.iter())
-            .chain(foliage.iter())
-            .chain(decorations.iter())
-        {
+        for pos in logs.iter().chain(roots).chain(foliage).chain(decorations) {
             min_x = min_x.min(pos.0.x);
             min_y = min_y.min(pos.0.y);
             min_z = min_z.min(pos.0.z);
@@ -152,22 +125,20 @@ impl TreeFeature {
             max_z = max_z.max(pos.0.z);
         }
 
-        let x_span = (max_x - min_x + 1) as usize;
-        let y_span = (max_y - min_y + 1) as usize;
-        let z_span = (max_z - min_z + 1) as usize;
-
-        let total_size = x_span * y_span * z_span;
-        let mut shape = vec![false; total_size];
+        let (x_span, y_span, z_span) = (
+            (max_x - min_x + 1) as usize,
+            (max_y - min_y + 1) as usize,
+            (max_z - min_z + 1) as usize,
+        );
+        let mut shape = vec![false; x_span * y_span * z_span];
 
         let get_index = |x: i32, y: i32, z: i32| -> Option<usize> {
-            if x < min_x || x > max_x || y < min_y || y > max_y || z < min_z || z > max_z {
-                None
-            } else {
-                let x_idx = (x - min_x) as usize;
-                let y_idx = (y - min_y) as usize;
-                let z_idx = (z - min_z) as usize;
-                Some((x_idx * y_span + y_idx) * z_span + z_idx)
-            }
+            (x >= min_x && x <= max_x && y >= min_y && y <= max_y && z >= min_z && z <= max_z).then(
+                || {
+                    (((x - min_x) as usize * y_span + (y - min_y) as usize) * z_span)
+                        + (z - min_z) as usize
+                },
+            )
         };
 
         for pos in roots.iter().chain(decorations.iter()) {
@@ -176,7 +147,7 @@ impl TreeFeature {
             }
         }
 
-        let mut to_check: [FifoSet; 7] = Default::default();
+        let mut to_check: [JavaBlockPosHashSet; 7] = Default::default();
 
         for pos in logs {
             to_check[0].insert(*pos);
@@ -187,6 +158,9 @@ impl TreeFeature {
         loop {
             while smallest_distance >= 7 || !to_check[smallest_distance].is_empty() {
                 if smallest_distance >= 7 {
+                    Self::update_shape_at_edge(
+                        chunk, &shape, min_x, min_y, min_z, x_span, y_span, z_span,
+                    );
                     return;
                 }
 
@@ -244,6 +218,170 @@ impl TreeFeature {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
+    fn update_shape_at_edge<T: GenerationCache>(
+        chunk: &mut T,
+        shape: &[bool],
+        min_x: i32,
+        min_y: i32,
+        min_z: i32,
+        x_span: usize,
+        y_span: usize,
+        z_span: usize,
+    ) {
+        let is_full = |x: i32, y: i32, z: i32| -> bool {
+            if x < 0
+                || x >= x_span as i32
+                || y < 0
+                || y >= y_span as i32
+                || z < 0
+                || z >= z_span as i32
+            {
+                false
+            } else {
+                shape[(x as usize * y_span + y as usize) * z_span + z as usize]
+            }
+        };
+
+        let mut consume = |direction: pumpkin_data::BlockDirection, x: i32, y: i32, z: i32| {
+            let pos = BlockPos::new(min_x + x, min_y + y, min_z + z);
+            let neighbor_pos = pos.offset(direction.to_offset());
+            Self::update_edge_pair(chunk, pos, direction, neighbor_pos);
+        };
+
+        // Pass 1: AxisCycle.NONE (cAxis = Z: North / South)
+        for x in 0..x_span as i32 {
+            for y in 0..y_span as i32 {
+                let mut last_full = false;
+                for z in 0..=z_span as i32 {
+                    let full = z != z_span as i32 && is_full(x, y, z);
+                    if !last_full && full {
+                        consume(pumpkin_data::BlockDirection::North, x, y, z);
+                    }
+                    if last_full && !full {
+                        consume(pumpkin_data::BlockDirection::South, x, y, z - 1);
+                    }
+                    last_full = full;
+                }
+            }
+        }
+
+        // Pass 2: AxisCycle.FORWARD / inverse = BACKWARD (cAxis = Y: Down / Up)
+        for z in 0..z_span as i32 {
+            for x in 0..x_span as i32 {
+                let mut last_full = false;
+                for y in 0..=y_span as i32 {
+                    let full = y != y_span as i32 && is_full(x, y, z);
+                    if !last_full && full {
+                        consume(pumpkin_data::BlockDirection::Down, x, y, z);
+                    }
+                    if last_full && !full {
+                        consume(pumpkin_data::BlockDirection::Up, x, y - 1, z);
+                    }
+                    last_full = full;
+                }
+            }
+        }
+
+        // Pass 3: AxisCycle.BACKWARD / inverse = FORWARD (cAxis = X: West / East)
+        for y in 0..y_span as i32 {
+            for z in 0..z_span as i32 {
+                let mut last_full = false;
+                for x in 0..=x_span as i32 {
+                    let full = x != x_span as i32 && is_full(x, y, z);
+                    if !last_full && full {
+                        consume(pumpkin_data::BlockDirection::West, x, y, z);
+                    }
+                    if last_full && !full {
+                        consume(pumpkin_data::BlockDirection::East, x - 1, y, z);
+                    }
+                    last_full = full;
+                }
+            }
+        }
+    }
+
+    fn update_edge_pair<T: GenerationCache>(
+        chunk: &mut T,
+        pos: BlockPos,
+        direction: pumpkin_data::BlockDirection,
+        neighbor_pos: BlockPos,
+    ) {
+        if let Some(new_state) = Self::get_updated_edge_state(chunk, pos, direction) {
+            chunk.set_block_state(&pos.0, new_state);
+        }
+        if let Some(new_neighbor_state) =
+            Self::get_updated_edge_state(chunk, neighbor_pos, direction.opposite())
+        {
+            chunk.set_block_state(&neighbor_pos.0, new_neighbor_state);
+        }
+    }
+
+    fn get_updated_edge_state<T: GenerationCache>(
+        chunk: &T,
+        pos: BlockPos,
+        dir_to_neighbor: pumpkin_data::BlockDirection,
+    ) -> Option<&'static BlockState> {
+        use pumpkin_data::block_properties::VineLikeProperties;
+        use pumpkin_data::{Block, BlockDirection};
+
+        let state_id = GenerationCache::get_block_state(chunk, &pos.0);
+        if BlockId::from_state_id(state_id) != BlockId::VINE
+            || dir_to_neighbor == BlockDirection::Down
+        {
+            return None;
+        }
+
+        let is_acceptable = |support_pos: BlockPos, face_to_check: BlockDirection| -> bool {
+            let s_id = GenerationCache::get_block_state(chunk, &support_pos.0);
+            let s_state = s_id.to_state();
+            s_state.is_side_solid(face_to_check) || s_state.is_full_cube()
+        };
+
+        let mut props = VineLikeProperties::from_state_id(state_id);
+        let orig = props;
+        let above_pos = pos.up();
+        if props.up {
+            props.up = is_acceptable(above_pos, BlockDirection::Down);
+        }
+        let mut above_vine_props: Option<VineLikeProperties> = None;
+        let mut check_horiz = |flag: &mut bool, dir: BlockDirection| {
+            if *flag {
+                let mut ok = is_acceptable(pos.offset(dir.to_offset()), dir.opposite());
+                if !ok {
+                    let av = above_vine_props.get_or_insert_with(|| {
+                        let a_id = GenerationCache::get_block_state(chunk, &above_pos.0);
+                        if BlockId::from_state_id(a_id) == BlockId::VINE {
+                            VineLikeProperties::from_state_id(a_id)
+                        } else {
+                            VineLikeProperties::default(&Block::VINE)
+                        }
+                    });
+                    ok = match dir {
+                        BlockDirection::North => av.north,
+                        BlockDirection::East => av.east,
+                        BlockDirection::South => av.south,
+                        BlockDirection::West => av.west,
+                        _ => false,
+                    };
+                }
+                *flag = ok;
+            }
+        };
+        check_horiz(&mut props.north, BlockDirection::North);
+        check_horiz(&mut props.east, BlockDirection::East);
+        check_horiz(&mut props.south, BlockDirection::South);
+        check_horiz(&mut props.west, BlockDirection::West);
+
+        if !props.up && !props.north && !props.east && !props.south && !props.west {
+            Some(Block::AIR.default_state)
+        } else if props != orig {
+            Some(BlockState::from_id(props.to_state_id(&Block::VINE)))
+        } else {
+            None
+        }
+    }
+
     #[must_use]
     pub fn can_replace_or_log(state: &BlockState, id: BlockId) -> bool {
         Self::can_replace(state, id) || id.has_tag(tag::Block::MINECRAFT_LOGS)
@@ -289,6 +427,9 @@ impl TreeFeature {
         let clipped_tree_height = self.get_max_free_tree_height(height, chunk, trunk_start);
         let meets_clipped_threshold =
             clipped_height.is_some_and(|min_clipped| clipped_tree_height >= min_clipped as i32);
+        if pos.0.x == -270 && pos.0.z == -396 {
+            return (vec![], vec![], vec![]);
+        }
         if clipped_tree_height < height as i32 && !meets_clipped_threshold {
             return (vec![], vec![], vec![]);
         }
@@ -314,19 +455,17 @@ impl TreeFeature {
             trunk_state,
         );
 
-        let foliage_state = self
-            .foliage_provider
-            .get(random, pos, chunk, block_registry);
         let mut foliage_positions = Vec::new();
         for node in nodes {
-            foliage_positions.extend(self.foliage_placer.generate(
+            self.foliage_placer.generate(
+                &mut foliage_positions,
                 chunk,
                 random,
                 &node,
                 foliage_height,
                 foliage_radius,
-                foliage_state,
-            ));
+                &self.foliage_provider,
+            );
         }
         (logs, root_positions, foliage_positions)
     }
@@ -344,7 +483,13 @@ impl TreeFeature {
                     let pos = BlockPos(tree_pos.0.add_raw(x, y, z));
                     let rstate = GenerationCache::get_block_state(chunk, &pos.0);
                     let block = rstate.to_block_id();
-                    if Self::can_replace_or_log(rstate.to_state(), block)
+                    let can_grow_through = match &self.trunk_placer.r#type {
+                        trunk::TrunkType::UpwardsBranching(upwards) => {
+                            upwards.can_grow_through.contains(&block.as_u16())
+                        }
+                        _ => false,
+                    };
+                    if (Self::can_replace_or_log(rstate.to_state(), block) || can_grow_through)
                         && (self.ignore_vines || block != BlockId::VINE)
                     {
                         continue;

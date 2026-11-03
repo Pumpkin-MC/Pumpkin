@@ -266,7 +266,7 @@ impl JavaClient {
         let public_keys = server.mojang_public_keys.load_full();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let is_valid = public_keys.iter().any(|key| {
                 let verifying_key = VerifyingKey::<Sha1>::new(key.clone());
                 verifying_key.verify(&signable, &key_signature).is_ok()

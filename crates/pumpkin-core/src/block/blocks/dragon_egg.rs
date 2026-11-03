@@ -33,9 +33,8 @@ impl DragonEggBlock {
             );
 
             let state = world.get_block_state(&test_pos);
-            let below_state = world.get_block_state(&test_pos.down());
 
-            if state.is_air() && !below_state.is_air() {
+            if state.is_air() && world.is_in_build_limit(test_pos) {
                 let packed_diff = pos.pack_difference_in_position(
                     &test_pos,
                     Self::TELEPORT_RADIUS_XZ,

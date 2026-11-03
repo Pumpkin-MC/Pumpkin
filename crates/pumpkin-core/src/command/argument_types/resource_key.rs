@@ -13,6 +13,7 @@ use pumpkin_util::text::TextComponent;
 use std::string::ToString;
 
 pub static ADVANCEMENT_REGISTRY: &Identifier = &Identifier::vanilla_static("advancement");
+pub static DIMENSION_REGISTRY: &Identifier = &Identifier::vanilla_static("dimension");
 pub static BIOME_REGISTRY: &Identifier = &Identifier::vanilla_static("worldgen/biome");
 
 pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> = CommandErrorType::new(
@@ -72,8 +73,18 @@ impl ArgumentType<CommandSource> for ResourceKeyArgument {
     }
 
     fn client_side_parser(&self) -> JavaClientArgumentType {
-        JavaClientArgumentType::ResourceKey {
-            identifier: self.0.clone(),
+        // Vanilla has its own parser for dimensions and takes biomes as plain
+        // `ResourceArgument`s; the rest are resource keys.
+        if self.0 == DIMENSION_REGISTRY {
+            JavaClientArgumentType::Dimension
+        } else if self.0 == BIOME_REGISTRY {
+            JavaClientArgumentType::Resource {
+                identifier: self.0.clone(),
+            }
+        } else {
+            JavaClientArgumentType::ResourceKey {
+                identifier: self.0.clone(),
+            }
         }
     }
 }
