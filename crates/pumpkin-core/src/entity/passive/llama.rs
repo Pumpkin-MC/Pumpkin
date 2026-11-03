@@ -683,7 +683,7 @@ impl Mob for LlamaEntity {
         if let Some(result) = self.interact_with_held_item(player, item_stack, true) {
             return result;
         }
-        self.horse_mob_interact(player, item_stack, Sound::EntityLlamaAmbient)
+        self.horse_mob_interact(player, item_stack)
     }
 }
 

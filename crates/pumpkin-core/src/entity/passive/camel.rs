@@ -620,6 +620,6 @@ impl Mob for CamelEntity {
         }
         self.is_baby()
             && item_stack.item == &Item::GOLDEN_DANDELION
-            && self.animal_interact(player, item_stack, Sound::EntityCamelAmbient)
+            && self.animal_interact(player, item_stack)
     }
 }

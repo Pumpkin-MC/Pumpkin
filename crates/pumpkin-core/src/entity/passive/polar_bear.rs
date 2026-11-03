@@ -173,6 +173,6 @@ impl Mob for PolarBearEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityPolarBearAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

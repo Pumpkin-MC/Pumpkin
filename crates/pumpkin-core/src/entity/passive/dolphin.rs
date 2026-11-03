@@ -441,7 +441,9 @@ impl Mob for DolphinEntity {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             if self.can_age_up() {
                 self.age_up(
-                    Self::get_speed_up_seconds_when_feeding(self.get_age().wrapping_neg()),
+                    crate::entity::ageable::get_speed_up_seconds_when_feeding(
+                        self.get_age().wrapping_neg(),
+                    ),
                     true,
                 );
             } else {
@@ -561,8 +563,9 @@ mod tests {
             &EntityType::DOLPHIN,
         ));
         dolphin.set_age(i32::MIN);
-        let seconds =
-            DolphinEntity::get_speed_up_seconds_when_feeding(dolphin.get_age().wrapping_neg());
+        let seconds = crate::entity::ageable::get_speed_up_seconds_when_feeding(
+            dolphin.get_age().wrapping_neg(),
+        );
         dolphin.age_up(seconds, true);
         assert_eq!(dolphin.get_age(), i32::MIN);
         assert_eq!(

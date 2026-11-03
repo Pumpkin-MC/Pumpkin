@@ -586,17 +586,12 @@ pub trait AbstractHorse: Animal + AgeableMob {
         None
     }
 
-    fn horse_mob_interact(
-        &self,
-        player: &Arc<Player>,
-        stack: &mut ItemStack,
-        ambient_sound: Sound,
-    ) -> bool
+    fn horse_mob_interact(&self, player: &Arc<Player>, stack: &mut ItemStack) -> bool
     where
         Self: Sized,
     {
         if self.get_entity().has_passengers() || self.is_baby() {
-            return self.animal_interact(player, stack, ambient_sound);
+            return self.animal_interact(player, stack);
         }
         if self.is_tamed() && player.get_entity().is_sneaking() {
             self.open_custom_inventory_screen(player);

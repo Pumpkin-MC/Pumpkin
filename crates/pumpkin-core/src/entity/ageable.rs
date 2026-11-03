@@ -30,6 +30,11 @@ impl Default for AgeableData {
     }
 }
 
+#[must_use]
+pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    ((ticks_until_adult / 20) as f32 * 0.1) as i32
+}
+
 pub trait AgeableMob: Mob {
     fn get_ageable_data(&self) -> &AgeableData;
 
@@ -201,14 +206,6 @@ pub trait AgeableMob: Mob {
         if self.get_age() == 0 {
             self.set_age(data.forced_age.load(Relaxed));
         }
-    }
-
-    #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
-    where
-        Self: Sized,
-    {
-        (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 
     fn write_ageable_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {

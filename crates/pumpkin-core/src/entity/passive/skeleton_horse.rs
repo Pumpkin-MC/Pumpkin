@@ -180,6 +180,6 @@ impl Mob for SkeletonHorseEntity {
         if !self.is_tamed() {
             return false;
         }
-        self.horse_mob_interact(player, item_stack, Sound::EntitySkeletonHorseAmbient)
+        self.horse_mob_interact(player, item_stack)
     }
 }

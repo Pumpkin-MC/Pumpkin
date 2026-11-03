@@ -410,13 +410,6 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let sound_variant =
-            ChickenSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-                .unwrap_or_default();
-        self.animal_interact(
-            player,
-            item_stack,
-            sound_variant.ambient_sound(self.is_baby()),
-        )
+        self.animal_interact(player, item_stack)
     }
 }

@@ -181,7 +181,7 @@ impl Mob for StriderEntity {
             return true;
         }
 
-        if self.animal_interact(player, item_stack, Sound::EntityStriderAmbient) {
+        if self.animal_interact(player, item_stack) {
             return true;
         }
         self.is_equippable_in_slot(item_stack, &EquipmentSlot::SADDLE)

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
-use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
@@ -52,12 +51,7 @@ pub trait Animal: Mob {
         world.get_light_level_dependent_magic_value(pos) - 0.5
     }
 
-    fn play_eating_sound(&self, sound: Sound) {
-        let mob_entity = self.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let world = entity.world.load();
-        world.play_sound(sound, SoundCategory::Neutral, &entity.pos.load());
-    }
+    fn play_eating_sound(&self) {}
 
     fn write_animal_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let mob_entity = self.get_mob_entity();
@@ -77,12 +71,7 @@ pub trait Animal: Mob {
         mob_entity.set_love_ticks(in_love, love_cause);
     }
 
-    fn animal_interact(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        ambient_sound: Sound,
-    ) -> bool {
+    fn animal_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let mob_entity = self.get_mob_entity();
         if self.is_food(item_stack) {
             let age = mob_entity
@@ -93,46 +82,30 @@ pub trait Animal: Mob {
 
             if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-
-                if !self.set_in_love(player) {
-                    return true;
+                if self.set_in_love(player) {
+                    self.play_eating_sound();
                 }
-                let entity = &mob_entity.living_entity.entity;
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    7,
-                    Particle::Heart,
-                );
-                world.play_sound(ambient_sound, SoundCategory::Neutral, &entity.pos.load());
                 return true;
             }
 
-            if age < 0 {
+            if let Some(ageable) = self.as_ageable()
+                && ageable.can_age_up()
+            {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-                let speedup = (-age / 10).max(1);
-                mob_entity
-                    .living_entity
-                    .entity
-                    .age
-                    .fetch_add(speedup, std::sync::atomic::Ordering::Relaxed);
+                ageable.age_up(
+                    crate::entity::ageable::get_speed_up_seconds_when_feeding(-age),
+                    true,
+                );
 
                 let entity = &mob_entity.living_entity.entity;
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                entity.world.load().spawn_particle(
+                    entity.pos.load() + Vector3::new(0.0, f64::from(entity.height()), 0.0),
                     Vector3::new(0.5, 0.5, 0.5),
                     1.0,
                     7,
                     Particle::HappyVillager,
                 );
-                self.play_eating_sound(ambient_sound);
+                self.play_eating_sound();
                 return true;
             }
         }
