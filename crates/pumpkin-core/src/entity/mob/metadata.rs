@@ -308,12 +308,6 @@ impl MobMetadata {
         self
     }
 
-    /// Sets bat roosting state.
-    #[must_use]
-    pub fn bat_roosting(self, roosting: bool) -> Self {
-        self.bat_flags(i8::from(roosting))
-    }
-
     /// Sets the full bat flags byte and the corresponding Bedrock resting state.
     #[must_use]
     pub fn bat_flags(mut self, flags: i8) -> Self {
