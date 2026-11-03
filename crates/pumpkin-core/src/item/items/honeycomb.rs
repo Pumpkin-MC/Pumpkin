@@ -11,6 +11,7 @@ use crate::world::World;
 use pumpkin_data::block_properties::{
     ChestLikeProperties, ChestType, DoubleBlockHalf, OakDoorLikeProperties,
 };
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -74,7 +75,11 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
         let (other_block, other_state_id) = world.get_block_and_state_id(&other_half_pos);
         if other_block == block {
             let other_new_state_id = with_properties_of(other_block, other_state_id, new_block);
-            world.set_block_state(&other_half_pos, other_new_state_id, BlockFlags::NOTIFY_ALL);
+            world.set_block_state(
+                &other_half_pos,
+                other_new_state_id,
+                BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
+            );
         }
     } else if matches!(
         block.id,
@@ -101,6 +106,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
                     neighbor_new_state,
                     BlockFlags::NOTIFY_LISTENERS,
                 );
+                world.emit_game_event(GameEvent::BlockChange.name(), neighbor_pos.to_f64());
                 world.sync_world_event(WorldEvent::ParticlesWaxOn, neighbor_pos, 0);
                 world.play_sound(
                     Sound::ItemHoneycombWaxOn,
@@ -112,6 +118,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     }
 
     world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
     world.sync_world_event(WorldEvent::ParticlesWaxOn, location, 0);
     world.play_sound(
         Sound::ItemHoneycombWaxOn,

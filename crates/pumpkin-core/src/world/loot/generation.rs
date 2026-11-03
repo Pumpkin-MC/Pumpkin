@@ -534,7 +534,9 @@ impl Generator<'_, '_> {
                         };
                     }
                     LootFunctionKind::ExplosionDecay => {
-                        if let Some(radius) = self.params.explosion_radius {
+                        if let Some(radius) = self.params.explosion_radius
+                            && radius > 1.0
+                        {
                             stack.count = (0..stack.count.max(0))
                                 .filter(|_| self.rng.next_f32() <= 1.0 / radius)
                                 .count() as i32;

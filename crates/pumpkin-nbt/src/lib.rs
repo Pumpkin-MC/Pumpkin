@@ -18,6 +18,8 @@ use serializer::{NbtWriteHelper, NbtWriteHelperBedrock, NbtWriteHelperJava};
 use tag::NbtTag;
 use thiserror::Error;
 
+/// CESU-8 string conversion helpers.
+pub mod cesu8;
 /// Compound-tag storage and construction helpers.
 pub mod compound;
 /// Low-level NBT deserialization support.

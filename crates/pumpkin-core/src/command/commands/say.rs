@@ -2,7 +2,7 @@ use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
-use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -41,6 +41,6 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     dispatcher.register(
         command(NAME, DESCRIPTION)
             .requires(PERMISSION)
-            .then(argument(ARG_MESSAGE, StringArgumentType::GreedyPhrase).executes(Executor)),
+            .then(argument(ARG_MESSAGE, MessageArgumentType).executes(Executor)),
     );
 }

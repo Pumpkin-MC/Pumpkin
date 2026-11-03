@@ -127,11 +127,6 @@ impl BlockBehaviour for DriedGhastBlock {
                 args.world.spawn_entity(ghastling);
             }
         } else if props.hydration > 0 {
-            args.world.play_sound(
-                Sound::BlockDriedGhastTransition,
-                SoundCategory::Blocks,
-                &args.position.to_f64(),
-            );
             props.hydration -= 1;
             args.world.set_block_state(
                 args.position,

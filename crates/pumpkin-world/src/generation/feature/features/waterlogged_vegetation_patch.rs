@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use super::JavaBlockPosHashSet;
 
 use pumpkin_util::{
     math::position::BlockPos,
@@ -70,7 +70,7 @@ impl WaterloggedVegetationPatchFeature {
         replaceable: &crate::generation::block_predicate::BlockPredicate,
         x_radius: i32,
         z_radius: i32,
-    ) -> HashSet<BlockPos> {
+    ) -> JavaBlockPosHashSet {
         let surface = self.base.place_ground_patch(
             chunk,
             block_registry,
@@ -82,7 +82,7 @@ impl WaterloggedVegetationPatchFeature {
         );
 
         // Filter the surface to only include unexposed positions, turning them into water
-        let water_surface: HashSet<BlockPos> = surface
+        let water_surface: JavaBlockPosHashSet = surface
             .into_iter()
             .filter(|&pos| !is_exposed(chunk, pos))
             .collect();

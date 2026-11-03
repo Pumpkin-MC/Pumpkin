@@ -1,12 +1,15 @@
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, atomic::Ordering};
 
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
     mob::{Mob, MobEntity},
 };
+
+/// Vanilla `Phantom.TICKS_PER_FLAP`, `Mth.ceil(24.166098F)`.
+const TICKS_PER_FLAP: i32 = 25;
 
 pub struct PhantomEntity {
     pub mob_entity: MobEntity,
@@ -38,6 +41,17 @@ impl PhantomEntity {
 }
 
 impl Mob for PhantomEntity {
+    fn mob_is_flapping(&self) -> bool {
+        let entity = self.get_entity();
+        // Vanilla `getUniqueFlapTickOffset` spreads the flaps by entity id.
+        entity
+            .entity_id
+            .wrapping_mul(3)
+            .wrapping_add(entity.tick_count.load(Ordering::Relaxed))
+            % TICKS_PER_FLAP
+            == 0
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

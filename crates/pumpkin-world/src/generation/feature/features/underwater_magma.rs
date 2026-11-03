@@ -19,31 +19,26 @@ impl UnderwaterMagmaFeature {
     fn get_floor_y<T: GenerationCache>(&self, chunk: &T, origin: BlockPos) -> Option<i32> {
         let x = origin.0.x;
         let z = origin.0.z;
+        let mut y = origin.0.y;
 
-        // Drop down until water found
-        for dy in 0..=self.floor_search_range {
-            let check_y = origin.0.y - dy;
-            let pos = BlockPos::new(x, check_y, z);
-            let state_id = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-
-            if state_id == Block::WATER {
-                // Sink to first non-water block below the column
-                let mut floor_y = check_y - 1;
-                loop {
-                    let floor_pos = BlockPos::new(x, floor_y, z);
-                    let floor_id =
-                        GenerationCache::get_block_state(chunk, &floor_pos.0).to_block_id();
-                    if floor_id != Block::WATER {
-                        return Some(floor_y);
-                    }
-                    if (check_y - floor_y) > self.floor_search_range {
-                        break;
-                    }
-                    floor_y -= 1;
-                }
-            }
+        if GenerationCache::get_block_state(chunk, &BlockPos::new(x, y, z).0).to_block_id()
+            != Block::WATER
+        {
+            return None;
         }
-        None
+
+        for _ in 1..self.floor_search_range {
+            if GenerationCache::get_block_state(chunk, &BlockPos::new(x, y, z).0).to_block_id()
+                != Block::WATER
+            {
+                break;
+            }
+            y -= 1;
+        }
+
+        let floor_id =
+            GenerationCache::get_block_state(chunk, &BlockPos::new(x, y, z).0).to_block_id();
+        (floor_id != Block::WATER).then_some(y)
     }
 
     /// Check if a block can host magma
@@ -94,9 +89,9 @@ impl UnderwaterMagmaFeature {
         let mut placed = 0i32;
         let r = self.placement_radius;
 
-        for dx in -r..=r {
+        for dz in -r..=r {
             for dy in -r..=r {
-                for dz in -r..=r {
+                for dx in -r..=r {
                     if random.next_f32() >= self.placement_probability {
                         continue;
                     }
