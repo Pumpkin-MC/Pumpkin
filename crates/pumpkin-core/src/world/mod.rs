@@ -2835,6 +2835,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
+        player.has_played_before.store(true, Ordering::Release);
 
         // Todo make the data less spread
         let level_settings = LevelSettings {
@@ -3257,8 +3258,6 @@ impl World {
         // Actors come from the tracker, in range only.
         self.pair_new_player_with_tracked_entities(&player);
 
-        player.has_played_before.store(true, Ordering::Relaxed);
-
         // 3. Trigger Join Event and Broadcast Join Message
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
@@ -3412,6 +3411,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
+        player.has_played_before.store(true, Ordering::Release);
         chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();
@@ -3793,7 +3793,6 @@ impl World {
             }
         }
 
-        player.has_played_before.store(true, Ordering::Relaxed);
         player.on_screen_handler_opened(&player.player_screen_handler);
 
         player.send_active_effects();
