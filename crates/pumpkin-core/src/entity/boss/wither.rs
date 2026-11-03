@@ -70,6 +70,7 @@ pub struct WitherEntity {
     pub bossbar_uuid: Uuid,
     pub bossbar_players: Mutex<Vec<Uuid>>,
     bossbar_progress: AtomicCell<f32>,
+    bossbar_title: Mutex<TextComponent>,
     pub dropped_loot: AtomicBool,
 }
 
@@ -87,6 +88,7 @@ impl WitherEntity {
             bossbar_uuid: Uuid::new_v4(),
             bossbar_players: Mutex::new(Vec::new()),
             bossbar_progress: AtomicCell::new(1.0),
+            bossbar_title: Mutex::new(Self::default_bossbar_title()),
             dropped_loot: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(wither);
@@ -242,23 +244,23 @@ impl WitherEntity {
         world.spawn_entity(skull);
     }
 
-    fn make_bossbar(&self) -> Bossbar {
-        let title = self
-            .mob_entity
+    fn default_bossbar_title() -> TextComponent {
+        TextComponent::translate_cross("entity.minecraft.wither", "entity.minecraft.wither", [])
+    }
+
+    fn bossbar_title_now(&self) -> TextComponent {
+        self.mob_entity
             .living_entity
             .entity
             .custom_name
             .load()
             .as_ref()
             .clone()
-            .unwrap_or_else(|| {
-                TextComponent::translate_cross(
-                    "entity.minecraft.wither",
-                    "entity.minecraft.wither",
-                    [],
-                )
-            });
+            .unwrap_or_else(Self::default_bossbar_title)
+    }
 
+    fn make_bossbar(&self) -> Bossbar {
+        let title = self.bossbar_title_now();
         Bossbar {
             uuid: self.bossbar_uuid,
             title,
@@ -312,8 +314,22 @@ impl WitherEntity {
             bossbar_players.retain(|u| u != uid);
         }
 
+        // WitherBoss.setCustomName renames the boss bar, so a name tag shows up right away.
+        let title = self.bossbar_title_now();
+        let mut sent_title = self
+            .bossbar_title
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let title_changed = *sent_title != title;
+        if title_changed {
+            sent_title.clone_from(&title);
+        }
+
         for player in players.iter() {
             if bossbar_players.contains(&player.gameprofile.id) {
+                if title_changed {
+                    player.update_bossbar_title(&self.bossbar_uuid, title.clone());
+                }
                 player.update_bossbar_health(&self.bossbar_uuid, progress);
             }
         }
