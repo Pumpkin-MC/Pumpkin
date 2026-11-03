@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use num_bigint::BigInt;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
@@ -82,5 +81,61 @@ impl KeyStore {
 }
 
 pub fn auth_digest(bytes: &[u8]) -> String {
-    BigInt::from_signed_bytes_be(bytes).to_str_radix(16)
+    if bytes.is_empty() {
+        return "0".to_string();
+    }
+    let is_negative = (bytes[0] & 0x80) != 0;
+    if is_negative {
+        let mut carry = 1u16;
+        let mut negated = vec![0u8; bytes.len()];
+        for (src, dst) in bytes.iter().rev().zip(negated.iter_mut().rev()) {
+            let sum = u16::from(!*src) + carry;
+            *dst = sum as u8;
+            carry = sum >> 8;
+        }
+        let hex_str = hex::encode(negated);
+        let trimmed = hex_str.trim_start_matches('0');
+        if trimmed.is_empty() {
+            "0".to_string()
+        } else {
+            format!("-{trimmed}")
+        }
+    } else {
+        let hex_str = hex::encode(bytes);
+        let trimmed = hex_str.trim_start_matches('0');
+        if trimmed.is_empty() {
+            "0".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_digest_minecraft_vectors() {
+        let digest_notch = Sha1::digest(b"Notch");
+        assert_eq!(
+            auth_digest(&digest_notch),
+            "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48"
+        );
+
+        let digest_jeb = Sha1::digest(b"jeb_");
+        assert_eq!(
+            auth_digest(&digest_jeb),
+            "-7c9d5b0044c130109a5d7b5fb5c317c02b4e28c1"
+        );
+
+        let digest_simon = Sha1::digest(b"simon");
+        assert_eq!(
+            auth_digest(&digest_simon),
+            "88e16a1019277b15d58faf0541e11910eb756f6"
+        );
+
+        assert_eq!(auth_digest(&[]), "0");
+        assert_eq!(auth_digest(&[0, 0, 0]), "0");
+    }
 }

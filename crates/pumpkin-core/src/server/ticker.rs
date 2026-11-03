@@ -1,7 +1,6 @@
-use super::server_test_manager::drain_game_test_queue;
+use super::server_test_manager::{drain_game_test_queue, has_pending_game_tests};
 
 use crate::{
-    STOP_INTERRUPT,
     plugin::server::{
         server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     },
@@ -48,14 +47,13 @@ pub struct Ticker;
 impl Ticker {
     /// Runs the main server tick loop on a dedicated thread.
     pub fn run(server: &Arc<Server>) {
-        let _guard = server.runtime.enter();
         // Single monotonic base, the schedule is plain nanosecond arithmetic.
         let base = Instant::now();
         let mut schedule = TickSchedule::new();
         let mut game_test_runner = GameTestRunner::new();
 
         let park_thread = std::thread::current();
-        let stop = STOP_INTERRUPT.clone();
+        let stop = server.stop_token.clone();
         server.runtime.spawn(async move {
             stop.cancelled().await;
             park_thread.unpark();
@@ -91,14 +89,13 @@ impl Ticker {
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
             if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
-                server.runtime.block_on(
-                    server
-                        .plugin_manager
-                        .fire(server, &mut ServerTickStartEvent::new(tick_number)),
-                );
+                server
+                    .plugin_manager
+                    .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
             }
 
-            let should_tick_game_tests = manager.runs_normally() || sprinting;
+            let should_tick_game_tests = (manager.runs_normally() || sprinting)
+                && (has_pending_game_tests() || !game_test_runner.is_empty());
 
             if sprinting {
                 manager.start_sprint_tick_work();
@@ -122,21 +119,21 @@ impl Ticker {
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
             if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
-                server.runtime.block_on(server.plugin_manager.fire(
+                server.plugin_manager.fire_blocking(
                     server,
                     &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
-                ));
+                );
             }
 
             server.update_tick_times(tick_duration_nanos);
 
-            if STOP_INTERRUPT.is_cancelled() {
+            if server.stop_token.is_cancelled() {
                 break 'ticker;
             }
 
-            wait_until_next_tick(base, schedule.next_tick_nanos);
+            wait_until_next_tick(server, base, schedule.next_tick_nanos);
 
-            if STOP_INTERRUPT.is_cancelled() {
+            if server.stop_token.is_cancelled() {
                 break 'ticker;
             }
         }
@@ -196,9 +193,9 @@ const fn apply_overload_skip(
 ///
 /// Vanilla drains its server-thread queue here (`pollTask`). there is no such queue:
 /// that work runs on the runtime and keeps going while this thread parks.
-fn wait_until_next_tick(base: Instant, next_tick_nanos: i64) {
+fn wait_until_next_tick(server: &Server, base: Instant, next_tick_nanos: i64) {
     loop {
-        if STOP_INTERRUPT.is_cancelled() {
+        if server.stop_token.is_cancelled() {
             return;
         }
 

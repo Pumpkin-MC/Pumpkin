@@ -31,7 +31,7 @@ pub trait Bucketable: Mob {
             ("NoAI", mob.is_no_ai()),
             ("Silent", entity.is_silent()),
             ("NoGravity", entity.has_no_gravity()),
-            ("Glowing", entity.glowing.load(Relaxed)),
+            ("Glowing", entity.has_glowing_tag.load(Relaxed)),
             ("Invulnerable", entity.invulnerable.load(Relaxed)),
             (
                 "PersistenceRequired",

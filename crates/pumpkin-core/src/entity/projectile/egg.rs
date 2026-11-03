@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 
@@ -28,7 +29,7 @@ impl EggEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -62,8 +63,8 @@ impl EggEntity {
 }
 
 impl EntityBase for EggEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {
@@ -100,11 +101,7 @@ impl EntityBase for EggEntity {
         let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
 
         // Play egg break particles
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         // Decide spawn count per probabilities:
         // r == 0 -> spawn 4 (1/256)
@@ -115,7 +112,6 @@ impl EntityBase for EggEntity {
         let mut hatching = to_spawn > 0;
         let mut hatching_type: &'static EntityType = &EntityType::CHICKEN;
 
-        let owner_id = self.thrown.owner_id;
         let entity_uuid = self.get_entity().entity_uuid;
         let variant_name = {
             let stack = self
@@ -127,8 +123,7 @@ impl EntityBase for EggEntity {
                 .map(|comp| comp.value.clone())
         };
 
-        if let Some(owner_id) = owner_id
-            && let Some(player) = world.get_player_by_id(owner_id)
+        if let Some(player) = self.thrown.owner.get_player(&world)
             && let Some(server) = world.server.upgrade()
         {
             let mut event = PlayerEggThrowEvent::new(

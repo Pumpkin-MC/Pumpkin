@@ -76,7 +76,7 @@ async fn verify_oidc_token_path(
     let token = token.to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     if self_signed {
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let res = pumpkin_auth::jwt::verify_oidc_token_self_signed(&token)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);
@@ -91,7 +91,7 @@ async fn verify_oidc_token_path(
                     AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
                 ))?;
 
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let res = pumpkin_auth::jwt::verify_oidc_token(&token, &issuer, &jwks)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);

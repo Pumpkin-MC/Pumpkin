@@ -130,6 +130,12 @@ impl Generator {
             } => {
                 quote! { LootCondition::RandomChanceWithEnchantedBonus { enchantment: #enchantment, unenchanted_chance: #unenchanted_chance, enchanted_chance_base: #enchanted_chance_base, enchanted_chance_per_level_above_first: #enchanted_chance_per_level_above_first } }
             }
+            DynamicLootCondition::RandomChanceWithLooting {
+                chance,
+                looting_multiplier,
+            } => {
+                quote! { LootCondition::RandomChanceWithLooting { chance: #chance, looting_multiplier: #looting_multiplier } }
+            }
             DynamicLootCondition::TableBonus {
                 enchantment,
                 chances,
@@ -192,6 +198,23 @@ impl Generator {
             }
             DynamicLootCondition::DamageSourceTag { tag, expected } => {
                 quote! { LootCondition::DamageSourceTag { tag: #tag, expected: #expected } }
+            }
+            DynamicLootCondition::DamageSourceProperties(predicate) => {
+                let predicate = self.predicate(predicate);
+                quote! { LootCondition::DamageSourceProperties(#predicate) }
+            }
+            DynamicLootCondition::TimeCheck { value, period } => {
+                let v = self.predicate(value);
+                let period = period.map_or_else(|| quote! {None}, |p| quote! {Some(#p)});
+                quote! { LootCondition::TimeCheck { value: #v, period: #period } }
+            }
+            DynamicLootCondition::ValueCheck { value, range } => {
+                let val = number_tokens(*value);
+                let r = self.predicate(range);
+                quote! { LootCondition::ValueCheck { value: #val, range: #r } }
+            }
+            DynamicLootCondition::Reference(name) => {
+                quote! { LootCondition::Reference(#name) }
             }
         }
     }

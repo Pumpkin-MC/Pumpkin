@@ -209,42 +209,141 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
     }
 
     /// Builds a complete palette without paying the bookkeeping cost of individual mutations.
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn from_fn(mut value_at: impl FnMut(usize, usize, usize) -> V) -> Self {
-        let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
-        let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
-        let mut palette = Vec::new();
-        let mut counts = Vec::<u16>::new();
+        let first = value_at(0, 0, 0);
+        let mut first_count: u16 = 1;
+        let mut first_diff = None;
 
-        for y in 0..DIM {
+        'homogeneous: for y in 0..DIM {
             for z in 0..DIM {
-                for x in 0..DIM {
+                let x_start = usize::from(y == 0 && z == 0);
+                for x in x_start..DIM {
                     let value = value_at(x, y, z);
-                    cube[y][z][x] = value;
-                    let index =
-                        if let Some(index) = palette.iter().position(|entry| *entry == value) {
-                            counts[index] += 1;
-                            index
-                        } else {
-                            palette.push(value);
-                            counts.push(1);
-                            palette.len() - 1
-                        };
-                    if let Ok(index) = u8::try_from(index) {
-                        indices[y][z][x] = index;
+                    if value == first {
+                        first_count += 1;
+                    } else {
+                        first_diff = Some((x, y, z, value));
+                        break 'homogeneous;
                     }
                 }
             }
         }
 
-        if palette.len() == 1 {
-            return Self::Homogeneous(palette[0]);
+        let Some((diff_x, diff_y, diff_z, second)) = first_diff else {
+            return Self::Homogeneous(first);
+        };
+
+        let mut palette = Vec::with_capacity(16);
+        palette.push(first);
+        palette.push(second);
+        let mut counts = Vec::<u16>::with_capacity(16);
+        counts.push(first_count);
+        counts.push(1);
+
+        if std::mem::size_of::<V>() <= 1 {
+            let mut cube = Box::new([[[first; DIM]; DIM]; DIM]);
+            cube[diff_y][diff_z][diff_x] = second;
+            let mut last_val = second;
+            let mut last_idx = 1usize;
+
+            for y in diff_y..DIM {
+                let z_start = if y == diff_y { diff_z } else { 0 };
+                for z in z_start..DIM {
+                    let x_start = if y == diff_y && z == diff_z {
+                        diff_x + 1
+                    } else {
+                        0
+                    };
+                    for x in x_start..DIM {
+                        let value = value_at(x, y, z);
+                        cube[y][z][x] = value;
+                        let index = if value == last_val {
+                            last_idx
+                        } else if let Some(idx) = palette.iter().position(|&e| e == value) {
+                            last_val = value;
+                            last_idx = idx;
+                            idx
+                        } else {
+                            palette.push(value);
+                            counts.push(0);
+                            last_val = value;
+                            last_idx = palette.len() - 1;
+                            last_idx
+                        };
+                        counts[index] += 1;
+                    }
+                }
+            }
+
+            return Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                storage: PaletteStorage::Dense(cube),
+                palette,
+                counts,
+            }));
         }
 
-        let storage = if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
-            PaletteStorage::Indexed(indices)
-        } else {
-            PaletteStorage::Dense(cube)
-        };
+        let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
+        indices[diff_y][diff_z][diff_x] = 1;
+        let mut dense_cube: Option<Box<[[[V; DIM]; DIM]; DIM]>> = None;
+        let mut last_val = second;
+        let mut last_idx = 1usize;
+
+        for y in diff_y..DIM {
+            let z_start = if y == diff_y { diff_z } else { 0 };
+            for z in z_start..DIM {
+                let x_start = if y == diff_y && z == diff_z {
+                    diff_x + 1
+                } else {
+                    0
+                };
+                for x in x_start..DIM {
+                    let value = value_at(x, y, z);
+                    let index = if value == last_val {
+                        counts[last_idx] += 1;
+                        last_idx
+                    } else if value == first {
+                        counts[0] += 1;
+                        last_val = first;
+                        last_idx = 0;
+                        0
+                    } else if let Some(idx) = palette.iter().position(|&e| e == value) {
+                        counts[idx] += 1;
+                        last_val = value;
+                        last_idx = idx;
+                        idx
+                    } else {
+                        palette.push(value);
+                        counts.push(1);
+                        let idx = palette.len() - 1;
+                        last_val = value;
+                        last_idx = idx;
+                        if idx == 256 {
+                            let mut cube = Box::new([[[first; DIM]; DIM]; DIM]);
+                            for cy in 0..=y {
+                                let cz_end = if cy == y { z + 1 } else { DIM };
+                                for cz in 0..cz_end {
+                                    let cx_end = if cy == y && cz == z { x } else { DIM };
+                                    for cx in 0..cx_end {
+                                        cube[cy][cz][cx] = palette[indices[cy][cz][cx] as usize];
+                                    }
+                                }
+                            }
+                            dense_cube = Some(cube);
+                        }
+                        idx
+                    };
+
+                    if let Some(cube) = &mut dense_cube {
+                        cube[y][z][x] = value;
+                    } else {
+                        indices[y][z][x] = index as u8;
+                    }
+                }
+            }
+        }
+
+        let storage = dense_cube.map_or(PaletteStorage::Indexed(indices), PaletteStorage::Dense);
         Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
             storage,
             palette,

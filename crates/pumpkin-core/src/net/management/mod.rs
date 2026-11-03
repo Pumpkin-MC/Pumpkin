@@ -88,6 +88,7 @@ impl ManagementServer {
             listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
+        .with_graceful_shutdown(server.stop_token.clone().cancelled_owned())
         .await
         {
             error!("Management server error: {e}");
@@ -102,12 +103,13 @@ async fn run_heartbeat_loop(server: Arc<Server>) {
             .settings
             .status_heartbeat_interval
             .load(Ordering::Relaxed);
+        tokio::select! {
+            () = server.stop_token.cancelled() => break,
+            () = tokio::time::sleep(Duration::from_secs(interval.max(1))) => {}
+        }
         if interval == 0 {
-            tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
-
-        tokio::time::sleep(Duration::from_secs(interval)).await;
 
         let status = ServerState {
             started: true,

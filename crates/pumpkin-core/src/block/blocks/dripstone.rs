@@ -366,8 +366,12 @@ fn can_place_at_pos(
         VerticalDirection::Up => position.up(),
         VerticalDirection::Down => position.down(),
     };
-    let support_block = block_accessor.get_block(&support_pos);
-    can_support_dripstone(speleothem, support_block)
+    can_support_dripstone(
+        block_accessor,
+        speleothem,
+        &support_pos,
+        support_block_vertical_direction,
+    )
 }
 
 fn get_support_block_vertical_direction(
@@ -388,21 +392,37 @@ fn get_support_block_vertical_direction(
     match block_direction_to_vertical_direction(placing_direction) {
         Some(ver_dir) => match ver_dir {
             VerticalDirection::Up => {
-                let block_above = block_accessor.get_block(&position.up());
-                let block_below = block_accessor.get_block(&position.down());
-                if can_support_dripstone(speleothem, block_above) {
+                if can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.up(),
+                    VerticalDirection::Up,
+                ) {
                     return Some(VerticalDirection::Up);
-                } else if can_support_dripstone(speleothem, block_below) {
+                } else if can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.down(),
+                    VerticalDirection::Down,
+                ) {
                     return Some(VerticalDirection::Down);
                 }
                 None
             }
             VerticalDirection::Down => {
-                let block_above = block_accessor.get_block(&position.up());
-                let block_below = block_accessor.get_block(&position.down());
-                if can_support_dripstone(speleothem, block_below) {
+                if can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.down(),
+                    VerticalDirection::Down,
+                ) {
                     return Some(VerticalDirection::Down);
-                } else if can_support_dripstone(speleothem, block_above) {
+                } else if can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.up(),
+                    VerticalDirection::Up,
+                ) {
                     return Some(VerticalDirection::Up);
                 }
                 None
@@ -410,14 +430,20 @@ fn get_support_block_vertical_direction(
         },
         None => player_option.map_or(Some(VerticalDirection::Up), |player| {
             let (_, pitch) = player.rotation();
-            let (can_place_above, can_place_below) = {
-                let block_above = block_accessor.get_block(&position.up());
-                let block_below = block_accessor.get_block(&position.down());
-                (
-                    can_support_dripstone(speleothem, block_above),
-                    can_support_dripstone(speleothem, block_below),
-                )
-            };
+            let (can_place_above, can_place_below) = (
+                can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.up(),
+                    VerticalDirection::Up,
+                ),
+                can_support_dripstone(
+                    block_accessor,
+                    speleothem,
+                    &position.down(),
+                    VerticalDirection::Down,
+                ),
+            );
             match (can_place_above, can_place_below) {
                 (true, true) => {
                     if pitch > 0.0 {
@@ -434,11 +460,22 @@ fn get_support_block_vertical_direction(
     }
 }
 
-fn can_support_dripstone(speleothem: &Block, support_block: &Block) -> bool {
+fn can_support_dripstone(
+    block_accessor: &dyn BlockAccessor,
+    speleothem: &Block,
+    support_pos: &BlockPos,
+    support_dir: VerticalDirection,
+) -> bool {
+    let (support_block, support_state) = block_accessor.get_block_and_state(support_pos);
     if support_block == speleothem {
-        return true;
+        let props = PointedDripstoneLikeProperties::from_state_id(support_state.id);
+        return props.vertical_direction == flip_dir(support_dir);
     }
-    support_block.default_state.is_solid_render()
+    let face = match support_dir {
+        VerticalDirection::Up => BlockDirection::Down,
+        VerticalDirection::Down => BlockDirection::Up,
+    };
+    support_state.is_side_solid(face)
 }
 
 fn modify_dripstone_thickness_to(
