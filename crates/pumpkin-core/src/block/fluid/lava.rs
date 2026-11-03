@@ -213,10 +213,10 @@ impl FluidBehaviour for FlowingLava {
                             Block::FIRE.default_state.id,
                             BlockFlags::NOTIFY_ALL,
                         );
-                        return;
+                        break;
                     }
                 } else if block.is_solid() {
-                    return;
+                    break;
                 }
             }
         }
