@@ -94,6 +94,14 @@ impl ParrotEntity {
 }
 
 impl Mob for ParrotEntity {
+    fn mob_is_pushable(&self) -> bool {
+        true
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        crate::entity::passive::animal::experience_reward(self)
+    }
+
     fn mob_ai_step(&self) {
         // Vanilla `calculateFlapping`.
         let entity = self.get_entity();

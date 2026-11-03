@@ -323,6 +323,10 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
     }

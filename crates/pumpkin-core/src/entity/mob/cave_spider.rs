@@ -62,9 +62,10 @@ impl Mob for CaveSpiderEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<crate::world::World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<super::spawn::SpawnGroupData>,
     ) -> Option<super::spawn::SpawnGroupData> {
-        super::spider::finalize_spider_spawn(&self.mob_entity, world, group_data)
+        super::spider::finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

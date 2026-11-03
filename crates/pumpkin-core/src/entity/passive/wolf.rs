@@ -192,6 +192,10 @@ impl Mob for WolfEntity {
         self.order_to_sit(false);
     }
 
+    fn can_shear_equipment(&self, player: &Player) -> bool {
+        self.is_owned_by(&player.gameprofile.id)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();

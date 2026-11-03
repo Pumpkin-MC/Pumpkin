@@ -586,7 +586,12 @@ impl EntityBase for ItemEntity {
     /// Vanilla `ItemEntity.getOwner`: the thrower.
     fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.thrower.load()?;
-        self.entity.world.load().get_entity_by_uuid(uuid)
+        let world = self.entity.world.load();
+        world.get_entity_by_uuid(uuid).or_else(|| {
+            world
+                .get_player_by_uuid(uuid)
+                .map(|player| player as Arc<dyn EntityBase>)
+        })
     }
 
     fn audited_reach(&self) -> Option<AuditedReach> {

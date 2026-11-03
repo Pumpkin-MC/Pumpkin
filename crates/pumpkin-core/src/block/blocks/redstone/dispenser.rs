@@ -592,7 +592,13 @@ impl DispenserBlock {
         let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
         // A dispenser has no acting player, matching vanilla's null `user` for this source.
-        prepare_egg_mob(item, &mob, ctx.world, None);
+        prepare_egg_mob(
+            item,
+            &mob,
+            ctx.world,
+            crate::entity::mob::spawn::EntitySpawnReason::Dispenser,
+            None,
+        );
 
         // Vanilla SpawnEggItemBehavior keeps the egg when nothing spawned.
         if ctx
@@ -1202,9 +1208,9 @@ impl DispenserBlock {
             if !living.is_alive()
                 || entity.is_spectator()
                 || !is_allowed_entity(allowed_entities.as_ref(), entity.get_entity().entity_type)
-                || entity
-                    .get_mob()
-                    .is_some_and(|mob| !mob.can_dispenser_equip_into_slot(slot))
+                || entity.get_mob().is_some_and(|mob| {
+                    !mob.can_use_slot(slot) || !mob.can_dispenser_equip_into_slot(slot)
+                })
             {
                 continue;
             }
@@ -1222,11 +1228,24 @@ impl DispenserBlock {
             drop(equipment);
 
             living.send_equipment_changes(&[(slot.clone(), stack)]);
-            ctx.world.play_sound_event(
-                &equip_sound,
-                SoundCategory::Blocks,
-                &entity.get_entity().pos.load(),
-            );
+            let pos = entity.get_entity().pos.load();
+            ctx.world.emit_game_event(GameEvent::Equip.name(), pos);
+            if let Some(mob) = entity.get_mob() {
+                let mob_entity = mob.get_mob_entity();
+                mob_entity.set_guaranteed_drop(slot);
+                mob_entity
+                    .persistence_required
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                match mob.get_equip_sound(slot) {
+                    Some(sound) => ctx.world.play_sound(sound, SoundCategory::Neutral, &pos),
+                    None => ctx
+                        .world
+                        .play_sound_event(&equip_sound, SoundCategory::Blocks, &pos),
+                }
+            } else {
+                ctx.world
+                    .play_sound_event(&equip_sound, SoundCategory::Blocks, &pos);
+            }
 
             return true;
         }
