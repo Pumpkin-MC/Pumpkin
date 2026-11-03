@@ -169,7 +169,7 @@ impl BlockBehaviour for LecternBlock {
             position: args.position,
             player: args.player,
         })
-        .map_or(BlockActionResult::Pass, |factory| {
+        .map_or(BlockActionResult::Consume, |factory| {
             args.player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
                 pumpkin_data::statistic::CustomStatistic::InteractWithLectern as i32,
@@ -247,6 +247,7 @@ impl BlockBehaviour for LecternBlock {
             props.to_state_id(args.block),
             BlockFlags::NOTIFY_ALL,
         );
+        Self::update_neighbors_below(args.world, args.position);
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -299,7 +300,9 @@ impl BlockBehaviour for LecternBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
+        let props = LecternLikeProperties::from_state_id(args.state.id);
+        if props.has_book
+            && let Some(block_entity) = args.world.get_block_entity(args.position)
             && let Some(lectern_entity) = block_entity.as_any().downcast_ref::<LecternBlockEntity>()
         {
             Some(lectern_entity.comparator_output())

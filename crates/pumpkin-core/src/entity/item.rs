@@ -1,9 +1,10 @@
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::player::statistics::StatisticCategory;
 use crate::server::Server;
 use crate::world::World;
 use core::f32;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl, DamageResistantImpl};
+use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
@@ -37,6 +38,7 @@ use crate::world::entity_islands::{self, AuditedReach};
 pub struct ItemEntity {
     entity: Entity,
     item_age: AtomicU32,
+    thrower: crossbeam::atomic::AtomicCell<Option<uuid::Uuid>>,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
@@ -110,6 +112,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(Self::DEFAULT_PICKUP_DELAY),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -132,6 +135,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -147,6 +151,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
             item_age: AtomicU32::new(0),
+            thrower: crossbeam::atomic::AtomicCell::new(None),
             pickup_delay: AtomicU8::new(0),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -157,6 +162,14 @@ impl ItemEntity {
 
     pub const fn get_item_stack(&self) -> &Mutex<ItemStack> {
         &self.item_stack
+    }
+
+    pub fn set_thrower(&self, uuid: uuid::Uuid) {
+        self.thrower.store(Some(uuid));
+    }
+
+    pub fn get_thrower(&self) -> Option<uuid::Uuid> {
+        self.thrower.load()
     }
 
     pub fn get_pickup_delay(&self) -> u8 {
@@ -171,17 +184,10 @@ impl ItemEntity {
         &self.entity
     }
 
-    /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
-    fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
-        stack
-            .get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
-    }
-
     /// Vanilla `ItemEntity.fireImmune`, cached since the item only changes on load.
     fn update_fire_immune(entity: &Entity, stack: &ItemStack) {
         entity.fire_immune.store(
-            !Self::can_be_hurt_by(stack, DamageType::IN_FIRE),
+            !stack.can_be_hurt_by(DamageType::IN_FIRE),
             Ordering::Relaxed,
         );
     }
@@ -562,25 +568,50 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
+    fn dampens_vibrations(&self) -> bool {
+        self.item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_DAMPENS_VIBRATIONS)
+    }
+
+    /// Vanilla `ItemEntity.getOwner`: the thrower.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
+        let uuid = self.thrower.load()?;
+        let world = self.entity.world.load();
+        world.get_entity_by_uuid(uuid).or_else(|| {
+            world
+                .get_player_by_uuid(uuid)
+                .map(|player| player as Arc<dyn EntityBase>)
+        })
+    }
+
     fn audited_reach(&self) -> Option<AuditedReach> {
         let entity = &self.entity;
         let world = entity.world.load();
         let pushes =
             super::MAX_PUSH_OUT_SPEED + super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
+        let horizontal = velocity.x.hypot(velocity.z) + pushes;
+        let vertical = velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION;
+        let mut links = entity_islands::links_of(self);
+        // Entering water splashes, wherever the item ends up.
+        let moved = entity
+            .bounding_box
+            .load()
+            .expand(horizontal, vertical, horizontal);
+        super::mob::game_event_listener_links(&world, false, &moved, &mut links);
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
-            motion: (
-                velocity.x.hypot(velocity.z) + pushes,
-                velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION,
-            ),
+            motion: (horizontal, vertical),
             entities: MERGE_DISTANCE,
             players: 0.0,
             block_reads: 1.0,
             route: None,
             changes_blocks: false,
             global: false,
-            links: entity_islands::links_of(self),
+            links,
         };
         reach.scan_contact_blocks(&world);
         Some(reach)
@@ -657,13 +688,11 @@ impl EntityBase for ItemEntity {
             return false;
         }
         // E.g. netherite ignores fire, the nether star explosions.
-        let can_be_hurt = Self::can_be_hurt_by(
-            &self
-                .item_stack
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            damage_type,
-        );
+        let can_be_hurt = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .can_be_hurt_by(damage_type);
         if !can_be_hurt {
             return false;
         }
@@ -743,6 +772,19 @@ impl EntityBase for ItemEntity {
             };
 
             if amount_picked_up > 0 {
+                if inserted
+                    && let Some(thrower) = self
+                        .thrower
+                        .load()
+                        .and_then(|uuid| self.entity.world.load().get_entity_by_uuid(uuid))
+                {
+                    player.trigger_advancement(AdvancementTrigger::ThrownItemPickedUpByPlayer {
+                        thrower_type: format!(
+                            "minecraft:{}",
+                            thrower.get_entity().entity_type.resource_name
+                        ),
+                    });
+                }
                 player.increment_stat(
                     StatisticCategory::PickedUp,
                     item_id as i32,
@@ -805,9 +847,13 @@ impl EntityBase for ItemEntity {
             self.pickup_delay.load(Ordering::Relaxed) as i16,
         );
         nbt.put_short("Health", self.health.load(Relaxed) as i16);
+        if let Some(thrower) = self.thrower.load() {
+            nbt.put_uuid("Thrower", thrower);
+        }
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.thrower.store(nbt.get_uuid("Thrower"));
         // Restore the item stack from the "Item" compound
         if let Some(item_compound) = nbt.get_compound("Item")
             && let Some(stack) = ItemStack::read_item_stack(item_compound)
@@ -946,11 +992,11 @@ mod tests {
     #[test]
     fn damage_resistant_items() {
         let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
-        assert!(!ItemEntity::can_be_hurt_by(&sword, DamageType::LAVA));
-        assert!(ItemEntity::can_be_hurt_by(&sword, DamageType::CACTUS));
+        assert!(!sword.can_be_hurt_by(DamageType::LAVA));
+        assert!(sword.can_be_hurt_by(DamageType::CACTUS));
 
         let star = ItemStack::new(1, &Item::NETHER_STAR);
-        assert!(!ItemEntity::can_be_hurt_by(&star, DamageType::EXPLOSION));
-        assert!(ItemEntity::can_be_hurt_by(&star, DamageType::LAVA));
+        assert!(!star.can_be_hurt_by(DamageType::EXPLOSION));
+        assert!(star.can_be_hurt_by(DamageType::LAVA));
     }
 }

@@ -3,17 +3,19 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use uuid::Uuid;
 
@@ -124,10 +126,11 @@ impl ZombieVillagerEntity {
             show_icon: true,
             blend: false,
         });
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, EntityStatus::ZombieConverting, None);
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::ZombieConverting,
+            ActorEventID::ZombieConverting,
+        );
     }
 
     /// Vanilla `getConversionProgress`: iron bars and beds nearby speed the cure up.
@@ -256,6 +259,22 @@ impl ZombieVillagerEntity {
 }
 
 impl Mob for ZombieVillagerEntity {
+    fn xp_reward(&self) -> u32 {
+        self.mob_entity.xp_reward()
+    }
+
+    fn can_hold_item(&self, stack: &ItemStack) -> bool {
+        self.mob_entity.can_hold_item(stack)
+    }
+
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        super::wants_to_pick_up(self, stack)
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityZombieVillagerStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity.mob_entity
     }
@@ -268,22 +287,17 @@ impl Mob for ZombieVillagerEntity {
         !self.is_converting() && self.villager_xp.load(Ordering::Relaxed) == 0
     }
 
-    fn mob_java_spawn_metadata(&self) -> Option<Box<[u8]>> {
-        let mut metadata = Vec::new();
-        Metadata::new(
-            tracked_data::zombie_villager::VILLAGER_DATA,
-            self.get_villager_data(),
-        )
-        .write(&mut metadata)
-        .ok()?;
-        Metadata::new(
-            tracked_data::zombie_villager::DATA_CONVERTING_ID,
-            self.is_converting(),
-        )
-        .write(&mut metadata)
-        .ok()?;
-        metadata.push(255);
-        Some(metadata.into_boxed_slice())
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new()
+            .zombie_villager_data(
+                self.get_villager_data(),
+                self.villager_xp.load(Ordering::Relaxed),
+            )
+            .converting(self.is_converting());
+        if self.is_baby() {
+            meta = meta.baby(true);
+        }
+        Some(meta)
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

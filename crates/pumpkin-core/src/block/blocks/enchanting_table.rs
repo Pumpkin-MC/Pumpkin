@@ -6,7 +6,11 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs, PathComputationType, PlacedArgs,
 };
-use pumpkin_data::{Block, BlockState, BlockStateId, translation};
+use pumpkin_data::{
+    BlockState,
+    tag::{self, Taggable},
+    translation,
+};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -48,20 +52,14 @@ impl BlockBehaviour for EnchantingTableBlock {
 
         for off_z in -1..=1 {
             for off_x in -1..=1 {
-                if (off_z != 0 || off_x != 0)
-                    && args
-                        .world
-                        .get_block_state(&args.position.add(off_x, 0, off_z))
-                        .id
-                        == BlockStateId::AIR
-                    && args
-                        .world
-                        .get_block_state(&args.position.add(off_x, 1, off_z))
-                        .id
-                        == BlockStateId::AIR
-                // Air
-                {
+                if off_z != 0 || off_x != 0 {
                     for off_y in 0..=1 {
+                        if !Self::is_power_transmitter(
+                            args.world,
+                            &args.position.add(off_x, off_y, off_z),
+                        ) {
+                            continue;
+                        }
                         if Self::is_bookshelf(
                             args.world,
                             &args.position.add(off_x * 2, off_y, off_z * 2),
@@ -102,9 +100,15 @@ impl BlockBehaviour for EnchantingTableBlock {
 
 impl EnchantingTableBlock {
     fn is_bookshelf(world: &Arc<crate::world::World>, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(pos);
-        let block = pumpkin_data::Block::from_state_id(state.id);
-        block == &Block::BOOKSHELF
+        world
+            .get_block(pos)
+            .has_tag(&tag::Block::MINECRAFT_ENCHANTMENT_POWER_PROVIDER)
+    }
+
+    fn is_power_transmitter(world: &Arc<crate::world::World>, pos: &BlockPos) -> bool {
+        let (block, state) = world.get_block_and_state(pos);
+        block.has_tag(&tag::Block::MINECRAFT_ENCHANTMENT_POWER_TRANSMITTER)
+            && state.get_block_collision_shapes().next().is_none()
     }
 }
 

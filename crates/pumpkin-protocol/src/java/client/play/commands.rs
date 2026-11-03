@@ -229,7 +229,12 @@ pub enum ArgumentType {
     LootTable,
     LootPredicate,
     LootModifier,
+    ContextFloatProvider,
+    ContextIntProvider,
+    SlotSource,
     Dialog,
+    Feature,
+    SwingAnimation,
     Uuid,
 }
 
@@ -370,5 +375,23 @@ impl SuggestionProviders {
             Self::AvailableSounds => "minecraft:available_sounds",
             Self::SummonableEntities => "minecraft:summonable_entities",
         }
+    }
+}
+
+#[cfg(test)]
+mod argument_type_id_tests {
+    use super::ArgumentType;
+
+    /// Ids of `ArgumentTypeInfos` in 26.3.
+    #[test]
+    fn ids_follow_vanilla() {
+        assert_eq!(ArgumentType::LootModifier.to_id(), 54);
+        assert_eq!(ArgumentType::ContextFloatProvider.to_id(), 55);
+        assert_eq!(ArgumentType::ContextIntProvider.to_id(), 56);
+        assert_eq!(ArgumentType::SlotSource.to_id(), 57);
+        assert_eq!(ArgumentType::Dialog.to_id(), 58);
+        assert_eq!(ArgumentType::Feature.to_id(), 59);
+        assert_eq!(ArgumentType::SwingAnimation.to_id(), 60);
+        assert_eq!(ArgumentType::Uuid.to_id(), 61);
     }
 }

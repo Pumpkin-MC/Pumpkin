@@ -43,7 +43,7 @@ impl MerchantOffer {
         self.base_cost_a.write_item_cost(&mut write)?;
         self.output.write(&mut write)?;
         write.write_option(&self.cost_b, |w, cost_b| cost_b.write_item_cost(w))?;
-        write.write_bool(self.reward_exp)?;
+        write.write_bool(self.is_out_of_stock())?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
         write.write_i32_be(self.xp)?;
@@ -143,7 +143,7 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
                 (base_cost_a, output, cost_b)
             };
 
-            let reward_exp = bytebuf.get_bool()?;
+            let out_of_stock = bytebuf.get_bool()?;
             let uses = bytebuf.get_i32_be()?;
             let max_uses = bytebuf.get_i32_be()?;
             let xp = bytebuf.get_i32_be()?;
@@ -155,8 +155,8 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
                 base_cost_a,
                 output,
                 cost_b,
-                reward_exp,
-                uses,
+                reward_exp: true,
+                uses: if out_of_stock { max_uses } else { uses },
                 max_uses,
                 xp,
                 special_price,

@@ -72,7 +72,8 @@ enum MinecartKind {
 }
 
 impl MinecartEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let kind = match entity.entity_type.id {
             id if id == EntityType::MINECART.id => MinecartKind::Rideable(RideableMinecart),
             id if id == EntityType::CHEST_MINECART.id => MinecartKind::Chest(ChestMinecart::new()),
@@ -110,7 +111,19 @@ impl MinecartEntity {
     }
 }
 
+const LOWERED_PASSENGER_ATTACHMENT: Vector3<f64> = Vector3::new(0.0, 0.0, 0.0);
+
 impl EntityBase for MinecartEntity {
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        let passenger_type = passenger.get_entity().entity_type;
+        (passenger_type == &EntityType::VILLAGER || passenger_type == &EntityType::WANDERING_TRADER)
+            .then_some(LOWERED_PASSENGER_ATTACHMENT)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),
@@ -440,14 +453,6 @@ impl EntityBase for MinecartEntity {
                 return;
             }
 
-            let new_pos = self.vehicle.entity.pos.load();
-
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(new_pos);
-                }
-            }
-
             #[allow(clippy::useless_let_if_seq)]
             let mut friction = 0.95; // Vanilla minecart air drag
 
@@ -742,7 +747,11 @@ impl EntityBase for MinecartEntity {
                 if let Some(container) = self.container()
                     && container.claim_drops()
                 {
-                    container.unpack_loot();
+                    container.unpack_loot(&crate::world::loot::LootContextParameters {
+                        world: Some(&world),
+                        position: Some(self.vehicle.entity.pos.load()),
+                        ..Default::default()
+                    });
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
@@ -758,16 +767,14 @@ impl EntityBase for MinecartEntity {
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         match &self.kind {
             MinecartKind::Chest(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Furnace(minecart) => {
                 minecart.interact(&self.vehicle.entity, player, item_stack)
             }
             MinecartKind::Hopper(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Rideable(_) => RideableMinecart::interact(&self.vehicle.entity, player),

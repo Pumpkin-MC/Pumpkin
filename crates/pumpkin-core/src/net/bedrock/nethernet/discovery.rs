@@ -25,7 +25,7 @@ use tracing::{debug, trace, warn};
 use webrtc::peer_connection::RTCIceCandidateInit;
 
 use super::{peer::negotiate, state::NetherNetState};
-use crate::{STOP_INTERRUPT, server::Server};
+use crate::server::Server;
 
 const DISCOVERY_PORT: u16 = 7551;
 const CHECKSUM_SIZE: usize = 32;
@@ -106,32 +106,13 @@ impl NetherNetDiscovery {
     }
 
     async fn advertise(&self, server: &Server, address: SocketAddr) -> Result<(), Error> {
-        let players = u32::try_from(server.get_player_count()).unwrap_or(u32::MAX);
-        let game_mode = server
-            .defaultgamemode
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .gamemode as u8;
-        let config = &server.advanced_config.networking.bedrock;
-        let response = encode_response(
-            self.network_id,
-            self.advertisement_id,
-            &server.advanced_config.networking.bedrock.motd,
-            &server.basic_config.default_level_name,
-            game_mode,
-            players,
-            server.advanced_config.networking.bedrock.max_players,
-            server.basic_config.hardcore,
-            !(config.online_mode && config.authentication.enabled),
-        )?;
+        let response = encode_discovery_response(server, self.network_id, self.advertisement_id)?;
         self.socket.send_to(&response, address).await?;
         trace!(
             %address,
             network_id = self.network_id,
             advertisement_id = format_args!("{:016x}", self.advertisement_id),
             version = SERVER_DATA_VERSION,
-            players,
-            max_players = server.advanced_config.networking.bedrock.max_players,
             online_mode = server.advanced_config.networking.bedrock.online_mode,
             "Sent NetherNet LAN discovery response"
         );
@@ -145,7 +126,13 @@ impl NetherNetDiscovery {
         sender_id: u64,
         data: String,
     ) {
-        if data == "Ping" {
+        if data.eq_ignore_ascii_case("ping") {
+            trace!(%address, sender_id, "Responding to NetherNet LAN Ping signal");
+            if let Ok(response) = encode_message(self.network_id, sender_id, "Pong")
+                && let Err(error) = self.socket.send_to(&response, address).await
+            {
+                warn!("Failed to send NetherNet LAN Pong signal to {address}: {error}");
+            }
             return;
         }
         let mut parts = data.splitn(3, ' ');
@@ -200,7 +187,7 @@ impl NetherNetDiscovery {
                         Err(error) => warn!("Failed to encode NetherNet LAN signal: {error}"),
                     }
                     tokio::select! {
-                        () = STOP_INTERRUPT.cancelled() => {},
+                        () = state.stop_token.cancelled() => {},
                         () = tokio::time::sleep(Duration::from_secs(30)) => {},
                     }
                     candidates.lock().await.remove(&key);
@@ -229,7 +216,7 @@ impl NetherNetDiscovery {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Packet {
+pub(super) enum Packet {
     Request,
     Message {
         sender_id: u64,
@@ -238,7 +225,7 @@ enum Packet {
     },
 }
 
-fn decode_packet(data: &[u8]) -> Option<Packet> {
+pub(super) fn decode_packet(data: &[u8]) -> Option<Packet> {
     let encrypted = data.get(CHECKSUM_SIZE..)?;
     if encrypted.is_empty() || !encrypted.len().is_multiple_of(16) {
         return None;
@@ -290,6 +277,31 @@ fn decode_packet(data: &[u8]) -> Option<Packet> {
     }
 }
 
+pub(super) fn encode_discovery_response(
+    server: &Server,
+    network_id: u64,
+    advertisement_id: u64,
+) -> Result<Vec<u8>, Error> {
+    let players = u32::try_from(server.get_player_count()).unwrap_or(u32::MAX);
+    let game_mode = server
+        .defaultgamemode
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .gamemode as u8;
+    let config = &server.advanced_config.networking.bedrock;
+    encode_response(
+        network_id,
+        advertisement_id,
+        &server.advanced_config.networking.bedrock.motd,
+        &server.basic_config.default_level_name,
+        game_mode,
+        players,
+        server.advanced_config.networking.bedrock.max_players,
+        server.basic_config.hardcore,
+        !(config.online_mode && config.authentication.enabled),
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn encode_response(
     network_id: u64,
@@ -323,7 +335,11 @@ fn encode_response(
     encode_packet(RESPONSE_PACKET, network_id, &body)
 }
 
-fn encode_message(network_id: u64, recipient_id: u64, data: &str) -> Result<Vec<u8>, Error> {
+pub(super) fn encode_message(
+    network_id: u64,
+    recipient_id: u64,
+    data: &str,
+) -> Result<Vec<u8>, Error> {
     let length = u32::try_from(data.len())
         .map_err(|_| Error::new(ErrorKind::InvalidInput, "NetherNet signal is too long"))?;
     let mut body = Vec::with_capacity(size_of::<u64>() + size_of::<u32>() + data.len());
@@ -449,7 +465,7 @@ mod tests {
             assert_eq!(
                 hex::encode(server_data),
                 format!(
-                    "071044656469636174656420536572766572a22207312e32362e3531\
+                    "071044656469636174656420536572766572e22207312e32362e3630\
              0e4372656174697665206c6576656c0014020000{authentication_flags}103962623634626366313437323762646208"
                 )
             );
@@ -465,6 +481,28 @@ mod tests {
                 sender_id: 99,
                 recipient_id: 42,
                 data: "CONNECTREQUEST 7 offer".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn ping_pong_message_packet() {
+        let ping = encode_message(42, 99, "Ping").unwrap();
+        assert_eq!(
+            decode_packet(&ping),
+            Some(Packet::Message {
+                sender_id: 42,
+                recipient_id: 99,
+                data: "Ping".to_owned(),
+            })
+        );
+        let pong = encode_message(99, 42, "Pong").unwrap();
+        assert_eq!(
+            decode_packet(&pong),
+            Some(Packet::Message {
+                sender_id: 99,
+                recipient_id: 42,
+                data: "Pong".to_owned(),
             })
         );
     }

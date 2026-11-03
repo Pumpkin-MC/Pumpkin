@@ -15,6 +15,10 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 
+const FRONT_SEAT_OFFSET: f32 = 0.2;
+const BACK_SEAT_OFFSET: f32 = -0.6;
+const ANIMAL_SEAT_SHIFT: f32 = 0.2;
+
 pub struct BoatEntity {
     pub vehicle: VehicleEntity,
     ticks_underwater: AtomicCell<f32>,
@@ -23,7 +27,8 @@ pub struct BoatEntity {
 }
 
 impl BoatEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub const fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         Self {
             vehicle: VehicleEntity::new(entity),
             ticks_underwater: AtomicCell::new(0.0),
@@ -51,6 +56,50 @@ impl BoatEntity {
 }
 
 impl EntityBase for BoatEntity {
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        index: usize,
+    ) -> Option<Vector3<f64>> {
+        let entity = self.get_entity();
+        let seats = entity.entity_type.boat?;
+        let mut offset = seats.single_passenger_x_offset;
+        let passenger_count = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len();
+        if passenger_count > 1 {
+            offset = if index == 0 {
+                FRONT_SEAT_OFFSET
+            } else {
+                BACK_SEAT_OFFSET
+            };
+            if passenger
+                .get_mob()
+                .and_then(|mob| mob.as_animal())
+                .is_some()
+            {
+                offset += ANIMAL_SEAT_SHIFT;
+            }
+        }
+        Some(crate::entity::attachment_point(
+            [0.0, seats.ride_height, f64::from(offset)],
+            1.0,
+            entity.yaw.load(),
+        ))
+    }
+
+    fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .filter(|passenger| passenger.get_living_entity().is_some())
+            .cloned()
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.vehicle.entity
     }

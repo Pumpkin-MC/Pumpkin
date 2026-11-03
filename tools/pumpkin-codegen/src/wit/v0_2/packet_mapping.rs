@@ -37,7 +37,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::Serialize,
         );
     }
@@ -58,7 +57,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ServerboundPacket",
             &format!("pumpkin_protocol::java::server::{}", state),
-            false,
             MappingMode::Deserialize,
         );
     }
@@ -79,7 +77,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::ToWit,
         );
     }
@@ -96,7 +93,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::Downcast,
         );
     }
@@ -122,7 +118,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::Serialize,
     );
 
@@ -141,7 +136,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BServerboundPacket",
         "pumpkin_protocol::bedrock::server",
-        true,
         MappingMode::Deserialize,
     );
 
@@ -160,7 +154,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::ToWit,
     );
 
@@ -175,7 +168,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::Downcast,
     );
     output.push_str("    None\n");
@@ -509,6 +501,12 @@ fn convert_value(
                     } else {
                         format!("VarInt({})", src)
                     }
+                } else if type_ident == "i8" {
+                    if is_ref {
+                        format!("&{}", src)
+                    } else {
+                        src.to_string()
+                    }
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
@@ -543,6 +541,12 @@ fn convert_value(
                     }
                 } else if type_ident == "VarInt" {
                     format!("{}.0.try_into().unwrap()", src)
+                } else if type_ident == "i8" {
+                    if is_ref {
+                        format!("*{}", src)
+                    } else {
+                        src.to_string()
+                    }
                 } else {
                     format!("{}.try_into().unwrap()", src)
                 }
@@ -566,7 +570,6 @@ fn process_packets(
     attr_name: &str,
     variant_prefix: &str,
     rust_path_prefix: &str,
-    skip_raknet: bool,
     mode: MappingMode,
 ) {
     let paths = fs::read_dir(dir).expect("Failed to read packet directory");
@@ -577,9 +580,6 @@ fn process_packets(
 
     for path in sorted_paths {
         if path.is_dir() {
-            if skip_raknet && path.file_name().unwrap() == "raknet" {
-                continue;
-            }
             process_packets(
                 path.to_str().unwrap(),
                 state,
@@ -587,7 +587,6 @@ fn process_packets(
                 attr_name,
                 variant_prefix,
                 rust_path_prefix,
-                skip_raknet,
                 mode,
             );
             continue;

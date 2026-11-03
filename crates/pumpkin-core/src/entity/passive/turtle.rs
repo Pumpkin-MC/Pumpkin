@@ -3,12 +3,14 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -24,6 +26,11 @@ use crate::entity::{
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SEAGRASS];
+
+/// Turtle is prey for wolves and cats.
+pub fn is_baby_on_land(mob: &dyn Mob) -> bool {
+    mob.as_ageable().is_some_and(AgeableMob::is_baby) && !mob.get_entity().is_in_water()
+}
 
 pub struct TurtleEntity {
     pub mob_entity: MobEntity,
@@ -50,7 +57,7 @@ impl TurtleEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(3, BreedGoal::new(1.0));
@@ -103,6 +110,19 @@ impl Animal for TurtleEntity {
 }
 
 impl Mob for TurtleEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        let sound = if self.get_entity().age.load(Ordering::Relaxed) < 0 {
+            Sound::EntityTurtleShambleBaby
+        } else {
+            Sound::EntityTurtleShamble
+        };
+        self.play_entity_sound(sound, 0.15, 1.0);
+    }
+
+    fn mob_play_swim_sound(&self, volume: f32) {
+        self.play_default_swim_sound(volume * 1.5);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -141,6 +161,6 @@ impl Mob for TurtleEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityTurtleAmbientLand)
+        self.animal_interact(player, item_stack)
     }
 }

@@ -116,7 +116,7 @@ impl BlockBehaviour for NetherPortalBlock {
             mob.get_entity()
                 .portal_cooldown
                 .store(300, Ordering::Relaxed);
-            args.world.spawn_entity_non_save(mob);
+            args.world.spawn_entity(mob);
         }
     }
 

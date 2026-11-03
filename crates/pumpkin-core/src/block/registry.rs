@@ -6,6 +6,7 @@ use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::beehive::BeehiveBlock;
+use crate::block::blocks::bonemealable_feature_placer::BonemealableFeaturePlacerBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::brushable_block::BrushableBlock;
 use crate::block::blocks::bubble_column::BubbleColumnBlock;
@@ -421,6 +422,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AmethystBlock);
     manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
+    manager.register(BonemealableFeaturePlacerBlock);
     manager.register(MyceliumBlock);
     manager.register(PodzolBlock);
     manager.register(RootedDirtBlock);
@@ -1608,9 +1610,7 @@ impl BlockRegistry {
         self.get_pumpkin_block(block.id).map_or_else(
             || match computation_type {
                 PathComputationType::Water => {
-                    state.is_waterlogged()
-                        || Fluid::from_state_id(state.id)
-                            .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+                    World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
                 }
                 PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
             },

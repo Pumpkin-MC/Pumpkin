@@ -6,10 +6,13 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use super::memory::{MemoryModuleId, types};
 use super::{BrainTick, VisibilityContext};
 
+pub mod adult;
 pub mod dummy;
 pub mod hurt_by;
+pub mod nearest_items;
 pub mod nearest_living_entities;
 pub mod nearest_players;
+pub mod tempting;
 
 pub use dummy::DummySensor;
 pub use hurt_by::HurtBySensor;
@@ -29,6 +32,9 @@ pub enum SensorType {
     NearestLivingEntities,
     NearestPlayers,
     HurtBy,
+    NearestItems,
+    FoodTemptations,
+    NearestAdult,
 }
 
 impl SensorType {
@@ -39,15 +45,22 @@ impl SensorType {
             Self::NearestLivingEntities => "minecraft:nearest_living_entities",
             Self::NearestPlayers => "minecraft:nearest_players",
             Self::HurtBy => "minecraft:hurt_by",
+            Self::NearestItems => "minecraft:nearest_items",
+            Self::FoodTemptations => "minecraft:food_temptations",
+            Self::NearestAdult => "minecraft:nearest_adult",
         }
     }
 
     #[must_use]
     pub const fn scan_rate(self) -> i32 {
         match self {
-            Self::Dummy | Self::NearestLivingEntities | Self::NearestPlayers | Self::HurtBy => {
-                DEFAULT_SCAN_RATE
-            }
+            Self::Dummy
+            | Self::NearestLivingEntities
+            | Self::NearestPlayers
+            | Self::HurtBy
+            | Self::NearestItems
+            | Self::FoodTemptations
+            | Self::NearestAdult => DEFAULT_SCAN_RATE,
         }
     }
 
@@ -57,6 +70,9 @@ impl SensorType {
             Self::NearestLivingEntities => Box::new(NearestLivingEntitySensor),
             Self::NearestPlayers => Box::new(PlayerSensor),
             Self::HurtBy => Box::new(HurtBySensor),
+            Self::NearestItems => Box::new(nearest_items::NearestItemSensor),
+            Self::FoodTemptations => Box::new(tempting::FoodTemptationSensor),
+            Self::NearestAdult => Box::new(adult::AdultSensor),
         }
     }
 
@@ -141,7 +157,25 @@ pub fn is_entity_targetable(ctx: &VisibilityContext<'_>, target: &dyn EntityBase
 
 #[must_use]
 pub fn is_entity_attackable(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
-    targeting_predicate(ctx, target, true).test(ctx.world, Some(ctx.mob), target)
+    targeting_predicate(ctx, target, true).test_with_alliance(
+        ctx.world,
+        Some(ctx.mob),
+        target,
+        |tester, target| is_allied(ctx, tester, target),
+    )
+}
+
+fn is_allied(
+    ctx: &VisibilityContext<'_>,
+    tester: &dyn EntityBase,
+    target: &dyn EntityBase,
+) -> bool {
+    tester.get_entity().entity_id == target.get_entity().entity_id
+        || ctx
+            .mob
+            .mob_considers_entity_as_ally(target, Some(ctx.state))
+            .unwrap_or_else(|| tester.considers_entity_as_ally(target))
+        || target.considers_entity_as_ally(tester)
 }
 
 #[must_use]
@@ -151,7 +185,9 @@ pub fn is_entity_attackable_ignoring_line_of_sight(
 ) -> bool {
     targeting_predicate(ctx, target, true)
         .ignore_visibility()
-        .test(ctx.world, Some(ctx.mob), target)
+        .test_with_alliance(ctx.world, Some(ctx.mob), target, |tester, target| {
+            is_allied(ctx, tester, target)
+        })
 }
 
 pub fn remember_positives<T>(

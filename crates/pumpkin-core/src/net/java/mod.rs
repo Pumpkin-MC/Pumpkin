@@ -39,8 +39,7 @@ use pumpkin_protocol::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
-    io::{BufReader, BufWriter},
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
     sync::oneshot,
 };
 use tokio::{
@@ -50,6 +49,12 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
+
+/// The client-to-server half of a Java connection: a TCP socket, or an in-memory pipe when the
+/// server is embedded in a client.
+pub type JavaReadHalf = Box<dyn AsyncRead + Send + Sync + Unpin>;
+/// The server-to-client half of a Java connection.
+pub type JavaWriteHalf = Box<dyn AsyncWrite + Send + Sync + Unpin>;
 
 pub mod chunk_data;
 pub mod features;
@@ -113,9 +118,9 @@ pub struct JavaClient {
     /// Tracks total buffered payload bytes in the outgoing queue.
     pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
-    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
+    network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<JavaWriteHalf>>>>,
     /// The packet decoder for incoming packets.
-    network_reader: std::sync::Mutex<Option<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>>,
+    network_reader: std::sync::Mutex<Option<TCPNetworkDecoder<BufReader<JavaReadHalf>>>>,
     /// Keep Alive:
     ///
     /// Whether we are waiting for a response after sending a keep alive packet.
@@ -349,8 +354,7 @@ impl JavaClient {
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
     }
 
@@ -372,17 +376,17 @@ impl JavaClient {
             }
         }
 
-        self.send_chunk_batch(valid_chunks).await;
+        self.send_chunk_batch(&server, valid_chunks).await;
     }
 
     /// Encodes and sends chunks that have already been through [`ChunkSend`].
-    pub(crate) async fn send_chunk_batch(&self, chunks: Vec<SyncChunk>) {
+    pub(crate) async fn send_chunk_batch(&self, server: &Server, chunks: Vec<SyncChunk>) {
         if chunks.is_empty() {
             return;
         }
 
         let (tx, rx) = oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let mut serialized = Vec::with_capacity(chunks.len());
             for chunk in chunks {
                 let mut buf = Vec::with_capacity(32 * 1024);
@@ -648,7 +652,7 @@ impl JavaClient {
 
     pub async fn get_packet_with_reader(
         &self,
-        network_reader: &mut TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
+        network_reader: &mut TCPNetworkDecoder<BufReader<JavaReadHalf>>,
     ) -> Option<RawPacket> {
         tokio::select! {
             () = self.await_close_interrupt() => {
@@ -896,23 +900,21 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
         // Decode as 26.3. `PacketReceivedEvent` can rewrite or cancel first.
+        let event_payload;
+        let (packet_id, mut payload) =
+            if server.plugin_manager.has_handlers::<PacketReceivedEvent>() {
+                let mut event =
+                    PacketReceivedEvent::new(player.clone(), packet.id, packet.payload.clone());
+                server.plugin_manager.fire_blocking(server, &mut event);
+                if event.cancelled {
+                    return Ok(());
+                }
+                event_payload = event.payload;
+                (event.packet_id, &event_payload[..])
+            } else {
+                (packet.id, &packet.payload[..])
+            };
 
-        let mut packet_id = packet.id;
-        let payload_storage;
-        if server.plugin_manager.has_handlers::<PacketReceivedEvent>() {
-            let mut event =
-                PacketReceivedEvent::new(player.clone(), packet.id, packet.payload.clone());
-            server.plugin_manager.fire_blocking(server, &mut event);
-            if event.cancelled {
-                return Ok(());
-            }
-            packet_id = event.packet_id;
-            payload_storage = event.payload;
-        } else {
-            payload_storage = packet.payload.clone();
-        }
-
-        let mut payload = &payload_storage[..];
         match packet_id {
             id if id == SConfirmTeleport::PACKET_ID => {
                 self.handle_confirm_teleport(player, &SConfirmTeleport::read(&mut payload)?);
