@@ -843,7 +843,6 @@ impl DispenserBlock {
                 item.item,
                 *ctx.position,
                 ctx.facing.to_block_direction(),
-                None,
             )
         };
 
