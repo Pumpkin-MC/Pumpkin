@@ -20,7 +20,6 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
     MetadataValue, SyncedActorDataList, entity_data_key,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
@@ -56,7 +55,6 @@ const MAX_TEMPER: i32 = 30;
 const FOLLOW_CARAVAN_SPEED: f64 = 2.1;
 const FOLLOW_LEASH_SPEED: f64 = 2.0;
 const LLAMA_SAFE_FALL_DISTANCE: f32 = 6.0;
-const BABY_SCALE: f32 = 0.5;
 const BEDROCK_CONTAINER_STRENGTH_MODIFIER: i32 = 3;
 
 /// Vanilla `Wolf.avoidLlama`: the stronger the llama, the likelier a wolf flees.
@@ -309,17 +307,7 @@ impl AgeableMob for LlamaEntity {
 
     fn age_boundary_reached(&self) {
         let entity = self.get_entity();
-        entity.set_default_dimensions(if self.is_baby() {
-            // Trader llama babies use the llama size too.
-            let llama = Entity::type_dimensions(&EntityType::LLAMA);
-            EntityDimensions::new(
-                llama.width * BABY_SCALE,
-                llama.height * BABY_SCALE,
-                llama.eye_height * BABY_SCALE,
-            )
-        } else {
-            Entity::type_dimensions(entity.entity_type)
-        });
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
     }
 }
 
@@ -362,10 +350,6 @@ impl AbstractHorse for LlamaEntity {
 
     fn get_max_temper(&self) -> i32 {
         MAX_TEMPER
-    }
-
-    fn get_angry_sound(&self) -> Option<Sound> {
-        Some(Sound::EntityLlamaAngry)
     }
 
     fn get_chest_equip_sound(&self) -> Sound {

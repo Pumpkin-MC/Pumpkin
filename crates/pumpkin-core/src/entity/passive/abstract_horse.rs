@@ -121,11 +121,21 @@ pub trait AbstractHorse: Animal + AgeableMob {
     }
 
     fn get_angry_sound(&self) -> Option<Sound> {
-        None
+        let entity_type = self.get_entity().entity_type;
+        if self.is_baby() {
+            entity_type.baby_angry_sound
+        } else {
+            entity_type.angry_sound
+        }
     }
 
     fn get_eating_sound(&self) -> Option<Sound> {
-        None
+        let entity_type = self.get_entity().entity_type;
+        if self.is_baby() {
+            entity_type.baby_eating_sound
+        } else {
+            entity_type.eating_sound
+        }
     }
 
     fn ambient_sound(&self) -> Option<Sound> {
@@ -144,6 +154,13 @@ pub trait AbstractHorse: Animal + AgeableMob {
 
     fn can_eat_grass(&self) -> bool {
         true
+    }
+
+    fn on_hurt(&self)
+    where
+        Self: Sized,
+    {
+        stand_on_hurt(self);
     }
 
     fn on_leash_pull(&self) {
@@ -191,6 +208,11 @@ pub trait AbstractHorse: Animal + AgeableMob {
     }
 
     fn randomize_attributes(&self) {}
+
+    fn refresh_age_dimensions(&self) {
+        let entity = self.get_entity();
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
+    }
 
     fn finalize_horse_spawn(
         &self,
@@ -677,10 +699,6 @@ pub trait AbstractHorse: Animal + AgeableMob {
 
     fn get_inventory_columns(&self) -> i32 {
         0
-    }
-
-    fn get_saddle_equip_sound(&self) -> Sound {
-        Sound::EntityHorseSaddle
     }
 
     /// The Java mount screen slot Bedrock shows as its one equipment slot.
@@ -1179,6 +1197,10 @@ macro_rules! impl_abstract_horse {
                 $crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
             }
 
+            fn age_boundary_reached(&self) {
+                $crate::entity::passive::abstract_horse::AbstractHorse::refresh_age_dimensions(self);
+            }
+
             $($ageable)*
         }
 
@@ -1272,11 +1294,9 @@ macro_rules! abstract_horse_mob_hooks {
             &self,
             slot: &pumpkin_data::data_component_impl::EquipmentSlot,
         ) -> Option<pumpkin_data::sound::Sound> {
-            (*slot == pumpkin_data::data_component_impl::EquipmentSlot::SADDLE).then(|| {
-                $crate::entity::passive::abstract_horse::AbstractHorse::get_saddle_equip_sound(
-                    self,
-                )
-            })
+            (*slot == pumpkin_data::data_component_impl::EquipmentSlot::SADDLE)
+                .then(|| $crate::entity::EntityBase::get_entity(self).entity_type.saddle_sound)
+                .flatten()
         }
 
         fn can_dispenser_equip_into_slot(
@@ -1321,7 +1341,7 @@ macro_rules! abstract_horse_mob_hooks {
             _damage_type: pumpkin_data::damage::DamageType,
             _source: Option<&dyn $crate::entity::EntityBase>,
         ) {
-            $crate::entity::passive::abstract_horse::stand_on_hurt(self);
+            $crate::entity::passive::abstract_horse::AbstractHorse::on_hurt(self);
         }
 
         fn on_elastic_leash_pull(&self) {

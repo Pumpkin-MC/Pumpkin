@@ -19,6 +19,13 @@ pub struct EntityType {
     /// Static death sound event name when it is safely derivable from extracted entity data.
     pub death_sound: Option<String>,
     pub ambient_sound: Option<String>,
+    pub eating_sound: Option<String>,
+    pub angry_sound: Option<String>,
+    pub sit_sound: Option<String>,
+    pub stand_sound: Option<String>,
+    pub dash_sound: Option<String>,
+    pub dash_ready_sound: Option<String>,
+    pub saddle_sound: Option<String>,
     /// Vanilla `getSoundSource`; missing only for the player.
     pub sound_source: Option<String>,
     /// Vanilla `getMovementEmission`; missing only for the player, whose emission depends on its state.
@@ -67,13 +74,17 @@ pub struct EntityType {
     pub spawn_restriction: SpawnRestriction,
     pub passenger_attachments: Vec<[f64; 3]>,
     pub vehicle_attachment: [f64; 3],
-    pub baby: Option<BabyAttachments>,
+    pub baby: Option<Baby>,
 }
 
 #[derive(Deserialize)]
-pub struct BabyAttachments {
+pub struct Baby {
+    dimension: [f32; 2],
+    eye_height: f32,
     passenger_attachments: Vec<[f64; 3]>,
     vehicle_attachment: [f64; 3],
+    eating_sound: Option<String>,
+    angry_sound: Option<String>,
 }
 
 fn attachments_tokens(passengers: &[[f64; 3]], vehicle: [f64; 3]) -> TokenStream {
@@ -180,6 +191,35 @@ impl ToTokens for NamedEntityType<'_> {
         let death_sound = optional_sound(entity.death_sound.as_ref());
         let hurt_sound = optional_sound(entity.hurt_sound.as_ref());
         let ambient_sound = optional_sound(entity.ambient_sound.as_ref());
+        let eating_sound = optional_sound(entity.eating_sound.as_ref());
+        let angry_sound = optional_sound(entity.angry_sound.as_ref());
+        let sit_sound = optional_sound(entity.sit_sound.as_ref());
+        let stand_sound = optional_sound(entity.stand_sound.as_ref());
+        let dash_sound = optional_sound(entity.dash_sound.as_ref());
+        let dash_ready_sound = optional_sound(entity.dash_ready_sound.as_ref());
+        let saddle_sound = optional_sound(entity.saddle_sound.as_ref());
+        let baby_dimensions = entity.baby.as_ref().map_or_else(
+            || quote! { None },
+            |baby| {
+                let [width, height] = baby.dimension;
+                let eye_height = baby.eye_height;
+                quote! {
+                    Some(EntityDimensions { width: #width, height: #height, eye_height: #eye_height })
+                }
+            },
+        );
+        let baby_eating_sound = optional_sound(
+            entity
+                .baby
+                .as_ref()
+                .and_then(|baby| baby.eating_sound.as_ref()),
+        );
+        let baby_angry_sound = optional_sound(
+            entity
+                .baby
+                .as_ref()
+                .and_then(|baby| baby.angry_sound.as_ref()),
+        );
         let swim_sound = optional_sound(entity.swim_sound.as_ref());
         let swim_splash_sound = optional_sound(entity.swim_splash_sound.as_ref());
         let swim_high_speed_splash_sound =
@@ -282,6 +322,15 @@ impl ToTokens for NamedEntityType<'_> {
                 hurt_sound: #hurt_sound,
                 death_sound: #death_sound,
                 ambient_sound: #ambient_sound,
+                eating_sound: #eating_sound,
+                baby_eating_sound: #baby_eating_sound,
+                angry_sound: #angry_sound,
+                baby_angry_sound: #baby_angry_sound,
+                sit_sound: #sit_sound,
+                stand_sound: #stand_sound,
+                dash_sound: #dash_sound,
+                dash_ready_sound: #dash_ready_sound,
+                saddle_sound: #saddle_sound,
                 sound_source: SoundCategory::#sound_source,
                 movement_emission: #movement_emission,
                 swim_sound: #swim_sound,
@@ -307,6 +356,7 @@ impl ToTokens for NamedEntityType<'_> {
                 spawn_restriction: #spawn_restriction,
                 attachments: #attachments,
                 baby_attachments: #baby_attachments,
+                baby_dimensions: #baby_dimensions,
                 resource_name: #name,
             }
         });
@@ -365,7 +415,7 @@ pub fn build() -> TokenStream {
         use crate::attributes::Attributes;
         use crate::sound::{Sound, SoundCategory};
         use pumpkin_util::HeightMap;
-        use pumpkin_util::math::boundingbox::BoundingBox;
+        use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
         use pumpkin_util::math::vector3::Vector3;
         use std::hash::Hash;
 
@@ -377,6 +427,15 @@ pub fn build() -> TokenStream {
             pub hurt_sound: Option<Sound>,
             pub death_sound: Option<Sound>,
             pub ambient_sound: Option<Sound>,
+            pub eating_sound: Option<Sound>,
+            pub baby_eating_sound: Option<Sound>,
+            pub angry_sound: Option<Sound>,
+            pub baby_angry_sound: Option<Sound>,
+            pub sit_sound: Option<Sound>,
+            pub stand_sound: Option<Sound>,
+            pub dash_sound: Option<Sound>,
+            pub dash_ready_sound: Option<Sound>,
+            pub saddle_sound: Option<Sound>,
             pub sound_source: SoundCategory,
             pub movement_emission: MovementEmission,
             pub swim_sound: Option<Sound>,
@@ -402,6 +461,7 @@ pub fn build() -> TokenStream {
             pub spawn_restriction: SpawnRestriction,
             pub attachments: EntityAttachments,
             pub baby_attachments: Option<EntityAttachments>,
+            pub baby_dimensions: Option<EntityDimensions>,
             pub resource_name: &'static str,
         }
 

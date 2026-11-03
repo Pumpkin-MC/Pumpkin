@@ -211,6 +211,7 @@ pub fn from_type(
         id if id == EntityType::AXOLOTL.id => AxolotlEntity::new(entity),
         id if id == EntityType::BEE.id => BeeEntity::new(entity),
         id if id == EntityType::CAMEL.id => CamelEntity::new(entity),
+        id if id == EntityType::CAMEL_HUSK.id => CamelEntity::new(entity),
         id if id == EntityType::COPPER_GOLEM.id => CopperGolemEntity::new(entity),
         id if id == EntityType::FROG.id => FrogEntity::new(entity),
         id if id == EntityType::GOAT.id => GoatEntity::new(entity),

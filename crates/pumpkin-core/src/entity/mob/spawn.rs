@@ -81,6 +81,21 @@ impl MobEntity {
             .push(rider);
     }
 
+    /// Queues a vehicle this mob rides as its first passenger once it enters the world.
+    pub fn set_pending_vehicle(&self, vehicle: Arc<dyn EntityBase>) {
+        *self
+            .pending_vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(vehicle);
+    }
+
+    pub(crate) fn take_pending_vehicle(&self) -> Option<Arc<dyn EntityBase>> {
+        self.pending_vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+    }
+
     pub(crate) fn take_pending_riders(&self) -> Vec<Arc<dyn EntityBase>> {
         std::mem::take(
             &mut *self

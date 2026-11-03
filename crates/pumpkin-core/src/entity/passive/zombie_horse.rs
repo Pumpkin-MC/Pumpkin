@@ -123,14 +123,6 @@ crate::impl_abstract_horse!(
                 generate_zombie_horse_speed(|| rng.random()),
             );
         }
-
-        fn get_angry_sound(&self) -> Option<Sound> {
-            Some(Sound::EntityZombieHorseAngry)
-        }
-
-        fn get_eating_sound(&self) -> Option<Sound> {
-            Some(Sound::EntityZombieHorseEat)
-        }
     },
     {
         fn can_age_up(&self) -> bool {

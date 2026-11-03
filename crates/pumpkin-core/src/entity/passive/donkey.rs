@@ -16,8 +16,9 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     passive::abstract_horse::{
         AbstractHorse, AbstractHorseData, BEDROCK_CHESTED_INVENTORY_SIZE,
-        BEDROCK_SADDLE_INVENTORY_SIZE, CHESTED_INVENTORY_COLUMNS, add_horse_behaviour_goals,
-        generate_max_health, play_horse_step_sound, register_horse_goals,
+        BEDROCK_SADDLE_INVENTORY_SIZE, CHESTED_INVENTORY_COLUMNS, JUMP_SOUND_VOLUME,
+        add_horse_behaviour_goals, generate_max_health, play_horse_step_sound,
+        register_horse_goals,
     },
     passive::animal::Animal,
     player::Player,
@@ -49,19 +50,15 @@ impl DonkeyEntity {
 }
 
 crate::impl_abstract_horse!(DonkeyEntity, {
+    fn play_jump_sound(&self) {
+        self.play_entity_sound(Sound::EntityDonkeyJump, JUMP_SOUND_VOLUME, 1.0);
+    }
+
     fn randomize_attributes(&self) {
         let mut rng = self.get_random();
         self.mob_entity
             .living_entity
             .set_max_health(generate_max_health(|bound| rng.random_range(0..bound)));
-    }
-
-    fn get_angry_sound(&self) -> Option<Sound> {
-        Some(Sound::EntityDonkeyAngry)
-    }
-
-    fn get_eating_sound(&self) -> Option<Sound> {
-        Some(Sound::EntityDonkeyEat)
     }
 
     fn can_carry_chest(&self) -> bool {

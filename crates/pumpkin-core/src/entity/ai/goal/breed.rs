@@ -72,7 +72,7 @@ impl BreedGoal {
         })
     }
 
-    fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
+    pub(crate) fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
         let world = entity.world.load();

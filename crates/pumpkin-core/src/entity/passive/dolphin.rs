@@ -13,7 +13,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -39,8 +38,6 @@ use crate::entity::{
 mod goals;
 const TOTAL_AIR_SUPPLY: i32 = 4800;
 const TOTAL_MOISTNESS_LEVEL: i32 = 2400;
-const BABY_SCALE: f32 = 0.65;
-const BABY_EYE_HEIGHT: f32 = 0.09375;
 const IN_WATER_SPEED_MODIFIER: f32 = 0.02;
 const OUTSIDE_WATER_SPEED_MODIFIER: f32 = 0.1;
 const SWIM_WITH_PLAYER_SPEED: f64 = 4.0;
@@ -149,16 +146,10 @@ impl DolphinEntity {
 
     fn update_dimensions(&self) {
         let entity = self.get_entity();
-        let dimensions = Entity::type_dimensions(entity.entity_type);
-        entity.set_default_dimensions(if AgeableMob::is_baby(self) {
-            EntityDimensions::new(
-                dimensions.width * BABY_SCALE,
-                dimensions.height * BABY_SCALE,
-                BABY_EYE_HEIGHT,
-            )
-        } else {
-            dimensions
-        });
+        entity.set_default_dimensions(Entity::age_dimensions(
+            entity.entity_type,
+            AgeableMob::is_baby(self),
+        ));
     }
 }
 

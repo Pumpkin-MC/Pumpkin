@@ -155,6 +155,7 @@ pub struct MobEntity {
     pub death_loot_table_seed: AtomicI64,
     pub ambient_sound_time: AtomicI32,
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
+    pending_vehicle: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
 
@@ -301,6 +302,7 @@ impl MobEntity {
             death_loot_table_seed: AtomicI64::new(0),
             ambient_sound_time: AtomicI32::new(0),
             pending_riders: std::sync::Mutex::new(Vec::new()),
+            pending_vehicle: std::sync::Mutex::new(None),
             mob_flags: AtomicU8::new(0),
         }
     }
@@ -504,13 +506,13 @@ impl MobEntity {
             move_control.tick(mob);
         };
 
-        {
+        if mob.ticks_look_control() {
             let mut look_control = self
                 .look_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             look_control.tick(mob);
-        };
+        }
 
         self.jump_control
             .lock()
@@ -678,6 +680,19 @@ impl MobEntity {
 
     /// Accesses the species' brain, building it on first use.
     /// Neither `make_brain` nor the callback may lock this brain again; Brain callbacks use `BrainTick`.
+    /// Reads another mob's brain without building one. A brain busy in its own tick reads as
+    /// empty, so a mob checks itself through its `BrainTick` instead.
+    pub fn brain_has_memory_value(
+        &self,
+        id: crate::entity::ai::brain::memory::MemoryModuleId,
+    ) -> bool {
+        self.brain
+            .try_lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().map(|brain| brain.has_memory_value(id)))
+            .unwrap_or(false)
+    }
+
     pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
         let result = {
             let mut slot = self
@@ -1399,6 +1414,10 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    fn ticks_look_control(&self) -> bool {
+        true
+    }
+
     /// Vanilla `LookControl.resetXRotOnTick`: the look control levels the pitch each tick.
     fn look_resets_pitch(&self) -> bool {
         true
@@ -1408,6 +1427,15 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn is_mob_immobile(&self) -> bool {
         self.get_mob_entity().living_entity.is_dead_or_dying()
+    }
+
+    /// See [`EntityBase::passenger_attachment_point`].
+    fn mob_passenger_attachment_point(
+        &self,
+        _passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        None
     }
 
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
@@ -1947,6 +1975,15 @@ pub trait Mob: EntityBase + Send + Sync {
         &self,
         world: &Arc<World>,
         _reason: crate::entity::mob::spawn::EntitySpawnReason,
+        group_data: Option<spawn::SpawnGroupData>,
+    ) -> Option<spawn::SpawnGroupData> {
+        self.default_finalize_spawn(world, group_data)
+    }
+
+    /// The `finalize_spawn` of mobs without their own, for overrides that extend it.
+    fn default_finalize_spawn(
+        &self,
+        world: &Arc<World>,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
         let entity = self.get_entity();
@@ -2633,6 +2670,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .get_mob_entity()
                 .goals_selector
                 .is_running::<EscapeDangerGoal>()
+            || self
+                .get_mob_entity()
+                .brain_has_memory_value(crate::entity::ai::brain::memory::types::IS_PANICKING.id())
     }
 
     fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
@@ -2699,6 +2739,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         self.mob_controlling_passenger()
+    }
+
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        index: usize,
+    ) -> Option<Vector3<f64>> {
+        self.mob_passenger_attachment_point(passenger, index)
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

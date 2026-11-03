@@ -565,6 +565,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    /// The seat of `passenger` relative to this entity, when the extracted attachment points
+    /// don't describe it.
+    fn passenger_attachment_point(
+        &self,
+        _passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn can_control_vehicle(&self) -> bool {
         !self
             .get_entity()
@@ -1255,11 +1265,16 @@ pub fn position_rider(vehicle: &dyn EntityBase, passenger: &dyn EntityBase) {
     else {
         return;
     };
-    let (seats, seat_scale) = attachments_of(vehicle);
-    let Some(&seat) = seats.passenger.get(index).or(seats.passenger.last()) else {
+    let Some(seat) = vehicle
+        .passenger_attachment_point(passenger, index)
+        .or_else(|| {
+            let (seats, scale) = attachments_of(vehicle);
+            let seat = *seats.passenger.get(index).or(seats.passenger.last())?;
+            Some(attachment_point(seat, scale, vehicle_entity.yaw.load()))
+        })
+    else {
         return;
     };
-    let seat = attachment_point(seat, seat_scale, vehicle_entity.yaw.load());
     let (own, own_scale) = attachments_of(passenger);
     let offset = attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load());
     passenger_entity.set_pos(vehicle_entity.pos.load() + seat - offset);
@@ -1854,6 +1869,15 @@ impl Entity {
                 },
             )
             .collect()
+    }
+
+    /// The type's baby size for babies, its adult size otherwise.
+    #[must_use]
+    pub fn age_dimensions(entity_type: &EntityType, baby: bool) -> EntityDimensions {
+        entity_type
+            .baby_dimensions
+            .filter(|_| baby)
+            .unwrap_or_else(|| Self::type_dimensions(entity_type))
     }
 
     /// The type's default size, vanilla `EntityType.getDimensions`.
@@ -3241,7 +3265,7 @@ impl Entity {
     }
 
     /// Vanilla `gameEvent(event)`: at the entity, with itself as the source.
-    fn emit_own_game_event(&self, caller: &dyn EntityBase, event: GameEvent) {
+    pub(crate) fn emit_own_game_event(&self, caller: &dyn EntityBase, event: GameEvent) {
         self.world.load().emit_game_event_with_context(
             event.name(),
             self.pos.load(),

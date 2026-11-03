@@ -6,6 +6,8 @@ use std::sync::{
 use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_state::SoundType;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{DataComponentImpl, HorseVariantImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::{HorseMarkings, HorseVariant};
 use pumpkin_data::item_stack::ItemStack;
@@ -185,22 +187,6 @@ crate::impl_abstract_horse!(HorseEntity, {
             generate_jump_strength(|| rng.random()),
         );
     }
-
-    fn get_angry_sound(&self) -> Option<Sound> {
-        Some(if self.is_baby() {
-            Sound::EntityBabyHorseAngry
-        } else {
-            Sound::EntityHorseAngry
-        })
-    }
-
-    fn get_eating_sound(&self) -> Option<Sound> {
-        Some(if self.is_baby() {
-            Sound::EntityBabyHorseEat
-        } else {
-            Sound::EntityHorseEat
-        })
-    }
 });
 
 impl Animal for HorseEntity {
@@ -240,6 +226,22 @@ impl Mob for HorseEntity {
 
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         play_horse_step_sound(self, pos, state);
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        (component == DataComponent::HorseVariant).then(|| {
+            Box::new(HorseVariantImpl {
+                value: HorseVariant::by_id(color_id(self.get_variant()))
+                    .name()
+                    .into(),
+            }) as Box<dyn DataComponentImpl>
+        })
+    }
+
+    fn mob_set_variant_name(&self, name: &str) {
+        if let Some(color) = HorseVariant::from_name(name) {
+            self.set_variant(pack_variant(color.id(), markings_id(self.get_variant())));
+        }
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

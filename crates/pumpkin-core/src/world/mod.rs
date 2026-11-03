@@ -5063,6 +5063,25 @@ impl World {
         let Some(mob) = vehicle.get_mob() else {
             return;
         };
+        if let Some(own_vehicle) = mob.get_mob_entity().take_pending_vehicle() {
+            // Taken first so this mob mounts before the vehicle's other riders.
+            let riders = own_vehicle
+                .get_mob()
+                .map(|vehicle| vehicle.get_mob_entity().take_pending_riders())
+                .unwrap_or_default();
+            own_vehicle.init_data_tracker();
+            self.add_entity_silent(own_vehicle.clone());
+            own_vehicle
+                .get_entity()
+                .add_passenger(own_vehicle.clone(), vehicle.clone());
+            for rider in riders {
+                rider.init_data_tracker();
+                self.add_entity_silent(rider.clone());
+                own_vehicle
+                    .get_entity()
+                    .add_passenger(own_vehicle.clone(), rider);
+            }
+        }
         for rider in mob.get_mob_entity().take_pending_riders() {
             rider.init_data_tracker();
             self.add_entity_silent(rider.clone());
