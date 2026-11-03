@@ -75,6 +75,23 @@ pub struct EntityType {
     pub passenger_attachments: Vec<[f64; 3]>,
     pub vehicle_attachment: [f64; 3],
     pub baby: Option<Baby>,
+    #[serde(default)]
+    pub poses: BTreeMap<String, PoseDimensions>,
+    pub boat: Option<BoatSeats>,
+}
+
+#[derive(Deserialize)]
+pub struct BoatSeats {
+    ride_height: f64,
+    single_passenger_x_offset: f32,
+}
+
+#[derive(Deserialize)]
+pub struct PoseDimensions {
+    dimension: [f32; 2],
+    eye_height: f32,
+    passenger_attachments: Vec<[f64; 3]>,
+    vehicle_attachment: [f64; 3],
 }
 
 #[derive(Deserialize)]
@@ -85,6 +102,25 @@ pub struct Baby {
     vehicle_attachment: [f64; 3],
     eating_sound: Option<String>,
     angry_sound: Option<String>,
+    #[serde(default)]
+    poses: BTreeMap<String, PoseDimensions>,
+}
+
+fn poses_tokens(poses: &BTreeMap<String, PoseDimensions>) -> TokenStream {
+    let poses = poses.iter().map(|(name, pose)| {
+        let pose_ident = format_ident!("{}", name.to_pascal_case());
+        let [width, height] = pose.dimension;
+        let eye_height = pose.eye_height;
+        let attachments = attachments_tokens(&pose.passenger_attachments, pose.vehicle_attachment);
+        quote! {
+            PoseDimensions {
+                pose: EntityPose::#pose_ident,
+                dimensions: EntityDimensions { width: #width, height: #height, eye_height: #eye_height },
+                attachments: #attachments,
+            }
+        }
+    });
+    quote! { &[#(#poses),*] }
 }
 
 fn attachments_tokens(passengers: &[[f64; 3]], vehicle: [f64; 3]) -> TokenStream {
@@ -314,6 +350,25 @@ impl ToTokens for NamedEntityType<'_> {
             },
         );
 
+        let poses = poses_tokens(&entity.poses);
+        let boat = entity.boat.as_ref().map_or_else(
+            || quote! { None },
+            |boat| {
+                let ride_height = boat.ride_height;
+                let single_passenger_x_offset = boat.single_passenger_x_offset;
+                quote! {
+                    Some(BoatSeats {
+                        ride_height: #ride_height,
+                        single_passenger_x_offset: #single_passenger_x_offset,
+                    })
+                }
+            },
+        );
+        let baby_poses = entity
+            .baby
+            .as_ref()
+            .map_or_else(|| quote! { &[] }, |baby| poses_tokens(&baby.poses));
+
         tokens.extend(quote! {
             EntityType {
                 id: #id,
@@ -357,6 +412,9 @@ impl ToTokens for NamedEntityType<'_> {
                 attachments: #attachments,
                 baby_attachments: #baby_attachments,
                 baby_dimensions: #baby_dimensions,
+                poses: #poses,
+                baby_poses: #baby_poses,
+                boat: #boat,
                 resource_name: #name,
             }
         });
@@ -413,6 +471,7 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
+        use crate::entity_pose::EntityPose;
         use crate::sound::{Sound, SoundCategory};
         use pumpkin_util::HeightMap;
         use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
@@ -462,7 +521,25 @@ pub fn build() -> TokenStream {
             pub attachments: EntityAttachments,
             pub baby_attachments: Option<EntityAttachments>,
             pub baby_dimensions: Option<EntityDimensions>,
+            pub poses: &'static [PoseDimensions],
+            pub baby_poses: &'static [PoseDimensions],
+            pub boat: Option<BoatSeats>,
             pub resource_name: &'static str,
+        }
+
+        /// Where a boat seats its riders: the seat height and the lone rider's forward offset.
+        #[derive(Debug, Clone, Copy)]
+        pub struct BoatSeats {
+            pub ride_height: f64,
+            pub single_passenger_x_offset: f32,
+        }
+
+        /// The size and attachment points a pose gives the entity when they differ from standing.
+        #[derive(Debug, Clone, Copy)]
+        pub struct PoseDimensions {
+            pub pose: EntityPose,
+            pub dimensions: EntityDimensions,
+            pub attachments: EntityAttachments,
         }
 
         /// Where riders sit on an entity and where it sits on its own vehicle, before rotation.
@@ -647,6 +724,12 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+
+            #[must_use]
+            pub fn pose_dimensions(&self, pose: EntityPose, baby: bool) -> Option<&'static PoseDimensions> {
+                let poses = if baby && self.baby_dimensions.is_some() { self.baby_poses } else { self.poses };
+                poses.iter().find(|entry| entry.pose == pose)
             }
 
             #[must_use]

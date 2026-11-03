@@ -111,7 +111,19 @@ impl MinecartEntity {
     }
 }
 
+const LOWERED_PASSENGER_ATTACHMENT: Vector3<f64> = Vector3::new(0.0, 0.0, 0.0);
+
 impl EntityBase for MinecartEntity {
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        let passenger_type = passenger.get_entity().entity_type;
+        (passenger_type == &EntityType::VILLAGER || passenger_type == &EntityType::WANDERING_TRADER)
+            .then_some(LOWERED_PASSENGER_ATTACHMENT)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),

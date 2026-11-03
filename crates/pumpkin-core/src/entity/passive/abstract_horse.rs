@@ -66,6 +66,7 @@ pub const BEDROCK_HORSE_INVENTORY_SIZE: i32 = 2;
 pub const BEDROCK_SADDLE_INVENTORY_SIZE: i32 = 1;
 pub const BEDROCK_CHESTED_INVENTORY_SIZE: i32 = 16;
 const STAND_TICKS: i32 = 20;
+const BABY_AGE_SCALE: f64 = 0.5;
 const STEP_VOLUME_SCALE: f32 = 0.15;
 pub const JUMP_SOUND_VOLUME: f32 = 0.4;
 const GALLOP_START_STEPS: i32 = 5;
@@ -95,6 +96,8 @@ pub struct AbstractHorseData {
     stand_counter: AtomicI32,
     eating_counter: AtomicI32,
     gallop_sound_counter: AtomicI32,
+    stand_anim: AtomicCell<f32>,
+    stand_anim_o: AtomicCell<f32>,
 }
 
 impl Default for AbstractHorseData {
@@ -109,6 +112,8 @@ impl Default for AbstractHorseData {
             stand_counter: AtomicI32::default(),
             eating_counter: AtomicI32::default(),
             gallop_sound_counter: AtomicI32::default(),
+            stand_anim: AtomicCell::default(),
+            stand_anim_o: AtomicCell::default(),
         }
     }
 }
@@ -415,6 +420,14 @@ pub trait AbstractHorse: Animal + AgeableMob {
                 self.clear_standing();
             }
         }
+        let stand_anim = data.stand_anim.load();
+        data.stand_anim_o.store(stand_anim);
+        data.stand_anim.store(if self.is_standing() {
+            (stand_anim + (1.0 - stand_anim) * 0.4 + 0.05).min(1.0)
+        } else {
+            (stand_anim + (0.8 * stand_anim * stand_anim * stand_anim - stand_anim) * 0.6 - 0.05)
+                .max(0.0)
+        });
     }
 
     fn eating(&self) {
@@ -1234,6 +1247,27 @@ macro_rules! impl_abstract_horse {
 
 /// Generates the `Mob` methods every horse shares. Use inside `impl Mob for ...`; camels pass
 /// `always_tamed`.
+pub fn stand_passenger_attachment_point<H: AbstractHorse>(
+    horse: &H,
+    index: usize,
+) -> Option<Vector3<f64>> {
+    let seat = crate::entity::default_passenger_attachment_point(horse, index)?;
+    let stand = f64::from(horse.horse_data().stand_anim_o.load());
+    let age_scale = if horse.is_baby() { BABY_AGE_SCALE } else { 1.0 };
+    let scale = horse
+        .get_mob_entity()
+        .living_entity
+        .get_attribute_value(&Attributes::SCALE)
+        * age_scale;
+    Some(
+        seat + crate::entity::attachment_point(
+            [0.0, 0.15 * stand, -0.7 * stand],
+            scale,
+            horse.get_entity().yaw.load(),
+        ),
+    )
+}
+
 #[macro_export]
 macro_rules! abstract_horse_mob_hooks {
     () => {
@@ -1242,6 +1276,14 @@ macro_rules! abstract_horse_mob_hooks {
                 self,
                 $crate::entity::passive::abstract_horse::FLAG_TAME,
             )
+        }
+
+        fn mob_passenger_attachment_point(
+            &self,
+            _passenger: &dyn $crate::entity::EntityBase,
+            index: usize,
+        ) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
+            $crate::entity::passive::abstract_horse::stand_passenger_attachment_point(self, index)
         }
 
         $crate::abstract_horse_mob_hooks!(@shared);

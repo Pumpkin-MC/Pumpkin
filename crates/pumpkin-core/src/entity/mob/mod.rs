@@ -1440,6 +1440,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn mob_vehicle_attachment_point(&self, _vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn mob_hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
         &[]
     }
@@ -2757,6 +2761,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
         self.mob_hurt_gear_slots(gear)
+    }
+
+    fn vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        self.mob_vehicle_attachment_point(vehicle)
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

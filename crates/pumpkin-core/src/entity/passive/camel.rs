@@ -44,12 +44,6 @@ const DASH_MINIMUM_DURATION_TICKS: i32 = 5;
 const SITDOWN_DURATION_TICKS: i64 = 40;
 const STANDUP_DURATION_TICKS: i64 = 52;
 const SITTING_HEIGHT_DIFFERENCE: f32 = 1.43;
-const BABY_SITTING_DIMENSIONS: EntityDimensions = EntityDimensions {
-    width: 0.95,
-    height: 0.425,
-    eye_height: 0.41,
-};
-const ADULT_SITTING_EYE_HEIGHT: f32 = 0.845;
 const BABY_SCALE: f32 = 0.6;
 const HUSK_STEP_VOLUME: f32 = 0.4;
 const DRIVER_SEAT_OFFSET: f32 = 0.5;
@@ -237,16 +231,15 @@ impl CamelEntity {
     }
 
     fn dimensions_for(&self, sitting: bool) -> EntityDimensions {
-        let adult = Entity::type_dimensions(&EntityType::CAMEL);
-        match (sitting, self.is_baby()) {
-            (true, true) => BABY_SITTING_DIMENSIONS,
-            (true, false) => EntityDimensions {
-                width: adult.width,
-                height: adult.height - SITTING_HEIGHT_DIFFERENCE,
-                eye_height: ADULT_SITTING_EYE_HEIGHT,
-            },
-            (false, baby) => Entity::age_dimensions(self.get_entity().entity_type, baby),
-        }
+        let entity_type = self.get_entity().entity_type;
+        let baby = self.is_baby();
+        sitting
+            .then(|| entity_type.pose_dimensions(EntityPose::Sitting, baby))
+            .flatten()
+            .map_or_else(
+                || Entity::age_dimensions(entity_type, baby),
+                |pose| pose.dimensions,
+            )
     }
 
     fn age_scale(&self) -> f32 {

@@ -24,6 +24,8 @@ use crate::world::World;
 use pumpkin_util::random::RandomImpl;
 use rand::RngExt;
 
+const PASSENGER_SINK_PER_SIZE: f64 = 0.015_625;
+
 const SLIME_HUNTS: &[Hunt] = &[
     Hunt::new(1, TargetMatch::Type(&EntityType::PLAYER), true)
         .matching(hunting::within_four_blocks_height),
@@ -286,6 +288,21 @@ impl Mob for SlimeEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn mob_passenger_attachment_point(
+        &self,
+        _passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        let living = &self.entity.living_entity;
+        let scale = living.get_attribute_value(&Attributes::SCALE);
+        Some(Vector3::new(
+            0.0,
+            f64::from(living.entity.height())
+                - PASSENGER_SINK_PER_SIZE * f64::from(self.get_size()) * scale,
+            0.0,
+        ))
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {

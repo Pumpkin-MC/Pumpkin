@@ -1,6 +1,7 @@
 /* This file is generated. Do not edit manually. */
 use crate::attributes::Attributes;
 use crate::data_component_impl::IDSetContent;
+use crate::entity_pose::EntityPose;
 use crate::sound::{Sound, SoundCategory};
 use crate::tag::RegistryKey;
 use crate::tag::Taggable;
@@ -51,7 +52,23 @@ pub struct EntityType {
     pub attachments: EntityAttachments,
     pub baby_attachments: Option<EntityAttachments>,
     pub baby_dimensions: Option<EntityDimensions>,
+    pub poses: &'static [PoseDimensions],
+    pub baby_poses: &'static [PoseDimensions],
+    pub boat: Option<BoatSeats>,
     pub resource_name: &'static str,
+}
+#[doc = r" Where a boat seats its riders: the seat height and the lone rider's forward offset."]
+#[derive(Debug, Clone, Copy)]
+pub struct BoatSeats {
+    pub ride_height: f64,
+    pub single_passenger_x_offset: f32,
+}
+#[doc = r" The size and attachment points a pose gives the entity when they differ from standing."]
+#[derive(Debug, Clone, Copy)]
+pub struct PoseDimensions {
+    pub pose: EntityPose,
+    pub dimensions: EntityDimensions,
+    pub attachments: EntityAttachments,
 }
 #[doc = r" Where riders sit on an entity and where it sits on its own vehicle, before rotation."]
 #[derive(Debug, Clone, Copy)]
@@ -249,6 +266,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "acacia_boat",
     };
     pub const ACACIA_CHEST_BOAT: EntityType = EntityType {
@@ -299,6 +322,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "acacia_chest_boat",
     };
     pub const ALLAY: EntityType = EntityType {
@@ -379,6 +408,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "allay",
     };
     pub const AREA_EFFECT_CLOUD: EntityType = EntityType {
@@ -429,6 +472,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "area_effect_cloud",
     };
     pub const ARMADILLO: EntityType = EntityType {
@@ -515,6 +561,31 @@ impl EntityType {
             height: 0.39000002f32,
             eye_height: 0.21875f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "armadillo",
     };
     pub const ARMOR_STAND: EntityType = EntityType {
@@ -592,6 +663,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "armor_stand",
     };
     pub const ARROW: EntityType = EntityType {
@@ -642,6 +727,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "arrow",
     };
     pub const AXOLOTL: EntityType = EntityType {
@@ -729,6 +817,31 @@ impl EntityType {
             height: 0.21f32,
             eye_height: 0.09375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "axolotl",
     };
     pub const BAMBOO_CHEST_RAFT: EntityType = EntityType {
@@ -779,6 +892,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.5f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "bamboo_chest_raft",
     };
     pub const BAMBOO_RAFT: EntityType = EntityType {
@@ -829,6 +948,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.5f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "bamboo_raft",
     };
     pub const BAT: EntityType = EntityType {
@@ -907,6 +1032,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "bat",
     };
     pub const BEE: EntityType = EntityType {
@@ -995,6 +1134,31 @@ impl EntityType {
             height: 0.25f32,
             eye_height: 0.15f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "bee",
     };
     pub const BIRCH_BOAT: EntityType = EntityType {
@@ -1045,6 +1209,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "birch_boat",
     };
     pub const BIRCH_CHEST_BOAT: EntityType = EntityType {
@@ -1095,6 +1265,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "birch_chest_boat",
     };
     pub const BLAZE: EntityType = EntityType {
@@ -1174,6 +1350,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "blaze",
     };
     pub const BLOCK_DISPLAY: EntityType = EntityType {
@@ -1224,6 +1414,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "block_display",
     };
     pub const BOGGED: EntityType = EntityType {
@@ -1303,6 +1496,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "bogged",
     };
     pub const BREEZE: EntityType = EntityType {
@@ -1382,6 +1589,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "breeze",
     };
     pub const BREEZE_WIND_CHARGE: EntityType = EntityType {
@@ -1432,6 +1653,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "breeze_wind_charge",
     };
     pub const CAMEL: EntityType = EntityType {
@@ -1518,6 +1742,59 @@ impl EntityType {
             height: 1.4f32,
             eye_height: 1.38f32,
         }),
+        poses: &[
+            PoseDimensions {
+                pose: EntityPose::Sitting,
+                dimensions: EntityDimensions {
+                    width: 1.7f32,
+                    height: 0.94500005f32,
+                    eye_height: 0.845f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.9450000524520874f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        baby_poses: &[
+            PoseDimensions {
+                pose: EntityPose::Sitting,
+                dimensions: EntityDimensions {
+                    width: 0.95f32,
+                    height: 0.425f32,
+                    eye_height: 0.41f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.42500001192092896f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        boat: None,
         resource_name: "camel",
     };
     pub const CAMEL_HUSK: EntityType = EntityType {
@@ -1597,6 +1874,34 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[
+            PoseDimensions {
+                pose: EntityPose::Sitting,
+                dimensions: EntityDimensions {
+                    width: 1.7f32,
+                    height: 0.94500005f32,
+                    eye_height: 0.845f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.9450000524520874f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        baby_poses: &[],
+        boat: None,
         resource_name: "camel_husk",
     };
     pub const CAT: EntityType = EntityType {
@@ -1684,6 +1989,31 @@ impl EntityType {
             height: 0.35f32,
             eye_height: 0.34375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "cat",
     };
     pub const CAVE_SPIDER: EntityType = EntityType {
@@ -1763,6 +2093,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "cave_spider",
     };
     pub const CHERRY_BOAT: EntityType = EntityType {
@@ -1813,6 +2157,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "cherry_boat",
     };
     pub const CHERRY_CHEST_BOAT: EntityType = EntityType {
@@ -1863,6 +2213,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "cherry_chest_boat",
     };
     pub const CHEST_MINECART: EntityType = EntityType {
@@ -1913,6 +2269,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "chest_minecart",
     };
     pub const CHICKEN: EntityType = EntityType {
@@ -1999,6 +2358,31 @@ impl EntityType {
             height: 0.4f32,
             eye_height: 0.28125f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "chicken",
     };
     pub const COD: EntityType = EntityType {
@@ -2077,6 +2461,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "cod",
     };
     pub const COMMAND_BLOCK_MINECART: EntityType = EntityType {
@@ -2127,6 +2525,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "command_block_minecart",
     };
     pub const COPPER_GOLEM: EntityType = EntityType {
@@ -2205,6 +2606,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "copper_golem",
     };
     pub const COW: EntityType = EntityType {
@@ -2291,6 +2706,31 @@ impl EntityType {
             height: 0.7f32,
             eye_height: 0.69f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "cow",
     };
     pub const CREAKING: EntityType = EntityType {
@@ -2370,6 +2810,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "creaking",
     };
     pub const CREEPER: EntityType = EntityType {
@@ -2449,6 +2903,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "creeper",
     };
     pub const CUSHION: EntityType = EntityType {
@@ -2499,6 +2967,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "cushion",
     };
     pub const DARK_OAK_BOAT: EntityType = EntityType {
@@ -2549,6 +3020,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "dark_oak_boat",
     };
     pub const DARK_OAK_CHEST_BOAT: EntityType = EntityType {
@@ -2599,6 +3076,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "dark_oak_chest_boat",
     };
     pub const DOLPHIN: EntityType = EntityType {
@@ -2685,6 +3168,31 @@ impl EntityType {
             height: 0.39000002f32,
             eye_height: 0.09375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "dolphin",
     };
     pub const DONKEY: EntityType = EntityType {
@@ -2771,6 +3279,31 @@ impl EntityType {
             height: 0.75f32,
             eye_height: 0.7125f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "donkey",
     };
     pub const DRAGON_FIREBALL: EntityType = EntityType {
@@ -2821,6 +3354,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "dragon_fireball",
     };
     pub const DROWNED: EntityType = EntityType {
@@ -2908,6 +3444,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.775f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "drowned",
     };
     pub const EGG: EntityType = EntityType {
@@ -2958,6 +3519,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "egg",
     };
     pub const ELDER_GUARDIAN: EntityType = EntityType {
@@ -3037,6 +3601,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "elder_guardian",
     };
     pub const END_CRYSTAL: EntityType = EntityType {
@@ -3087,6 +3665,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "end_crystal",
     };
     pub const ENDER_DRAGON: EntityType = EntityType {
@@ -3165,6 +3746,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "ender_dragon",
     };
     pub const ENDER_PEARL: EntityType = EntityType {
@@ -3215,6 +3810,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "ender_pearl",
     };
     pub const ENDERMAN: EntityType = EntityType {
@@ -3294,6 +3892,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "enderman",
     };
     pub const ENDERMITE: EntityType = EntityType {
@@ -3373,6 +3985,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "endermite",
     };
     pub const EVOKER: EntityType = EntityType {
@@ -3452,6 +4078,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "evoker",
     };
     pub const EVOKER_FANGS: EntityType = EntityType {
@@ -3502,6 +4142,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "evoker_fangs",
     };
     pub const EXPERIENCE_BOTTLE: EntityType = EntityType {
@@ -3552,6 +4195,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "experience_bottle",
     };
     pub const EXPERIENCE_ORB: EntityType = EntityType {
@@ -3602,6 +4248,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "experience_orb",
     };
     pub const EYE_OF_ENDER: EntityType = EntityType {
@@ -3652,6 +4301,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "eye_of_ender",
     };
     pub const FALLING_BLOCK: EntityType = EntityType {
@@ -3702,6 +4354,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "falling_block",
     };
     pub const FIREBALL: EntityType = EntityType {
@@ -3752,6 +4407,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "fireball",
     };
     pub const FIREWORK_ROCKET: EntityType = EntityType {
@@ -3802,6 +4460,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "firework_rocket",
     };
     pub const FISHING_BOBBER: EntityType = EntityType {
@@ -3852,6 +4513,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "fishing_bobber",
     };
     pub const FOX: EntityType = EntityType {
@@ -3939,6 +4603,31 @@ impl EntityType {
             height: 0.42000002f32,
             eye_height: 0.34375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "fox",
     };
     pub const FROG: EntityType = EntityType {
@@ -4019,6 +4708,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "frog",
     };
     pub const FURNACE_MINECART: EntityType = EntityType {
@@ -4069,6 +4772,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "furnace_minecart",
     };
     pub const GHAST: EntityType = EntityType {
@@ -4148,6 +4854,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "ghast",
     };
     pub const GIANT: EntityType = EntityType {
@@ -4227,6 +4947,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "giant",
     };
     pub const GLOW_ITEM_FRAME: EntityType = EntityType {
@@ -4277,6 +5011,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "glow_item_frame",
     };
     pub const GLOW_SQUID: EntityType = EntityType {
@@ -4362,6 +5099,31 @@ impl EntityType {
             height: 0.5f32,
             eye_height: 0.37f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "glow_squid",
     };
     pub const GOAT: EntityType = EntityType {
@@ -4449,6 +5211,59 @@ impl EntityType {
             height: 0.65f32,
             eye_height: 0.59375f32,
         }),
+        poses: &[
+            PoseDimensions {
+                pose: EntityPose::LongJumping,
+                dimensions: EntityDimensions {
+                    width: 0.63f32,
+                    height: 0.90999997f32,
+                    eye_height: 0.7735f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.778749953359366f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        baby_poses: &[
+            PoseDimensions {
+                pose: EntityPose::LongJumping,
+                dimensions: EntityDimensions {
+                    width: 0.315f32,
+                    height: 0.45499998f32,
+                    eye_height: 0.415625f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.3718749936670065f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        boat: None,
         resource_name: "goat",
     };
     pub const GUARDIAN: EntityType = EntityType {
@@ -4528,6 +5343,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "guardian",
     };
     pub const HAPPY_GHAST: EntityType = EntityType {
@@ -4625,6 +5454,31 @@ impl EntityType {
             height: 0.95f32,
             eye_height: 0.46875f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "happy_ghast",
     };
     pub const HOGLIN: EntityType = EntityType {
@@ -4711,6 +5565,31 @@ impl EntityType {
             height: 0.85f32,
             eye_height: 0.625f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "hoglin",
     };
     pub const HOPPER_MINECART: EntityType = EntityType {
@@ -4761,6 +5640,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "hopper_minecart",
     };
     pub const HORSE: EntityType = EntityType {
@@ -4847,6 +5729,31 @@ impl EntityType {
             height: 1.12f32,
             eye_height: 1.064f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "horse",
     };
     pub const HUSK: EntityType = EntityType {
@@ -4934,6 +5841,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.825f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "husk",
     };
     pub const ILLUSIONER: EntityType = EntityType {
@@ -5013,6 +5945,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "illusioner",
     };
     pub const INTERACTION: EntityType = EntityType {
@@ -5063,6 +6009,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "interaction",
     };
     pub const IRON_GOLEM: EntityType = EntityType {
@@ -5142,6 +6091,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "iron_golem",
     };
     pub const ITEM: EntityType = EntityType {
@@ -5192,6 +6155,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "item",
     };
     pub const ITEM_DISPLAY: EntityType = EntityType {
@@ -5242,6 +6208,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "item_display",
     };
     pub const ITEM_FRAME: EntityType = EntityType {
@@ -5292,6 +6261,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "item_frame",
     };
     pub const JUNGLE_BOAT: EntityType = EntityType {
@@ -5342,6 +6314,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "jungle_boat",
     };
     pub const JUNGLE_CHEST_BOAT: EntityType = EntityType {
@@ -5392,6 +6370,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "jungle_chest_boat",
     };
     pub const LEASH_KNOT: EntityType = EntityType {
@@ -5442,6 +6426,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "leash_knot",
     };
     pub const LIGHTNING_BOLT: EntityType = EntityType {
@@ -5492,6 +6479,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "lightning_bolt",
     };
     pub const LINGERING_POTION: EntityType = EntityType {
@@ -5542,6 +6532,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "lingering_potion",
     };
     pub const LLAMA: EntityType = EntityType {
@@ -5628,6 +6621,31 @@ impl EntityType {
             height: 0.935f32,
             eye_height: 0.88825f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "llama",
     };
     pub const LLAMA_SPIT: EntityType = EntityType {
@@ -5678,6 +6696,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "llama_spit",
     };
     pub const MAGMA_CUBE: EntityType = EntityType {
@@ -5757,6 +6778,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "magma_cube",
     };
     pub const MANGROVE_BOAT: EntityType = EntityType {
@@ -5807,6 +6842,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "mangrove_boat",
     };
     pub const MANGROVE_CHEST_BOAT: EntityType = EntityType {
@@ -5857,6 +6898,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "mangrove_chest_boat",
     };
     pub const MANNEQUIN: EntityType = EntityType {
@@ -5934,6 +6981,82 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[
+            PoseDimensions {
+                pose: EntityPose::Crouching,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 1.5f32,
+                    eye_height: 1.27f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 1.5f64, 0f64]],
+                    vehicle: [0f64, 0.6f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Dying,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 1.62f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::FallFlying,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::SpinAttack,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Swimming,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        baby_poses: &[],
+        boat: None,
         resource_name: "mannequin",
     };
     pub const MARKER: EntityType = EntityType {
@@ -5984,6 +7107,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "marker",
     };
     pub const MINECART: EntityType = EntityType {
@@ -6034,6 +7160,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "minecart",
     };
     pub const MOOSHROOM: EntityType = EntityType {
@@ -6120,6 +7249,31 @@ impl EntityType {
             height: 0.7f32,
             eye_height: 0.69f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "mooshroom",
     };
     pub const MULE: EntityType = EntityType {
@@ -6206,6 +7360,31 @@ impl EntityType {
             height: 0.8f32,
             eye_height: 0.76f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "mule",
     };
     pub const NAUTILUS: EntityType = EntityType {
@@ -6293,6 +7472,31 @@ impl EntityType {
             height: 0.475f32,
             eye_height: 0.13755f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "nautilus",
     };
     pub const OAK_BOAT: EntityType = EntityType {
@@ -6343,6 +7547,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "oak_boat",
     };
     pub const OAK_CHEST_BOAT: EntityType = EntityType {
@@ -6393,6 +7603,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "oak_chest_boat",
     };
     pub const OCELOT: EntityType = EntityType {
@@ -6480,6 +7696,31 @@ impl EntityType {
             height: 0.35f32,
             eye_height: 0.34375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "ocelot",
     };
     pub const OMINOUS_ITEM_SPAWNER: EntityType = EntityType {
@@ -6530,6 +7771,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "ominous_item_spawner",
     };
     pub const PAINTING: EntityType = EntityType {
@@ -6580,6 +7824,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "painting",
     };
     pub const PALE_OAK_BOAT: EntityType = EntityType {
@@ -6630,6 +7877,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "pale_oak_boat",
     };
     pub const PALE_OAK_CHEST_BOAT: EntityType = EntityType {
@@ -6680,6 +7933,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "pale_oak_chest_boat",
     };
     pub const PANDA: EntityType = EntityType {
@@ -6767,6 +8026,31 @@ impl EntityType {
             height: 0.625f32,
             eye_height: 0.28125f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "panda",
     };
     pub const PARCHED: EntityType = EntityType {
@@ -6846,6 +8130,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "parched",
     };
     pub const PARROT: EntityType = EntityType {
@@ -6927,6 +8225,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "parrot",
     };
     pub const PHANTOM: EntityType = EntityType {
@@ -7006,6 +8318,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "phantom",
     };
     pub const PIG: EntityType = EntityType {
@@ -7092,6 +8418,31 @@ impl EntityType {
             height: 0.45f32,
             eye_height: 0.40625f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "pig",
     };
     pub const PIGLIN: EntityType = EntityType {
@@ -7178,6 +8529,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.78f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "piglin",
     };
     pub const PIGLIN_BRUTE: EntityType = EntityType {
@@ -7257,6 +8633,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "piglin_brute",
     };
     pub const PILLAGER: EntityType = EntityType {
@@ -7336,6 +8726,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "pillager",
     };
     pub const PLAYER: EntityType = EntityType {
@@ -7423,6 +8827,82 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[
+            PoseDimensions {
+                pose: EntityPose::Crouching,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 1.5f32,
+                    eye_height: 1.27f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 1.5f64, 0f64]],
+                    vehicle: [0f64, 0.6f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Dying,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 1.62f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::FallFlying,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Sleeping,
+                dimensions: EntityDimensions {
+                    width: 0.2f32,
+                    height: 0.2f32,
+                    eye_height: 0.2f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::SpinAttack,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+            PoseDimensions {
+                pose: EntityPose::Swimming,
+                dimensions: EntityDimensions {
+                    width: 0.6f32,
+                    height: 0.6f32,
+                    eye_height: 0.4f32,
+                },
+                attachments: EntityAttachments {
+                    passenger: &[[0f64, 0.6000000238418579f64, 0f64]],
+                    vehicle: [0f64, 0f64, 0f64],
+                },
+            },
+        ],
+        baby_poses: &[],
+        boat: None,
         resource_name: "player",
     };
     pub const POLAR_BEAR: EntityType = EntityType {
@@ -7510,6 +8990,31 @@ impl EntityType {
             height: 0.7f32,
             eye_height: 0.34375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "polar_bear",
     };
     pub const POPLAR_BOAT: EntityType = EntityType {
@@ -7560,6 +9065,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "poplar_boat",
     };
     pub const POPLAR_CHEST_BOAT: EntityType = EntityType {
@@ -7610,6 +9121,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "poplar_chest_boat",
     };
     pub const PUFFERFISH: EntityType = EntityType {
@@ -7688,6 +9205,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "pufferfish",
     };
     pub const RABBIT: EntityType = EntityType {
@@ -7775,6 +9306,31 @@ impl EntityType {
             height: 0.4f32,
             eye_height: 0.39f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "rabbit",
     };
     pub const RAVAGER: EntityType = EntityType {
@@ -7854,6 +9410,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "ravager",
     };
     pub const SALMON: EntityType = EntityType {
@@ -7932,6 +9502,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "salmon",
     };
     pub const SHEEP: EntityType = EntityType {
@@ -8018,6 +9602,31 @@ impl EntityType {
             height: 0.65f32,
             eye_height: 0.65625f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "sheep",
     };
     pub const SHULKER: EntityType = EntityType {
@@ -8096,6 +9705,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "shulker",
     };
     pub const SHULKER_BULLET: EntityType = EntityType {
@@ -8146,6 +9769,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "shulker_bullet",
     };
     pub const SILVERFISH: EntityType = EntityType {
@@ -8225,6 +9851,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "silverfish",
     };
     pub const SKELETON: EntityType = EntityType {
@@ -8304,6 +9944,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "skeleton",
     };
     pub const SKELETON_HORSE: EntityType = EntityType {
@@ -8390,6 +10044,31 @@ impl EntityType {
             height: 1.12f32,
             eye_height: 1.064f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "skeleton_horse",
     };
     pub const SLIME: EntityType = EntityType {
@@ -8469,6 +10148,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "slime",
     };
     pub const SMALL_FIREBALL: EntityType = EntityType {
@@ -8519,6 +10212,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "small_fireball",
     };
     pub const SNIFFER: EntityType = EntityType {
@@ -8605,6 +10301,31 @@ impl EntityType {
             height: 0.875f32,
             eye_height: 0.525f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "sniffer",
     };
     pub const SNOW_GOLEM: EntityType = EntityType {
@@ -8683,6 +10404,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "snow_golem",
     };
     pub const SNOWBALL: EntityType = EntityType {
@@ -8733,6 +10468,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "snowball",
     };
     pub const SPAWNER_MINECART: EntityType = EntityType {
@@ -8783,6 +10521,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "spawner_minecart",
     };
     pub const SPECTRAL_ARROW: EntityType = EntityType {
@@ -8833,6 +10574,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "spectral_arrow",
     };
     pub const SPIDER: EntityType = EntityType {
@@ -8912,6 +10656,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "spider",
     };
     pub const SPLASH_POTION: EntityType = EntityType {
@@ -8962,6 +10720,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "splash_potion",
     };
     pub const SPRUCE_BOAT: EntityType = EntityType {
@@ -9012,6 +10773,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0f32,
+        }),
         resource_name: "spruce_boat",
     };
     pub const SPRUCE_CHEST_BOAT: EntityType = EntityType {
@@ -9062,6 +10829,12 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: Some(BoatSeats {
+            ride_height: 0.1875f64,
+            single_passenger_x_offset: 0.15f32,
+        }),
         resource_name: "spruce_chest_boat",
     };
     pub const SQUID: EntityType = EntityType {
@@ -9147,6 +10920,31 @@ impl EntityType {
             height: 0.5f32,
             eye_height: 0.37f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "squid",
     };
     pub const STRAY: EntityType = EntityType {
@@ -9226,6 +11024,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "stray",
     };
     pub const STRIDER: EntityType = EntityType {
@@ -9312,6 +11124,31 @@ impl EntityType {
             height: 0.85f32,
             eye_height: 0.4375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "strider",
     };
     pub const SULFUR_CUBE: EntityType = EntityType {
@@ -9398,6 +11235,31 @@ impl EntityType {
             height: 0.49f32,
             eye_height: 0.175f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "sulfur_cube",
     };
     pub const TADPOLE: EntityType = EntityType {
@@ -9477,6 +11339,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "tadpole",
     };
     pub const TEXT_DISPLAY: EntityType = EntityType {
@@ -9527,6 +11403,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "text_display",
     };
     pub const TNT: EntityType = EntityType {
@@ -9577,6 +11456,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "tnt",
     };
     pub const TNT_MINECART: EntityType = EntityType {
@@ -9627,6 +11509,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "tnt_minecart",
     };
     pub const TRADER_LLAMA: EntityType = EntityType {
@@ -9713,6 +11598,31 @@ impl EntityType {
             height: 0.935f32,
             eye_height: 0.88825f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "trader_llama",
     };
     pub const TRIDENT: EntityType = EntityType {
@@ -9763,6 +11673,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "trident",
     };
     pub const TROPICAL_FISH: EntityType = EntityType {
@@ -9841,6 +11754,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "tropical_fish",
     };
     pub const TURTLE: EntityType = EntityType {
@@ -9927,6 +11854,31 @@ impl EntityType {
             height: 0.120000005f32,
             eye_height: 0.102000006f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "turtle",
     };
     pub const VEX: EntityType = EntityType {
@@ -10006,6 +11958,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "vex",
     };
     pub const VILLAGER: EntityType = EntityType {
@@ -10091,6 +12057,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.63f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "villager",
     };
     pub const VINDICATOR: EntityType = EntityType {
@@ -10170,6 +12161,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "vindicator",
     };
     pub const WANDERING_TRADER: EntityType = EntityType {
@@ -10255,6 +12260,31 @@ impl EntityType {
             height: 0.975f32,
             eye_height: 0.81f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "wandering_trader",
     };
     pub const WARDEN: EntityType = EntityType {
@@ -10334,6 +12364,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "warden",
     };
     pub const WIND_CHARGE: EntityType = EntityType {
@@ -10384,6 +12428,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "wind_charge",
     };
     pub const WITCH: EntityType = EntityType {
@@ -10463,6 +12510,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "witch",
     };
     pub const WITHER: EntityType = EntityType {
@@ -10543,6 +12604,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "wither",
     };
     pub const WITHER_SKELETON: EntityType = EntityType {
@@ -10622,6 +12697,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "wither_skeleton",
     };
     pub const WITHER_SKULL: EntityType = EntityType {
@@ -10672,6 +12761,9 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[],
+        baby_poses: &[],
+        boat: None,
         resource_name: "wither_skull",
     };
     pub const WOLF: EntityType = EntityType {
@@ -10759,6 +12851,31 @@ impl EntityType {
             height: 0.425f32,
             eye_height: 0.34375f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "wolf",
     };
     pub const ZOGLIN: EntityType = EntityType {
@@ -10845,6 +12962,31 @@ impl EntityType {
             height: 0.85f32,
             eye_height: 0.625f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "zoglin",
     };
     pub const ZOMBIE: EntityType = EntityType {
@@ -10932,6 +13074,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.775f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "zombie",
     };
     pub const ZOMBIE_HORSE: EntityType = EntityType {
@@ -11018,6 +13185,31 @@ impl EntityType {
             height: 1.12f32,
             eye_height: 1.064f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "zombie_horse",
     };
     pub const ZOMBIE_NAUTILUS: EntityType = EntityType {
@@ -11098,6 +13290,20 @@ impl EntityType {
         },
         baby_attachments: None,
         baby_dimensions: None,
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[],
+        boat: None,
         resource_name: "zombie_nautilus",
     };
     pub const ZOMBIE_VILLAGER: EntityType = EntityType {
@@ -11185,6 +13391,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.67f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "zombie_villager",
     };
     pub const ZOMBIFIED_PIGLIN: EntityType = EntityType {
@@ -11272,6 +13503,31 @@ impl EntityType {
             height: 0.98f32,
             eye_height: 0.78f32,
         }),
+        poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        baby_poses: &[PoseDimensions {
+            pose: EntityPose::Sleeping,
+            dimensions: EntityDimensions {
+                width: 0.2f32,
+                height: 0.2f32,
+                eye_height: 0.2f32,
+            },
+            attachments: EntityAttachments {
+                passenger: &[[0f64, 0.20000000298023224f64, 0f64]],
+                vehicle: [0f64, 0f64, 0f64],
+            },
+        }],
+        boat: None,
         resource_name: "zombified_piglin",
     };
     pub const ALL: &'static [&'static Self] = &[
@@ -11769,6 +14025,15 @@ impl EntityType {
             "zombified_piglin" => Some(&Self::ZOMBIFIED_PIGLIN),
             _ => None,
         }
+    }
+    #[must_use]
+    pub fn pose_dimensions(&self, pose: EntityPose, baby: bool) -> Option<&'static PoseDimensions> {
+        let poses = if baby && self.baby_dimensions.is_some() {
+            self.baby_poses
+        } else {
+            self.poses
+        };
+        poses.iter().find(|entry| entry.pose == pose)
     }
     #[must_use]
     pub const fn width(&self) -> f32 {

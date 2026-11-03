@@ -581,6 +581,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn vehicle_attachment_point(&self, _vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
         &[]
     }
@@ -1242,14 +1246,16 @@ fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
     )
 }
 
-/// Attachment points for the entity's current age, and the scale they grow with.
+/// Attachment points for the entity's current pose and age, and the scale they grow with.
 fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) {
-    let entity_type = entity.get_entity().entity_type;
+    let base = entity.get_entity();
+    let entity_type = base.entity_type;
     let living = entity.get_living_entity();
+    let baby = living.is_some_and(LivingEntity::is_baby);
     let attachments = entity_type
-        .baby_attachments
-        .as_ref()
-        .filter(|_| living.is_some_and(LivingEntity::is_baby))
+        .pose_dimensions(base.pose.load(), baby)
+        .map(|pose| &pose.attachments)
+        .or_else(|| entity_type.baby_attachments.as_ref().filter(|_| baby))
         .unwrap_or(&entity_type.attachments);
     let scale = living.map_or(1.0, |living| {
         living.get_attribute_value(&pumpkin_data::attributes::Attributes::SCALE)
@@ -1257,9 +1263,22 @@ fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) 
     (attachments, scale)
 }
 
-fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
+pub(crate) fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
     let [x, y, z] = point;
     y_rot(Vector3::new(x, y, z) * scale, -yaw.to_radians())
+}
+
+pub fn default_passenger_attachment_point(
+    vehicle: &dyn EntityBase,
+    index: usize,
+) -> Option<Vector3<f64>> {
+    let (seats, scale) = attachments_of(vehicle);
+    let seat = *seats.passenger.get(index).or(seats.passenger.last())?;
+    Some(attachment_point(
+        seat,
+        scale,
+        vehicle.get_entity().yaw.load(),
+    ))
 }
 
 /// Moves `passenger` onto its seat on `vehicle`.
@@ -1277,16 +1296,16 @@ pub fn position_rider(vehicle: &dyn EntityBase, passenger: &dyn EntityBase) {
     };
     let Some(seat) = vehicle
         .passenger_attachment_point(passenger, index)
-        .or_else(|| {
-            let (seats, scale) = attachments_of(vehicle);
-            let seat = *seats.passenger.get(index).or(seats.passenger.last())?;
-            Some(attachment_point(seat, scale, vehicle_entity.yaw.load()))
-        })
+        .or_else(|| default_passenger_attachment_point(vehicle, index))
     else {
         return;
     };
-    let (own, own_scale) = attachments_of(passenger);
-    let offset = attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load());
+    let offset = passenger
+        .vehicle_attachment_point(vehicle)
+        .unwrap_or_else(|| {
+            let (own, own_scale) = attachments_of(passenger);
+            attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load())
+        });
     passenger_entity.set_pos(vehicle_entity.pos.load() + seat - offset);
 }
 
@@ -1783,10 +1802,7 @@ impl Entity {
         self.init_bedrock_flags();
 
         let mut metadata = SyncedActorDataList::new();
-        let dimensions = self
-            .default_dimensions
-            .load()
-            .unwrap_or_else(|| Self::type_dimensions(self.entity_type));
+        let dimensions = self.get_dimensions(self.pose.load());
         metadata.set(
             entity_data_key::WIDTH,
             MetadataValue::Float(dimensions.width),
@@ -1902,7 +1918,10 @@ impl Entity {
 
     /// Sets the entity's growth age. Negative values indicate that the entity is a baby.
     pub fn set_age(&self, age: i32) {
-        self.age.store(age, Relaxed);
+        let old_age = self.age.swap(age, Relaxed);
+        if (old_age < 0) != (age < 0) {
+            self.refresh_dimensions();
+        }
     }
 
     /// Adds a scoreboard tag to this entity.
@@ -2044,22 +2063,13 @@ impl Entity {
 
     #[must_use]
     pub fn get_dimensions(&self, pose: EntityPose) -> EntityDimensions {
-        if pose == EntityPose::Sleeping {
-            return EntityDimensions::new(0.2, 0.2, 0.2);
-        }
-        if self.entity_type == &EntityType::PLAYER {
-            match pose {
-                EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
-                    return EntityDimensions::new(0.6, 0.6, 0.4);
-                }
-                EntityPose::Crouching => return EntityDimensions::new(0.6, 1.5, 1.27),
-                EntityPose::Dying => return EntityDimensions::new(0.2, 0.2, 1.62),
-                _ => {}
-            }
+        let baby = self.age.load(Relaxed) < 0;
+        if let Some(pose_dimensions) = self.entity_type.pose_dimensions(pose, baby) {
+            return pose_dimensions.dimensions;
         }
         self.default_dimensions
             .load()
-            .unwrap_or_else(|| Self::type_dimensions(self.entity_type))
+            .unwrap_or_else(|| Self::age_dimensions(self.entity_type, baby))
     }
 
     pub fn set_default_dimensions(&self, dimensions: EntityDimensions) {
