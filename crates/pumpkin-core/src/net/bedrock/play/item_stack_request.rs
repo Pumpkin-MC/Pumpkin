@@ -1236,19 +1236,24 @@ fn can_take_bedrock_armor_slot(
     player: &dyn InventoryPlayer,
     slot_info: &ItemStackRequestSlotInfo,
 ) -> bool {
-    if slot_info.container_name.container_name != ContainerName::Armor
-        || screen_handler.window_type().is_some()
-    {
+    if screen_handler.window_type().is_some() {
         return true;
     }
 
-    map_bedrock_container_slot(
+    let mapped_slot = map_bedrock_container_slot(
         screen_handler,
         slot_info.container_name.container_name,
         slot_info.slot_id,
-    )
-    .and_then(|index| screen_handler.get_behaviour().slots.get(index))
-    .is_some_and(|slot| slot.can_take_items(player))
+    );
+    match mapped_slot {
+        Some(index) if (5..9).contains(&index) => screen_handler
+            .get_behaviour()
+            .slots
+            .get(index)
+            .is_some_and(|slot| slot.can_take_items(player)),
+        None if slot_info.container_name.container_name == ContainerName::Armor => false,
+        _ => true,
+    }
 }
 
 fn get_slot_stack(
