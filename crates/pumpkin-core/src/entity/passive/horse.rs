@@ -7,7 +7,7 @@ use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_state::SoundType;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{DataComponentImpl, HorseVariantImpl};
+use pumpkin_data::data_component_impl::{DataComponentImpl, EquipmentSlot, HorseVariantImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::{HorseMarkings, HorseVariant};
 use pumpkin_data::item_stack::ItemStack;
@@ -22,7 +22,7 @@ use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase,
+    Entity, EntityBase, GearDamage,
     ageable::{AgeableData, AgeableMob, DEFAULT_BABY_SPAWN_CHANCE},
     mob::spawn::{EntitySpawnReason, SpawnGroupData},
     mob::{Mob, MobEntity},
@@ -223,6 +223,13 @@ impl Animal for HorseEntity {
 
 impl Mob for HorseEntity {
     crate::abstract_horse_mob_hooks!();
+
+    fn mob_hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        match gear {
+            GearDamage::Armor => &[EquipmentSlot::BODY],
+            GearDamage::Helmet => &[],
+        }
+    }
 
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         play_horse_step_sound(self, pos, state);

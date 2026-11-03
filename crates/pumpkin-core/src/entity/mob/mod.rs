@@ -1,4 +1,6 @@
-use super::{Entity, EntityBase, LeashTick, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase, GearDamage, LeashTick, ai::pathfinder::Navigator, living::LivingEntity,
+};
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
 use crate::entity::ai::brain::Brain;
@@ -1438,6 +1440,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn mob_hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
+        &[]
+    }
+
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         let first = self.get_mob_entity().first_passenger()?;
         self.mob_rider_controller(first)
@@ -2747,6 +2753,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         index: usize,
     ) -> Option<Vector3<f64>> {
         self.mob_passenger_attachment_point(passenger, index)
+    }
+
+    fn hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        self.mob_hurt_gear_slots(gear)
     }
 
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {

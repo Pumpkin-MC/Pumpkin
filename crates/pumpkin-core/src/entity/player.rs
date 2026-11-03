@@ -325,7 +325,7 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::mob::warden_spawn_tracker::WardenSpawnTracker;
-use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use super::{Entity, EntityBase, GearDamage, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -7509,6 +7509,18 @@ impl EntityBase for Player {
         cause: Option<&dyn EntityBase>,
     ) -> bool {
         self.damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    fn hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        match gear {
+            GearDamage::Armor => &[
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+            ],
+            GearDamage::Helmet => &[EquipmentSlot::HEAD],
+        }
     }
 
     fn teleport(

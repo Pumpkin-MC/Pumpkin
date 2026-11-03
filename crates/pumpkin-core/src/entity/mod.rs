@@ -151,6 +151,12 @@ pub(crate) const fn max_fluid_push_speed(fast_lava: bool) -> f64 {
     WATER_PUSH_SPEED + lava_push_speed(fast_lava)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GearDamage {
+    Armor,
+    Helmet,
+}
+
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
 #[must_use]
@@ -573,6 +579,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         _index: usize,
     ) -> Option<Vector3<f64>> {
         None
+    }
+
+    fn hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
+        &[]
     }
 
     fn can_control_vehicle(&self) -> bool {
