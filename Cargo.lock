@@ -2938,6 +2938,7 @@ dependencies = [
  "pumpkin-config",
  "pumpkin-core",
  "pumpkin-data",
+ "pumpkin-gametest",
  "pumpkin-util",
  "pumpkin-wasm-host",
  "pumpkin-world",
@@ -2945,6 +2946,7 @@ dependencies = [
  "rustls",
  "tokio",
  "tracing",
+ "zip",
 ]
 
 [[package]]

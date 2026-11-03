@@ -29,7 +29,7 @@ use pumpkin_core::{
 };
 use pumpkin_core::{PumpkinServer, stop_server};
 
-use pumpkin::{GameTestOptions, StartupCommand, parse_startup_command};
+use pumpkin::{StartupCommand, parse_startup_command};
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
@@ -40,6 +40,8 @@ use pumpkin_wasm_host::WasmPluginLoader;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info, warn};
+
+mod game_test_server;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,14 +57,25 @@ async fn main() {
         Err(error) => error.exit(),
     };
 
+    initialize_runtime();
+    tokio::spawn(async {
+        if let Err(err) = setup_sighandler().await {
+            tracing::error!("Unable to setup signal handlers: {err}");
+        }
+    });
+
     match command {
         StartupCommand::DedicatedServer => dedicated_server().await,
-        StartupCommand::GameTestServer(options) => game_test_server(options),
+        StartupCommand::GameTestServer(options) => {
+            if let Err(error) = game_test_server::run(options).await {
+                tracing::error!("{error}");
+                exit(1);
+            }
+        }
     }
 }
 
-#[allow(clippy::too_many_lines)]
-async fn dedicated_server() {
+fn initialize_runtime() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
     // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
@@ -79,6 +92,10 @@ async fn dedicated_server() {
 
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
+}
+
+#[allow(clippy::too_many_lines)]
+async fn dedicated_server() {
     let time = Instant::now();
 
     let exec_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -169,12 +186,6 @@ async fn dedicated_server() {
     }
     print_support_links_and_warning();
 
-    tokio::spawn(async {
-        if let Err(err) = setup_sighandler().await {
-            tracing::error!("Unable to setup signal handlers: {err}");
-        }
-    });
-
     let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(WasmPluginLoader::new(
         config.advanced.plugins.verify_signatures,
     ))];
@@ -252,8 +263,6 @@ async fn dedicated_server() {
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
-
-fn game_test_server(_options: GameTestOptions) {}
 
 fn print_support_links_and_warning() {
     warn!(

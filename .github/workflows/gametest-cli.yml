@@ -1,0 +1,29 @@
+name: GameTest CLI
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CI_RUST_TOOLCHAIN_VER: stable
+
+jobs:
+  gametest:
+    name: Run GameTests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Run GameTest CLI
+        run: cargo run --locked -p pumpkin -- --tests --universe gametestserver --report gametest-results.xml
+      - name: Upload GameTest report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gametest-results
+          path: gametest-results.xml

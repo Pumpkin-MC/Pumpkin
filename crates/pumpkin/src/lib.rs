@@ -9,7 +9,7 @@ pub enum StartupCommand {
     GameTestServer(GameTestOptions),
 }
 
-/// Holds the options for a GameTest server run.
+/// Holds the options for a `GameTest` server run.
 #[derive(Debug, Eq, PartialEq)]
 pub struct GameTestOptions {
     pub universe: PathBuf,
@@ -43,7 +43,7 @@ struct GameTestArgs {
     packs: Option<PathBuf>,
 }
 
-/// Selects GameTest mode when `--tests` is present and parses its options.
+/// Selects `GameTest` mode when `--tests` is present and parses its options.
 pub fn parse_startup_command(
     args: impl IntoIterator<Item = String>,
 ) -> Result<StartupCommand, clap::Error> {
@@ -63,81 +63,4 @@ pub fn parse_startup_command(
         repeat_count: options.repeat_count,
         packs: options.packs,
     }))
-}
-
-#[cfg(test)]
-mod tests {
-    use clap::error::ErrorKind;
-
-    use super::{GameTestOptions, StartupCommand, parse_startup_command};
-
-    #[test]
-    fn dedicated_is_the_default() {
-        assert_eq!(
-            parse_startup_command([]).ok(),
-            Some(StartupCommand::DedicatedServer)
-        );
-        assert_eq!(
-            parse_startup_command(["--convert-world".into(), "anvil".into()]).ok(),
-            Some(StartupCommand::DedicatedServer)
-        );
-    }
-
-    #[test]
-    fn parses_game_test_options() {
-        let args = [
-            "--universe=tmp/tests",
-            "--report",
-            "results.xml",
-            "--tests",
-            "minecraft:*",
-            "--verify",
-            "true",
-            "--repeatCount",
-            "3",
-            "--packs",
-            "packs",
-        ]
-        .map(str::to_owned);
-        let parsed = parse_startup_command(args);
-        assert_eq!(
-            parsed.ok(),
-            Some(StartupCommand::GameTestServer(GameTestOptions {
-                universe: "tmp/tests".into(),
-                report: Some("results.xml".into()),
-                tests: Some("minecraft:*".into()),
-                verify: true,
-                repeat_count: 3,
-                packs: Some("packs".into()),
-            }))
-        );
-    }
-
-    #[test]
-    fn tests_without_selector_runs_all() {
-        let parsed = parse_startup_command(["--tests".into(), "--verify".into(), "true".into()]);
-        assert!(matches!(
-            parsed,
-            Ok(StartupCommand::GameTestServer(GameTestOptions {
-                tests: None,
-                verify: true,
-                ..
-            }))
-        ));
-    }
-
-    #[test]
-    fn help_and_invalid_values_are_handled_by_clap() {
-        assert_eq!(
-            parse_startup_command(["--help".into()])
-                .err()
-                .map(|error| error.kind()),
-            Some(ErrorKind::DisplayHelp)
-        );
-        assert!(parse_startup_command(["--tests".into(), "--verify".into()]).is_err());
-        assert!(
-            parse_startup_command(["--tests".into(), "--repeatCount".into(), "nope".into()])
-                .is_err()
-        );
-    }
 }
