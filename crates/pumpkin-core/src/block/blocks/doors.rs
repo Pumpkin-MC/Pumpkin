@@ -75,14 +75,6 @@ fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     );
 }
 
-fn can_open_door(block: &Block) -> bool {
-    if block == &Block::IRON_DOOR {
-        return false;
-    }
-
-    true
-}
-
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
@@ -161,10 +153,18 @@ fn get_hinge(
 pub struct DoorBlock;
 
 impl DoorBlock {
+    /// Vanilla `BlockSetType.canOpenByHand` of a door's set: only iron doors need redstone.
+    #[must_use]
+    pub fn can_open_by_hand(block: &Block) -> bool {
+        block != &Block::IRON_DOOR
+    }
+
+    /// Vanilla `DoorBlock.isWoodenDoor`, which despite its name is any door that opens by hand,
+    /// copper doors included.
     #[must_use]
     pub fn is_wooden_door(world: &World, block_pos: &BlockPos) -> bool {
         let block = world.get_block(block_pos);
-        block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS)
+        block.has_tag(&tag::Block::MINECRAFT_DOORS) && Self::can_open_by_hand(block)
     }
 
     #[must_use]
@@ -260,7 +260,7 @@ impl BlockBehaviour for DoorBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         {
-            if !can_open_door(args.block) {
+            if !Self::can_open_by_hand(args.block) {
                 return BlockActionResult::Pass;
             }
 

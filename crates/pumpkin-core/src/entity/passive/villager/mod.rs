@@ -416,7 +416,12 @@ impl VillagerEntity {
 
     #[allow(clippy::too_many_lines)]
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        mob_entity
+            .navigator
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_can_open_doors(true);
         let villager_data = VillagerData::new(VillagerType::Plains, VillagerProfession::None, 1);
         let inventory = std::sync::Mutex::new((0..8).map(|_| ItemStack::EMPTY.clone()).collect());
 
@@ -1237,7 +1242,9 @@ impl VillagerEntity {
             }
             candidates.sort_by(|left, right| left.0.total_cmp(&right.0));
 
+            // Vanilla `AcquirePoi` paths with the villager's own navigation, which opens doors.
             let mut navigator = Navigator::default();
+            navigator.set_can_open_doors(true);
             let mut claimed = None;
             for (_, position, block, _) in candidates.into_iter().take(5) {
                 if !navigator.can_reach_within(

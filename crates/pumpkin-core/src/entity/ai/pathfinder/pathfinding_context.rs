@@ -6,6 +6,7 @@ use pumpkin_data::{
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::{
+    block::blocks::doors::DoorBlock,
     entity::ai::pathfinder::{
         node::{Coordinate, PathComputationType, PathType},
         path_type_cache::PathTypeCache,
@@ -138,10 +139,10 @@ impl PathfindingContext {
                 return PathType::DoorOpen;
             }
 
-            return if block.id == Block::IRON_DOOR.id {
-                PathType::DoorIronClosed
-            } else {
+            return if DoorBlock::can_open_by_hand(block) {
                 PathType::DoorWoodClosed
+            } else {
+                PathType::DoorIronClosed
             };
         }
 
