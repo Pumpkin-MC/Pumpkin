@@ -570,7 +570,12 @@ impl ItemBehaviour for FilledBucketItem {
             );
             let mob = from_type(entity_type, spawn_coord, &world, Uuid::new_v4());
             if mob.get_mob().and_then(|mob| mob.as_bucketable()).is_some() {
-                crate::entity::mob::spawn::finalize_spawn(&mob, &world, None);
+                crate::entity::mob::spawn::finalize_spawn(
+                    &mob,
+                    &world,
+                    crate::entity::mob::spawn::EntitySpawnReason::Bucket,
+                    None,
+                );
                 apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
                 if world.spawn_creature(
                     mob.clone(),

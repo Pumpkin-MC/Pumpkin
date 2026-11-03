@@ -428,9 +428,23 @@ fn is_thundering(world: &World) -> bool {
 }
 
 impl Mob for FoxEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        *slot == pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
+            && self.mob_entity.can_pick_up_loot()
+    }
+
+    // Needs fox eating first.
+    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let (variant, size) = if let Some(SpawnGroupData::Fox { variant, size }) = group_data {
