@@ -24,7 +24,10 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
     let handler_id = task.handler_id;
     let server_clone = server.clone();
 
-    server.spawn_task(async move {
+    // Run the task to completion inside the server tick. Spawned as its own Tokio task it ran
+    // concurrently with the world tick: its host calls waited on world locks while the tick waited
+    // in a blocking event for the same plugin instance, which froze the server.
+    let fut = async move {
         let plugin_instance = plugin.plugin_instance.clone();
         let api_version = plugin.api_version;
         if let Err(error) = plugin
@@ -78,5 +81,10 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
         {
             tracing::error!(handler_id, %error, "Wasm scheduled task failed");
         }
-    });
+    };
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::task::block_in_place(|| server.runtime.block_on(fut));
+    } else {
+        server.runtime.block_on(fut);
+    }
 }
