@@ -14,7 +14,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
@@ -195,10 +195,6 @@ impl CustomSound for ChickenEntity {
 
     fn hurt_sound(&self) -> Option<Sound> {
         Some(self.sound_variant().hurt_sound(self.is_baby()))
-    }
-
-    fn sound_category(&self) -> SoundCategory {
-        self.sound_source()
     }
 }
 

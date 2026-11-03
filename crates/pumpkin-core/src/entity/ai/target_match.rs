@@ -23,6 +23,8 @@ pub enum TargetMatch {
     /// Vanilla `Monster.class`: an [`Self::Enemy`] that is not a slime, ghast, phantom,
     /// shulker, hoglin or the dragon.
     Monster,
+    /// Vanilla `Mob.class`: every mob, never a player.
+    Mob,
 }
 
 /// Monster category, but not vanilla `Enemy`.
@@ -59,6 +61,7 @@ impl TargetMatch {
             Self::AllExcept(tag) => !entity_type.has_tag(tag),
             Self::Enemy => is_enemy(entity_type),
             Self::Monster => is_enemy(entity_type) && !ENEMY_NOT_MONSTER.contains(&entity_type),
+            Self::Mob => entity_type.mob,
         }
     }
 

@@ -1472,6 +1472,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_on_rider_positioned(&self, _passenger: &dyn EntityBase) {}
 
+    fn mob_consume_sound(&self, _stack: &ItemStack) -> Option<pumpkin_data::sound::Sound> {
+        None
+    }
+
     fn mob_hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
         &[]
     }
@@ -1918,8 +1922,8 @@ pub trait Mob: EntityBase + Send + Sync {
         let custom_sound = self.as_custom_sound();
         self.get_mob_entity().living_entity.make_sound(
             sound,
-            custom_sound.map_or(
-                pumpkin_data::sound::SoundCategory::Players,
+            custom_sound.map_or_else(
+                || self.sound_source(),
                 crate::entity::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, crate::entity::custom_sound::CustomSound::sound_volume),

@@ -39,7 +39,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
+use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeAnimation, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
     EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
@@ -295,8 +295,8 @@ impl LivingEntity {
         let custom_sound = caller.get_mob().and_then(|mob| mob.as_custom_sound());
         self.make_sound(
             sound,
-            custom_sound.map_or(
-                SoundCategory::Players,
+            custom_sound.map_or_else(
+                || caller.sound_source(),
                 super::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
@@ -4045,6 +4045,26 @@ impl EntityBase for LivingEntity {
             }
         }
 
+        if caller.get_player().is_none() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use
+                    && item
+                        .get_data_component::<ConsumableImpl>()
+                        .is_some_and(|consumable| {
+                            consumable.should_emit_particles_and_sounds(remaining_use_ticks)
+                        })
+                {
+                    self.play_consume_sound(caller, &item);
+                }
+            }
+        }
+
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0
             && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 1
@@ -4069,6 +4089,11 @@ impl EntityBase for LivingEntity {
                     );
                 }
 
+                if caller.get_player().is_none()
+                    && item.get_data_component::<ConsumableImpl>().is_some()
+                {
+                    self.play_consume_sound(caller, item);
+                }
                 self.apply_consumable_effects(caller, item);
 
                 // Handle potion consumption
@@ -4291,6 +4316,33 @@ impl LivingEntity {
         let efficiency = self.get_attribute_value(&Attributes::MOVEMENT_EFFICIENCY) as f32;
         let super_factor = self.entity.get_block_speed_factor();
         super_factor + efficiency * (1.0 - super_factor)
+    }
+
+    fn play_consume_sound(&self, caller: &dyn EntityBase, item: &ItemStack) {
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+        if self.entity.is_silent() {
+            return;
+        }
+        let mut rng = rand::rng();
+        let (volume, pitch) = if consumable.animation == ConsumeAnimation::Drink {
+            (0.5, 0.9 + rng.random::<f32>() * 0.1)
+        } else {
+            (
+                if rng.random::<bool>() { 0.5 } else { 1.0 },
+                0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 1.0),
+            )
+        };
+        let world = self.entity.world.load();
+        let pos = self.entity.pos.load();
+        let category = caller.sound_source();
+        match caller.get_mob().and_then(|mob| mob.mob_consume_sound(item)) {
+            Some(sound) => world.play_sound_fine(sound, category, &pos, volume, pitch),
+            None => {
+                world.play_sound_event_fine(&consumable.sound_event, category, &pos, volume, pitch);
+            }
+        }
     }
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.

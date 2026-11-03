@@ -196,6 +196,8 @@ use weather::Weather;
 const MAX_LIGHT_LEVEL: u8 = 15;
 const POI_TYPE_LIGHTNING_ROD: &str = "minecraft:lightning_rod";
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
+pub(crate) const POI_TYPE_MEETING: &str = "minecraft:meeting";
+const MEETING_MAX_TICKETS: i32 = 32;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -1325,13 +1327,26 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
+        self.play_sound_event_fine(sound, category, position, 1.0, 1.0);
+    }
+
+    pub fn play_sound_event_fine(
+        &self,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
         let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
             position,
-            1.0,
-            1.0,
+            volume,
+            pitch,
             seed,
         );
         self.broadcast_packet_all(&packet);
@@ -5439,6 +5454,7 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if villager_poi::profession_for_block(old_block).is_some()
+            || old_block == &Block::BELL
             || pumpkin_data::tag::Taggable::has_tag(
                 old_block,
                 &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
@@ -5453,6 +5469,8 @@ impl World {
             &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
         ) {
             poi.add_with_free_tickets(*position, POI_TYPE_LIGHTNING_ROD, 0);
+        } else if new_block == &Block::BELL {
+            poi.add_with_free_tickets(*position, POI_TYPE_MEETING, MEETING_MAX_TICKETS);
         }
     }
 

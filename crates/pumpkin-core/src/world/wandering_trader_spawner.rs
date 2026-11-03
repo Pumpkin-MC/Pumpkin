@@ -125,7 +125,7 @@ impl WanderingTraderSpawner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .find_closest_matching(center, SEARCH_RADIUS, |poi_type| {
-                poi_type == "minecraft:meeting"
+                poi_type == crate::world::POI_TYPE_MEETING
             })?;
         (pos.squared_distance(&center) <= SEARCH_RADIUS * SEARCH_RADIUS).then_some(pos)
     }

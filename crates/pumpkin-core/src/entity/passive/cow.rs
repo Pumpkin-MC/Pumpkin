@@ -9,7 +9,7 @@ use pumpkin_data::cow_variant::CowVariant;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{CowSoundVariantImpl, CowVariantImpl, DataComponentImpl};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -132,10 +132,6 @@ impl CustomSound for CowEntity {
 
     fn sound_volume(&self) -> f32 {
         SOUND_VOLUME
-    }
-
-    fn sound_category(&self) -> SoundCategory {
-        self.sound_source()
     }
 }
 
