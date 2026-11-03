@@ -239,8 +239,7 @@ impl FluidBehaviour for FlowingLava {
             let above_pos = test_pos.up();
             let (above_block, _) = world.get_block_and_state_id(&above_pos);
 
-            if (above_block.id == Block::AIR.id
-                || above_block.id == Block::CAVE_AIR.id)
+            if (above_block.id == Block::AIR.id || above_block.id == Block::CAVE_AIR.id)
                 && Self::is_flammable(world, &test_pos)
             {
                 Self::ignite_fire_if_possible(world, &above_pos);
