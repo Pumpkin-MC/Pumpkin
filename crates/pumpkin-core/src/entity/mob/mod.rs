@@ -20,6 +20,7 @@ use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::vehicle::boat::BoatEntity;
+use crate::item::items::name_tag::NameTagItem;
 use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
 use crate::server::Server;
@@ -2668,6 +2669,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         item_stack: &mut ItemStack,
         hand: pumpkin_util::Hand,
     ) -> Option<bool> {
+        // Mob.checkAndHandleImportantInteractions: a name tag goes before any other interaction.
+        if item_stack.get_item() == &Item::NAME_TAG
+            && NameTagItem::interact_living_entity(item_stack, player.gamemode.load(), self)
+        {
+            return Some(true);
+        }
         self.mob_interact_with_hand(player, item_stack, hand)
     }
 
