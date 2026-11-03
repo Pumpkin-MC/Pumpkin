@@ -65,6 +65,26 @@ pub struct EntityType {
     pub spawn_dimensions_scale: f32,
     /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
+    pub passenger_attachments: Vec<[f64; 3]>,
+    pub vehicle_attachment: [f64; 3],
+    pub baby: Option<BabyAttachments>,
+}
+
+#[derive(Deserialize)]
+pub struct BabyAttachments {
+    passenger_attachments: Vec<[f64; 3]>,
+    vehicle_attachment: [f64; 3],
+}
+
+fn attachments_tokens(passengers: &[[f64; 3]], vehicle: [f64; 3]) -> TokenStream {
+    let passengers = passengers.iter().map(|[x, y, z]| quote! { [#x, #y, #z] });
+    let [x, y, z] = vehicle;
+    quote! {
+        EntityAttachments {
+            passenger: &[#(#passengers),*],
+            vehicle: [#x, #y, #z],
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -243,6 +263,16 @@ impl ToTokens for NamedEntityType<'_> {
         let client_tracking_range = entity.client_tracking_range;
         let update_interval = entity.update_interval;
         let track_deltas = entity.track_deltas;
+        let attachments =
+            attachments_tokens(&entity.passenger_attachments, entity.vehicle_attachment);
+        let baby_attachments = entity.baby.as_ref().map_or_else(
+            || quote! { None },
+            |baby| {
+                let attachments =
+                    attachments_tokens(&baby.passenger_attachments, baby.vehicle_attachment);
+                quote! { Some(#attachments) }
+            },
+        );
 
         tokens.extend(quote! {
             EntityType {
@@ -275,6 +305,8 @@ impl ToTokens for NamedEntityType<'_> {
                 eye_height: #eye_height,
                 spawn_dimensions_scale: #spawn_dimensions_scale,
                 spawn_restriction: #spawn_restriction,
+                attachments: #attachments,
+                baby_attachments: #baby_attachments,
                 resource_name: #name,
             }
         });
@@ -368,7 +400,16 @@ pub fn build() -> TokenStream {
             pub eye_height: f32,
             pub spawn_dimensions_scale: f32,
             pub spawn_restriction: SpawnRestriction,
+            pub attachments: EntityAttachments,
+            pub baby_attachments: Option<EntityAttachments>,
             pub resource_name: &'static str,
+        }
+
+        /// Where riders sit on an entity and where it sits on its own vehicle, before rotation.
+        #[derive(Debug, Clone, Copy)]
+        pub struct EntityAttachments {
+            pub passenger: &'static [[f64; 3]],
+            pub vehicle: [f64; 3],
         }
 
         impl Hash for EntityType {

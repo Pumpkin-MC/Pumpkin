@@ -1685,6 +1685,9 @@ impl World {
 
             entity.get_entity().tick_count.fetch_add(1, Relaxed);
             entity.tick(entity.as_ref(), server_ref);
+            // Riders may tick before or after their vehicle, so both ends re-seat them.
+            crate::entity::ride_tick(entity.as_ref());
+            crate::entity::position_riders(entity.as_ref());
 
             let entity_inner = entity.get_entity();
             let entity_pos = entity_inner.pos.load();

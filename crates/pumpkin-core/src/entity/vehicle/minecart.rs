@@ -441,14 +441,6 @@ impl EntityBase for MinecartEntity {
                 return;
             }
 
-            let new_pos = self.vehicle.entity.pos.load();
-
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(new_pos);
-                }
-            }
-
             #[allow(clippy::useless_let_if_seq)]
             let mut friction = 0.95; // Vanilla minecart air drag
 

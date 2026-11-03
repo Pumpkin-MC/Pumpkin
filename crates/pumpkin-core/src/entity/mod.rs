@@ -21,7 +21,7 @@ use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::entity::{EntityAttachments, EntityStatus};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
@@ -1220,6 +1220,76 @@ fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
         vector.y,
         vector.z * cos - vector.x * sin,
     )
+}
+
+/// Attachment points for the entity's current age, and the scale they grow with.
+fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) {
+    let entity_type = entity.get_entity().entity_type;
+    let living = entity.get_living_entity();
+    let attachments = entity_type
+        .baby_attachments
+        .as_ref()
+        .filter(|_| living.is_some_and(LivingEntity::is_baby))
+        .unwrap_or(&entity_type.attachments);
+    let scale = living.map_or(1.0, |living| {
+        living.get_attribute_value(&pumpkin_data::attributes::Attributes::SCALE)
+    });
+    (attachments, scale)
+}
+
+fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
+    let [x, y, z] = point;
+    y_rot(Vector3::new(x, y, z) * scale, -yaw.to_radians())
+}
+
+/// Moves `passenger` onto its seat on `vehicle`.
+pub fn position_rider(vehicle: &dyn EntityBase, passenger: &dyn EntityBase) {
+    let vehicle_entity = vehicle.get_entity();
+    let passenger_entity = passenger.get_entity();
+    let Some(index) = vehicle_entity
+        .passengers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .position(|other| other.get_entity().entity_id == passenger_entity.entity_id)
+    else {
+        return;
+    };
+    let (seats, seat_scale) = attachments_of(vehicle);
+    let Some(&seat) = seats.passenger.get(index).or(seats.passenger.last()) else {
+        return;
+    };
+    let seat = attachment_point(seat, seat_scale, vehicle_entity.yaw.load());
+    let (own, own_scale) = attachments_of(passenger);
+    let offset = attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load());
+    passenger_entity.set_pos(vehicle_entity.pos.load() + seat - offset);
+}
+
+/// Places every rider of `vehicle`, and their riders, after the vehicle has moved.
+pub fn position_riders(vehicle: &dyn EntityBase) {
+    let passengers = vehicle
+        .get_entity()
+        .passengers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    for passenger in passengers {
+        position_rider(vehicle, passenger.as_ref());
+        position_riders(passenger.as_ref());
+    }
+}
+
+/// The end of a ridden entity's own tick: it stays on its seat and builds no fall.
+pub fn ride_tick(entity: &dyn EntityBase) {
+    let Some(vehicle) = entity.get_entity().get_vehicle() else {
+        return;
+    };
+    let base = entity.get_entity();
+    base.velocity.store(Vector3::default());
+    if let Some(living) = entity.get_living_entity() {
+        living.fall_distance.store(0.0);
+    }
+    position_rider(vehicle.as_ref(), entity);
 }
 
 /// The movement the server knows about: a player's last reported step, otherwise velocity.

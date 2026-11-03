@@ -14,7 +14,7 @@ impl JavaClient {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        if let Some(vehicle) = vehicle {
+        if let Some(vehicle) = &vehicle {
             let vehicle_entity = vehicle.get_entity();
             let old_pos = vehicle_entity.pos.load();
             let old_y = old_pos.y;
@@ -58,8 +58,12 @@ impl JavaClient {
         } else {
             player.entered_lava_pos.store(None);
         }
-        entity.set_pos(pos);
-        let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
+        match &vehicle {
+            Some(vehicle) => crate::entity::position_rider(vehicle.as_ref(), player.as_ref()),
+            None => entity.set_pos(pos),
+        }
+        let new_pos = entity.pos.load();
+        let distance = last_pos.squared_distance_to_vec(&new_pos).sqrt();
         let cm = (distance * 100.0).round() as i32;
         if cm > 0 {
             let stat = player.get_movement_statistic();
