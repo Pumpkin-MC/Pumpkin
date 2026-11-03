@@ -3,12 +3,14 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -125,6 +127,17 @@ impl Animal for GoatEntity {
 }
 
 impl Mob for GoatEntity {
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.mob_entity
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+            - 10
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityGoatStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

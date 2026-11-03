@@ -98,7 +98,6 @@ impl CarvingContext<'_> {
             self.sea_level,
         );
         context.init_horizontal(x, z);
-        context.biome = chunk.get_terrain_gen_biome(x, y, z);
         context.set_steep_material_condition(steep);
         context.init_vertical(1, 1, y, if under_fluid { y + 1 } else { i32::MIN });
 
@@ -204,6 +203,15 @@ pub trait Carver {
 
 #[allow(clippy::too_many_lines)]
 pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
+    let existing_height_cache = std::mem::take(&mut chunk.surface_height_cache);
+    let existing_aquifer = chunk.aquifer_sampler.take();
+
+    if let Some(uniform_carvers) = generator.uniform_carvers
+        && uniform_carvers.is_empty()
+    {
+        return;
+    }
+
     // Vanilla applyCarvers uses a range of 8 chunks (17x17 area)
     let radius = 8;
     let chunk_x = chunk.x;
@@ -211,7 +219,10 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let chunk_pos = Vector2::new(chunk_x, chunk_z);
 
     let supplier: &dyn BiomeSupplier = &generator.biome_supplier;
-    let mut multi_noise_sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
+    let mut multi_noise_sampler = generator
+        .uniform_carvers
+        .is_none()
+        .then(|| MultiNoiseSampler::generate(&generator.base_router.multi_noise));
 
     let generation_shape = &generator.settings.shape;
     let min_gen_y = generation_shape.min_y;
@@ -230,14 +241,20 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             let carver_z = chunk_z + dz;
             let carver_chunk_pos = Vector2::new(carver_x, carver_z);
 
-            let carver_biome = supplier.biome(
-                biome_coords::from_block(section_coords::section_to_block(carver_x)),
-                0,
-                biome_coords::from_block(section_coords::section_to_block(carver_z)),
-                &mut multi_noise_sampler,
-            );
+            let carvers = generator.uniform_carvers.unwrap_or_else(|| {
+                multi_noise_sampler.as_mut().map_or(&[][..], |sampler| {
+                    supplier
+                        .biome(
+                            biome_coords::from_block(section_coords::section_to_block(carver_x)),
+                            0,
+                            biome_coords::from_block(section_coords::section_to_block(carver_z)),
+                            sampler,
+                        )
+                        .carvers
+                })
+            });
 
-            for (index, &config) in carver_biome.carvers.iter().enumerate() {
+            for (index, &config) in carvers.iter().enumerate() {
                 let seed = get_large_feature_seed(
                     generator.random_config.seed + index as u64,
                     carver_x,
@@ -284,17 +301,19 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             generation_shape.max_y() as i32,
             generation_shape.vertical_cell_block_count() as usize,
         );
-        let surface_height_sampler = SurfaceHeightEstimateSampler::generate(
+        let surface_height_sampler = SurfaceHeightEstimateSampler::generate_with_cache(
             &generator.base_router.surface_estimator,
             &surface_config,
+            existing_height_cache,
         );
         let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
-            CarverAquiferSampler::new(
+            CarverAquiferSampler::new_for_carving(
                 chunk_x,
                 chunk_z,
                 &generator.base_router,
                 &generator.random_config,
                 generator.settings,
+                existing_aquifer,
             )
         });
 
@@ -418,7 +437,11 @@ fn overworld_carve_state(
     z: i32,
 ) -> Option<(&'static BlockState, bool)> {
     if let Some(aquifer) = run.ctx.carver_aquifer.as_mut() {
-        let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
+        let result = aquifer.compute_with_estimator(
+            &Vector3::new(x, y, z),
+            0.0,
+            &mut run.ctx.surface_height_sampler,
+        );
         result
             .state
             .map(|state| (state, result.should_schedule_fluid_update))

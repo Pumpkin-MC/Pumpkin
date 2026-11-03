@@ -27,6 +27,32 @@ pub trait GameEventListener {
     ) -> bool;
 }
 
+fn notified_sections(center: BlockPos, radius: i32) -> (Vector3<i32>, Vector3<i32>) {
+    (
+        chunk_section_from_pos(&center.offset(Vector3::new(-radius, -radius, -radius))),
+        chunk_section_from_pos(&center.offset(Vector3::new(radius, radius, radius))),
+    )
+}
+
+/// The chunk sections whose listeners an event at `position` can notify.
+#[must_use]
+pub fn notified_area(position: Vector3<f64>, radius: i32) -> BoundingBox {
+    let (section_min, section_max) = notified_sections(BlockPos::floored_v(position), radius);
+    let block_min = |section: i32| f64::from(section_to_block(section));
+    BoundingBox::new(
+        Vector3::new(
+            block_min(section_min.x),
+            block_min(section_min.y),
+            block_min(section_min.z),
+        ),
+        Vector3::new(
+            block_min(section_max.x + 1),
+            block_min(section_max.y + 1),
+            block_min(section_max.z + 1),
+        ),
+    )
+}
+
 impl World {
     pub(super) fn post_game_event(
         &self,
@@ -36,23 +62,8 @@ impl World {
     ) {
         let radius = event.notification_radius();
         let center = BlockPos::floored_v(position);
-        let section_min =
-            chunk_section_from_pos(&center.offset(Vector3::new(-radius, -radius, -radius)));
-        let section_max =
-            chunk_section_from_pos(&center.offset(Vector3::new(radius, radius, radius)));
-        let block_min = |section: i32| f64::from(section_to_block(section));
-        let area = BoundingBox::new(
-            Vector3::new(
-                block_min(section_min.x),
-                block_min(section_min.y),
-                block_min(section_min.z),
-            ),
-            Vector3::new(
-                block_min(section_max.x + 1),
-                block_min(section_max.y + 1),
-                block_min(section_max.z + 1),
-            ),
-        );
+        let (section_min, section_max) = notified_sections(center, radius);
+        let area = notified_area(position, radius);
         for entity in self.entity_index.query(self.entities.load_full(), area) {
             let Some(mob) = entity.get_mob() else {
                 continue;

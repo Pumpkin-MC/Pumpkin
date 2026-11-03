@@ -59,6 +59,20 @@ impl BlockEntity for ComparatorBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Comparator", self.position)
+                .put_int(
+                    "OutputSignal",
+                    i32::from(self.output_signal.load(Ordering::Relaxed)),
+                )
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

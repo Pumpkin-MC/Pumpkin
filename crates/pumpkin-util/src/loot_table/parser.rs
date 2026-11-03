@@ -15,6 +15,21 @@ pub fn parse_loot_table(json: &str) -> Option<Table> {
     parse_loot_table_with_predicates(json, &|_| None)
 }
 
+/// Parses a condition with a resolver for named predicate definitions.
+#[must_use]
+pub fn parse_condition_with_predicates(
+    value: &Value,
+    predicates: &impl Fn(&str) -> Option<Value>,
+) -> Option<Condition> {
+    Parser { predicates }.condition(value, 0)
+}
+
+/// Parses a condition without predicate resolution.
+#[must_use]
+pub fn parse_condition(value: &Value) -> Option<Condition> {
+    parse_condition_with_predicates(value, &|_| None)
+}
+
 /// Parses a loot table with a resolver for named predicate definitions.
 pub fn parse_loot_table_with_predicates(
     json: &str,
@@ -182,6 +197,7 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
             })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn condition(&self, value: &Value, depth: usize) -> Option<Condition> {
         if depth >= MAX_PREDICATE_DEPTH {
             return None;
@@ -230,6 +246,17 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
                     enchanted_chance_per_level_above_first,
                 }
             }
+            "random_chance_with_looting" => {
+                let chance = value.get("chance").and_then(Value::as_f64).unwrap_or(0.0) as f32;
+                let looting_multiplier = value
+                    .get("looting_multiplier")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0) as f32;
+                Condition::RandomChanceWithLooting {
+                    chance,
+                    looting_multiplier,
+                }
+            }
             "table_bonus" => Condition::TableBonus {
                 enchantment: value
                     .get("enchantment")
@@ -268,7 +295,9 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
             "entity_properties" => Self::entity_properties(value)?,
             "damage_source_properties" => Self::damage_source_properties(value),
             "location_check" => Self::location_check(value)?,
-            "match_block" => Condition::MatchBlock(value.get("predicate").unwrap_or(value).clone()),
+            "match_block" | "block_state_property" => {
+                Condition::MatchBlock(value.get("predicate").unwrap_or(value).clone())
+            }
             "match_tool" => Condition::MatchTool(
                 value
                     .get("predicate")
@@ -279,6 +308,22 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
                 raining: value.get("raining").and_then(Value::as_bool),
                 thundering: value.get("thundering").and_then(Value::as_bool),
             },
+            "time_check" => {
+                let period = value.get("period").and_then(Value::as_u64);
+                let value = value.get("value").cloned().unwrap_or(Value::Null);
+                Condition::TimeCheck { value, period }
+            }
+            "value_check" => {
+                let val = value.get("value").and_then(provider)?;
+                let range = value.get("range").cloned().unwrap_or(Value::Null);
+                Condition::ValueCheck { value: val, range }
+            }
+            "reference" => {
+                let name = value.get("name").and_then(Value::as_str)?;
+                (self.predicates)(name)
+                    .and_then(|value| self.condition(&value, depth + 1))
+                    .unwrap_or_else(|| Condition::Reference(name.to_owned()))
+            }
             _ => return None,
         })
     }
@@ -369,6 +414,20 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
                         expected: tag.get("expected").and_then(Value::as_bool).unwrap_or(true),
                     });
                 }
+            }
+        }
+        for (flag, tag_name) in [
+            ("is_projectile", "minecraft:is_projectile"),
+            ("is_explosion", "minecraft:is_explosion"),
+            ("is_fire", "minecraft:is_fire"),
+            ("is_lightning", "minecraft:is_lightning"),
+            ("is_fall", "minecraft:is_fall"),
+        ] {
+            if let Some(expected) = predicate.get(flag).and_then(Value::as_bool) {
+                conditions.push(Condition::DamageSourceTag {
+                    tag: tag_name.to_owned(),
+                    expected,
+                });
             }
         }
         all(conditions)

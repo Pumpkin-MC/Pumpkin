@@ -6,10 +6,12 @@ use pumpkin_util::text::TextComponent;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::core::float::FloatArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::argument_types::registry_id::RegistryIdArgumentType;
 use crate::command::argument_types::time::TimeArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use pumpkin_util::identifier::Identifier;
 
 const DESCRIPTION: &str = "Query or modify the world time and clocks.";
 const PERMISSION: &str = "minecraft:command.time";
@@ -349,7 +351,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     ));
 
     let of_clock_node = literal("of").then(build_branches!(
-        argument("clock", IdentifierArgumentType),
+        argument(
+            "clock",
+            RegistryIdArgumentType::resource(Identifier::vanilla_static("world_clock"))
+        ),
         true
     ));
 

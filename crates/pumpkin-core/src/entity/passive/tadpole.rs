@@ -1,5 +1,6 @@
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -7,6 +8,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -45,7 +47,7 @@ impl TadpoleEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
@@ -77,6 +79,9 @@ impl AgeableMob for TadpoleEntity {
 }
 
 impl Mob for TadpoleEntity {
+    /// Vanilla `AbstractFish` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -96,6 +101,7 @@ impl Mob for TadpoleEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         self.mob_entity.finalize_spawn_base();

@@ -199,6 +199,11 @@ fn get_chest_screen_handler_factory(
             && let Some(table) = get_loot_table(&loot_key)
             && let Some(inv) = entity.clone().get_inventory()
         {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                    loot_table_id: loot_key.clone(),
+                },
+            );
             fill_chest_inventory_handle(
                 &inv,
                 &crate::world::loot::LootTableHandle::Static(table),

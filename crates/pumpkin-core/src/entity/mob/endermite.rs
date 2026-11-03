@@ -1,18 +1,25 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::goal::revenge::RevengeGoal;
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
+
+const ENDERMITE_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)];
 
 pub struct EndermiteEntity {
     pub mob_entity: MobEntity,
@@ -45,10 +52,8 @@ impl EndermiteEntity {
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             let target_selector = &mob_arc.mob_entity.target_selector;
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMITE_HUNTS);
         };
 
         mob_arc
@@ -56,6 +61,10 @@ impl EndermiteEntity {
 }
 
 impl Mob for EndermiteEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityEndermiteStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
