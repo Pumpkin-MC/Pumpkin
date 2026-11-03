@@ -2581,16 +2581,29 @@ impl World {
             // TODO encapsulatingFullBlocks
             if true {
                 // TODO biome.getPrecipitationAt(pos, this.getSeaLevel()) == Biome.Precipitation.RAIN
-                // TODO this.getCurrentDifficultyAt(blockPos);
-                if rng().random::<f32>() < 0.0675
-                    && self.get_block(&random_pos.to_block_pos().down()) != &Block::LIGHTNING_ROD
+                let pos = random_pos.to_f64();
+                let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(self, pos);
+                if self.level_info.load().game_rules.spawn_mobs
+                    && rng().random::<f64>() < f64::from(difficulty.effective_difficulty) * 0.01
+                    && !pumpkin_data::tag::Taggable::has_tag(
+                        self.get_block(&random_pos.to_block_pos().down()),
+                        &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
+                    )
                 {
-                    let entity = Entity::new(
-                        self.clone(),
-                        random_pos.to_f64(),
+                    let horse = crate::entity::r#type::from_type(
                         &EntityType::SKELETON_HORSE,
+                        pos,
+                        self,
+                        uuid::Uuid::new_v4(),
                     );
-                    self.spawn_entity_non_save(Arc::new(entity));
+                    if let Some(skeleton_horse) = horse
+                        .cast_any()
+                        .downcast_ref::<crate::entity::passive::skeleton_horse::SkeletonHorseEntity>()
+                    {
+                        skeleton_horse.set_trap(true);
+                        crate::entity::ageable::AgeableMob::set_age(skeleton_horse, 0);
+                    }
+                    self.spawn_entity(horse);
                 }
                 let entity = Entity::new(
                     self.clone(),
@@ -5147,6 +5160,20 @@ impl World {
             return;
         }
         base_entity.removed.store(true, Ordering::Release);
+
+        if let Some(vehicle) = base_entity.get_vehicle() {
+            vehicle
+                .get_entity()
+                .remove_passenger_on_disconnect(base_entity.entity_id);
+        }
+        let passengers = base_entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            base_entity.remove_passenger(passenger.get_entity().entity_id);
+        }
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);

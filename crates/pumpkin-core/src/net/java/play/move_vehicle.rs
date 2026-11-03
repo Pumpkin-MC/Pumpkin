@@ -16,12 +16,14 @@ impl JavaClient {
             .clone();
         if let Some(vehicle) = vehicle {
             let vehicle_entity = vehicle.get_entity();
-            let old_y = vehicle_entity.pos.load().y;
+            let old_pos = vehicle_entity.pos.load();
+            let old_y = old_pos.y;
             vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
             vehicle_entity
                 .on_ground
                 .store(packet.on_ground, Ordering::Relaxed);
+            vehicle_entity.emit_client_movement(vehicle.as_ref(), pos - old_pos);
             if let Some(living) = vehicle.get_living_entity() {
                 living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground, false);
             }

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity_variant::HorseVariant;
 use rand::RngExt;
 
 use crate::entity::EntityBase;
@@ -31,6 +32,11 @@ pub enum SpawnGroupData {
     /// A llama spawn group sharing the first llama's variant.
     Llama {
         variant: pumpkin_data::entity_variant::LlamaVariant,
+        group_size: u32,
+    },
+    /// A horse spawn group sharing the first horse's coat color.
+    Horse {
+        color: HorseVariant,
         group_size: u32,
     },
     /// Vanilla `FoxGroupData`: the group's variant and how many joined so far.

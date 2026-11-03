@@ -1,36 +1,26 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
-    ai::goal::{
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
-    },
-    mob::{Mob, MobEntity, equipment::equip_on_target},
+    ageable::AgeableData,
+    mob::{Mob, MobEntity},
     passive::abstract_horse::{
-        AbstractHorse, AbstractHorseData, CHESTED_INVENTORY_COLUMNS, play_horse_step_sound,
+        AbstractHorse, AbstractHorseData, BEDROCK_CHESTED_INVENTORY_SIZE,
+        BEDROCK_SADDLE_INVENTORY_SIZE, CHESTED_INVENTORY_COLUMNS, add_horse_behaviour_goals,
+        generate_max_health, play_horse_step_sound, register_horse_goals,
     },
     passive::animal::Animal,
     player::Player,
 };
-
-const TEMPT_ITEMS: &[&Item] = &[
-    &Item::GOLDEN_APPLE,
-    &Item::ENCHANTED_GOLDEN_APPLE,
-    &Item::GOLDEN_CARROT,
-];
 
 pub struct MuleEntity {
     pub mob_entity: MobEntity,
@@ -47,31 +37,46 @@ impl MuleEntity {
             horse_data: AbstractHorseData::default(),
         };
         let mob_arc = Arc::new(mule);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.7)));
-            goal_selector.add_goal(
-                7,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-        };
+        let mob: Arc<dyn Mob> = mob_arc.clone();
+        register_horse_goals(&mob);
+        add_horse_behaviour_goals(mob.as_ref());
 
         mob_arc
     }
 }
 
 crate::impl_abstract_horse!(MuleEntity, {
+    fn randomize_attributes(&self) {
+        let mut rng = self.get_random();
+        self.mob_entity
+            .living_entity
+            .set_max_health(generate_max_health(|bound| rng.random_range(0..bound)));
+    }
+
+    fn get_angry_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityMuleAngry)
+    }
+
+    fn get_eating_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityMuleEat)
+    }
+
+    fn get_chest_equip_sound(&self) -> Sound {
+        Sound::EntityMuleChest
+    }
+
+    fn can_carry_chest(&self) -> bool {
+        true
+    }
+
+    fn bedrock_inventory_size(&self) -> i32 {
+        if self.has_chest() {
+            BEDROCK_CHESTED_INVENTORY_SIZE
+        } else {
+            BEDROCK_SADDLE_INVENTORY_SIZE
+        }
+    }
+
     fn get_inventory_columns(&self) -> i32 {
         if self.has_chest() {
             CHESTED_INVENTORY_COLUMNS
@@ -84,13 +89,10 @@ crate::impl_abstract_horse!(MuleEntity, {
 impl Animal for MuleEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_HORSE_FOOD)
-            || item_stack.item == &Item::WHEAT
-            || item_stack.item == &Item::SUGAR
-            || item_stack.item == &Item::HAY_BLOCK
-            || item_stack.item == &Item::APPLE
-            || item_stack.item == &Item::GOLDEN_CARROT
-            || item_stack.item == &Item::GOLDEN_APPLE
-            || item_stack.item == &Item::ENCHANTED_GOLDEN_APPLE
+    }
+
+    fn can_mate(&self, _partner: &dyn EntityBase) -> bool {
+        false
     }
 }
 
@@ -102,7 +104,7 @@ impl Mob for MuleEntity {
     }
 
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
-        play_horse_step_sound(self, pos, state, false);
+        play_horse_step_sound(self, pos, state);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -121,37 +123,12 @@ impl Mob for MuleEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if self.is_tamed() && item == &Item::CHEST && !self.has_chest() && !self.is_baby() {
-            self.set_chest(true);
-            self.create_inventory();
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityDonkeyChest,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
-            return true;
+        if let Some(result) = self.handle_important_interactions(player, item_stack) {
+            return result;
         }
-
-        if equip_on_target(self, player, item_stack) {
-            return true;
+        if let Some(result) = self.interact_with_held_item(player, item_stack, true) {
+            return result;
         }
-
-        if !self.is_baby() && !self.is_food(item_stack) {
-            let world = player.world();
-            let ent = &self.mob_entity.living_entity.entity;
-            if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
-                && let Some(passenger) = world.get_player_by_id(player.entity_id())
-            {
-                ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-                return true;
-            }
-        }
-
-        self.animal_interact(player, item_stack, Sound::EntityMuleAmbient)
+        self.horse_mob_interact(player, item_stack, Sound::EntityMuleAmbient)
     }
 }

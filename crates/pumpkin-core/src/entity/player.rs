@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use crate::entity::attributes::{Modifier, ModifierOperation};
+use crate::entity::passive::abstract_horse::player_jump_pending_scale;
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
@@ -306,6 +307,7 @@ use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent;
+use crate::plugin::api::events::entity::horse_jump::HorseJumpEvent;
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -6410,6 +6412,33 @@ impl Player {
         };
         horse.open_custom_inventory_screen(self);
         true
+    }
+
+    /// Only rears and plays the sound; the rider's client simulates the jump itself.
+    pub fn start_riding_jump(&self, server: &Arc<Server>, jump_scale: i32) {
+        let Some(vehicle) = self.get_entity().get_vehicle() else {
+            return;
+        };
+        if vehicle
+            .get_controlling_passenger()
+            .is_none_or(|rider| rider.get_entity().entity_id != self.entity_id())
+        {
+            return;
+        }
+        let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) else {
+            return;
+        };
+        if !horse.can_jump() || jump_scale <= 0 {
+            return;
+        }
+        let mut event = HorseJumpEvent::new(
+            vehicle.get_entity().entity_id,
+            player_jump_pending_scale(jump_scale),
+        );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if !event.cancelled {
+            horse.handle_start_jump(jump_scale);
+        }
     }
 
     pub fn open_mount_screen(

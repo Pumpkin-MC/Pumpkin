@@ -18,6 +18,7 @@ pub struct EntityType {
     pub hurt_sound: Option<String>,
     /// Static death sound event name when it is safely derivable from extracted entity data.
     pub death_sound: Option<String>,
+    pub ambient_sound: Option<String>,
     /// Vanilla `getSoundSource`; missing only for the player.
     pub sound_source: Option<String>,
     /// Vanilla `getMovementEmission`; missing only for the player, whose emission depends on its state.
@@ -158,6 +159,7 @@ impl ToTokens for NamedEntityType<'_> {
 
         let death_sound = optional_sound(entity.death_sound.as_ref());
         let hurt_sound = optional_sound(entity.hurt_sound.as_ref());
+        let ambient_sound = optional_sound(entity.ambient_sound.as_ref());
         let swim_sound = optional_sound(entity.swim_sound.as_ref());
         let swim_splash_sound = optional_sound(entity.swim_splash_sound.as_ref());
         let swim_high_speed_splash_sound =
@@ -249,6 +251,7 @@ impl ToTokens for NamedEntityType<'_> {
                 experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
                 death_sound: #death_sound,
+                ambient_sound: #ambient_sound,
                 sound_source: SoundCategory::#sound_source,
                 movement_emission: #movement_emission,
                 swim_sound: #swim_sound,
@@ -341,6 +344,7 @@ pub fn build() -> TokenStream {
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
             pub death_sound: Option<Sound>,
+            pub ambient_sound: Option<Sound>,
             pub sound_source: SoundCategory,
             pub movement_emission: MovementEmission,
             pub swim_sound: Option<Sound>,

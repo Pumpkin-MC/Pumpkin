@@ -6,6 +6,7 @@ use std::sync::{
 use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
@@ -22,12 +23,16 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity, equipment::equip_on_target},
-    passive::abstract_horse::{AbstractHorse, AbstractHorseData},
+    passive::abstract_horse::{
+        AbstractHorse, AbstractHorseData, BEDROCK_SADDLE_INVENTORY_SIZE, spawn_age_up_particle,
+    },
     passive::animal::Animal,
     player::Player,
 };
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::CACTUS];
+const CAMEL_AGE_UP_SECONDS: i32 = 10;
+const MAX_PASSENGERS: usize = 2;
 
 pub struct CamelEntity {
     pub mob_entity: MobEntity,
@@ -86,12 +91,63 @@ crate::impl_abstract_horse!(CamelEntity, {
     fn get_saddle_equip_sound(&self) -> Sound {
         Sound::EntityCamelSaddle
     }
+
+    fn can_perform_rearing(&self) -> bool {
+        false
+    }
+
+    // TODO: start the dash once camels tick their dash cooldown.
+    fn handle_start_jump(&self, _jump_scale: i32) {}
+
+    fn get_eating_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityCamelEat)
+    }
+
+    fn bedrock_inventory_size(&self) -> i32 {
+        BEDROCK_SADDLE_INVENTORY_SIZE
+    }
+
+    fn handle_eating(&self, player: &Arc<Player>, stack: &ItemStack) -> bool {
+        if !self.is_food(stack) {
+            return false;
+        }
+        let living = &self.mob_entity.living_entity;
+        let could_heal = living.health.load() < living.get_max_health();
+        if could_heal {
+            living.heal(2.0);
+        }
+        let could_set_in_love =
+            self.is_tamed() && self.get_age() == 0 && !self.mob_entity.is_in_love();
+        if could_set_in_love {
+            self.set_in_love(player);
+        }
+        let could_age_up = self.can_age_up();
+        if could_age_up {
+            spawn_age_up_particle(self.get_entity(), &mut self.get_random());
+            self.age_up(CAMEL_AGE_UP_SECONDS, false);
+        }
+        if !could_heal && !could_set_in_love && !could_age_up {
+            return false;
+        }
+        if let Some(sound) = self.get_eating_sound() {
+            self.play_varied_sound(sound);
+        }
+        let entity = self.get_entity();
+        entity
+            .world
+            .load()
+            .emit_game_event(GameEvent::Eat.name(), entity.pos.load());
+        true
+    }
 });
 
 impl Animal for CamelEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_CAMEL_FOOD)
-            || item_stack.item == &Item::CACTUS
+    }
+
+    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
+        self.can_mate_with(partner, &[&EntityType::CAMEL])
     }
 }
 
@@ -132,21 +188,31 @@ impl Mob for CamelEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if let Some(result) = self.handle_important_interactions(player, item_stack) {
+            return result;
+        }
+        if player.get_entity().is_sneaking() && !self.is_baby() {
+            self.open_custom_inventory_screen(player);
+            return true;
+        }
         if equip_on_target(self, player, item_stack) {
             return true;
         }
-
-        if self.is_saddled() && !self.is_baby() && !self.is_food(item_stack) {
-            let world = player.world();
-            let ent = &self.mob_entity.living_entity.entity;
-            if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
-                && let Some(passenger) = world.get_player_by_id(player.entity_id())
-            {
-                ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-                return true;
-            }
+        if self.is_food(item_stack) {
+            return self.fed_food(player, item_stack);
         }
-
-        self.animal_interact(player, item_stack, Sound::EntityCamelAmbient)
+        let entity = self.get_entity();
+        let passengers = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len();
+        if passengers < MAX_PASSENGERS && !self.is_baby() {
+            self.do_player_ride(player);
+            return true;
+        }
+        self.is_baby()
+            && item_stack.item == &Item::GOLDEN_DANDELION
+            && self.animal_interact(player, item_stack, Sound::EntityCamelAmbient)
     }
 }

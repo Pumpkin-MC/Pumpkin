@@ -218,6 +218,18 @@ impl TargetMatch {
     pub const WITHER_LIKE: Self = Self::AnyOf(&[&EntityType::WITHER_SKELETON, &EntityType::WITHER]);
     /// `Llama`.
     pub const LLAMA_LIKE: Self = Self::AnyOf(&[&EntityType::LLAMA, &EntityType::TRADER_LLAMA]);
+    /// `AbstractHorse`.
+    pub const ABSTRACT_HORSE: Self = Self::AnyOf(&[
+        &EntityType::HORSE,
+        &EntityType::DONKEY,
+        &EntityType::MULE,
+        &EntityType::SKELETON_HORSE,
+        &EntityType::ZOMBIE_HORSE,
+        &EntityType::CAMEL,
+        &EntityType::CAMEL_HUSK,
+        &EntityType::LLAMA,
+        &EntityType::TRADER_LLAMA,
+    ]);
 }
 
 impl From<&'static EntityType> for TargetMatch {
