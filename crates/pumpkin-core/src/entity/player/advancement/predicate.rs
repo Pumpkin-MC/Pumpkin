@@ -421,6 +421,10 @@ impl LocationPredicate {
         {
             return false;
         }
+        // TODO: check the structure at pos once we can look it up
+        if self.structure.is_some() {
+            return false;
+        }
         true
     }
 
@@ -2486,5 +2490,31 @@ mod tests {
             }
             _ => panic!("Expected PlayerInteractedWithEntity variant"),
         }
+    }
+
+    #[test]
+    fn matches_structure_condition_works() {
+        let cond = json!({
+            "player": {
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                    "minecraft:location": {
+                        "structures": "minecraft:stronghold"
+                    }
+                }
+            }
+        });
+        assert!(!matches_location_condition(
+            &cond,
+            (0.0, 64.0, 0.0),
+            Some("plains"),
+            Some("minecraft:overworld"),
+            &[],
+            None,
+            None,
+            None,
+            false,
+        ));
     }
 }
