@@ -1,9 +1,3 @@
-//! Beacon block entity, mirroring vanilla `BeaconBlockEntity`.
-//!
-//! Each tick scans up to ten blocks of the column above the beacon; once the scan reaches
-//! the world surface the result becomes the active beam state. Every 80 game ticks an
-//! active beacon re-measures its pyramid and applies its effects to players in range.
-
 use std::any::Any;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
