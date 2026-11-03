@@ -478,6 +478,7 @@ impl LocationPredicate {
         let structure = loc_map
             .get("structures")
             .or_else(|| loc_map.get("structure"))
+            .and_then(|s| s.as_array().map_or(Some(s), |list| list.first()))
             .and_then(Value::as_str)
             .map(ToString::to_string);
 
@@ -2507,6 +2508,29 @@ mod tests {
         });
         assert!(!matches_location_condition(
             &cond,
+            (0.0, 64.0, 0.0),
+            Some("plains"),
+            Some("minecraft:overworld"),
+            &[],
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let list_cond = json!({
+            "player": {
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                    "minecraft:location": {
+                        "structures": ["minecraft:stronghold", "minecraft:fortress"]
+                    }
+                }
+            }
+        });
+        assert!(!matches_location_condition(
+            &list_cond,
             (0.0, 64.0, 0.0),
             Some("plains"),
             Some("minecraft:overworld"),

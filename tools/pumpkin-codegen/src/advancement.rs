@@ -1101,6 +1101,7 @@ fn generate_location_condition_tokens(val: &serde_json::Value) -> TokenStream {
     let structure = loc_val
         .get("structures")
         .or_else(|| loc_val.get("structure"))
+        .and_then(|s| s.as_array().map_or(Some(s), |list| list.first()))
         .and_then(|s| s.as_str());
 
     let player_pred = val.get("player").and_then(|p| p.get("predicate"));
