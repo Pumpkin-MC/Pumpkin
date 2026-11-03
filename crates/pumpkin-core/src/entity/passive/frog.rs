@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,6 +11,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -74,12 +76,13 @@ impl FrogEntity {
     }
 
     pub fn set_variant(&self, variant: FrogVariant) {
-        self.variant.store(variant.id() as i32, Ordering::Relaxed);
+        self.set_variant_id(variant.id() as i32);
+    }
+
+    pub fn set_variant_id(&self, raw_id: i32) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(variant.id() as i32),
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::frog::VARIANT, VarInt(raw_id));
     }
 }
 
@@ -87,9 +90,17 @@ impl AgeableMob for FrogEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
+
+    fn can_be_a_baby(&self) -> bool {
+        false
+    }
 }
 
 impl Animal for FrogEntity {
+    fn play_eating_sound(&self) {
+        self.play_entity_sound(Sound::EntityFrogEat, 2.0, 1.0);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FROG_FOOD)
             || FROG_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -97,6 +108,17 @@ impl Animal for FrogEntity {
 }
 
 impl Mob for FrogEntity {
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.mob_entity
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+            - 5
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityFrogStep, 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,
@@ -119,12 +141,22 @@ impl Mob for FrogEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("variant", self.get_variant().asset_id().to_string());
+        let variant_id = self.variant.load(Ordering::Relaxed) as u32;
+        let variant_str =
+            self.resolve_dynamic_entry_id("minecraft:frog_variant", variant_id, |_id| {
+                self.get_variant().asset_id().to_string()
+            });
+        nbt.put_string("variant", variant_str);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("variant") {
-            self.set_variant(FrogVariant::from_name(variant_str).unwrap_or_default());
+        if let Some(variant_str) = nbt.get_string("variant")
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:frog_variant", variant_str, |n| {
+                    FrogVariant::from_name(n).map(|v| v.id())
+                })
+        {
+            self.set_variant_id(id as i32);
         }
     }
 
@@ -133,7 +165,11 @@ impl Mob for FrogEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        self.set_variant(FrogVariant::from_name(name).unwrap_or_default());
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:frog_variant", name, |n| {
+            FrogVariant::from_name(n).map(|v| v.id())
+        }) {
+            self.set_variant_id(id as i32);
+        }
     }
 
     fn mob_init_data_tracker(&self) {
@@ -144,11 +180,11 @@ impl Mob for FrogEntity {
         }
         entity.set_synced_data(
             pumpkin_data::tracked_data::frog::VARIANT,
-            VarInt(self.get_variant().id() as i32),
+            VarInt(self.variant.load(Ordering::Relaxed)),
         );
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

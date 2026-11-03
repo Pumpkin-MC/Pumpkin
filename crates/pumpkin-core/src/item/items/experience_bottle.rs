@@ -1,3 +1,4 @@
+use rand::RngExt;
 use std::any::Any;
 use std::sync::Arc;
 
@@ -10,7 +11,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_util::Hand;
-use rand::RngExt;
 
 const ROLL: f32 = -20.0;
 const POWER: f32 = 0.7;
@@ -32,18 +32,18 @@ impl ItemBehaviour for ExperienceBottleItem {
 
     fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
-        let position = player.position();
-        let sound_pitch = 0.4 / rand::rng().random::<f32>().mul_add(0.4, 0.8);
+        let pos = player.position();
         world.play_sound_fine(
             Sound::EntityExperienceBottleThrow,
             SoundCategory::Neutral,
-            &position,
+            &pos,
             0.5,
-            sound_pitch,
+            0.4 / (rand::rng().random::<f32>() * 0.4 + 0.8),
         );
 
-        let mut stack = player.inventory().get_stack_in_hand(hand);
-        let entity = Entity::new(world.clone(), position, &EntityType::EXPERIENCE_BOTTLE);
+        let inventory = player.inventory();
+        let mut stack = inventory.get_stack_in_hand(hand);
+        let entity = Entity::new(world.clone(), pos, &EntityType::EXPERIENCE_BOTTLE);
         let bottle = ExperienceBottleEntity::new_shot(entity, player.get_entity());
         bottle.set_item_stack(stack.copy_with_count(1));
 
@@ -53,7 +53,7 @@ impl ItemBehaviour for ExperienceBottleItem {
         world.spawn_entity(Arc::new(bottle));
 
         stack.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory().set_stack_in_hand(hand, stack);
+        inventory.set_stack_in_hand(hand, stack);
         player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 

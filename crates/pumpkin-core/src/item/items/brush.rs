@@ -27,7 +27,12 @@ impl ItemMetadata for BrushItem {
         Box::new([Item::BRUSH.id])
     }
 }
-fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> ItemStack {
+fn get_archaeology_loot(
+    is_sand: bool,
+    location: BlockPos,
+    world: &World,
+    player: Option<&Player>,
+) -> ItemStack {
     if let Some(block_entity) = world.get_block_entity(&location)
         && let Some(brushable) = block_entity
             .as_any()
@@ -42,6 +47,13 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
         if let Ok(mut table_guard) = brushable.loot_table.lock()
             && let Some(loot_key) = table_guard.take()
         {
+            if let Some(p) = player {
+                p.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                        loot_table_id: loot_key.clone(),
+                    },
+                );
+            }
             let seed = brushable.loot_table_seed.lock().map_or(0, |g| *g);
             let actual_seed = if seed == 0 { rand::random() } else { seed };
             let stripped = loot_key.strip_prefix("minecraft:").unwrap_or(&loot_key);
@@ -68,6 +80,14 @@ fn get_archaeology_loot(is_sand: bool, location: BlockPos, world: &World) -> Ite
     } else {
         "minecraft:archaeology/trail_ruins_common"
     };
+
+    if let Some(p) = player {
+        p.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                loot_table_id: loot_key.to_string(),
+            },
+        );
+    }
 
     if let Some(table) = world.get_loot_table(loot_key) {
         let items = table.generate_loot_with_context(
@@ -148,7 +168,7 @@ impl ItemBehaviour for BrushItem {
                 &block_center,
             );
         } else {
-            let loot_item = get_archaeology_loot(is_sand, location, &world);
+            let loot_item = get_archaeology_loot(is_sand, location, &world, Some(player));
             world.sync_world_event(
                 WorldEvent::ParticlesAndSoundBrushBlockComplete,
                 location,

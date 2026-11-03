@@ -1,8 +1,6 @@
-use crate::entity::EntityBase;
-use crate::entity::living::LivingEntity;
+use crate::entity::living::{EffectSource, LivingEntity};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::tag::Taggable;
 
 /// Utilities for reading potion contents from an `ItemStack` and applying effects.
 pub struct PotionContents;
@@ -18,11 +16,11 @@ pub enum PotionApplicationSource {
 }
 
 impl PotionApplicationSource {
-    const fn instant_scale(self, scale: f32) -> f32 {
+    const fn instant_scale(self, scale: f32) -> Option<f32> {
         match self {
-            Self::AreaEffectCloud => scale * 0.5,
-            Self::Arrow => 1.0,
-            Self::Normal => scale,
+            Self::AreaEffectCloud => Some(scale * 0.5),
+            Self::Arrow => None,
+            Self::Normal => Some(scale),
         }
     }
 
@@ -138,40 +136,17 @@ impl PotionContents {
         effects: Vec<(&'static StatusEffect, i32, u8, bool, bool, bool)>,
         scale: f32,
         source: PotionApplicationSource,
+        effect_source: Option<EffectSource<'_>>,
     ) {
         for (effect_type, duration, amplifier, ambient, show_particles, show_icon) in effects {
-            // Instant effects should apply immediately
-            let is_instant = effect_type.id
-                == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
-                || effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
-
-            if is_instant {
-                // Instant potency scaling
-                let instant_scale = source.instant_scale(scale);
-                let is_inverted = target
-                    .get_entity()
-                    .entity_type
-                    .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM);
-                let is_harm =
-                    effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
-
-                // Apply instant effects logic directly as they don't tick
-                if is_harm == is_inverted {
-                    let amount = (instant_scale * (4 << amplifier) as f32 + 0.5) as i32 as f32;
-                    target.heal(amount);
-                } else {
-                    let amount = (instant_scale * (6 << amplifier) as f32 + 0.5) as i32 as f32;
-
-                    let _ = target.damage(
-                        target.get_entity(),
-                        amount,
-                        pumpkin_data::damage::DamageType::MAGIC,
-                    );
-                }
-
-                // Like vanilla, instant effects are applied once and never added to the active
-                // effects, where they would linger.
-            } else {
+            // Like vanilla, instant effects are applied once and never added to the active
+            // effects, where they would linger.
+            if !target.apply_instant_effect(
+                effect_type,
+                amplifier,
+                source.instant_scale(scale).map(f64::from),
+                effect_source,
+            ) {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
 
@@ -215,6 +190,6 @@ mod tests {
             (160.0 * PotionApplicationSource::Arrow.duration_scale(scale)) as i32,
             20
         );
-        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), 1.0);
+        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), None);
     }
 }
