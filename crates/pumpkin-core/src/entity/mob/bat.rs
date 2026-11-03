@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicI8, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::world::WorldEvent;
@@ -16,10 +16,10 @@ use rand::RngExt;
 
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::custom_sound::CustomSound;
+use crate::entity::mob::spawn::EntitySpawnReason;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
-use crate::world::natural_spawner::is_valid_spawn_floor;
 
 const ROOSTING_FLAG: i8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
@@ -42,7 +42,12 @@ impl BatEntity {
     }
 
     #[must_use]
-    pub fn check_bat_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_bat_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        reason: EntitySpawnReason,
+    ) -> bool {
         if pos.0.y >= world.get_heightmap_height(ChunkHeightmapType::WorldSurface, pos.0.x, pos.0.z)
         {
             return false;
@@ -60,7 +65,7 @@ impl BatEntity {
         {
             return false;
         }
-        is_valid_spawn_floor(world.get_block_state(&below_pos), &EntityType::BAT)
+        MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
     #[must_use]
@@ -304,10 +309,6 @@ impl CustomSound for BatEntity {
 
     fn sound_volume(&self) -> f32 {
         0.1
-    }
-
-    fn sound_category(&self) -> SoundCategory {
-        SoundCategory::Neutral
     }
 
     fn voice_pitch(&self) -> f32 {

@@ -293,16 +293,12 @@ impl LivingEntity {
 
     fn make_voice_sound(&self, caller: &dyn EntityBase, sound: Sound) {
         let custom_sound = caller.get_mob().and_then(|mob| mob.as_custom_sound());
-        if self.entity.is_silent() {
-            return;
-        }
-        self.entity.world.load().play_sound_fine(
+        self.make_sound(
             sound,
             custom_sound.map_or_else(
                 || caller.sound_source(),
                 super::custom_sound::CustomSound::sound_category,
             ),
-            &self.entity.pos.load(),
             custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
             custom_sound.map_or_else(
                 || self.get_pitch(),

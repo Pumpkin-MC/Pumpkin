@@ -27,6 +27,7 @@ use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crate::world::entity_islands::{self, AuditedReach};
 use crate::world::game_event::notified_area;
+use crate::world::natural_spawner::is_valid_spawn_floor;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
@@ -38,7 +39,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -901,17 +902,16 @@ impl MobEntity {
     }
 
     pub fn check_mob_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         reason: spawn::EntitySpawnReason,
     ) -> bool {
-        reason.is_spawner() || {
-            let state = world.get_block_state(&pos.down());
-            state.is_side_solid(BlockDirection::Up) && state.luminance < 14
-        }
+        reason.is_spawner() || is_valid_spawn_floor(world.get_block_state(&pos.down()), entity_type)
     }
 
     pub fn check_monster_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
@@ -927,10 +927,11 @@ impl MobEntity {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos, reason)
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
     pub fn check_any_light_monster_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         reason: spawn::EntitySpawnReason,
@@ -939,16 +940,17 @@ impl MobEntity {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos, reason)
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
     pub fn check_surface_monsters_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
         reason: spawn::EntitySpawnReason,
     ) -> bool {
-        Self::check_monster_spawn_rules(world, pos, is_thundering, reason)
+        Self::check_monster_spawn_rules(entity_type, world, pos, is_thundering, reason)
             && (reason.is_spawner() || world.can_see_sky(pos))
     }
 
@@ -1685,10 +1687,6 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
-    }
-
-    fn mob_is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
     }
 
     fn pushes_entities(&self) -> bool {
