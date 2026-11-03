@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
@@ -126,7 +127,10 @@ impl RevengeGoal {
             {
                 continue;
             }
-            other_mob.set_mob_target(Some(attacker.clone()));
+            other_mob.set_mob_target(
+                Some(attacker.clone()),
+                TargetReason::TargetAttackedNearbyEntity,
+            );
         }
     }
 }
@@ -177,10 +181,16 @@ impl Goal for RevengeGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone());
+        self.track_target_goal.start_targeting(
+            mob,
+            self.target.clone(),
+            TargetReason::TargetAttackedEntity,
+        );
 
         let mob_entity = mob.get_mob_entity();
-        self.track_target_goal.set_target_mob(self.target.clone());
+        // Vanilla `targetMob = mob.getTarget()`: what the event left, not the attacker.
+        self.track_target_goal
+            .set_target_mob(mob_entity.get_target());
         self.timestamp = mob_entity.living_entity.get_last_hurt_by_mob_timestamp();
         self.track_target_goal.max_time_without_visibility = 300;
 

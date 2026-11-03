@@ -30,7 +30,7 @@ fn entity_predicates_do_not_match_a_missing_entity() {
 use crate::entity::{
     Entity,
     ai::test_support::world,
-    mob::magma_cube::MagmaCubeEntity,
+    mob::{Mob, magma_cube::MagmaCubeEntity},
     passive::{
         chicken::ChickenEntity,
         frog::FrogEntity,
@@ -119,6 +119,33 @@ async fn component_predicates_select_chicken_and_mooshroom_variants() {
             &[(item, 1); 5],
         );
     }
+}
+
+#[tokio::test]
+async fn chicken_variant_set_and_nbt_roundtrip() {
+    let folder = tempfile::tempdir().unwrap();
+    let world = world(&folder);
+    let chicken = ChickenEntity::new(Entity::new(
+        world.clone(),
+        Vector3::default(),
+        &EntityType::CHICKEN,
+    ));
+    chicken.mob_set_variant_name("warm");
+    assert_eq!(
+        chicken.variant.load(std::sync::atomic::Ordering::Relaxed),
+        ChickenVariant::Warm.id()
+    );
+
+    let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+    chicken.mob_write_nbt(&mut nbt);
+    assert_eq!(nbt.get_string("variant"), Some("minecraft:warm"));
+
+    let chicken2 = ChickenEntity::new(Entity::new(world, Vector3::default(), &EntityType::CHICKEN));
+    chicken2.mob_read_nbt(&nbt);
+    assert_eq!(
+        chicken2.variant.load(std::sync::atomic::Ordering::Relaxed),
+        ChickenVariant::Warm.id()
+    );
 }
 
 #[tokio::test]

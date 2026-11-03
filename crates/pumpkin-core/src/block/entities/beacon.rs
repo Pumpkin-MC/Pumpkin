@@ -384,7 +384,7 @@ impl BlockEntity for BeaconBlockEntity {
     ) -> Option<NbtCompound> {
         let name_guard = self.custom_name.lock().ok();
         let name = name_guard.as_ref().and_then(|n| n.as_deref());
-        Some(crate::block::entities::bedrock::build_beacon_actor(
+        Some(build_beacon_actor(
             self.position,
             self.primary_effect().map_or(0, StatusEffect::to_bedrock_id),
             self.secondary_effect()
@@ -442,5 +442,36 @@ mod tests {
                 Some("Beacon")
             );
         }
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for beacons.
+#[must_use]
+pub fn build_beacon_actor(
+    position: BlockPos,
+    primary: i32,
+    secondary: i32,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("Beacon", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_int("primary", primary.max(0))
+        .put_int("secondary", secondary.max(0))
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn beacon_actor_builder() {
+        let pos = BlockPos::new(5, 64, 5);
+        let nbt = build_beacon_actor(pos, 1, 1, None);
+        assert_eq!(nbt.get_string("id"), Some("Beacon"));
+        assert_eq!(nbt.get_int("primary"), Some(1));
+        assert_eq!(nbt.get_int("secondary"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }

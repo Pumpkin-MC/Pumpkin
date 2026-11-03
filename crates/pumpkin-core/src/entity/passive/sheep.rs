@@ -3,8 +3,10 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::{
@@ -294,6 +296,10 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySheepStep, 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,
@@ -370,6 +376,7 @@ impl Mob for SheepEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
@@ -404,6 +411,6 @@ impl Mob for SheepEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
+        self.animal_interact(player, item_stack)
     }
 }
