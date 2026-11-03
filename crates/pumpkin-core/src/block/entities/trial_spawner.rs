@@ -1033,6 +1033,16 @@ impl TrialSpawner {
                 continue;
             }
 
+            if !crate::entity::r#type::check_spawn_rules(
+                entity_type,
+                world,
+                &BlockPos::floored_v(spawn_pos),
+                world.is_thundering(),
+                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
+            ) {
+                continue;
+            }
+
             chosen_pos = Some(spawn_pos);
             break;
         }
@@ -1098,7 +1108,12 @@ impl TrialSpawner {
 
         // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
         if only_id {
-            crate::entity::mob::spawn::finalize_spawn(&entity, world, None);
+            crate::entity::mob::spawn::finalize_spawn(
+                &entity,
+                world,
+                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
+                None,
+            );
         }
         world.spawn_entity(entity);
 
