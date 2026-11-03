@@ -1033,6 +1033,16 @@ impl TrialSpawner {
                 continue;
             }
 
+            if !crate::entity::r#type::check_spawn_rules(
+                entity_type,
+                world,
+                &BlockPos::floored_v(spawn_pos),
+                world.is_thundering(),
+                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
+            ) {
+                continue;
+            }
+
             chosen_pos = Some(spawn_pos);
             break;
         }

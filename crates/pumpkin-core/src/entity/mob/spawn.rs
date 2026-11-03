@@ -130,6 +130,18 @@ pub enum EntitySpawnReason {
     DimensionTravel,
 }
 
+impl EntitySpawnReason {
+    #[must_use]
+    pub const fn is_spawner(self) -> bool {
+        matches!(self, Self::Spawner | Self::TrialSpawner)
+    }
+
+    #[must_use]
+    pub const fn ignores_light_requirements(self) -> bool {
+        matches!(self, Self::TrialSpawner)
+    }
+}
+
 /// Finalizes `entity` if it is a mob, and returns the group data for the next mob of the group.
 pub fn finalize_spawn(
     entity: &Arc<dyn EntityBase>,

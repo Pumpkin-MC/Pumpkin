@@ -18,7 +18,7 @@ use crate::entity::{
     Entity, EntityBase,
     ai::control::{Control, MoveControlTrait, move_control::MoveControl},
     ai::goal::Goal,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, spawn::EntitySpawnReason},
 };
 use crate::world::World;
 use pumpkin_util::random::RandomImpl;
@@ -156,13 +156,17 @@ impl SlimeEntity {
         self.get_size() <= 1
     }
 
-    pub fn check_slime_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_slime_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        reason: EntitySpawnReason,
+    ) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
         }
-
-        // TODO: check spawn reason. if it's spawner, we should return true if block below is valid
-        // For now, we assume natural spawning as that's what we are implementing.
+        if reason.is_spawner() {
+            return MobEntity::check_mob_spawn_rules(world, pos, reason);
+        }
 
         // Swamp/Surface Spawning
         // TODO: fix
@@ -195,7 +199,7 @@ impl SlimeEntity {
 
         let mut rng = rand::rng();
         if rng.random_range(0..10) == 0 && slime_rand.next_bounded_i32(10) == 0 && pos.0.y < 40 {
-            return true;
+            return MobEntity::check_mob_spawn_rules(world, pos, reason);
         }
 
         false
