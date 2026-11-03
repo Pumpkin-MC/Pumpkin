@@ -1535,18 +1535,23 @@ impl ProtoChunk {
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
         for entry in set.structures {
-            let structure = Structure::get(&entry.structure);
-            if let Some(biomes) = get_tag_ids(
-                RegistryKey::WorldgenBiome,
-                structure
-                    .biomes
-                    .strip_prefix('#')
-                    .unwrap_or(structure.biomes),
-            ) {
-                allowed_biomes.extend_from_slice(biomes);
-            }
+            allowed_biomes.extend_from_slice(Self::structure_biomes(entry.structure));
         }
         allowed_biomes
+    }
+
+    /// The biomes a structure may start in (vanilla `Structure.biomes()`).
+    #[must_use]
+    pub fn structure_biomes(key: StructureKeys) -> &'static [u16] {
+        let structure = Structure::get(&key);
+        get_tag_ids(
+            RegistryKey::WorldgenBiome,
+            structure
+                .biomes
+                .strip_prefix('#')
+                .unwrap_or(structure.biomes),
+        )
+        .unwrap_or_default()
     }
 
     /// Returns the deterministic weighted fallback order for structures in a set.
