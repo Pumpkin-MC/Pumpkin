@@ -10,7 +10,7 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use std::{
     backtrace::{Backtrace, BacktraceStatus},
-    io::{self},
+    io,
     panic::PanicHookInfo,
     process::exit,
     sync::{OnceLock, atomic::Ordering},
@@ -29,6 +29,7 @@ use pumpkin_core::{
 };
 use pumpkin_core::{PumpkinServer, stop_server};
 
+use pumpkin::{GameTestOptions, StartupCommand, parse_startup_command};
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
@@ -47,9 +48,21 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
-#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
+    let command = match parse_startup_command(std::env::args().skip(1)) {
+        Ok(command) => command,
+        Err(error) => error.exit(),
+    };
+
+    match command {
+        StartupCommand::DedicatedServer => dedicated_server().await,
+        StartupCommand::GameTestServer(options) => game_test_server(options),
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+async fn dedicated_server() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
     // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
@@ -239,6 +252,9 @@ async fn main() {
 
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
+
+fn game_test_server(_options: GameTestOptions) {}
+
 fn print_support_links_and_warning() {
     warn!(
         "{}",
