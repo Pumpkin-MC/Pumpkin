@@ -45,7 +45,7 @@ impl FlowingLava {
         }
 
         let target = Vector3::new(f64::from(pos.0.x), f64::from(pos.0.y), f64::from(pos.0.z));
-        let max_distance_sq = f64::from(spread_radius).powi(2);
+        let max_distance_sq = (spread_radius as f64).powi(2);
         world.players.load().iter().any(|player| {
             !player.is_spectator()
                 && player
