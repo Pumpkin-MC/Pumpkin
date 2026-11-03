@@ -585,6 +585,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn on_rider_positioned(&self, _passenger: &dyn EntityBase) {}
+
     fn hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
         &[]
     }
@@ -1307,6 +1309,7 @@ pub fn position_rider(vehicle: &dyn EntityBase, passenger: &dyn EntityBase) {
             attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load())
         });
     passenger_entity.set_pos(vehicle_entity.pos.load() + seat - offset);
+    vehicle.on_rider_positioned(passenger);
 }
 
 /// Places every rider of `vehicle`, and their riders, after the vehicle has moved.
