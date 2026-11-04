@@ -34,6 +34,7 @@ pub enum SensorType {
     HurtBy,
     NearestItems,
     FoodTemptations,
+    FrogTemptations,
     NearestAdult,
 }
 
@@ -47,6 +48,7 @@ impl SensorType {
             Self::HurtBy => "minecraft:hurt_by",
             Self::NearestItems => "minecraft:nearest_items",
             Self::FoodTemptations => "minecraft:food_temptations",
+            Self::FrogTemptations => "minecraft:frog_temptations",
             Self::NearestAdult => "minecraft:nearest_adult",
         }
     }
@@ -60,6 +62,7 @@ impl SensorType {
             | Self::HurtBy
             | Self::NearestItems
             | Self::FoodTemptations
+            | Self::FrogTemptations
             | Self::NearestAdult => DEFAULT_SCAN_RATE,
         }
     }
@@ -71,7 +74,8 @@ impl SensorType {
             Self::NearestPlayers => Box::new(PlayerSensor),
             Self::HurtBy => Box::new(HurtBySensor),
             Self::NearestItems => Box::new(nearest_items::NearestItemSensor),
-            Self::FoodTemptations => Box::new(tempting::FoodTemptationSensor),
+            Self::FoodTemptations => Box::new(tempting::TemptingSensor::for_animal()),
+            Self::FrogTemptations => Box::new(tempting::TemptingSensor::for_frog()),
             Self::NearestAdult => Box::new(adult::AdultSensor),
         }
     }
