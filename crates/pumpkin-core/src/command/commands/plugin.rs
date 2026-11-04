@@ -15,7 +15,8 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
-use crate::plugin::{PluginEntry, PluginStatus};
+use crate::plugin::{PluginEntry, PluginId, PluginStatus};
+use crate::server::Server;
 
 const DESCRIPTION: &str = "Manage server plugins.";
 const PERMISSION: &str = "pumpkin:command.plugin";
@@ -196,23 +197,40 @@ impl CommandExecutor for LoadExecutor {
                 return;
             }
 
-            let result = server_clone
+            // Loader still holds the old copy
+            if entry.as_ref().is_some_and(|entry| !entry.can_unload) {
+                source_clone.send_feedback(
+                    TextComponent::text(format!(
+                        "Plugin {name} cannot be loaded again at runtime, restart the server"
+                    ))
+                    .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            }
+
+            let loaded = server_clone
                 .plugin_manager
                 .try_load_plugin(&server_clone, &path)
-                .await
-                .map_err(|e| format!("Failed to load plugin {name}: {e}"))
-                .and_then(|loaded| {
-                    // A named file may declare another name now, the requested one is then not
-                    // loaded. Without metadata the entry is listed by its file name
-                    if entry.is_none_or(|entry| entry.metadata.is_none()) || loaded == name {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "Plugin {name} was not loaded: {} now declares {loaded}, which was loaded instead",
-                            path.display()
-                        ))
-                    }
-                });
+                .await;
+            let result = match loaded {
+                // Without metadata the entry is listed by its file name, not the declared one
+                Ok(loaded) if loaded.name == name || entry.is_none_or(|e| e.metadata.is_none()) => {
+                    Ok(())
+                }
+                // The file may declare another name now, the requested one is then not loaded
+                Ok(loaded) => Err(unload_mismatch(
+                    &server_clone,
+                    &loaded,
+                    format!(
+                        "Plugin {name} was not loaded: {} now declares {}",
+                        path.display(),
+                        loaded.name
+                    ),
+                )
+                .await),
+                Err(e) => Err(format!("Failed to load plugin {name}: {e}")),
+            };
 
             send_result(
                 &source_clone,
@@ -313,12 +331,20 @@ impl CommandExecutor for ReloadExecutor {
                     .unload_plugin(&plugin_name)
                     .await
             {
+                let in_use = e.is_library_in_use();
                 source_clone.send_feedback(
                     TextComponent::text(format!("Failed to unload plugin {plugin_name}: {e}"))
-                        .color_named(NamedColor::Red),
+                        .color_named(if in_use {
+                            NamedColor::Yellow
+                        } else {
+                            NamedColor::Red
+                        }),
                     false,
                 );
-                return;
+                // Unloaded all the same, only its library is kept
+                if !in_use {
+                    return;
+                }
             }
 
             let loaded = server_clone
@@ -327,19 +353,18 @@ impl CommandExecutor for ReloadExecutor {
                 .await;
             let result = match loaded {
                 // Without metadata the entry is listed by its file name, not the declared one
-                Ok(loaded) if loaded == plugin_name || entry.metadata.is_none() => Ok(()),
+                Ok(loaded) if loaded.name == plugin_name || entry.metadata.is_none() => Ok(()),
                 // The file may declare another name now, the requested one is then not back
-                Ok(loaded) => {
-                    let mismatch = format!(
-                        "Plugin {plugin_name} was not reloaded: {} now declares {loaded}",
-                        entry.path.display()
-                    );
-                    // Not what was asked for, so it does not stay running
-                    match server_clone.plugin_manager.unload_plugin(&loaded).await {
-                        Ok(()) => Err(mismatch),
-                        Err(e) => Err(format!("{mismatch}, and unloading {loaded} failed: {e}")),
-                    }
-                }
+                Ok(loaded) => Err(unload_mismatch(
+                    &server_clone,
+                    &loaded,
+                    format!(
+                        "Plugin {plugin_name} was not reloaded: {} now declares {}",
+                        entry.path.display(),
+                        loaded.name
+                    ),
+                )
+                .await),
                 Err(e) if was_loaded => Err(format!(
                     "Plugin {plugin_name} was unloaded but could not be loaded again: {e}"
                 )),
@@ -354,6 +379,14 @@ impl CommandExecutor for ReloadExecutor {
         });
 
         Ok(1)
+    }
+}
+
+/// Unloads a plugin loaded under another name than asked for, returns the error to report.
+async fn unload_mismatch(server: &Server, loaded: &PluginId, mismatch: String) -> String {
+    match server.plugin_manager.unload_loaded(loaded).await {
+        Ok(()) => mismatch,
+        Err(e) => format!("{mismatch}, and unloading {} failed: {e}", loaded.name),
     }
 }
 

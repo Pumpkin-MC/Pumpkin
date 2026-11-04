@@ -121,6 +121,11 @@ impl Context {
         name: N,
         service: Arc<T>,
     ) {
+        // Owner recorded: unloading it takes the service off again
+        let service = crate::plugin::Service {
+            owner: self.metadata.name.clone(),
+            payload: service,
+        };
         let mut services = self.plugin_manager.services.write().await;
         services.insert(name.into(), service);
     }
@@ -151,7 +156,7 @@ impl Context {
     /// ```
     pub async fn get_service<T: Payload + 'static>(&self, name: &str) -> Option<Arc<T>> {
         let services = self.plugin_manager.services.read().await;
-        let service = services.get(name)?.clone();
+        let service = Arc::clone(&services.get(name)?.payload);
         <dyn Payload>::downcast_arc::<T>(service)
     }
 

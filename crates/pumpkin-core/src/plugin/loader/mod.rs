@@ -62,7 +62,7 @@ pub enum LoaderError {
     RuntimeError(String),
 
     #[error(
-        "Event handlers or IPC calls of the plugin are still running, its library stays loaded"
+        "Event handlers, services or IPC calls of the plugin are still in use, its library stays loaded until restart"
     )]
     LibraryInUse,
 

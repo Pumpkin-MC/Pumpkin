@@ -274,15 +274,40 @@ fn is_plugin_file(path: &Path) -> bool {
 const HANDLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const HANDLER_DRAIN_POLL: Duration = Duration::from_millis(10);
 
-/// Hands a plugin's library back to its loader once no event runs its handlers and no call
-/// still holds its instance.
+/// A registered service and the plugin that registered it.
+pub(crate) struct Service {
+    pub(crate) owner: String,
+    pub(crate) payload: Arc<dyn Payload>,
+}
+
+/// Handlers and services taken off a plugin. Their code lives in its library.
+struct Registrations {
+    handlers: Vec<Arc<dyn DynEventHandler>>,
+    services: Vec<Arc<dyn Payload>>,
+}
+
+impl Registrations {
+    /// Any count above ours: a running event or another holder of a service.
+    fn in_use(&self) -> bool {
+        self.handlers.iter().any(|h| Arc::strong_count(h) > 1)
+            || self.services.iter().any(|s| Arc::strong_count(s) > 1)
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.handlers.extend(other.handlers);
+        self.services.extend(other.services);
+    }
+}
+
+/// Hands a plugin's library back to its loader once nothing runs its handlers, holds its
+/// services, or holds its instance.
 ///
-/// A handler or instance call still running after `HANDLER_DRAIN_TIMEOUT` keeps the library
+/// Anything still running or held after `HANDLER_DRAIN_TIMEOUT` keeps the library
 /// loaded for good, releasing it would pull the code out from under that call. That is
 /// `LibraryInUse`.
 async fn release_library(
     name: &str,
-    handlers: Vec<Arc<dyn DynEventHandler>>,
+    registrations: Registrations,
     instance: Option<Arc<dyn Plugin>>,
     loader: &dyn PluginLoader,
     loader_data: Box<dyn Any + Send + Sync>,
@@ -290,9 +315,7 @@ async fn release_library(
     // Each handler is wrapped once per registration, so any count above ours is a running event.
     // The same goes for the instance, which `send_message` holds across `on_ipc_message`
     let drained = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
-        while handlers
-            .iter()
-            .any(|handler| Arc::strong_count(handler) > 1)
+        while registrations.in_use()
             || instance
                 .as_ref()
                 .is_some_and(|instance| Arc::strong_count(instance) > 1)
@@ -303,13 +326,13 @@ async fn release_library(
     .await
     .is_ok();
     // Their code lives in the library, so they go first
-    drop(handlers);
+    drop(registrations);
     drop(instance);
     if drained {
         loader.unload(loader_data).await
     } else {
         warn!(
-            "Plugin {name} still has event handlers or IPC calls running, keeping its library loaded"
+            "Plugin {name} still has event handlers, services or IPC calls in use, keeping its library loaded"
         );
         Box::leak(loader_data);
         Err(LoaderError::LibraryInUse)
@@ -342,6 +365,13 @@ async fn discard_loaded(
     loader.unload(loader_data).await.ok();
 }
 
+/// One load of a plugin: a later load of the same name is another one.
+#[derive(Debug, Clone)]
+pub struct PluginId {
+    pub name: String,
+    token: u64,
+}
+
 /// Core plugin management system
 #[repr(C)]
 pub struct PluginManager {
@@ -352,7 +382,7 @@ pub struct PluginManager {
     unloaded_files: RwLock<HashSet<PathBuf>>,
     /// Plugin files that are known but not running, by path
     inactive: SyncRwLock<HashMap<PathBuf, PluginEntry>>,
-    services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
+    services: Arc<RwLock<HashMap<String, Service>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
@@ -395,6 +425,14 @@ pub enum ManagerError {
     DependencyError(String),
     #[error("Waiting on plugin {0} would deadlock, its initialization waits on the caller")]
     InitializationDeadlock(String),
+}
+
+impl ManagerError {
+    /// Unload done, only the library stays loaded.
+    #[must_use]
+    pub const fn is_library_in_use(&self) -> bool {
+        matches!(self, Self::LoaderError(LoaderError::LibraryInUse))
+    }
 }
 
 impl Default for PluginManager {
@@ -493,9 +531,14 @@ impl PluginManager {
         // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
         let mut first_error = None;
         for name in plugin_names {
-            if let Err(e) = self.unload_plugin(&name).await {
-                error!("Failed to unload plugin {name}: {e}");
-                first_error.get_or_insert(e);
+            match self.unload_plugin(&name).await {
+                Ok(()) => {}
+                // Unloaded all the same, its library is only kept
+                Err(e) if e.is_library_in_use() => warn!("Plugin {name}: {e}"),
+                Err(e) => {
+                    error!("Failed to unload plugin {name}: {e}");
+                    first_error.get_or_insert(e);
+                }
             }
         }
 
@@ -639,14 +682,16 @@ impl PluginManager {
 
         let unload_failed = if let Some(name) = plugin_name {
             info!("Hot-reloading plugin: {}", name);
-            if let Err(e) = self.unload_plugin(&name).await {
-                error!(
-                    "Failed to unload plugin {} for hot-reload, not reloading: {}",
-                    name, e
-                );
-                true
-            } else {
-                false
+            match self.unload_plugin(&name).await {
+                Ok(()) => false,
+                Err(e) if e.is_library_in_use() => {
+                    warn!("Plugin {name}: {e}");
+                    false
+                }
+                Err(e) => {
+                    error!("Failed to unload plugin {name} for hot-reload, not reloading: {e}");
+                    true
+                }
             }
         } else {
             false
@@ -853,7 +898,7 @@ impl PluginManager {
         loader_data: Box<dyn Any + Send + Sync>,
         loader: Arc<dyn PluginLoader>,
         path: PathBuf,
-    ) -> Result<tokio::task::JoinHandle<Result<(), String>>, ManagerError> {
+    ) -> Result<(u64, tokio::task::JoinHandle<Result<(), String>>), ManagerError> {
         let context = Arc::new(Context::new(
             metadata.clone(),
             server.clone(),
@@ -915,7 +960,9 @@ impl PluginManager {
             let result = INITIALIZING_PLUGIN
                 .scope(
                     plugin_name.clone(),
-                    AssertUnwindSafe(instance.on_load(context.clone())).catch_unwind(),
+                    // Called inside the block: a panic before the future exists is caught too
+                    AssertUnwindSafe(async { instance.on_load(context.clone()).await })
+                        .catch_unwind(),
                 )
                 .await
                 .unwrap_or_else(|_| Err("on_load panicked".to_string()));
@@ -980,18 +1027,19 @@ impl PluginManager {
 
                     // on_load may have registered handlers, commands or permissions before
                     // failing partway through, leaving them would block every future load
-                    let mut handlers = self_ref_clone.unregister_handlers(&plugin_name);
+                    let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
                     context.unregister_commands();
                     context.unregister_permissions();
                     // Still Loading, so a self-unload from on_unload would wait on itself too
                     let _ = INITIALIZING_PLUGIN
                         .scope(
                             plugin_name.clone(),
-                            AssertUnwindSafe(instance.on_unload(context.clone())).catch_unwind(),
+                            AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
+                                .catch_unwind(),
                         )
                         .await;
                     // on_unload can register again, that must not outlive the library
-                    handlers.extend(self_ref_clone.unregister_handlers(&plugin_name));
+                    registrations.extend(self_ref_clone.take_registrations(&plugin_name).await);
                     context.unregister_commands();
                     context.unregister_permissions();
                     // The instance's code lives in the library, so drop it before unloading
@@ -1009,17 +1057,12 @@ impl PluginManager {
                             .and_then(|plugin| plugin.loader_data.take())
                     };
 
-                    // Try to unload the plugin data
-                    let released = match loader_data {
-                        Some(data) => {
-                            release_library(&plugin_name, handlers, None, &*loader_clone, data)
-                                .await
-                        }
-                        None => Ok(()),
-                    };
-                    // The old code is still running, so the record stays and keeps refusing a
-                    // load of the name, like `unload_plugin`
-                    let keep_claim = matches!(released, Err(LoaderError::LibraryInUse));
+                    // Library still in use: stays leaked, the name is free again anyway
+                    if let Some(data) = loader_data {
+                        release_library(&plugin_name, registrations, None, &*loader_clone, data)
+                            .await
+                            .ok();
+                    }
 
                     // Same states-then-plugins section as the reservation, so a new load of
                     // this name cannot reserve in between and get its state overwritten
@@ -1031,7 +1074,7 @@ impl PluginManager {
                                 .write()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner);
                             let index = plugins.iter().position(|p| p.token == token);
-                            if !keep_claim && let Some(index) = index {
+                            if let Some(index) = index {
                                 plugins.remove(index);
                             }
                             index.is_some()
@@ -1066,7 +1109,7 @@ impl PluginManager {
             }
         });
 
-        Ok(task)
+        Ok((token, task))
     }
 
     /// Load all plugins from the plugin directory
@@ -1288,7 +1331,7 @@ impl PluginManager {
                     )
                     .await
                 {
-                    Ok(task) => {
+                    Ok((_, task)) => {
                         // Its on_load waiting on this caller is refused instead of deadlocking
                         let _wait = self.enter_init_wait(&name)?;
                         // We must await each initialization to ensure dependencies are ready
@@ -1384,7 +1427,7 @@ impl PluginManager {
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<(String, tokio::task::JoinHandle<Result<(), String>>), ManagerError> {
+    ) -> Result<(PluginId, tokio::task::JoinHandle<Result<(), String>>), ManagerError> {
         if !server.advanced_config.plugins.enabled {
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                 "Plugin system is disabled in configuration".to_string(),
@@ -1472,7 +1515,7 @@ impl PluginManager {
                 }
 
                 let name = metadata.name.clone();
-                let task = self
+                let (token, task) = self
                     .spawn_plugin_initialization(
                         server.clone(),
                         instance,
@@ -1482,7 +1525,7 @@ impl PluginManager {
                         path.to_path_buf(),
                     )
                     .await?;
-                return Ok((name, task));
+                return Ok((PluginId { name, token }, task));
             }
         }
 
@@ -1494,15 +1537,15 @@ impl PluginManager {
         ))
     }
 
-    /// Attempt to load a single plugin file, returns the name the file declares
+    /// Attempt to load a single plugin file, returns the plugin the file declares
     pub async fn try_load_plugin(
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<String, ManagerError> {
-        let (name, task) = self.start_loading_plugin(server, path).await?;
+    ) -> Result<PluginId, ManagerError> {
+        let (id, task) = self.start_loading_plugin(server, path).await?;
         // Its on_load waiting on this caller is refused instead of deadlocking
-        let _wait = self.enter_init_wait(&name)?;
+        let _wait = self.enter_init_wait(&id.name)?;
         task.await
             .map_err(|e| {
                 ManagerError::LoaderError(LoaderError::InitializationFailed(format!(
@@ -1510,7 +1553,7 @@ impl PluginManager {
                 )))
             })?
             .map_err(|e| ManagerError::LoaderError(LoaderError::InitializationFailed(e)))?;
-        Ok(name)
+        Ok(id)
     }
 
     /// Wait until a plugin is no longer initializing, whether it succeeded or failed.
@@ -1818,7 +1861,17 @@ impl PluginManager {
 
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
-        // The record is claimed, not removed: it keeps the name until the library is released, so a
+        self.unload(name, None).await
+    }
+
+    /// Unload the plugin `id` names, not a later load of the same name.
+    pub async fn unload_loaded(&self, id: &PluginId) -> Result<(), ManagerError> {
+        self.unload(&id.name, Some(id.token)).await
+    }
+
+    /// `load`: only that load of `name`.
+    async fn unload(&self, name: &str, load: Option<u64>) -> Result<(), ManagerError> {
+        // The record is claimed, not removed: it keeps the name until the release attempt, so a
         // load of the same plugin is refused instead of running next to the old copy. State goes in
         // the same section, or a load reserving the name would lose its Loading state to this unload
         let (token, instance, context, loader, metadata, path) = loop {
@@ -1837,7 +1890,11 @@ impl PluginManager {
             // An inactive record is already unloaded, or another unload is releasing it
             let plugin = plugins
                 .iter_mut()
-                .find(|p| p.metadata.name == name && p.is_active)
+                .find(|p| {
+                    p.metadata.name == name
+                        && p.is_active
+                        && load.is_none_or(|token| p.token == token)
+                })
                 .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
             plugin.is_active = false;
             states.remove(name);
@@ -1851,12 +1908,12 @@ impl PluginManager {
             );
         };
 
-        let mut handlers = self.unregister_handlers(name);
+        let mut registrations = self.take_registrations(name).await;
         context.unregister_commands();
         context.unregister_permissions();
 
         if let Some(instance) = &instance {
-            match AssertUnwindSafe(instance.on_unload(context.clone()))
+            match AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
                 .catch_unwind()
                 .await
             {
@@ -1865,7 +1922,7 @@ impl PluginManager {
                 Err(_) => error!("Plugin {name} panicked in on_unload"),
             }
             // on_unload can register again, that must not outlive the library
-            handlers.extend(self.unregister_handlers(name));
+            registrations.extend(self.take_registrations(name).await);
             context.unregister_commands();
             context.unregister_permissions();
         }
@@ -1883,12 +1940,9 @@ impl PluginManager {
             .find(|p| p.token == token)
             .and_then(|p| p.loader_data.take());
         let unloaded = match loader_data {
-            Some(data) => release_library(name, handlers, instance, &*loader, data).await,
+            Some(data) => release_library(name, registrations, instance, &*loader, data).await,
             None => Ok(()),
         };
-
-        // The old code is still running, so the record stays and keeps refusing a load of the name
-        let keep_claim = matches!(unloaded, Err(LoaderError::LibraryInUse));
 
         // Listed before the record goes, so a load that reserves the name next replaces the entry
         // instead of having it written over its own
@@ -1897,20 +1951,29 @@ impl PluginManager {
             Err(e) => PluginStatus::Failed(e.to_string()),
         };
         self.mark_inactive(&path, Some(&metadata), status);
-        if keep_claim {
-            // The retained record is listed before the inactive entry, so it carries the failure
-            self.plugin_states.write().await.insert(
-                name.to_string(),
-                PluginState::Failed(LoaderError::LibraryInUse.to_string()),
-            );
-        } else {
-            self.plugins
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .retain(|p| p.token != token);
-        }
+        // Also on `LibraryInUse`: the leaked library stays mapped, a new load may start
+        self.plugins
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|p| p.token != token);
 
         unloaded.map_err(ManagerError::from)
+    }
+
+    /// Takes a plugin's handlers and services off their maps and returns them.
+    async fn take_registrations(&self, source: &str) -> Registrations {
+        let mut services = Vec::new();
+        self.services.write().await.retain(|_, service| {
+            let keep = service.owner != source;
+            if !keep {
+                services.push(Arc::clone(&service.payload));
+            }
+            keep
+        });
+        Registrations {
+            handlers: self.unregister_handlers(source),
+            services,
+        }
     }
 
     /// Takes a plugin's handlers off the map and returns them.
