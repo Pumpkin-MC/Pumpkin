@@ -1223,6 +1223,19 @@ impl PluginManager {
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
+                // A dependency that failed or was skipped earlier in this pass is not active
+                let missing = metadata
+                    .dependencies
+                    .iter()
+                    .find(|dep| !self.is_plugin_active(dep));
+                if let Some(dep) = missing {
+                    let reason = format!("dependency {dep} is not active");
+                    warn!("Skipping plugin \"{}\": {reason}", metadata.name);
+                    self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason));
+                    discard_loaded(instance, &*loader, loader_data).await;
+                    continue;
+                }
+
                 let (allowed, wait_time) = self
                     .clone()
                     .check_permissions_cached(&path, &metadata, &mut cache, &cache_path, server)
