@@ -186,11 +186,6 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
 
             let uses = bytebuf.get_i32_be()?;
             let max_uses = bytebuf.get_i32_be()?;
-            
-            if out_of_stock {
-            		uses = max_uses;
-            }
-            
             let xp = bytebuf.get_i32_be()?;
             let special_price = bytebuf.get_i32_be()?;
             let price_multiplier = bytebuf.get_f32_be()?;
@@ -201,7 +196,7 @@ impl<'a> crate::ServerPacket<'a> for CMerchantOffers {
                 output,
                 cost_b,
                 reward_exp: true,
-                uses,
+                uses: if out_of_stock { max_uses } else { uses },
                 max_uses,
                 xp,
                 special_price,
