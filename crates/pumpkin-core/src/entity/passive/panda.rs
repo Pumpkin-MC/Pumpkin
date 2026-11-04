@@ -120,6 +120,7 @@ pub struct PandaEntity {
 impl PandaEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        mob_entity.set_can_pick_up_loot(true);
         let panda = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
@@ -305,8 +306,6 @@ impl AgeableMob for PandaEntity {
 impl Animal for PandaEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_PANDA_FOOD)
-            || item_stack.item == &Item::BAMBOO
-            || item_stack.item == &Item::CAKE
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -340,6 +339,20 @@ impl Mob for PandaEntity {
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityPandaStep, 0.15, 1.0);
+    }
+
+    fn can_be_leashed(&self) -> bool {
+        false
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.is_aggressive() {
+            Sound::EntityPandaAggressiveAmbient
+        } else if self.is_worried() {
+            Sound::EntityPandaWorriedAmbient
+        } else {
+            Sound::EntityPandaAmbient
+        })
     }
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
