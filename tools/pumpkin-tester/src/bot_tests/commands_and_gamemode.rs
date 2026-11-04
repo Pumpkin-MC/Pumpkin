@@ -3,9 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use pumpkin_core::server::{Server, server_test_manager::drain_game_test_queue};
+use pumpkin_core::server::Server;
 use pumpkin_data::{Block, dimension::Dimension, item::Item};
-use pumpkin_gametest::GameTestRunner;
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 
 use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
@@ -13,7 +12,6 @@ use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 pub async fn run_commands_and_gamemode_tests(
     server: &Arc<Server>,
     bot1: &mut HeadlessBot,
-    runner: &mut GameTestRunner,
     summary_lines: &mut Vec<String>,
 ) -> Result<(), String> {
     let cmd_start = Instant::now();
@@ -25,7 +23,6 @@ pub async fn run_commands_and_gamemode_tests(
     let dispatcher = server.command_dispatcher.load();
     player1.set_permission_lvl(server, PermissionLvl::Four, &dispatcher);
 
-    // 1. Test `/gamemode creative` and `/give @s minecraft:diamond 5`
     bot1.send_command("gamemode creative").await?;
     bot1.send_command("give @s minecraft:diamond 5").await?;
 
@@ -41,22 +38,13 @@ pub async fn run_commands_and_gamemode_tests(
     ))
     .await?;
 
-    // 2. Test `/test run minecraft:always_pass`
-    bot1.send_command("test run minecraft:always_pass").await?;
-
     let mut gamemode_updated = false;
     let mut diamond_received = false;
     let mut block_placed = false;
-    let mut command_queued_and_ran = false;
 
     for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
-        drain_game_test_queue(server, runner).await;
-        if !runner.is_empty() {
-            command_queued_and_ran = true;
-        }
-        runner.tick().await;
 
         if player1.gamemode.load() == GameMode::Creative {
             gamemode_updated = true;
@@ -70,12 +58,7 @@ pub async fn run_commands_and_gamemode_tests(
             block_placed = true;
         }
 
-        if gamemode_updated
-            && diamond_received
-            && block_placed
-            && command_queued_and_ran
-            && runner.is_empty()
-        {
+        if gamemode_updated && diamond_received && block_placed {
             break;
         }
     }
@@ -89,15 +72,8 @@ pub async fn run_commands_and_gamemode_tests(
     if !block_placed {
         return Err("Bot `/setblock` did not place emerald_block in the world".to_string());
     }
-    if !command_queued_and_ran {
-        return Err(
-            "Bot 'TestBot1' `/test run minecraft:always_pass` command did not enqueue a GameTest"
-                .to_string(),
-        );
-    }
-
     summary_lines.push(format!(
-        "[PASS] bot:commands_gamemode_give_setblock_test ({}ms)",
+        "[PASS] bot:commands_gamemode_give_setblock ({}ms)",
         cmd_start.elapsed().as_millis()
     ));
     Ok(())

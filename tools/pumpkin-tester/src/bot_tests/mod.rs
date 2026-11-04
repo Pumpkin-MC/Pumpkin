@@ -24,13 +24,8 @@ pub async fn run_bot_tests(
     let (mut bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
 
-    commands_and_gamemode::run_commands_and_gamemode_tests(
-        server,
-        &mut bot1,
-        runner,
-        summary_lines,
-    )
-    .await?;
+    commands_and_gamemode::run_commands_and_gamemode_tests(server, &mut bot1, summary_lines)
+        .await?;
 
     loot_tables::run_loot_table_tests(server, &mut bot1, summary_lines).await?;
 
