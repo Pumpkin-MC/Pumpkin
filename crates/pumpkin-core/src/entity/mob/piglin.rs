@@ -18,7 +18,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::target_match::TargetMatch;
@@ -79,17 +78,6 @@ impl PiglinEntity {
     pub const INVENTORY_SIZE: usize = 8;
     pub const XP_REWARD: u32 = 5;
     pub const AMBIENT_SOUND_INTERVAL: i32 = 80;
-
-    pub const ADULT_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.6,
-        height: 1.95,
-        eye_height: 1.79,
-    };
-    pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.49,
-        height: 0.98,
-        eye_height: 0.78,
-    };
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -215,11 +203,7 @@ impl PiglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Self::ADULT_DIMENSIONS
-        });
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, baby));
     }
 
     #[must_use]

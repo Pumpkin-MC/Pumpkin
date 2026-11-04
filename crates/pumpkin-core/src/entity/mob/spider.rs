@@ -2,12 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -30,6 +32,8 @@ use crate::entity::{
     r#type::from_type,
 };
 use crate::world::World;
+
+const VEHICLE_SEAT_HEIGHT: f64 = 0.3125;
 
 pub const SPIDER_FLEES: &[Flee] =
     &[
@@ -111,6 +115,7 @@ impl SpiderEntity {
 pub fn finalize_spider_spawn(
     mob: &MobEntity,
     world: &Arc<World>,
+    reason: crate::entity::mob::spawn::EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
 ) -> Option<SpawnGroupData> {
     mob.finalize_spawn_base();
@@ -121,7 +126,7 @@ pub fn finalize_spider_spawn(
     if rng.random_range(0..100) == 0 {
         let skeleton = from_type(&EntityType::SKELETON, pos, world, Uuid::new_v4());
         skeleton.get_entity().set_rotation(entity.yaw.load(), 0.0);
-        finalize_spawn(&skeleton, world, None);
+        finalize_spawn(&skeleton, world, reason, None);
         mob.add_pending_rider(skeleton);
     }
 
@@ -152,7 +157,26 @@ pub fn finalize_spider_spawn(
     Some(group_data)
 }
 
+pub(super) fn small_vehicle_attachment_point(
+    mob: &MobEntity,
+    vehicle: &dyn EntityBase,
+    seat_height: f64,
+) -> Option<Vector3<f64>> {
+    let living = &mob.living_entity;
+    (vehicle.get_entity().width() <= living.entity.width()).then(|| {
+        Vector3::new(
+            0.0,
+            seat_height * living.get_attribute_value(&Attributes::SCALE),
+            0.0,
+        )
+    })
+}
+
 impl Mob for SpiderEntity {
+    fn mob_vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        small_vehicle_attachment_point(&self.mob_entity, vehicle, VEHICLE_SEAT_HEIGHT)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
     }
@@ -160,9 +184,10 @@ impl Mob for SpiderEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        finalize_spider_spawn(&self.mob_entity, world, group_data)
+        finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

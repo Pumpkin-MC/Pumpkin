@@ -259,6 +259,10 @@ impl ZombieVillagerEntity {
 }
 
 impl Mob for ZombieVillagerEntity {
+    fn xp_reward(&self) -> u32 {
+        self.mob_entity.xp_reward()
+    }
+
     fn can_hold_item(&self, stack: &ItemStack) -> bool {
         self.mob_entity.can_hold_item(stack)
     }

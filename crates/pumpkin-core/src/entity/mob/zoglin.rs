@@ -7,7 +7,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
@@ -30,12 +29,6 @@ pub struct ZoglinEntity {
 impl ZoglinEntity {
     pub const XP_REWARD: u32 = 5;
     const BABY_ATTACK_DAMAGE: f64 = 0.5;
-
-    pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.75,
-        height: 0.85,
-        eye_height: 0.625,
-    };
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -121,11 +114,9 @@ impl ZoglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
         let living = &self.mob_entity.living_entity;
-        living.entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Entity::type_dimensions(living.entity.entity_type)
-        });
+        living
+            .entity
+            .set_default_dimensions(Entity::age_dimensions(living.entity.entity_type, baby));
         if baby {
             living.set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
         }
@@ -148,6 +139,7 @@ impl Mob for ZoglinEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         if rand::random::<f32>() < 0.2 {

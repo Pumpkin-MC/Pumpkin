@@ -18,6 +18,7 @@ const PARTNER_RANGE: f64 = 8.0;
 
 pub struct BreedGoal {
     speed: f64,
+    partners: Option<TargetMatch>,
     mate: Option<Arc<dyn EntityBase>>,
     timer: i32,
 }
@@ -27,12 +28,24 @@ impl BreedGoal {
     pub fn new(speed: f64) -> Box<Self> {
         Box::new(Self {
             speed,
+            partners: None,
             mate: None,
             timer: 0,
         })
     }
 
-    fn find_mate(mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+    /// Searches `partners` instead of the mob's own type.
+    #[must_use]
+    pub fn with_partners(speed: f64, partners: TargetMatch) -> Box<Self> {
+        Box::new(Self {
+            speed,
+            partners: Some(partners),
+            mate: None,
+            timer: 0,
+        })
+    }
+
+    fn find_mate(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
         let mob_entity = mob.get_mob_entity();
         if !mob_entity.is_in_love() {
             return None;
@@ -46,15 +59,20 @@ impl BreedGoal {
             .set_base_max_distance(PARTNER_RANGE);
         let area = SearchArea::from_feet(entity, PARTNER_RANGE, PARTNER_RANGE);
 
-        TargetMatch::Type(entity.entity_type).find_nearest(&world, &area, |candidate| {
-            candidate.is_in_love()
+        let animal = mob.as_animal();
+        let partners = self
+            .partners
+            .unwrap_or(TargetMatch::Type(entity.entity_type));
+        partners.find_nearest(&world, &area, |candidate| {
+            animal.is_none_or(|animal| animal.can_mate(candidate))
+                && candidate.is_in_love()
                 && candidate.is_breeding_ready()
                 && !candidate.is_panicking()
                 && conditions.test(&world, Some(mob), candidate)
         })
     }
 
-    fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
+    pub(crate) fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
         let world = entity.world.load();
@@ -176,7 +194,7 @@ impl Goal for BreedGoal {
             return false;
         }
 
-        self.mate = Self::find_mate(mob);
+        self.mate = self.find_mate(mob);
         self.mate.is_some()
     }
 
