@@ -1348,4 +1348,25 @@ mod tests {
             "clearing the bit would need a count, and over-reporting is the safe direction"
         );
     }
+
+    /// A lit proto rim chunk can hold block light in a section with no emitter. That stored
+    /// light has to be seeded, or it never reaches the centre's border.
+    #[test]
+    fn a_proto_rim_chunk_seeds_its_stored_block_light() {
+        const SECTION: usize = 3;
+
+        let mut proto = proto_chunk(1, 0);
+        assert!(!proto.emitter_sections.contains(SECTION));
+        proto.light.block_light[SECTION].set(0, 8, 5, 14);
+        let chunk = Chunk::Proto(Box::new(proto));
+
+        assert!(
+            super::section_flags::block_light_seeds(&chunk, true).contains(SECTION),
+            "stored light in a rim proto chunk was not seeded"
+        );
+        assert!(
+            !super::section_flags::block_light_seeds(&chunk, false).contains(SECTION),
+            "the centre chunk should seed from emitters only"
+        );
+    }
 }
