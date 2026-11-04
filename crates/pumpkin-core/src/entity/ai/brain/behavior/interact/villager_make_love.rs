@@ -13,6 +13,7 @@ use super::super::super::memory::{GlobalPos, MemoryModuleId, MemoryStatus, types
 use super::super::timed::Behavior;
 use super::super::utils;
 use crate::entity::EntityBase;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::mob::Mob;
 use crate::entity::passive::villager::VillagerEntity;
 
@@ -94,9 +95,9 @@ fn try_to_give_birth(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
         release_bed(tick, &childs_bed);
         return;
     };
-    body.get_entity().set_age(6000);
-    target.get_entity().set_age(6000);
-    child.get_entity().set_age(-24000);
+    body.set_age(6000);
+    target_villager.set_age(6000);
+    child.set_age(-24000);
     let pos = body.get_entity().pos.load();
     child.get_entity().set_pos(pos);
     child.get_entity().yaw.store(0.0);

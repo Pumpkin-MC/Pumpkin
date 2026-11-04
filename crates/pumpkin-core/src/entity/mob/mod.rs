@@ -1559,25 +1559,11 @@ pub trait Mob: EntityBase + Send + Sync {
         self.mob_metadata().map(|m| m.to_bedrock_actor_data())
     }
 
-    fn get_job_site(&self) -> Option<BlockPos> {
-        None
-    }
-
-    fn is_job_site_pending(&self) -> bool {
-        false
-    }
-
-    fn release_pending_job_site(&self, _position: BlockPos) {}
-
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
     fn clear_trading_player(&self) {}
-
-    fn get_home(&self) -> Option<BlockPos> {
-        None
-    }
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
@@ -1861,6 +1847,9 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_removed(&self) {}
+
+    /// Runs when the mob dies, before the death effects, where vanilla subclasses override `die`.
+    fn on_die(&self, _source: Option<&dyn EntityBase>) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
         None
@@ -2771,14 +2760,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             || self
                 .get_mob_entity()
                 .brain_has_memory_value(crate::entity::ai::brain::memory::types::IS_PANICKING.id())
-    }
-
-    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_job_site(self)
-    }
-
-    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_home(self)
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {

@@ -63,7 +63,6 @@ pub mod try_find_water;
 pub mod use_item;
 pub mod wander_around;
 pub mod water_avoiding_random_flying;
-pub mod work_at_job_site;
 pub mod zombie_attack;
 
 #[must_use]

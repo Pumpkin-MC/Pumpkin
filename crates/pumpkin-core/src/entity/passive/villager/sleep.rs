@@ -8,6 +8,7 @@ use pumpkin_util::math::wrap_degrees;
 
 use crate::block::blocks::bed::BedBlock;
 use crate::entity::EntityBase;
+use crate::entity::ai::brain::memory::types;
 
 use super::VillagerEntity;
 
@@ -76,6 +77,20 @@ impl VillagerEntity {
         self.get_entity().set_pos(position);
         self.get_entity()
             .set_synced_data(tracked_data::villager::SLEEPING_POS_ID, None::<BlockPos>);
+    }
+
+    pub fn wake_up(&self) {
+        self.stop_sleeping();
+        let time = self
+            .get_entity()
+            .world
+            .load()
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .world_age;
+        self.mob_entity
+            .with_brain(self, |brain| brain.set(types::LAST_WOKEN, time));
     }
 
     #[must_use]

@@ -100,6 +100,7 @@ impl Behavior for TradeWithVillager {
             SPEED_MODIFIER,
             CLOSE_ENOUGH_DISTANCE,
         );
+        body.gossip(tick.state, tick.world, target_villager, tick.time);
         let is_farmer = profession(body) == VillagerProfession::Farmer;
         if body.has_excess_food() && (is_farmer || target_villager.wants_more_food()) {
             throw_half_stack(tick, body, target.as_ref(), |stack| {

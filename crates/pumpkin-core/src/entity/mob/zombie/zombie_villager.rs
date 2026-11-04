@@ -21,8 +21,8 @@ use uuid::Uuid;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
-use crate::entity::passive::villager::VillagerEntity;
-use crate::entity::passive::villager::data::{GossipType, VillagerData};
+use crate::entity::passive::villager::data::VillagerData;
+use crate::entity::passive::villager::{ReputationEventType, VillagerEntity};
 use crate::entity::player::Player;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{Entity, EntityBase};
@@ -220,19 +220,7 @@ impl ZombieVillagerEntity {
 
         if let Some(starter) = self.conversion_starter.load() {
             // Vanilla's `ZOMBIE_VILLAGER_CURED` reputation event.
-            let mut gossips = villager
-                .gossips
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let entries = gossips.entry(starter).or_default();
-            for (gossip_type, amount) in [
-                (GossipType::MajorPositive, 20),
-                (GossipType::MinorPositive, 25),
-            ] {
-                let value = entries.entry(gossip_type).or_default();
-                *value = (*value + amount).min(gossip_type.max_value());
-            }
-            drop(gossips);
+            villager.on_reputation_event_from(ReputationEventType::ZombieVillagerCured, starter);
 
             if let Some(player) = world.get_player_by_uuid(starter) {
                 player.trigger_advancement(AdvancementTrigger::CuredZombieVillager);
