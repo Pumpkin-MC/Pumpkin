@@ -6,6 +6,7 @@ use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::beehive::BeehiveBlock;
+use crate::block::blocks::bonemealable_feature_placer::BonemealableFeaturePlacerBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::brushable_block::BrushableBlock;
 use crate::block::blocks::bubble_column::BubbleColumnBlock;
@@ -421,6 +422,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AmethystBlock);
     manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
+    manager.register(BonemealableFeaturePlacerBlock);
     manager.register(MyceliumBlock);
     manager.register(PodzolBlock);
     manager.register(RootedDirtBlock);

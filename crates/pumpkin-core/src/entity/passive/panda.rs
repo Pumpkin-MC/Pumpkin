@@ -256,6 +256,14 @@ impl Animal for PandaEntity {
 }
 
 impl Mob for PandaEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        *slot == pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
+            && self.mob_entity.can_pick_up_loot()
+    }
+
     // Needs pandas eating from their hand first.
     fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
         false
@@ -326,6 +334,6 @@ impl Mob for PandaEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityPandaAmbient)
+        self.animal_interact(player, item_stack)
     }
 }
