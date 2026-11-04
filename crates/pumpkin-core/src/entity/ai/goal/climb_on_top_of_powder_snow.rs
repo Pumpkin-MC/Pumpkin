@@ -6,17 +6,8 @@ use pumpkin_data::tag::{self, Taggable};
 use super::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
 
-pub struct ClimbOnTopOfPowderSnowGoal {
-    goal_control: Controls,
-}
-
-impl Default for ClimbOnTopOfPowderSnowGoal {
-    fn default() -> Self {
-        Self {
-            goal_control: Controls::JUMP,
-        }
-    }
-}
+#[derive(Default)]
+pub struct ClimbOnTopOfPowderSnowGoal;
 
 impl Goal for ClimbOnTopOfPowderSnowGoal {
     fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
@@ -52,6 +43,6 @@ impl Goal for ClimbOnTopOfPowderSnowGoal {
     }
 
     fn controls(&self) -> Controls {
-        self.goal_control
+        Controls::JUMP
     }
 }
