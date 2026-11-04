@@ -11,12 +11,10 @@ mod world_interaction;
 use std::{net::SocketAddr, sync::Arc};
 
 use pumpkin_core::server::Server;
-use pumpkin_gametest::GameTestRunner;
 
 pub async fn run_bot_tests(
     server: &Arc<Server>,
     addr: SocketAddr,
-    runner: &mut GameTestRunner,
     summary_lines: &mut Vec<String>,
 ) -> Result<(), String> {
     status_ping::run_bot_status_ping_test(addr, summary_lines).await?;
