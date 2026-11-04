@@ -1149,8 +1149,7 @@ impl PluginManager {
                         }
                         Err(err) => {
                             error!("Failed to load plugin from {:?}: {}", path, err);
-                            // No metadata -> the file never named itself
-                            self.mark_inactive(&path, None, PluginStatus::Failed(err.to_string()));
+                            self.mark_load_failed(&path, &err);
                             loader_found = true;
                         }
                     }
@@ -1374,8 +1373,7 @@ impl PluginManager {
                     Ok(loaded) => loaded,
                     Err(err) => {
                         error!("Failed to load plugin from {:?}: {}", path, err);
-                        // No metadata -> the file never named itself
-                        self.mark_inactive(path, None, PluginStatus::Failed(err.to_string()));
+                        self.mark_load_failed(path, &err);
                         return Err(err.into());
                     }
                 };
@@ -1681,6 +1679,21 @@ impl PluginManager {
             .await
             .into_iter()
             .find(|entry| entry.name() == name)
+    }
+
+    /// Record a failed load, keeping the metadata an earlier record of the file already had.
+    fn mark_load_failed(&self, path: &Path, err: &LoaderError) {
+        let metadata = self
+            .inactive
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .and_then(|entry| entry.metadata.clone());
+        self.mark_inactive(
+            path,
+            metadata.as_ref(),
+            PluginStatus::Failed(err.to_string()),
+        );
     }
 
     /// Records why a plugin file is not running, so it can be reported and not only logged.
