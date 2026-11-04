@@ -13,13 +13,13 @@ use pumpkin_data::data_component_impl::{ProvidesTrimMaterialImpl, TrimImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{
-    get_smithing_transform_recipe, get_smithing_trim_recipe, RecipeIngredientTypes,
-    RECIPES_SMITHING_TRANSFORM, RECIPES_SMITHING_TRIM,
+    RECIPES_SMITHING_TRANSFORM, RECIPES_SMITHING_TRIM, RecipeIngredientTypes,
+    get_smithing_transform_recipe, get_smithing_trim_recipe,
 };
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::codec::recipe::DynamicRecipe;
+use pumpkin_protocol::codec::recipe::{DynamicRecipe, OwnedRecipeIngredient};
 use pumpkin_protocol::java::server::play::SlotActionType;
 
 pub struct SmithingTableScreenHandler {
@@ -308,9 +308,9 @@ impl SmithingInputSlot {
 
         let item = stack.item;
 
-        let matches_role = |template: &RecipeIngredientTypes,
-                            base: &RecipeIngredientTypes,
-                            addition: &RecipeIngredientTypes|
+        let matches_static_role = |template: &RecipeIngredientTypes,
+                                   base: &RecipeIngredientTypes,
+                                   addition: &RecipeIngredientTypes|
          -> bool {
             match self.slot_type {
                 0 => template.match_item(item),
@@ -322,28 +322,46 @@ impl SmithingInputSlot {
 
         if RECIPES_SMITHING_TRIM
             .iter()
-            .any(|r| matches_role(&r.template, &r.base, &r.addition))
+            .any(|r| matches_static_role(&r.template, &r.base, &r.addition))
         {
             return true;
         }
         if RECIPES_SMITHING_TRANSFORM
             .iter()
-            .any(|r| matches_role(&r.template, &r.base, &r.addition))
+            .any(|r| matches_static_role(&r.template, &r.base, &r.addition))
         {
             return true;
         }
 
         if let Some(provider) = &self.recipe_provider {
+            let matches_dynamic_role =
+                |template: &OwnedRecipeIngredient,
+                 base: &OwnedRecipeIngredient,
+                 addition: &OwnedRecipeIngredient|
+                 -> bool {
+                    match self.slot_type {
+                        0 => template.match_item(item),
+                        1 => base.match_item(item),
+                        2 => addition.match_item(item),
+                        _ => false,
+                    }
+                };
+
             for dynamic in provider.get_dynamic_recipes() {
                 let ok = match dynamic {
-                    DynamicRecipe::SmithingTransform(r) => {
-                        matches_role(&r.template, &r.base, &r.addition)
-                    }
-                    DynamicRecipe::SmithingTrim(r) => {
-                        matches_role(&r.template, &r.base, &r.addition)
-                    }
+                    DynamicRecipe::SmithingTransform(recipe) => matches_dynamic_role(
+                        &recipe.template,
+                        &recipe.base,
+                        &recipe.addition,
+                    ),
+                    DynamicRecipe::SmithingTrim(recipe) => matches_dynamic_role(
+                        &recipe.template,
+                        &recipe.base,
+                        &recipe.addition,
+                    ),
                     _ => false,
                 };
+
                 if ok {
                     return true;
                 }
@@ -386,8 +404,6 @@ impl Slot for SmithingInputSlot {
     fn set_stack(&self, stack: ItemStack) {
         self.inventory.set_stack(self.index, stack);
     }
-
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {}
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
@@ -460,8 +476,6 @@ impl Slot for SmithingOutputSlot {
     fn set_stack(&self, stack: ItemStack) {
         self.inventory.set_stack(self.index, stack);
     }
-
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {}
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
