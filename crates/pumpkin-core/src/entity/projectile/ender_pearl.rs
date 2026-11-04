@@ -116,31 +116,33 @@ impl EntityBase for EnderPearlEntity {
         }
 
         if let Some(owner) = attacker
-            && owner.get_player().is_some()
             && owner.get_entity().is_alive()
             && owner.get_living_entity().is_none_or(|living| {
                 living.health.load() > 0.0 && owner.get_entity().pose.load() != EntityPose::Sleeping
             })
         {
-            let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
-            if world.should_spawn_monsters() && should_spawn_endermite {
-                let entity = Entity::new(
-                    world.clone(),
-                    owner.get_entity().pos.load(),
-                    &EntityType::ENDERMITE,
-                );
-                entity.set_rotation(
-                    owner.get_entity().yaw.load(),
-                    owner.get_entity().pitch.load(),
-                );
-                let endermite = EndermiteEntity::new(entity);
-                finalize_spawn(
-                    &(endermite.clone() as std::sync::Arc<dyn EntityBase>),
-                    &world,
-                    EntitySpawnReason::Triggered,
-                    None,
-                );
-                world.spawn_entity(endermite);
+            let is_player = owner.get_player().is_some();
+            if is_player {
+                let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
+                if world.should_spawn_monsters() && should_spawn_endermite {
+                    let entity = Entity::new(
+                        world.clone(),
+                        owner.get_entity().pos.load(),
+                        &EntityType::ENDERMITE,
+                    );
+                    entity.set_rotation(
+                        owner.get_entity().yaw.load(),
+                        owner.get_entity().pitch.load(),
+                    );
+                    let endermite = EndermiteEntity::new(entity);
+                    finalize_spawn(
+                        &(endermite.clone() as std::sync::Arc<dyn EntityBase>),
+                        &world,
+                        EntitySpawnReason::Triggered,
+                        None,
+                    );
+                    world.spawn_entity(endermite);
+                }
             }
 
             // In vanilla, teleport handles everything including sound
@@ -158,12 +160,13 @@ impl EntityBase for EnderPearlEntity {
                 &teleport_pos,
             );
 
-            // Deal 5 damage to owner
-            owner.damage(
-                owner.as_ref(),
-                5.0,
-                pumpkin_data::damage::DamageType::ENDER_PEARL,
-            );
+            if is_player {
+                owner.damage(
+                    owner.as_ref(),
+                    5.0,
+                    pumpkin_data::damage::DamageType::ENDER_PEARL,
+                );
+            }
         }
 
         world.send_entity_status(entity, EntityStatus::Death, ActorEventID::Death);

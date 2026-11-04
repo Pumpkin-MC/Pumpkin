@@ -63,7 +63,10 @@ pub(crate) fn collision_shape_for_entity(
         return Some(BoundingBox::full_block());
     }
 
-    if can_entity_walk_on_powder_snow(entity) && is_entity_above_block(base, position) {
+    if can_entity_walk_on_powder_snow(entity)
+        && is_entity_above_block(base, position)
+        && !base.is_sneaking()
+    {
         return Some(BoundingBox::full_block());
     }
 
