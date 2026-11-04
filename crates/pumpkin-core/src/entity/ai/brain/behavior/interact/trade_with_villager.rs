@@ -9,12 +9,11 @@ use super::super::super::memory::{MemoryModuleId, MemoryStatus, types};
 use super::super::timed::Behavior;
 use super::super::utils;
 use crate::entity::EntityBase;
-use crate::entity::passive::villager::{BREEDING_FOOD_THRESHOLD, VillagerEntity};
+use crate::entity::passive::villager::VillagerEntity;
 
 const CLOSE_ENOUGH_DISTANCE: i32 = 2;
 const SPEED_MODIFIER: f32 = 0.5;
 const INTERACTION_DISTANCE_SQR: f64 = 5.0;
-const EXCESS_FOOD_THRESHOLD: i32 = 24;
 
 const ENTRY_CONDITIONS: [(MemoryModuleId, MemoryStatus); 2] = [
     (types::INTERACTION_TARGET.id(), MemoryStatus::ValuePresent),
@@ -102,7 +101,7 @@ impl Behavior for TradeWithVillager {
             CLOSE_ENOUGH_DISTANCE,
         );
         let is_farmer = profession(body) == VillagerProfession::Farmer;
-        if has_excess_food(body) && (is_farmer || wants_more_food(target_villager)) {
+        if body.has_excess_food() && (is_farmer || target_villager.wants_more_food()) {
             throw_half_stack(tick, body, target.as_ref(), |stack| {
                 stack.has_data_component(DataComponent::VillagerFood)
             });
@@ -150,14 +149,6 @@ fn figure_out_what_i_am_willing_to_trade(
         .copied()
         .filter(|item| !self_items.iter().any(|self_item| self_item.id == item.id))
         .collect()
-}
-
-fn has_excess_food(villager: &VillagerEntity) -> bool {
-    villager.count_food_points_in_inventory() >= EXCESS_FOOD_THRESHOLD
-}
-
-fn wants_more_food(villager: &VillagerEntity) -> bool {
-    villager.count_food_points_in_inventory() < BREEDING_FOOD_THRESHOLD
 }
 
 fn has_any_of(villager: &VillagerEntity, items: &[&'static Item]) -> bool {

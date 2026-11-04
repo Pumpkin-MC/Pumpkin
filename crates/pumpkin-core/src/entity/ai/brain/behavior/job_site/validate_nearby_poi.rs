@@ -17,7 +17,10 @@ use crate::world::World;
 const MAX_DISTANCE: i32 = 16;
 
 #[must_use]
-pub fn create(poi_type: fn(PoiType) -> bool, memory_type: MemoryModuleType<GlobalPos>) -> OneShot {
+pub fn create(
+    poi_type: impl Fn(PoiType) -> bool + Send + Sync + 'static,
+    memory_type: MemoryModuleType<GlobalPos>,
+) -> OneShot {
     OneShot::new(
         "ValidateNearbyPoi",
         vec![(memory_type.id(), MemoryStatus::ValuePresent)],

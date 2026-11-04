@@ -3,6 +3,7 @@ use pumpkin_data::environment_attribute::Activity;
 use super::super::super::BrainTick;
 use super::super::super::memory::{MemoryModuleId, MemoryStatus, types};
 use super::super::timed::Behavior;
+use crate::entity::passive::villager::VillagerEntity;
 
 pub struct VillagerPanicTrigger;
 
@@ -46,6 +47,14 @@ impl Behavior for VillagerPanicTrigger {
                 tick.state.erase(types::INTERACTION_TARGET.id());
             }
             tick.state.set_active_activity_if_possible(Activity::Panic);
+        }
+    }
+
+    fn tick(&mut self, tick: &mut BrainTick<'_>) {
+        if tick.time % 100 == 0
+            && let Some(villager) = tick.mob.cast_any().downcast_ref::<VillagerEntity>()
+        {
+            villager.spawn_golem_if_needed(tick.state, tick.world, tick.time, 3);
         }
     }
 

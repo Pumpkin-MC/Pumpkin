@@ -48,7 +48,12 @@ use crate::entity::{
 use crate::world::World;
 use crate::world::villager_poi::profession_for_block;
 
+pub mod ai;
+pub mod breeding;
 pub mod data;
+pub mod golem;
+pub mod gossip;
+pub mod sleep;
 pub use data::{
     BREEDING_FOOD_THRESHOLD, GossipType, VillagerData, VillagerProfession, VillagerType,
     get_food_points,
@@ -361,6 +366,7 @@ pub struct VillagerEntity {
     pub job_site: std::sync::Mutex<Option<BlockPos>>,
     pub job_site_pending: AtomicBool,
     pub home_pos: std::sync::Mutex<Option<BlockPos>>,
+    pub(crate) sleeping_pos: std::sync::Mutex<Option<BlockPos>>,
     pub self_weak: std::sync::Mutex<Option<Weak<Self>>>,
 }
 
@@ -430,6 +436,7 @@ impl VillagerEntity {
             job_site: std::sync::Mutex::new(None),
             job_site_pending: AtomicBool::new(false),
             home_pos: std::sync::Mutex::new(None),
+            sleeping_pos: std::sync::Mutex::new(None),
             self_weak: std::sync::Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);

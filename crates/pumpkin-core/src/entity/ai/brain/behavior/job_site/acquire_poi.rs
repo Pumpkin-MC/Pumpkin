@@ -21,7 +21,7 @@ const BATCH_SIZE: usize = 5;
 
 #[must_use]
 pub fn create(
-    poi_type: fn(PoiType) -> bool,
+    poi_type: impl Fn(PoiType) -> bool + Send + Sync + 'static,
     memory_to_validate: MemoryModuleType<GlobalPos>,
     memory_to_acquire: MemoryModuleType<GlobalPos>,
     only_if_adult: bool,

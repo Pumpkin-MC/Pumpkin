@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering::Relaxed;
 
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::poi_type::PoiType;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::position::BlockPos;
@@ -9,12 +9,12 @@ use pumpkin_world::poi::Occupancy;
 use rand::RngExt;
 
 use super::super::super::BrainTick;
-use super::super::super::memory::{MemoryModuleId, MemoryStatus, types};
+use super::super::super::memory::{GlobalPos, MemoryModuleId, MemoryStatus, types};
 use super::super::timed::Behavior;
 use super::super::utils;
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
-use crate::entity::passive::villager::{BREEDING_FOOD_THRESHOLD, VillagerEntity};
+use crate::entity::passive::villager::VillagerEntity;
 
 const DURATION: i32 = 350;
 const BIRTH_DELAY: i32 = 275;
@@ -65,11 +65,11 @@ fn is_breeding_possible(tick: &BrainTick<'_>) -> bool {
         .mob
         .cast_any()
         .downcast_ref::<VillagerEntity>()
-        .is_some_and(can_breed);
+        .is_some_and(VillagerEntity::can_breed);
     let target_can_breed = target
         .cast_any()
         .downcast_ref::<VillagerEntity>()
-        .is_some_and(can_breed);
+        .is_some_and(VillagerEntity::can_breed);
     utils::target_is_valid(&tick.visibility(), types::BREED_TARGET, |target| {
         target.get_entity().entity_type == &EntityType::VILLAGER
     }) && body_can_breed
@@ -82,11 +82,48 @@ fn try_to_give_birth(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
         broadcast_angry(tick, tick.mob.get_entity());
         return;
     };
+    let Some(body) = tick.mob.cast_any().downcast_ref::<VillagerEntity>() else {
+        release_bed(tick, &childs_bed);
+        return;
+    };
+    let Some(target_villager) = target.cast_any().downcast_ref::<VillagerEntity>() else {
+        release_bed(tick, &childs_bed);
+        return;
+    };
+    let Some(child) = body.get_breed_offspring(tick.world, target_villager) else {
+        release_bed(tick, &childs_bed);
+        return;
+    };
+    body.get_entity().set_age(6000);
+    target.get_entity().set_age(6000);
+    child.get_entity().set_age(-24000);
+    let pos = body.get_entity().pos.load();
+    child.get_entity().set_pos(pos);
+    child.get_entity().yaw.store(0.0);
+    child.get_entity().pitch.store(0.0);
+    tick.world.spawn_entity(child.clone());
+    broadcast_hearts(tick, child.get_entity());
+    give_bed_to_child(tick, &child, childs_bed);
+}
+
+fn release_bed(tick: &BrainTick<'_>, bed: &BlockPos) {
     tick.world
         .portal_poi
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .release(&childs_bed);
+        .release(bed);
+}
+
+fn give_bed_to_child(tick: &BrainTick<'_>, child: &Arc<VillagerEntity>, bed: BlockPos) {
+    let Some(child_mob) = child.get_mob() else {
+        return;
+    };
+    let Some(dimension) = Dimension::from_name(tick.world.dimension.minecraft_name) else {
+        return;
+    };
+    child_mob.get_mob_entity().with_brain(child_mob, |brain| {
+        brain.set(types::HOME, GlobalPos::new(dimension, bed));
+    });
 }
 
 impl Behavior for VillagerMakeLove {
@@ -148,10 +185,10 @@ impl Behavior for VillagerMakeLove {
         );
         if tick.time >= self.birth_timestamp {
             if let Some(body) = tick.mob.cast_any().downcast_ref::<VillagerEntity>() {
-                eat_and_digest_food(body);
+                body.eat_and_digest_food();
             }
             if let Some(target_villager) = target.cast_any().downcast_ref::<VillagerEntity>() {
-                eat_and_digest_food(target_villager);
+                target_villager.eat_and_digest_food();
             }
             try_to_give_birth(tick, &target);
         } else if tick.mob.get_random().random_range(0..HEART_CHANCE) == 0 {
@@ -167,20 +204,6 @@ impl Behavior for VillagerMakeLove {
     fn debug_name(&self) -> &'static str {
         "VillagerMakeLove"
     }
-}
-
-fn can_breed(villager: &VillagerEntity) -> bool {
-    villager.food_level.load(Relaxed) + villager.count_food_points_in_inventory()
-        >= BREEDING_FOOD_THRESHOLD
-        && villager.get_entity().pose.load() != EntityPose::Sleeping
-        && villager.get_entity().age.load(Relaxed) == 0
-}
-
-fn eat_and_digest_food(villager: &VillagerEntity) {
-    villager.eat_until_full();
-    villager
-        .food_level
-        .fetch_sub(BREEDING_FOOD_THRESHOLD, Relaxed);
 }
 
 fn take_vacant_bed(tick: &BrainTick<'_>) -> Option<BlockPos> {

@@ -10,6 +10,7 @@ pub mod adult;
 pub mod dummy;
 pub mod golem;
 pub mod hurt_by;
+pub mod nearest_bed;
 pub mod nearest_items;
 pub mod nearest_living_entities;
 pub mod nearest_players;
@@ -40,6 +41,7 @@ pub enum SensorType {
     FoodTemptations,
     FrogTemptations,
     NearestAdult,
+    NearestBed,
     VillagerBabies,
     VillagerHostiles,
     SecondaryPois,
@@ -58,6 +60,7 @@ impl SensorType {
             Self::FoodTemptations => "minecraft:food_temptations",
             Self::FrogTemptations => "minecraft:frog_temptations",
             Self::NearestAdult => "minecraft:nearest_adult",
+            Self::NearestBed => "minecraft:nearest_bed",
             Self::VillagerBabies => "minecraft:villager_babies",
             Self::VillagerHostiles => "minecraft:villager_hostiles",
             Self::SecondaryPois => "minecraft:secondary_pois",
@@ -76,6 +79,7 @@ impl SensorType {
             | Self::FoodTemptations
             | Self::FrogTemptations
             | Self::NearestAdult
+            | Self::NearestBed
             | Self::VillagerBabies
             | Self::VillagerHostiles => DEFAULT_SCAN_RATE,
             Self::SecondaryPois => 40,
@@ -93,6 +97,7 @@ impl SensorType {
             Self::FoodTemptations => Box::new(tempting::TemptingSensor::for_animal()),
             Self::FrogTemptations => Box::new(tempting::TemptingSensor::for_frog()),
             Self::NearestAdult => Box::new(adult::AdultSensor),
+            Self::NearestBed => Box::<nearest_bed::NearestBedSensor>::default(),
             Self::VillagerBabies => Box::new(villager_babies::VillagerBabiesSensor),
             Self::VillagerHostiles => Box::new(villager_hostiles::VillagerHostilesSensor),
             Self::SecondaryPois => Box::new(secondary_pois::SecondaryPoiSensor),

@@ -1,11 +1,12 @@
 use pumpkin_data::block_properties::WhiteBedLikeProperties as BedProperties;
-use pumpkin_data::entity::EntityPose;
 use pumpkin_data::environment_attribute::Activity;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
 
 use super::super::super::BrainTick;
 use super::super::super::memory::{MemoryModuleId, MemoryStatus, types};
+use super::super::door::close_doors_that_i_have_opened_or_passed_through;
 use super::super::timed::Behavior;
+use crate::entity::passive::villager::VillagerEntity;
 
 pub const COOLDOWN_AFTER_BEING_WOKEN: i32 = 100;
 
@@ -89,13 +90,45 @@ impl Behavior for SleepInBed {
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
         if tick.time > self.next_ok_start_time {
+            if tick.state.has_memory_value(types::DOORS_TO_CLOSE.id()) {
+                let mut doors = tick
+                    .state
+                    .get(types::DOORS_TO_CLOSE)
+                    .cloned()
+                    .unwrap_or_default();
+                let nearest_entities = tick
+                    .state
+                    .get(types::NEAREST_LIVING_ENTITIES)
+                    .map(Vec::as_slice);
+                close_doors_that_i_have_opened_or_passed_through(
+                    tick.world,
+                    tick.mob,
+                    None,
+                    None,
+                    &mut doors,
+                    nearest_entities,
+                );
+                tick.state.set_optional(types::DOORS_TO_CLOSE, Some(doors));
+            }
+
+            if let Some(villager) = tick.mob.cast_any().downcast_ref::<VillagerEntity>()
+                && let Some(home) = tick.state.get(types::HOME).copied()
+                && villager.start_sleeping(home.pos)
+            {
+                tick.state.set(types::LAST_SLEPT, tick.time);
+            }
+
             tick.state.erase(types::WALK_TARGET.id());
             tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
         }
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        if tick.mob.get_entity().pose.load() == EntityPose::Sleeping {
+        if let Some(villager) = tick.mob.cast_any().downcast_ref::<VillagerEntity>()
+            && villager.is_sleeping()
+        {
+            villager.stop_sleeping();
+            tick.state.set(types::LAST_WOKEN, tick.time);
             self.next_ok_start_time = tick.time + 40;
         }
     }

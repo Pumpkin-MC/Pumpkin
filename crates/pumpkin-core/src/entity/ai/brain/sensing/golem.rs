@@ -1,5 +1,6 @@
 use pumpkin_data::entity::EntityType;
 
+use super::super::BrainState;
 use super::super::BrainTick;
 use super::super::memory::{MemoryModuleId, types};
 use super::Sensor;
@@ -10,6 +11,10 @@ const REQUIRES: [MemoryModuleId; 2] = [
 ];
 
 const MEMORY_TIME_TO_LIVE: i64 = 599;
+
+pub fn golem_detected(state: &mut BrainState) {
+    state.set_with_expiry(types::GOLEM_DETECTED_RECENTLY, true, MEMORY_TIME_TO_LIVE);
+}
 
 pub struct GolemSensor;
 
@@ -26,8 +31,7 @@ impl Sensor for GolemSensor {
             .iter()
             .any(|entity| entity.get_entity().entity_type == &EntityType::IRON_GOLEM);
         if golem_present {
-            tick.state
-                .set_with_expiry(types::GOLEM_DETECTED_RECENTLY, true, MEMORY_TIME_TO_LIVE);
+            golem_detected(tick.state);
         }
     }
 }
