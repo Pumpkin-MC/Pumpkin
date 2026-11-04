@@ -1,7 +1,10 @@
+use std::sync::atomic::Ordering::Relaxed;
+
+use pumpkin_data::Block;
+use pumpkin_data::tag::{self, Taggable};
+
 use super::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
 
 pub struct ClimbOnTopOfPowderSnowGoal;
 
@@ -12,22 +15,18 @@ impl Goal for ClimbOnTopOfPowderSnowGoal {
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let entity = mob.get_entity();
-        if !(entity
-            .was_in_powder_snow
-            .load(std::sync::atomic::Ordering::Relaxed)
-            || entity.is_in_powder_snow())
+        let in_powder_snow =
+            entity.was_in_powder_snow.load(Relaxed) || entity.is_in_powder_snow.load(Relaxed);
+        if !in_powder_snow
             || !entity
                 .entity_type
                 .has_tag(&tag::EntityType::MINECRAFT_POWDER_SNOW_WALKABLE_MOBS)
         {
             return false;
         }
-
         let above = entity.block_pos.load().up();
-        let world = entity.world.load();
-        let above_state = world.get_block_state(&above);
-        world.get_block(&above) == &Block::POWDER_SNOW
-            || above_state.get_block_collision_shapes().next().is_none()
+        let (block, state) = entity.world.load().get_block_and_state(&above);
+        block == &Block::POWDER_SNOW || state.get_block_collision_shapes_at(&above).next().is_none()
     }
 
     fn tick(&mut self, mob: &dyn Mob) {

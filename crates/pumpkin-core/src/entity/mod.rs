@@ -914,6 +914,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn is_ignoring_block_triggers(&self) -> bool {
+        self.get_mob().is_some_and(mob::Mob::ignores_block_triggers)
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
@@ -3866,6 +3870,11 @@ impl Entity {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
             self.set_flag(Flag::OnFire, on_fire);
         }
+    }
+
+    #[must_use]
+    pub fn get_y(&self, height_fraction: f64) -> f64 {
+        f64::from(self.entity_dimension.load().height).mul_add(height_fraction, self.pos.load().y)
     }
 
     #[must_use]

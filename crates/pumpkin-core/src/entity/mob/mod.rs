@@ -27,6 +27,7 @@ use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crate::world::entity_islands::{self, AuditedReach};
 use crate::world::game_event::notified_area;
+use crate::world::natural_spawner::is_valid_spawn_floor;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
@@ -38,7 +39,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -57,6 +58,7 @@ pub mod bat;
 pub mod blaze;
 pub mod breeze;
 pub mod cave_spider;
+pub mod conversion;
 pub mod creaking;
 pub mod creeper;
 pub mod crossbow_attack_mob;
@@ -901,17 +903,16 @@ impl MobEntity {
     }
 
     pub fn check_mob_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         reason: spawn::EntitySpawnReason,
     ) -> bool {
-        reason.is_spawner()
-            || world
-                .get_block_state(&pos.down())
-                .is_side_solid(BlockDirection::Up)
+        reason.is_spawner() || is_valid_spawn_floor(world.get_block_state(&pos.down()), entity_type)
     }
 
     pub fn check_monster_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
@@ -927,10 +928,11 @@ impl MobEntity {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos, reason)
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
     pub fn check_any_light_monster_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         reason: spawn::EntitySpawnReason,
@@ -939,16 +941,17 @@ impl MobEntity {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos, reason)
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
     pub fn check_surface_monsters_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
         reason: spawn::EntitySpawnReason,
     ) -> bool {
-        Self::check_monster_spawn_rules(world, pos, is_thundering, reason)
+        Self::check_monster_spawn_rules(entity_type, world, pos, is_thundering, reason)
             && (reason.is_spawner() || world.can_see_sky(pos))
     }
 
@@ -1687,6 +1690,10 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn pushes_entities(&self) -> bool {
+        true
+    }
+
     /// See [`EntityBase::sound_source`].
     fn mob_sound_source(&self) -> SoundCategory {
         self.get_entity().entity_type.sound_source
@@ -1718,6 +1725,19 @@ pub trait Mob: EntityBase + Send + Sync {
     fn before_mob_ai_step(&self) {}
 
     fn mob_ai_step(&self) {}
+
+    fn tick_jump_control(&self, jump: bool) {
+        self.get_mob_entity()
+            .living_entity
+            .jumping
+            .store(jump, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn jump_power_multiplier(&self) -> f32 {
+        1.0
+    }
+
+    fn on_jump_from_ground(&self) {}
 
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
         self.get_mob_entity()
@@ -1813,6 +1833,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn should_check_fall_damage(&self) -> bool {
         true
+    }
+
+    fn ignores_block_triggers(&self) -> bool {
+        false
     }
 
     fn on_removed(&self) {}
@@ -1920,13 +1944,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn make_sound(&self, sound: pumpkin_data::sound::Sound) {
         let custom_sound = self.as_custom_sound();
-        self.get_mob_entity().living_entity.make_sound(
+        let living_entity = &self.get_mob_entity().living_entity;
+        living_entity.make_sound(
             sound,
             custom_sound.map_or_else(
                 || self.sound_source(),
                 crate::entity::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, crate::entity::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || living_entity.get_pitch(),
+                crate::entity::custom_sound::CustomSound::voice_pitch,
+            ),
         );
     }
 

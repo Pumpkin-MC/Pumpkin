@@ -48,7 +48,7 @@ pub trait Animal: Mob {
         if world.get_block(&pos.down()).id == pumpkin_data::Block::GRASS_BLOCK.id {
             return 10.0;
         }
-        world.get_light_level_dependent_magic_value(pos) - 0.5
+        world.get_pathfinding_cost_from_light_levels(pos)
     }
 
     fn play_eating_sound(&self) {}

@@ -91,6 +91,7 @@ mod statistic;
 mod structure_metadata;
 mod structure_template;
 mod structures;
+mod suspicious_effects;
 mod tag;
 mod template_pool;
 mod test_instance;
@@ -184,6 +185,7 @@ pub fn main() {
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",
         ),
+        (suspicious_effects::build, "suspicious_effects.rs"),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (data_component::build, "data_component.rs"),
