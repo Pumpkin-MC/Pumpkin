@@ -10,6 +10,7 @@ use std::sync::Arc;
 /// An event that occurs when a chunk is sent to a client.
 ///
 /// This event contains information about the world and the chunk being sent.
+/// Cancelling holds the chunk back -> it is offered again about a second later.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct ChunkSend {

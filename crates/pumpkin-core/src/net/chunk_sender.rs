@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::VecDeque;
 use std::num::NonZero;
 use std::sync::{Arc, Weak};
 
@@ -24,6 +25,8 @@ const INITIAL_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_CONCURRENT_BATCHES: u16 = 10;
 /// Encode attempts per chunk before a Bedrock dispatch is given up on.
 const MAX_ENCODE_ATTEMPTS: u8 = 3;
+/// Ticks a chunk cancelled by `ChunkSend` waits before it is offered again.
+const CANCELLED_RETRY_TICKS: u64 = 20;
 
 pub struct PreparedChunk {
     pub position: Vector2<i32>,
@@ -40,7 +43,7 @@ pub struct DispatchedChunk {
 /// Why a committed Bedrock chunk did not reach the client.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DeliveryFailure {
-    /// Cancelled `ChunkSend` -> stays unsent, like the Java path.
+    /// Cancelled `ChunkSend` -> parked, offered again after `CANCELLED_RETRY_TICKS`.
     Cancelled,
     /// Not queued for a passing reason (player not set, closed connection) -> retried.
     Deferred,
@@ -82,6 +85,13 @@ pub struct ChunkSender {
     awaiting_delivery: FxHashMap<Vector2<i32>, (u64, bool)>,
     /// Failed Bedrock encode attempts per chunk.
     encode_failures: FxHashMap<Vector2<i32>, u8>,
+    /// Chunks cancelled by `ChunkSend`, by the tick they become pending again.
+    /// Kept out of `pending_chunks` so they take no batch slots meanwhile.
+    parked_chunks: FxHashMap<Vector2<i32>, u64>,
+    /// `parked_chunks` entries in release order; stale ones are skipped.
+    park_queue: VecDeque<(u64, Vector2<i32>)>,
+    /// Counts `prepare_batch` calls.
+    batch_tick: u64,
     /// Monotonic across resets, so a superseded dispatch can never match again.
     next_delivery_token: u64,
     pub in_flight_batches: u16,
@@ -98,6 +108,9 @@ impl ChunkSender {
             sent_chunks: FxHashSet::default(),
             awaiting_delivery: FxHashMap::default(),
             encode_failures: FxHashMap::default(),
+            parked_chunks: FxHashMap::default(),
+            park_queue: VecDeque::new(),
+            batch_tick: 0,
             next_delivery_token: 0,
             in_flight_batches: 0,
             desired_rate: INITIAL_CHUNKS_PER_TICK,
@@ -111,6 +124,8 @@ impl ChunkSender {
         self.sent_chunks.clear();
         self.awaiting_delivery.clear();
         self.encode_failures.clear();
+        self.parked_chunks.clear();
+        self.park_queue.clear();
         self.in_flight_batches = 0;
         self.send_quota = 0.0;
     }
@@ -141,7 +156,7 @@ impl ChunkSender {
         delivered
     }
 
-    /// Cancelled `ChunkSend` before dispatch -> the client never gets it, so it stops being pending.
+    /// Cancelled `ChunkSend` before dispatch -> the client never gets it, so it is parked.
     pub fn cancel_pending(
         &mut self,
         batch: &PreparedBatch,
@@ -151,8 +166,31 @@ impl ChunkSender {
         if current_epoch != batch.epoch_snapshot {
             return;
         }
-        for pos in cancelled {
-            self.pending_chunks.remove(pos);
+        for &pos in cancelled {
+            if self.pending_chunks.remove(&pos) {
+                self.park(pos);
+            }
+        }
+    }
+
+    /// Holds a cancelled chunk back from batches until its retry tick.
+    fn park(&mut self, pos: Vector2<i32>) {
+        let release_tick = self.batch_tick + CANCELLED_RETRY_TICKS;
+        self.parked_chunks.insert(pos, release_tick);
+        self.park_queue.push_back((release_tick, pos));
+    }
+
+    /// Moves parked chunks whose retry tick has come back to pending.
+    fn release_parked(&mut self) {
+        while let Some(&(release_tick, pos)) = self.park_queue.front() {
+            if release_tick > self.batch_tick {
+                break;
+            }
+            self.park_queue.pop_front();
+            if self.parked_chunks.get(&pos) == Some(&release_tick) {
+                self.parked_chunks.remove(&pos);
+                self.pending_chunks.insert(pos);
+            }
         }
     }
 
@@ -173,7 +211,10 @@ impl ChunkSender {
             }
 
             let retry = match failure {
-                DeliveryFailure::Cancelled => false,
+                DeliveryFailure::Cancelled => {
+                    self.park(pos);
+                    continue;
+                }
                 DeliveryFailure::Deferred => true,
                 DeliveryFailure::Unencodable => {
                     let attempts = self.encode_failures.entry(pos).or_default();
@@ -232,6 +273,7 @@ impl ChunkSender {
     /// Vanilla `ChunkMap.markChunkPendingToSend` -> a held copy stays tracked while re-queued.
     pub fn enqueue_chunk(&mut self, pos: Vector2<i32>) {
         // A Bedrock dispatch still encoding keeps its marker until it resolves
+        self.parked_chunks.remove(&pos);
         self.pending_chunks.insert(pos);
     }
 
@@ -239,6 +281,7 @@ impl ChunkSender {
         self.pending_chunks.remove(&pos);
         self.awaiting_delivery.remove(&pos);
         self.encode_failures.remove(&pos);
+        self.parked_chunks.remove(&pos);
         if self.sent_chunks.remove(&pos)
             && let ClientPlatform::Java(java_client) = client
             && !java_client.is_closed()
@@ -323,6 +366,9 @@ impl ChunkSender {
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
+        self.batch_tick += 1;
+        self.release_parked();
+
         if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
         {
             return None;
@@ -675,7 +721,7 @@ mod tests {
     }
 
     #[test]
-    fn cancelled_delivery_is_not_retried() {
+    fn cancelled_delivery_is_parked_then_retried() {
         let position = Vector2::new(-1, 6);
         let mut sender = ChunkSender::new();
 
@@ -689,6 +735,51 @@ mod tests {
 
         assert!(!sender.pending_chunks.contains(&position));
         assert!(!sender.is_chunk_sent(&position));
+
+        for _ in 1..CANCELLED_RETRY_TICKS {
+            sender.batch_tick += 1;
+            sender.release_parked();
+            assert!(!sender.pending_chunks.contains(&position));
+        }
+        sender.batch_tick += 1;
+        sender.release_parked();
+        assert!(sender.pending_chunks.contains(&position));
+    }
+
+    #[test]
+    fn cancelled_java_chunk_is_parked() {
+        let position = Vector2::new(9, -9);
+        let batch = batch_for(position, 3);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+
+        sender.cancel_pending(&batch, 3, &[position]);
+
+        assert!(!sender.pending_chunks.contains(&position));
+        assert!(sender.parked_chunks.contains_key(&position));
+    }
+
+    #[test]
+    fn re_enqueue_or_reset_drops_a_parked_chunk() {
+        let position = Vector2::new(2, -7);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+        sender.cancel_pending(&batch_for(position, 0), 0, &[position]);
+
+        // A republish sends now instead of waiting.
+        sender.enqueue_chunk(position);
+        assert!(sender.pending_chunks.contains(&position));
+        assert!(!sender.parked_chunks.contains_key(&position));
+
+        // A stale queue entry cannot release a later park early.
+        sender.batch_tick += 1;
+        sender.cancel_pending(&batch_for(position, 0), 0, &[position]);
+        sender.batch_tick += CANCELLED_RETRY_TICKS - 1;
+        sender.release_parked();
+        assert!(!sender.pending_chunks.contains(&position));
+
+        sender.reset();
+        assert!(sender.parked_chunks.is_empty());
     }
 
     #[test]
@@ -712,7 +803,11 @@ mod tests {
         }
 
         assert!(!sender.is_chunk_sent(&position));
-        assert!(sender.commit_bedrock_batch(&batch_for(position, 0), 0).is_empty());
+        assert!(
+            sender
+                .commit_bedrock_batch(&batch_for(position, 0), 0)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -733,7 +828,7 @@ mod tests {
         )]);
 
         assert!(sender.is_chunk_ready(&position));
-        assert!(!sender.pending_chunks.contains(&position));
+        assert!(sender.parked_chunks.contains_key(&position));
     }
 
     fn batch_for(position: Vector2<i32>, epoch_snapshot: u32) -> PreparedBatch {
