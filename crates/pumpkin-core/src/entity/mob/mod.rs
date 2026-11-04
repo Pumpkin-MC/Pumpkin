@@ -146,6 +146,7 @@ pub struct MobEntity {
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
     brain: std::sync::Mutex<Option<Brain>>,
     brain_memory_clear_requested: AtomicBool,
+    brain_refresh_requested: AtomicBool,
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
@@ -294,6 +295,7 @@ impl MobEntity {
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
             brain: std::sync::Mutex::new(None),
             brain_memory_clear_requested: AtomicBool::new(false),
+            brain_refresh_requested: AtomicBool::new(false),
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
@@ -733,10 +735,17 @@ impl MobEntity {
         });
     }
 
+    pub fn request_refresh_brain(&self) {
+        self.brain_refresh_requested.store(true, Ordering::Release);
+    }
+
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
         self.with_brain(mob, |brain| brain.tick(&world, mob, time));
+        if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
+            self.refresh_brain(mob);
+        }
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {

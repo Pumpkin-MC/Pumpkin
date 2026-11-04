@@ -152,7 +152,7 @@ material_rule = []
 noise_settings = []
 chunk_gen_settings = ["noise_settings", "material_rule"]
 carver = []
-villager = ["item", "sound"]
+villager = ["item", "sound", "poi_type"]
 slot_ranges = []
 
 noise_parameter = []

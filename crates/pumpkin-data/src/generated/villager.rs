@@ -6773,6 +6773,82 @@ impl VillagerProfession {
         }
     }
     #[must_use]
+    #[allow(clippy::match_same_arms)]
+    pub const fn held_job_site(&self) -> &'static [crate::poi_type::PoiType] {
+        match self {
+            Self::None => &[],
+            Self::Armorer => &[crate::poi_type::PoiType::Armorer],
+            Self::Butcher => &[crate::poi_type::PoiType::Butcher],
+            Self::Cartographer => &[crate::poi_type::PoiType::Cartographer],
+            Self::Cleric => &[crate::poi_type::PoiType::Cleric],
+            Self::Farmer => &[crate::poi_type::PoiType::Farmer],
+            Self::Fisherman => &[crate::poi_type::PoiType::Fisherman],
+            Self::Fletcher => &[crate::poi_type::PoiType::Fletcher],
+            Self::Leatherworker => &[crate::poi_type::PoiType::Leatherworker],
+            Self::Librarian => &[crate::poi_type::PoiType::Librarian],
+            Self::Mason => &[crate::poi_type::PoiType::Mason],
+            Self::Nitwit => &[],
+            Self::Shepherd => &[crate::poi_type::PoiType::Shepherd],
+            Self::Toolsmith => &[crate::poi_type::PoiType::Toolsmith],
+            Self::Weaponsmith => &[crate::poi_type::PoiType::Weaponsmith],
+        }
+    }
+    #[must_use]
+    #[allow(clippy::match_same_arms)]
+    pub const fn acquirable_job_site(&self) -> &'static [crate::poi_type::PoiType] {
+        match self {
+            Self::None => &[
+                crate::poi_type::PoiType::Armorer,
+                crate::poi_type::PoiType::Butcher,
+                crate::poi_type::PoiType::Cartographer,
+                crate::poi_type::PoiType::Cleric,
+                crate::poi_type::PoiType::Farmer,
+                crate::poi_type::PoiType::Fisherman,
+                crate::poi_type::PoiType::Fletcher,
+                crate::poi_type::PoiType::Leatherworker,
+                crate::poi_type::PoiType::Librarian,
+                crate::poi_type::PoiType::Mason,
+                crate::poi_type::PoiType::Shepherd,
+                crate::poi_type::PoiType::Toolsmith,
+                crate::poi_type::PoiType::Weaponsmith,
+            ],
+            Self::Armorer => &[crate::poi_type::PoiType::Armorer],
+            Self::Butcher => &[crate::poi_type::PoiType::Butcher],
+            Self::Cartographer => &[crate::poi_type::PoiType::Cartographer],
+            Self::Cleric => &[crate::poi_type::PoiType::Cleric],
+            Self::Farmer => &[crate::poi_type::PoiType::Farmer],
+            Self::Fisherman => &[crate::poi_type::PoiType::Fisherman],
+            Self::Fletcher => &[crate::poi_type::PoiType::Fletcher],
+            Self::Leatherworker => &[crate::poi_type::PoiType::Leatherworker],
+            Self::Librarian => &[crate::poi_type::PoiType::Librarian],
+            Self::Mason => &[crate::poi_type::PoiType::Mason],
+            Self::Nitwit => &[],
+            Self::Shepherd => &[crate::poi_type::PoiType::Shepherd],
+            Self::Toolsmith => &[crate::poi_type::PoiType::Toolsmith],
+            Self::Weaponsmith => &[crate::poi_type::PoiType::Weaponsmith],
+        }
+    }
+    #[must_use]
+    pub fn from_held_job_site(poi_type: crate::poi_type::PoiType) -> Option<Self> {
+        [
+            Self::Armorer,
+            Self::Butcher,
+            Self::Cartographer,
+            Self::Cleric,
+            Self::Farmer,
+            Self::Fisherman,
+            Self::Fletcher,
+            Self::Leatherworker,
+            Self::Librarian,
+            Self::Mason,
+            Self::Shepherd,
+            Self::Toolsmith,
+            Self::Weaponsmith,
+        ]
+        .into_iter()
+        .find(|profession| profession.held_job_site().contains(&poi_type))
+    }
+    #[must_use]
     pub const fn translation_key(&self) -> &'static str {
         match self {
             Self::None => "entity.minecraft.villager.none",

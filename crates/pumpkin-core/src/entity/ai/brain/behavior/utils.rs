@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -13,6 +14,19 @@ use super::super::memory::position_tracker::{BlockPosTracker, EntityTracker, Pos
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryModuleType, types};
 use super::super::{BrainState, VisibilityContext};
+
+#[must_use]
+pub fn world_for_dimension(world: &Arc<World>, dimension: &Dimension) -> Option<Arc<World>> {
+    if world.dimension.id == dimension.id {
+        return Some(Arc::clone(world));
+    }
+    let server = world.server.upgrade()?;
+    let worlds = server.worlds.load();
+    worlds
+        .iter()
+        .find(|candidate| candidate.dimension.id == dimension.id)
+        .cloned()
+}
 
 const MAX_SWIMMABLE_POS_ATTEMPTS: i32 = 10;
 

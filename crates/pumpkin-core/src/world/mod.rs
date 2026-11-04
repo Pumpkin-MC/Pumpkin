@@ -13,6 +13,7 @@ use pumpkin_protocol::bedrock::client::{
 use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
+use pumpkin_world::poi::{PoiStorage, SectionPos};
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
@@ -2716,6 +2717,22 @@ impl World {
             center = center.up_height(2);
         }
         center
+    }
+
+    pub fn sections_to_village(&self, section: SectionPos) -> i32 {
+        self.portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sections_to_village(section)
+    }
+
+    pub fn is_close_to_village(&self, pos: &BlockPos, section_distance: i32) -> bool {
+        section_distance <= PoiStorage::MAX_VILLAGE_DISTANCE
+            && self.sections_to_village(SectionPos::of(pos)) <= section_distance
+    }
+
+    pub fn is_village(&self, pos: &BlockPos) -> bool {
+        self.is_close_to_village(pos, 1)
     }
 
     fn find_lightning_rod(&self, center: BlockPos) -> Option<BlockPos> {
