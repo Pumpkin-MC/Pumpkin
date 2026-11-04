@@ -282,10 +282,18 @@ impl CommandExecutor for ReloadExecutor {
             }
 
             // A plugin still initializing counts as loaded until it finishes or fails
-            server_clone
+            if let Err(e) = server_clone
                 .plugin_manager
                 .wait_for_initialization(&plugin_name)
-                .await;
+                .await
+            {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Failed to reload plugin {plugin_name}: {e}"))
+                        .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            }
             let was_loaded = server_clone.plugin_manager.is_plugin_loaded(&plugin_name);
             if was_loaded
                 && let Err(e) = server_clone
