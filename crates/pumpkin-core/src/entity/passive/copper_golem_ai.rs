@@ -51,8 +51,8 @@ fn get_activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                 ),
                 (
                     1,
-                    Box::new(set_entity_look_target_sometimes::create_for_type(
-                        &EntityType::PLAYER,
+                    Box::new(set_entity_look_target_sometimes::create_matching(
+                        Some(&EntityType::PLAYER),
                         6.0,
                         40,
                         80,
@@ -69,7 +69,7 @@ fn get_activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                             ),
                         ],
                         vec![
-                            (Box::new(random_stroll::stroll(1.0, 2, 2)), 1),
+                            (Box::new(random_stroll::stroll_with_distance(1.0, 2, 2)), 1),
                             (Box::new(DoNothing::new(30, 60)), 1),
                         ],
                     )),

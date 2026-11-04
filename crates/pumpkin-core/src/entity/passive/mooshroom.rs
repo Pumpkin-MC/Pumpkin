@@ -346,6 +346,6 @@ impl Mob for MooshroomEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

@@ -23,6 +23,8 @@ pub enum TargetMatch {
     /// Vanilla `Monster.class`: an [`Self::Enemy`] that is not a slime, ghast, phantom,
     /// shulker, hoglin or the dragon.
     Monster,
+    /// Vanilla `Mob.class`: every mob, never a player.
+    Mob,
 }
 
 /// Monster category, but not vanilla `Enemy`.
@@ -59,6 +61,7 @@ impl TargetMatch {
             Self::AllExcept(tag) => !entity_type.has_tag(tag),
             Self::Enemy => is_enemy(entity_type),
             Self::Monster => is_enemy(entity_type) && !ENEMY_NOT_MONSTER.contains(&entity_type),
+            Self::Mob => entity_type.mob,
         }
     }
 
@@ -218,6 +221,18 @@ impl TargetMatch {
     pub const WITHER_LIKE: Self = Self::AnyOf(&[&EntityType::WITHER_SKELETON, &EntityType::WITHER]);
     /// `Llama`.
     pub const LLAMA_LIKE: Self = Self::AnyOf(&[&EntityType::LLAMA, &EntityType::TRADER_LLAMA]);
+    /// `AbstractHorse`.
+    pub const ABSTRACT_HORSE: Self = Self::AnyOf(&[
+        &EntityType::HORSE,
+        &EntityType::DONKEY,
+        &EntityType::MULE,
+        &EntityType::SKELETON_HORSE,
+        &EntityType::ZOMBIE_HORSE,
+        &EntityType::CAMEL,
+        &EntityType::CAMEL_HUSK,
+        &EntityType::LLAMA,
+        &EntityType::TRADER_LLAMA,
+    ]);
 }
 
 impl From<&'static EntityType> for TargetMatch {

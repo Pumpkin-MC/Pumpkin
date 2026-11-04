@@ -493,12 +493,12 @@ impl CustomSound for CopperGolemEntity {
 impl Mob for CopperGolemEntity {
     fn finalize_spawn(
         &self,
-        _world: &Arc<crate::world::World>,
+        world: &Arc<crate::world::World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         self.play_spawn_sound();
-        self.mob_entity.finalize_spawn_base();
-        group_data
+        self.default_finalize_spawn(world, group_data)
     }
     fn make_brain(&self, packed: &PackedMemories) -> Brain {
         super::copper_golem_ai::make_brain(self, packed)

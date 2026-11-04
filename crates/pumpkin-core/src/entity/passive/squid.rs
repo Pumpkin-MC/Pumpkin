@@ -9,7 +9,7 @@ use pumpkin_data::{
     tag::{self, Taggable},
 };
 use pumpkin_protocol::bedrock::server::ActorEventID;
-use pumpkin_util::math::{boundingbox::EntityDimensions, cos, sin, vector3::Vector3};
+use pumpkin_util::math::{cos, sin, vector3::Vector3};
 use rand::RngExt;
 
 use super::ageable_water_creature::AgeableWaterCreature;
@@ -20,7 +20,6 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::new(0.5, 0.5, 0.37);
 const SQUID_FLEE_SPEED: f64 = 3.0;
 const SQUID_FLEE_MIN_DISTANCE: f64 = 5.0;
 const SQUID_FLEE_MAX_DISTANCE: f64 = 10.0;
@@ -210,11 +209,7 @@ pub trait Squid: AgeableWaterCreature {
 
     fn update_squid_dimensions(&self) {
         let entity = self.get_entity();
-        entity.set_default_dimensions(if self.is_baby() {
-            BABY_DIMENSIONS
-        } else {
-            Entity::type_dimensions(entity.entity_type)
-        });
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
     }
 
     fn init_squid_data(&self) {

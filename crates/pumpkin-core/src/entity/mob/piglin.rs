@@ -18,7 +18,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::target_match::TargetMatch;
@@ -79,17 +78,6 @@ impl PiglinEntity {
     pub const INVENTORY_SIZE: usize = 8;
     pub const XP_REWARD: u32 = 5;
     pub const AMBIENT_SOUND_INTERVAL: i32 = 80;
-
-    pub const ADULT_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.6,
-        height: 1.95,
-        eye_height: 1.79,
-    };
-    pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions {
-        width: 0.49,
-        height: 0.98,
-        eye_height: 0.78,
-    };
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -215,11 +203,7 @@ impl PiglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(if baby {
-            Self::BABY_DIMENSIONS
-        } else {
-            Self::ADULT_DIMENSIONS
-        });
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, baby));
     }
 
     #[must_use]
@@ -737,107 +721,6 @@ impl PiglinEntity {
         }
     }
 
-    fn pick_up_nearby_items(&self) {
-        let living = &self.mob_entity.living_entity;
-        let entity = &living.entity;
-        if !self.mob_entity.can_pick_up_loot()
-            || !entity.is_alive()
-            || living.health.load() <= 0.0
-            || living.dead.load(Ordering::Relaxed)
-        {
-            return;
-        }
-        let world = entity.world.load();
-        if !world.level_info.load().game_rules.mob_griefing {
-            return;
-        }
-
-        let reach = entity.bounding_box.load().expand(1.0, 0.0, 1.0);
-        for candidate in world.get_entities_at_box(&reach) {
-            let Some(item) = candidate.get_item_entity() else {
-                continue;
-            };
-            if item.get_entity().is_alive()
-                && item.get_pickup_delay() == 0
-                && self.wants_item_entity(item)
-            {
-                self.pick_up_item(item);
-            }
-        }
-    }
-
-    fn pick_up_item(&self, item: &ItemEntity) {
-        self.stop_walking();
-        let count = {
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            // Nuggets are taken whole, everything else one at a time.
-            if stack.item.id == Item::GOLD_NUGGET.id {
-                stack.item_count
-            } else {
-                stack.item_count.min(1)
-            }
-        };
-        if count == 0
-            || !self
-                .mob_entity
-                .living_entity
-                .pickup(item.get_entity(), u32::from(count))
-        {
-            return;
-        }
-
-        let taken = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .split(count);
-        let emptied = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if emptied {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
-
-        if PiglinAi::is_loved_item(&taken) {
-            if let Some(thrower_uuid) = item.get_thrower()
-                && let Some(thrower_player) = self
-                    .mob_entity
-                    .living_entity
-                    .entity
-                    .world
-                    .load()
-                    .get_player_by_uuid(thrower_uuid)
-            {
-                let is_baby = self.is_baby();
-                let player_wearing_safe_armor =
-                    PiglinAi::is_wearing_safe_armor(&thrower_player.living_entity);
-                thrower_player.trigger_advancement(
-                    crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
-                        entity_type: "minecraft:piglin".to_string(),
-                        item_id: taken.item.registry_key.to_string(),
-                        is_baby,
-                        player_wearing_safe_armor,
-                    },
-                );
-            }
-            self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
-            self.hold_in_off_hand(taken);
-            self.admire_gold_item();
-        } else if PiglinAi::is_food(&taken) && !self.has_eaten_recently() {
-            self.eat_cooldown_timer
-                .store(PiglinAi::EAT_COOLDOWN, Ordering::Relaxed);
-        } else if mob_equipment::equip_item_if_possible(self, taken.clone()).is_empty() {
-            self.put_in_inventory(taken);
-        }
-    }
-
     pub fn stop_holding_off_hand_item(&self, bartering_enabled: bool) {
         let item = self
             .mob_entity
@@ -1217,8 +1100,68 @@ impl Mob for PiglinEntity {
         self.update_activity();
     }
 
-    fn post_tick(&self) {
-        self.pick_up_nearby_items();
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        self.get_entity()
+            .world
+            .load()
+            .level_info
+            .load()
+            .game_rules
+            .mob_griefing
+            && self.mob_entity.can_pick_up_loot()
+            && PiglinAi::wants_to_pickup(self, stack)
+    }
+
+    fn pick_up_item(&self, item: &ItemEntity) {
+        self.stop_walking();
+        let count = {
+            let stack = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Nuggets are taken whole, everything else one at a time.
+            if stack.item.id == Item::GOLD_NUGGET.id {
+                stack.item_count
+            } else {
+                stack.item_count.min(1)
+            }
+        };
+        if count == 0
+            || !self
+                .mob_entity
+                .living_entity
+                .pickup(item.get_entity(), u32::from(count))
+        {
+            return;
+        }
+        self.mob_entity.living_entity.on_item_pickup(item);
+
+        let taken = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .split(count);
+        let emptied = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty();
+        if emptied {
+            item.get_entity().remove();
+        } else {
+            item.init_data_tracker();
+        }
+
+        if PiglinAi::is_loved_item(&taken) {
+            self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
+            self.hold_in_off_hand(taken);
+            self.admire_gold_item();
+        } else if PiglinAi::is_food(&taken) && !self.has_eaten_recently() {
+            self.eat_cooldown_timer
+                .store(PiglinAi::EAT_COOLDOWN, Ordering::Relaxed);
+        } else if mob_equipment::equip_item_if_possible(self, taken.clone()).is_empty() {
+            self.put_in_inventory(taken);
+        }
     }
 
     fn on_damage(

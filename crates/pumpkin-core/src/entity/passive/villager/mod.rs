@@ -330,6 +330,8 @@ fn explorer_map_target(
 }
 
 /// Vanilla `VillagerHostilesSensor` distances; panic runs at 0.5 * 1.5.
+const INVENTORY_SIZE: usize = 8;
+
 const VILLAGER_FLEES: &[Flee] = &[Flee::nearest_of(
     1,
     &[
@@ -488,6 +490,19 @@ impl VillagerEntity {
             .send_bedrock_actor_data(&bedrock_metadata);
 
         mob_arc
+    }
+
+    fn can_add_item(&self, stack: &ItemStack) -> bool {
+        let inventory = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inventory.len() < INVENTORY_SIZE
+            || inventory.iter().any(|slot| {
+                slot.is_empty()
+                    || (slot.are_items_and_components_equal(stack)
+                        && slot.item_count < slot.get_max_stack_size())
+            })
     }
 
     pub fn count_food_points_in_inventory(&self) -> i32 {
@@ -1848,7 +1863,95 @@ impl VillagerEntity {
     }
 }
 
+fn add_to_inventory(inventory: &mut Vec<ItemStack>, stack: &mut ItemStack) {
+    for slot in inventory.iter_mut() {
+        if stack.is_empty() {
+            return;
+        }
+        if !slot.is_empty() && slot.are_items_and_components_equal(stack) {
+            let count = stack
+                .item_count
+                .min(slot.get_max_stack_size().saturating_sub(slot.item_count));
+            stack.decrement(count);
+            slot.increment(count);
+        }
+    }
+    for slot in inventory.iter_mut() {
+        if stack.is_empty() {
+            return;
+        }
+        if slot.is_empty() {
+            *slot = std::mem::replace(stack, ItemStack::EMPTY.clone());
+        }
+    }
+    if !stack.is_empty() && inventory.len() < INVENTORY_SIZE {
+        inventory.push(std::mem::replace(stack, ItemStack::EMPTY.clone()));
+    }
+}
+
 impl Mob for VillagerEntity {
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        let profession = self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .profession_enum();
+        (stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_VILLAGER_PICKS_UP)
+            || stack
+                .get_data_component::<pumpkin_data::data_component_impl::VillagerFoodImpl>()
+                .is_some()
+            || profession
+                .requested_items()
+                .iter()
+                .any(|item| item.id == stack.item.id))
+            && self.can_add_item(stack)
+    }
+
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if !self.wants_to_pick_up(&stack) {
+            return;
+        }
+        let mut remainder = stack.clone();
+        add_to_inventory(
+            &mut self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+            &mut remainder,
+        );
+        let taken = stack.item_count - remainder.item_count;
+        let living = &self.mob_entity.living_entity;
+        if taken == 0 || !living.pickup(item.get_entity(), u32::from(taken)) {
+            return;
+        }
+        let mut remainder = stack;
+        add_to_inventory(
+            &mut self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            &mut remainder,
+        );
+        living.on_item_pickup(item);
+        if remainder.is_empty() {
+            item.get_entity().remove();
+        } else {
+            *item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = remainder;
+            item.init_data_tracker();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         {

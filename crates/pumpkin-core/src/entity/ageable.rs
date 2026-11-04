@@ -30,6 +30,11 @@ impl Default for AgeableData {
     }
 }
 
+#[must_use]
+pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    ((ticks_until_adult / 20) as f32 * 0.1) as i32
+}
+
 pub trait AgeableMob: Mob {
     fn get_ageable_data(&self) -> &AgeableData;
 
@@ -59,6 +64,7 @@ pub trait AgeableMob: Mob {
         if (old_age < 0 && new_age >= 0) || (old_age >= 0 && new_age < 0) {
             let is_baby = new_age < 0;
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
+            entity.refresh_dimensions();
             self.age_boundary_reached();
             if let Some(meta) = self.mob_metadata() {
                 entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
@@ -181,12 +187,12 @@ pub trait AgeableMob: Mob {
     fn age_up(&self, seconds: i32, forced: bool) {
         let mut age = self.get_age();
         let old_age = age;
-        age += seconds * 20;
+        age = age.wrapping_add(seconds.wrapping_mul(20));
         if age > 0 {
             age = 0;
         }
 
-        let delta = age - old_age;
+        let delta = age.wrapping_sub(old_age);
         self.set_age(age);
 
         let data = self.get_ageable_data();
@@ -200,14 +206,6 @@ pub trait AgeableMob: Mob {
         if self.get_age() == 0 {
             self.set_age(data.forced_age.load(Relaxed));
         }
-    }
-
-    #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
-    where
-        Self: Sized,
-    {
-        (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 
     fn write_ageable_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {

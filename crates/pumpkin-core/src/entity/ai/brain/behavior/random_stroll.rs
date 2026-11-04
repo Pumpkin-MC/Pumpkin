@@ -9,7 +9,16 @@ const MAX_XZ_DIST: i32 = 10;
 const MAX_Y_DIST: i32 = 7;
 
 #[must_use]
-pub fn stroll(speed_modifier: f32, horizontal_distance: i32, vertical_distance: i32) -> OneShot {
+pub fn stroll(speed_modifier: f32) -> OneShot {
+    stroll_with_distance(speed_modifier, MAX_XZ_DIST, MAX_Y_DIST)
+}
+
+#[must_use]
+pub fn stroll_with_distance(
+    speed_modifier: f32,
+    horizontal_distance: i32,
+    vertical_distance: i32,
+) -> OneShot {
     OneShot::new(
         "RandomStroll",
         vec![(types::WALK_TARGET.id(), MemoryStatus::ValueAbsent)],
