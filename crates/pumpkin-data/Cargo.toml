@@ -60,6 +60,7 @@ default = [
     "trial_spawner",
     "test_instance",
     "painting_variant",
+    "poi_type",
     "context_provider",
     "instrument",
     "wolf_variant",
@@ -103,6 +104,7 @@ decorated_pot_pattern = []
 chat_type = []
 context_provider = []
 painting_variant = []
+poi_type = ["tag"]
 test_instance = []
 trial_spawner = []
 block_transformer = ["block", "sound", "world", "tag"]

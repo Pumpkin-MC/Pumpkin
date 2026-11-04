@@ -329,6 +329,11 @@ pub mod test_instance;
 #[path = "generated/painting_variant.rs"]
 pub mod painting_variant;
 
+#[cfg(feature = "poi_type")]
+#[rustfmt::skip]
+#[path = "generated/poi_type.rs"]
+pub mod poi_type;
+
 #[cfg(feature = "context_provider")]
 #[rustfmt::skip]
 #[path = "generated/context_provider.rs"]

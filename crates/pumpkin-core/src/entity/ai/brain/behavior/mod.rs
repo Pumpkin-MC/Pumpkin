@@ -24,6 +24,7 @@ pub mod shuffling_list;
 pub mod stay_close_to_target;
 pub mod swim;
 pub mod timed;
+pub mod update_activity_from_schedule;
 pub mod utils;
 
 pub use animal_make_love::AnimalMakeLove;

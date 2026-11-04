@@ -6752,6 +6752,27 @@ impl VillagerProfession {
         }
     }
     #[must_use]
+    #[allow(clippy::match_same_arms)]
+    pub const fn secondary_poi(&self) -> &'static [&'static crate::Block] {
+        match self {
+            Self::None => &[],
+            Self::Armorer => &[],
+            Self::Butcher => &[],
+            Self::Cartographer => &[],
+            Self::Cleric => &[],
+            Self::Farmer => &[&crate::Block::FARMLAND],
+            Self::Fisherman => &[],
+            Self::Fletcher => &[],
+            Self::Leatherworker => &[],
+            Self::Librarian => &[],
+            Self::Mason => &[],
+            Self::Nitwit => &[],
+            Self::Shepherd => &[],
+            Self::Toolsmith => &[],
+            Self::Weaponsmith => &[],
+        }
+    }
+    #[must_use]
     pub const fn translation_key(&self) -> &'static str {
         match self {
             Self::None => "entity.minecraft.villager.none",

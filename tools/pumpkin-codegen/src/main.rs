@@ -76,6 +76,7 @@ mod packet;
 mod painting_variant;
 mod particle;
 mod placed_feature;
+mod poi_type;
 mod potion;
 mod potion_brewing;
 mod processor_list;
@@ -173,6 +174,7 @@ pub fn main() {
         (structure_template::build, "structure_template.rs"),
         (test_instance::build, "test_instance.rs"),
         (painting_variant::build, "painting_variant.rs"),
+        (poi_type::build, "poi_type.rs"),
         (context_provider::build, "context_provider.rs"),
         (material_rule::build, "material_rule.rs"),
         (noise_settings::build, "noise_settings.rs"),
