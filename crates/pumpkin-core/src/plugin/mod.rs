@@ -274,29 +274,37 @@ fn is_plugin_file(path: &Path) -> bool {
 const HANDLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const HANDLER_DRAIN_POLL: Duration = Duration::from_millis(10);
 
-/// Hands a plugin's library back to its loader once no event runs its handlers any more.
+/// Hands a plugin's library back to its loader once no event runs its handlers and no call
+/// still holds its instance.
 ///
-/// A handler still running after `HANDLER_DRAIN_TIMEOUT` keeps the library loaded for good,
-/// releasing it would pull the code out from under that call. That is `LibraryInUse`.
+/// A handler or instance call still running after `HANDLER_DRAIN_TIMEOUT` keeps the library
+/// loaded for good, releasing it would pull the code out from under that call. That is
+/// `LibraryInUse`.
 async fn release_library(
     name: &str,
     handlers: Vec<Arc<dyn DynEventHandler>>,
+    instance: Option<Arc<dyn Plugin>>,
     loader: &dyn PluginLoader,
     loader_data: Box<dyn Any + Send + Sync>,
 ) -> Result<(), LoaderError> {
-    // Each handler is wrapped once per registration, so any count above ours is a running event
+    // Each handler is wrapped once per registration, so any count above ours is a running event.
+    // The same goes for the instance, which `send_message` holds across `on_ipc_message`
     let drained = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
         while handlers
             .iter()
             .any(|handler| Arc::strong_count(handler) > 1)
+            || instance
+                .as_ref()
+                .is_some_and(|instance| Arc::strong_count(instance) > 1)
         {
             tokio::time::sleep(HANDLER_DRAIN_POLL).await;
         }
     })
     .await
     .is_ok();
-    // The handlers' code lives in the library, so they go first
+    // Their code lives in the library, so they go first
     drop(handlers);
+    drop(instance);
     if drained {
         loader.unload(loader_data).await
     } else {
@@ -997,7 +1005,7 @@ impl PluginManager {
 
                     // Try to unload the plugin data
                     if let Some(data) = loader_data {
-                        release_library(&plugin_name, handlers, &*loader_clone, data)
+                        release_library(&plugin_name, handlers, None, &*loader_clone, data)
                             .await
                             .ok();
                     }
@@ -1809,7 +1817,7 @@ impl PluginManager {
         context.unregister_commands();
         context.unregister_permissions();
 
-        if let Some(instance) = instance {
+        if let Some(instance) = &instance {
             match AssertUnwindSafe(instance.on_unload(context))
                 .catch_unwind()
                 .await
@@ -1818,8 +1826,6 @@ impl PluginManager {
                 Ok(Err(e)) => warn!("Plugin {name} failed to unload cleanly: {e}"),
                 Err(_) => error!("Plugin {name} panicked in on_unload"),
             }
-            // The instance's code lives in the library, so drop it before unloading
-            drop(instance);
         }
 
         // The loader keeps the library, so the record stays as an inactive copy until restart
@@ -1835,7 +1841,7 @@ impl PluginManager {
             .find(|p| p.token == token)
             .and_then(|p| p.loader_data.take());
         let unloaded = match loader_data {
-            Some(data) => release_library(name, handlers, &*loader, data).await,
+            Some(data) => release_library(name, handlers, instance, &*loader, data).await,
             None => Ok(()),
         };
 
