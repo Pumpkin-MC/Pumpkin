@@ -142,7 +142,7 @@ impl VillagerEntity {
         });
     }
 
-    fn refresh_trading_player_prices(&self, source: Option<Uuid>) {
+    pub(super) fn refresh_trading_player_prices(&self, source: Option<Uuid>) {
         if let Some(player) = self.get_trading_player()
             && source.is_none_or(|uuid| uuid == player.get_entity().entity_uuid)
         {

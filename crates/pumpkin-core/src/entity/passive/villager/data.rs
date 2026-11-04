@@ -28,6 +28,22 @@ pub enum GossipType {
     Trading = 4,
 }
 
+const NEXT_LEVEL_XP_THRESHOLDS: [i32; 5] = [0, 10, 70, 150, 250];
+
+#[must_use]
+pub const fn can_level_up(current_level: i32) -> bool {
+    current_level >= 1 && current_level < 5
+}
+
+#[must_use]
+pub const fn get_max_xp_per_level(level: i32) -> i32 {
+    if can_level_up(level) {
+        NEXT_LEVEL_XP_THRESHOLDS[level as usize]
+    } else {
+        0
+    }
+}
+
 impl GossipType {
     #[must_use]
     pub const fn name(self) -> &'static str {

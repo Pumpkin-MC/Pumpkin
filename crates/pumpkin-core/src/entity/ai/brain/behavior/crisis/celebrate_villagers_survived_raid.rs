@@ -108,8 +108,9 @@ impl Behavior for CelebrateVillagersSurvivedRaid {
                 &EntityType::FIREWORK_ROCKET,
             );
             tick.world
-                .spawn_entity(Arc::new(FireworkRocketEntity::new_with_stack(
+                .spawn_entity(Arc::new(FireworkRocketEntity::new_with_owner(
                     rocket,
+                    body,
                     get_firework(color, flight_power),
                 )));
         }

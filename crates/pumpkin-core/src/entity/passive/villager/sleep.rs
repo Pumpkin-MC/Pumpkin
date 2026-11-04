@@ -1,3 +1,5 @@
+use pumpkin_data::HorizontalFacingExt;
+use pumpkin_data::block_properties::WhiteBedLikeProperties;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
 use pumpkin_data::tracked_data;
@@ -62,7 +64,17 @@ impl VillagerEntity {
             if block.has_tag(&BlockTag::MINECRAFT_BEDS) {
                 BedBlock::set_occupied(false, &world, block, &bed_pos, state_id);
 
-                let stand_up = bed_pos.up().to_f64().add_raw(0.0, STAND_UP_HEIGHT, 0.0);
+                let facing = WhiteBedLikeProperties::from_state_id(state_id)
+                    .facing
+                    .to_block_direction();
+                let stand_up = BedBlock::find_stand_up_position(
+                    self.get_entity().entity_type,
+                    &world,
+                    &bed_pos,
+                    facing,
+                    self.get_entity().yaw.load(),
+                )
+                .unwrap_or_else(|| bed_pos.up().to_f64().add_raw(0.0, STAND_UP_HEIGHT, 0.0));
                 let look_direction = bed_pos.to_f64().sub(&stand_up).normalize();
                 let yaw = wrap_degrees(
                     look_direction.z.atan2(look_direction.x).to_degrees() as f32 - 90.0,

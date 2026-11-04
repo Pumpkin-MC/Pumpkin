@@ -29,6 +29,8 @@ use pumpkin_util::text::TextComponent;
 use crate::entity::ageable::{AgeableData, AgeableMob};
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
+use crate::entity::mob::conversion::{ConversionParams, convert_to};
+use crate::entity::mob::spawn::EntitySpawnReason;
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
@@ -47,7 +49,7 @@ pub mod reputation;
 pub mod sleep;
 pub use data::{
     BREEDING_FOOD_THRESHOLD, GossipType, VillagerData, VillagerProfession, VillagerType,
-    get_food_points,
+    can_level_up, get_food_points, get_max_xp_per_level,
 };
 pub use gossip::GossipContainer;
 pub use reputation::ReputationEventType;
@@ -317,6 +319,7 @@ const INVENTORY_SIZE: usize = 8;
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
+    villager_data_finalized: AtomicBool,
     pub villager_data: std::sync::Mutex<VillagerData>,
     pub food_level: AtomicI32,
     pub xp: AtomicI32,
@@ -329,7 +332,6 @@ pub struct VillagerEntity {
     pub inventory: std::sync::Mutex<Vec<ItemStack>>,
     pub merchant_inventory: Arc<SimpleInventory>,
     pub offers: std::sync::Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
-    pub merchant_update_timer: AtomicI32,
     pub unhappy_counter: AtomicI32,
     pub trade_sound_cooldown: AtomicI32,
     pub increase_profession_level_on_update: AtomicBool,
@@ -392,6 +394,7 @@ impl VillagerEntity {
         let villager = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
+            villager_data_finalized: AtomicBool::new(false),
             villager_data: std::sync::Mutex::new(villager_data),
             food_level: AtomicI32::new(0),
             xp: AtomicI32::new(0),
@@ -404,7 +407,6 @@ impl VillagerEntity {
             inventory,
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             offers: std::sync::Mutex::new(Vec::new()),
-            merchant_update_timer: AtomicI32::new(0),
             unhappy_counter: AtomicI32::new(0),
             trade_sound_cooldown: AtomicI32::new(0),
             increase_profession_level_on_update: AtomicBool::new(false),
@@ -493,6 +495,35 @@ impl VillagerEntity {
                 }
             }
         }
+    }
+
+    #[must_use]
+    pub fn get_villager_data_finalized(&self) -> bool {
+        self.villager_data_finalized.load(Ordering::Relaxed)
+    }
+
+    pub fn set_villager_data_finalized(&self, finalized: bool) {
+        self.villager_data_finalized
+            .store(finalized, Ordering::Relaxed);
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA_FINALIZED, finalized);
+    }
+
+    pub fn finalize_villager_type(&self, world: &World, pos: &BlockPos) {
+        if self.get_villager_data_finalized() {
+            return;
+        }
+        let biome_type = breeding::villager_type_for_biome(world.get_biome(pos).registry_id);
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.set_villager_data(VillagerData::new(
+            biome_type,
+            data.profession_enum(),
+            data.level.0,
+        ));
+        self.set_villager_data_finalized(true);
     }
 
     pub fn set_villager_data(&self, data: VillagerData) {
@@ -781,6 +812,7 @@ impl VillagerEntity {
             (offer.xp, offer.reward_exp)
         };
 
+        let mut pop_xp = 3 + self.get_random().random_range(0..4);
         let current_xp = self.xp.fetch_add(xp_gain, Ordering::Relaxed) + xp_gain;
         let villager_data = *self
             .villager_data
@@ -791,14 +823,26 @@ impl VillagerEntity {
             .set_synced_data(tracked_data::villager::VILLAGER_DATA, villager_data);
         self.get_entity().send_bedrock_actor_data(&bedrock_metadata);
 
-        if reward_exp {
-            ExperienceOrbEntity::spawn(world, self.get_entity().pos.load(), xp_gain as u32);
-        }
-
         *self
             .last_traded_player
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(player_uuid);
+
+        if can_level_up(villager_data.level.0)
+            && current_xp >= get_max_xp_per_level(villager_data.level.0)
+        {
+            self.increase_profession_level_on_update
+                .store(true, Ordering::Relaxed);
+            pop_xp += 5;
+        }
+
+        if reward_exp {
+            ExperienceOrbEntity::spawn(
+                world,
+                self.get_entity().pos.load().add_raw(0.0, 0.5, 0.0),
+                pop_xp as u32,
+            );
+        }
 
         if let Some(player) = world.get_player_by_uuid(player_uuid) {
             self.resend_offers_to_player(&player);
@@ -816,6 +860,30 @@ impl VillagerEntity {
         if player.get_entity().entity_uuid != player_uuid {
             return;
         }
+        let offers = self
+            .offers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let villager_data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.send_trade_offers(player, sync_id, &offers, villager_data);
+    }
+
+    fn resend_offers_to_trading_player(&self) {
+        let trading_player = *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some((player_uuid, sync_id)) = trading_player else {
+            return;
+        };
+        let world = self.get_entity().world.load();
+        let Some(player) = world.get_player_by_uuid(player_uuid) else {
+            return;
+        };
         let offers = self
             .offers
             .lock()
@@ -850,30 +918,6 @@ impl VillagerEntity {
         if !ok {
             return;
         }
-        self.send_trade_offers(player, sync_id, &offers, villager_data);
-    }
-
-    fn resend_offers_to_trading_player(&self) {
-        let trading_player = *self
-            .trading_player
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some((player_uuid, sync_id)) = trading_player else {
-            return;
-        };
-        let world = self.get_entity().world.load();
-        let Some(player) = world.get_player_by_uuid(player_uuid) else {
-            return;
-        };
-        let offers = self
-            .offers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let villager_data = *self
-            .villager_data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.send_trade_offers(&player, sync_id, &offers, villager_data);
     }
 
@@ -1009,15 +1053,32 @@ impl VillagerEntity {
                 && game_time > self.last_restock_time.load(Ordering::Relaxed) + 2_400)
     }
 
+    fn increase_merchant_career(&self) {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.set_villager_data(VillagerData::new(
+            data.type_enum(),
+            data.profession_enum(),
+            data.level.0 + 1,
+        ));
+        self.update_trades();
+    }
+
+    fn update_trades(&self) {
+        let data = *self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.add_trades(data.profession_enum(), data.level.0);
+        self.refresh_trading_player_prices(None);
+    }
+
     pub fn set_unhappy(&self) {
         let entity = self.get_entity();
         self.unhappy_counter.store(40, Ordering::Relaxed);
         entity.set_synced_data(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
-        entity.world.load().send_entity_status(
-            entity,
-            pumpkin_data::entity::EntityStatus::VillagerAngry,
-            ActorEventID::VillagerAngry,
-        );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
 
@@ -1286,33 +1347,6 @@ impl VillagerEntity {
             })
             .ok();
 
-        if !self.is_trading.load(Ordering::Relaxed)
-            && self.merchant_update_timer.load(Ordering::Relaxed) > 0
-            && self.merchant_update_timer.fetch_sub(1, Ordering::Relaxed) == 1
-        {
-            if self
-                .increase_profession_level_on_update
-                .swap(false, Ordering::Relaxed)
-            {
-                let mut data = *self
-                    .villager_data
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                data.level.0 += 1;
-                self.set_villager_data(data);
-                self.add_trades(data.profession_enum(), data.level.0);
-            }
-            self.mob_entity.living_entity.add_effect(Effect {
-                effect_type: &StatusEffect::REGENERATION,
-                duration: 200,
-                amplifier: 0,
-                ambient: false,
-                show_particles: true,
-                show_icon: true,
-                blend: false,
-            });
-        }
-
         let game_time = world
             .level_time
             .lock()
@@ -1327,6 +1361,22 @@ impl VillagerEntity {
 
     fn villager_ai_step(&self) {
         let world = self.get_entity().world.load();
+
+        if self
+            .increase_profession_level_on_update
+            .swap(false, Ordering::Relaxed)
+        {
+            self.increase_merchant_career();
+            self.mob_entity.living_entity.add_effect(Effect {
+                effect_type: &StatusEffect::REGENERATION,
+                duration: 200,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            });
+        }
 
         let last_traded_player = self
             .last_traded_player
@@ -1398,6 +1448,27 @@ impl AgeableMob for VillagerEntity {
 }
 
 impl Mob for VillagerEntity {
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
+        group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
+    ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
+        if reason == crate::entity::mob::spawn::EntitySpawnReason::Breeding {
+            let data = *self
+                .villager_data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.set_villager_data(VillagerData::new(
+                data.type_enum(),
+                VillagerProfession::None,
+                data.level.0,
+            ));
+        }
+        self.finalize_villager_type(world, &self.get_entity().block_pos.load());
+        self.default_finalize_spawn(world, group_data)
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -1477,6 +1548,7 @@ impl Mob for VillagerEntity {
             nbt.put_compound("VillagerData", villager_data_nbt);
         };
 
+        nbt.put_bool("VillagerDataFinalized", self.get_villager_data_finalized());
         nbt.put_int("FoodLevel", self.food_level.load(Ordering::Relaxed));
         nbt.put_int("Xp", self.xp.load(Ordering::Relaxed));
         nbt.put_long(
@@ -1571,6 +1643,11 @@ impl Mob for VillagerEntity {
 
     #[allow(clippy::too_many_lines)]
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if nbt.get_bool("VillagerDataFinalized").unwrap_or(false)
+            || nbt.get_compound("VillagerData").is_some()
+        {
+            self.set_villager_data_finalized(true);
+        }
         if let Some(villager_data_nbt) = nbt.get_compound("VillagerData") {
             let mut data = self
                 .villager_data
@@ -1763,23 +1840,74 @@ impl Mob for VillagerEntity {
         }
     }
 
-    fn on_damage(
+    fn on_damage_with_context(
         &self,
         _damage_type: pumpkin_data::damage::DamageType,
         source: Option<&dyn EntityBase>,
-    ) {
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
         if self.is_sleeping() {
             self.wake_up();
         }
-        let Some(source) = source.filter(|source| {
-            source.get_entity().entity_type == &pumpkin_data::entity::EntityType::PLAYER
-        }) else {
-            return;
-        };
-        self.on_reputation_event_from(
-            ReputationEventType::VillagerHurt,
-            source.get_entity().entity_uuid,
-        );
+        if let Some(hurt_by) = cause
+            .or(source)
+            .filter(|entity| entity.get_living_entity().is_some())
+        {
+            self.on_reputation_event_from(
+                ReputationEventType::VillagerHurt,
+                hurt_by.get_entity().entity_uuid,
+            );
+            if !self.mob_entity.living_entity.is_dead_or_dying()
+                && hurt_by.get_entity().entity_type == &pumpkin_data::entity::EntityType::PLAYER
+            {
+                self.get_entity().world.load().send_entity_status(
+                    self.get_entity(),
+                    pumpkin_data::entity::EntityStatus::VillagerAngry,
+                    ActorEventID::VillagerAngry,
+                );
+            }
+        }
+        true
+    }
+
+    fn mob_on_lightning_strike(
+        &self,
+        caller: &dyn EntityBase,
+        lightning: &crate::entity::lightning::LightningBoltEntity,
+    ) {
+        let world = self.get_entity().world.load_full();
+        let converted = (world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful)
+            .then(|| {
+                convert_to(
+                    self,
+                    &pumpkin_data::entity::EntityType::WITCH,
+                    ConversionParams::single(false, false),
+                    |witch| {
+                        witch.finalize_spawn(&world, EntitySpawnReason::Conversion, None);
+                        witch
+                            .get_mob_entity()
+                            .persistence_required
+                            .store(true, Ordering::Relaxed);
+                        self.release_all_pois();
+                    },
+                )
+            })
+            .flatten();
+        if converted.is_none() {
+            self.mob_entity
+                .living_entity
+                .on_lightning_strike(caller, lightning);
+        }
+    }
+
+    fn get_ambient_sound(&self) -> Option<pumpkin_data::sound::Sound> {
+        if self.is_sleeping() {
+            None
+        } else if self.is_trading.load(Ordering::Relaxed) {
+            Some(pumpkin_data::sound::Sound::EntityVillagerTrade)
+        } else {
+            Some(pumpkin_data::sound::Sound::EntityVillagerAmbient)
+        }
     }
 
     fn on_die(&self, source: Option<&dyn EntityBase>) {
@@ -1805,8 +1933,12 @@ impl Mob for VillagerEntity {
         self.villager_mob_tick();
     }
 
-    fn mob_interact(&self, player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
-        if self.is_trading.load(Ordering::Relaxed) {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.item == &Item::VILLAGER_SPAWN_EGG
+            || self.mob_entity.living_entity.is_dead_or_dying()
+            || self.is_trading.load(Ordering::Relaxed)
+            || self.is_sleeping()
+        {
             return false;
         }
         if self.get_entity().age.load(Ordering::Relaxed) < 0 {
@@ -1842,7 +1974,6 @@ impl Mob for VillagerEntity {
             .is_empty();
         if !has_offers {
             self.set_unhappy();
-            return true;
         }
 
         player.increment_stat(
@@ -1850,6 +1981,9 @@ impl Mob for VillagerEntity {
             pumpkin_data::statistic::CustomStatistic::TalkedToVillager as i32,
             1,
         );
+        if !has_offers {
+            return true;
+        }
 
         let villager = self
             .self_weak

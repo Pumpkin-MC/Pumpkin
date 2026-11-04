@@ -35,7 +35,7 @@ const fn breed_type_roll(
     }
 }
 
-fn villager_type_for_biome(registry_id: &str) -> VillagerType {
+pub(super) fn villager_type_for_biome(registry_id: &str) -> VillagerType {
     match registry_id {
         "badlands" | "desert" | "eroded_badlands" | "wooded_badlands" => VillagerType::Desert,
         "bamboo_jungle" | "jungle" | "sparse_jungle" => VillagerType::Jungle,
@@ -105,6 +105,7 @@ impl VillagerEntity {
             &EntityType::VILLAGER,
         ));
         baby.set_villager_data(VillagerData::new(r#type, VillagerProfession::None, 1));
+        baby.set_villager_data_finalized(true);
         Some(baby)
     }
 }
