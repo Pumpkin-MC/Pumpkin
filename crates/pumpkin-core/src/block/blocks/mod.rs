@@ -92,6 +92,7 @@ pub mod sculk;
 pub mod vine;
 
 // Terrain / environment / physics
+pub mod bonemealable_feature_placer;
 pub mod bubble_column;
 pub mod cobweb;
 pub mod dirt_path;

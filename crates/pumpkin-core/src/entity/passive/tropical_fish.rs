@@ -162,6 +162,7 @@ impl Mob for TropicalFishEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<crate::world::World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let mut group_data = self.finalize_school_spawn(group_data);

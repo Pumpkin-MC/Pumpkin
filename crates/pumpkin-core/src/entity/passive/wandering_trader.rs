@@ -3,13 +3,11 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
-use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::potion::Effect;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::villager::{
     TRADES_WANDERING_TRADER_BUYING, TRADES_WANDERING_TRADER_COMMON,
@@ -31,14 +29,16 @@ use rand::RngExt;
 use rand::seq::IndexedRandom;
 
 use super::villager::{
-    apply_potion, apply_random_dye, apply_random_stew_effect, trigger_trade_advancement,
+    apply_potion, apply_random_dye, apply_stew_effect, trigger_trade_advancement,
 };
 use crate::entity::ageable::{AgeableData, AgeableMob};
 use crate::entity::ai::behavior::fleeing::{self, Flee};
 use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
+use crate::entity::ai::goal::interact::InteractGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::trade_with_player::TradeWithPlayerGoal;
+use crate::entity::ai::goal::use_item::UseItemGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
@@ -50,6 +50,12 @@ use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 const DEFAULT_DESPAWN_DELAY: i32 = 0;
+
+fn is_invisible(mob: &dyn Mob) -> bool {
+    mob.get_mob_entity()
+        .living_entity
+        .has_effect(&StatusEffect::INVISIBILITY)
+}
 
 fn create_invisibility_potion() -> ItemStack {
     let mut stack = ItemStack::new(1, &Item::POTION);
@@ -87,8 +93,8 @@ fn add_offers_from_dynamic_trades(
                     apply_potion(&mut output, potion_name);
                 }
             }
-            DynamicTradeModifier::SuspiciousStew => {
-                apply_random_stew_effect(rng, &mut output);
+            DynamicTradeModifier::SuspiciousStew(effects) => {
+                apply_stew_effect(rng, &mut output, effects);
             }
             DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
             _ => {}
@@ -145,8 +151,6 @@ pub struct WanderingTraderEntity {
     pub merchant_inventory: Arc<SimpleInventory>,
     pub trading_player: std::sync::Mutex<Option<(Uuid, u8)>>,
     pub is_trading: AtomicBool,
-    pub trade_sound_cooldown: AtomicI32,
-    pub ambient_sound_timer: AtomicI32,
     pub ageable_data: AgeableData,
     self_weak: std::sync::Mutex<Option<Weak<Self>>>,
 }
@@ -164,8 +168,6 @@ impl WanderingTraderEntity {
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             trading_player: std::sync::Mutex::new(None),
             is_trading: AtomicBool::new(false),
-            trade_sound_cooldown: AtomicI32::new(0),
-            ambient_sound_timer: AtomicI32::new(120),
             ageable_data: AgeableData::default(),
             self_weak: std::sync::Mutex::new(None),
         };
@@ -187,10 +189,25 @@ impl WanderingTraderEntity {
             // Priority 0: FloatGoal
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
 
-            // Priority 0: UseItemGoal (Invisibility potion at night / Milk bucket in daylight)
             goal_selector.add_goal(
                 0,
-                Box::new(WanderingTraderUseItemGoal::new(trader_weak.clone())),
+                Box::new(UseItemGoal::new(
+                    create_invisibility_potion(),
+                    Some(Sound::EntityWanderingTraderDisappeared),
+                    Arc::new(|mob: &dyn Mob| {
+                        mob.get_entity().world.load().is_dark_outside() && !is_invisible(mob)
+                    }),
+                )),
+            );
+            goal_selector.add_goal(
+                0,
+                Box::new(UseItemGoal::new(
+                    ItemStack::new(1, &Item::MILK_BUCKET),
+                    Some(Sound::EntityWanderingTraderReappeared),
+                    Arc::new(|mob: &dyn Mob| {
+                        mob.get_entity().world.load().is_bright_outside() && is_invisible(mob)
+                    }),
+                )),
             );
 
             // Priority 1: TradeWithPlayerGoal
@@ -215,24 +232,29 @@ impl WanderingTraderEntity {
             goal_selector.add_goal(4, Box::new(MoveTowardsRestrictionGoal::new(0.35)));
 
             // Priority 8: WaterAvoidingRandomStrollGoal (WanderAroundGoal)
-            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.35)));
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::water_avoiding(0.35)));
 
             // Priority 9: InteractGoal (Player.class, 3.0F, 1.0F)
             goal_selector.add_goal(
                 9,
-                Box::new(LookAtEntityGoal::new(
+                Box::new(InteractGoal::new(
                     mob_weak.clone(),
                     &EntityType::PLAYER,
                     3.0,
                     1.0,
-                    false,
                 )),
             );
 
             // Priority 10: LookAtPlayerGoal (Mob.class, 8.0F)
             goal_selector.add_goal(
                 10,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                Box::new(LookAtEntityGoal::matching(
+                    mob_weak,
+                    TargetMatch::Mob,
+                    8.0,
+                    0.02,
+                    false,
+                )),
             );
         };
 
@@ -493,9 +515,9 @@ impl WanderingTraderEntity {
             (offer.reward_exp, reward_xp)
         };
 
-        self.get_entity()
-            .play_sound(Sound::EntityWanderingTraderYes);
-        self.trade_sound_cooldown.store(20, Ordering::Relaxed);
+        self.mob_entity
+            .ambient_sound_time
+            .store(-self.get_ambient_sound_interval(), Ordering::Relaxed);
 
         if reward_exp {
             let position = self.get_entity().pos.load().add_raw(0.0, 0.5, 0.0);
@@ -556,12 +578,11 @@ impl ScreenHandlerFactory for WanderingTraderEntity {
             let Some(trader) = update_weak.upgrade() else {
                 return;
             };
-            if trader
-                .trade_sound_cooldown
-                .compare_exchange(0, 20, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok()
-            {
-                trader.get_entity().play_sound(if has_result {
+            let interval = trader.get_ambient_sound_interval();
+            let ambient_sound_time = &trader.mob_entity.ambient_sound_time;
+            if ambient_sound_time.load(Ordering::Relaxed) > -interval + 20 {
+                ambient_sound_time.store(-interval, Ordering::Relaxed);
+                trader.make_sound(if has_result {
                     Sound::EntityWanderingTraderYes
                 } else {
                     Sound::EntityWanderingTraderNo
@@ -768,6 +789,22 @@ impl Mob for WanderingTraderEntity {
         }
     }
 
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.is_trading.load(Ordering::Relaxed) {
+            Sound::EntityWanderingTraderTrade
+        } else {
+            Sound::EntityWanderingTraderAmbient
+        })
+    }
+
+    fn mob_consume_sound(&self, stack: &ItemStack) -> Option<Sound> {
+        Some(if stack.item == &Item::MILK_BUCKET {
+            Sound::EntityWanderingTraderDrinkMilk
+        } else {
+            Sound::EntityWanderingTraderDrinkPotion
+        })
+    }
+
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.item == &Item::VILLAGER_SPAWN_EGG
             || self.mob_entity.living_entity.health.load() <= 0.0
@@ -824,38 +861,8 @@ impl Mob for WanderingTraderEntity {
                 self.despawn_delay.store(new_delay, Ordering::Relaxed);
                 if new_delay == 0 {
                     self.mob_entity.living_entity.entity.remove();
-                    return;
                 }
             }
-        }
-
-        // Trade sound cooldown
-        let cooldown = self.trade_sound_cooldown.load(Ordering::Relaxed);
-        if cooldown > 0 {
-            self.trade_sound_cooldown
-                .store(cooldown - 1, Ordering::Relaxed);
-        }
-
-        // Ambient sound handling
-        if self.ambient_sound_timer.fetch_sub(1, Ordering::Relaxed) <= 0 {
-            let mut rng = rand::rng();
-            self.ambient_sound_timer
-                .store(rng.random_range(80..=160), Ordering::Relaxed);
-            let sound = if self.is_trading.load(Ordering::Relaxed) {
-                Sound::EntityWanderingTraderTrade
-            } else {
-                Sound::EntityWanderingTraderAmbient
-            };
-            self.mob_entity
-                .living_entity
-                .entity
-                .world
-                .load()
-                .play_sound(
-                    sound,
-                    SoundCategory::Neutral,
-                    &self.mob_entity.living_entity.entity.pos.load(),
-                );
         }
     }
 }
@@ -1082,172 +1089,6 @@ impl Goal for MoveTowardsRestrictionGoal {
 
     fn controls(&self) -> Controls {
         Controls::MOVE
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PotionGoalType {
-    Invisibility,
-    Milk,
-}
-
-struct WanderingTraderUseItemGoal {
-    trader: Weak<WanderingTraderEntity>,
-    goal_type: Option<PotionGoalType>,
-    timer: i32,
-}
-
-impl WanderingTraderUseItemGoal {
-    pub const fn new(trader: Weak<WanderingTraderEntity>) -> Self {
-        Self {
-            trader,
-            goal_type: None,
-            timer: 0,
-        }
-    }
-}
-
-impl Goal for WanderingTraderUseItemGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(trader) = self.trader.upgrade() else {
-            return false;
-        };
-        if !trader.mob_entity.living_entity.entity.is_alive()
-            || trader.is_trading.load(Ordering::Relaxed)
-        {
-            return false;
-        }
-        let world = trader.mob_entity.living_entity.entity.world.load();
-        let is_dark = world.is_dark_outside();
-        let is_bright = world.is_bright_outside();
-        let is_invisible = trader
-            .mob_entity
-            .living_entity
-            .has_effect(&StatusEffect::INVISIBILITY);
-
-        if is_dark && !is_invisible {
-            self.goal_type = Some(PotionGoalType::Invisibility);
-            return true;
-        }
-        if is_bright && is_invisible {
-            self.goal_type = Some(PotionGoalType::Milk);
-            return true;
-        }
-        false
-    }
-
-    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(trader) = self.trader.upgrade() else {
-            return false;
-        };
-        self.timer > 0
-            && trader.mob_entity.living_entity.entity.is_alive()
-            && !trader.is_trading.load(Ordering::Relaxed)
-    }
-
-    fn start(&mut self, _mob: &dyn Mob) {
-        let Some(trader) = self.trader.upgrade() else {
-            return;
-        };
-        self.timer = 32;
-        let stack = match self.goal_type {
-            Some(PotionGoalType::Invisibility) => create_invisibility_potion(),
-            Some(PotionGoalType::Milk) => ItemStack::new(1, &Item::MILK_BUCKET),
-            None => return,
-        };
-        if let Ok(mut equip) = trader.mob_entity.living_entity.entity_equipment.try_lock() {
-            equip.put(&EquipmentSlot::MAIN_HAND, stack.clone());
-            drop(equip);
-            trader
-                .mob_entity
-                .living_entity
-                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
-        }
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        let Some(trader) = self.trader.upgrade() else {
-            return;
-        };
-        self.timer -= 1;
-        if self.timer > 0 && self.timer % 4 == 0 {
-            let sound = match self.goal_type {
-                Some(PotionGoalType::Invisibility) => Sound::EntityWanderingTraderDrinkPotion,
-                Some(PotionGoalType::Milk) => Sound::EntityWanderingTraderDrinkMilk,
-                None => return,
-            };
-            trader
-                .mob_entity
-                .living_entity
-                .entity
-                .world
-                .load()
-                .play_sound(
-                    sound,
-                    SoundCategory::Neutral,
-                    &trader.mob_entity.living_entity.entity.pos.load(),
-                );
-        }
-        if self.timer == 0 {
-            match self.goal_type {
-                Some(PotionGoalType::Invisibility) => {
-                    trader.mob_entity.living_entity.add_effect(Effect {
-                        effect_type: &StatusEffect::INVISIBILITY,
-                        duration: 6000,
-                        amplifier: 0,
-                        ambient: false,
-                        show_particles: true,
-                        show_icon: true,
-                        blend: false,
-                    });
-                    trader
-                        .mob_entity
-                        .living_entity
-                        .entity
-                        .world
-                        .load()
-                        .play_sound(
-                            Sound::EntityWanderingTraderDisappeared,
-                            SoundCategory::Neutral,
-                            &trader.mob_entity.living_entity.entity.pos.load(),
-                        );
-                }
-                Some(PotionGoalType::Milk) => {
-                    trader
-                        .mob_entity
-                        .living_entity
-                        .remove_effect(&StatusEffect::INVISIBILITY);
-                    trader
-                        .mob_entity
-                        .living_entity
-                        .entity
-                        .world
-                        .load()
-                        .play_sound(
-                            Sound::EntityWanderingTraderReappeared,
-                            SoundCategory::Neutral,
-                            &trader.mob_entity.living_entity.entity.pos.load(),
-                        );
-                }
-                None => {}
-            }
-        }
-    }
-
-    fn stop(&mut self, _mob: &dyn Mob) {
-        if let Some(trader) = self.trader.upgrade() {
-            let empty = ItemStack::EMPTY;
-            if let Ok(mut equip) = trader.mob_entity.living_entity.entity_equipment.try_lock() {
-                equip.put(&EquipmentSlot::MAIN_HAND, empty.clone());
-                drop(equip);
-                trader
-                    .mob_entity
-                    .living_entity
-                    .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, empty.clone())]);
-            }
-        }
-        self.goal_type = None;
-        self.timer = 0;
     }
 }
 

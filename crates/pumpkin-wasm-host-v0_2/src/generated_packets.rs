@@ -3107,6 +3107,16 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CContainerSetData(data) => {
+            let p = pumpkin_protocol::bedrock::client::CContainerSetData {
+                container_id: data.container_id.try_into().unwrap(),
+                id: VarInt(data.id),
+                value: VarInt(data.value),
+            };
+            let mut buf = Vec::new();
+            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CDisconnect(data) => {
             let p = pumpkin_protocol::bedrock::client::CDisconnect {
                 reason: VarInt(data.reason),
@@ -3360,6 +3370,18 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
             Some(buf.into())
         }
+        BClientboundPacket::CStonecutterSetRecipe(data) => {
+            let p = pumpkin_protocol::bedrock::client::CStonecutterSetRecipe {
+                player_unique_id: pumpkin_protocol::codec::var_long::VarLong(
+                    data.player_unique_id.try_into().unwrap(),
+                ),
+                container_id: data.container_id.try_into().unwrap(),
+                recipe_index: VarInt(data.recipe_index),
+            };
+            let mut buf = Vec::new();
+            pumpkin_core::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
+            Some(buf.into())
+        }
         BClientboundPacket::CTakeItemActor(data) => {
             let p = pumpkin_protocol::bedrock::client::CTakeItemActor {
                 item_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
@@ -3435,6 +3457,13 @@ pub fn deserialize_bedrock_serverbound_packet(
                 server_initiated_close: p.server_initiated_close.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SCursorItemDrag as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SCursorItemDrag as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SCursorItemDrag(crate::pumpkin::plugin::bedrock_packets::SCursorItemDrag {
+                state: p.state.try_into().unwrap(),
+            }))
+        }
         id if id == <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
@@ -3495,6 +3524,14 @@ pub fn deserialize_bedrock_serverbound_packet(
                 layout_craft: p.layout_craft.0.try_into().unwrap(),
             }))
         }
+        id if id == <pumpkin_protocol::bedrock::server::SStonecutterSetRecipe as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
+            use pumpkin_protocol::BServerPacket;
+            let p = <pumpkin_protocol::bedrock::server::SStonecutterSetRecipe as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            Some(BServerboundPacket::SStonecutterSetRecipe(crate::pumpkin::plugin::bedrock_packets::SStonecutterSetRecipe {
+                container_id: p.container_id.try_into().unwrap(),
+                recipe_index: p.recipe_index.0.try_into().unwrap(),
+            }))
+        }
         _ => None,
     }
 }
@@ -3549,6 +3586,18 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CContainerOp
                 container_type: self.container_type.try_into().unwrap(),
                 position: (self.position.0.x, self.position.0.y, self.position.0.z),
                 target_entity_id: self.target_entity_id.0.try_into().unwrap(),
+            },
+        )
+    }
+}
+
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CContainerSetData {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CContainerSetData(
+            crate::pumpkin::plugin::bedrock_packets::CContainerSetData {
+                container_id: self.container_id.try_into().unwrap(),
+                id: self.id.0.try_into().unwrap(),
+                value: self.value.0.try_into().unwrap(),
             },
         )
     }
@@ -3813,6 +3862,18 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CShowCredits
     }
 }
 
+impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CStonecutterSetRecipe {
+    fn to_wit(&self) -> BClientboundPacket {
+        BClientboundPacket::CStonecutterSetRecipe(
+            crate::pumpkin::plugin::bedrock_packets::CStonecutterSetRecipe {
+                player_unique_id: self.player_unique_id.0.try_into().unwrap(),
+                container_id: self.container_id.try_into().unwrap(),
+                recipe_index: self.recipe_index.0.try_into().unwrap(),
+            },
+        )
+    }
+}
+
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CTakeItemActor {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CTakeItemActor(
@@ -3861,6 +3922,9 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CContainerOpen>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CContainerSetData>() {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CDisconnect>() {
@@ -3918,6 +3982,10 @@ pub fn clientbound_bedrock_any_to_wit(any: &dyn Any) -> Option<BClientboundPacke
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CShowCredits>() {
+        return Some(p.to_wit());
+    }
+    if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CStonecutterSetRecipe>()
+    {
         return Some(p.to_wit());
     }
     if let Some(p) = any.downcast_ref::<pumpkin_protocol::bedrock::client::CTakeItemActor>() {

@@ -24,7 +24,7 @@ pub enum VillagerTradeModifier {
     ExplorationMap { destination: &'static str },
     RandomDyes,
     RandomPotion,
-    SuspiciousStew,
+    SuspiciousStew(&'static [(&'static str, i32)]),
     Potion(&'static str),
 }
 #[derive(Clone, Copy, PartialEq)]
@@ -1487,7 +1487,14 @@ pub const TRADES_FARMER_LEVEL_4: &[VillagerTrade] = &[
         max_uses: 12i32,
         xp: 15i32,
         price_multiplier: 0.05f32,
-        modifier: VillagerTradeModifier::SuspiciousStew,
+        modifier: VillagerTradeModifier::SuspiciousStew(&[
+            ("minecraft:night_vision", 5i32),
+            ("minecraft:jump_boost", 8i32),
+            ("minecraft:weakness", 7i32),
+            ("minecraft:blindness", 6i32),
+            ("minecraft:poison", 14i32),
+            ("minecraft:saturation", 7i32),
+        ]),
         allowed_types: &[],
     },
 ];

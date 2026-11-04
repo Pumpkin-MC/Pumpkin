@@ -1,10 +1,10 @@
 use pumpkin_data::damage::DamageType;
-use rand::RngExt;
 
 use crate::entity::{
     EntityBase,
     breath::{DROWNING_DAMAGE, MAX_AIR},
     mob::Mob,
+    passive::animal::experience_reward,
 };
 
 pub const AMBIENT_SOUND_INTERVAL: i32 = 120;
@@ -60,8 +60,4 @@ pub(super) fn handle_air_supply<M: Mob + ?Sized>(
     } else {
         entity.set_air_supply(MAX_AIR);
     }
-}
-
-pub(super) fn experience_reward<M: Mob + ?Sized>(mob: &M) -> u32 {
-    1 + mob.get_random().random_range(0..3)
 }

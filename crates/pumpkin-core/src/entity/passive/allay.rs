@@ -185,83 +185,6 @@ impl AllayEntity {
         }
     }
 
-    fn pick_up_items(&self) {
-        if self.mob_entity.living_entity.is_dead_or_dying() || !self.can_pick_up_loot(None) {
-            return;
-        }
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let area = entity.bounding_box.load().expand(
-            ITEM_PICKUP_REACH.x,
-            ITEM_PICKUP_REACH.y,
-            ITEM_PICKUP_REACH.z,
-        );
-        for other in world.get_entities_at_box(&area) {
-            let Some(item) = other.cast_any().downcast_ref::<ItemEntity>() else {
-                continue;
-            };
-            if item.get_pickup_delay() != 0 || item.get_entity().is_removed() {
-                continue;
-            }
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if !self.wants_to_pick_up(&stack) {
-                continue;
-            }
-            let count = {
-                let stored = self
-                    .inventory
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                stack.item_count.min(if stored.is_empty() {
-                    stack.get_max_stack_size()
-                } else {
-                    stored.get_max_stack_size() - stored.item_count
-                })
-            };
-            if count == 0
-                || !self
-                    .mob_entity
-                    .living_entity
-                    .pickup(item.get_entity(), u32::from(count))
-            {
-                continue;
-            }
-            let mut ground = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let item_key = ground.item.registry_key.to_string();
-            self.add_item(&mut ground);
-            if let Some(thrower_uuid) = item.get_thrower()
-                && let Some(thrower_player) = self
-                    .get_entity()
-                    .world
-                    .load()
-                    .get_player_by_uuid(thrower_uuid)
-            {
-                thrower_player.trigger_advancement(
-                    AdvancementTrigger::ThrownItemPickedUpByEntity {
-                        entity_type: "minecraft:allay".to_string(),
-                        item_id: item_key,
-                        is_baby: false,
-                        player_wearing_safe_armor: false,
-                    },
-                );
-            }
-            let empty = ground.is_empty();
-            drop(ground);
-            if empty {
-                item.get_entity().remove();
-            } else {
-                item.init_data_tracker();
-            }
-        }
-    }
-
     fn throw_item(
         &self,
         stack: ItemStack,
@@ -436,6 +359,10 @@ impl CustomSound for AllayEntity {
 }
 
 impl Mob for AllayEntity {
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
     fn mob_is_flapping(&self) -> bool {
         !self.get_entity().on_ground.load(Ordering::Relaxed)
     }
@@ -568,9 +495,49 @@ impl Mob for AllayEntity {
             && Self::considers_item_equal(&sample, stack)
     }
 
+    fn get_pickup_reach(&self) -> Vector3<f64> {
+        ITEM_PICKUP_REACH
+    }
+
+    fn pick_up_item(&self, item: &ItemEntity) {
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let count = {
+            let stored = self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            stack.item_count.min(if stored.is_empty() {
+                stack.get_max_stack_size()
+            } else {
+                stored.get_max_stack_size() - stored.item_count
+            })
+        };
+        let living = &self.mob_entity.living_entity;
+        if count == 0 || !living.pickup(item.get_entity(), u32::from(count)) {
+            return;
+        }
+        living.on_item_pickup(item);
+        let empty = {
+            let mut ground = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.add_item(&mut ground);
+            ground.is_empty()
+        };
+        if empty {
+            item.get_entity().remove();
+        } else {
+            item.init_data_tracker();
+        }
+    }
+
     fn post_tick(&self) {
         self.finish_noteblock_chunk();
-        self.pick_up_items();
         let entity = self.get_entity();
         let tick = entity.tick_count.load(Ordering::Relaxed);
         if !self.mob_entity.living_entity.is_dead_or_dying() && tick % 10 == 0 {
@@ -819,7 +786,7 @@ mod tests {
         ));
         item.set_pickup_delay(0);
         world.add_entity_silent(item.clone());
-        allay.pick_up_items();
+        crate::entity::mob::pick_up_nearby_items(allay.as_ref());
         assert_eq!(
             allay
                 .inventory
@@ -842,7 +809,7 @@ mod tests {
         allay.mob_entity.with_brain(allay.as_ref(), |brain| {
             brain.set(types::ITEM_PICKUP_COOLDOWN_TICKS, 60);
         });
-        allay.pick_up_items();
+        crate::entity::mob::pick_up_nearby_items(allay.as_ref());
         assert!(
             allay
                 .inventory

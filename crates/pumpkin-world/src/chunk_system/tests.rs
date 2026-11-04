@@ -462,47 +462,53 @@ fn cancelled_out_of_range_task_clears_holder_task_slot() {
 }
 
 #[test]
-fn features_task_waits_for_higher_priority_overlapping_features_neighbor() {
-    let mut graph = DAG::default();
-    let mut chunk_map = HashMap::new();
+fn center_chunk_pyramid_prioritized_ahead_of_outer_rings() {
+    let mut last_level: ChunkLevel = HashMapType::default();
+    let base_center_level = 32i8;
+    for dx in -10i32..=10 {
+        for dz in -10i32..=10 {
+            let dist = dx.abs().max(dz.abs()) as i8;
+            last_level.insert(ChunkPos::new(dx, dz), base_center_level + dist);
+        }
+    }
+    let high_priority = Vec::new();
 
-    let earlier_pos = ChunkPos::new(-1, -1);
-    let later_pos = ChunkPos::new(0, 0);
+    let center_full = GenerationSchedule::calc_priority(
+        &last_level,
+        &high_priority,
+        ChunkPos::new(0, 0),
+        StagedChunkEnum::Full,
+    );
+    let pyramid_edge_empty = GenerationSchedule::calc_priority(
+        &last_level,
+        &high_priority,
+        ChunkPos::new(5, 5),
+        StagedChunkEnum::Empty,
+    );
+    let ring1_full = GenerationSchedule::calc_priority(
+        &last_level,
+        &high_priority,
+        ChunkPos::new(1, 0),
+        StagedChunkEnum::Full,
+    );
+    let outer_ring_empty = GenerationSchedule::calc_priority(
+        &last_level,
+        &high_priority,
+        ChunkPos::new(10, 0),
+        StagedChunkEnum::Empty,
+    );
 
-    let earlier_key = graph
-        .nodes
-        .insert(Node::new(earlier_pos, StagedChunkEnum::Features));
-    let later_key = graph
-        .nodes
-        .insert(Node::new(later_pos, StagedChunkEnum::Features));
-
-    let mut earlier_holder = ChunkHolder {
-        current_stage: StagedChunkEnum::Carvers,
-        target_stage: StagedChunkEnum::Full,
-        ..Default::default()
-    };
-    earlier_holder.tasks[StagedChunkEnum::Features as usize] = earlier_key;
-    chunk_map.insert(earlier_pos, earlier_holder);
-
-    let mut later_holder = ChunkHolder {
-        current_stage: StagedChunkEnum::Carvers,
-        target_stage: StagedChunkEnum::Full,
-        ..Default::default()
-    };
-    later_holder.tasks[StagedChunkEnum::Features as usize] = later_key;
-    chunk_map.insert(later_pos, later_holder);
-
-    assert!(GenerationSchedule::is_features_order_ready(
-        &chunk_map,
-        earlier_pos,
-    ));
-    assert!(!GenerationSchedule::is_features_order_ready(
-        &chunk_map, later_pos,
-    ));
-
-    chunk_map.get_mut(&earlier_pos).unwrap().current_stage = StagedChunkEnum::Features;
-
-    assert!(GenerationSchedule::is_features_order_ready(
-        &chunk_map, later_pos,
-    ));
+    // TaskHeapNode reverses Ord so smaller TaskPriority pops first from BinaryHeap.
+    assert!(
+        center_full < pyramid_edge_empty,
+        "Higher stage (Full) in the same dependency wave must run before Empty"
+    );
+    assert!(
+        pyramid_edge_empty < ring1_full,
+        "Center chunk (0,0) dependency pyramid must precede ring-1 Full"
+    );
+    assert!(
+        ring1_full < outer_ring_empty,
+        "Inner ring Full chunks must not be preempted by outer-ring Empty tasks"
+    );
 }

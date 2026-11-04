@@ -122,6 +122,23 @@ impl CreeperEntity {
 }
 
 impl Mob for CreeperEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        let damaged =
+            self.mob_entity
+                .living_entity
+                .cause_fall_damage(caller, fall_distance, damage_modifier);
+        let max_swell = self.fuse_time.load(Ordering::Relaxed) - 5;
+        let swell = self.current_fuse_time.load(Ordering::Relaxed) + (fall_distance * 1.5) as i32;
+        self.current_fuse_time
+            .store(swell.min(max_swell), Ordering::Relaxed);
+        damaged
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
         nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);

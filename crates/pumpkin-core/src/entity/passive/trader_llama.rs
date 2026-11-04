@@ -1,84 +1,34 @@
-use std::sync::{
-    Arc, Weak,
-    atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockState;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{DataComponentImpl, EquipmentSlot};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
-use rand::RngExt;
-use uuid::Uuid;
 
+use crate::entity::Entity;
+use crate::entity::EntityBase;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::goal::escape_danger::EscapeDangerGoal;
+use crate::entity::ai::goal::track_target::TrackTargetGoal;
+use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::target_match::TargetMatch;
-use crate::entity::passive::llama::LLAMA_HUNTS;
-use crate::entity::{
-    Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
-    ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        ranged_attack::RangedAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
-    },
-    mob::{Mob, MobEntity, RangedAttackMob},
-    passive::animal::{Animal, get_carpet_color_from_item},
-    player::Player,
-    projectile::llama_spit::LlamaSpitEntity,
-};
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
-
-pub const FLAG_TAME: u8 = 2;
-pub const FLAG_BRED: u8 = 8;
-pub const FLAG_EATING: u8 = 16;
-pub const FLAG_STANDING: u8 = 32;
-pub const FLAG_OPEN_MOUTH: u8 = 64;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(i32)]
-pub enum TraderLlamaVariant {
-    #[default]
-    Creamy = 0,
-    White = 1,
-    Brown = 2,
-    Gray = 3,
-}
-
-impl TraderLlamaVariant {
-    #[must_use]
-    pub const fn from_id(id: i32) -> Self {
-        match id {
-            1 => Self::White,
-            2 => Self::Brown,
-            3 => Self::Gray,
-            _ => Self::Creamy,
-        }
-    }
-
-    #[must_use]
-    pub const fn id(self) -> i32 {
-        self as i32
-    }
-
-    #[must_use]
-    pub fn random_variant() -> Self {
-        let mut rng = rand::rng();
-        match rng.random_range(0..4) {
-            1 => Self::White,
-            2 => Self::Brown,
-            3 => Self::Gray,
-            _ => Self::Creamy,
-        }
-    }
-}
+use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::custom_sound::CustomSound;
+use crate::entity::mob::spawn::SpawnGroupData;
+use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::passive::abstract_horse::AbstractHorse;
+use crate::entity::passive::animal::Animal;
+use crate::entity::passive::llama::LlamaEntity;
+use crate::entity::passive::wandering_trader::WanderingTraderEntity;
+use crate::entity::player::Player;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::world::World;
 
 const TRADER_LLAMA_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::ZOMBIE_LIKE, true).matching(|_hunter, target, _world| {
@@ -87,314 +37,288 @@ const TRADER_LLAMA_HUNTS: &[Hunt] = &[
     Hunt::new(2, TargetMatch::ILLAGER, true),
 ];
 
+const DEFAULT_DESPAWN_DELAY: i32 = 47999;
+
 pub struct TraderLlamaEntity {
-    pub mob_entity: MobEntity,
-    pub ageable_data: AgeableData,
-    pub variant: AtomicI32,
-    pub strength: AtomicI32,
-    pub carpet_color: AtomicCell<Option<u8>>,
-    pub flags: AtomicU8,
-    pub has_chest: AtomicBool,
-    pub temper: AtomicI32,
-    pub owner: AtomicCell<Option<Uuid>>,
+    pub llama: Arc<LlamaEntity>,
+    despawn_delay: AtomicI32,
 }
 
 impl TraderLlamaEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
-        let mut rng = rand::rng();
-        let variant = TraderLlamaVariant::random_variant();
-        // TODO: vanilla rolls 1..=3, and 1..=5 with 4% chance.
-        let strength = rng.random_range(1..=5);
-
-        let llama = Self {
-            mob_entity,
-            ageable_data: AgeableData::default(),
-            variant: AtomicI32::new(variant.id()),
-            strength: AtomicI32::new(strength),
-            carpet_color: AtomicCell::new(None),
-            flags: AtomicU8::new(0),
-            has_chest: AtomicBool::new(false),
-            temper: AtomicI32::new(0),
-            owner: AtomicCell::new(None),
-        };
-        let mob_arc = Arc::new(llama);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-        let ranged_weak: Weak<dyn RangedAttackMob> = {
-            let ranged_arc: Arc<dyn RangedAttackMob> = mob_arc.clone();
-            Arc::downgrade(&ranged_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(
-                3,
-                Box::new(RangedAttackGoal::new(ranged_weak, 1.25, 40, 20.0)),
-            );
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.0)));
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(0.7)));
-            goal_selector.add_goal(
-                8,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // TODO: TraderLlamaDefendWanderingTraderGoal at 1.
-            hunting::apply(target_selector, &mob_arc.mob_entity, LLAMA_HUNTS);
-            hunting::apply(target_selector, &mob_arc.mob_entity, TRADER_LLAMA_HUNTS);
-        };
-
-        mob_arc
-    }
-
-    #[must_use]
-    pub fn get_variant(&self) -> TraderLlamaVariant {
-        TraderLlamaVariant::from_id(self.variant.load(Ordering::Relaxed))
-    }
-
-    pub fn set_variant(&self, variant: TraderLlamaVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_VARIANT_ID,
-            VarInt(variant.id()),
+        let llama = LlamaEntity::new(entity);
+        llama
+            .mob_entity
+            .goals_selector
+            .add_goal(1, EscapeDangerGoal::new(2.0));
+        llama
+            .mob_entity
+            .target_selector
+            .add_goal(1, Box::new(DefendWanderingTraderGoal::new()));
+        hunting::apply(
+            &llama.mob_entity.target_selector,
+            &llama.mob_entity,
+            TRADER_LLAMA_HUNTS,
         );
+        Arc::new(Self {
+            llama,
+            despawn_delay: AtomicI32::new(DEFAULT_DESPAWN_DELAY),
+        })
     }
 
-    #[must_use]
-    pub fn get_strength(&self) -> i32 {
-        self.strength.load(Ordering::Relaxed)
+    pub fn set_despawn_delay(&self, despawn_delay: i32) {
+        self.despawn_delay.store(despawn_delay, Relaxed);
     }
 
-    pub fn set_strength(&self, strength: i32) {
-        self.strength.store(strength, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_STRENGTH_ID,
-            VarInt(strength),
-        );
-    }
-
-    #[must_use]
-    pub fn has_flag(&self, flag: u8) -> bool {
-        (self.flags.load(Ordering::Relaxed) & flag) != 0
-    }
-
-    pub fn set_flag(&self, flag: u8, val: bool) {
-        let current = self.flags.load(Ordering::Relaxed);
-        let new_flags = if val { current | flag } else { current & !flag };
-        self.flags.store(new_flags, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_ID_FLAGS,
-            new_flags as i8,
-        );
-    }
-
-    #[must_use]
-    pub fn is_tame(&self) -> bool {
-        self.has_flag(FLAG_TAME)
-    }
-
-    pub fn set_tame(&self, val: bool) {
-        self.set_flag(FLAG_TAME, val);
-    }
-
-    #[must_use]
-    pub fn has_chest(&self) -> bool {
-        self.has_chest.load(Ordering::Relaxed)
-    }
-
-    pub fn set_has_chest(&self, val: bool) {
-        self.has_chest.store(val, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(pumpkin_data::tracked_data::trader_llama::DATA_ID_CHEST, val);
-    }
-
-    pub fn spit(&self, target: &Arc<dyn EntityBase>) {
-        let entity = self.get_entity();
-        let world = entity.world.load_full();
-
-        let spit_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::LLAMA_SPIT);
-        let spit = LlamaSpitEntity::new_shot(spit_entity, entity);
-
-        let mob_pos = entity.pos.load();
-        let target_entity = target.get_entity();
-        let target_pos = target_entity.pos.load();
-        let target_height = f64::from(target_entity.entity_dimension.load().height);
-
-        let dx = target_pos.x - mob_pos.x;
-        let dy = (target_pos.y + target_height / 3.0) - spit.get_entity().pos.load().y;
-        let dz = target_pos.z - mob_pos.z;
-        let horizontal_distance = dx.hypot(dz);
-        let yo = horizontal_distance * 0.2;
-
-        spit.thrown.set_velocity(dx, dy + yo, dz, 1.5, 10.0);
-
-        if !entity.silent.load(Ordering::Relaxed) {
-            world.play_sound(Sound::EntityLlamaSpit, SoundCategory::Neutral, &mob_pos);
+    fn maybe_despawn(&self) {
+        if !self.can_despawn() {
+            return;
         }
+        let entity = self.get_entity();
+        let trader_delay = wandering_trader_holder(entity).and_then(|holder| {
+            holder
+                .cast_any()
+                .downcast_ref::<WanderingTraderEntity>()
+                .map(WanderingTraderEntity::get_despawn_delay)
+        });
+        let despawn_delay = trader_delay.unwrap_or_else(|| self.despawn_delay.load(Relaxed)) - 1;
+        self.despawn_delay.store(despawn_delay, Relaxed);
+        if despawn_delay <= 0 {
+            entity.remove_leash();
+            entity.remove();
+        }
+    }
 
-        let spit_arc: Arc<dyn EntityBase> = Arc::new(spit);
-        world.spawn_entity(spit_arc);
+    fn can_despawn(&self) -> bool {
+        let entity = self.get_entity();
+        let leashed_to_other = entity.is_leashed() && wandering_trader_holder(entity).is_none();
+        let one_player_passenger = {
+            let passengers = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            passengers.len() == 1 && passengers[0].get_player().is_some()
+        };
+        !self.llama.is_tamed()
+            && !leashed_to_other
+            && !one_player_passenger
+            && !self.llama.is_age_locked()
+            && !self.llama.mob_entity.persistence_required.load(Relaxed)
     }
 }
 
-impl AgeableMob for TraderLlamaEntity {
-    fn get_ageable_data(&self) -> &AgeableData {
-        &self.ageable_data
+fn wandering_trader_holder(entity: &Entity) -> Option<Arc<dyn EntityBase>> {
+    entity
+        .leashed_to
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+        .filter(|holder| {
+            holder
+                .cast_any()
+                .downcast_ref::<WanderingTraderEntity>()
+                .is_some()
+        })
+        .cloned()
+}
+
+/// Targets whatever last hurt the wandering trader holding this llama's leash.
+struct DefendWanderingTraderGoal {
+    track_target_goal: TrackTargetGoal,
+    target: Option<Arc<dyn EntityBase>>,
+    target_predicate: TargetPredicate,
+    timestamp: i32,
+}
+
+impl DefendWanderingTraderGoal {
+    fn new() -> Self {
+        Self {
+            track_target_goal: TrackTargetGoal::with_default(false),
+            target: None,
+            target_predicate: TargetPredicate::create_attackable(),
+            timestamp: 0,
+        }
     }
 }
 
-impl Animal for TraderLlamaEntity {
-    fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack.item.has_tag(&tag::Item::MINECRAFT_LLAMA_FOOD)
-            || item_stack
-                .item
-                .has_tag(&tag::Item::MINECRAFT_LLAMA_TEMPT_ITEMS)
-            || item_stack.item == &Item::WHEAT
-            || item_stack.item == &Item::HAY_BLOCK
+impl Goal for DefendWanderingTraderGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(owner) = wandering_trader_holder(mob.get_entity()) else {
+            return false;
+        };
+        let Some(owner_living) = owner.get_living_entity() else {
+            return false;
+        };
+        let timestamp = owner_living.get_last_hurt_by_mob_timestamp();
+        let Some(attacker) = owner_living.get_last_hurt_by_mob() else {
+            return false;
+        };
+        if timestamp == self.timestamp
+            || !self.track_target_goal.can_track(
+                mob,
+                Some(attacker.as_ref()),
+                &self.target_predicate,
+            )
+        {
+            return false;
+        }
+        self.target = Some(attacker);
+        true
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.track_target_goal.start_targeting(
+            mob,
+            self.target.clone(),
+            TargetReason::TargetAttackedOwner,
+        );
+        if let Some(owner) = wandering_trader_holder(mob.get_entity())
+            && let Some(owner_living) = owner.get_living_entity()
+        {
+            self.timestamp = owner_living.get_last_hurt_by_mob_timestamp();
+        }
+        self.track_target_goal.start(mob);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
+        self.track_target_goal.stop(mob);
+    }
+
+    fn controls(&self) -> Controls {
+        self.track_target_goal.controls()
     }
 }
 
 impl Mob for TraderLlamaEntity {
-    fn is_tamed(&self) -> bool {
-        self.is_tame()
+    fn on_elastic_leash_pull(&self) {
+        self.llama.on_elastic_leash_pull();
     }
 
-    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
-        self.play_entity_sound(Sound::EntityLlamaStep, 0.15, 1.0);
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        self.llama
+            .cause_fall_damage(caller, fall_distance, damage_modifier)
     }
 
-    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
-        Some(self)
-    }
-
-    fn as_animal(&self) -> Option<&dyn Animal> {
-        Some(self)
-    }
-
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-        nbt.put_int("Variant", self.get_variant().id());
-        nbt.put_int("Strength", self.get_strength());
-        nbt.put_bool("ChestedHorse", self.has_chest());
-        nbt.put_bool("Tame", self.is_tame());
-        nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
-        if let Some(owner) = self.owner.load() {
-            nbt.put_uuid("Owner", owner);
-        }
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
-        if let Some(variant) = nbt.get_int("Variant") {
-            self.set_variant(TraderLlamaVariant::from_id(variant));
-        }
-        if let Some(strength) = nbt.get_int("Strength") {
-            self.set_strength(strength);
-        }
-        if let Some(chested) = nbt.get_bool("ChestedHorse") {
-            self.set_has_chest(chested);
-        }
-        if let Some(tame) = nbt.get_bool("Tame") {
-            self.set_tame(tame);
-        }
-        if let Some(temper) = nbt.get_int("Temper") {
-            self.temper.store(temper, Ordering::Relaxed);
-        }
-        if let Some(owner) = nbt.get_uuid("Owner") {
-            self.owner.store(Some(owner));
-        }
+    fn mob_is_pushable(&self) -> bool {
+        self.llama.mob_is_pushable()
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
+        &self.llama.mob_entity
+    }
+
+    fn is_tamed(&self) -> bool {
+        self.llama.is_tamed()
+    }
+
+    fn get_owner_uuid(&self) -> Option<uuid::Uuid> {
+        self.llama.get_owner_uuid()
+    }
+
+    fn follow_leash_speed(&self) -> f64 {
+        self.llama.follow_leash_speed()
+    }
+
+    fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
+        self.llama.can_dispenser_equip_into_slot(slot)
+    }
+
+    fn is_mob_immobile(&self) -> bool {
+        self.llama.is_mob_immobile()
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        self.llama.get_ambient_sound()
+    }
+
+    fn get_ambient_sound_interval(&self) -> i32 {
+        self.llama.get_ambient_sound_interval()
+    }
+
+    fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
+        self.llama.mob_play_step_sound(pos, state);
+    }
+
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(&*self.llama)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(&*self.llama)
+    }
+
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
+        Some(&*self.llama)
+    }
+
+    fn as_abstract_horse(&self) -> Option<&dyn AbstractHorse> {
+        Some(&*self.llama)
+    }
+
+    fn drop_inventory(&self) {
+        self.llama.drop_inventory();
+    }
+
+    fn tick_links(&self) -> Vec<i32> {
+        self.llama.tick_links()
+    }
+
+    fn mob_ai_step(&self) {
+        self.llama.mob_ai_step();
+        self.maybe_despawn();
+    }
+
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        if reason == crate::entity::mob::spawn::EntitySpawnReason::Event {
+            self.llama.set_age(0);
+        }
+        self.llama.finalize_spawn(world, reason, group_data)
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        self.llama.mob_get_component(component)
+    }
+
+    fn mob_set_variant_name(&self, name: &str) {
+        self.llama.mob_set_variant_name(name);
+    }
+
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        self.llama.mob_write_nbt(nbt);
+        nbt.put_int("DespawnDelay", self.despawn_delay.load(Relaxed));
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.llama.mob_read_nbt(nbt);
+        self.set_despawn_delay(nbt.get_int("DespawnDelay").unwrap_or(DEFAULT_DESPAWN_DELAY));
     }
 
     fn mob_init_data_tracker(&self) {
-        let entity = self.get_entity();
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        if is_baby {
-            entity.set_synced_data(pumpkin_data::tracked_data::trader_llama::DATA_BABY_ID, true);
-        }
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_VARIANT_ID,
-            VarInt(self.get_variant().id()),
-        );
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_STRENGTH_ID,
-            VarInt(self.get_strength()),
-        );
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_ID_CHEST,
-            self.has_chest(),
-        );
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::trader_llama::DATA_ID_FLAGS,
-            self.flags.load(Ordering::Relaxed) as i8,
-        );
+        self.llama.mob_init_data_tracker();
+    }
+
+    fn mob_bedrock_spawn_metadata(
+        &self,
+    ) -> Option<pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList> {
+        self.llama.mob_bedrock_spawn_metadata()
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if self.is_tame() && item == &Item::CHEST && !self.has_chest() && !self.is_baby() {
-            self.set_has_chest(true);
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityDonkeyChest,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
-            return true;
-        }
-
-        if self.is_tame()
-            && !self.is_baby()
-            && let Some(color) = get_carpet_color_from_item(item)
-        {
-            self.carpet_color.store(Some(color));
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityLlamaSwag,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
-            return true;
-        }
-
-        if !self.is_baby() && !self.is_food(item_stack) {
-            let world = player.world();
-            let ent = &self.mob_entity.living_entity.entity;
-            if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
-                && let Some(passenger) = world.get_player_by_id(player.entity_id())
-            {
-                ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-                return true;
-            }
-        }
-
-        self.animal_interact(player, item_stack, Sound::EntityLlamaAmbient)
-    }
-}
-
-impl RangedAttackMob for TraderLlamaEntity {
-    fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
-        self.spit(target);
+        self.llama.mob_interact(player, item_stack)
     }
 }

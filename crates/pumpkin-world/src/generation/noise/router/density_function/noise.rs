@@ -249,6 +249,39 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
             volume,
         );
         let mut index = 0;
+        if self.data.y_scale == 0.0 && volume.size_y > 1 {
+            for z in 0..volume.size_z {
+                let base_noise_z = f64::from(volume.block_z(z)) * self.data.xz_scale;
+                for x in 0..volume.size_x {
+                    let base_noise_x = f64::from(volume.block_x(x)) * self.data.xz_scale;
+                    let mut last_sx = f32::NAN;
+                    let mut last_sy = f32::NAN;
+                    let mut last_sz = f32::NAN;
+                    let mut last_val = 0.0;
+                    for _ in 0..volume.size_y {
+                        let sx = buffer[index];
+                        let sy = y_shifts[index];
+                        let sz = z_shifts[index];
+                        if sx.to_bits() != last_sx.to_bits()
+                            || sy.to_bits() != last_sy.to_bits()
+                            || sz.to_bits() != last_sz.to_bits()
+                        {
+                            last_sx = sx;
+                            last_sy = sy;
+                            last_sz = sz;
+                            last_val = self.sampler.sample(
+                                base_noise_x + f64::from(sx),
+                                f64::from(sy),
+                                base_noise_z + f64::from(sz),
+                            );
+                        }
+                        buffer[index] = last_val;
+                        index += 1;
+                    }
+                }
+            }
+            return;
+        }
         for z in 0..volume.size_z {
             let base_noise_z = f64::from(volume.block_z(z)) * self.data.xz_scale;
             for x in 0..volume.size_x {
