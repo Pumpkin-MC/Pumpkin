@@ -78,21 +78,21 @@ fn is_breeding_possible(tick: &BrainTick<'_>) -> bool {
 }
 
 fn try_to_give_birth(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
-    let Some(childs_bed) = take_vacant_bed(tick) else {
+    let Some(child_bed) = take_vacant_bed(tick) else {
         broadcast_angry(tick, target.get_entity());
         broadcast_angry(tick, tick.mob.get_entity());
         return;
     };
     let Some(body) = tick.mob.cast_any().downcast_ref::<VillagerEntity>() else {
-        release_bed(tick, &childs_bed);
+        release_bed(tick, &child_bed);
         return;
     };
     let Some(target_villager) = target.cast_any().downcast_ref::<VillagerEntity>() else {
-        release_bed(tick, &childs_bed);
+        release_bed(tick, &child_bed);
         return;
     };
     let Some(child) = body.get_breed_offspring(tick.world, target_villager) else {
-        release_bed(tick, &childs_bed);
+        release_bed(tick, &child_bed);
         return;
     };
     body.set_age(6000);
@@ -104,7 +104,7 @@ fn try_to_give_birth(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
     child.get_entity().pitch.store(0.0);
     tick.world.spawn_entity(child.clone());
     broadcast_hearts(tick, child.get_entity());
-    give_bed_to_child(tick, &child, childs_bed);
+    give_bed_to_child(tick, &child, child_bed);
 }
 
 fn release_bed(tick: &BrainTick<'_>, bed: &BlockPos) {

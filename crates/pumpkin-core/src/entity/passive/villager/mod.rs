@@ -510,10 +510,14 @@ impl VillagerEntity {
     }
 
     pub fn finalize_villager_type(&self, world: &World, pos: &BlockPos) {
+        self.finalize_villager_type_in_biome(world.get_biome(pos));
+    }
+
+    pub fn finalize_villager_type_in_biome(&self, biome: &pumpkin_data::chunk::Biome) {
         if self.get_villager_data_finalized() {
             return;
         }
-        let biome_type = breeding::villager_type_for_biome(world.get_biome(pos).registry_id);
+        let biome_type = breeding::villager_type_for_biome(biome.registry_id);
         let data = *self
             .villager_data
             .lock()
@@ -1448,6 +1452,10 @@ impl AgeableMob for VillagerEntity {
 }
 
 impl Mob for VillagerEntity {
+    fn finalize_spawn_in_biome(&self, biome: &'static pumpkin_data::chunk::Biome) {
+        self.finalize_villager_type_in_biome(biome);
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
@@ -1541,11 +1549,7 @@ impl Mob for VillagerEntity {
                 .villager_data
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut villager_data_nbt = NbtCompound::new();
-            villager_data_nbt.put_int("Type", data.r#type.0);
-            villager_data_nbt.put_int("Profession", data.profession.0);
-            villager_data_nbt.put_int("Level", data.level.0);
-            nbt.put_compound("VillagerData", villager_data_nbt);
+            nbt.put_compound("VillagerData", data.write_nbt());
         };
 
         nbt.put_bool("VillagerDataFinalized", self.get_villager_data_finalized());
@@ -1653,15 +1657,7 @@ impl Mob for VillagerEntity {
                 .villager_data
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(t) = villager_data_nbt.get_int("Type") {
-                data.r#type = VarInt(t);
-            }
-            if let Some(p) = villager_data_nbt.get_int("Profession") {
-                data.profession = VarInt(p);
-            }
-            if let Some(l) = villager_data_nbt.get_int("Level") {
-                data.level = VarInt(l);
-            }
+            *data = VillagerData::read_nbt(villager_data_nbt, *data);
         }
 
         if let Some(food) = nbt.get_int("FoodLevel") {

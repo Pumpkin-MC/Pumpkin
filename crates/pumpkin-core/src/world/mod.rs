@@ -7733,10 +7733,13 @@ impl WorldPortalExt for WorldPortal {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
     }
 
-    fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for mut nbt in entities {
+    fn spawn_structure_entities(&self, entities: Vec<(NbtCompound, &'static Biome)>) {
+        for (mut nbt, biome) in entities {
             nbt.child_tags.remove("UUID");
             if let Some(entity) = load_static_entity_from_nbt(&nbt, Vector3::default(), &self.0) {
+                if let Some(mob) = entity.get_mob() {
+                    mob.finalize_spawn_in_biome(biome);
+                }
                 self.0.spawn_entity(entity);
             }
         }

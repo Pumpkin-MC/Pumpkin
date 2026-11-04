@@ -2067,6 +2067,10 @@ pub trait Mob: EntityBase + Send + Sync {
         self.default_finalize_spawn(world, group_data)
     }
 
+    /// The part of `finalize_spawn` that reads the biome, for spawns made while the chunk is
+    /// still being generated and `World::get_biome` cannot see it.
+    fn finalize_spawn_in_biome(&self, _biome: &'static pumpkin_data::chunk::Biome) {}
+
     /// The `finalize_spawn` of mobs without their own, for overrides that extend it.
     fn default_finalize_spawn(
         &self,

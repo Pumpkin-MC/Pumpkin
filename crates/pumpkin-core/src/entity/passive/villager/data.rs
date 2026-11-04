@@ -1,5 +1,6 @@
 use pumpkin_data::item::Item;
 pub use pumpkin_data::villager::{VillagerProfession, VillagerType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use serde::Serialize;
 
@@ -184,5 +185,39 @@ impl VillagerData {
     #[must_use]
     pub fn profession_enum(&self) -> VillagerProfession {
         VillagerProfession::from_i32(self.profession.0).unwrap_or(VillagerProfession::None)
+    }
+
+    #[must_use]
+    pub fn read_nbt(nbt: &NbtCompound, current: Self) -> Self {
+        let r#type = nbt
+            .get_string("type")
+            .and_then(VillagerType::from_name)
+            .or_else(|| nbt.get_int("Type").and_then(VillagerType::from_i32))
+            .unwrap_or_else(|| current.type_enum());
+        let profession = nbt
+            .get_string("profession")
+            .and_then(VillagerProfession::from_name)
+            .or_else(|| {
+                nbt.get_int("Profession")
+                    .and_then(VillagerProfession::from_i32)
+            })
+            .unwrap_or_else(|| current.profession_enum());
+        let level = nbt
+            .get_int("level")
+            .or_else(|| nbt.get_int("Level"))
+            .unwrap_or(current.level.0);
+        Self::new(r#type, profession, level)
+    }
+
+    #[must_use]
+    pub fn write_nbt(&self) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("type", format!("minecraft:{}", self.type_enum().to_name()));
+        nbt.put_string(
+            "profession",
+            format!("minecraft:{}", self.profession_enum().to_name()),
+        );
+        nbt.put_int("level", self.level.0);
+        nbt
     }
 }
