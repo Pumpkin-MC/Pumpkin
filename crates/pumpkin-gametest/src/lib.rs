@@ -4,6 +4,7 @@ pub mod helper;
 pub mod manager;
 pub mod model;
 pub mod runner;
+pub mod selector;
 pub mod structure;
 pub mod world;
 
@@ -16,13 +17,15 @@ pub use helper::{
 };
 pub use manager::{
     GameTestBatchReport, GameTestManager, GameTestReporter, GameTestRetryOptions, GameTestRunner,
+    VERIFY_TEST_BATCH_SIZE,
 };
 pub use model::{GameTestDefinition, GameTestRotation, TestType};
 pub use runner::{GameTestSession, GameTestState, TestRunner};
+pub use selector::resource_selector_matches;
 pub use structure::{
     GameTestPosition, GameTestStructureBlock, GameTestStructureTemplate, TestBlockMode,
-    TestStructureInstance, clear_structure_area, encase_structure, place_structure,
-    place_structure_with_controller_rotation, remove_barriers,
+    TestStructureInstance, clear_placed_test, clear_structure_area, encase_structure,
+    place_structure, place_structure_with_controller_rotation, remove_barriers,
 };
 pub use world::GameTestWorld;
 

@@ -1216,7 +1216,7 @@ impl Server {
         self.simulation_pool.install(|| {
             // Do not flush mid-tick; `Flush` is `flushChannel`.
             let suspended = self.suspend_player_flushes();
-            if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+            if self.tick_rate_manager.runs_game_elements() {
                 self.tick_worlds();
                 // Always run player and network ticking, even when game is frozen
             } else {

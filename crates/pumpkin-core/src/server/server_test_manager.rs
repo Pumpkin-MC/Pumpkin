@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex as StdMutex};
 
@@ -7,7 +7,7 @@ use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_gametest::{
     BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
     GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
-    TestType,
+    TestStructureInstance, TestType, clear_placed_test,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
@@ -25,55 +25,44 @@ use crate::{
     world::World,
 };
 
-static GAME_TEST_QUEUE: LazyLock<StdMutex<Vec<GameTestQueueEntry>>> =
-    LazyLock::new(|| StdMutex::new(Vec::new()));
+static GAME_TEST_QUEUE: LazyLock<StdMutex<QueuedGameTests>> =
+    LazyLock::new(|| StdMutex::new(QueuedGameTests::default()));
 static STOP_GAME_TESTS: AtomicBool = AtomicBool::new(false);
 static PENDING_GAME_TESTS: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Default)]
+struct QueuedGameTests {
+    requests: Vec<GameTestQueueEntry>,
+    clears: Vec<GameTestClearRequest>,
+    verification: Option<VerificationQueue>,
+}
+
+struct GameTestClearRequest {
+    world: Arc<World>,
+    positions: Vec<BlockPos>,
+}
+
+struct VerificationQueue {
+    batches: VecDeque<Vec<GameTestQueueEntry>>,
+    report: Arc<GameTestBatchReport>,
+}
+
+impl QueuedGameTests {
+    fn update_pending_count(&self) {
+        let verification_batches = self
+            .verification
+            .as_ref()
+            .map_or(0, |verification| verification.batches.len());
+        PENDING_GAME_TESTS.store(
+            self.requests.len() + self.clears.len() + verification_batches,
+            Ordering::Release,
+        );
+    }
+}
 
 #[must_use]
 pub fn has_pending_game_tests() -> bool {
     STOP_GAME_TESTS.load(Ordering::Acquire) || PENDING_GAME_TESTS.load(Ordering::Acquire) > 0
-}
-
-/// Matches a `GameTest` selector against a namespaced test ID.
-#[must_use]
-pub fn resource_selector_matches(selector: &str, name: &str) -> bool {
-    let selector = if selector.contains(':') {
-        selector.to_string()
-    } else {
-        format!("minecraft:{selector}")
-    };
-
-    wildcard_match(selector.as_bytes(), name.as_bytes())
-}
-
-const fn wildcard_match(pattern: &[u8], value: &[u8]) -> bool {
-    let (mut p, mut v) = (0usize, 0usize);
-    let mut star = None;
-    let mut retry_v = 0usize;
-
-    while v < value.len() {
-        if p < pattern.len() && (pattern[p] == b'?' || pattern[p] == value[v]) {
-            p += 1;
-            v += 1;
-        } else if p < pattern.len() && pattern[p] == b'*' {
-            star = Some(p);
-            p += 1;
-            retry_v = v;
-        } else if let Some(star_index) = star {
-            p = star_index + 1;
-            retry_v += 1;
-            v = retry_v;
-        } else {
-            return false;
-        }
-    }
-
-    while p < pattern.len() && pattern[p] == b'*' {
-        p += 1;
-    }
-
-    p == pattern.len()
 }
 
 #[derive(Clone, Copy)]
@@ -159,8 +148,30 @@ pub fn enqueue_game_test(request: GameTestQueueEntry) {
     let mut queue = GAME_TEST_QUEUE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    queue.push(request);
-    PENDING_GAME_TESTS.store(queue.len(), Ordering::Release);
+    queue.requests.push(request);
+    queue.update_pending_count();
+}
+
+pub fn enqueue_game_test_clear(world: Arc<World>, positions: Vec<BlockPos>) {
+    let mut queue = GAME_TEST_QUEUE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    queue.clears.push(GameTestClearRequest { world, positions });
+    queue.update_pending_count();
+}
+
+pub fn enqueue_game_test_verification(
+    batches: Vec<Vec<GameTestQueueEntry>>,
+    report: Arc<GameTestBatchReport>,
+) {
+    let mut queue = GAME_TEST_QUEUE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    queue.verification = Some(VerificationQueue {
+        batches: batches.into(),
+        report,
+    });
+    queue.update_pending_count();
 }
 
 pub fn stop_game_tests() {
@@ -170,8 +181,10 @@ pub fn stop_game_tests() {
     let mut queue = GAME_TEST_QUEUE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    queue.clear();
-    PENDING_GAME_TESTS.store(0, Ordering::Release);
+    queue.requests.clear();
+    queue.clears.clear();
+    queue.verification = None;
+    queue.update_pending_count();
     STOP_GAME_TESTS.store(true, Ordering::Release);
 }
 
@@ -179,16 +192,60 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     // Hold the same queue mutex used by stop_game_tests while consuming the stop
     // flag and draining requests. This closes the async race where a new /test run
     // could otherwise be drained before the old runner was cleared.
-    let queued = {
+    let (queued, clears, verification_batch) = {
         let mut queue = GAME_TEST_QUEUE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if STOP_GAME_TESTS.swap(false, Ordering::AcqRel) {
             runner.clear();
         }
-        PENDING_GAME_TESTS.store(0, Ordering::Release);
-        std::mem::take(&mut *queue)
+        let queued = std::mem::take(&mut queue.requests);
+        let clears = std::mem::take(&mut queue.clears);
+        let verification_batch = if runner.is_empty() {
+            queue
+                .verification
+                .as_mut()
+                .and_then(|verification| verification.batches.pop_front())
+        } else {
+            None
+        };
+        queue.update_pending_count();
+        (queued, clears, verification_batch)
     };
+
+    for clear in clears {
+        for position in clear.positions {
+            if let Err(error) = clear_test_instance(server, clear.world.clone(), position).await {
+                warn!(target: "pumpkin::gametest", %position, %error, "Unable to clear GameTest structure");
+            }
+        }
+    }
+
+    if let Some(batch) = verification_batch {
+        for completed in runner.take_completed() {
+            if let Err(error) = completed.clear_placement().await {
+                warn!(target: "pumpkin::gametest", error = %error, "Unable to clear previous GameTest batch");
+                stop_game_tests();
+                runner.clear();
+                return;
+            }
+        }
+        runner.collect_completed();
+        for request in batch {
+            let test_id = request.test_id.clone();
+            let report = request.report.clone();
+            match prepare_test_run(server, request).await {
+                Ok(run) => runner.enqueue(run),
+                Err(error) => {
+                    warn!(target: "pumpkin::gametest", test = %test_id, error = %error, "Unable to start queued GameTest");
+                    report.fail_to_start(&error);
+                    stop_game_tests();
+                    runner.clear();
+                    return;
+                }
+            }
+        }
+    }
 
     for request in queued {
         let test_id = request.test_id.clone();
@@ -209,6 +266,120 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
             }
         }
     }
+}
+
+pub fn finish_game_test_tick(runner: &mut GameTestRunner) {
+    let mut queue = GAME_TEST_QUEUE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(verification) = &queue.verification else {
+        return;
+    };
+    if verification.report.failed_required() + verification.report.failed_optional() > 0 {
+        runner.clear();
+        queue.verification = None;
+        queue.update_pending_count();
+    } else if verification.report.is_done() {
+        runner.stop_collecting_completed();
+        queue.verification = None;
+        queue.update_pending_count();
+    }
+}
+
+async fn clear_test_instance(
+    server: &Arc<Server>,
+    world: Arc<World>,
+    position: BlockPos,
+) -> GameTestResult<()> {
+    let placement = test_instance_placement(server, &world, position)?;
+    let entity = world.get_block_entity(&position).ok_or_else(|| {
+        GameTestError::World(format!("Missing test instance block entity at {position}"))
+    })?;
+    let entity = Arc::downcast::<TestInstanceBlockBlockEntity>(entity).map_err(|_| {
+        GameTestError::World(format!(
+            "Block entity at {position} is not a test instance block"
+        ))
+    })?;
+    let padding = {
+        let data = entity
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        data.as_ref()
+            .and_then(|data| data.get_string("test"))
+            .and_then(|test| server.datapack_manager.get_test_instance(test))
+            .map_or(0, |test| test.padding)
+    };
+    let adapter = ServerGameTestWorld {
+        world,
+        forced_chunks: StdMutex::new(HashSet::new()),
+    };
+    clear_placed_test(&adapter, &placement, padding).await
+}
+
+/// Reads a placed test controller using the same structure bounds as its test definition.
+pub fn test_instance_placement(
+    server: &Arc<Server>,
+    world: &Arc<World>,
+    position: BlockPos,
+) -> GameTestResult<TestStructureInstance> {
+    let entity = world.get_block_entity(&position).ok_or_else(|| {
+        GameTestError::World(format!("Missing test instance block entity at {position}"))
+    })?;
+    let entity = Arc::downcast::<TestInstanceBlockBlockEntity>(entity).map_err(|_| {
+        GameTestError::World(format!(
+            "Block entity at {position} is not a test instance block"
+        ))
+    })?;
+    let data = entity
+        .data
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let data = data
+        .as_ref()
+        .ok_or_else(|| GameTestError::World(format!("Test instance at {position} has no data")))?;
+    let size: [i32; 3] = data
+        .get_int_array("size")
+        .and_then(|size| size.try_into().ok())
+        .ok_or_else(|| GameTestError::World(format!("Test instance at {position} has no size")))?;
+    if size.iter().any(|&axis| !(0..=256).contains(&axis)) {
+        return Err(GameTestError::World(format!(
+            "Test instance at {position} has invalid size"
+        )));
+    }
+    let definition = data
+        .get_string("test")
+        .and_then(|test| server.datapack_manager.get_test_instance(test));
+    let padding = definition.as_ref().map_or(0, |test| test.padding);
+    let base_rotation = definition
+        .as_ref()
+        .map_or(GameTestRotation::None, |test| test.rotation);
+    let controller_rotation = match data.get_string("rotation") {
+        Some("clockwise_90") => GameTestRotation::Clockwise90,
+        Some("180") => GameTestRotation::Clockwise180,
+        Some("counterclockwise_90") => GameTestRotation::Counterclockwise90,
+        _ => GameTestRotation::None,
+    };
+    let rotation = base_rotation.then(controller_rotation);
+    let rotated_size =
+        rotation
+            .as_block_rotation()
+            .transform_size(pumpkin_util::math::vector3::Vector3::new(
+                size[0], size[1], size[2],
+            ));
+    let origin = BlockPos::new(
+        position.0.x + padding,
+        position.0.y + padding + 1,
+        position.0.z + padding + 1,
+    );
+    let placement = TestStructureInstance::new(
+        position,
+        origin,
+        size,
+        [rotated_size.x, rotated_size.y, rotated_size.z],
+        rotation,
+    );
+    Ok(placement)
 }
 
 pub async fn prepare_test_run(

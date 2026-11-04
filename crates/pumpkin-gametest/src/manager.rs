@@ -6,6 +6,8 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::{GameTestError, GameTestSession, GameTestState};
 
+pub const VERIFY_TEST_BATCH_SIZE: usize = 100;
+
 /// Receives fully constructed `GameTest` report messages.
 ///
 /// The `GameTest` runtime owns when and what to report. Integrations only decide
@@ -401,12 +403,18 @@ impl GameTestManager {
 #[derive(Default)]
 pub struct GameTestRunner {
     active: Vec<GameTestManager>,
+    completed: Vec<GameTestSession>,
+    collect_completed: bool,
 }
 
 impl GameTestRunner {
     #[must_use]
     pub const fn new() -> Self {
-        Self { active: Vec::new() }
+        Self {
+            active: Vec::new(),
+            completed: Vec::new(),
+            collect_completed: false,
+        }
     }
 
     pub fn enqueue(&mut self, run: GameTestManager) {
@@ -415,6 +423,21 @@ impl GameTestRunner {
 
     pub fn clear(&mut self) {
         self.active.clear();
+        self.completed.clear();
+        self.collect_completed = false;
+    }
+
+    pub const fn collect_completed(&mut self) {
+        self.collect_completed = true;
+    }
+
+    pub fn take_completed(&mut self) -> Vec<GameTestSession> {
+        std::mem::take(&mut self.completed)
+    }
+
+    pub fn stop_collecting_completed(&mut self) {
+        self.completed.clear();
+        self.collect_completed = false;
     }
 
     #[must_use]
@@ -443,7 +466,19 @@ impl GameTestRunner {
             }
         }
 
-        self.active.retain(|managed| !managed.done);
+        if self.collect_completed {
+            let mut active = Vec::with_capacity(self.active.len());
+            for managed in self.active.drain(..) {
+                if managed.done {
+                    self.completed.push(managed.run);
+                } else {
+                    active.push(managed);
+                }
+            }
+            self.active = active;
+        } else {
+            self.active.retain(|managed| !managed.done);
+        }
         if self.active.iter().all(|managed| managed.rerun_scheduled) {
             for managed in &mut self.active {
                 managed.install_scheduled_rerun();

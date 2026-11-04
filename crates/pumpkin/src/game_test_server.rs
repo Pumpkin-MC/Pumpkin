@@ -14,14 +14,14 @@ use pumpkin_core::{
     data::VanillaData,
     server::{
         Server,
-        server_test_manager::{
-            GameTestBatchReport, GameTestQueueEntry, GameTestRetryOptions,
-            prepare_test_run_with_reporter, resource_selector_matches,
-        },
+        server_test_manager::{GameTestQueueEntry, prepare_test_run_with_reporter},
     },
 };
 use pumpkin_data::dimension::Dimension;
-use pumpkin_gametest::{GameTestReporter, GameTestRunner};
+use pumpkin_gametest::{
+    GameTestBatchReport, GameTestReporter, GameTestRetryOptions, GameTestRotation, GameTestRunner,
+    VERIFY_TEST_BATCH_SIZE, resource_selector_matches,
+};
 use pumpkin_util::{GameMode, text::TextComponent, world_seed::Seed};
 use tracing::info;
 use zip::ZipArchive;
@@ -32,6 +32,7 @@ const TEST_BASE_Y: i32 = 180;
 const TEST_BASE_Z: i32 = 64;
 const TEST_GRID_SPACING: i32 = 128;
 const TESTS_PER_ROW: i32 = 8;
+const MAX_TESTS_PER_BATCH: usize = 50;
 const MAX_PACK_ENTRIES: usize = 10_000;
 const MAX_PACK_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -116,7 +117,6 @@ pub async fn run(options: GameTestOptions) -> Result<(), String> {
 }
 
 async fn run_tests(server: &Arc<Server>, options: &GameTestOptions) -> Result<(), String> {
-    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
     let names: Vec<_> = server
         .datapack_manager
         .get_test_instance_names()
@@ -138,58 +138,27 @@ async fn run_tests(server: &Arc<Server>, options: &GameTestOptions) -> Result<()
 
     info!(target: "pumpkin::gametest", count = names.len(), "Starting GameTests");
     let mut outcomes = Vec::new();
-    for (index, test_id) in names.iter().enumerate() {
-        let test = server
-            .datapack_manager
-            .get_test_instance(test_id)
-            .ok_or_else(|| format!("GameTest '{test_id}' disappeared during selection"))?;
-        let rotations = if options.verify { 4 } else { 1 };
-        let runs = if options.verify {
-            100
-        } else {
-            options.repeat_count.max(1)
-        };
-        let index = i32::try_from(index).map_err(|_| "Too many GameTests".to_string())?;
-        let test_x = TEST_BASE_X + index.rem_euclid(TESTS_PER_ROW) * TEST_GRID_SPACING;
-        let test_z = TEST_BASE_Z + index.div_euclid(TESTS_PER_ROW) * TEST_GRID_SPACING;
+    let verify = options.tests.is_some() && options.verify;
+    let copies = if verify {
+        VERIFY_TEST_BATCH_SIZE
+    } else if options.tests.is_some() {
+        usize::try_from(options.repeat_count.max(1)).map_err(|error| error.to_string())?
+    } else {
+        1
+    };
+    let rotations = if verify {
+        &GameTestRotation::ALL[..]
+    } else {
+        &GameTestRotation::ALL[..1]
+    };
+    let mut grid_index = 0i32;
 
-        for rotation in 0..rotations {
-            let sink = Arc::new(LoggingReporter::default());
-            let report = Arc::new(GameTestBatchReport::new(Arc::new(SilentReporter), 1));
-            let entry = GameTestQueueEntry::new(
-                test_id,
-                world.clone(),
-                test_x,
-                test_z,
-                rotation,
-                GameTestRetryOptions::new(runs, false),
-                report.clone(),
-            )
-            .with_y(TEST_BASE_Y);
-            let manager = prepare_test_run_with_reporter(server, entry, sink.clone())
-                .await
-                .map_err(|error| format!("Failed to prepare GameTest '{test_id}': {error}"))?;
-            let mut runner = GameTestRunner::new();
-            runner.enqueue(manager);
-            let started = Instant::now();
-            while !runner.is_empty() {
-                if SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
-                    return Err("GameTest server interrupted".to_string());
-                }
-                server.tick();
-                runner.tick().await;
-            }
-            outcomes.push(TestOutcome {
-                name: if options.verify {
-                    format!("{test_id} (rotation {rotation})")
-                } else {
-                    test_id.clone()
-                },
-                required: test.required,
-                report,
-                elapsed_ms: started.elapsed().as_millis(),
-                messages: sink.messages(),
-            });
+    for test_id in &names {
+        for &rotation in rotations {
+            outcomes.push(
+                run_test_rotation(server, test_id, rotation, copies, verify, &mut grid_index)
+                    .await?,
+            );
         }
     }
 
@@ -216,6 +185,79 @@ async fn run_tests(server: &Arc<Server>, options: &GameTestOptions) -> Result<()
             "{required_failures} required GameTest run(s) failed"
         ))
     }
+}
+
+async fn run_test_rotation(
+    server: &Arc<Server>,
+    test_id: &str,
+    rotation: GameTestRotation,
+    copies: usize,
+    verify: bool,
+    grid_index: &mut i32,
+) -> Result<TestOutcome, String> {
+    let test = server
+        .datapack_manager
+        .get_test_instance(test_id)
+        .ok_or_else(|| format!("GameTest '{test_id}' disappeared during selection"))?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let sink = Arc::new(LoggingReporter::default());
+    let report = Arc::new(GameTestBatchReport::new(Arc::new(SilentReporter), copies));
+    let mut runner = GameTestRunner::new();
+    let started = Instant::now();
+
+    for _ in 0..copies {
+        let test_x = TEST_BASE_X + grid_index.rem_euclid(TESTS_PER_ROW) * TEST_GRID_SPACING;
+        let test_z = grid_index
+            .div_euclid(TESTS_PER_ROW)
+            .checked_mul(TEST_GRID_SPACING)
+            .and_then(|offset| TEST_BASE_Z.checked_add(offset))
+            .ok_or_else(|| "Too many GameTests".to_string())?;
+        *grid_index = grid_index
+            .checked_add(1)
+            .ok_or_else(|| "Too many GameTests".to_string())?;
+
+        let entry = GameTestQueueEntry::new(
+            test_id,
+            world.clone(),
+            test_x,
+            test_z,
+            rotation.steps(),
+            GameTestRetryOptions::no_retries(),
+            report.clone(),
+        )
+        .with_y(TEST_BASE_Y);
+        let manager = prepare_test_run_with_reporter(server, entry, sink.clone())
+            .await
+            .map_err(|error| format!("Failed to prepare GameTest '{test_id}': {error}"))?;
+        runner.enqueue(manager);
+        if runner.active_len() == MAX_TESTS_PER_BATCH {
+            run_batch(server, &mut runner).await?;
+        }
+    }
+    run_batch(server, &mut runner).await?;
+
+    Ok(TestOutcome {
+        name: if verify {
+            format!("{test_id} (rotation {})", rotation.steps())
+        } else {
+            test_id.to_string()
+        },
+        required: test.required,
+        report,
+        elapsed_ms: started.elapsed().as_millis(),
+        messages: sink.messages(),
+    })
+}
+
+async fn run_batch(server: &Arc<Server>, runner: &mut GameTestRunner) -> Result<(), String> {
+    while !runner.is_empty() {
+        if SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("GameTest server interrupted".to_string());
+        }
+        server.tick();
+        runner.tick().await;
+    }
+    Ok(())
 }
 
 fn reset_universe(universe: &Path) -> Result<PathBuf, String> {
