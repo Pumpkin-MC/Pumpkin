@@ -29,6 +29,9 @@ static GAME_TEST_QUEUE: LazyLock<StdMutex<QueuedGameTests>> =
     LazyLock::new(|| StdMutex::new(QueuedGameTests::default()));
 static STOP_GAME_TESTS: AtomicBool = AtomicBool::new(false);
 static PENDING_GAME_TESTS: AtomicUsize = AtomicUsize::new(0);
+const VERIFY_TESTS_PER_ROW: i32 = 10;
+const SPACE_BETWEEN_COLUMNS: i32 = 5;
+const SPACE_BETWEEN_ROWS: i32 = 6;
 
 #[derive(Default)]
 struct QueuedGameTests {
@@ -272,7 +275,28 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
             }
         }
         runner.collect_completed();
-        for request in batch {
+        let Some(first) = batch.first() else {
+            return;
+        };
+        let (column_spacing, row_spacing) = match game_test_grid_spacing(
+            server,
+            &first.test_id,
+            GameTestRotation::from_steps(first.rotation_steps),
+        )
+        .await
+        {
+            Ok(spacing) => spacing,
+            Err(error) => {
+                first.report.fail_to_start(&error);
+                stop_game_tests();
+                runner.clear();
+                return;
+            }
+        };
+        for (index, mut request) in batch.into_iter().enumerate() {
+            let index = index as i32;
+            request.test_x += index.rem_euclid(VERIFY_TESTS_PER_ROW) * column_spacing;
+            request.test_z += index.div_euclid(VERIFY_TESTS_PER_ROW) * row_spacing;
             let test_id = request.test_id.clone();
             let report = request.report.clone();
             match prepare_test_run(server, request).await {
@@ -305,6 +329,41 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
                 );
                 report.fail_to_start(&error);
             }
+        }
+    }
+}
+
+/// Returns structure-sized column and row spacing for a `GameTest` grid.
+pub async fn game_test_grid_spacing(
+    server: &Arc<Server>,
+    test_id: &str,
+    extra_rotation: GameTestRotation,
+) -> GameTestResult<(i32, i32)> {
+    let test = server
+        .datapack_manager
+        .get_test_instance(test_id)
+        .ok_or_else(|| GameTestError::World(format!("Unknown test instance '{test_id}'")))?;
+    let template = load_game_test_template(server, &test.structure).await?;
+    let [x, y, z] = template.size();
+    let size = test
+        .rotation
+        .then(extra_rotation)
+        .as_block_rotation()
+        .transform_size(pumpkin_util::math::vector3::Vector3::new(x, y, z));
+    Ok((
+        size.x + 2 * test.padding + SPACE_BETWEEN_COLUMNS,
+        size.z + 2 * test.padding + SPACE_BETWEEN_ROWS,
+    ))
+}
+
+async fn load_game_test_template(
+    server: &Arc<Server>,
+    structure: &str,
+) -> GameTestResult<GameTestStructureTemplate> {
+    match server.datapack_manager.load_structure(structure).await {
+        Ok(structure) => GameTestStructureTemplate::from_nbt(&structure),
+        Err(error) => {
+            GameTestStructureTemplate::parse_empty_id(structure).ok_or(GameTestError::World(error))
         }
     }
 }
@@ -471,15 +530,7 @@ pub async fn prepare_test_run_with_reporter(
         }
     };
 
-    let template = match server
-        .datapack_manager
-        .load_structure(&test_instance.structure)
-        .await
-    {
-        Ok(structure) => GameTestStructureTemplate::from_nbt(&structure)?,
-        Err(error) => GameTestStructureTemplate::parse_empty_id(&test_instance.structure)
-            .ok_or(GameTestError::World(error))?,
-    };
+    let template = load_game_test_template(server, &test_instance.structure).await?;
     let mut test = BlockBasedTest::new(request.test_id, test_instance);
     if let Some(function) = function {
         test = test.with_function(function);

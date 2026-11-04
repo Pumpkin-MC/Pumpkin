@@ -45,8 +45,6 @@ const ARG_RADIUS: &str = "radius";
 const TEST_POS_Z_OFFSET_FROM_PLAYER: i32 = 3;
 const TEST_GRID_SPACING: i32 = 64;
 const DEFAULT_TESTS_PER_ROW: i32 = 8;
-const VERIFY_TEST_GRID_AXIS_SIZE: i32 = 10;
-const VERIFY_TEST_GRID_SPACING: i32 = 128;
 const DEFAULT_CLEAR_RADIUS: i32 = 250;
 const MAX_CLEAR_RADIUS: i32 = 1024;
 
@@ -265,15 +263,12 @@ impl CommandExecutor for VerifyExecutor {
         for test_id in selected {
             for &rotation in &GameTestRotation::ALL {
                 let mut batch = Vec::with_capacity(VERIFY_TEST_BATCH_SIZE);
-                for index in 0..VERIFY_TEST_BATCH_SIZE {
-                    let index = index as i32;
-                    let column = index % VERIFY_TEST_GRID_AXIS_SIZE;
-                    let row = index / VERIFY_TEST_GRID_AXIS_SIZE;
+                for _ in 0..VERIFY_TEST_BATCH_SIZE {
                     batch.push(GameTestQueueEntry::new(
                         test_id.clone(),
                         world.clone(),
-                        base_x + column * VERIFY_TEST_GRID_SPACING,
-                        base_z + row * VERIFY_TEST_GRID_SPACING,
+                        base_x,
+                        base_z,
                         rotation.steps(),
                         GameTestRetryOptions::no_retries(),
                         report.clone(),

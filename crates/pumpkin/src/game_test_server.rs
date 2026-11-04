@@ -14,7 +14,9 @@ use pumpkin_core::{
     data::VanillaData,
     server::{
         Server,
-        server_test_manager::{GameTestQueueEntry, prepare_test_run_with_reporter},
+        server_test_manager::{
+            GameTestQueueEntry, game_test_grid_spacing, prepare_test_run_with_reporter,
+        },
     },
 };
 use pumpkin_data::dimension::Dimension;
@@ -30,7 +32,6 @@ const WORLD_NAME: &str = "gametestworld";
 const TEST_BASE_X: i32 = 64;
 const TEST_BASE_Y: i32 = 180;
 const TEST_BASE_Z: i32 = 64;
-const TEST_GRID_SPACING: i32 = 128;
 const TESTS_PER_ROW: i32 = 8;
 const MAX_TESTS_PER_BATCH: usize = 50;
 const MAX_PACK_ENTRIES: usize = 10_000;
@@ -73,6 +74,41 @@ struct TestOutcome {
     report: Arc<GameTestBatchReport>,
     elapsed_ms: u128,
     messages: Vec<String>,
+}
+
+struct TestGrid {
+    next_x: i32,
+    next_z: i32,
+    row_depth: i32,
+    column: i32,
+}
+
+impl TestGrid {
+    const fn new() -> Self {
+        Self {
+            next_x: TEST_BASE_X,
+            next_z: TEST_BASE_Z,
+            row_depth: 0,
+            column: 0,
+        }
+    }
+
+    fn place(&mut self, width: i32, depth: i32) -> Result<(i32, i32), String> {
+        let position = (self.next_x, self.next_z);
+        self.next_x = self.next_x.checked_add(width).ok_or("Too many GameTests")?;
+        self.row_depth = self.row_depth.max(depth);
+        self.column += 1;
+        if self.column == TESTS_PER_ROW {
+            self.column = 0;
+            self.next_x = TEST_BASE_X;
+            self.next_z = self
+                .next_z
+                .checked_add(self.row_depth)
+                .ok_or("Too many GameTests")?;
+            self.row_depth = 0;
+        }
+        Ok(position)
+    }
 }
 
 pub async fn run(options: GameTestOptions) -> Result<(), String> {
@@ -151,13 +187,11 @@ async fn run_tests(server: &Arc<Server>, options: &GameTestOptions) -> Result<()
     } else {
         &GameTestRotation::ALL[..1]
     };
-    let mut grid_index = 0i32;
-
+    let mut grid = TestGrid::new();
     for test_id in &names {
         for &rotation in rotations {
             outcomes.push(
-                run_test_rotation(server, test_id, rotation, copies, verify, &mut grid_index)
-                    .await?,
+                run_test_rotation(server, test_id, rotation, copies, verify, &mut grid).await?,
             );
         }
     }
@@ -193,7 +227,7 @@ async fn run_test_rotation(
     rotation: GameTestRotation,
     copies: usize,
     verify: bool,
-    grid_index: &mut i32,
+    grid: &mut TestGrid,
 ) -> Result<TestOutcome, String> {
     let test = server
         .datapack_manager
@@ -203,18 +237,13 @@ async fn run_test_rotation(
     let sink = Arc::new(LoggingReporter::default());
     let report = Arc::new(GameTestBatchReport::new(Arc::new(SilentReporter), copies));
     let mut runner = GameTestRunner::new();
+    let (column_spacing, row_spacing) = game_test_grid_spacing(server, test_id, rotation)
+        .await
+        .map_err(|error| format!("Failed to prepare GameTest '{test_id}': {error}"))?;
     let started = Instant::now();
 
     for _ in 0..copies {
-        let test_x = TEST_BASE_X + grid_index.rem_euclid(TESTS_PER_ROW) * TEST_GRID_SPACING;
-        let test_z = grid_index
-            .div_euclid(TESTS_PER_ROW)
-            .checked_mul(TEST_GRID_SPACING)
-            .and_then(|offset| TEST_BASE_Z.checked_add(offset))
-            .ok_or_else(|| "Too many GameTests".to_string())?;
-        *grid_index = grid_index
-            .checked_add(1)
-            .ok_or_else(|| "Too many GameTests".to_string())?;
+        let (test_x, test_z) = grid.place(column_spacing, row_spacing)?;
 
         let entry = GameTestQueueEntry::new(
             test_id,
