@@ -1369,6 +1369,9 @@ impl PluginManager {
         let loaders = self.loaders.read().await.clone();
         for loader in &loaders {
             if loader.can_load(path) {
+                // A loader took it, so it is no longer waiting for one
+                self.unloaded_files.write().await.remove(path);
+
                 let (instance, metadata, loader_data) = match loader.load(path).await {
                     Ok(loaded) => loaded,
                     Err(err) => {
@@ -1421,9 +1424,6 @@ impl PluginManager {
                         "Permission denied".to_string(),
                     )));
                 }
-
-                // A loader took it, so it is no longer waiting for one
-                self.unloaded_files.write().await.remove(path);
 
                 let name = metadata.name.clone();
                 let task = self
