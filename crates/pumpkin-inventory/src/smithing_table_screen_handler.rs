@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use crate::crafting::recipe_provider::RecipeProvider;
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
-use crate::slot::{NormalSlot, Slot};
+use crate::slot::Slot;
 
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
@@ -15,6 +15,8 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{get_smithing_transform_recipe, get_smithing_trim_recipe};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Item as ItemTag;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_protocol::java::server::play::SlotActionType;
@@ -43,16 +45,19 @@ impl SmithingTableScreenHandler {
             recipe_provider,
         };
 
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             0,
+            0,
         )));
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             1,
+            1,
         )));
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
+            2,
             2,
         )));
         handler.add_slot(Arc::new(SmithingOutputSlot::new(
@@ -231,7 +236,6 @@ impl ScreenHandler for SmithingTableScreenHandler {
                 stack = slot_stack.clone();
                 match slot_index.cmp(&3) {
                     std::cmp::Ordering::Equal => {
-                        // From output slot to player inventory
                         if !self.insert_item(&mut slot_stack, 4, 40, true) {
                             return ItemStack::EMPTY.clone();
                         }
@@ -241,13 +245,11 @@ impl ScreenHandler for SmithingTableScreenHandler {
                         slot.on_take_item(player, &taken_stack);
                     }
                     std::cmp::Ordering::Less => {
-                        // From input slots to player inventory
                         if !self.insert_item(&mut slot_stack, 4, 40, true) {
                             return ItemStack::EMPTY.clone();
                         }
                     }
                     std::cmp::Ordering::Greater => {
-                        // From player inventory into input slots (0..3)
                         if !self.insert_item(&mut slot_stack, 0, 3, false) {
                             return ItemStack::EMPTY.clone();
                         }
@@ -268,6 +270,83 @@ impl ScreenHandler for SmithingTableScreenHandler {
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
         self.drop_inventory(player, self.input_inventory.clone());
+    }
+}
+
+pub struct SmithingInputSlot {
+    pub inventory: Arc<dyn Inventory>,
+    pub index: usize,
+    pub slot_type: u8,
+    pub id: AtomicU8,
+}
+
+impl SmithingInputSlot {
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize, slot_type: u8) -> Self {
+        Self {
+            inventory,
+            index,
+            slot_type,
+            id: AtomicU8::new(0),
+        }
+    }
+
+    fn is_valid_for_slot(&self, stack: &ItemStack) -> bool {
+        if stack.is_empty() {
+            return true;
+        }
+
+        let item = stack.item;
+
+        match self.slot_type {
+            0 => {
+                item.registry_key == "netherite_upgrade_smithing_template"
+                    || item.registry_key.ends_with("_armor_trim_smithing_template")
+            }
+            1 => item.has_tag(&ItemTag::MINECRAFT_TRIMMABLE_ARMOR),
+            2 => item.has_tag(&ItemTag::MINECRAFT_TRIM_MATERIALS),
+            _ => false,
+        }
+    }
+}
+
+impl Slot for SmithingInputSlot {
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&self, id: usize) {
+        self.id.store(id as u8, Ordering::Relaxed);
+    }
+
+    fn can_insert(&self, stack: &ItemStack) -> bool {
+        self.is_valid_for_slot(stack)
+    }
+
+    fn get_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
+    }
+
+    fn get_cloned_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
+    }
+
+    fn has_stack(&self) -> bool {
+        !self.inventory.get_stack(self.index).is_empty()
+    }
+
+    fn set_stack(&self, stack: ItemStack) {
+        self.inventory.set_stack(self.index, stack);
+    }
+
+    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
+    }
+
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
     }
 }
 
@@ -339,7 +418,6 @@ impl Slot for SmithingOutputSlot {
     }
 
     fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-        // Do nothing
     }
 
     fn mark_dirty(&self) {
