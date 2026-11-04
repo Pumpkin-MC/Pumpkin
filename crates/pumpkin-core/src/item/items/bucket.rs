@@ -625,13 +625,8 @@ impl ItemBehaviour for FilledBucketItem {
         }
         if item.item.id == Item::WATER_BUCKET.id {
             let entity_type = entity.get_entity().entity_type;
-            let result_item = if entity_type == &EntityType::AXOLOTL {
-                Some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl))
-            } else if entity_type == &EntityType::TADPOLE {
-                Some((&Item::TADPOLE_BUCKET, Sound::ItemBucketFillTadpole))
-            } else {
-                None
-            };
+            let result_item = (entity_type == &EntityType::AXOLOTL)
+                .then_some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl));
 
             if let Some((mob_bucket, sound)) = result_item {
                 let ent = entity.get_entity();

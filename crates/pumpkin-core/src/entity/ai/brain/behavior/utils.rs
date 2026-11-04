@@ -1,14 +1,45 @@
 use std::sync::Arc;
 
+use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::ai::pathfinder::node::PathComputationType;
+use crate::entity::ai::util::default_random_pos;
+use crate::entity::mob::Mob;
 use crate::world::World;
 
 use super::super::memory::position_tracker::{BlockPosTracker, EntityTracker, PositionTracker};
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryModuleType, types};
 use super::super::{BrainState, VisibilityContext};
+
+const MAX_SWIMMABLE_POS_ATTEMPTS: i32 = 10;
+
+#[must_use]
+pub fn get_random_swimmable_pos(
+    mob: &dyn Mob,
+    max_horizontal_distance: i32,
+    max_vertical_distance: i32,
+) -> Option<Vector3<f64>> {
+    let world = mob.get_entity().world.load();
+    let mut target =
+        default_random_pos::get_pos(mob, max_horizontal_distance, max_vertical_distance);
+    let mut count = 0;
+    while let Some(pos) = target {
+        let (block, state) = world.get_block_and_state(&pos.to_block_pos());
+        if world
+            .block_registry
+            .is_pathfindable(block, state, PathComputationType::Water)
+            || count >= MAX_SWIMMABLE_POS_ATTEMPTS
+        {
+            break;
+        }
+        count += 1;
+        target = default_random_pos::get_pos(mob, max_horizontal_distance, max_vertical_distance);
+    }
+    target
+}
 
 #[must_use]
 pub fn entity_is_visible(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
