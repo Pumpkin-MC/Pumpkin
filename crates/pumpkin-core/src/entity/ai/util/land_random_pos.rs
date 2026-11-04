@@ -51,11 +51,40 @@ pub fn get_pos_weighted(
 }
 
 #[must_use]
+pub fn get_pos_towards(
+    mob: &dyn Mob,
+    horizontal_dist: i32,
+    vertical_dist: i32,
+    towards_pos: Vector3<f64>,
+) -> Option<Vector3<f64>> {
+    get_pos_in_direction(
+        mob,
+        horizontal_dist,
+        vertical_dist,
+        towards_pos - mob.get_entity().pos.load(),
+    )
+}
+
+#[must_use]
 pub fn get_pos_away(
     mob: &dyn Mob,
     horizontal_dist: i32,
     vertical_dist: i32,
     away_from: Vector3<f64>,
+) -> Option<Vector3<f64>> {
+    let mut away_direction = mob.get_entity().pos.load() - away_from;
+    if away_direction.length() == 0.0 {
+        let mut rng = mob.get_random();
+        away_direction = Vector3::new(rng.random::<f64>() - 0.5, 0.0, rng.random::<f64>() - 0.5);
+    }
+    get_pos_in_direction(mob, horizontal_dist, vertical_dist, away_direction)
+}
+
+fn get_pos_in_direction(
+    mob: &dyn Mob,
+    horizontal_dist: i32,
+    vertical_dist: i32,
+    direction: Vector3<f64>,
 ) -> Option<Vector3<f64>> {
     let restrict = goal_utils::mob_restricted(mob, f64::from(horizontal_dist));
     let world = mob.get_entity().world.load_full();
@@ -65,21 +94,17 @@ pub fn get_pos_away(
         world.clone(),
     );
     let mut rng = mob.get_random();
-    let mut away_direction = mob.get_entity().pos.load() - away_from;
-    if away_direction.length() == 0.0 {
-        away_direction = Vector3::new(rng.random::<f64>() - 0.5, 0.0, rng.random::<f64>() - 0.5);
-    }
 
     random_pos::generate_random_pos(
         || {
-            let direction = random_pos::generate_random_direction_within_radians(
+            let offset = random_pos::generate_random_direction_within_radians(
                 &mut rng,
                 0.0,
                 f64::from(horizontal_dist),
                 vertical_dist,
                 0,
-                away_direction.x,
-                away_direction.z,
+                direction.x,
+                direction.z,
                 std::f64::consts::FRAC_PI_2,
             )?;
             let pos = toward_direction(
@@ -87,7 +112,7 @@ pub fn get_pos_away(
                 &world,
                 f64::from(horizontal_dist),
                 restrict,
-                direction,
+                offset,
                 &mut rng,
             )?;
             move_pos_up_out_of_solid(mob, &world, &mut context, pos)

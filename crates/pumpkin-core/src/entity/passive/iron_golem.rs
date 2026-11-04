@@ -24,10 +24,12 @@ use crate::entity::{
     Entity, EntityBase,
     ai::behavior::neutral::apply_targets,
     ai::goal::{
-        defend_village_target::DefendVillageTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        defend_village_target::DefendVillageTargetGoal,
+        golem_random_stroll_in_village::golem_random_stroll_in_village,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, move_back_to_village::move_back_to_village,
         move_towards_target::MoveTowardsTargetGoal, offer_flower::OfferFlowerGoal,
-        revenge::RevengeGoal, wander_around::WanderAroundGoal,
+        revenge::RevengeGoal,
     },
     mob::{
         Mob, MobEntity,
@@ -45,7 +47,7 @@ const ATTACK_ANIMATION_TICKS: i32 = 10;
 const OFFER_FLOWER_TICKS: i32 = 400;
 const KNOCKBACK_UP_VELOCITY: f32 = 0.4;
 const PUSH_TARGET_CHANCE: u32 = 20;
-const STROLL_INTERVAL: i32 = 240;
+const STROLL_SPEED: f64 = 0.6;
 const AMBIENT_SOUND_INTERVAL: i32 = 120;
 
 /// Represents an Iron Golem, a powerful neutral mob that protects villagers and players.
@@ -87,10 +89,8 @@ impl IronGolemEntity {
 
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(2, Box::new(MoveTowardsTargetGoal::new(0.9, 32.0)));
-            goal_selector.add_goal(
-                4,
-                Box::new(WanderAroundGoal::with_interval(0.6, STROLL_INTERVAL)),
-            );
+            goal_selector.add_goal(2, Box::new(move_back_to_village(STROLL_SPEED)));
+            goal_selector.add_goal(4, Box::new(golem_random_stroll_in_village(STROLL_SPEED)));
             goal_selector.add_goal(5, Box::new(OfferFlowerGoal::new()));
             goal_selector.add_goal(
                 7,

@@ -85,7 +85,7 @@ fn select_closest_section(
     best.map_or(center, |(section, _)| section)
 }
 
-const fn section_center(section: SectionPos) -> BlockPos {
+pub(crate) const fn section_center(section: SectionPos) -> BlockPos {
     BlockPos::new(
         (section.x << 4) + 8,
         (section.y << 4) + 8,
