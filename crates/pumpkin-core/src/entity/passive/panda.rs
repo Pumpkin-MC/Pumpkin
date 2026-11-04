@@ -364,13 +364,11 @@ impl Mob for PandaEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_string("MainGene", self.get_main_gene().name().to_string());
         nbt.put_string("HiddenGene", self.get_hidden_gene().name().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         self.set_main_gene(
             nbt.get_string("MainGene")
                 .and_then(PandaGene::from_name)
@@ -542,6 +540,7 @@ mod tests {
         let world = world(&folder);
         let source = panda(&world);
         set_genes(&source, PandaGene::Brown, PandaGene::Weak);
+        source.set_age(-100);
         let mut nbt = NbtCompound::new();
         source.write_custom_nbt(&mut nbt);
         assert_eq!(nbt.get_string("MainGene"), Some("brown"));
@@ -552,6 +551,7 @@ mod tests {
         loaded.read_custom_nbt(&nbt);
         assert_eq!(loaded.get_main_gene(), PandaGene::Brown);
         assert_eq!(loaded.get_hidden_gene(), PandaGene::Weak);
+        assert_eq!(loaded.get_age(), -100);
 
         set_genes(&loaded, PandaGene::Weak, PandaGene::Brown);
         loaded.read_custom_nbt(&NbtCompound::new());
