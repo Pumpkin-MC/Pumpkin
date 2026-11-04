@@ -194,35 +194,20 @@ pub(crate) fn apply_random_dye(rng: &mut impl rand::Rng, stack: &mut ItemStack) 
     ));
 }
 
-pub(crate) fn apply_random_stew_effect(rng: &mut impl rand::Rng, stack: &mut ItemStack) {
-    use pumpkin_data::data_component::DataComponent;
-    use pumpkin_data::data_component_impl::{
-        DataComponentImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
-    };
+pub(crate) fn apply_stew_effect(
+    rng: &mut impl rand::Rng,
+    stack: &mut ItemStack,
+    effects: &[(String, i32)],
+) {
     use rand::RngExt;
-    use std::borrow::Cow;
 
-    const EFFECTS: [(&str, i32); 6] = [
-        ("minecraft:night_vision", 100),
-        ("minecraft:jump_boost", 160),
-        ("minecraft:weakness", 140),
-        ("minecraft:blindness", 120),
-        ("minecraft:poison", 280),
-        ("minecraft:saturation", 7),
-    ];
-    let (effect, duration) = EFFECTS[rng.random_range(0..EFFECTS.len())];
-    stack.patch.push((
-        DataComponent::SuspiciousStewEffects,
-        Some(
-            SuspiciousStewEffectsImpl {
-                effects: Cow::Owned(vec![SuspiciousStewEffect {
-                    effect: Cow::Owned(effect.to_owned()),
-                    duration,
-                }]),
-            }
-            .to_dyn(),
-        ),
-    ));
+    if effects.is_empty() {
+        return;
+    }
+    let (effect, duration) = &effects[rng.random_range(0..effects.len())];
+    if let Some(effect) = pumpkin_data::effect::StatusEffect::from_minecraft_name(effect) {
+        crate::world::loot::add_stew_effect(stack, effect, *duration);
+    }
 }
 
 pub(crate) fn apply_potion(stack: &mut ItemStack, potion_name: &str) {
@@ -734,8 +719,8 @@ impl VillagerEntity {
                         };
                         apply_potion(&mut output, potion_name);
                     }
-                    DynamicTradeModifier::SuspiciousStew => {
-                        apply_random_stew_effect(&mut rng, &mut output);
+                    DynamicTradeModifier::SuspiciousStew(effects) => {
+                        apply_stew_effect(&mut rng, &mut output, effects);
                     }
                     DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
                 }

@@ -246,7 +246,19 @@ pub fn build() -> TokenStream {
                     }
                     "minecraft:set_random_dyes" => quote! { VillagerTradeModifier::RandomDyes },
                     "minecraft:set_random_potion" => quote! { VillagerTradeModifier::RandomPotion },
-                    "minecraft:set_stew_effect" => quote! { VillagerTradeModifier::SuspiciousStew },
+                    "minecraft:set_stew_effect" => {
+                        let effects = modifier
+                            .get("effects")?
+                            .as_array()?
+                            .iter()
+                            .map(|effect| {
+                                let id = effect.get("type")?.as_str()?;
+                                let duration = i32::try_from(effect.get("duration")?.as_i64()?).ok()?;
+                                Some(quote! { (#id, #duration) })
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        quote! { VillagerTradeModifier::SuspiciousStew(&[#(#effects),*]) }
+                    }
                     "minecraft:set_potion" => {
                         let potion = modifier.get("id")?.as_str()?;
                         quote! { VillagerTradeModifier::Potion(#potion) }
@@ -443,7 +455,7 @@ pub fn build() -> TokenStream {
             ExplorationMap { destination: &'static str },
             RandomDyes,
             RandomPotion,
-            SuspiciousStew,
+            SuspiciousStew(&'static [(&'static str, i32)]),
             Potion(&'static str),
         }
 

@@ -615,5 +615,24 @@ fn shuffle_and_split_items(
     }
 }
 
+pub(crate) fn add_stew_effect(
+    stack: &mut ItemStack,
+    effect: &pumpkin_data::effect::StatusEffect,
+    duration: i32,
+) {
+    use pumpkin_data::data_component_impl::{SuspiciousStewEffect, SuspiciousStewEffectsImpl};
+    let duration = if effect.instantaneous {
+        duration
+    } else {
+        duration * 20
+    };
+    if let Some(effects) = stack.get_data_component_mut::<SuspiciousStewEffectsImpl>() {
+        effects.effects.to_mut().push(SuspiciousStewEffect {
+            effect: effect.minecraft_name.into(),
+            duration,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests;
