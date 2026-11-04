@@ -524,7 +524,7 @@ pub fn check_spawn_rules(
         }
         return reason.is_spawner()
             || world
-                .get_closest_player(pos.to_centered_f64(), 5.0)
+                .get_nearest_player(pos.to_centered_f64(), 5.0, |player| !player.is_spectator())
                 .is_none();
     }
 

@@ -112,7 +112,7 @@ pub fn degrees_difference_abs(angle_a: f32, angle_b: f32) -> f32 {
 pub fn rotate_if_necessary(base_angle: f32, target_angle: f32, max_angle_diff: f32) -> f32 {
     let delta_angle = degrees_difference(base_angle, target_angle);
     let delta_angle_clamped = delta_angle.clamp(-max_angle_diff, max_angle_diff);
-    target_angle - delta_angle_clamped
+    base_angle + delta_angle_clamped
 }
 
 #[must_use]

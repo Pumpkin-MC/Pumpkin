@@ -1,3 +1,4 @@
+use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
 use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::AtomicBool;
 
@@ -115,6 +116,7 @@ impl EntityBase for EnderPearlEntity {
         }
 
         if let Some(owner) = attacker
+            && owner.get_player().is_some()
             && owner.get_entity().is_alive()
             && owner.get_living_entity().is_none_or(|living| {
                 living.health.load() > 0.0 && owner.get_entity().pose.load() != EntityPose::Sleeping
@@ -127,7 +129,17 @@ impl EntityBase for EnderPearlEntity {
                     owner.get_entity().pos.load(),
                     &EntityType::ENDERMITE,
                 );
+                entity.set_rotation(
+                    owner.get_entity().yaw.load(),
+                    owner.get_entity().pitch.load(),
+                );
                 let endermite = EndermiteEntity::new(entity);
+                finalize_spawn(
+                    &(endermite.clone() as std::sync::Arc<dyn EntityBase>),
+                    &world,
+                    EntitySpawnReason::Triggered,
+                    None,
+                );
                 world.spawn_entity(endermite);
             }
 
