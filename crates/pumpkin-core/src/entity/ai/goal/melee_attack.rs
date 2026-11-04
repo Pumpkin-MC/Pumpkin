@@ -214,15 +214,8 @@ impl Goal for MeleeAttackGoal {
                 return;
             }
 
-            // Iron golem animation plays on every swing, even when blocked
-            if let Some(golem) = mob.as_iron_golem() {
-                golem.trigger_attack_animation();
-            }
-
             mob.get_mob_entity().living_entity.swing_hand();
-            let damaged = mob
-                .get_mob_entity()
-                .try_attack(mob.get_entity(), target.as_ref());
+            let damaged = mob.do_hurt_target(target.as_ref());
             if damaged {
                 mob.on_attack(target.as_ref());
             }

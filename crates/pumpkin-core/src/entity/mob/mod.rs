@@ -1680,6 +1680,18 @@ pub trait Mob: EntityBase + Send + Sync {
         crate::entity::breath::MAX_AIR
     }
 
+    fn mob_decrease_air_supply(&self, current: i32) -> i32 {
+        let oxygen_bonus = self
+            .get_mob_entity()
+            .living_entity
+            .get_attribute_value(&Attributes::OXYGEN_BONUS);
+        if oxygen_bonus <= 0.0 || self.get_random().random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
+            current.wrapping_sub(1)
+        } else {
+            current
+        }
+    }
+
     fn mob_increase_air_supply(&self, current: i32) -> i32 {
         current
             .wrapping_add(crate::entity::breath::AIR_RECOVERY_RATE)
@@ -1888,6 +1900,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {}
+
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        self.get_mob_entity().try_attack(self.get_entity(), target)
+    }
+
+    fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
     fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {

@@ -1792,6 +1792,9 @@ impl LivingEntity {
         }
 
         for entity in pushable {
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.do_push(&entity);
+            }
             entity.push(dyn_self);
         }
     }
@@ -3067,11 +3070,7 @@ impl LivingEntity {
                 && !water_breathing
                 && !nautilus_breathing
             {
-                let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
-                let mut random = caller.get_random();
-                if oxygen_bonus <= 0.0 || random.random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
-                    entity.set_air_supply(current.wrapping_sub(1));
-                }
+                entity.set_air_supply(caller.mob_decrease_air_supply(current));
                 if self.should_take_drowning_damage() {
                     entity.set_air_supply(0);
                     entity.world.load().send_entity_status(
