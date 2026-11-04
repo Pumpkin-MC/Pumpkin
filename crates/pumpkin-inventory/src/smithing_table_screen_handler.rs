@@ -12,11 +12,12 @@ use crate::inventory::SimpleInventory;
 use pumpkin_data::data_component_impl::{ProvidesTrimMaterialImpl, TrimImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::recipes::{get_smithing_transform_recipe, get_smithing_trim_recipe};
+use pumpkin_data::recipes::{
+    get_smithing_transform_recipe, get_smithing_trim_recipe, RecipeIngredientTypes,
+    RECIPES_SMITHING_TRANSFORM, RECIPES_SMITHING_TRIM,
+};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::tag::Item as ItemTag;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_protocol::java::server::play::SlotActionType;
@@ -42,23 +43,26 @@ impl SmithingTableScreenHandler {
             behaviour,
             input_inventory,
             output_inventory,
-            recipe_provider,
+            recipe_provider: recipe_provider.clone(),
         };
 
         handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             0,
             0,
+            recipe_provider.clone(),
         )));
         handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             1,
             1,
+            recipe_provider.clone(),
         )));
         handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             2,
             2,
+            recipe_provider,
         )));
         handler.add_slot(Arc::new(SmithingOutputSlot::new(
             handler.output_inventory.clone(),
@@ -277,15 +281,22 @@ pub struct SmithingInputSlot {
     pub inventory: Arc<dyn Inventory>,
     pub index: usize,
     pub slot_type: u8,
+    pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
     pub id: AtomicU8,
 }
 
 impl SmithingInputSlot {
-    pub fn new(inventory: Arc<dyn Inventory>, index: usize, slot_type: u8) -> Self {
+    pub fn new(
+        inventory: Arc<dyn Inventory>,
+        index: usize,
+        slot_type: u8,
+        recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    ) -> Self {
         Self {
             inventory,
             index,
             slot_type,
+            recipe_provider,
             id: AtomicU8::new(0),
         }
     }
@@ -297,15 +308,49 @@ impl SmithingInputSlot {
 
         let item = stack.item;
 
-        match self.slot_type {
-            0 => {
-                item.registry_key == "netherite_upgrade_smithing_template"
-                    || item.registry_key.ends_with("_armor_trim_smithing_template")
+        let matches_role = |template: &RecipeIngredientTypes,
+                            base: &RecipeIngredientTypes,
+                            addition: &RecipeIngredientTypes|
+         -> bool {
+            match self.slot_type {
+                0 => template.match_item(item),
+                1 => base.match_item(item),
+                2 => addition.match_item(item),
+                _ => false,
             }
-            1 => item.has_tag(&ItemTag::MINECRAFT_TRIMMABLE_ARMOR),
-            2 => item.has_tag(&ItemTag::MINECRAFT_TRIM_MATERIALS),
-            _ => false,
+        };
+
+        if RECIPES_SMITHING_TRIM
+            .iter()
+            .any(|r| matches_role(&r.template, &r.base, &r.addition))
+        {
+            return true;
         }
+        if RECIPES_SMITHING_TRANSFORM
+            .iter()
+            .any(|r| matches_role(&r.template, &r.base, &r.addition))
+        {
+            return true;
+        }
+
+        if let Some(provider) = &self.recipe_provider {
+            for dynamic in provider.get_dynamic_recipes() {
+                let ok = match dynamic {
+                    DynamicRecipe::SmithingTransform(r) => {
+                        matches_role(&r.template, &r.base, &r.addition)
+                    }
+                    DynamicRecipe::SmithingTrim(r) => {
+                        matches_role(&r.template, &r.base, &r.addition)
+                    }
+                    _ => false,
+                };
+                if ok {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 
@@ -342,8 +387,7 @@ impl Slot for SmithingInputSlot {
         self.inventory.set_stack(self.index, stack);
     }
 
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-    }
+    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {}
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
@@ -417,8 +461,7 @@ impl Slot for SmithingOutputSlot {
         self.inventory.set_stack(self.index, stack);
     }
 
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-    }
+    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {}
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
