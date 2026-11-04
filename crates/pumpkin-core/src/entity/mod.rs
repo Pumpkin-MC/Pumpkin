@@ -3873,6 +3873,11 @@ impl Entity {
     }
 
     #[must_use]
+    pub fn get_y(&self, height_fraction: f64) -> f64 {
+        f64::from(self.entity_dimension.load().height).mul_add(height_fraction, self.pos.load().y)
+    }
+
+    #[must_use]
     pub fn is_on_fire(&self) -> bool {
         self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
     }

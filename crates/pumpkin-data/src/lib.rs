@@ -279,6 +279,11 @@ pub mod noise_router;
 #[path = "generated/flower_pot_transformations.rs"]
 pub mod flower_pot_transformations;
 
+#[cfg(feature = "suspicious_effects")]
+#[rustfmt::skip]
+#[path = "generated/suspicious_effects.rs"]
+pub mod suspicious_effects;
+
 #[cfg(feature = "effect")]
 #[rustfmt::skip]
 #[path = "generated/effect.rs"]

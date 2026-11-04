@@ -38,6 +38,7 @@ default = [
     "noise_router",
     "composter",
     "flower_pot",
+    "suspicious_effects",
     "effect",
     "structures",
     "potion",
@@ -141,6 +142,7 @@ tag = []
 noise_router = []
 composter = []
 flower_pot = []
+suspicious_effects = ["effect"]
 effect = []
 structures = []
 potion = ["potion_brewing"]

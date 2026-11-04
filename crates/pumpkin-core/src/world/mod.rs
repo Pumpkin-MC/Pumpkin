@@ -5840,6 +5840,11 @@ impl World {
         self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
     }
 
+    #[must_use]
+    pub fn get_pathfinding_cost_from_light_levels(&self, pos: &BlockPos) -> f32 {
+        self.get_light_level_dependent_magic_value(pos) - 0.5
+    }
+
     /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
     #[must_use]
     pub fn light_level_dependent_magic_value_with_sky(&self, pos: &BlockPos, sky_light: u8) -> f32 {
