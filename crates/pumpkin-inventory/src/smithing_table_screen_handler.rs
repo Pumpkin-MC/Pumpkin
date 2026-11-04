@@ -1,5 +1,7 @@
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::crafting::recipe_provider::RecipeProvider;
@@ -282,6 +284,7 @@ pub struct SmithingInputSlot {
     pub index: usize,
     pub slot_type: u8,
     pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    valid_cache: Mutex<HashMap<u16, bool>>,
     pub id: AtomicU8,
 }
 
@@ -297,17 +300,12 @@ impl SmithingInputSlot {
             index,
             slot_type,
             recipe_provider,
+            valid_cache: Mutex::new(HashMap::new()),
             id: AtomicU8::new(0),
         }
     }
 
-    fn is_valid_for_slot(&self, stack: &ItemStack) -> bool {
-        if stack.is_empty() {
-            return true;
-        }
-
-        let item = stack.item;
-
+    fn compute_valid(&self, item: &Item) -> bool {
         let matches_static_role = |template: &RecipeIngredientTypes,
                                    base: &RecipeIngredientTypes,
                                    addition: &RecipeIngredientTypes|
@@ -364,6 +362,28 @@ impl SmithingInputSlot {
         }
 
         false
+    }
+
+    fn is_valid_for_slot(&self, stack: &ItemStack) -> bool {
+        if stack.is_empty() {
+            return true;
+        }
+
+        let item_id = stack.item.id;
+
+        if let Ok(cache) = self.valid_cache.lock()
+            && let Some(&cached) = cache.get(&item_id)
+        {
+            return cached;
+        }
+
+        let result = self.compute_valid(stack.item);
+
+        if let Ok(mut cache) = self.valid_cache.lock() {
+            cache.insert(item_id, result);
+        }
+
+        result
     }
 }
 
