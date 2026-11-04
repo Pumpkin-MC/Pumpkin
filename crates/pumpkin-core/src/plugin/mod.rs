@@ -319,6 +319,8 @@ pub enum ManagerError {
     IoError(#[from] std::io::Error),
     #[error("Dependency error: {0}")]
     DependencyError(String),
+    #[error("Plugin {0} cannot unload itself from on_load")]
+    UnloadDuringLoad(String),
 }
 
 impl Default for PluginManager {
@@ -1559,6 +1561,10 @@ impl PluginManager {
 
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
+        // The wait below would wait on the caller's own on_load
+        if INITIALIZING_PLUGIN.try_with(|caller| caller == name) == Ok(true) {
+            return Err(ManagerError::UnloadDuringLoad(name.to_string()));
+        }
         // State goes in the same section as the record, or a load reserving the freed name
         // would lose its Loading state to this unload
         let mut plugin = loop {
