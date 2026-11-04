@@ -10,6 +10,7 @@ pub mod break_door;
 pub mod breath_air;
 pub mod breed;
 pub mod chase_player;
+pub mod climb_on_top_of_powder_snow;
 pub mod creeper_ignite;
 pub mod destroy_egg;
 pub mod door_interact;

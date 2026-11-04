@@ -30,6 +30,14 @@ pub trait MoveControlTrait: Control {
     fn has_wanted(&self) -> bool {
         false
     }
+
+    fn get_speed_modifier(&self) -> f64 {
+        0.0
+    }
+
+    fn get_wanted_position(&self) -> Vector3<f64> {
+        Vector3::default()
+    }
 }
 
 pub trait LookControlTrait: Control {

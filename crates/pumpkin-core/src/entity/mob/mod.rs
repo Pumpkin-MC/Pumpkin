@@ -1725,6 +1725,19 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_ai_step(&self) {}
 
+    fn tick_jump_control(&self, jump: bool) {
+        self.get_mob_entity()
+            .living_entity
+            .jumping
+            .store(jump, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn jump_power_multiplier(&self) -> f32 {
+        1.0
+    }
+
+    fn on_jump_from_ground(&self) {}
+
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
         self.get_mob_entity()
             .living_entity
