@@ -61,7 +61,9 @@ pub enum LoaderError {
     #[error("Runtime error: {0}")]
     RuntimeError(String),
 
-    #[error("Event handlers of the plugin are still running, its library stays loaded")]
+    #[error(
+        "Event handlers or IPC calls of the plugin are still running, its library stays loaded"
+    )]
     LibraryInUse,
 
     #[error("Invalid loader data")]

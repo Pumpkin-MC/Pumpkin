@@ -308,7 +308,9 @@ async fn release_library(
     if drained {
         loader.unload(loader_data).await
     } else {
-        warn!("Plugin {name} still has event handlers running, keeping its library loaded");
+        warn!(
+            "Plugin {name} still has event handlers or IPC calls running, keeping its library loaded"
+        );
         Box::leak(loader_data);
         Err(LoaderError::LibraryInUse)
     }
@@ -978,16 +980,20 @@ impl PluginManager {
 
                     // on_load may have registered handlers, commands or permissions before
                     // failing partway through, leaving them would block every future load
-                    let handlers = self_ref_clone.unregister_handlers(&plugin_name);
+                    let mut handlers = self_ref_clone.unregister_handlers(&plugin_name);
                     context.unregister_commands();
                     context.unregister_permissions();
                     // Still Loading, so a self-unload from on_unload would wait on itself too
                     let _ = INITIALIZING_PLUGIN
                         .scope(
                             plugin_name.clone(),
-                            AssertUnwindSafe(instance.on_unload(context)).catch_unwind(),
+                            AssertUnwindSafe(instance.on_unload(context.clone())).catch_unwind(),
                         )
                         .await;
+                    // on_unload can register again, that must not outlive the library
+                    handlers.extend(self_ref_clone.unregister_handlers(&plugin_name));
+                    context.unregister_commands();
+                    context.unregister_permissions();
                     // The instance's code lives in the library, so drop it before unloading
                     drop(instance);
 
@@ -1004,38 +1010,43 @@ impl PluginManager {
                     };
 
                     // Try to unload the plugin data
-                    if let Some(data) = loader_data {
-                        release_library(&plugin_name, handlers, None, &*loader_clone, data)
-                            .await
-                            .ok();
-                    }
+                    let released = match loader_data {
+                        Some(data) => {
+                            release_library(&plugin_name, handlers, None, &*loader_clone, data)
+                                .await
+                        }
+                        None => Ok(()),
+                    };
+                    // The old code is still running, so the record stays and keeps refusing a
+                    // load of the name, like `unload_plugin`
+                    let keep_claim = matches!(released, Err(LoaderError::LibraryInUse));
 
                     // Same states-then-plugins section as the reservation, so a new load of
                     // this name cannot reserve in between and get its state overwritten
-                    let removed = {
+                    let owned = {
                         let mut states = self_ref_clone.plugin_states.write().await;
-                        let removed = {
+                        let owned = {
                             let mut plugins = self_ref_clone
                                 .plugins
                                 .write()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            plugins
-                                .iter()
-                                .position(|p| p.token == token)
-                                .map(|index| plugins.remove(index))
-                                .is_some()
+                            let index = plugins.iter().position(|p| p.token == token);
+                            if !keep_claim && let Some(index) = index {
+                                plugins.remove(index);
+                            }
+                            index.is_some()
                         };
-                        if removed {
+                        if owned {
                             states.insert(
                                 plugin_name.clone(),
                                 PluginState::Failed(error_msg.clone()),
                             );
                         }
-                        removed
+                        owned
                     };
 
                     // Unloaded during on_unload
-                    if !removed {
+                    if !owned {
                         error!("Failed to initialize plugin {plugin_name}: {error_msg}");
                         state_notify.notify_waiters();
                         return Err(e);
@@ -1205,6 +1216,12 @@ impl PluginManager {
             .map(|p| (p.metadata.name.clone(), Vec::new()))
             .collect();
         metadata_list.extend(resident);
+        // A dependency that is neither prepared nor active fails only its dependents, in the
+        // activity check below, not the whole pass
+        let known: HashSet<String> = metadata_list.iter().map(|(name, _)| name.clone()).collect();
+        for (_, deps) in &mut metadata_list {
+            deps.retain(|dep| known.contains(dep));
+        }
 
         let sorted_names =
             Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
@@ -1411,6 +1428,27 @@ impl PluginManager {
                             "Plugin \"{}\" is unsigned or invalid and allow_unsigned is disabled",
                             metadata.name
                         ),
+                    )));
+                }
+
+                // A dependency still initializing must finish first, one that can't be waited on
+                // counts as missing
+                let mut missing = None;
+                for dep in &metadata.dependencies {
+                    if self.wait_for_initialization(dep).await.is_err()
+                        || !self.is_plugin_active(dep)
+                    {
+                        missing = Some(dep.clone());
+                        break;
+                    }
+                }
+                if let Some(dep) = missing {
+                    let reason = format!("dependency {dep} is not active");
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::Failed(reason.clone()));
+                    discard_loaded(instance, &**loader, loader_data).await;
+                    return Err(ManagerError::DependencyError(format!(
+                        "Plugin \"{}\": {reason}",
+                        metadata.name
                     )));
                 }
 
@@ -1813,12 +1851,12 @@ impl PluginManager {
             );
         };
 
-        let handlers = self.unregister_handlers(name);
+        let mut handlers = self.unregister_handlers(name);
         context.unregister_commands();
         context.unregister_permissions();
 
         if let Some(instance) = &instance {
-            match AssertUnwindSafe(instance.on_unload(context))
+            match AssertUnwindSafe(instance.on_unload(context.clone()))
                 .catch_unwind()
                 .await
             {
@@ -1826,6 +1864,10 @@ impl PluginManager {
                 Ok(Err(e)) => warn!("Plugin {name} failed to unload cleanly: {e}"),
                 Err(_) => error!("Plugin {name} panicked in on_unload"),
             }
+            // on_unload can register again, that must not outlive the library
+            handlers.extend(self.unregister_handlers(name));
+            context.unregister_commands();
+            context.unregister_permissions();
         }
 
         // The loader keeps the library, so the record stays as an inactive copy until restart
@@ -1855,7 +1897,13 @@ impl PluginManager {
             Err(e) => PluginStatus::Failed(e.to_string()),
         };
         self.mark_inactive(&path, Some(&metadata), status);
-        if !keep_claim {
+        if keep_claim {
+            // The retained record is listed before the inactive entry, so it carries the failure
+            self.plugin_states.write().await.insert(
+                name.to_string(),
+                PluginState::Failed(LoaderError::LibraryInUse.to_string()),
+            );
+        } else {
             self.plugins
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

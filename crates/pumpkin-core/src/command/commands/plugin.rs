@@ -188,7 +188,7 @@ impl CommandExecutor for LoadExecutor {
                 |entry| (entry.name().into_owned(), entry.path.clone()),
             );
 
-            if entry.is_some_and(|entry| entry.status.is_active()) {
+            if entry.as_ref().is_some_and(|entry| entry.status.is_active()) {
                 source_clone.send_feedback(
                     TextComponent::text(format!("Plugin {name} is already loaded")),
                     false,
@@ -200,8 +200,19 @@ impl CommandExecutor for LoadExecutor {
                 .plugin_manager
                 .try_load_plugin(&server_clone, &path)
                 .await
-                .map(|_| ())
-                .map_err(|e| format!("Failed to load plugin {name}: {e}"));
+                .map_err(|e| format!("Failed to load plugin {name}: {e}"))
+                .and_then(|loaded| {
+                    // A named file may declare another name now, the requested one is then not
+                    // loaded. Without metadata the entry is listed by its file name
+                    if entry.is_none_or(|entry| entry.metadata.is_none()) || loaded == name {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "Plugin {name} was not loaded: {} now declares {loaded}, which was loaded instead",
+                            path.display()
+                        ))
+                    }
+                });
 
             send_result(
                 &source_clone,
@@ -310,30 +321,30 @@ impl CommandExecutor for ReloadExecutor {
                 return;
             }
 
-            let result = server_clone
+            let loaded = server_clone
                 .plugin_manager
                 .try_load_plugin(&server_clone, &entry.path)
-                .await
-                .map_err(|e| {
-                    if was_loaded {
-                        format!(
-                            "Plugin {plugin_name} was unloaded but could not be loaded again: {e}"
-                        )
-                    } else {
-                        format!("Plugin {plugin_name} could not be loaded: {e}")
+                .await;
+            let result = match loaded {
+                // Without metadata the entry is listed by its file name, not the declared one
+                Ok(loaded) if loaded == plugin_name || entry.metadata.is_none() => Ok(()),
+                // The file may declare another name now, the requested one is then not back
+                Ok(loaded) => {
+                    let mismatch = format!(
+                        "Plugin {plugin_name} was not reloaded: {} now declares {loaded}",
+                        entry.path.display()
+                    );
+                    // Not what was asked for, so it does not stay running
+                    match server_clone.plugin_manager.unload_plugin(&loaded).await {
+                        Ok(()) => Err(mismatch),
+                        Err(e) => Err(format!("{mismatch}, and unloading {loaded} failed: {e}")),
                     }
-                })
-                .and_then(|loaded| {
-                    // The file may declare another name now, the requested one is then not back
-                    if loaded == plugin_name {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "Plugin {plugin_name} was not reloaded: {} now declares {loaded}",
-                            entry.path.display()
-                        ))
-                    }
-                });
+                }
+                Err(e) if was_loaded => Err(format!(
+                    "Plugin {plugin_name} was unloaded but could not be loaded again: {e}"
+                )),
+                Err(e) => Err(format!("Plugin {plugin_name} could not be loaded: {e}")),
+            };
 
             send_result(
                 &source_clone,
