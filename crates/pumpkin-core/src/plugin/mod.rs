@@ -659,17 +659,23 @@ impl PluginManager {
         self.add_owned_loader(server, None, loader).await;
     }
 
-    /// `owner`: plugin whose unload takes the loader off again.
+    /// `owner`: plugin whose unload takes the loader off again. Refused once it unloads.
     pub(crate) async fn add_owned_loader(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        owner: Option<String>,
+        owner: Option<&Context>,
         loader: Arc<dyn PluginLoader>,
     ) {
-        self.loaders
-            .write()
-            .await
-            .push(RegisteredLoader { owner, loader });
+        // Checked under the sweep's lock: no add can land after it
+        let mut loaders = self.loaders.write().await;
+        if owner.is_some_and(Context::is_closed) {
+            return;
+        }
+        loaders.push(RegisteredLoader {
+            owner: owner.map(|context| context.get_metadata().name.clone()),
+            loader,
+        });
+        drop(loaders);
 
         // Try to load previously unloaded files with the new loader
         self.retry_unloaded_files(server).await;
@@ -992,9 +998,16 @@ impl PluginManager {
 
         let plugin_path = path.clone();
 
-        // Unload would drop the server's own permission nodes
-        if RESERVED_NAMESPACES.contains(&metadata.name.as_str()) {
-            let reason = format!("name {} is reserved by the server", metadata.name);
+        // Unload drops every node under `{name}:`: no server namespace, no other plugin's
+        let invalid = if RESERVED_NAMESPACES.contains(&metadata.name.as_str()) {
+            Some("is reserved by the server")
+        } else if metadata.name.contains(':') {
+            Some("contains ':'")
+        } else {
+            None
+        };
+        if let Some(invalid) = invalid {
+            let reason = format!("name {} {invalid}", metadata.name);
             self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason.clone()));
             discard_loaded(instance, &*loader, loader_data).await;
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
@@ -1120,6 +1133,8 @@ impl PluginManager {
 
                     // on_load may have registered handlers, commands or permissions before
                     // failing partway through, leaving them would block every future load
+                    self_ref_clone.unload_children(&plugin_name).await;
+                    context.close();
                     let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
                     context.unregister_commands();
                     context.unregister_permissions();
@@ -2001,6 +2016,8 @@ impl PluginManager {
             );
         };
 
+        self.unload_children(name).await;
+        context.close();
         let mut registrations = self.take_registrations(name).await;
         context.unregister_commands();
         context.unregister_permissions();
@@ -2051,6 +2068,35 @@ impl PluginManager {
             .retain(|p| p.token != token);
 
         unloaded.map_err(ManagerError::from)
+    }
+
+    /// Unloads what `owner`'s loaders loaded: it can't run without them.
+    async fn unload_children(&self, owner: &str) {
+        let owned: Vec<Arc<dyn PluginLoader>> = self
+            .loaders
+            .read()
+            .await
+            .iter()
+            .filter(|registered| registered.owner.as_deref() == Some(owner))
+            .map(|registered| Arc::clone(&registered.loader))
+            .collect();
+        if owned.is_empty() {
+            return;
+        }
+        let children: Vec<String> = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|p| owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader)))
+            .map(|p| p.metadata.name.clone())
+            .collect();
+        for child in children {
+            match Box::pin(self.unload_plugin(&child)).await {
+                Ok(()) | Err(ManagerError::PluginNotFound(_)) => {}
+                Err(e) => warn!("Plugin {child} loaded by {owner}: {e}"),
+            }
+        }
     }
 
     /// Takes a plugin's handlers, services and loaders off and returns them.

@@ -1,7 +1,10 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use crate::{
@@ -40,6 +43,8 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<PermissionManager>,
     pub logger: Arc<OnceLock<LoggerOption>>,
+    /// Set when unload starts: handlers, services and loaders are refused from then on.
+    closed: AtomicBool,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -67,7 +72,18 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
+            closed: AtomicBool::new(false),
         }
+    }
+
+    /// Refuses further handlers, services and loaders, set before unload takes them off.
+    pub(crate) fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+    }
+
+    #[must_use]
+    pub(crate) fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
     }
 
     #[must_use]
@@ -127,6 +143,10 @@ impl Context {
             payload: service,
         };
         let mut services = self.plugin_manager.services.write().await;
+        // Checked under the sweep's lock: no insert can land after it
+        if self.is_closed() {
+            return;
+        }
         services.insert(name.into(), service);
     }
 
@@ -345,6 +365,10 @@ impl Context {
         });
 
         self.handlers.rcu(|handlers| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_closed() {
+                return Arc::clone(handlers);
+            }
             let mut new_handlers = (**handlers).clone();
             new_handlers
                 .entry(E::get_name_static())
@@ -380,7 +404,7 @@ impl Context {
     ) -> bool {
         let before_count = self.plugin_manager.loaded_plugins().len();
         self.plugin_manager
-            .add_owned_loader(&self.server, Some(self.metadata.name.clone()), loader)
+            .add_owned_loader(&self.server, Some(self), loader)
             .await;
         let after_count = self.plugin_manager.loaded_plugins().len();
 
