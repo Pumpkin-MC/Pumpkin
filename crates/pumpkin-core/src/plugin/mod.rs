@@ -277,7 +277,7 @@ const HANDLER_DRAIN_POLL: Duration = Duration::from_millis(10);
 /// Hands a plugin's library back to its loader once no event runs its handlers any more.
 ///
 /// A handler still running after `HANDLER_DRAIN_TIMEOUT` keeps the library loaded for good,
-/// releasing it would pull the code out from under that call.
+/// releasing it would pull the code out from under that call. That is `LibraryInUse`.
 async fn release_library(
     name: &str,
     handlers: Vec<Arc<dyn DynEventHandler>>,
@@ -302,7 +302,7 @@ async fn release_library(
     } else {
         warn!("Plugin {name} still has event handlers running, keeping its library loaded");
         Box::leak(loader_data);
-        Ok(())
+        Err(LoaderError::LibraryInUse)
     }
 }
 
@@ -1762,6 +1762,9 @@ impl PluginManager {
             None => Ok(()),
         };
 
+        // The old code is still running, so the record stays and keeps refusing a load of the name
+        let keep_claim = matches!(unloaded, Err(LoaderError::LibraryInUse));
+
         // Listed before the record goes, so a load that reserves the name next replaces the entry
         // instead of having it written over its own
         let status = match &unloaded {
@@ -1769,10 +1772,12 @@ impl PluginManager {
             Err(e) => PluginStatus::Failed(e.to_string()),
         };
         self.mark_inactive(&path, Some(&metadata), status);
-        self.plugins
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|p| p.token != token);
+        if !keep_claim {
+            self.plugins
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|p| p.token != token);
+        }
 
         unloaded.map_err(ManagerError::from)
     }
