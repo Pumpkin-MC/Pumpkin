@@ -1386,12 +1386,12 @@ impl PluginManager {
         ))
     }
 
-    /// Attempt to load a single plugin file
+    /// Attempt to load a single plugin file, returns the name the file declares
     pub async fn try_load_plugin(
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<(), ManagerError> {
+    ) -> Result<String, ManagerError> {
         let (name, task) = self.start_loading_plugin(server, path).await?;
         // Its on_load waiting on this caller is refused instead of deadlocking
         let _wait = self.enter_init_wait(&name)?;
@@ -1401,7 +1401,8 @@ impl PluginManager {
                     "Task join error: {e}"
                 )))
             })?
-            .map_err(|e| ManagerError::LoaderError(LoaderError::InitializationFailed(e)))
+            .map_err(|e| ManagerError::LoaderError(LoaderError::InitializationFailed(e)))?;
+        Ok(name)
     }
 
     /// Wait until a plugin is no longer initializing, whether it succeeded or failed.

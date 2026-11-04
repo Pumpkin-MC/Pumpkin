@@ -200,6 +200,7 @@ impl CommandExecutor for LoadExecutor {
                 .plugin_manager
                 .try_load_plugin(&server_clone, &path)
                 .await
+                .map(|_| ())
                 .map_err(|e| format!("Failed to load plugin {name}: {e}"));
 
             send_result(
@@ -320,6 +321,17 @@ impl CommandExecutor for ReloadExecutor {
                         )
                     } else {
                         format!("Plugin {plugin_name} could not be loaded: {e}")
+                    }
+                })
+                .and_then(|loaded| {
+                    // The file may declare another name now, the requested one is then not back
+                    if loaded == plugin_name {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "Plugin {plugin_name} was not reloaded: {} now declares {loaded}",
+                            entry.path.display()
+                        ))
                     }
                 });
 
