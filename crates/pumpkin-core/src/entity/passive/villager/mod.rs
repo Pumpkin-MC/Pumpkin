@@ -1014,6 +1014,116 @@ impl VillagerEntity {
         }
     }
 
+    pub fn should_restock(&self, game_time: i64, day: i64) -> bool {
+        let half_day_passed_time = self.last_restock_time.load(Ordering::Relaxed) + 12_000;
+        let mut is_new_day = game_time > half_day_passed_time;
+        let last_check_day = self.last_restock_check_day.swap(day, Ordering::Relaxed);
+        is_new_day |= last_check_day > 0 && day > last_check_day;
+        if is_new_day {
+            self.last_restock_time.store(game_time, Ordering::Relaxed);
+            self.reset_number_of_restocks();
+        }
+        self.allowed_to_restock(game_time) && self.needs_to_restock()
+    }
+
+    pub fn restock(&self, game_time: i64) {
+        self.update_demand();
+        {
+            let mut offers = self
+                .offers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for offer in offers.iter_mut() {
+                offer.reset_uses();
+            }
+        }
+        self.notify_trading_player_offers_updated();
+        self.last_restock_time.store(game_time, Ordering::Relaxed);
+        self.restocks_today.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn play_work_sound(&self) {
+        let profession = self
+            .villager_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .profession_enum();
+        if let Some(sound) = profession.work_sound() {
+            self.get_entity().play_sound(sound);
+        }
+    }
+
+    pub fn has_farm_seeds(&self) -> bool {
+        let inventory = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inventory.iter().any(|stack| {
+            stack
+                .item
+                .has_tag(&pumpkin_data::tag::Item::MINECRAFT_VILLAGER_PLANTABLE_SEEDS)
+        })
+    }
+
+    pub fn inventory_count(&self, item: &'static Item) -> i32 {
+        let inventory = self
+            .inventory
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inventory
+            .iter()
+            .filter(|stack| stack.item == item)
+            .map(|stack| i32::from(stack.item_count))
+            .sum()
+    }
+
+    fn reset_number_of_restocks(&self) {
+        self.catch_up_demand();
+        self.restocks_today.store(0, Ordering::Relaxed);
+    }
+
+    fn catch_up_demand(&self) {
+        let missed_updates = 2 - self.restocks_today.load(Ordering::Relaxed);
+        if missed_updates > 0 {
+            let mut offers = self
+                .offers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for offer in offers.iter_mut() {
+                offer.reset_uses();
+            }
+        }
+        for _ in 0..missed_updates {
+            self.update_demand();
+        }
+        self.notify_trading_player_offers_updated();
+    }
+
+    fn update_demand(&self) {
+        let mut offers = self
+            .offers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for offer in offers.iter_mut() {
+            offer.update_demand();
+        }
+    }
+
+    fn needs_to_restock(&self) -> bool {
+        self.offers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(pumpkin_protocol::java::client::play::MerchantOffer::needs_restock)
+    }
+
+    fn allowed_to_restock(&self, game_time: i64) -> bool {
+        let restocks_today = self.restocks_today.load(Ordering::Relaxed);
+        restocks_today == 0
+            || (restocks_today < 2
+                && game_time > self.last_restock_time.load(Ordering::Relaxed) + 2_400)
+    }
+
     fn work_at_job_site(&self, game_time: i64, day_time: i64, day: i64) {
         use rand::RngExt;
 
@@ -1036,67 +1146,10 @@ impl VillagerEntity {
             return;
         }
 
-        let profession = self
-            .villager_data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .profession_enum();
-        if let Some(sound) = profession.work_sound() {
-            self.get_entity().play_sound(sound);
+        self.play_work_sound();
+        if self.should_restock(game_time, day) {
+            self.restock(game_time);
         }
-
-        let last_restock = self.last_restock_time.load(Ordering::Relaxed);
-        let last_check_day = self.last_restock_check_day.swap(day, Ordering::Relaxed);
-        if game_time > last_restock + 12_000 || (last_check_day > 0 && day > last_check_day) {
-            let missed_restock_count = (2 - self.restocks_today.load(Ordering::Relaxed)).max(0);
-            {
-                let mut offers = self
-                    .offers
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if missed_restock_count > 0 {
-                    for offer in offers.iter_mut() {
-                        offer.reset_uses();
-                    }
-                }
-                for _ in 0..missed_restock_count {
-                    for offer in offers.iter_mut() {
-                        offer.update_demand();
-                    }
-                }
-            }
-            self.last_restock_time.store(game_time, Ordering::Relaxed);
-            self.restocks_today.store(0, Ordering::Relaxed);
-            self.notify_trading_player_offers_updated();
-        }
-
-        let restocks_today = self.restocks_today.load(Ordering::Relaxed);
-        let allowed = restocks_today == 0
-            || (restocks_today < 2
-                && game_time > self.last_restock_time.load(Ordering::Relaxed) + 2_400);
-        if !allowed {
-            return;
-        }
-
-        {
-            let mut offers = self
-                .offers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !offers
-                .iter()
-                .any(pumpkin_protocol::java::client::play::MerchantOffer::needs_restock)
-            {
-                return;
-            }
-            for offer in offers.iter_mut() {
-                offer.update_demand();
-                offer.reset_uses();
-            }
-        }
-        self.last_restock_time.store(game_time, Ordering::Relaxed);
-        self.restocks_today.fetch_add(1, Ordering::Relaxed);
-        self.notify_trading_player_offers_updated();
     }
 
     #[expect(clippy::too_many_lines)]
