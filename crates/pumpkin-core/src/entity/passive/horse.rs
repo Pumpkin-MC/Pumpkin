@@ -1,95 +1,79 @@
 use std::sync::{
-    Arc, Weak,
-    atomic::{AtomicI32, AtomicU8, Ordering},
+    Arc,
+    atomic::{AtomicI32, Ordering},
 };
 
-use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_state::SoundType;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{DataComponentImpl, EquipmentSlot, HorseVariantImpl};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
+use pumpkin_data::entity_variant::{HorseMarkings, HorseVariant};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::client::set_actor_data::{
+    MetadataValue, SyncedActorDataList, entity_data_key,
+};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
-use uuid::Uuid;
 
 use crate::entity::{
-    Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
-    ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
-    },
+    Entity, EntityBase, GearDamage,
+    ageable::{AgeableData, AgeableMob, DEFAULT_BABY_SPAWN_CHANCE},
+    mob::spawn::{EntitySpawnReason, SpawnGroupData},
     mob::{Mob, MobEntity},
+    passive::abstract_horse::{
+        AbstractHorse, AbstractHorseData, add_horse_behaviour_goals, generate_jump_strength,
+        generate_max_health, generate_speed, play_horse_gallop_sound, play_horse_step_sound,
+        register_horse_goals,
+    },
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 
-const TEMPT_ITEMS: &[&Item] = &[
-    &Item::GOLDEN_APPLE,
-    &Item::ENCHANTED_GOLDEN_APPLE,
-    &Item::GOLDEN_CARROT,
-];
+const HORSE_PARTNERS: &[&EntityType] = &[&EntityType::HORSE, &EntityType::DONKEY];
+const MARKINGS_SHIFT: i32 = 8;
+const ID_MASK: i32 = 0xFF;
+const BREATHE_CHANCE: i32 = 10;
+const BREATHE_VOLUME_SCALE: f32 = 0.6;
 
-pub const FLAG_TAME: u8 = 2;
-pub const FLAG_SADDLE: u8 = 4;
-pub const FLAG_BRED: u8 = 8;
-pub const FLAG_EATING: u8 = 16;
-pub const FLAG_STANDING: u8 = 32;
-pub const FLAG_OPEN_MOUTH: u8 = 64;
+const fn pack_variant(color: i32, markings: i32) -> i32 {
+    (color & ID_MASK) | ((markings & ID_MASK) << MARKINGS_SHIFT)
+}
+
+const fn color_id(variant: i32) -> i32 {
+    variant & ID_MASK
+}
+
+const fn markings_id(variant: i32) -> i32 {
+    (variant >> MARKINGS_SHIFT) & ID_MASK
+}
 
 pub struct HorseEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
+    horse_data: AbstractHorseData,
     pub variant: AtomicI32,
-    pub flags: AtomicU8,
-    pub temper: AtomicI32,
-    pub owner: AtomicCell<Option<Uuid>>,
 }
 
 impl HorseEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let mut rng = rand::rng();
-        let color = rng.random_range(0..7);
-        let style = rng.random_range(0..5);
-        let variant = color | (style << 8);
-
         let horse = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            variant: AtomicI32::new(variant),
-            flags: AtomicU8::new(0),
-            temper: AtomicI32::new(0),
-            owner: AtomicCell::new(None),
+            horse_data: AbstractHorseData::default(),
+            variant: AtomicI32::default(),
         };
         let mob_arc = Arc::new(horse);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            // TODO: RunAroundLikeCrazyGoal at 1, the only way to tame by riding.
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.7)));
-            goal_selector.add_goal(
-                7,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-        };
+        let mob: Arc<dyn Mob> = mob_arc.clone();
+        register_horse_goals(&mob);
+        add_horse_behaviour_goals(mob.as_ref());
 
         mob_arc
     }
@@ -106,196 +90,194 @@ impl HorseEntity {
             pumpkin_data::tracked_data::horse::DATA_ID_TYPE_VARIANT,
             VarInt(variant),
         );
+        entity.send_bedrock_actor_data(&self.bedrock_variant_data());
+    }
+}
+
+crate::impl_abstract_horse!(HorseEntity, {
+    fn finalize_horse_spawn(
+        &self,
+        _world: &Arc<World>,
+        _reason: EntitySpawnReason,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let mut rng = self.get_random();
+        let (color, group_size) = match group_data {
+            Some(SpawnGroupData::Horse { color, group_size }) => (color, group_size),
+            _ => (
+                HorseVariant::ALL[rng.random_range(0..HorseVariant::ALL.len())],
+                0,
+            ),
+        };
+        let markings = HorseMarkings::ALL[rng.random_range(0..HorseMarkings::ALL.len())];
+        self.set_variant(pack_variant(color.id(), markings.id()));
+        self.randomize_attributes();
+        let group_size = match self.finalize_ageable_spawn(Some(SpawnGroupData::Ageable {
+            group_size,
+            should_spawn_baby: true,
+            baby_spawn_chance: DEFAULT_BABY_SPAWN_CHANCE,
+        })) {
+            Some(SpawnGroupData::Ageable { group_size, .. }) => group_size,
+            _ => group_size + 1,
+        };
+        Some(SpawnGroupData::Horse { color, group_size })
     }
 
-    #[must_use]
-    pub fn has_flag(&self, flag: u8) -> bool {
-        (self.flags.load(Ordering::Relaxed) & flag) != 0
+    fn bedrock_variant_data(&self) -> SyncedActorDataList {
+        let variant = self.get_variant();
+        let mut data = SyncedActorDataList::new();
+        data.set(
+            entity_data_key::VARIANT,
+            MetadataValue::Int(color_id(variant)),
+        );
+        data.set(
+            entity_data_key::MARK_VARIANT,
+            MetadataValue::Int(markings_id(variant)),
+        );
+        data
     }
 
-    pub fn set_flag(&self, flag: u8, val: bool) {
-        let current = self.flags.load(Ordering::Relaxed);
-        let new_flags = if val { current | flag } else { current & !flag };
-        self.flags.store(new_flags, Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::horse::DATA_ID_FLAGS,
-            new_flags as i8,
+    fn play_gallop_sound(&self, sound_type: &SoundType) {
+        play_horse_gallop_sound(self, sound_type);
+        if self.get_random().random_range(0..BREATHE_CHANCE) == 0 {
+            let breathe = if self.is_baby() {
+                Sound::EntityBabyHorseBreathe
+            } else {
+                Sound::EntityHorseBreathe
+            };
+            self.play_entity_sound(
+                breathe,
+                sound_type.volume * BREATHE_VOLUME_SCALE,
+                sound_type.pitch,
+            );
+        }
+    }
+
+    fn ambient_sound(&self) -> Option<Sound> {
+        if self.is_baby() {
+            Some(Sound::EntityBabyHorseAmbient)
+        } else {
+            self.get_entity().entity_type.ambient_sound
+        }
+    }
+
+    fn get_hurt_sound(&self) -> Option<Sound> {
+        Some(if self.is_baby() {
+            Sound::EntityBabyHorseHurt
+        } else {
+            Sound::EntityHorseHurt
+        })
+    }
+
+    fn get_death_sound(&self) -> Option<Sound> {
+        Some(if self.is_baby() {
+            Sound::EntityBabyHorseDeath
+        } else {
+            Sound::EntityHorseDeath
+        })
+    }
+
+    fn randomize_attributes(&self) {
+        let mut rng = self.get_random();
+        let living = &self.mob_entity.living_entity;
+        living.set_max_health(generate_max_health(|bound| rng.random_range(0..bound)));
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, generate_speed(|| rng.random()));
+        living.set_attribute_base(
+            &Attributes::JUMP_STRENGTH,
+            generate_jump_strength(|| rng.random()),
         );
     }
-
-    #[must_use]
-    pub fn is_tame(&self) -> bool {
-        self.has_flag(FLAG_TAME)
-    }
-
-    pub fn set_tame(&self, val: bool) {
-        self.set_flag(FLAG_TAME, val);
-    }
-
-    #[must_use]
-    pub fn is_saddled(&self) -> bool {
-        self.has_flag(FLAG_SADDLE)
-    }
-
-    pub fn set_saddled(&self, val: bool) {
-        self.set_flag(FLAG_SADDLE, val);
-    }
-}
-
-impl AgeableMob for HorseEntity {
-    fn get_ageable_data(&self) -> &AgeableData {
-        &self.ageable_data
-    }
-
-    fn default_baby_spawn_chance(&self) -> f32 {
-        crate::entity::ageable::ABSTRACT_HORSE_BABY_SPAWN_CHANCE
-    }
-}
+});
 
 impl Animal for HorseEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_HORSE_FOOD)
-            || item_stack.item == &Item::WHEAT
-            || item_stack.item == &Item::SUGAR
-            || item_stack.item == &Item::HAY_BLOCK
-            || item_stack.item == &Item::APPLE
-            || item_stack.item == &Item::GOLDEN_CARROT
-            || item_stack.item == &Item::GOLDEN_APPLE
-            || item_stack.item == &Item::ENCHANTED_GOLDEN_APPLE
+    }
+
+    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
+        self.can_mate_with(partner, HORSE_PARTNERS)
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let Some(other) = partner.cast_any().downcast_ref::<Self>() else {
+            return self.breed_offspring(partner, &EntityType::MULE);
+        };
+        let baby = self.breed_offspring(partner, &EntityType::HORSE);
+        if let Some(foal) = baby.cast_any().downcast_ref::<Self>() {
+            let mut rng = self.get_random();
+            let color = match rng.random_range(0..9) {
+                0..4 => color_id(self.get_variant()),
+                4..8 => color_id(other.get_variant()),
+                _ => rng.random_range(0..HorseVariant::ALL.len() as i32),
+            };
+            let markings = match rng.random_range(0..5) {
+                0..2 => markings_id(self.get_variant()),
+                2..4 => markings_id(other.get_variant()),
+                _ => rng.random_range(0..HorseMarkings::ALL.len() as i32),
+            };
+            foal.set_variant(pack_variant(color, markings));
+        }
+        baby
     }
 }
 
-/// Vanilla `AbstractHorse.playStepSound`, shared by every horse that doesn't override it.
-pub(crate) fn play_horse_step_sound(
-    horse: &dyn Mob,
-    pos: &BlockPos,
-    state: &BlockState,
-    can_gallop: bool,
-) {
-    if state.is_liquid() {
-        return;
-    }
-    let entity = horse.get_entity();
-    let above = entity.world.load().get_block_state(&pos.up());
-    let sound_type = if above.id.to_block() == &Block::SNOW {
-        above.get_sound_type()
-    } else {
-        state.get_sound_type()
-    };
-    let volume = sound_type.volume * 0.15;
-    // TODO: gallop once ridden horses move: `tickRidden` resets the gallop counter while the
-    // rider isn't pressing forward, which is always the case without ridden movement.
-    let ridden = entity.has_passengers() && can_gallop;
-    let sound = if ridden || is_wood_sound_type(sound_type) {
-        Sound::EntityHorseStepWood
-    } else if entity.age.load(Ordering::Relaxed) < 0 {
-        Sound::EntityBabyHorseStep
-    } else {
-        Sound::EntityHorseStep
-    };
-    horse.play_entity_sound(sound, volume, sound_type.pitch);
-}
-
-/// Vanilla `AbstractHorse.isWoodSoundType`.
-fn is_wood_sound_type(sound_type: &SoundType) -> bool {
-    matches!(
-        sound_type.name,
-        "WOOD" | "NETHER_WOOD" | "STEM" | "CHERRY_WOOD" | "BAMBOO_WOOD"
-    )
-}
-
-// TODO: random health, speed and jump at spawn and averaged for foals (`AbstractHorse`); needs attribute NBT.
 impl Mob for HorseEntity {
-    fn is_tamed(&self) -> bool {
-        self.is_tame()
+    crate::abstract_horse_mob_hooks!();
+
+    fn mob_hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        match gear {
+            GearDamage::Armor => &[EquipmentSlot::BODY],
+            GearDamage::Helmet => &[],
+        }
     }
 
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
-        play_horse_step_sound(self, pos, state, true);
+        play_horse_step_sound(self, pos, state);
     }
 
-    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
-        Some(self)
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        (component == DataComponent::HorseVariant).then(|| {
+            Box::new(HorseVariantImpl {
+                value: HorseVariant::by_id(color_id(self.get_variant()))
+                    .name()
+                    .into(),
+            }) as Box<dyn DataComponentImpl>
+        })
     }
 
-    fn as_animal(&self) -> Option<&dyn Animal> {
-        Some(self)
+    fn mob_set_variant_name(&self, name: &str) {
+        if let Some(color) = HorseVariant::from_name(name) {
+            self.set_variant(pack_variant(color.id(), markings_id(self.get_variant())));
+        }
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
+        self.write_horse_nbt(nbt);
         nbt.put_int("Variant", self.get_variant());
-        nbt.put_bool("Tame", self.is_tame());
-        nbt.put_int("Temper", self.temper.load(Ordering::Relaxed));
-        if let Some(owner) = self.owner.load() {
-            nbt.put_uuid("Owner", owner);
-        }
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
+        self.read_horse_nbt(nbt);
         if let Some(variant) = nbt.get_int("Variant") {
             self.set_variant(variant);
         }
-        if let Some(tame) = nbt.get_bool("Tame") {
-            self.set_tame(tame);
-        }
-        if let Some(temper) = nbt.get_int("Temper") {
-            self.temper.store(temper, Ordering::Relaxed);
-        }
-        if let Some(owner) = nbt.get_uuid("Owner") {
-            self.owner.store(Some(owner));
-        }
-    }
-
-    fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
     }
 
     fn mob_init_data_tracker(&self) {
-        let entity = self.get_entity();
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        if is_baby {
-            entity.set_synced_data(pumpkin_data::tracked_data::horse::DATA_BABY_ID, true);
-        }
-        entity.set_synced_data(
+        self.init_horse_data_tracker();
+        self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::horse::DATA_ID_TYPE_VARIANT,
             VarInt(self.get_variant()),
-        );
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::horse::DATA_ID_FLAGS,
-            self.flags.load(Ordering::Relaxed) as i8,
         );
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let item = item_stack.get_item();
-
-        if self.is_tame() && item == &Item::SADDLE && !self.is_saddled() && !self.is_baby() {
-            self.set_saddled(true);
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityHorseSaddle,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
-            return true;
+        if let Some(result) = self.handle_important_interactions(player, item_stack) {
+            return result;
         }
-
-        if !self.is_baby() && !self.is_food(item_stack) {
-            let world = player.world();
-            let ent = &self.mob_entity.living_entity.entity;
-            if let Some(vehicle) = world.get_entity_by_id(ent.entity_id)
-                && let Some(passenger) = world.get_player_by_id(player.entity_id())
-            {
-                ent.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
-                return true;
-            }
+        if let Some(result) = self.interact_with_held_item(player, item_stack, true) {
+            return result;
         }
-
-        self.animal_interact(player, item_stack, Sound::EntityHorseAmbient)
+        self.horse_mob_interact(player, item_stack)
     }
 }

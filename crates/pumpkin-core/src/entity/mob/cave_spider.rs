@@ -6,6 +6,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::behavior::{fleeing, hunting};
 use crate::entity::mob::spider::{SPIDER_FLEES, SPIDER_HUNTS};
@@ -17,6 +18,8 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
+
+const VEHICLE_SEAT_HEIGHT: f64 = 0.218_75;
 
 pub struct CaveSpiderEntity {
     pub mob_entity: MobEntity,
@@ -55,6 +58,14 @@ impl CaveSpiderEntity {
 }
 
 impl Mob for CaveSpiderEntity {
+    fn mob_vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        super::spider::small_vehicle_attachment_point(
+            &self.mob_entity,
+            vehicle,
+            VEHICLE_SEAT_HEIGHT,
+        )
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
     }
@@ -62,9 +73,10 @@ impl Mob for CaveSpiderEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<crate::world::World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<super::spawn::SpawnGroupData>,
     ) -> Option<super::spawn::SpawnGroupData> {
-        super::spider::finalize_spider_spawn(&self.mob_entity, world, group_data)
+        super::spider::finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

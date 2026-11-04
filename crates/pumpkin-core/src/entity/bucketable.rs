@@ -47,6 +47,10 @@ pub trait Bucketable: Mob {
     }
 
     fn load_from_bucket_tag(&self, nbt: &NbtCompound) {
+        self.load_default_data_from_bucket_tag(nbt);
+    }
+
+    fn load_default_data_from_bucket_tag(&self, nbt: &NbtCompound) {
         let entity = self.get_entity();
         let mob = self.get_mob_entity();
         if let Some(value) = nbt.get_bool("NoAI") {

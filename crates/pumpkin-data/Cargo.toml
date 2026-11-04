@@ -38,6 +38,7 @@ default = [
     "noise_router",
     "composter",
     "flower_pot",
+    "suspicious_effects",
     "effect",
     "structures",
     "potion",
@@ -141,6 +142,7 @@ tag = []
 noise_router = []
 composter = []
 flower_pot = []
+suspicious_effects = ["effect"]
 effect = []
 structures = []
 potion = ["potion_brewing"]
@@ -156,7 +158,7 @@ biome = ["carver"]
 chunk_status = []
 entity_pose = []
 entity_status = []
-entity_type = ["sound"]
+entity_type = ["entity_pose", "sound"]
 spawn_egg = []
 world_event = []
 message_type = []
