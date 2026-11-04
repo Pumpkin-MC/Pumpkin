@@ -421,12 +421,9 @@ impl PluginManager {
         self.unload_active_plugins(|_| true).await
     }
 
-    /// Unload the active plugins matching `filter`, reporting the first failure
-    async fn unload_active_plugins(
-        &self,
-        filter: impl Fn(&LoadedPlugin) -> bool,
-    ) -> Result<(), ManagerError> {
-        let selected: Vec<(String, Vec<String>)> = {
+    /// The active plugins matching `filter` with their files, dependents before what they depend on
+    fn unload_order(&self, filter: impl Fn(&LoadedPlugin) -> bool) -> Vec<(String, PathBuf)> {
+        let selected: Vec<(String, Vec<String>, PathBuf)> = {
             let plugins = self
                 .plugins
                 .read()
@@ -434,30 +431,53 @@ impl PluginManager {
             plugins
                 .iter()
                 .filter(|p| p.is_active && filter(p))
-                .map(|p| (p.metadata.name.clone(), p.metadata.dependencies.clone()))
+                .map(|p| {
+                    (
+                        p.metadata.name.clone(),
+                        p.metadata.dependencies.clone(),
+                        p.path.clone(),
+                    )
+                })
                 .collect()
         };
 
-        // Dependents go before what they depend on, the reverse of the load order.
         // Dependencies outside the selection stay loaded, so they don't take part
-        let names: HashSet<&String> = selected.iter().map(|(name, _)| name).collect();
+        let names: HashSet<&String> = selected.iter().map(|(name, _, _)| name).collect();
         let relations: Vec<(String, Vec<String>)> = selected
             .iter()
-            .map(|(name, deps)| {
+            .map(|(name, deps, _)| {
                 let inside = deps.iter().filter(|dep| names.contains(dep)).cloned();
                 (name.clone(), inside.collect())
             })
             .collect();
-        let plugin_names = match Self::topological_sort(&relations) {
+        let mut paths: HashMap<String, PathBuf> = selected
+            .iter()
+            .map(|(name, _, path)| (name.clone(), path.clone()))
+            .collect();
+        match Self::topological_sort(&relations) {
             Ok(mut order) => {
                 order.reverse();
                 order
+                    .into_iter()
+                    .filter_map(|name| paths.remove(&name).map(|path| (name, path)))
+                    .collect()
             }
             Err(e) => {
                 warn!("Unloading plugins in listed order: {e}");
-                selected.into_iter().map(|(name, _)| name).collect()
+                selected
+                    .into_iter()
+                    .map(|(name, _, path)| (name, path))
+                    .collect()
             }
-        };
+        }
+    }
+
+    /// Unload the active plugins matching `filter`, reporting the first failure
+    async fn unload_active_plugins(
+        &self,
+        filter: impl Fn(&LoadedPlugin) -> bool,
+    ) -> Result<(), ManagerError> {
+        let plugin_names = self.unload_order(filter).into_iter().map(|(name, _)| name);
 
         // Keep unloading the rest even if one fails, but report the failure so a caller
         // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
@@ -487,10 +507,20 @@ impl PluginManager {
             )));
         }
 
-        self.unload_active_plugins(|p| p.loader.can_unload())
+        let unloading = self.unload_order(|p| p.loader.can_unload());
+        let names: HashSet<&String> = unloading.iter().map(|(name, _)| name).collect();
+        self.unload_active_plugins(|p| p.is_active && names.contains(&p.metadata.name))
             .await?;
         self.prune_missing_files().await;
-        self.load_plugins(server).await?;
+        if let Err(e) = self.load_plugins(server).await {
+            // The rescan failed as a whole, so bring back what was running before it
+            for (name, path) in unloading.iter().rev() {
+                if let Err(err) = self.try_load_plugin(server, path).await {
+                    error!("Failed to restore plugin {name}: {err}");
+                }
+            }
+            return Err(e);
+        }
         Ok(())
     }
 
