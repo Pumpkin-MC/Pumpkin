@@ -6,6 +6,7 @@ use pumpkin_data::tag::{self, Taggable};
 use super::{Controls, Goal, GoalReach};
 use crate::entity::mob::Mob;
 
+#[derive(Default)]
 pub struct ClimbOnTopOfPowderSnowGoal;
 
 impl Goal for ClimbOnTopOfPowderSnowGoal {
