@@ -42,6 +42,7 @@ pub const FLAG_SIT: u8 = 8;
 pub const FLAG_ON_BACK: u8 = 16;
 
 const GENE_RANDOM_BOUND: i32 = 16;
+const MUTATION_CHANCE: i32 = 32;
 const WEAK_MAX_HEALTH: f32 = 10.0;
 const LAZY_MOVEMENT_SPEED: f32 = 0.07;
 
@@ -65,6 +66,44 @@ fn get_random_gene(mut next_int: impl FnMut(i32) -> i32) -> PandaGene {
         9 | 10 => PandaGene::Brown,
         _ => PandaGene::Normal,
     }
+}
+
+fn next_boolean(next_int: &mut impl FnMut(i32) -> i32) -> bool {
+    next_int(2) != 0
+}
+
+/// Vanilla `getOneOfGenesRandomly` for a panda's (main, hidden) genes.
+fn get_one_of_genes_randomly(
+    genes: (PandaGene, PandaGene),
+    next_int: &mut impl FnMut(i32) -> i32,
+) -> PandaGene {
+    if next_boolean(next_int) {
+        genes.0
+    } else {
+        genes.1
+    }
+}
+
+/// Vanilla `setGeneFromParents`: the (main, hidden) genes of a foal of two pandas.
+fn genes_from_parents(
+    parent1: (PandaGene, PandaGene),
+    parent2: (PandaGene, PandaGene),
+    mut next_int: impl FnMut(i32) -> i32,
+) -> (PandaGene, PandaGene) {
+    let (first, second) = if next_boolean(&mut next_int) {
+        (parent1, parent2)
+    } else {
+        (parent2, parent1)
+    };
+    let mut main_gene = get_one_of_genes_randomly(first, &mut next_int);
+    let mut hidden_gene = get_one_of_genes_randomly(second, &mut next_int);
+    if next_int(MUTATION_CHANCE) == 0 {
+        main_gene = get_random_gene(&mut next_int);
+    }
+    if next_int(MUTATION_CHANCE) == 0 {
+        hidden_gene = get_random_gene(&mut next_int);
+    }
+    (main_gene, hidden_gene)
 }
 
 pub struct PandaEntity {
@@ -189,6 +228,17 @@ impl PandaEntity {
         }
     }
 
+    pub fn set_gene_from_parents(&self, parent1: &Self, parent2: &Self) {
+        let mut rng = self.get_random();
+        let (main_gene, hidden_gene) = genes_from_parents(
+            (parent1.get_main_gene(), parent1.get_hidden_gene()),
+            (parent2.get_main_gene(), parent2.get_hidden_gene()),
+            |bound| rng.random_range(0..bound),
+        );
+        self.set_main_gene(main_gene);
+        self.set_hidden_gene(hidden_gene);
+    }
+
     #[must_use]
     pub fn has_flag(&self, flag: u8) -> bool {
         (self.flags.load(Ordering::Relaxed) & flag) != 0
@@ -257,6 +307,20 @@ impl Animal for PandaEntity {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_PANDA_FOOD)
             || item_stack.item == &Item::BAMBOO
             || item_stack.item == &Item::CAKE
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::PANDA,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            baby.set_gene_from_parents(self, partner);
+        }
+        baby.set_attributes();
+        baby
     }
 }
 
@@ -382,6 +446,49 @@ mod tests {
         panda.set_hidden_gene(hidden_gene);
     }
 
+    /// Runs `genes_from_parents` against scripted `(bound, result)` random calls.
+    fn inherit(
+        parent1: (PandaGene, PandaGene),
+        parent2: (PandaGene, PandaGene),
+        calls: &[(i32, i32)],
+    ) -> (PandaGene, PandaGene) {
+        let mut script = calls.iter();
+        let genes = genes_from_parents(parent1, parent2, |bound| {
+            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
+            assert_eq!(bound, expected_bound);
+            result
+        });
+        assert!(script.next().is_none(), "unused scripted random calls");
+        genes
+    }
+
+    #[test]
+    fn foal_genes_come_from_the_parents_and_mutate_independently() {
+        let parent1 = (PandaGene::Lazy, PandaGene::Worried);
+        let parent2 = (PandaGene::Playful, PandaGene::Aggressive);
+        // First boolean true: main from parent 1, hidden from parent 2.
+        let genes = inherit(
+            parent1,
+            parent2,
+            &[(2, 1), (2, 1), (2, 0), (32, 5), (32, 7)],
+        );
+        assert_eq!(genes, (PandaGene::Lazy, PandaGene::Aggressive));
+        // First boolean false: main from parent 2, hidden from parent 1.
+        let genes = inherit(
+            parent1,
+            parent2,
+            &[(2, 0), (2, 0), (2, 1), (32, 5), (32, 7)],
+        );
+        assert_eq!(genes, (PandaGene::Aggressive, PandaGene::Lazy));
+        // A 1/32 mutation hits one gene and not the other.
+        let genes = inherit(
+            parent1,
+            parent2,
+            &[(2, 1), (2, 1), (2, 0), (32, 0), (16, 3), (32, 4)],
+        );
+        assert_eq!(genes, (PandaGene::Weak, PandaGene::Aggressive));
+    }
+
     #[tokio::test]
     async fn weak_variant_halves_health_and_lazy_variant_slows_down() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -437,6 +544,26 @@ mod tests {
         loaded.read_custom_nbt(&NbtCompound::new());
         assert_eq!(loaded.get_main_gene(), PandaGene::Normal);
         assert_eq!(loaded.get_hidden_gene(), PandaGene::Normal);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn offspring_gets_attributes_for_its_genes() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let parent = panda(&world);
+        set_genes(&parent, PandaGene::Weak, PandaGene::Weak);
+        let mate = panda(&world);
+        set_genes(&mate, PandaGene::Weak, PandaGene::Weak);
+
+        let baby = parent.get_breed_offspring(mate.as_ref());
+        let foal = baby
+            .cast_any()
+            .downcast_ref::<PandaEntity>()
+            .ok_or("offspring is not a panda")?;
+        // A mutation can make the foal normal, so compare against its own variant.
+        let expected = if foal.is_weak() { 10.0 } else { 20.0 };
+        assert!((foal.mob_entity.living_entity.get_max_health() - expected).abs() < f32::EPSILON);
         Ok(())
     }
 }
