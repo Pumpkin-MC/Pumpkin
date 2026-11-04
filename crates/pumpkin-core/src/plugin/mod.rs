@@ -1929,6 +1929,12 @@ impl PluginManager {
             if loading.is_empty() {
                 return Ok(());
             }
+            // The caller is still loading, so waiting for everything would wait on itself
+            if let Ok(caller) = INITIALIZING_PLUGIN.try_with(Clone::clone)
+                && loading.contains(&caller)
+            {
+                return Err(ManagerError::InitializationDeadlock(caller));
+            }
             for name in loading {
                 self.wait_for_initialization(&name).await?;
             }
