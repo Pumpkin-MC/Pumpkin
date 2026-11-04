@@ -156,7 +156,7 @@ impl Context {
     /// ```
     pub async fn get_service<T: Payload + 'static>(&self, name: &str) -> Option<Arc<T>> {
         let services = self.plugin_manager.services.read().await;
-        let service = Arc::clone(&services.get(name)?.payload);
+        let service = Arc::clone(services.get(name)?);
         <dyn Payload>::downcast_arc::<T>(service)
     }
 
@@ -379,7 +379,9 @@ impl Context {
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
     ) -> bool {
         let before_count = self.plugin_manager.loaded_plugins().len();
-        self.plugin_manager.add_loader(&self.server, loader).await;
+        self.plugin_manager
+            .add_owned_loader(&self.server, Some(self.metadata.name.clone()), loader)
+            .await;
         let after_count = self.plugin_manager.loaded_plugins().len();
 
         // Return true if any new plugins were loaded

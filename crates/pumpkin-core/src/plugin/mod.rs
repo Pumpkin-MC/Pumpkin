@@ -254,11 +254,21 @@ impl PluginEntry {
     }
 }
 
-/// Keeps the first, richer record when a later source names the same plugin again.
+/// Keeps the first, richer record when a later source names the same file again.
+///
+/// Another file declaring a known name stays listed.
 fn push_unless_known(entries: &mut Vec<PluginEntry>, entry: PluginEntry) {
-    if !entries.iter().any(|known| known.name() == entry.name()) {
+    if !entries
+        .iter()
+        .any(|known| known.name() == entry.name() && same_file(&known.path, &entry.path))
+    {
         entries.push(entry);
     }
+}
+
+/// Equal paths, or two spellings of one file.
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b || std::fs::canonicalize(a).is_ok_and(|a| std::fs::canonicalize(b).is_ok_and(|b| a == b))
 }
 
 /// Whether a file claims to be a plugin, by extension.
@@ -270,6 +280,9 @@ fn is_plugin_file(path: &Path) -> bool {
     })
 }
 
+/// Server permission namespaces, never a plugin name.
+const RESERVED_NAMESPACES: [&str; 2] = ["minecraft", "pumpkin"];
+
 /// How long an unload waits for events still running the plugin's handlers.
 const HANDLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const HANDLER_DRAIN_POLL: Duration = Duration::from_millis(10);
@@ -280,22 +293,69 @@ pub(crate) struct Service {
     pub(crate) payload: Arc<dyn Payload>,
 }
 
-/// Handlers and services taken off a plugin. Their code lives in its library.
+/// Services by name, plus replaced ones a holder may still use.
+#[derive(Default)]
+pub(crate) struct Services {
+    active: HashMap<String, Service>,
+    /// Off the map, still drained with their owner.
+    replaced: Vec<Service>,
+}
+
+impl Services {
+    pub(crate) fn insert(&mut self, name: String, service: Service) {
+        // Only our count left: owner still loaded, safe to drop
+        self.replaced
+            .retain(|old| Arc::strong_count(&old.payload) > 1);
+        if let Some(old) = self.active.insert(name, service) {
+            self.replaced.push(old);
+        }
+    }
+
+    pub(crate) fn get(&self, name: &str) -> Option<&Arc<dyn Payload>> {
+        self.active.get(name).map(|service| &service.payload)
+    }
+
+    /// Takes every service `owner` registered, replaced ones included.
+    fn take_owned(&mut self, owner: &str) -> Vec<Arc<dyn Payload>> {
+        let mut taken = Vec::new();
+        let mut take = |service: &Service| {
+            let keep = service.owner != owner;
+            if !keep {
+                taken.push(Arc::clone(&service.payload));
+            }
+            keep
+        };
+        self.active.retain(|_, service| take(service));
+        self.replaced.retain(|service| take(service));
+        taken
+    }
+}
+
+/// A plugin loader and the plugin that registered it, `None` for the server's own.
+struct RegisteredLoader {
+    owner: Option<String>,
+    loader: Arc<dyn PluginLoader>,
+}
+
+/// Handlers, services and loaders taken off a plugin. Their code lives in its library.
 struct Registrations {
     handlers: Vec<Arc<dyn DynEventHandler>>,
     services: Vec<Arc<dyn Payload>>,
+    loaders: Vec<Arc<dyn PluginLoader>>,
 }
 
 impl Registrations {
-    /// Any count above ours: a running event or another holder of a service.
+    /// Any count above ours: a running event, a service holder, or a plugin from that loader.
     fn in_use(&self) -> bool {
         self.handlers.iter().any(|h| Arc::strong_count(h) > 1)
             || self.services.iter().any(|s| Arc::strong_count(s) > 1)
+            || self.loaders.iter().any(|l| Arc::strong_count(l) > 1)
     }
 
     fn extend(&mut self, other: Self) {
         self.handlers.extend(other.handlers);
         self.services.extend(other.services);
+        self.loaders.extend(other.loaders);
     }
 }
 
@@ -377,12 +437,12 @@ pub struct PluginId {
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
     next_plugin_token: AtomicU64,
-    loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
+    loaders: RwLock<Vec<RegisteredLoader>>,
     pub handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     /// Plugin files that are known but not running, by path
     inactive: SyncRwLock<HashMap<PathBuf, PluginEntry>>,
-    services: Arc<RwLock<HashMap<String, Service>>>,
+    services: Arc<RwLock<Services>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
@@ -445,8 +505,13 @@ impl PluginManager {
     /// Create a new plugin manager with the native loader and the given extra loaders
     #[must_use]
     pub fn new(extra_loaders: Vec<Arc<dyn PluginLoader>>) -> Self {
-        let mut loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(NativePluginLoader)];
-        loaders.extend(extra_loaders);
+        let loaders = std::iter::once(Arc::new(NativePluginLoader) as Arc<dyn PluginLoader>)
+            .chain(extra_loaders)
+            .map(|loader| RegisteredLoader {
+                owner: None,
+                loader,
+            })
+            .collect();
         Self {
             plugins: SyncRwLock::new(Vec::new()),
             next_plugin_token: AtomicU64::new(0),
@@ -454,7 +519,7 @@ impl PluginManager {
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
             inactive: SyncRwLock::new(HashMap::new()),
-            services: Arc::new(RwLock::new(HashMap::new())),
+            services: Arc::new(RwLock::new(Services::default())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
@@ -591,7 +656,20 @@ impl PluginManager {
 
     /// Add a new plugin loader implementation
     pub async fn add_loader(self: &Arc<Self>, server: &Arc<Server>, loader: Arc<dyn PluginLoader>) {
-        self.loaders.write().await.push(loader);
+        self.add_owned_loader(server, None, loader).await;
+    }
+
+    /// `owner`: plugin whose unload takes the loader off again.
+    pub(crate) async fn add_owned_loader(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        owner: Option<String>,
+        loader: Arc<dyn PluginLoader>,
+    ) {
+        self.loaders
+            .write()
+            .await
+            .push(RegisteredLoader { owner, loader });
 
         // Try to load previously unloaded files with the new loader
         self.retry_unloaded_files(server).await;
@@ -743,8 +821,8 @@ impl PluginManager {
     /// Lets every loader run its per-tick work.
     pub fn tick_loaders(&self, server: &Arc<Server>) {
         if let Ok(loaders) = self.loaders.try_read() {
-            for loader in loaders.iter() {
-                loader.on_tick(server);
+            for registered in loaders.iter() {
+                registered.loader.on_tick(server);
             }
         }
     }
@@ -752,7 +830,12 @@ impl PluginManager {
     /// Get a clone of the loaders for context use
     #[must_use]
     pub async fn get_loaders(&self) -> Vec<Arc<dyn PluginLoader>> {
-        self.loaders.read().await.clone()
+        self.loaders
+            .read()
+            .await
+            .iter()
+            .map(|registered| Arc::clone(&registered.loader))
+            .collect()
     }
 
     /// Helper for topological sort of plugins based on dependencies
@@ -908,6 +991,16 @@ impl PluginManager {
         ));
 
         let plugin_path = path.clone();
+
+        // Unload would drop the server's own permission nodes
+        if RESERVED_NAMESPACES.contains(&metadata.name.as_str()) {
+            let reason = format!("name {} is reserved by the server", metadata.name);
+            self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason.clone()));
+            discard_loaded(instance, &*loader, loader_data).await;
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                format!("Plugin \"{}\": {reason}", metadata.name),
+            )));
+        }
 
         // Claiming the name and inserting the record: two loads of
         // the same plugin would otherwise both initialize and register handlers
@@ -1129,7 +1222,7 @@ impl PluginManager {
         let mut cache = cache::PermissionCache::load(&cache_path).await;
 
         let mut prepared_plugins = Vec::new();
-        let loaders = self.loaders.read().await.clone();
+        let loaders = self.get_loaders().await;
 
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
@@ -1434,7 +1527,7 @@ impl PluginManager {
             )));
         }
 
-        let loaders = self.loaders.read().await.clone();
+        let loaders = self.get_loaders().await;
         for loader in &loaders {
             if loader.can_load(path) {
                 // A loader took it, so it is no longer waiting for one
@@ -1701,7 +1794,7 @@ impl PluginManager {
 
     /// Every plugin file the manager knows about: running, unloaded, failed or without a loader.
     ///
-    /// Sorted by name; the first, richer record wins when a plugin is named more than once.
+    /// Sorted by name; the first, richer record wins when a file is listed more than once.
     pub async fn plugin_entries(&self) -> Vec<PluginEntry> {
         let states = self.plugin_states.read().await;
 
@@ -1960,19 +2053,21 @@ impl PluginManager {
         unloaded.map_err(ManagerError::from)
     }
 
-    /// Takes a plugin's handlers and services off their maps and returns them.
+    /// Takes a plugin's handlers, services and loaders off and returns them.
     async fn take_registrations(&self, source: &str) -> Registrations {
-        let mut services = Vec::new();
-        self.services.write().await.retain(|_, service| {
-            let keep = service.owner != source;
+        let services = self.services.write().await.take_owned(source);
+        let mut loaders = Vec::new();
+        self.loaders.write().await.retain(|registered| {
+            let keep = registered.owner.as_deref() != Some(source);
             if !keep {
-                services.push(Arc::clone(&service.payload));
+                loaders.push(Arc::clone(&registered.loader));
             }
             keep
         });
         Registrations {
             handlers: self.unregister_handlers(source),
             services,
+            loaders,
         }
     }
 

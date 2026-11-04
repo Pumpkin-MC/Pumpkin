@@ -80,10 +80,11 @@ pub(super) fn hover_text(entry: &PluginEntry) -> String {
         || format!("File: {}", entry.path.display()),
         |metadata| {
             format!(
-                "Version: {}\nAuthors: {}\nDescription: {}",
+                "Version: {}\nAuthors: {}\nDescription: {}\nFile: {}",
                 metadata.version,
                 metadata.authors.join(", "),
-                metadata.description
+                metadata.description,
+                entry.path.display()
             )
         },
     );
