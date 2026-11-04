@@ -426,7 +426,7 @@ impl PluginManager {
         &self,
         filter: impl Fn(&LoadedPlugin) -> bool,
     ) -> Result<(), ManagerError> {
-        let plugin_names: Vec<String> = {
+        let selected: Vec<(String, Vec<String>)> = {
             let plugins = self
                 .plugins
                 .read()
@@ -434,8 +434,29 @@ impl PluginManager {
             plugins
                 .iter()
                 .filter(|p| p.is_active && filter(p))
-                .map(|p| p.metadata.name.clone())
+                .map(|p| (p.metadata.name.clone(), p.metadata.dependencies.clone()))
                 .collect()
+        };
+
+        // Dependents go before what they depend on, the reverse of the load order.
+        // Dependencies outside the selection stay loaded, so they don't take part
+        let names: HashSet<&String> = selected.iter().map(|(name, _)| name).collect();
+        let relations: Vec<(String, Vec<String>)> = selected
+            .iter()
+            .map(|(name, deps)| {
+                let inside = deps.iter().filter(|dep| names.contains(dep)).cloned();
+                (name.clone(), inside.collect())
+            })
+            .collect();
+        let plugin_names = match Self::topological_sort(&relations) {
+            Ok(mut order) => {
+                order.reverse();
+                order
+            }
+            Err(e) => {
+                warn!("Unloading plugins in listed order: {e}");
+                selected.into_iter().map(|(name, _)| name).collect()
+            }
         };
 
         // Keep unloading the rest even if one fails, but report the failure so a caller
