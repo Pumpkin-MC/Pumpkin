@@ -5,6 +5,7 @@ use std::sync::{
 
 use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity_variant::PandaGene;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
@@ -34,82 +35,22 @@ pub const FLAG_ROLL: u8 = 4;
 pub const FLAG_SIT: u8 = 8;
 pub const FLAG_ON_BACK: u8 = 16;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(u8)]
-pub enum PandaGene {
-    #[default]
-    Normal = 0,
-    Lazy = 1,
-    Worried = 2,
-    Playful = 3,
-    Brown = 4,
-    Weak = 5,
-    Aggressive = 6,
-}
-
-impl PandaGene {
-    #[must_use]
-    pub const fn from_id(id: u8) -> Self {
-        match id {
-            1 => Self::Lazy,
-            2 => Self::Worried,
-            3 => Self::Playful,
-            4 => Self::Brown,
-            5 => Self::Weak,
-            6 => Self::Aggressive,
-            _ => Self::Normal,
-        }
-    }
-
-    #[must_use]
-    pub const fn id(self) -> u8 {
-        self as u8
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Normal => "normal",
-            Self::Lazy => "lazy",
-            Self::Worried => "worried",
-            Self::Playful => "playful",
-            Self::Brown => "brown",
-            Self::Weak => "weak",
-            Self::Aggressive => "aggressive",
-        }
-    }
-
-    #[must_use]
-    pub fn from_name(name: &str) -> Self {
-        match name {
-            "lazy" => Self::Lazy,
-            "worried" => Self::Worried,
-            "playful" => Self::Playful,
-            "brown" => Self::Brown,
-            "weak" => Self::Weak,
-            "aggressive" => Self::Aggressive,
-            _ => Self::Normal,
-        }
-    }
-
-    #[must_use]
-    pub fn random_gene() -> Self {
-        let mut rng = rand::rng();
-        if rng.random_range(0..16) == 0 {
-            Self::from_id(rng.random_range(4..=6))
-        } else if rng.random_range(0..8) == 0 {
-            Self::from_id(rng.random_range(1..=3))
-        } else {
-            Self::Normal
-        }
+fn random_gene() -> PandaGene {
+    let mut rng = rand::rng();
+    if rng.random_range(0..16) == 0 {
+        PandaGene::by_id(rng.random_range(4..=6))
+    } else if rng.random_range(0..8) == 0 {
+        PandaGene::by_id(rng.random_range(1..=3))
+    } else {
+        PandaGene::Normal
     }
 }
 
 pub struct PandaEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
-    pub main_gene: AtomicU8,
-    pub hidden_gene: AtomicU8,
+    pub main_gene: AtomicI32,
+    pub hidden_gene: AtomicI32,
     pub flags: AtomicU8,
     pub eat_counter: AtomicI32,
     pub sneeze_counter: AtomicI32,
@@ -119,13 +60,13 @@ pub struct PandaEntity {
 impl PandaEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let gene = PandaGene::random_gene();
-        let hidden = PandaGene::random_gene();
+        let gene = random_gene();
+        let hidden = random_gene();
         let panda = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            main_gene: AtomicU8::new(gene.id()),
-            hidden_gene: AtomicU8::new(hidden.id()),
+            main_gene: AtomicI32::new(gene.id()),
+            hidden_gene: AtomicI32::new(hidden.id()),
             flags: AtomicU8::new(0),
             eat_counter: AtomicI32::new(0),
             sneeze_counter: AtomicI32::new(0),
@@ -158,7 +99,7 @@ impl PandaEntity {
 
     #[must_use]
     pub fn get_main_gene(&self) -> PandaGene {
-        PandaGene::from_id(self.main_gene.load(Ordering::Relaxed))
+        PandaGene::by_id(self.main_gene.load(Ordering::Relaxed))
     }
 
     pub fn set_main_gene(&self, gene: PandaGene) {
@@ -172,7 +113,7 @@ impl PandaEntity {
 
     #[must_use]
     pub fn get_hidden_gene(&self) -> PandaGene {
-        PandaGene::from_id(self.hidden_gene.load(Ordering::Relaxed))
+        PandaGene::by_id(self.hidden_gene.load(Ordering::Relaxed))
     }
 
     pub fn set_hidden_gene(&self, gene: PandaGene) {
@@ -283,17 +224,17 @@ impl Mob for PandaEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_ageable_nbt(nbt);
-        nbt.put_string("MainGene", self.get_main_gene().as_str().to_string());
-        nbt.put_string("HiddenGene", self.get_hidden_gene().as_str().to_string());
+        nbt.put_string("MainGene", self.get_main_gene().name().to_string());
+        nbt.put_string("HiddenGene", self.get_hidden_gene().name().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.read_ageable_nbt(nbt);
         if let Some(main) = nbt.get_string("MainGene") {
-            self.set_main_gene(PandaGene::from_name(main));
+            self.set_main_gene(PandaGene::from_name(main).unwrap_or(PandaGene::Normal));
         }
         if let Some(hidden) = nbt.get_string("HiddenGene") {
-            self.set_hidden_gene(PandaGene::from_name(hidden));
+            self.set_hidden_gene(PandaGene::from_name(hidden).unwrap_or(PandaGene::Normal));
         }
     }
 
