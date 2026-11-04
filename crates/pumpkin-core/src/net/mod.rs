@@ -309,7 +309,7 @@ impl ClientPlatform {
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
-            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
+            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await.sent,
         }
     }
 

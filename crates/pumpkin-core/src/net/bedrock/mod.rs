@@ -67,7 +67,7 @@ use crate::{
     entity::player::Player,
     net::{
         DisconnectReason, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
-        decrement_pending_bytes,
+        chunk_sender::DeliveryFailure, decrement_pending_bytes,
     },
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
@@ -149,6 +149,24 @@ pub struct BedrockClient {
     incoming_game_packet_recv: Mutex<Option<Receiver<RawPacket>>>,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
+}
+
+/// Result of [`BedrockClient::send_chunks`].
+#[derive(Default)]
+pub struct BedrockChunkSend {
+    pub sent: Vec<Vector2<i32>>,
+    pub failed: Vec<(Vector2<i32>, DeliveryFailure)>,
+}
+
+impl BedrockChunkSend {
+    /// A chunk with no reported outcome was never attempted -> deferred.
+    #[must_use]
+    pub fn failure(&self, pos: Vector2<i32>) -> DeliveryFailure {
+        self.failed
+            .iter()
+            .find(|(failed, _)| *failed == pos)
+            .map_or(DeliveryFailure::Deferred, |&(_, failure)| failure)
+    }
 }
 
 impl BedrockClient {
@@ -358,24 +376,35 @@ impl BedrockClient {
         self.close().await;
     }
 
-    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
+    /// Queues the chunks and reports which were sent and why the others were not.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> BedrockChunkSend {
+        let mut outcome = BedrockChunkSend::default();
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
             debug!(
-                "send_chunks: player not set yet, dropping {} chunks",
+                "send_chunks: player not set yet, deferring {} chunks",
                 chunks.len()
             );
-            return Vec::new();
+            return outcome;
         };
         let Some(server) = player.world().server.upgrade() else {
-            return Vec::new();
+            return outcome;
         };
 
         let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
+        outcome.failed.extend(
+            chunks
+                .iter()
+                .filter(|chunk| !valid_chunks.iter().any(|valid| Arc::ptr_eq(valid, chunk)))
+                .map(|chunk| (Vector2::new(chunk.x, chunk.z), DeliveryFailure::Cancelled)),
+        );
         if valid_chunks.is_empty() {
-            return Vec::new();
+            return outcome;
         }
+        let valid_positions: Vec<_> = valid_chunks
+            .iter()
+            .map(|chunk| Vector2::new(chunk.x, chunk.z))
+            .collect();
 
         let bedrock_dimension =
             if player.world().dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
@@ -403,17 +432,26 @@ impl BedrockClient {
                     &block_actors,
                 ) {
                     Ok((payload, blobs)) => {
-                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), payload));
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), Some(payload)));
                         new_blobs.extend(blobs);
                     }
-                    Err(e) => error!("Failed to serialize Bedrock chunk: {:?}", e),
+                    Err(e) => {
+                        error!("Failed to serialize Bedrock chunk: {:?}", e);
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), None));
+                    }
                 }
             }
             let _ = tx.send((encoded_payloads, new_blobs));
         });
 
         let Ok((encoded_payloads, new_blobs)) = rx.await else {
-            return Vec::new();
+            // Encoding task died -> counts as an encode failure for every chunk
+            outcome.failed.extend(
+                valid_positions
+                    .into_iter()
+                    .map(|pos| (pos, DeliveryFailure::Unencodable)),
+            );
+            return outcome;
         };
 
         if !new_blobs.is_empty() {
@@ -426,10 +464,25 @@ impl BedrockClient {
             }
         }
 
+        self.queue_chunk_payloads(encoded_payloads, &mut outcome)
+            .await;
+        outcome
+    }
+
+    /// Wraps encoded chunk payloads as game packets and queues them, recording each outcome.
+    async fn queue_chunk_payloads(
+        &self,
+        encoded_payloads: Vec<(Vector2<i32>, Option<Vec<u8>>)>,
+        outcome: &mut BedrockChunkSend,
+    ) {
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
             let encoder = self.network_writer.read().await;
             for (pos, payload) in encoded_payloads {
+                let Some(payload) = payload else {
+                    outcome.failed.push((pos, DeliveryFailure::Unencodable));
+                    continue;
+                };
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
                     CLevelChunk::PACKET_ID as u16,
@@ -439,17 +492,20 @@ impl BedrockClient {
                     &mut packet_buf,
                 ) {
                     Ok(()) => packets_to_enqueue.push((pos, packet_buf)),
-                    Err(err) => error!("Failed to write game packet wrapper: {err}"),
+                    Err(err) => {
+                        error!("Failed to write game packet wrapper: {err}");
+                        outcome.failed.push((pos, DeliveryFailure::Unencodable));
+                    }
                 }
             }
         }
-        let mut sent = Vec::with_capacity(packets_to_enqueue.len());
         for (pos, packet_buf) in packets_to_enqueue {
             if self.enqueue_packet_data(packet_buf.into()).await {
-                sent.push(pos);
+                outcome.sent.push(pos);
+            } else {
+                outcome.failed.push((pos, DeliveryFailure::Deferred));
             }
         }
-        sent
     }
 
     pub fn set_player(&self, player: Arc<Player>) {

@@ -22,6 +22,8 @@ const MIN_CHUNKS_PER_TICK: f32 = 0.01;
 const MAX_CHUNKS_PER_TICK: f32 = 64.0;
 const INITIAL_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_CONCURRENT_BATCHES: u16 = 10;
+/// Encode attempts per chunk before a Bedrock dispatch is given up on.
+const MAX_ENCODE_ATTEMPTS: u8 = 3;
 
 pub struct PreparedChunk {
     pub position: Vector2<i32>,
@@ -33,6 +35,17 @@ pub struct DispatchedChunk {
     pub position: Vector2<i32>,
     pub chunk: SyncChunk,
     pub delivery_token: u64,
+}
+
+/// Why a committed Bedrock chunk did not reach the client.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DeliveryFailure {
+    /// Cancelled `ChunkSend` -> stays unsent, like the Java path.
+    Cancelled,
+    /// Not queued for a passing reason (player not set, closed connection) -> retried.
+    Deferred,
+    /// Failed to encode -> retried up to `MAX_ENCODE_ATTEMPTS` times.
+    Unencodable,
 }
 
 pub struct PreparedBatch {
@@ -67,6 +80,8 @@ pub struct ChunkSender {
     /// Committed Bedrock chunks packets are still being encoded, by dispatch token and
     /// whether the client already held an earlier copy.
     awaiting_delivery: FxHashMap<Vector2<i32>, (u64, bool)>,
+    /// Failed Bedrock encode attempts per chunk.
+    encode_failures: FxHashMap<Vector2<i32>, u8>,
     /// Monotonic across resets, so a superseded dispatch can never match again.
     next_delivery_token: u64,
     pub in_flight_batches: u16,
@@ -82,6 +97,7 @@ impl ChunkSender {
             pending_chunks: FxHashSet::default(),
             sent_chunks: FxHashSet::default(),
             awaiting_delivery: FxHashMap::default(),
+            encode_failures: FxHashMap::default(),
             next_delivery_token: 0,
             in_flight_batches: 0,
             desired_rate: INITIAL_CHUNKS_PER_TICK,
@@ -94,6 +110,7 @@ impl ChunkSender {
         self.pending_chunks.clear();
         self.sent_chunks.clear();
         self.awaiting_delivery.clear();
+        self.encode_failures.clear();
         self.in_flight_batches = 0;
         self.send_quota = 0.0;
     }
@@ -117,6 +134,7 @@ impl ChunkSender {
         for &(pos, token) in deliveries {
             if self.awaiting_delivery.get(&pos).map(|d| d.0) == Some(token) {
                 self.awaiting_delivery.remove(&pos);
+                self.encode_failures.remove(&pos);
                 delivered.push(pos);
             }
         }
@@ -139,16 +157,34 @@ impl ChunkSender {
     }
 
     /// Bedrock dispatch that never reached the client -> no longer held, unless an earlier
-    /// copy was. A re-enqueue since then holds a newer token and is kept.
-    pub fn cancel_delivery(&mut self, cancelled: &[(Vector2<i32>, u64)]) {
-        for &(pos, token) in cancelled {
-            if let Some(&(current, held_before)) = self.awaiting_delivery.get(&pos)
-                && current == token
-            {
-                self.awaiting_delivery.remove(&pos);
-                if !held_before {
-                    self.sent_chunks.remove(&pos);
+    /// copy was, and pending again if retryable. A re-enqueue since then holds a newer token
+    /// and is kept.
+    pub fn fail_delivery(&mut self, failed: &[(Vector2<i32>, u64, DeliveryFailure)]) {
+        for &(pos, token, failure) in failed {
+            let Some(&(current, held_before)) = self.awaiting_delivery.get(&pos) else {
+                continue;
+            };
+            if current != token {
+                continue;
+            }
+            self.awaiting_delivery.remove(&pos);
+            if !held_before {
+                self.sent_chunks.remove(&pos);
+            }
+
+            let retry = match failure {
+                DeliveryFailure::Cancelled => false,
+                DeliveryFailure::Deferred => true,
+                DeliveryFailure::Unencodable => {
+                    let attempts = self.encode_failures.entry(pos).or_default();
+                    *attempts += 1;
+                    *attempts < MAX_ENCODE_ATTEMPTS
                 }
+            };
+            if retry {
+                self.pending_chunks.insert(pos);
+            } else {
+                self.encode_failures.remove(&pos);
             }
         }
     }
@@ -202,6 +238,7 @@ impl ChunkSender {
     pub fn unload_chunk(&mut self, client: &ClientPlatform, pos: Vector2<i32>) {
         self.pending_chunks.remove(&pos);
         self.awaiting_delivery.remove(&pos);
+        self.encode_failures.remove(&pos);
         if self.sent_chunks.remove(&pos)
             && let ClientPlatform::Java(java_client) = client
             && !java_client.is_closed()
@@ -618,6 +655,85 @@ mod tests {
 
         sender.mark_delivered(&[(position, first[0].delivery_token)]);
         assert_eq!(sender.ready_chunks_count(), 1);
+    }
+
+    #[test]
+    fn deferred_first_delivery_is_pending_again() {
+        let position = Vector2::new(4, 0);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let dispatch = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.fail_delivery(&[(
+            position,
+            dispatch[0].delivery_token,
+            DeliveryFailure::Deferred,
+        )]);
+
+        assert!(sender.pending_chunks.contains(&position));
+        assert!(!sender.is_chunk_sent(&position));
+    }
+
+    #[test]
+    fn cancelled_delivery_is_not_retried() {
+        let position = Vector2::new(-1, 6);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let dispatch = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.fail_delivery(&[(
+            position,
+            dispatch[0].delivery_token,
+            DeliveryFailure::Cancelled,
+        )]);
+
+        assert!(!sender.pending_chunks.contains(&position));
+        assert!(!sender.is_chunk_sent(&position));
+    }
+
+    #[test]
+    fn unencodable_delivery_gives_up_after_bounded_attempts() {
+        let position = Vector2::new(7, 7);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+
+        for attempt in 1..=MAX_ENCODE_ATTEMPTS {
+            let dispatch = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+            assert_eq!(dispatch.len(), 1);
+            sender.fail_delivery(&[(
+                position,
+                dispatch[0].delivery_token,
+                DeliveryFailure::Unencodable,
+            )]);
+            assert_eq!(
+                sender.pending_chunks.contains(&position),
+                attempt < MAX_ENCODE_ATTEMPTS
+            );
+        }
+
+        assert!(!sender.is_chunk_sent(&position));
+        assert!(sender.commit_bedrock_batch(&batch_for(position, 0), 0).is_empty());
+    }
+
+    #[test]
+    fn failed_resend_of_a_held_chunk_keeps_it_held() {
+        let position = Vector2::new(0, -5);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let first = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.mark_delivered(&[(position, first[0].delivery_token)]);
+
+        sender.enqueue_chunk(position);
+        let resend = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.fail_delivery(&[(
+            position,
+            resend[0].delivery_token,
+            DeliveryFailure::Cancelled,
+        )]);
+
+        assert!(sender.is_chunk_ready(&position));
+        assert!(!sender.pending_chunks.contains(&position));
     }
 
     fn batch_for(position: Vector2<i32>, epoch_snapshot: u32) -> PreparedBatch {

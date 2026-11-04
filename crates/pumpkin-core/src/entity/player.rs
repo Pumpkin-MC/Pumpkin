@@ -2999,14 +2999,14 @@ impl Player {
                     );
                     self.pair_entities_in_chunks(&world, &sent);
                 }
-                ClientPlatform::Bedrock(_) => {
+                ClientPlatform::Bedrock(bedrock) => {
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
                     let chunks = self.chunk_sender.try_lock().map_or_else(
                         |_| Vec::new(),
                         |mut sender| sender.commit_bedrock_batch(&batch, current_epoch),
                     );
                     if !chunks.is_empty() {
-                        let client = self.client.clone();
+                        let bedrock = bedrock.clone();
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
@@ -3014,18 +3014,21 @@ impl Player {
                                 .into_iter()
                                 .map(|c| ((c.position, c.delivery_token), c.chunk))
                                 .unzip();
-                            let sent = client.send_chunks(&chunks).await;
-                            // A cancelled `ChunkSend` never reached the client -> no longer held.
+                            let outcome = bedrock.send_chunks(&chunks).await;
                             let (deliveries, dropped): (Vec<_>, Vec<_>) = deliveries
                                 .into_iter()
-                                .partition(|(pos, _)| sent.contains(pos));
+                                .partition(|(pos, _)| outcome.sent.contains(pos));
+                            let dropped: Vec<_> = dropped
+                                .into_iter()
+                                .map(|(pos, token)| (pos, token, outcome.failure(pos)))
+                                .collect();
                             if let Some(player) = world.get_player_by_uuid(uuid) {
                                 // dispatcher sets a reset or a re-enqueue since then holds a newer token.
                                 let mut sender = player
                                     .chunk_sender
                                     .lock()
                                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                sender.cancel_delivery(&dropped);
+                                sender.fail_delivery(&dropped);
                                 let delivered = sender.mark_delivered(&deliveries);
                                 drop(sender);
                                 player.pair_entities_in_chunks(&world, &delivered);
