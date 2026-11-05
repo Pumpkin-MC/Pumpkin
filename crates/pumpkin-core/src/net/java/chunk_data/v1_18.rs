@@ -1,4 +1,5 @@
 use super::util::write_compound_nbt;
+use crate::block::entities::block_entity_update_tag;
 use pumpkin_protocol::codec::bit_set::BitSet;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::NetworkWriteExt;
@@ -191,7 +192,8 @@ pub fn write_chunk_data(
         write.write_u8(local_xz as u8)?;
         write.write_i16_be(pos.0.y as i16)?;
 
-        let id = nbt.get_string("id").map_or(0, |id_str| {
+        let entity_id = nbt.get_string("id");
+        let id = entity_id.map_or(0, |id_str| {
             let name = id_str.split(':').next_back().unwrap_or(id_str);
             pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
                 .iter()
@@ -200,7 +202,7 @@ pub fn write_chunk_data(
         });
         write.write_var_int(&VarInt(id as i32))?;
 
-        let mut client_nbt = nbt.clone();
+        let mut client_nbt = block_entity_update_tag(entity_id.unwrap_or_default(), nbt.clone());
         client_nbt.child_tags.remove("id");
         client_nbt.child_tags.remove("x");
         client_nbt.child_tags.remove("y");
