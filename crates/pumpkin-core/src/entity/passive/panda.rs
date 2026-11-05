@@ -6,6 +6,7 @@ use std::sync::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::PandaGene;
@@ -15,6 +16,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -606,6 +608,50 @@ impl PandaEntity {
         None
     }
 
+    /// Whether feeding takes the shared animal path of vanilla `Panda.mobInteract`: an adult that
+    /// can fall in love, or a baby that can still grow up. Anything else sits down and eats.
+    fn feeding_is_breeding_or_growing(&self) -> bool {
+        let breeding = self.get_age() >= 0
+            && self.mob_entity.is_breeding_ready()
+            && !self.mob_entity.is_in_love();
+        breeding || self.can_age_up()
+    }
+
+    /// The last branch of vanilla `Panda.mobInteract` for food: an adult panda that cannot be
+    /// bred sits down and eats the item. It drops what it held before (unless the player has
+    /// infinite materials, i.e. in creative mode), holds one of the given item and the player's
+    /// stack shrinks. Returns whether the interaction was handled.
+    fn sit_and_eat(&self, item_stack: &mut ItemStack, gamemode: GameMode) -> bool {
+        self.sit_and_eat_if(item_stack, gamemode, |held| self.plugin_allows_drop(held))
+    }
+
+    /// `sit_and_eat` with the plugin decision passed in. The old item is only swapped out once its
+    /// drop is allowed: if a plugin cancels that drop nothing changes (the panda keeps its item and
+    /// the player's stack stays) and the interaction is not handled.
+    fn sit_and_eat_if(
+        &self,
+        item_stack: &mut ItemStack,
+        gamemode: GameMode,
+        allowed: impl FnOnce(&ItemStack) -> bool,
+    ) -> bool {
+        if self.is_baby() || self.is_sitting() || self.get_entity().is_in_water() {
+            return false;
+        }
+        let held = self.main_hand_item();
+        let drops_held = gamemode != GameMode::Creative && !held.is_empty();
+        if drops_held && !allowed(&held) {
+            return false;
+        }
+        self.try_to_sit();
+        self.eat(true);
+        let held = self.set_main_hand_item(ItemStack::new(1, item_stack.item));
+        if drops_held {
+            self.get_entity().spawn_at_location(held);
+        }
+        item_stack.decrement_unless_creative(gamemode, 1);
+        true
+    }
+
     /// Vanilla `canPerformAction`: the panda is free to walk, attack, flee and look around.
     #[must_use]
     pub fn can_perform_action(&self) -> bool {
@@ -812,12 +858,22 @@ impl Mob for PandaEntity {
     }
 
     /// Vanilla `Panda.mobInteract`: the checks before feeding come from
-    /// `interact_before_feeding`, the rest is the shared animal feeding.
+    /// `interact_before_feeding`, an adult that cannot be bred sits down and eats the food
+    /// (`sit_and_eat`), the rest is the shared animal feeding.
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if let Some(handled) = self.interact_before_feeding(item_stack) {
             return handled;
         }
+        if self.is_food(item_stack) && !self.feeding_is_breeding_or_growing() {
+            return self.sit_and_eat(item_stack, player.gamemode.load());
+        }
         self.animal_interact(player, item_stack)
+    }
+
+    /// Vanilla `Panda.hurtServer`: any damage makes the panda stand up first.
+    fn pre_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
+        self.set_sitting(false);
+        true
     }
 }
 
@@ -1501,10 +1557,15 @@ mod tests {
         stone_floor(&world);
         let panda = spawn_panda(&world, 0.5, 0.5);
 
+        let mut asked = false;
         assert!(
-            !panda.drop_main_hand_item_if(|_| unreachable!("an empty mouth asked a plugin")),
+            !panda.drop_main_hand_item_if(|_| {
+                asked = true;
+                true
+            }),
             "an empty mouth dropped something"
         );
+        assert!(!asked, "an empty mouth asked a plugin");
         hold(&panda, &Item::BAMBOO);
         assert!(panda.drop_main_hand_item_if(|_| false));
         assert_eq!(
@@ -1705,7 +1766,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn registered_sit_goal_sits_a_panda_that_holds_an_item() -> TestResult {
+    async fn registered_sit_goal_sits_a_panda_that_holds_an_item_until_it_is_hurt() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         stone_floor(&world);
@@ -1723,6 +1784,13 @@ mod tests {
         steps(1, 11);
         assert!(panda.mob_entity.goals_selector.is_running::<PandaSitGoal>());
         assert!(panda.is_sitting(), "the panda did not sit down");
+
+        // A hit stands the panda up at once, and the sit goal that is still running sits it
+        // down again with its item.
+        panda.damage(panda.as_ref(), 1.0, DamageType::MOB_ATTACK);
+        assert!(!panda.is_sitting(), "the panda kept sitting when hurt");
+        steps(11, 15);
+        assert!(panda.is_sitting());
         world.level.shutdown().await;
         Ok(())
     }
@@ -1831,6 +1899,101 @@ mod tests {
         panda.post_tick();
         assert_eq!(panda.get_eat_counter(), 2);
         assert!(synched.is_dirty(), "the counter step was not synched");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn feeding_a_panda_that_cannot_breed_makes_it_sit_down_and_eat() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mut bamboo = ItemStack::new(3, &Item::BAMBOO);
+
+        // A panda that can fall in love takes the shared animal feeding, an adult in love eats.
+        assert!(panda.feeding_is_breeding_or_growing());
+        panda.mob_entity.set_love_ticks(600, None);
+        assert!(!panda.feeding_is_breeding_or_growing());
+
+        panda
+            .get_entity()
+            .touching_water
+            .store(true, Ordering::Relaxed);
+        assert!(!panda.sit_and_eat(&mut bamboo, GameMode::Survival));
+        assert!(!panda.is_sitting() && !panda.is_holding_item());
+        panda
+            .get_entity()
+            .touching_water
+            .store(false, Ordering::Relaxed);
+
+        hold(&panda, &Item::STICK);
+        assert!(panda.sit_and_eat(&mut bamboo, GameMode::Survival));
+        assert!(panda.is_sitting());
+        assert_eq!(panda.get_eat_counter(), 1);
+        assert_eq!(held_item(&panda), &Item::BAMBOO);
+        assert_eq!(panda.main_hand_item().item_count, 1);
+        assert_eq!(bamboo.item_count, 2);
+        assert_eq!(dropped_items(&world, &panda), 1, "the old item was kept");
+        assert!(!panda.sit_and_eat(&mut bamboo, GameMode::Survival));
+        assert_eq!(bamboo.item_count, 2, "a sitting panda took more food");
+
+        // With infinite materials the stack stays and the old item is not dropped.
+        let creative = self::panda(&world);
+        hold(&creative, &Item::STICK);
+        assert!(creative.sit_and_eat(&mut bamboo, GameMode::Creative));
+        assert_eq!(held_item(&creative), &Item::BAMBOO);
+        assert_eq!(bamboo.item_count, 2);
+        assert_eq!(dropped_items(&world, &creative), 1);
+
+        // A baby grows up on food, and one that cannot grow up does not eat either.
+        let baby = self::panda(&world);
+        baby.set_age(-1200);
+        assert!(baby.feeding_is_breeding_or_growing());
+        baby.set_age_locked(true);
+        assert!(!baby.feeding_is_breeding_or_growing());
+        assert!(!baby.sit_and_eat(&mut bamboo, GameMode::Survival));
+        assert!(!baby.is_sitting());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_drop_stops_the_panda_from_swapping_its_item_for_food() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        hold(&panda, &Item::STICK);
+        let mut bamboo = ItemStack::new(3, &Item::BAMBOO);
+
+        assert!(!panda.sit_and_eat_if(&mut bamboo, GameMode::Survival, |_| false));
+        assert!(!panda.is_sitting(), "the panda sat down");
+        assert_eq!(held_item(&panda), &Item::STICK, "the old item was swapped");
+        assert_eq!(bamboo.item_count, 3, "the player's stack shrank");
+        assert_eq!(dropped_items(&world, &panda), 0);
+
+        assert!(
+            panda.sit_and_eat_if(&mut bamboo, GameMode::Survival, |held| {
+                held.item.id == Item::STICK.id
+            })
+        );
+        assert_eq!(held_item(&panda), &Item::BAMBOO);
+        assert_eq!(bamboo.item_count, 2);
+        assert_eq!(dropped_items(&world, &panda), 1);
+
+        // Nothing is dropped with infinite materials, so no plugin is asked either.
+        let creative = spawn_panda(&world, 8.5, 8.5);
+        hold(&creative, &Item::STICK);
+        let mut asked = false;
+        assert!(
+            creative.sit_and_eat_if(&mut bamboo, GameMode::Creative, |_| {
+                asked = true;
+                true
+            })
+        );
+        assert!(!asked, "a creative player's panda asked a plugin");
+        assert_eq!(held_item(&creative), &Item::BAMBOO);
         world.level.shutdown().await;
         Ok(())
     }
