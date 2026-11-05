@@ -525,7 +525,7 @@ impl Mob for EndermanEntity {
             self.get_random().random(),
             &params,
         ) {
-            world.drop_stack(&pos, stack);
+            entity.spawn_at_location(stack);
         }
     }
 
