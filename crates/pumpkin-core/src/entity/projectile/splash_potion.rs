@@ -68,6 +68,9 @@ impl SplashPotionEntity {
         else {
             return false;
         };
+        if potion.id == pumpkin_data::potion::Potion::WATER.id {
+            return true;
+        }
         let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
         names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
     }
@@ -230,11 +233,6 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
-        // If no effects, just splash (like water bottles)
-        if effects.is_empty() {
-            return;
-        }
-
         let radius = 4.0f64;
         let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
         let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
@@ -282,18 +280,31 @@ impl EntityBase for SplashPotionEntity {
         }
 
         let owner = self.thrown.owner.get(&world);
+        let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
-                crate::item::potion::PotionContents::apply_effects_to(
-                    living,
-                    effects.clone(),
-                    scale,
-                    crate::item::potion::PotionApplicationSource::Normal,
-                    Some(crate::entity::living::EffectSource {
-                        direct: self,
-                        owner: owner.as_deref(),
-                    }),
-                );
+                if hurts_water_sensitive_entities {
+                    cand.damage_with_context(
+                        cand.as_ref(),
+                        1.0,
+                        pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
+                        Some(hit_pos),
+                        Some(self),
+                        owner.as_deref(),
+                    );
+                }
+                if !effects.is_empty() {
+                    crate::item::potion::PotionContents::apply_effects_to(
+                        living,
+                        effects.clone(),
+                        scale,
+                        crate::item::potion::PotionApplicationSource::Normal,
+                        Some(crate::entity::living::EffectSource {
+                            direct: self,
+                            owner: owner.as_deref(),
+                        }),
+                    );
+                }
             }
         }
     }
