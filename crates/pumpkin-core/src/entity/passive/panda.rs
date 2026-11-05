@@ -46,10 +46,12 @@ use crate::world::World;
 use goals::{
     PandaBreedGoal, PandaGoal, PandaPanicGoal, PandaSitGoal, attack_goal, hurt_by_target_goal,
 };
+use lie_on_back::PandaLieOnBackGoal;
 use move_control::PandaMoveControl;
 use sneeze::PandaSneezeGoal;
 
 mod goals;
+mod lie_on_back;
 mod move_control;
 mod sneeze;
 
@@ -235,6 +237,7 @@ impl PandaEntity {
             fleeing::apply(goal_selector, PANDA_FLEES);
             goal_selector.add_goal(7, Box::new(PandaSitGoal::default()));
             goal_selector.add_goal(8, Box::new(PandaSneezeGoal));
+            goal_selector.add_goal(8, Box::new(PandaLieOnBackGoal::default()));
             goal_selector.add_goal(
                 9,
                 Box::new(PandaGoal::new(
