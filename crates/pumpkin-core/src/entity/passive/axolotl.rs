@@ -299,6 +299,24 @@ impl Mob for AxolotlEntity {
         Some(self)
     }
 
+    /// Vanilla `Axolotl.removeWhenFarAway`: only axolotls released from a bucket or named ones
+    /// stay.
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_from_bucket() && (**self.get_entity().custom_name.load()).is_none()
+    }
+
+    /// Vanilla `Axolotl.requiresCustomPersistence`: `Mob`'s rule (a passenger or a leashed mob
+    /// stays) or a bucket axolotl.
+    fn requires_custom_persistence(&self) -> bool {
+        let entity = self.get_entity();
+        entity.has_vehicle() || entity.is_leashed() || self.is_from_bucket()
+    }
+
+    /// Vanilla `Axolotl.checkSpawnObstruction`: only blocking entities obstruct, water does not.
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        super::water_animal::check_spawn_obstruction(self, world)
+    }
+
     /// Vanilla `Axolotl.finalizeSpawn`: bucket spawns keep the group untouched, everything else
     /// joins the spawn group (see [`join_spawn_group`]).
     fn finalize_spawn(
@@ -399,7 +417,7 @@ mod tests {
     use core::convert::Infallible;
     use std::collections::VecDeque;
 
-    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
     use rand::TryRng;
 
     use super::*;
@@ -706,6 +724,40 @@ mod tests {
         }));
         assert!(seen.contains(&AxolotlVariant::Cyan));
         assert!(seen.contains(&AxolotlVariant::Gold));
+        Ok(())
+    }
+
+    /// Only a bucket axolotl or a named one is kept from despawning by `remove_when_far_away`;
+    /// riding or being leashed (vanilla `Mob.requiresCustomPersistence`) and a bucket also keep
+    /// it through `requires_custom_persistence`.
+    #[tokio::test]
+    async fn axolotls_despawn_unless_bucketed_named_leashed_or_riding() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let other: Arc<dyn EntityBase> = axolotl(&world);
+
+        let plain = axolotl(&world);
+        assert!(plain.remove_when_far_away(1.0e6));
+        assert!(!plain.requires_custom_persistence());
+
+        let named = axolotl(&world);
+        named
+            .get_entity()
+            .set_custom_name(TextComponent::text("Bob"));
+        assert!(!named.remove_when_far_away(1.0e6));
+
+        let bucket = axolotl(&world);
+        bucket.set_from_bucket(true);
+        assert!(!bucket.remove_when_far_away(1.0e6));
+        assert!(bucket.requires_custom_persistence());
+
+        let leashed = axolotl(&world);
+        *leashed.get_entity().leashed_to.lock().unwrap() = Some(other.clone());
+        assert!(leashed.requires_custom_persistence());
+
+        let rider = axolotl(&world);
+        *rider.get_entity().vehicle.lock().unwrap() = Some(other);
+        assert!(rider.requires_custom_persistence());
         Ok(())
     }
 }
