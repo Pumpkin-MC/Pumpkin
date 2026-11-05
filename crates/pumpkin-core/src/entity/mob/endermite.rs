@@ -6,7 +6,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use rand::RngExt;
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::goal::revenge::RevengeGoal;
@@ -69,6 +68,10 @@ impl Mob for EndermiteEntity {
         self.play_entity_sound(Sound::EntityEndermiteStep, 0.15, 1.0);
     }
 
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermiteAmbient)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -101,32 +104,13 @@ impl Mob for EndermiteEntity {
         if !self.mob_entity.persistence_required.load(Ordering::Relaxed) {
             self.lifetime.fetch_add(1, Ordering::Relaxed);
         }
+
         if self.lifetime.load(Ordering::Relaxed) >= MAX_LIFETIME {
             entity.remove();
-            return;
         }
 
-        let dimensions = entity.entity_dimension.load();
-        let position = entity.pos.load();
-        let mut rng = self.get_random();
-        for _ in 0..2 {
-            let particle_position = pumpkin_util::math::vector3::Vector3::new(
-                position.x + (rng.random::<f64>() - 0.5) * f64::from(dimensions.width),
-                position.y + rng.random::<f64>() * f64::from(dimensions.height),
-                position.z + (rng.random::<f64>() - 0.5) * f64::from(dimensions.width),
-            );
-            let velocity = pumpkin_util::math::vector3::Vector3::new(
-                (rng.random::<f64>() - 0.5) * 2.0,
-                -rng.random::<f64>(),
-                (rng.random::<f64>() - 0.5) * 2.0,
-            );
-            entity.world.load().spawn_particle(
-                particle_position,
-                velocity.to_f32_lossy(),
-                1.0,
-                0,
-                pumpkin_data::particle::Particle::Portal,
-            );
-        }
+        // Note: Vanilla spawns portal particles strictly inside an `isClientSide()` block.
+        // A server should not manually calculate and spawn logic particles, the client handles
+        // that natively when it observes an Endermite entity.
     }
 }
