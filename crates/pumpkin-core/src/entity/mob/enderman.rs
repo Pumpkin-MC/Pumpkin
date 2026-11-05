@@ -610,6 +610,16 @@ impl Mob for EndermanEntity {
         let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
         let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
         if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
+            if !entity.has_vehicle()
+                && self
+                    .mob_entity
+                    .living_entity
+                    .hurt_cooldown
+                    .load(Ordering::Relaxed)
+                    > 10
+            {
+                self.teleport_randomly();
+            }
             caller.damage(caller, 1.0, DamageType::DROWN);
         }
     }
