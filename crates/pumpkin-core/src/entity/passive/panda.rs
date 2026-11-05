@@ -33,6 +33,7 @@ use crate::entity::{
         },
         target_match::TargetMatch,
     },
+    item::ItemEntity,
     mob::{
         Mob, MobEntity, PathAwareEntity,
         spawn::{EntitySpawnReason, SpawnGroupData},
@@ -663,6 +664,18 @@ impl PandaEntity {
     }
 }
 
+/// Vanilla `Panda.canPickUpAndEat`: an item entity that is still there, can be picked up and
+/// holds something from `#minecraft:panda_eats_from_ground`.
+fn can_pick_up_and_eat(item: &ItemEntity) -> bool {
+    item.get_item_stack()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .item
+        .has_tag(&tag::Item::MINECRAFT_PANDA_EATS_FROM_GROUND)
+        && item.get_entity().is_alive()
+        && item.get_pickup_delay() == 0
+}
+
 impl AgeableMob for PandaEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
@@ -716,9 +729,33 @@ impl Mob for PandaEntity {
             && self.mob_entity.can_pick_up_loot()
     }
 
-    // Needs pandas eating from their hand first.
-    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
-        false
+    /// Vanilla `Panda.pickUpItem`: a panda with an empty mouth takes a whole stack of an item it
+    /// eats from the ground, and the item is dropped for sure when the panda is killed.
+    /// `Mob.wantsToPickUp` is not overridden, so the item filter lives here, as in vanilla.
+    fn pick_up_item(&self, item: &ItemEntity) {
+        if self.is_holding_item() || !can_pick_up_and_eat(item) {
+            return;
+        }
+        let count = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .item_count;
+        let living = &self.mob_entity.living_entity;
+        if !living.pickup(item.get_entity(), u32::from(count)) {
+            return;
+        }
+        living.on_item_pickup(item);
+        let taken = std::mem::replace(
+            &mut *item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+            ItemStack::EMPTY.clone(),
+        );
+        self.mob_entity
+            .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, taken);
+        item.get_entity().remove();
     }
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
@@ -2011,6 +2048,124 @@ mod tests {
         loaded.read_nbt_non_mut(&nbt);
         assert_eq!(held_item(&loaded), &Item::BAMBOO);
         assert!(PandaSitGoal::default().can_start(loaded.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Puts an item entity on the floor at `x`, `z` whose pickup delay is over.
+    fn drop_item(world: &Arc<World>, stack: ItemStack, x: f64, z: f64) -> Arc<ItemEntity> {
+        let item = Arc::new(ItemEntity::new_with_velocity(
+            Entity::new(world.clone(), Vector3::new(x, 64.0, z), &EntityType::ITEM),
+            stack,
+            Vector3::default(),
+            0,
+        ));
+        world.add_entity_silent(item.clone());
+        item
+    }
+
+    fn on_ground(item: &ItemEntity) -> u8 {
+        item.get_item_stack()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .item_count
+    }
+
+    fn set_mob_griefing(world: &World, value: bool) {
+        world.level_info.rcu(|current| {
+            let mut info = (**current).clone();
+            info.game_rules.mob_griefing = value;
+            info
+        });
+    }
+
+    #[tokio::test]
+    async fn panda_takes_the_whole_stack_of_an_item_it_eats_from_the_ground() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let bamboo = drop_item(&world, ItemStack::new(5, &Item::BAMBOO), 0.5, 0.5);
+
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+
+        let held = panda.main_hand_item();
+        assert_eq!(held.item, &Item::BAMBOO);
+        assert_eq!(held.item_count, 5, "the panda did not take the whole stack");
+        assert_eq!(on_ground(&bamboo), 0);
+        assert!(bamboo.get_entity().is_removed());
+        assert!(
+            panda.mob_entity.drop_chance(&EquipmentSlot::MAIN_HAND)
+                >= MobEntity::GUARANTEED_DROP_CHANCE,
+            "the picked up item is not a guaranteed drop"
+        );
+
+        // Cake is in the tag as well, and the sit goal takes over once the mouth is full.
+        let cake = self::panda(&world);
+        cake.get_entity().set_pos(Vector3::new(9.5, 64.0, 9.5));
+        let item = drop_item(&world, ItemStack::new(1, &Item::CAKE), 9.5, 9.5);
+        crate::entity::mob::pick_up_nearby_items(cake.as_ref());
+        assert_eq!(held_item(&cake), &Item::CAKE);
+        assert!(item.get_entity().is_removed());
+        assert!(PandaSitGoal::default().can_start(cake.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn panda_leaves_items_it_cannot_eat_from_the_ground_or_cannot_take_yet() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+
+        // Not in `#panda_eats_from_ground`, although `Mob.wantsToPickUp` is true for anything.
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let stick = drop_item(&world, ItemStack::new(1, &Item::STICK), 0.5, 0.5);
+        assert!(panda.wants_to_pick_up(&ItemStack::new(1, &Item::STICK)));
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(!panda.is_holding_item());
+        assert_eq!(on_ground(&stick), 1);
+
+        // Still in its pickup delay.
+        let bamboo = drop_item(&world, ItemStack::new(1, &Item::BAMBOO), 0.5, 0.5);
+        bamboo.set_pickup_delay(ItemEntity::DEFAULT_PICKUP_DELAY);
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(!panda.is_holding_item());
+        assert!(!bamboo.get_entity().is_removed());
+        bamboo.set_pickup_delay(0);
+
+        // The `mobGriefing` rule.
+        set_mob_griefing(&world, false);
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(!panda.is_holding_item(), "picked up with mobGriefing off");
+        set_mob_griefing(&world, true);
+
+        // `canPickUpLoot` is a flag of its own (a dispenser or NBT can clear it).
+        panda.mob_entity.set_can_pick_up_loot(false);
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(!panda.is_holding_item(), "picked up without canPickUpLoot");
+        panda.mob_entity.set_can_pick_up_loot(true);
+
+        // Out of reach: the pickup box grows by one block sideways only.
+        let far = drop_item(&world, ItemStack::new(1, &Item::BAMBOO), 4.5, 0.5);
+        far.set_pickup_delay(0);
+        bamboo.get_entity().remove();
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(!panda.is_holding_item());
+        assert!(!far.get_entity().is_removed());
+
+        // A full mouth takes nothing more.
+        let other = drop_item(&world, ItemStack::new(2, &Item::BAMBOO), 0.5, 0.5);
+        hold(&panda, &Item::CAKE);
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert_eq!(held_item(&panda), &Item::CAKE);
+        assert_eq!(on_ground(&other), 2);
+        assert!(!other.get_entity().is_removed());
+
+        // Everything works again once the panda drops what it held.
+        assert!(panda.drop_main_hand_item());
+        crate::entity::mob::pick_up_nearby_items(panda.as_ref());
+        assert!(panda.is_holding_item());
         world.level.shutdown().await;
         Ok(())
     }
