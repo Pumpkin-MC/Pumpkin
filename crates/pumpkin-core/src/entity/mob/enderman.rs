@@ -203,6 +203,11 @@ impl EndermanEntity {
             return false;
         };
 
+        let ground_block =
+            pumpkin_data::Block::from_state_id(world.get_block_state_id(&ground_pos));
+        if ground_block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO) {
+            return false;
+        }
         if world
             .get_fluid(&ground_pos)
             .has_tag(&tag::Fluid::MINECRAFT_WATER)
