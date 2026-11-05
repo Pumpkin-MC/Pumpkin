@@ -137,13 +137,6 @@ impl Goal for TeleportTowardsPlayerGoal {
     fn start(&mut self, _mob: &dyn Mob) {
         self.warmup = to_goal_ticks(5);
         self.unseen_ticks = 0;
-        if let Some(player) = self
-            .target_player
-            .as_ref()
-            .and_then(|target| target.get_player())
-        {
-            self.enderman.play_stare_sound(player);
-        }
         self.enderman.set_provoked(true);
     }
 

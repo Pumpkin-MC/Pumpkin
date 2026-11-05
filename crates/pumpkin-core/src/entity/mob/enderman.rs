@@ -88,7 +88,7 @@ impl EndermanEntity {
             daylight_deaggression: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
             target_change_time: AtomicI32::new(0),
-            last_stare_sound: AtomicI32::new(i32::MIN),
+            last_stare_sound: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -271,6 +271,10 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
+        let staring_player = target
+            .as_ref()
+            .and_then(|target| target.get_player())
+            .filter(|player| self.is_player_staring(player));
         self.target_change_time.store(
             self.mob_entity
                 .living_entity
@@ -288,6 +292,9 @@ impl EndermanEntity {
         drop(mob_target);
 
         if is_some {
+            if staring_player.is_some() {
+                self.play_stare_sound();
+            }
             self.set_creepy(true);
             // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
@@ -362,23 +369,18 @@ impl EndermanEntity {
         self.daylight_deaggression.swap(false, Ordering::Relaxed)
     }
 
-    pub fn play_stare_sound(&self, player: &Player) {
+    fn play_stare_sound(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         let tick = entity.tick_count.load(Ordering::Relaxed);
         let last_played = self.last_stare_sound.load(Ordering::Relaxed);
-        if (last_played != i32::MIN && tick.wrapping_sub(last_played) < 400)
-            || self
-                .last_stare_sound
-                .compare_exchange(last_played, tick, Ordering::Relaxed, Ordering::Relaxed)
-                .is_err()
-        {
+        if tick < last_played.saturating_add(400) || entity.is_silent() {
             return;
         }
+        self.last_stare_sound.store(tick, Ordering::Relaxed);
 
         let pos = entity.pos.load();
         let eye_pos = Vector3::new(pos.x, pos.y + ENDERMAN_EYE_HEIGHT, pos.z);
-        entity.world.load().play_sound_raw_expect(
-            player,
+        entity.world.load().play_sound_raw(
             Sound::EntityEndermanStare as u16,
             SoundCategory::Hostile,
             &eye_pos,
