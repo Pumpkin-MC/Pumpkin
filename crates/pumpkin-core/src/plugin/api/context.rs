@@ -45,6 +45,8 @@ pub struct Context {
     pub logger: Arc<OnceLock<LoggerOption>>,
     /// Set when unload starts: handlers, services and loaders are refused from then on.
     closed: AtomicBool,
+    /// Set by a command registration: the tree keeps its code for good.
+    commands: AtomicBool,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -73,6 +75,7 @@ impl Context {
             permission_manager,
             logger,
             closed: AtomicBool::new(false),
+            commands: AtomicBool::new(false),
         }
     }
 
@@ -84,6 +87,16 @@ impl Context {
     #[must_use]
     pub(crate) fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
+    }
+
+    /// Library must stay loaded: the command tree holds its code.
+    pub(crate) fn mark_commands(&self) {
+        self.commands.store(true, Ordering::SeqCst);
+    }
+
+    #[must_use]
+    pub(crate) fn has_commands(&self) -> bool {
+        self.commands.load(Ordering::SeqCst)
     }
 
     #[must_use]
@@ -198,6 +211,7 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
+        self.mark_commands();
         let mut node = node.into();
         node.meta.source = Some(self.metadata.name.clone());
         node.owned
@@ -231,6 +245,7 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
+        self.mark_commands();
         let mut node = node.into();
         node.meta.source = Some(self.metadata.name.clone());
         node.owned

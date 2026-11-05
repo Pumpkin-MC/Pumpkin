@@ -362,6 +362,8 @@ impl Registrations {
 /// Hands a plugin's library back to its loader once nothing runs its handlers, holds its
 /// services, or holds its instance.
 ///
+/// `commands`: its commands stay in the command tree, the library is kept right away.
+///
 /// Anything still running or held after `HANDLER_DRAIN_TIMEOUT` keeps the library
 /// loaded for good, releasing it would pull the code out from under that call. That is
 /// `LibraryInUse`.
@@ -371,7 +373,17 @@ async fn release_library(
     instance: Option<Arc<dyn Plugin>>,
     loader: &dyn PluginLoader,
     loader_data: Box<dyn Any + Send + Sync>,
+    commands: bool,
 ) -> Result<(), LoaderError> {
+    // Tree never drops nodes: executors and argument types run its code
+    // TODO: remove a plugin's nodes from the command tree after reload
+    if commands {
+        drop(registrations);
+        drop(instance);
+        warn!("Plugin {name} registered commands, keeping its library loaded");
+        Box::leak(loader_data);
+        return Err(LoaderError::CommandsResident);
+    }
     // Each handler is wrapped once per registration, so any count above ours is a running event.
     // The same goes for the instance, which `send_message` holds across `on_ipc_message`
     let drained = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
@@ -491,7 +503,10 @@ impl ManagerError {
     /// Unload done, only the library stays loaded.
     #[must_use]
     pub const fn is_library_in_use(&self) -> bool {
-        matches!(self, Self::LoaderError(LoaderError::LibraryInUse))
+        matches!(
+            self,
+            Self::LoaderError(LoaderError::LibraryInUse | LoaderError::CommandsResident)
+        )
     }
 }
 
@@ -1135,6 +1150,7 @@ impl PluginManager {
                     // failing partway through, leaving them would block every future load
                     self_ref_clone.unload_children(&plugin_name).await;
                     context.close();
+                    self_ref_clone.pin_loader_owner(&context, &loader_clone).await;
                     let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
                     context.unregister_commands();
                     context.unregister_permissions();
@@ -1167,9 +1183,16 @@ impl PluginManager {
 
                     // Library still in use: stays leaked, the name is free again anyway
                     if let Some(data) = loader_data {
-                        release_library(&plugin_name, registrations, None, &*loader_clone, data)
-                            .await
-                            .ok();
+                        release_library(
+                            &plugin_name,
+                            registrations,
+                            None,
+                            &*loader_clone,
+                            data,
+                            context.has_commands(),
+                        )
+                        .await
+                        .ok();
                     }
 
                     // Same states-then-plugins section as the reservation, so a new load of
@@ -2018,6 +2041,7 @@ impl PluginManager {
 
         self.unload_children(name).await;
         context.close();
+        self.pin_loader_owner(&context, &loader).await;
         let mut registrations = self.take_registrations(name).await;
         context.unregister_commands();
         context.unregister_permissions();
@@ -2050,7 +2074,10 @@ impl PluginManager {
             .find(|p| p.token == token)
             .and_then(|p| p.loader_data.take());
         let unloaded = match loader_data {
-            Some(data) => release_library(name, registrations, instance, &*loader, data).await,
+            Some(data) => {
+                let commands = context.has_commands();
+                release_library(name, registrations, instance, &*loader, data, commands).await
+            }
             None => Ok(()),
         };
 
@@ -2068,6 +2095,30 @@ impl PluginManager {
             .retain(|p| p.token != token);
 
         unloaded.map_err(ManagerError::from)
+    }
+
+    /// Commands of a plugin from another plugin's loader run that plugin's code too.
+    async fn pin_loader_owner(&self, context: &Context, loader: &Arc<dyn PluginLoader>) {
+        if !context.has_commands() {
+            return;
+        }
+        let Some(owner) = self
+            .loaders
+            .read()
+            .await
+            .iter()
+            .find(|registered| Arc::ptr_eq(&registered.loader, loader))
+            .and_then(|registered| registered.owner.clone())
+        else {
+            return;
+        };
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for plugin in plugins.iter().filter(|p| p.metadata.name == owner) {
+            plugin.context.mark_commands();
+        }
     }
 
     /// Unloads what `owner`'s loaders loaded: it can't run without them.

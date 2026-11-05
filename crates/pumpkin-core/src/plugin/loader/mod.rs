@@ -66,6 +66,11 @@ pub enum LoaderError {
     )]
     LibraryInUse,
 
+    #[error(
+        "Commands of the plugin stay in the command tree, its library stays loaded until restart"
+    )]
+    CommandsResident,
+
     #[error("Invalid loader data")]
     InvalidLoaderData,
 
