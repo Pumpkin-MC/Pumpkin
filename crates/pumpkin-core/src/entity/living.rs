@@ -2180,7 +2180,7 @@ impl LivingEntity {
         }
     }
 
-    fn jump_from_ground(&self, multiplier: f32) {
+    pub(crate) fn jump_from_ground(&self, multiplier: f32) {
         let jump = self.get_jump_velocity(f64::from(multiplier));
 
         if jump <= 1.0e-5 {

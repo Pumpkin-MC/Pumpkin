@@ -50,6 +50,7 @@ use move_control::PandaMoveControl;
 
 mod goals;
 mod move_control;
+mod sneeze;
 
 /// Vanilla `PandaAvoidGoal` x2: a worried panda keeps clear of players and monsters.
 const PANDA_FLEES: &[Flee] = &[
@@ -355,10 +356,6 @@ impl PandaEntity {
     #[must_use]
     pub fn is_sneezing(&self) -> bool {
         self.has_flag(FLAG_SNEEZE)
-    }
-
-    pub fn set_sneezing(&self, val: bool) {
-        self.set_flag(FLAG_SNEEZE, val);
     }
 
     #[must_use]
@@ -895,6 +892,8 @@ impl Mob for PandaEntity {
             }
             self.set_unhappy_counter(unhappy_counter - 1);
         }
+
+        self.tick_sneeze();
 
         if self.is_sitting() {
             self.get_entity().set_pitch(0.0);
