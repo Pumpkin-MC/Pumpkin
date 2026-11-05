@@ -283,10 +283,9 @@ impl Animal for AxolotlEntity {
         baby
     }
 
+    /// Vanilla `Axolotl.isFood`: only the `axolotl_food` item tag.
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_AXOLOTL_FOOD)
-            || item_stack.item == &Item::TROPICAL_FISH_BUCKET
-            || item_stack.item == &Item::TROPICAL_FISH
     }
 }
 
@@ -758,6 +757,27 @@ mod tests {
         let rider = axolotl(&world);
         *rider.get_entity().vehicle.lock().unwrap() = Some(other);
         assert!(rider.requires_custom_persistence());
+        Ok(())
+    }
+
+    /// Only the tropical fish bucket is axolotl food: not the fish, not another bucket.
+    #[tokio::test]
+    async fn only_the_tropical_fish_bucket_is_food() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let axolotl = axolotl(&world(&folder));
+        for (item, is_food) in [
+            (&Item::TROPICAL_FISH_BUCKET, true),
+            (&Item::TROPICAL_FISH, false),
+            (&Item::COD_BUCKET, false),
+            (&Item::WATER_BUCKET, false),
+        ] {
+            assert_eq!(
+                axolotl.is_food(&ItemStack::new(1, item)),
+                is_food,
+                "{}",
+                item.registry_key
+            );
+        }
         Ok(())
     }
 }
