@@ -80,6 +80,10 @@ impl BlockEntity for DispenserBlockEntity {
         Some(nbt)
     }
 
+    fn client_update_tag(&self, _saved: NbtCompound) -> NbtCompound {
+        NbtCompound::new()
+    }
+
     fn bedrock_block_actor_data(
         &self,
         _state_id: pumpkin_data::BlockStateId,

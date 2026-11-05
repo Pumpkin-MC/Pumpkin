@@ -113,12 +113,17 @@ pub trait BlockEntity: Any + Send + Sync {
             .unwrap_or(0) as u32
     }
 
-    /// Obtain the block entity's own NBT for persistence and client updates.
-    ///
-    /// Client-bound data goes through [`block_entity_update_tag`], which keeps
-    /// container contents out of chunk and update packets.
+    /// Obtain the block entity's own NBT for persistence.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
+    }
+
+    /// Returns the tag sent to clients for this block entity, given its saved tag.
+    ///
+    /// This mirrors vanilla's `getUpdateTag`. Container contents only reach the
+    /// client when a window opens, so containers override this with an empty tag.
+    fn client_update_tag(&self, saved: NbtCompound) -> NbtCompound {
+        saved
     }
 
     /// Obtain block actor NBT for fields Bedrock does not include in its block state.
@@ -168,36 +173,6 @@ pub trait BlockEntity: Any + Send + Sync {
     }
     fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
         None
-    }
-}
-
-/// NBT sent to clients for a block entity, matching vanilla's `getUpdateTag`.
-///
-/// Container contents reach the client only when a window opens, so their
-/// update tag is empty even though the saved tag carries the inventory.
-#[must_use]
-pub fn block_entity_update_tag(resource_location: &str, saved: NbtCompound) -> NbtCompound {
-    let name = resource_location
-        .strip_prefix("minecraft:")
-        .unwrap_or(resource_location);
-    if matches!(
-        name,
-        "chest"
-            | "trapped_chest"
-            | "barrel"
-            | "shulker_box"
-            | "dispenser"
-            | "dropper"
-            | "hopper"
-            | "furnace"
-            | "blast_furnace"
-            | "smoker"
-            | "brewing_stand"
-            | "crafter"
-    ) {
-        NbtCompound::new()
-    } else {
-        saved
     }
 }
 
@@ -481,9 +456,13 @@ pub fn create_block_entity(
 #[cfg(test)]
 mod test {
     use super::{
-        BlockEntity, block_entity_from_nbt, block_entity_update_tag, furnace::FurnaceBlockEntity,
+        BlockEntity, barrel::BarrelBlockEntity, blasting_furnace::BlastingFurnaceBlockEntity,
+        block_entity_from_nbt, brewing_stand::BrewingStandBlockEntity, chest::ChestBlockEntity,
+        crafter::CrafterBlockEntity, dispenser::DispenserBlockEntity, dropper::DropperBlockEntity,
+        furnace::FurnaceBlockEntity, hopper::HopperBlockEntity, shulker_box::ShulkerBoxBlockEntity,
+        sign::SignBlockEntity, smoker::SmokerBlockEntity, trapped_chest::TrappedChestBlockEntity,
     };
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_data::{block_properties::FacingHopper, item::Item, item_stack::ItemStack};
     use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
@@ -491,34 +470,34 @@ mod test {
 
     #[test]
     fn container_update_tags_are_empty() {
+        let position = BlockPos::new(0, 0, 0);
         let mut saved = NbtCompound::new();
-        saved.put_string("id", "minecraft:chest".to_string());
         saved.put_string("CustomName", "stored".to_string());
 
-        for id in [
-            "minecraft:chest",
-            "minecraft:trapped_chest",
-            "minecraft:barrel",
-            "minecraft:shulker_box",
-            "minecraft:dispenser",
-            "minecraft:dropper",
-            "minecraft:hopper",
-            "minecraft:furnace",
-            "minecraft:blast_furnace",
-            "minecraft:smoker",
-            "minecraft:brewing_stand",
-            "minecraft:crafter",
-        ] {
+        let containers: [Arc<dyn BlockEntity>; 12] = [
+            Arc::new(ChestBlockEntity::new(position)),
+            Arc::new(TrappedChestBlockEntity::new(position)),
+            Arc::new(BarrelBlockEntity::new(position)),
+            Arc::new(ShulkerBoxBlockEntity::new(position)),
+            Arc::new(DispenserBlockEntity::new(position)),
+            Arc::new(DropperBlockEntity::new(position)),
+            Arc::new(HopperBlockEntity::new(position, FacingHopper::Down)),
+            Arc::new(FurnaceBlockEntity::new(position)),
+            Arc::new(BlastingFurnaceBlockEntity::new(position)),
+            Arc::new(SmokerBlockEntity::new(position)),
+            Arc::new(BrewingStandBlockEntity::new(position)),
+            Arc::new(CrafterBlockEntity::new(position)),
+        ];
+        for container in containers {
             assert!(
-                block_entity_update_tag(id, saved.clone()).is_empty(),
-                "{id} must not send its saved contents"
+                container.client_update_tag(saved.clone()).is_empty(),
+                "{} must not send its saved contents",
+                container.resource_location()
             );
         }
 
-        assert_eq!(
-            block_entity_update_tag("minecraft:sign", saved.clone()),
-            saved
-        );
+        let sign = SignBlockEntity::empty(position);
+        assert_eq!(sign.client_update_tag(saved.clone()), saved);
     }
 
     /// A loaded block entity is serialized back into its chunk with
