@@ -507,6 +507,22 @@ impl Level {
         !self.mark_chunks_as_not_watched([chunk]).is_empty()
     }
 
+    /// A player watcher or direct loading ticket keeps this chunk's entities in memory.
+    pub fn is_chunk_retained(&self, chunk: &Vector2<i32>) -> bool {
+        self.chunk_watchers
+            .get(chunk)
+            .is_some_and(|count| *count != 0)
+            || self.has_loading_ticket(*chunk)
+    }
+
+    fn has_loading_ticket(&self, chunk: Vector2<i32>) -> bool {
+        self.chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .ticket
+            .contains_key(&chunk)
+    }
+
     // In Level::clean_entity_chunks()
     pub fn clean_entity_chunks(
         self: &Arc<Self>,
@@ -516,17 +532,20 @@ impl Level {
             .into_iter()
             .filter_map(|pos_borrow| {
                 let pos = pos_borrow.borrow();
-                // Only include chunks with no watchers
-                let has_watchers = self
-                    .chunk_watchers
-                    .get(pos)
-                    .is_some_and(|count| *count != 0);
-
-                if has_watchers {
+                let watchers = self.chunk_watchers.entry(*pos);
+                if matches!(&watchers, Entry::Occupied(entry) if *entry.get() != 0) {
                     return None;
                 }
 
-                // Remove immediately to prevent race conditions
+                let loading = self
+                    .chunk_loading
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if loading.ticket.contains_key(pos) {
+                    return None;
+                }
+
+                // Keep both retention guards through the final removal check.
                 self.loaded_entity_chunks.remove(pos)
             })
             .collect();
@@ -642,11 +661,21 @@ impl Level {
 
     pub fn clean_memory(self: &Arc<Self>) -> Vec<Vector2<i32>> {
         self.chunk_watchers.retain(|_, watcher| *watcher != 0);
+        let ticketed: FxHashSet<_> = self
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .ticket
+            .keys()
+            .copied()
+            .collect();
 
         let entity_chunks_to_remove: Vec<_> = self
             .loaded_entity_chunks
             .iter()
-            .filter(|entry| !self.chunk_watchers.contains_key(entry.key()))
+            .filter(|entry| {
+                !self.chunk_watchers.contains_key(entry.key()) && !ticketed.contains(entry.key())
+            })
             .map(|entry| *entry.key())
             .collect();
 

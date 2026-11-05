@@ -404,6 +404,22 @@ impl World {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
 
+        let forced_chunks: FxHashSet<_> =
+            pumpkin_world::world_info::data_files::read_forced_chunks(
+                &level.level_folder.dim_folder,
+            )
+            .into_iter()
+            .collect();
+        let mut chunk_loading = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for &pos in &forced_chunks {
+            chunk_loading.add_force_ticket(pos);
+        }
+        chunk_loading.send_change();
+        drop(chunk_loading);
+
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -439,7 +455,7 @@ impl World {
             navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
             tick_spawns: std::sync::Mutex::new(Vec::new()),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
-            forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
+            forced_chunks: std::sync::Mutex::new(forced_chunks),
             game_test_forced_chunks: std::sync::Mutex::new(FxHashMap::default()),
             server,
             block_entities: DashMap::new(),
@@ -639,6 +655,7 @@ impl World {
     }
 
     pub async fn shutdown(&self) {
+        self.save_forced_chunks().await;
         let entities = self.entities.load_full();
         self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
             .await;
@@ -5409,7 +5426,11 @@ impl World {
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
     ) {
-        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        let chunks_set: FxHashSet<_> = chunks
+            .into_iter()
+            .map(|c| *c.borrow())
+            .filter(|pos| !self.level.is_chunk_retained(pos))
+            .collect();
         if chunks_set.is_empty() {
             return;
         }
@@ -7449,7 +7470,26 @@ impl World {
         }
     }
 
+    async fn save_forced_chunks(&self) {
+        let forced_chunks = self
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let folder = self.level.level_folder.dim_folder.clone();
+        match tokio::task::spawn_blocking(move || {
+            pumpkin_world::world_info::data_files::write_forced_chunks(&folder, forced_chunks)
+        })
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => warn!("Failed to save forced chunks: {error}"),
+            Err(error) => warn!("Failed to save forced chunks: {error}"),
+        }
+    }
+
     pub async fn save(&self) {
+        self.save_forced_chunks().await;
         let entities = self.entities.load_full();
         self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
             .await;

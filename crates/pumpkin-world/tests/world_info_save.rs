@@ -5,12 +5,32 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::world_info::{
     LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
     anvil::{AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME},
+    data_files::{read_forced_chunks, write_forced_chunks},
 };
 use tempfile::TempDir;
+
+#[test]
+fn forced_chunks_survive_save_and_remain_dimension_specific() {
+    let temp_dir = TempDir::new().unwrap();
+    let overworld = temp_dir.path().join("overworld");
+    let nether = temp_dir.path().join("nether");
+    let initial = [Vector2::new(-3, 7), Vector2::new(0, 0)];
+
+    assert!(read_forced_chunks(&overworld).is_empty());
+    write_forced_chunks(&overworld, initial).unwrap();
+    write_forced_chunks(&nether, [Vector2::new(9, -4)]).unwrap();
+    assert_eq!(read_forced_chunks(&overworld), initial);
+    assert_eq!(read_forced_chunks(&nether), [Vector2::new(9, -4)]);
+
+    write_forced_chunks(&overworld, [Vector2::new(1, 2)]).unwrap();
+    assert_eq!(read_forced_chunks(&overworld), [Vector2::new(1, 2)]);
+    assert_eq!(read_forced_chunks(&nether), [Vector2::new(9, -4)]);
+}
 
 #[test]
 fn write_world_info_reports_backup_failure_and_keeps_previous_level_dat() {
