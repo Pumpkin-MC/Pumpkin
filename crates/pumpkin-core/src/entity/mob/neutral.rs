@@ -7,6 +7,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
@@ -85,7 +86,7 @@ fn is_valid_player_target(target: &dyn EntityBase) -> bool {
 fn is_alive_target(target: &dyn EntityBase) -> bool {
     target
         .get_living_entity()
-        .is_some_and(|living| living.is_alive())
+        .is_some_and(LivingEntity::is_alive)
 }
 
 /// a timed grudge plus the entity it is held against.

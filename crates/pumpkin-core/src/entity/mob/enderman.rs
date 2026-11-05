@@ -237,10 +237,7 @@ impl EndermanEntity {
         }
 
         entity.teleport(new_pos, None, None, &world);
-        world.emit_game_event(
-            pumpkin_data::game_event::GameEvent::Teleport.name(),
-            origin,
-        );
+        world.emit_game_event(pumpkin_data::game_event::GameEvent::Teleport.name(), origin);
         for pos in &[origin, new_pos] {
             world.spawn_particle(
                 *pos,
