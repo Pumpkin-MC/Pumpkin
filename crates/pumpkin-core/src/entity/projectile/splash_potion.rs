@@ -68,9 +68,6 @@ impl SplashPotionEntity {
         else {
             return false;
         };
-        if potion.id == pumpkin_data::potion::Potion::WATER.id {
-            return true;
-        }
         let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
         names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
     }
