@@ -11,7 +11,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use rand::{Rng, seq::IndexedRandom};
+use rand::{Rng, RngExt, seq::IndexedRandom};
 
 use crate::entity::{
     Entity, EntityBase,
@@ -34,6 +34,8 @@ use crate::world::World;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
+/// Vanilla `Axolotl.RARE_VARIANT_CHANCE`: one in this many babies takes the rare variant.
+const RARE_VARIANT_CHANCE: u32 = 1200;
 /// Members already in a spawn group from which `Axolotl.finalizeSpawn` makes babies.
 const BABY_GROUP_SIZE: u32 = 2;
 
@@ -54,6 +56,27 @@ fn get_spawn_variant<R: Rng + ?Sized>(rng: &mut R, common: bool) -> AxolotlVaria
 /// Vanilla `Axolotl.Variant.getCommonSpawnVariant`.
 fn get_common_spawn_variant<R: Rng + ?Sized>(rng: &mut R) -> AxolotlVariant {
     get_spawn_variant(rng, true)
+}
+
+/// Vanilla `Axolotl.Variant.getRareSpawnVariant`.
+fn get_rare_spawn_variant<R: Rng + ?Sized>(rng: &mut R) -> AxolotlVariant {
+    get_spawn_variant(rng, false)
+}
+
+/// Vanilla `Axolotl.getBreedOffspring` variant rule: one baby in `RARE_VARIANT_CHANCE` gets a rare
+/// variant, every other one takes this parent's variant or the partner's with equal odds.
+fn get_breed_variant<R: Rng + ?Sized>(
+    parent: AxolotlVariant,
+    partner: AxolotlVariant,
+    rng: &mut R,
+) -> AxolotlVariant {
+    if rng.random_range(0..RARE_VARIANT_CHANCE) == 0 {
+        get_rare_spawn_variant(rng)
+    } else if rng.random::<bool>() {
+        parent
+    } else {
+        partner
+    }
 }
 
 /// Vanilla `AxolotlGroupData` joined by one more axolotl: the first member of a group draws two
@@ -236,6 +259,30 @@ impl AgeableMob for AxolotlEntity {
 }
 
 impl Animal for AxolotlEntity {
+    /// Vanilla `Axolotl.getBreedOffspring`: the baby gets a variant by [`get_breed_variant`] and
+    /// is kept from despawning.
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::AXOLOTL,
+        ));
+        let partner_variant = partner
+            .cast_any()
+            .downcast_ref::<Self>()
+            .map_or_else(|| self.get_variant(), Self::get_variant);
+        baby.set_variant(get_breed_variant(
+            self.get_variant(),
+            partner_variant,
+            &mut self.get_random(),
+        ));
+        baby.mob_entity
+            .persistence_required
+            .store(true, Ordering::Relaxed);
+        baby
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_AXOLOTL_FOOD)
             || item_stack.item == &Item::TROPICAL_FISH_BUCKET
@@ -588,6 +635,77 @@ mod tests {
         assert_eq!(bucket.get_variant(), AxolotlVariant::Lucy);
         assert!(!bucket.is_baby());
         assert_eq!(group_parts(&group), ([AxolotlVariant::Gold; 2], 5));
+        Ok(())
+    }
+
+    /// One baby in 1200 is rare whatever the parents are: a draw just inside 1/1200 gives the rare
+    /// variant, one just outside it falls through to the parent choice, which uses exactly one more
+    /// draw (and a rare baby uses one more for the rare variant, which has no alternative).
+    #[test]
+    fn breeding_rolls_the_rare_variant_one_in_1200() {
+        let mut rng = ScriptedRng::new(&[1.0 / 1300.0, 0.5]);
+        assert_eq!(
+            get_breed_variant(AxolotlVariant::Lucy, AxolotlVariant::Gold, &mut rng),
+            AxolotlVariant::Blue
+        );
+        assert_eq!(rng.remaining(), 0);
+
+        for draw in [1.0 / 1100.0, ScriptedRng::pick(1, 1200)] {
+            let mut rng = ScriptedRng::new(&[draw, 0.75]);
+            assert_eq!(
+                get_breed_variant(AxolotlVariant::Lucy, AxolotlVariant::Gold, &mut rng),
+                AxolotlVariant::Lucy,
+                "draw {draw}"
+            );
+            assert_eq!(rng.remaining(), 0);
+        }
+    }
+
+    /// Without the rare roll the baby takes this parent's variant or the partner's, chosen by the
+    /// draw after the rare roll; a blue parent passes blue on like any other variant.
+    #[test]
+    fn breeding_takes_this_parent_or_the_partner() {
+        let miss = ScriptedRng::pick(600, 1200);
+        for (draw, expected) in [(0.75, AxolotlVariant::Blue), (0.25, AxolotlVariant::Gold)] {
+            let mut rng = ScriptedRng::new(&[miss, draw]);
+            assert_eq!(
+                get_breed_variant(AxolotlVariant::Blue, AxolotlVariant::Gold, &mut rng),
+                expected,
+                "draw {draw}"
+            );
+            assert_eq!(rng.remaining(), 0);
+        }
+    }
+
+    /// The baby is an axolotl that takes the variant of either parent (blue being the rare
+    /// exception) and never despawns. With 100 babies both parents are picked unless the odds
+    /// are about 1 in 2^99 against it.
+    #[tokio::test]
+    async fn bred_baby_takes_either_parents_variant_and_persists() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let parent = axolotl(&world);
+        parent.set_variant(AxolotlVariant::Cyan);
+        let partner = axolotl(&world);
+        partner.set_variant(AxolotlVariant::Gold);
+        let mut seen = Vec::new();
+        for _ in 0..100 {
+            let offspring = parent.get_breed_offspring(partner.as_ref());
+            let baby = offspring
+                .cast_any()
+                .downcast_ref::<AxolotlEntity>()
+                .expect("an axolotl baby");
+            assert!(baby.mob_entity.persistence_required.load(Ordering::Relaxed));
+            seen.push(baby.get_variant());
+        }
+        assert!(seen.iter().all(|variant| {
+            matches!(
+                variant,
+                AxolotlVariant::Cyan | AxolotlVariant::Gold | AxolotlVariant::Blue
+            )
+        }));
+        assert!(seen.contains(&AxolotlVariant::Cyan));
+        assert!(seen.contains(&AxolotlVariant::Gold));
         Ok(())
     }
 }
