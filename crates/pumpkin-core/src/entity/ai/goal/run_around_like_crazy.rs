@@ -6,6 +6,7 @@ use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::mob::Mob;
+use crate::entity::passive::abstract_horse::AbstractHorse;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct RunAroundLikeCrazyGoal {
@@ -31,7 +32,12 @@ impl RunAroundLikeCrazyGoal {
 
 impl Goal for RunAroundLikeCrazyGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if mob.is_tamed() || !mob.get_entity().has_passengers() {
+        if mob.is_tamed()
+            || !mob.get_entity().has_passengers()
+            || mob
+                .as_abstract_horse()
+                .is_some_and(AbstractHorse::is_mob_controlled)
+        {
             return false;
         }
 

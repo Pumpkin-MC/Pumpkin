@@ -11,6 +11,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -120,6 +121,16 @@ impl AgeableMob for GoatEntity {
 }
 
 impl Animal for GoatEntity {
+    fn play_eating_sound(&self) {
+        let sound = if self.is_screaming() {
+            Sound::EntityGoatScreamingEat
+        } else {
+            Sound::EntityGoatEat
+        };
+        let pitch = 0.8 + self.get_random().random::<f32>() * 0.4;
+        self.play_entity_sound(sound, 1.0, pitch);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_GOAT_FOOD)
             || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
@@ -203,11 +214,6 @@ impl Mob for GoatEntity {
             return true;
         }
 
-        let ambient_sound = if self.is_screaming() {
-            Sound::EntityGoatScreamingAmbient
-        } else {
-            Sound::EntityGoatAmbient
-        };
-        self.animal_interact(player, item_stack, ambient_sound)
+        self.animal_interact(player, item_stack)
     }
 }

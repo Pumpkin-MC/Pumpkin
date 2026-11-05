@@ -617,8 +617,13 @@ pub fn spawn_mobs_for_chunk_generation(
                         fx,
                         f64::from(pos.0.y),
                         fz,
-                    )) && check_spawn_rules(entity_type, world, &check_pos, false)
-                    {
+                    )) && check_spawn_rules(
+                        entity_type,
+                        world,
+                        &check_pos,
+                        false,
+                        crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
+                    ) {
                         let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
                         entity
                             .get_entity()
@@ -998,7 +1003,13 @@ pub fn is_valid_spawn_position_for_type(
     if !is_spawn_position_ok(world, block_pos, entity_type) {
         return false;
     }
-    if !check_spawn_rules(entity_type, world, block_pos, is_thundering) {
+    if !check_spawn_rules(
+        entity_type,
+        world,
+        block_pos,
+        is_thundering,
+        crate::entity::mob::spawn::EntitySpawnReason::Natural,
+    ) {
         return false;
     }
     if !world.is_space_empty(entity_type.get_spawn_bounding_box(
@@ -1113,7 +1124,10 @@ pub fn is_valid_empty_spawn_block(
 }
 
 #[must_use]
-fn is_valid_spawn_floor(state: &'static BlockState, entity_type: &'static EntityType) -> bool {
+pub(crate) fn is_valid_spawn_floor(
+    state: &'static BlockState,
+    entity_type: &'static EntityType,
+) -> bool {
     match Block::from_state_id(state.id).spawn_floor_predicate() {
         SpawnFloorPredicate::Default => {
             state.is_side_solid(BlockDirection::Up) && state.luminance < 14

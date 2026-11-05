@@ -44,9 +44,9 @@ impl JavaClient {
             }
             Action::LeaveBed => player.wake_up(),
 
-            Action::StartHorseJump | Action::StopHorseJump => {
-                debug!("todo");
-            }
+            Action::StartHorseJump => player.start_riding_jump(server, command.jump_boost.0),
+            // Releasing the jump key does nothing on any rideable mob.
+            Action::StopHorseJump => {}
             Action::OpenVehicleInventory => {
                 player.open_vehicle_inventory();
             }
