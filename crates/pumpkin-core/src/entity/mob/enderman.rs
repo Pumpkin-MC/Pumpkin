@@ -70,6 +70,7 @@ pub struct EndermanEntity {
     /// Synced CREEPY flag, the open-mouth pose. Anger lives in `NeutralMob`.
     creepy: AtomicBool,
     provoked: AtomicBool,
+    daylight_deaggression: AtomicBool,
     speed_boosted: AtomicBool,
     target_change_time: AtomicI32,
     last_stare_sound: AtomicI32,
@@ -84,6 +85,7 @@ impl EndermanEntity {
             carried_block: AtomicCell::new(None),
             creepy: AtomicBool::new(false),
             provoked: AtomicBool::new(false),
+            daylight_deaggression: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
             target_change_time: AtomicI32::new(0),
             last_stare_sound: AtomicI32::new(i32::MIN),
@@ -356,6 +358,10 @@ impl EndermanEntity {
         self.carried_block.load()
     }
 
+    pub(crate) fn take_daylight_deaggression(&self) -> bool {
+        self.daylight_deaggression.swap(false, Ordering::Relaxed)
+    }
+
     pub fn play_stare_sound(&self, player: &Player) {
         let entity = &self.mob_entity.living_entity.entity;
         let tick = entity.tick_count.load(Ordering::Relaxed);
@@ -463,14 +469,21 @@ impl Mob for EndermanEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(Some(block_state)) = nbt
-            .get_int("carriedBlockState")
-            .map(|block_state| BlockStateId::new(block_state as u16))
-            && block_state != BlockStateId::AIR
-        {
-            self.set_carried_block(Some(block_state));
+        if let Some(value) = nbt.get_int("carriedBlockState") {
+            self.set_carried_block(
+                BlockStateId::new(value as u16).filter(|id| *id != BlockStateId::AIR),
+            );
         }
         self.read_anger_nbt(nbt);
+    }
+
+    fn mob_remove_nbt(&self, removed: &[Box<str>]) {
+        if removed
+            .iter()
+            .any(|key| key.as_ref() == "carriedBlockState")
+        {
+            self.set_carried_block(None);
+        }
     }
 
     fn requires_custom_persistence(&self) -> bool {
@@ -562,10 +575,12 @@ impl Mob for EndermanEntity {
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
-        if self.mob_entity.get_target().is_none()
-            || entity.tick_count.load(Ordering::Relaxed)
-                < self.target_change_time.load(Ordering::Relaxed) + 600
-        {
+        let ticks_since_target_change = entity
+            .tick_count
+            .load(Ordering::Relaxed)
+            .wrapping_sub(self.target_change_time.load(Ordering::Relaxed))
+            as u32;
+        if self.mob_entity.get_target().is_none() || ticks_since_target_change < 600 {
             return;
         }
 
@@ -580,6 +595,7 @@ impl Mob for EndermanEntity {
         }
 
         if self.get_random().random::<f32>() * 30.0 < (brightness - 0.4) * 2.0 {
+            self.daylight_deaggression.store(true, Ordering::Relaxed);
             self.set_target(None);
             self.teleport_randomly();
         }
@@ -624,8 +640,7 @@ impl Mob for EndermanEntity {
 
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         let is_projectile = is_projectile_damage(damage_type);
-        if is_projectile && !self.mob_entity.living_entity.entity.has_vehicle() {
-            self.repeatedly_try_to_teleport();
+        if is_projectile && self.repeatedly_try_to_teleport() {
             return false;
         }
         true

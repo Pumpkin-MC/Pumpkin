@@ -2213,6 +2213,8 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
 
+    fn mob_remove_nbt(&self, _removed: &[Box<str>]) {}
+
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
         let target = target?;
@@ -2810,6 +2812,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             neutral.read_anger_nbt(nbt);
         }
         self.mob_read_nbt(nbt);
+    }
+
+    fn remove_custom_nbt(&self, removed: &[Box<str>]) {
+        self.mob_remove_nbt(removed);
     }
 
     fn get_gravity(&self) -> f64 {

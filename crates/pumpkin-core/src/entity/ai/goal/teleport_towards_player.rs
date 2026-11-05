@@ -79,6 +79,11 @@ impl Goal for TeleportTowardsPlayerGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.enderman.take_daylight_deaggression() {
+            self.target_player = None;
+            self.committed_target = None;
+            return false;
+        }
         if let Some(target) = &self.target_player
             && let Some(player) = target.get_player()
         {
