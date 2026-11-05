@@ -279,6 +279,7 @@ pub struct World {
     /// Entities spawned by ticking entities, with their sequential order.
     tick_spawns: std::sync::Mutex<Vec<(u64, i32)>>,
     active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
+    pending_forced_entity_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// `GameTest` force leases, separate from persistent `/forceload` chunks.
     pub(crate) game_test_forced_chunks: std::sync::Mutex<FxHashMap<Vector2<i32>, usize>>,
@@ -455,6 +456,7 @@ impl World {
             navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
             tick_spawns: std::sync::Mutex::new(Vec::new()),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
+            pending_forced_entity_chunks: std::sync::Mutex::new(FxHashSet::default()),
             forced_chunks: std::sync::Mutex::new(forced_chunks),
             game_test_forced_chunks: std::sync::Mutex::new(FxHashMap::default()),
             server,
@@ -470,7 +472,7 @@ impl World {
         clippy::too_many_lines,
         reason = "active chunk tracking combines players and force tickets"
     )]
-    pub fn update_active_chunks(&self) {
+    pub fn update_active_chunks(self: &Arc<Self>) {
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
@@ -569,6 +571,56 @@ impl World {
         drop(tracker);
         for pos in migrations {
             self.migrate_pending_block_entities(pos);
+        }
+
+        for pos in forced_chunks {
+            if !self.level.is_chunk_loaded(&pos)
+                || self
+                    .level
+                    .read_entity_chunk_sync(&pos, |chunk| chunk.live.load(Ordering::Acquire))
+                    .unwrap_or(false)
+            {
+                continue;
+            }
+            let mut pending = self
+                .pending_forced_entity_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !pending.insert(pos) {
+                continue;
+            }
+            drop(pending);
+            let world = self.clone();
+            if self
+                .level
+                .spawn_task(async move {
+                    let chunk = world.level.get_entity_chunk(pos).await;
+                    let still_forced = world
+                        .forced_chunks
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains(&pos)
+                        || world
+                            .game_test_forced_chunks
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .contains_key(&pos);
+                    if still_forced {
+                        world.activate_entity_chunk(&chunk);
+                    }
+                    world
+                        .pending_forced_entity_chunks
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(&pos);
+                })
+                .is_none()
+            {
+                self.pending_forced_entity_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&pos);
+            }
         }
 
         self.spawn_state.store(Arc::new(SpawnState::new(
@@ -4602,7 +4654,7 @@ impl World {
                     }
                 };
 
-                let Some((chunk_weak, first_load)) = recv_result else {
+                let Some((chunk_weak, _first_load)) = recv_result else {
                     break;
                 };
 
@@ -4623,41 +4675,9 @@ impl World {
                     continue 'main;
                 }
 
-                if first_load {
-                    // First watcher: consume the serialized entities and make them
-                    // live. The live entity list becomes the single source of
-                    // truth, so the chunk's NBT is taken (cleared) to avoid keeping
-                    // a duplicate copy that would be re-appended on the next unload
-                    // and doubled on every reload.
-                    let entity_nbts = std::mem::take(
-                        &mut *chunk
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    chunk.live.store(true, Relaxed);
-                    for entity_nbt in &entity_nbts {
-                        let Some(root) =
-                            load_entity_from_nbt(entity_nbt, Vector3::default(), &world)
-                        else {
-                            continue;
-                        };
-                        for entity in self_and_passengers(&root) {
-                            match entity.get_mob() {
-                                Some(mob) => mob.mob_init_data_tracker(),
-                                None => entity.init_data_tracker(),
-                            }
-
-                            // Clear velocity so the client does not replay the drop
-                            // animation; residual velocity from the original drop is
-                            // stale data.
-                            entity.get_entity().velocity.store(Vector3::default());
-
-                            // UUID-dedupes if another watcher already loaded this entity.
-                            // Tracker owns pairing (spawn packets + vehicle restore).
-                            world.add_entity_silent(entity.clone());
-                            player.try_restore_vehicle(&entity);
-                        }
+                if let Some(entities) = world.activate_entity_chunk(&chunk) {
+                    for entity in entities {
+                        player.try_restore_vehicle(&entity);
                     }
                 } else {
                     // Already live for other watchers: pair this player now so
@@ -4671,6 +4691,41 @@ impl World {
             #[cfg(debug_assertions)]
             debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
         });
+    }
+
+    /// Makes saved entities in a loaded chunk live once.
+    pub(crate) fn activate_entity_chunk(
+        self: &Arc<Self>,
+        chunk: &pumpkin_world::level::SyncEntityChunk,
+    ) -> Option<Vec<Arc<dyn EntityBase>>> {
+        let mut data = chunk
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if chunk.live.load(Ordering::Acquire) {
+            return None;
+        }
+
+        let entity_nbts = std::mem::take(&mut *data);
+        let mut entities = Vec::new();
+        for entity_nbt in &entity_nbts {
+            let Some(root) = load_entity_from_nbt(entity_nbt, Vector3::default(), self) else {
+                continue;
+            };
+            for entity in self_and_passengers(&root) {
+                match entity.get_mob() {
+                    Some(mob) => mob.mob_init_data_tracker(),
+                    None => entity.init_data_tracker(),
+                }
+
+                // Residual velocity from a saved item drop is stale on the client.
+                entity.get_entity().velocity.store(Vector3::default());
+                self.add_entity_silent(entity.clone());
+                entities.push(entity);
+            }
+        }
+        chunk.live.store(true, Ordering::Release);
+        Some(entities)
     }
 
     /// Gets a `Player` by an entity id

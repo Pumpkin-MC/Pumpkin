@@ -328,7 +328,16 @@ impl ServerGameTestWorld {
         for chunk_x in min_chunk_x..=max_chunk_x {
             for chunk_z in min_chunk_z..=max_chunk_z {
                 let chunk = Vector2::new(chunk_x, chunk_z);
-                if !self.world.level.is_chunk_loaded(&chunk) || !active_chunks.contains(&chunk) {
+                if !self.world.level.is_chunk_loaded(&chunk)
+                    || !active_chunks.contains(&chunk)
+                    || !self
+                        .world
+                        .level
+                        .read_entity_chunk_sync(&chunk, |entities| {
+                            entities.live.load(Ordering::Acquire)
+                        })
+                        .unwrap_or(false)
+                {
                     return false;
                 }
             }
@@ -351,7 +360,7 @@ impl Drop for ServerGameTestWorld {
     }
 }
 
-fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
+fn acquire_forced_game_test_chunk(world: &Arc<World>, chunk: Vector2<i32>) {
     let mut leases = world
         .game_test_forced_chunks
         .lock()
@@ -373,7 +382,7 @@ fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
     world.update_active_chunks();
 }
 
-fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
+fn release_forced_game_test_chunk(world: &Arc<World>, chunk: Vector2<i32>) {
     let mut leases = world
         .game_test_forced_chunks
         .lock()
@@ -462,6 +471,18 @@ impl GameTestWorld for ServerGameTestWorld {
         min: &BlockPos,
         max: &BlockPos,
     ) -> GameTestResult<()> {
+        if max.0.x > min.0.x && max.0.z > min.0.z {
+            for chunk_x in (min.0.x >> 4)..=((max.0.x - 1) >> 4) {
+                for chunk_z in (min.0.z >> 4)..=((max.0.z - 1) >> 4) {
+                    let pos = Vector2::new(chunk_x, chunk_z);
+                    self.ensure_chunk_loaded(&BlockPos::new(chunk_x * 16, 0, chunk_z * 16))
+                        .await;
+                    let chunk = self.world.level.get_entity_chunk(pos).await;
+                    self.world.activate_entity_chunk(&chunk);
+                }
+            }
+        }
+
         let min_x = f64::from(min.0.x);
         let min_y = f64::from(min.0.y);
         let min_z = f64::from(min.0.z);
@@ -895,5 +916,113 @@ impl GameTestWorld for ServerGameTestWorld {
                     tick: 0,
                 })?;
         Ok(count.max(0).cast_unsigned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world as create_world;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::chunk::ChunkData;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn forced_chunk_waits_for_entities_then_becomes_ready()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = create_world(&folder);
+        let chunk = Vector2::new(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(0, 0));
+        world.level.spawn_entity_generation(chunk);
+
+        let adapter = ServerGameTestWorld {
+            world: world.clone(),
+            forced_chunks: StdMutex::new(HashSet::new()),
+        };
+        let min = BlockPos::new(0, 64, 0);
+        let max = BlockPos::new(16, 65, 16);
+        adapter.ensure_chunk_loaded(&min).await;
+        assert!(!adapter.area_loaded_and_ticking(&min, &max));
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !adapter.area_loaded_and_ticking(&min, &max) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await?;
+        assert!(world.level.clean_memory().is_empty());
+
+        drop(adapter);
+        assert_eq!(world.level.clean_memory(), vec![chunk]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn clearing_test_entities_removes_saved_entities()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let pos = Vector2::new(0, 0);
+        let min = BlockPos::new(0, 64, 0);
+        let max = BlockPos::new(16, 80, 16);
+
+        let world = create_world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(pos, ChunkData::empty_sync(0, 0));
+        let adapter = ServerGameTestWorld {
+            world: world.clone(),
+            forced_chunks: StdMutex::new(HashSet::new()),
+        };
+        adapter
+            .spawn_entity("minecraft:pig", Vector3::new(8.5, 65.0, 8.5))
+            .await?;
+        assert_eq!(world.entities.load().len(), 1);
+        drop(adapter);
+        world.shutdown().await;
+        drop(world);
+
+        let world = create_world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(pos, ChunkData::empty_sync(0, 0));
+        let chunk = world.level.get_entity_chunk(pos).await;
+        assert_eq!(
+            chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+            1
+        );
+        assert!(world.entities.load().is_empty());
+
+        let adapter = ServerGameTestWorld {
+            world: world.clone(),
+            forced_chunks: StdMutex::new(HashSet::new()),
+        };
+        adapter.clear_non_player_entities(&min, &max).await?;
+        assert!(world.entities.load().is_empty());
+        drop(adapter);
+        world.shutdown().await;
+        drop(world);
+
+        let world = create_world(&folder);
+        let chunk = world.level.get_entity_chunk(pos).await;
+        assert!(
+            chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 }
