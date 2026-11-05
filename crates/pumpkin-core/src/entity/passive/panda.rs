@@ -22,23 +22,24 @@ use crate::entity::{
     ai::{
         behavior::fleeing::{self, Flee},
         goal::{
-            avoid_entity::not_spectator, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-            follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-            wander_around::WanderAroundGoal,
+            avoid_entity::not_spectator, follow_parent::FollowParentGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+            tempt::TemptGoal, wander_around::WanderAroundGoal,
         },
         target_match::TargetMatch,
     },
     mob::{
-        Mob, MobEntity,
+        Mob, MobEntity, PathAwareEntity,
         spawn::{EntitySpawnReason, SpawnGroupData},
     },
     passive::animal::Animal,
     player::Player,
 };
 use crate::world::World;
+use goals::{PandaBreedGoal, PandaGoal, PandaPanicGoal, attack_goal, hurt_by_target_goal};
 use move_control::PandaMoveControl;
 
+mod goals;
 mod move_control;
 
 /// Vanilla `PandaAvoidGoal` x2: a worried panda keeps clear of players and monsters.
@@ -63,6 +64,10 @@ pub const FLAG_ROLL: u8 = 4;
 pub const FLAG_SIT: u8 = 8;
 pub const FLAG_ON_BACK: u8 = 16;
 
+/// Speed modifier of vanilla's `PandaAttackGoal`.
+const ATTACK_SPEED_MODIFIER: f64 = 1.2;
+/// Vanilla `Panda.TOTAL_UNHAPPY_TIME`: ticks a panda sulks when there is no bamboo to breed near.
+const TOTAL_UNHAPPY_TIME: i32 = 32;
 /// Unhappy counter values at which the panda whines about the missing bamboo.
 const UNHAPPY_SOUND_TICKS: [i32; 2] = [29, 14];
 /// Vanilla turns the panda to its target by up to this many degrees per axis while it sulks.
@@ -195,8 +200,9 @@ impl PandaEntity {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, EscapeDangerGoal::new(2.0));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
+            goal_selector.add_goal(2, Box::new(PandaPanicGoal::new(2.0)));
+            goal_selector.add_goal(2, Box::new(PandaBreedGoal::new(1.0)));
+            goal_selector.add_goal(3, Box::new(attack_goal(ATTACK_SPEED_MODIFIER)));
             goal_selector.add_goal(
                 4,
                 Box::new(TemptGoal::with_tag(
@@ -208,11 +214,19 @@ impl PandaEntity {
             fleeing::apply(goal_selector, PANDA_FLEES);
             goal_selector.add_goal(
                 9,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                Box::new(PandaGoal::new(
+                    *LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                    Self::can_perform_action,
+                )),
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(13, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(14, Box::new(WanderAroundGoal::water_avoiding(1.0)));
+
+            mob_arc
+                .mob_entity
+                .target_selector
+                .add_goal(1, Box::new(hurt_by_target_goal()));
         };
 
         mob_arc
@@ -456,7 +470,21 @@ impl Animal for PandaEntity {
     }
 }
 
+/// Vanilla `PathfinderMob.isPanicking`: the shared panic detection (breeding partners, leash
+/// pulling) only knows `EscapeDangerGoal`, so the panda-local panic goal reports itself here.
+impl PathAwareEntity for PandaEntity {
+    fn is_panicking(&self) -> bool {
+        self.mob_entity
+            .goals_selector
+            .is_running::<PandaPanicGoal>()
+    }
+}
+
 impl Mob for PandaEntity {
+    fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
+        Some(self)
+    }
+
     fn can_dispenser_equip_into_slot(
         &self,
         slot: &pumpkin_data::data_component_impl::EquipmentSlot,
@@ -598,6 +626,11 @@ impl Mob for PandaEntity {
         }
     }
 
+    /// Vanilla `Panda.playAttackSound`, which `Mob.doHurtTarget` plays after a hit that hurt.
+    fn on_attack(&self, _target: &dyn EntityBase) {
+        self.play_entity_sound(Sound::EntityPandaBite, 1.0, 1.0);
+    }
+
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack)
     }
@@ -605,11 +638,14 @@ impl Mob for PandaEntity {
 
 #[cfg(test)]
 mod tests {
+    use super::goals::bite;
     use super::*;
+    use crate::entity::ai::goal::Goal;
     use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::creeper::CreeperEntity;
     use pumpkin_data::Block;
+    use pumpkin_data::damage::DamageType;
     use pumpkin_data::item::Item;
     use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::math::vector3::Vector3;
@@ -617,6 +653,9 @@ mod tests {
     use pumpkin_world::world::BlockFlags;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// Tries allowed for the random flee position in the panic test.
+    const PANIC_START_ATTEMPTS: usize = 20;
 
     fn panda(world: &Arc<World>) -> Arc<PandaEntity> {
         PandaEntity::new(Entity::new(
@@ -1000,6 +1039,238 @@ mod tests {
         assert!(!ran_avoid_goal(&calm, 40), "a calm panda fled");
         assert!(!ran_avoid_goal(&sitting, 40), "a sitting panda fled");
         assert!(ran_avoid_goal(&worried, 40), "a worried panda never fled");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    fn set_world_age(world: &World, world_age: i64) {
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .world_age = world_age;
+    }
+
+    #[tokio::test]
+    async fn panda_panics_only_from_environmental_damage_and_stops_when_it_sits() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let hit = spawn_panda(&world, 0.5, 0.5);
+        let pricked = spawn_panda(&world, 6.5, 0.5);
+        hit.damage(hit.as_ref(), 1.0, DamageType::MOB_ATTACK);
+        pricked.damage(pricked.as_ref(), 1.0, DamageType::CACTUS);
+
+        let mut goal = PandaPanicGoal::new(2.0);
+        assert!(
+            !goal.can_start(hit.as_ref()),
+            "a panda hit by a mob panicked"
+        );
+        // The flee position is random and may not be reachable, so allow a few tries.
+        let started = (0..PANIC_START_ATTEMPTS).any(|_| {
+            goal.can_start(pricked.as_ref()) && {
+                goal.start(pricked.as_ref());
+                !pricked.is_navigator_idle()
+            }
+        });
+        assert!(started, "a panda pricked by a cactus did not panic");
+        assert!(goal.should_continue(pricked.as_ref()));
+
+        pricked.set_sitting(true);
+        assert!(
+            !goal.should_continue(pricked.as_ref()),
+            "a sitting panda kept panicking"
+        );
+        assert!(
+            pricked.is_navigator_idle(),
+            "the panic path was kept while sitting"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_running_panic_goal_counts_as_panicking_for_the_shared_checks() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let calm = spawn_panda(&world, 0.5, 0.5);
+        let pricked = spawn_panda(&world, 6.5, 0.5);
+        pricked.damage(pricked.as_ref(), 1.0, DamageType::CACTUS);
+
+        let mut panicked = false;
+        for tick in 1..=20 {
+            for panda in [&calm, &pricked] {
+                set_tick(panda, tick);
+                panda
+                    .mob_entity
+                    .server_ai_step(panda.as_ref(), panda.as_ref());
+            }
+            panicked = pricked
+                .mob_entity
+                .goals_selector
+                .is_running::<PandaPanicGoal>();
+            if panicked {
+                break;
+            }
+        }
+        assert!(panicked, "a panda pricked by a cactus did not panic");
+        assert!(
+            EntityBase::is_panicking(pricked.as_ref()),
+            "the shared check did not see the panda panic goal"
+        );
+        assert!(!EntityBase::is_panicking(calm.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn breeding_needs_bamboo_nearby_and_sulks_once_per_cooldown() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mate = spawn_panda(&world, 1.5, 0.5);
+        for in_love in [&panda, &mate] {
+            in_love.mob_entity.set_love_ticks(600, None);
+        }
+        let set_tick = |tick| panda.get_entity().tick_count.store(tick, Ordering::Relaxed);
+        let plant_bamboo = |x, y, z| {
+            world.set_block_state(
+                &BlockPos::new(x, y, z),
+                Block::BAMBOO.default_state.id,
+                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+            );
+        };
+        let mut goal = PandaBreedGoal::new(1.0);
+
+        set_tick(100);
+        assert!(!goal.can_start(panda.as_ref()), "bred without bamboo");
+        assert_eq!(panda.get_unhappy_counter(), TOTAL_UNHAPPY_TIME);
+
+        // The next sulk has to wait for the cooldown, which counts server ticks.
+        panda.set_unhappy_counter(0);
+        set_tick(699);
+        assert!(!goal.can_start(panda.as_ref()));
+        assert_eq!(panda.get_unhappy_counter(), 0);
+        set_tick(700);
+        assert!(!goal.can_start(panda.as_ref()));
+        assert_eq!(panda.get_unhappy_counter(), TOTAL_UNHAPPY_TIME);
+        panda.set_unhappy_counter(0);
+        set_tick(1300);
+
+        // One block too far sideways, and one block too high: no bamboo.
+        plant_bamboo(8, 64, 0);
+        plant_bamboo(0, 67, 0);
+        assert!(!goal.can_start(panda.as_ref()));
+        panda.set_unhappy_counter(0);
+
+        plant_bamboo(-7, 66, 7);
+        set_tick(2000);
+        assert!(goal.can_start(panda.as_ref()), "bamboo was not found");
+        panda.set_unhappy_counter(5);
+        assert!(
+            !goal.can_start(panda.as_ref()),
+            "a sulking panda started to breed"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn attack_starts_only_when_the_panda_can_act_but_goes_on_after_sitting() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        set_world_age(&world, 100);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let victim = spawn_panda(&world, 2.5, 0.5);
+        panda.mob_entity.set_target(Some(victim));
+
+        let mut goal = attack_goal(ATTACK_SPEED_MODIFIER);
+        panda.set_sitting(true);
+        assert!(!goal.can_start(panda.as_ref()), "a sitting panda attacked");
+        panda.set_sitting(false);
+        assert!(goal.can_start(panda.as_ref()));
+
+        goal.start(panda.as_ref());
+        assert!(panda.mob_entity.is_attacking());
+        panda.set_sitting(true);
+        assert!(
+            goal.should_continue(panda.as_ref()),
+            "sitting down ended the attack"
+        );
+        goal.stop(panda.as_ref());
+        assert!(!panda.mob_entity.is_attacking());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn only_a_panda_that_is_not_aggressive_remembers_the_bite() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let victim = panda(&world);
+
+        let calm = panda(&world);
+        bite(calm.as_ref(), victim.as_ref());
+        assert!(calm.did_bite.load(Ordering::Relaxed));
+
+        let aggressive = panda(&world);
+        set_genes(&aggressive, PandaGene::Aggressive, PandaGene::Aggressive);
+        bite(aggressive.as_ref(), victim.as_ref());
+        assert!(!aggressive.did_bite.load(Ordering::Relaxed));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn hurt_panda_hits_back_alerts_aggressive_pandas_and_forgives_bamboo() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let attacker = spawn_panda(&world, 4.5, 0.5);
+        let victim = spawn_panda(&world, 0.5, 0.5);
+        let guard = spawn_panda(&world, 0.5, 2.5);
+        set_genes(&guard, PandaGene::Aggressive, PandaGene::Aggressive);
+        let bystander = spawn_panda(&world, 2.5, 2.5);
+        // The goal ignores a grudge whose timestamp it has already seen (0 at spawn).
+        victim.get_entity().tick_count.store(10, Ordering::Relaxed);
+        victim
+            .mob_entity
+            .living_entity
+            .set_last_hurt_by_mob(Some(attacker.as_ref()));
+
+        let mut goal = hurt_by_target_goal();
+        assert!(goal.can_start(victim.as_ref()));
+        goal.start(victim.as_ref());
+        let targets = |panda: &PandaEntity, other: &Arc<PandaEntity>| {
+            panda
+                .mob_entity
+                .get_target()
+                .is_some_and(|target| target.get_entity().entity_id == other.get_entity().entity_id)
+        };
+        assert!(
+            targets(&victim, &attacker),
+            "the hurt panda did not retaliate"
+        );
+        assert!(
+            targets(&guard, &attacker),
+            "the aggressive panda was not alerted"
+        );
+        assert!(
+            bystander.mob_entity.get_target().is_none(),
+            "a calm panda was alerted"
+        );
+
+        assert!(goal.should_continue(victim.as_ref()));
+        victim.got_bamboo.store(true, Ordering::Relaxed);
+        assert!(
+            !goal.should_continue(victim.as_ref()),
+            "bamboo did not calm the panda"
+        );
+        goal.stop(victim.as_ref());
+        assert!(victim.mob_entity.get_target().is_none());
         world.level.shutdown().await;
         Ok(())
     }
