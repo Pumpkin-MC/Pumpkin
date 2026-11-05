@@ -29,8 +29,6 @@ impl TeleportTowardsPlayerGoal {
     pub fn new(enderman: Arc<EndermanEntity>) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(false);
         let mut target_predicate = TargetPredicate::create_attackable();
-        target_predicate.respects_visibility = false;
-        target_predicate.use_distance_scaling_factor = false;
         target_predicate.base_max_distance = enderman
             .mob_entity
             .living_entity
