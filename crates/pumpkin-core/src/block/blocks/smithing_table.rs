@@ -38,13 +38,14 @@ impl BlockBehaviour for SmithingTableBlock {
 
     fn get_screen_handler_factory(
         &self,
-        _args: GetScreenHandlerFactoryArgs<'_>,
+        args: GetScreenHandlerFactoryArgs<'_>,
     ) -> Option<Box<dyn ScreenHandlerFactory>> {
-        Some(Box::new(SmithingTableScreenFactory))
+        let recipe_manager = args.server.recipe_manager.clone();
+        Some(Box::new(SmithingTableScreenFactory(recipe_manager)))
     }
 }
 
-struct SmithingTableScreenFactory;
+struct SmithingTableScreenFactory(Arc<crate::server::recipe::RecipeManager>);
 
 impl ScreenHandlerFactory for SmithingTableScreenFactory {
     fn create_screen_handler(
@@ -56,6 +57,7 @@ impl ScreenHandlerFactory for SmithingTableScreenFactory {
         let handler: SharedScreenHandler = Arc::new(Mutex::new(SmithingTableScreenHandler::new(
             sync_id,
             player_inventory,
+            Some(self.0.clone()),
         )));
         Some(handler)
     }

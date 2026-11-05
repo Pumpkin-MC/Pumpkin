@@ -31,7 +31,7 @@ pub trait Bucketable: Mob {
             ("NoAI", mob.is_no_ai()),
             ("Silent", entity.is_silent()),
             ("NoGravity", entity.has_no_gravity()),
-            ("Glowing", entity.glowing.load(Relaxed)),
+            ("Glowing", entity.has_glowing_tag.load(Relaxed)),
             ("Invulnerable", entity.invulnerable.load(Relaxed)),
             (
                 "PersistenceRequired",
@@ -47,6 +47,10 @@ pub trait Bucketable: Mob {
     }
 
     fn load_from_bucket_tag(&self, nbt: &NbtCompound) {
+        self.load_default_data_from_bucket_tag(nbt);
+    }
+
+    fn load_default_data_from_bucket_tag(&self, nbt: &NbtCompound) {
         let entity = self.get_entity();
         let mob = self.get_mob_entity();
         if let Some(value) = nbt.get_bool("NoAI") {

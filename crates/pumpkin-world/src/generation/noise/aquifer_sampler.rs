@@ -9,8 +9,8 @@ use crate::generation::{
     noise::{
         LAVA_BLOCK, WATER_BLOCK,
         router::{
-            chunk_density_function::ChunkNoiseFunctionBuilderOptions,
-            chunk_noise_router::ChunkNoiseRouter, proto_noise_router::ProtoNoiseRouters,
+            chunk_noise_router::ChunkNoiseRouter,
+            proto_noise_router::{ProtoNoiseRouter, ProtoNoiseRouters},
             surface_height_sampler::SurfaceHeightEstimateSampler,
         },
     },
@@ -62,8 +62,9 @@ pub struct CarverAquiferResult {
 
 pub struct CarverAquiferSampler<'a> {
     aquifer: WorldAquiferSampler,
-    router: ChunkNoiseRouter<'a>,
-    height_estimator: SurfaceHeightEstimateSampler<'a>,
+    base_router: &'a ProtoNoiseRouter,
+    router: Option<ChunkNoiseRouter<'a>>,
+    height_estimator: Option<SurfaceHeightEstimateSampler<'a>>,
 }
 
 impl<'a> CarverAquiferSampler<'a> {
@@ -76,7 +77,6 @@ impl<'a> CarverAquiferSampler<'a> {
         settings: &NoiseSettings,
     ) -> Self {
         let shape = &settings.shape;
-        let builder_options = ChunkNoiseFunctionBuilderOptions::new(Vec::new(), Vec::new(), None);
         let surface_config =
             super::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
                 shape.min_y as i32,
@@ -100,18 +100,86 @@ impl<'a> CarverAquiferSampler<'a> {
                 shape.height,
                 fluid_level,
             ),
-            router: ChunkNoiseRouter::generate(&base_router.noise, &builder_options),
-            height_estimator: SurfaceHeightEstimateSampler::generate(
+            base_router: &base_router.noise,
+            router: None,
+            height_estimator: Some(SurfaceHeightEstimateSampler::generate(
                 &base_router.surface_estimator,
                 &surface_config,
-            ),
+            )),
+        }
+    }
+
+    #[must_use]
+    pub fn new_for_carving(
+        chunk_x: i32,
+        chunk_z: i32,
+        base_router: &'a ProtoNoiseRouters,
+        random_config: &GlobalRandomConfig,
+        settings: &NoiseSettings,
+        existing_aquifer: Option<Box<WorldAquiferSampler>>,
+    ) -> Self {
+        let shape = &settings.shape;
+        let aquifer = existing_aquifer.map_or_else(
+            || {
+                let fluid_level = StandardChunkFluidLevelSampler::new(
+                    FluidLevel::new(
+                        settings.sea_level,
+                        Block::from_state_id(settings.default_fluid.id),
+                    ),
+                    FluidLevel::new(-54, &Block::LAVA),
+                );
+                WorldAquiferSampler::new(
+                    chunk_x,
+                    chunk_z,
+                    &random_config.aquifer_random_deriver,
+                    shape.min_y,
+                    shape.height,
+                    fluid_level,
+                )
+            },
+            |boxed| *boxed,
+        );
+
+        Self {
+            aquifer,
+            base_router: &base_router.noise,
+            router: None,
+            height_estimator: None,
         }
     }
 
     pub fn compute(&mut self, pos: &Vector3<i32>, density: f32) -> CarverAquiferResult {
+        let Some(height_estimator) = self.height_estimator.as_mut() else {
+            return CarverAquiferResult {
+                state: None,
+                should_schedule_fluid_update: false,
+            };
+        };
+        let router = self
+            .router
+            .get_or_insert_with(|| ChunkNoiseRouter::generate_aquifer(self.base_router));
         let (state, should_schedule_fluid_update) =
             self.aquifer
-                .apply_internal(&mut self.router, pos, &mut self.height_estimator, density);
+                .apply_internal(router, pos, height_estimator, density);
+
+        CarverAquiferResult {
+            state,
+            should_schedule_fluid_update,
+        }
+    }
+
+    pub fn compute_with_estimator(
+        &mut self,
+        pos: &Vector3<i32>,
+        density: f32,
+        height_estimator: &mut SurfaceHeightEstimateSampler<'a>,
+    ) -> CarverAquiferResult {
+        let router = self
+            .router
+            .get_or_insert_with(|| ChunkNoiseRouter::generate_aquifer(self.base_router));
+        let (state, should_schedule_fluid_update) =
+            self.aquifer
+                .apply_internal(router, pos, height_estimator, density);
 
         CarverAquiferResult {
             state,

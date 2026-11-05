@@ -89,6 +89,8 @@ impl TridentItem {
             player.get_entity().send_velocity();
         }
 
+        player.release_shoulders();
+
         let sound = match riptide_level {
             1 => Sound::ItemTridentRiptide1,
             2 => Sound::ItemTridentRiptide2,

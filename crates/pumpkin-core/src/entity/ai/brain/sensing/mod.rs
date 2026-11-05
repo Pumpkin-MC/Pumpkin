@@ -6,11 +6,18 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use super::memory::{MemoryModuleId, types};
 use super::{BrainTick, VisibilityContext};
 
+pub mod adult;
 pub mod dummy;
+pub mod golem;
 pub mod hurt_by;
+pub mod nearest_bed;
 pub mod nearest_items;
 pub mod nearest_living_entities;
 pub mod nearest_players;
+pub mod secondary_pois;
+pub mod tempting;
+pub mod villager_babies;
+pub mod villager_hostiles;
 
 pub use dummy::DummySensor;
 pub use hurt_by::HurtBySensor;
@@ -31,6 +38,14 @@ pub enum SensorType {
     NearestPlayers,
     HurtBy,
     NearestItems,
+    FoodTemptations,
+    FrogTemptations,
+    NearestAdult,
+    NearestBed,
+    VillagerBabies,
+    VillagerHostiles,
+    SecondaryPois,
+    GolemDetected,
 }
 
 impl SensorType {
@@ -42,6 +57,14 @@ impl SensorType {
             Self::NearestPlayers => "minecraft:nearest_players",
             Self::HurtBy => "minecraft:hurt_by",
             Self::NearestItems => "minecraft:nearest_items",
+            Self::FoodTemptations => "minecraft:food_temptations",
+            Self::FrogTemptations => "minecraft:frog_temptations",
+            Self::NearestAdult => "minecraft:nearest_adult",
+            Self::NearestBed => "minecraft:nearest_bed",
+            Self::VillagerBabies => "minecraft:villager_babies",
+            Self::VillagerHostiles => "minecraft:villager_hostiles",
+            Self::SecondaryPois => "minecraft:secondary_pois",
+            Self::GolemDetected => "minecraft:golem_detected",
         }
     }
 
@@ -52,7 +75,15 @@ impl SensorType {
             | Self::NearestLivingEntities
             | Self::NearestPlayers
             | Self::HurtBy
-            | Self::NearestItems => DEFAULT_SCAN_RATE,
+            | Self::NearestItems
+            | Self::FoodTemptations
+            | Self::FrogTemptations
+            | Self::NearestAdult
+            | Self::NearestBed
+            | Self::VillagerBabies
+            | Self::VillagerHostiles => DEFAULT_SCAN_RATE,
+            Self::SecondaryPois => 40,
+            Self::GolemDetected => 200,
         }
     }
 
@@ -63,6 +94,14 @@ impl SensorType {
             Self::NearestPlayers => Box::new(PlayerSensor),
             Self::HurtBy => Box::new(HurtBySensor),
             Self::NearestItems => Box::new(nearest_items::NearestItemSensor),
+            Self::FoodTemptations => Box::new(tempting::TemptingSensor::for_animal()),
+            Self::FrogTemptations => Box::new(tempting::TemptingSensor::for_frog()),
+            Self::NearestAdult => Box::new(adult::AdultSensor),
+            Self::NearestBed => Box::<nearest_bed::NearestBedSensor>::default(),
+            Self::VillagerBabies => Box::new(villager_babies::VillagerBabiesSensor),
+            Self::VillagerHostiles => Box::new(villager_hostiles::VillagerHostilesSensor),
+            Self::SecondaryPois => Box::new(secondary_pois::SecondaryPoiSensor),
+            Self::GolemDetected => Box::new(golem::GolemSensor),
         }
     }
 
