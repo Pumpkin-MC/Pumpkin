@@ -273,14 +273,17 @@ impl EndermanEntity {
             .as_ref()
             .and_then(|target| target.get_player())
             .filter(|player| self.is_player_staring(player));
-        self.target_change_time.store(
+        let target_change_time = if is_some {
             self.mob_entity
                 .living_entity
                 .entity
                 .tick_count
-                .load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
+                .load(Ordering::Relaxed)
+        } else {
+            0
+        };
+        self.target_change_time
+            .store(target_change_time, Ordering::Relaxed);
         let mut mob_target = self
             .mob_entity
             .target
@@ -549,7 +552,7 @@ impl Mob for EndermanEntity {
             .load(Ordering::Relaxed)
             .wrapping_sub(self.target_change_time.load(Ordering::Relaxed))
             as u32;
-        if self.mob_entity.get_target().is_none() || ticks_since_target_change < 600 {
+        if ticks_since_target_change < 600 {
             return;
         }
 
