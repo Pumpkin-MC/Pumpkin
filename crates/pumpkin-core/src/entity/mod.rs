@@ -781,12 +781,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .unwrap_or_else(|| entity_type_to_bedrock_identifier(entity.entity_type));
         let mut metadata = entity.bedrock_metadata();
         if let Some(extra_meta) = self.entity_bedrock_spawn_metadata() {
-            metadata.0.extend(extra_meta.0);
+            metadata.merge(extra_meta);
         }
         if let Some(mob) = self.get_mob()
             && let Some(mob_metadata) = mob.mob_bedrock_spawn_metadata()
         {
-            metadata.0.extend(mob_metadata.0);
+            metadata.merge(mob_metadata);
         }
         let packet = CAddActor {
             target_actor_id: VarLong(runtime_id as i64),

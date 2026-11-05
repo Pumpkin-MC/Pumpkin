@@ -37,11 +37,23 @@ impl BedrockClient {
 
             let mut responses = Vec::with_capacity(packet.requests.len());
 
-            for request in packet.requests {
+            for mut request in packet.requests {
                 let mut created_item: Option<ItemStack> = None;
                 let mut crafting_inputs_consumed = false;
                 let mut updates = Vec::new();
                 let mut result = 0u8; // 0 = Success, 1 = Error
+
+                if request
+                    .actions
+                    .iter()
+                    .any(|action| touches_unroutable_slot(&*screen_handler, action))
+                {
+                    tracing::debug!(
+                        "Item stack request targets armor/offhand outside the player screen"
+                    );
+                    result = 1;
+                    request.actions.clear();
+                }
 
                 for action in request.actions {
                     match action {
@@ -901,6 +913,37 @@ impl BedrockClient {
     }
 }
 
+/// Whether `action` touches an armor or offhand slot that doesn't resolve on the open screen.
+/// Such requests are rejected whole, before any stack changes.
+fn touches_unroutable_slot(
+    screen_handler: &dyn ScreenHandler,
+    action: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction,
+) -> bool {
+    use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction as A;
+    let slots = match action {
+        A::Take {
+            source,
+            destination,
+            ..
+        }
+        | A::Place {
+            source,
+            destination,
+            ..
+        } => [Some(source), Some(destination)],
+        A::Swap { slot1, slot2 } => [Some(slot1), Some(slot2)],
+        A::Drop { source, .. } | A::Destroy { source, .. } | A::Consume { source, .. } => {
+            [Some(source), None]
+        }
+        _ => [None, None],
+    };
+    slots.into_iter().flatten().any(|slot| {
+        let name = slot.container_name.container_name;
+        matches!(name, ContainerName::Armor | ContainerName::Offhand)
+            && map_bedrock_container_slot(screen_handler, name, slot.slot_id).is_none()
+    })
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn map_bedrock_container_slot(
     screen_handler: &dyn ScreenHandler,
@@ -956,9 +999,10 @@ pub(crate) fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
+        // Armor and offhand live only on the player's own screen.
+        ContainerName::Armor => (is_player_screen && slot_id < 4).then(|| 5 + slot_id as usize),
         ContainerName::Offhand => {
-            (u32::from(slot_id) <= super::OFF_HAND_BEDROCK_SLOT).then_some(45)
+            (is_player_screen && u32::from(slot_id) <= super::OFF_HAND_BEDROCK_SLOT).then_some(45)
         }
         ContainerName::Cursor => None,
         ContainerName::CraftingInput => {

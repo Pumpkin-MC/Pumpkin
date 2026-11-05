@@ -145,10 +145,11 @@ impl SlimeEntity {
     }
 
     /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
-    /// melee range and in sight
+    /// melee range and in sight. Sight is checked fresh, not through the sensing cache, which
+    /// `NoAI` cubes never clear.
     pub fn deal_damage(&self, player: &crate::entity::player::Player) {
         if self.entity.is_in_attack_range(player)
-            && self.has_line_of_sight(player.get_entity())
+            && self.get_entity().has_line_of_sight(player.get_entity())
             && self.entity.try_attack(self, player)
         {
             self.on_attack(player);
