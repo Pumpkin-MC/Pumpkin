@@ -85,6 +85,7 @@ use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::noise_settings::NoiseSettings;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -2563,6 +2564,41 @@ impl World {
             }
         }
         true
+    }
+
+    pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty(bounding_box)
+            && self.no_entity_collision(source, bounding_box)
+            && self.no_border_collision(source, bounding_box)
+    }
+
+    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let average_size = ((bounding_box.max.x - bounding_box.min.x)
+            + (bounding_box.max.y - bounding_box.min.y)
+            + (bounding_box.max.z - bounding_box.min.z))
+            / 3.0;
+        if average_size < 1.0E-7 {
+            return true;
+        }
+
+        let area = bounding_box.expand_all(1.0E-7);
+        !self.get_all_at_box(&area).iter().any(|entity| {
+            let other = entity.get_entity();
+            !entity.is_spectator()
+                && (other.entity_type == &EntityType::SHULKER
+                    || other.entity_type == &EntityType::HAPPY_GHAST
+                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+                && !source.get_entity().is_passenger_of_same_vehicle(other)
+        })
+    }
+
+    pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let border = self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !border.is_inside_close_to_border(source.get_entity(), &bounding_box)
+            || border.collision_shape_contains(&bounding_box)
     }
 
     /// Vanilla's `BlockView.getDismountHeight()`.
