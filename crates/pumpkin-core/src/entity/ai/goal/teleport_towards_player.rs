@@ -29,6 +29,8 @@ impl TeleportTowardsPlayerGoal {
     pub fn new(enderman: Arc<EndermanEntity>) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(false);
         let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.respects_visibility = false;
+        target_predicate.use_distance_scaling_factor = false;
         target_predicate.base_max_distance = enderman
             .mob_entity
             .living_entity
@@ -46,7 +48,8 @@ impl TeleportTowardsPlayerGoal {
 
     /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
-        self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world)
+        !player.get_entity().has_vehicle()
+            && (self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world))
     }
 
     fn find_staring_player(&self) -> Option<Arc<Player>> {
