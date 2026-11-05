@@ -70,6 +70,23 @@ impl DragonNode {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
+struct OrderedFloat(f64);
+
+impl Eq for OrderedFloat {}
+
+impl PartialOrd for OrderedFloat {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OrderedFloat {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+
 #[must_use]
 pub fn find_path(
     nodes: &[Option<DragonNode>; NODE_COUNT],
@@ -84,7 +101,7 @@ pub fn find_path(
     let mut g = [f64::MAX; NODE_COUNT];
     let mut came_from = [NODE_COUNT; NODE_COUNT];
     let mut closed = [false; NODE_COUNT];
-    let mut open: std::collections::BinaryHeap<(ordered_float::OrderedFloat<f64>, usize)> =
+    let mut open: std::collections::BinaryHeap<(OrderedFloat, usize)> =
         std::collections::BinaryHeap::new();
 
     let h = |n: usize| -> f64 {
@@ -100,7 +117,7 @@ pub fn find_path(
     };
 
     g[from] = 0.0;
-    open.push((ordered_float::OrderedFloat(-h(from)), from));
+    open.push((OrderedFloat(-h(from)), from));
 
     'outer: while let Some((_, cur)) = open.pop() {
         if closed[cur] {
@@ -123,7 +140,7 @@ pub fn find_path(
             if ng < g[nbr] {
                 g[nbr] = ng;
                 came_from[nbr] = cur;
-                open.push((ordered_float::OrderedFloat(-(ng + h(nbr))), nbr));
+                open.push((OrderedFloat(-(ng + h(nbr))), nbr));
             }
         }
     }

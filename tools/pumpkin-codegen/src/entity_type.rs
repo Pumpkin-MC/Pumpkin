@@ -18,6 +18,14 @@ pub struct EntityType {
     pub hurt_sound: Option<String>,
     /// Static death sound event name when it is safely derivable from extracted entity data.
     pub death_sound: Option<String>,
+    pub ambient_sound: Option<String>,
+    pub eating_sound: Option<String>,
+    pub angry_sound: Option<String>,
+    pub sit_sound: Option<String>,
+    pub stand_sound: Option<String>,
+    pub dash_sound: Option<String>,
+    pub dash_ready_sound: Option<String>,
+    pub saddle_sound: Option<String>,
     /// Vanilla `getSoundSource`; missing only for the player.
     pub sound_source: Option<String>,
     /// Vanilla `getMovementEmission`; missing only for the player, whose emission depends on its state.
@@ -36,8 +44,6 @@ pub struct EntityType {
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
     pub mob: Option<bool>,
-    /// Whether this entity's class extends vanilla `Animal`.
-    pub animal: Option<bool>,
     /// Whether the vanilla entity implements the Enemy marker interface.
     pub is_enemy: bool,
     /// Maximum number of this entity type allowed per chunk, if capped.
@@ -64,31 +70,68 @@ pub struct EntityType {
     pub eye_height: f32,
     /// Scale factor for spawn dimensions (e.g. slimes/magma cubes).
     pub spawn_dimensions_scale: f32,
-    /// Vanilla `EntityAttachment.PASSENGER` points, one seat per passenger index.
-    pub passenger_attachments: Vec<[f64; 3]>,
-    /// Vanilla `EntityAttachment.VEHICLE` point, where this entity is held on a seat.
-    pub vehicle_attachment: [f64; 3],
-    /// Size and attachments as a baby, for mobs that can be babies.
-    pub baby: Option<BabyEntityType>,
     /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
-}
-
-/// Vanilla `getDefaultDimensions` of a mob while it is a baby.
-#[derive(Deserialize)]
-pub struct BabyEntityType {
-    pub dimension: [f32; 2],
-    pub eye_height: f32,
     pub passenger_attachments: Vec<[f64; 3]>,
     pub vehicle_attachment: [f64; 3],
+    pub baby: Option<Baby>,
+    #[serde(default)]
+    pub poses: BTreeMap<String, PoseDimensions>,
+    pub boat: Option<BoatSeats>,
 }
 
-/// Emits `&[Vector3::new(..), ..]` for attachment points.
-fn attachment_points(points: &[[f64; 3]]) -> TokenStream {
-    let points = points
-        .iter()
-        .map(|[x, y, z]| quote! { Vector3::new(#x, #y, #z) });
-    quote! { &[#(#points),*] }
+#[derive(Deserialize)]
+pub struct BoatSeats {
+    ride_height: f64,
+    single_passenger_x_offset: f32,
+}
+
+#[derive(Deserialize)]
+pub struct PoseDimensions {
+    dimension: [f32; 2],
+    eye_height: f32,
+    passenger_attachments: Vec<[f64; 3]>,
+    vehicle_attachment: [f64; 3],
+}
+
+#[derive(Deserialize)]
+pub struct Baby {
+    dimension: [f32; 2],
+    eye_height: f32,
+    passenger_attachments: Vec<[f64; 3]>,
+    vehicle_attachment: [f64; 3],
+    eating_sound: Option<String>,
+    angry_sound: Option<String>,
+    #[serde(default)]
+    poses: BTreeMap<String, PoseDimensions>,
+}
+
+fn poses_tokens(poses: &BTreeMap<String, PoseDimensions>) -> TokenStream {
+    let poses = poses.iter().map(|(name, pose)| {
+        let pose_ident = format_ident!("{}", name.to_pascal_case());
+        let [width, height] = pose.dimension;
+        let eye_height = pose.eye_height;
+        let attachments = attachments_tokens(&pose.passenger_attachments, pose.vehicle_attachment);
+        quote! {
+            PoseDimensions {
+                pose: EntityPose::#pose_ident,
+                dimensions: EntityDimensions { width: #width, height: #height, eye_height: #eye_height },
+                attachments: #attachments,
+            }
+        }
+    });
+    quote! { &[#(#poses),*] }
+}
+
+fn attachments_tokens(passengers: &[[f64; 3]], vehicle: [f64; 3]) -> TokenStream {
+    let passengers = passengers.iter().map(|[x, y, z]| quote! { [#x, #y, #z] });
+    let [x, y, z] = vehicle;
+    quote! {
+        EntityAttachments {
+            passenger: &[#(#passengers),*],
+            vehicle: [#x, #y, #z],
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -183,6 +226,36 @@ impl ToTokens for NamedEntityType<'_> {
 
         let death_sound = optional_sound(entity.death_sound.as_ref());
         let hurt_sound = optional_sound(entity.hurt_sound.as_ref());
+        let ambient_sound = optional_sound(entity.ambient_sound.as_ref());
+        let eating_sound = optional_sound(entity.eating_sound.as_ref());
+        let angry_sound = optional_sound(entity.angry_sound.as_ref());
+        let sit_sound = optional_sound(entity.sit_sound.as_ref());
+        let stand_sound = optional_sound(entity.stand_sound.as_ref());
+        let dash_sound = optional_sound(entity.dash_sound.as_ref());
+        let dash_ready_sound = optional_sound(entity.dash_ready_sound.as_ref());
+        let saddle_sound = optional_sound(entity.saddle_sound.as_ref());
+        let baby_dimensions = entity.baby.as_ref().map_or_else(
+            || quote! { None },
+            |baby| {
+                let [width, height] = baby.dimension;
+                let eye_height = baby.eye_height;
+                quote! {
+                    Some(EntityDimensions { width: #width, height: #height, eye_height: #eye_height })
+                }
+            },
+        );
+        let baby_eating_sound = optional_sound(
+            entity
+                .baby
+                .as_ref()
+                .and_then(|baby| baby.eating_sound.as_ref()),
+        );
+        let baby_angry_sound = optional_sound(
+            entity
+                .baby
+                .as_ref()
+                .and_then(|baby| baby.angry_sound.as_ref()),
+        );
         let swim_sound = optional_sound(entity.swim_sound.as_ref());
         let swim_splash_sound = optional_sound(entity.swim_splash_sound.as_ref());
         let swim_high_speed_splash_sound =
@@ -255,7 +328,6 @@ impl ToTokens for NamedEntityType<'_> {
                 .to_pascal_case()
         );
         let mob = entity.mob.unwrap_or(false);
-        let animal = entity.animal.unwrap_or(false);
         let is_enemy = entity.is_enemy;
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
@@ -267,23 +339,35 @@ impl ToTokens for NamedEntityType<'_> {
         let client_tracking_range = entity.client_tracking_range;
         let update_interval = entity.update_interval;
         let track_deltas = entity.track_deltas;
-        let passenger_attachments = attachment_points(&entity.passenger_attachments);
-        let [vehicle_x, vehicle_y, vehicle_z] = entity.vehicle_attachment;
-        let baby = entity.baby.as_ref().map_or_else(
+        let attachments =
+            attachments_tokens(&entity.passenger_attachments, entity.vehicle_attachment);
+        let baby_attachments = entity.baby.as_ref().map_or_else(
             || quote! { None },
             |baby| {
-                let [width, height] = baby.dimension;
-                let eye_height = baby.eye_height;
-                let passenger_attachments = attachment_points(&baby.passenger_attachments);
-                let [x, y, z] = baby.vehicle_attachment;
-                quote! { Some(BabyEntityType {
-                    dimension: [#width, #height],
-                    eye_height: #eye_height,
-                    passenger_attachments: #passenger_attachments,
-                    vehicle_attachment: Vector3::new(#x, #y, #z),
-                }) }
+                let attachments =
+                    attachments_tokens(&baby.passenger_attachments, baby.vehicle_attachment);
+                quote! { Some(#attachments) }
             },
         );
+
+        let poses = poses_tokens(&entity.poses);
+        let boat = entity.boat.as_ref().map_or_else(
+            || quote! { None },
+            |boat| {
+                let ride_height = boat.ride_height;
+                let single_passenger_x_offset = boat.single_passenger_x_offset;
+                quote! {
+                    Some(BoatSeats {
+                        ride_height: #ride_height,
+                        single_passenger_x_offset: #single_passenger_x_offset,
+                    })
+                }
+            },
+        );
+        let baby_poses = entity
+            .baby
+            .as_ref()
+            .map_or_else(|| quote! { &[] }, |baby| poses_tokens(&baby.poses));
 
         tokens.extend(quote! {
             EntityType {
@@ -292,6 +376,16 @@ impl ToTokens for NamedEntityType<'_> {
                 experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
                 death_sound: #death_sound,
+                ambient_sound: #ambient_sound,
+                eating_sound: #eating_sound,
+                baby_eating_sound: #baby_eating_sound,
+                angry_sound: #angry_sound,
+                baby_angry_sound: #baby_angry_sound,
+                sit_sound: #sit_sound,
+                stand_sound: #stand_sound,
+                dash_sound: #dash_sound,
+                dash_ready_sound: #dash_ready_sound,
+                saddle_sound: #saddle_sound,
                 sound_source: SoundCategory::#sound_source,
                 movement_emission: #movement_emission,
                 swim_sound: #swim_sound,
@@ -301,7 +395,6 @@ impl ToTokens for NamedEntityType<'_> {
                 big_fall_sound: #big_fall_sound,
                 attackable: #attackable,
                 mob: #mob,
-                animal: #animal,
                 is_enemy: #is_enemy,
                 saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
@@ -315,10 +408,13 @@ impl ToTokens for NamedEntityType<'_> {
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
                 spawn_dimensions_scale: #spawn_dimensions_scale,
-                passenger_attachments: #passenger_attachments,
-                vehicle_attachment: Vector3::new(#vehicle_x, #vehicle_y, #vehicle_z),
-                baby: #baby,
                 spawn_restriction: #spawn_restriction,
+                attachments: #attachments,
+                baby_attachments: #baby_attachments,
+                baby_dimensions: #baby_dimensions,
+                poses: #poses,
+                baby_poses: #baby_poses,
+                boat: #boat,
                 resource_name: #name,
             }
         });
@@ -375,9 +471,10 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
+        use crate::entity_pose::EntityPose;
         use crate::sound::{Sound, SoundCategory};
         use pumpkin_util::HeightMap;
-        use pumpkin_util::math::boundingbox::BoundingBox;
+        use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
         use pumpkin_util::math::vector3::Vector3;
         use std::hash::Hash;
 
@@ -388,6 +485,16 @@ pub fn build() -> TokenStream {
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
             pub death_sound: Option<Sound>,
+            pub ambient_sound: Option<Sound>,
+            pub eating_sound: Option<Sound>,
+            pub baby_eating_sound: Option<Sound>,
+            pub angry_sound: Option<Sound>,
+            pub baby_angry_sound: Option<Sound>,
+            pub sit_sound: Option<Sound>,
+            pub stand_sound: Option<Sound>,
+            pub dash_sound: Option<Sound>,
+            pub dash_ready_sound: Option<Sound>,
+            pub saddle_sound: Option<Sound>,
             pub sound_source: SoundCategory,
             pub movement_emission: MovementEmission,
             pub swim_sound: Option<Sound>,
@@ -397,7 +504,6 @@ pub fn build() -> TokenStream {
             pub big_fall_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
-            pub animal: bool,
             pub is_enemy: bool,
             pub saveable: bool,
             pub limit_per_chunk: i32,
@@ -411,20 +517,36 @@ pub fn build() -> TokenStream {
             pub dimension: [f32; 2],
             pub eye_height: f32,
             pub spawn_dimensions_scale: f32,
-            pub passenger_attachments: &'static [Vector3<f64>],
-            pub vehicle_attachment: Vector3<f64>,
-            pub baby: Option<BabyEntityType>,
             pub spawn_restriction: SpawnRestriction,
+            pub attachments: EntityAttachments,
+            pub baby_attachments: Option<EntityAttachments>,
+            pub baby_dimensions: Option<EntityDimensions>,
+            pub poses: &'static [PoseDimensions],
+            pub baby_poses: &'static [PoseDimensions],
+            pub boat: Option<BoatSeats>,
             pub resource_name: &'static str,
         }
 
-        /// Vanilla `getDefaultDimensions` of a mob while it is a baby.
-        #[derive(Debug, Clone)]
-        pub struct BabyEntityType {
-            pub dimension: [f32; 2],
-            pub eye_height: f32,
-            pub passenger_attachments: &'static [Vector3<f64>],
-            pub vehicle_attachment: Vector3<f64>,
+        /// Where a boat seats its riders: the seat height and the lone rider's forward offset.
+        #[derive(Debug, Clone, Copy)]
+        pub struct BoatSeats {
+            pub ride_height: f64,
+            pub single_passenger_x_offset: f32,
+        }
+
+        /// The size and attachment points a pose gives the entity when they differ from standing.
+        #[derive(Debug, Clone, Copy)]
+        pub struct PoseDimensions {
+            pub pose: EntityPose,
+            pub dimensions: EntityDimensions,
+            pub attachments: EntityAttachments,
+        }
+
+        /// Where riders sit on an entity and where it sits on its own vehicle, before rotation.
+        #[derive(Debug, Clone, Copy)]
+        pub struct EntityAttachments {
+            pub passenger: &'static [[f64; 3]],
+            pub vehicle: [f64; 3],
         }
 
         impl Hash for EntityType {
@@ -602,6 +724,12 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+
+            #[must_use]
+            pub fn pose_dimensions(&self, pose: EntityPose, baby: bool) -> Option<&'static PoseDimensions> {
+                let poses = if baby && self.baby_dimensions.is_some() { self.baby_poses } else { self.poses };
+                poses.iter().find(|entry| entry.pose == pose)
             }
 
             #[must_use]

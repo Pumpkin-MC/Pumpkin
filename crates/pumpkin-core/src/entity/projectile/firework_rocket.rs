@@ -70,6 +70,12 @@ impl FireworkRocketEntity {
         }
     }
 
+    pub fn new_with_owner(entity: Entity, owner: &Entity, stack: ItemStack) -> Self {
+        let mut rocket = Self::new_with_stack(entity, stack);
+        rocket.entity.owner = ProjectileOwner::new(Some(owner));
+        rocket
+    }
+
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         Self::new_shot_with_stack(entity, shooter, ItemStack::new(1, &Item::FIREWORK_ROCKET))
     }

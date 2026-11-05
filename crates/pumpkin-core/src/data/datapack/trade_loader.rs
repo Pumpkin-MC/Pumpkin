@@ -18,7 +18,7 @@ pub enum DynamicTradeModifier {
     ExplorationMap { destination: String },
     RandomDyes,
     RandomPotion,
-    SuspiciousStew,
+    SuspiciousStew(Vec<(String, i32)>),
     Potion(String),
 }
 
@@ -71,7 +71,14 @@ impl From<&VillagerTrade> for DynamicVillagerTrade {
                 }
                 VillagerTradeModifier::RandomDyes => DynamicTradeModifier::RandomDyes,
                 VillagerTradeModifier::RandomPotion => DynamicTradeModifier::RandomPotion,
-                VillagerTradeModifier::SuspiciousStew => DynamicTradeModifier::SuspiciousStew,
+                VillagerTradeModifier::SuspiciousStew(effects) => {
+                    DynamicTradeModifier::SuspiciousStew(
+                        effects
+                            .iter()
+                            .map(|(effect, duration)| ((*effect).to_string(), *duration))
+                            .collect(),
+                    )
+                }
                 VillagerTradeModifier::Potion(potion) => {
                     DynamicTradeModifier::Potion(potion.to_string())
                 }
@@ -188,7 +195,24 @@ pub fn parse_trade_modifier(modifiers: &[Value]) -> DynamicTradeModifier {
             }
             "minecraft:set_random_dyes" => return DynamicTradeModifier::RandomDyes,
             "minecraft:set_random_potion" => return DynamicTradeModifier::RandomPotion,
-            "minecraft:set_stew_effect" => return DynamicTradeModifier::SuspiciousStew,
+            "minecraft:set_stew_effect" => {
+                let effects = modifier
+                    .get("effects")
+                    .and_then(Value::as_array)
+                    .map(|effects| {
+                        effects
+                            .iter()
+                            .filter_map(|effect| {
+                                Some((
+                                    effect.get("type")?.as_str()?.to_string(),
+                                    i32::try_from(effect.get("duration")?.as_i64()?).ok()?,
+                                ))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                return DynamicTradeModifier::SuspiciousStew(effects);
+            }
             "minecraft:set_potion" => {
                 if let Some(potion) = modifier.get("id").and_then(Value::as_str) {
                     return DynamicTradeModifier::Potion(potion.to_string());

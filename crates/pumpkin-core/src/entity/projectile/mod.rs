@@ -214,7 +214,13 @@ impl ThrownItemEntity {
         }
 
         // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        let mut candidates = world.get_entities_at_box(&search_box);
+        candidates.extend(
+            world
+                .get_players_at_box(&search_box)
+                .into_iter()
+                .map(|player| player as Arc<dyn EntityBase>),
+        );
         for cand in candidates {
             if self.should_skip_collision(&world, entity, &cand) {
                 continue;
@@ -266,6 +272,10 @@ impl ThrownItemEntity {
     ) -> bool {
         let other_ent = other.get_entity();
         if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        if other.is_spectator() {
             return true;
         }
 

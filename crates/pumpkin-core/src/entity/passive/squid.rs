@@ -207,6 +207,11 @@ pub trait Squid: AgeableWaterCreature {
         }
     }
 
+    fn update_squid_dimensions(&self) {
+        let entity = self.get_entity();
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
+    }
+
     fn init_squid_data(&self) {
         let entity = self.get_entity();
         entity.set_synced_data(

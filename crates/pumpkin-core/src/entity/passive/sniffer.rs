@@ -15,6 +15,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -131,7 +132,7 @@ impl SnifferEntity {
             let digging = EntityDimensions::new(size.width, size.height - 0.4, 0.81);
             if baby { digging.scale(0.5) } else { digging }
         } else if baby {
-            Entity::baby_dimensions(&EntityType::SNIFFER)
+            Entity::age_dimensions(&EntityType::SNIFFER, true)
         } else {
             Entity::type_dimensions(&EntityType::SNIFFER)
         };
@@ -329,6 +330,11 @@ impl AgeableMob for SnifferEntity {
 }
 
 impl Animal for SnifferEntity {
+    fn play_eating_sound(&self) {
+        let pitch = 0.8 + self.get_random().random::<f32>() * 0.4;
+        self.play_entity_sound(Sound::EntitySnifferEat, 1.0, pitch);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
             || SNIFFER_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -336,6 +342,10 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn mob_support_quad_leash(&self) -> bool {
+        true
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
     }
@@ -408,6 +418,6 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntitySnifferEat)
+        self.animal_interact(player, item_stack)
     }
 }

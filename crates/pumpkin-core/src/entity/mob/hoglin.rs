@@ -196,13 +196,14 @@ impl Mob for HoglinEntity {
 
     fn finalize_spawn(
         &self,
-        _world: &Arc<World>,
+        world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         if self.get_random().random::<f32>() < 0.2 {
             self.set_baby(true);
         }
-        self.finalize_spawn_super(group_data)
+        self.default_finalize_spawn(world, group_data)
     }
 
     fn should_drop_experience(&self) -> bool {

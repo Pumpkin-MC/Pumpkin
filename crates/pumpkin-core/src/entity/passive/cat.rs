@@ -177,23 +177,6 @@ impl CatEntity {
             VarInt(sound_variant as u8 as i32),
         );
     }
-
-    fn eat_sound(&self) -> pumpkin_data::sound::Sound {
-        let is_baby = self.get_entity().age.load(Ordering::Relaxed) < 0;
-        CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default()
-            .eat_sound(is_baby)
-    }
-
-    pub fn play_eating_sound(&self) {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        world.play_sound(
-            self.eat_sound(),
-            pumpkin_data::sound::SoundCategory::Neutral,
-            &entity.pos.load(),
-        );
-    }
 }
 
 impl CustomSound for CatEntity {
@@ -213,6 +196,16 @@ impl CustomSound for CatEntity {
 }
 
 impl Animal for CatEntity {
+    fn play_eating_sound(&self) {
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.play_entity_sound(
+            sound_variant.eat_sound(self.mob_entity.living_entity.is_baby()),
+            1.0,
+            1.0,
+        );
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         let item = item_stack.get_item();
         item.has_tag(&tag::Item::MINECRAFT_CAT_FOOD) || item == &Item::COD || item == &Item::SALMON

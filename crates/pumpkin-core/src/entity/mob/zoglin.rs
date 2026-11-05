@@ -114,6 +114,9 @@ impl ZoglinEntity {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
         let living = &self.mob_entity.living_entity;
+        living
+            .entity
+            .set_default_dimensions(Entity::age_dimensions(living.entity.entity_type, baby));
         if baby {
             living.set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
         }
@@ -136,6 +139,7 @@ impl Mob for ZoglinEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         if rand::random::<f32>() < 0.2 {

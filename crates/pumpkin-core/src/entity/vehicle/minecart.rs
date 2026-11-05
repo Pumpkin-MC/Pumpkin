@@ -12,7 +12,7 @@ use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
 
 use crate::{
-    entity::{Entity, EntityBase, attachment, living::LivingEntity, player::Player},
+    entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
 };
 use pumpkin_data::Block;
@@ -111,15 +111,17 @@ impl MinecartEntity {
     }
 }
 
+const LOWERED_PASSENGER_ATTACHMENT: Vector3<f64> = Vector3::new(0.0, 0.0, 0.0);
+
 impl EntityBase for MinecartEntity {
-    /// Vanilla `AbstractMinecart.getPassengerAttachmentPoint`: villagers sit lower.
-    fn passenger_attachment_point(&self, passenger: &Entity) -> Vector3<f64> {
-        if passenger.entity_type == &EntityType::VILLAGER
-            || passenger.entity_type == &EntityType::WANDERING_TRADER
-        {
-            return Vector3::default();
-        }
-        attachment::default_passenger_attachment(&self.vehicle.entity, passenger)
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        let passenger_type = passenger.get_entity().entity_type;
+        (passenger_type == &EntityType::VILLAGER || passenger_type == &EntityType::WANDERING_TRADER)
+            .then_some(LOWERED_PASSENGER_ATTACHMENT)
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
