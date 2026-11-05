@@ -8,6 +8,7 @@ type PositionProvider = fn(&dyn Mob) -> Option<Vector3<f64>>;
 
 pub const DEFAULT_INTERVAL: i32 = 120;
 pub const PROBABILITY: f32 = 0.001;
+const NO_ACTION_TIME_LIMIT: i32 = 100;
 
 pub struct WanderAroundGoal {
     goal_control: Controls,
@@ -110,7 +111,16 @@ impl Goal for WanderAroundGoal {
         }
 
         if !self.force_trigger {
-            // TODO: also bail out on a long no-action time, which needs the despawn bookkeeping.
+            if mob
+                .get_mob_entity()
+                .living_entity
+                .no_action_time
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= NO_ACTION_TIME_LIMIT
+            {
+                return false;
+            }
+
             if mob
                 .get_random()
                 .random_range(0..to_goal_ticks(self.interval))
@@ -150,5 +160,36 @@ impl Goal for WanderAroundGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{Entity, ai::test_support::world, passive::cow::CowEntity};
+    use pumpkin_data::entity::EntityType;
+    use std::sync::atomic::Ordering::Relaxed;
+
+    #[tokio::test]
+    async fn idle_mobs_only_stroll_when_forced() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let mut goal = WanderAroundGoal::with_interval(1.0, 1)
+            .with_position(|_| Some(Vector3::new(1.0, 64.0, 0.0)), 0.0);
+        let idle = &cow.get_mob_entity().living_entity.no_action_time;
+        idle.store(99, Relaxed);
+        assert!(goal.can_start(cow.as_ref()));
+        idle.store(100, Relaxed);
+        assert!(!goal.can_start(cow.as_ref()));
+        goal.trigger();
+        assert!(goal.can_start(cow.as_ref()));
+        assert!(!goal.can_start(cow.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
     }
 }

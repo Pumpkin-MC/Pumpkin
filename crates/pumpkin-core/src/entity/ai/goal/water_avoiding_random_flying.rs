@@ -1,35 +1,26 @@
-use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::pathfinder::NavigatorGoal;
+use super::{Controls, Goal, wander_around::WanderAroundGoal};
 use crate::entity::ai::util::{air_and_water_random_pos, hover_random_pos};
 use crate::entity::mob::Mob;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 pub struct WaterAvoidingRandomFlyingGoal {
-    goal_control: Controls,
-    speed: f64,
-    target: Option<Vector3<f64>>,
-    chance: i32,
-    perch_in_trees: bool,
+    wander: WanderAroundGoal,
 }
 
 impl WaterAvoidingRandomFlyingGoal {
     #[must_use]
     pub const fn new(speed: f64) -> Self {
         Self {
-            goal_control: Controls::MOVE,
-            speed,
-            target: None,
-            chance: to_goal_ticks(120),
-            perch_in_trees: false,
+            wander: WanderAroundGoal::new(speed).with_position(Self::get_position, 0.0),
         }
     }
 
     #[must_use]
     pub const fn parrot(speed: f64) -> Self {
-        let mut goal = Self::new(speed);
-        goal.perch_in_trees = true;
-        goal
+        Self {
+            wander: WanderAroundGoal::new(speed).with_position(Self::parrot_position, 0.0),
+        }
     }
 
     fn parrot_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
@@ -103,51 +94,22 @@ impl WaterAvoidingRandomFlyingGoal {
 
 impl Goal for WaterAvoidingRandomFlyingGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if self.perch_in_trees
-            && mob
-                .get_mob_entity()
-                .living_entity
-                .no_action_time
-                .load(std::sync::atomic::Ordering::Relaxed)
-                >= 100
-        {
-            return false;
-        }
-        if mob.get_entity().has_passengers() {
-            return false;
-        }
-
-        if mob.get_random().random_range(0..self.chance) != 0 {
-            return false;
-        }
-
-        self.target = if self.perch_in_trees {
-            Self::parrot_position(mob)
-        } else {
-            Self::get_position(mob)
-        };
-        self.target.is_some()
+        self.wander.can_start(mob)
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let is_idle = mob.is_navigator_idle();
-        !is_idle && !mob.get_entity().has_passengers()
+        self.wander.should_continue(mob)
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        if let Some(target) = self.target {
-            let mob_pos = mob.get_entity().pos.load();
-            let steered = mob.get_mob_entity().steered();
-            let mut navigator = steered.navigator();
-            navigator.set_progress(NavigatorGoal::new(mob_pos, target, self.speed));
-        }
+        self.wander.start(mob);
     }
 
-    fn stop(&mut self, _mob: &dyn Mob) {
-        self.target = None;
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.wander.stop(mob);
     }
 
     fn controls(&self) -> Controls {
-        self.goal_control
+        self.wander.controls()
     }
 }

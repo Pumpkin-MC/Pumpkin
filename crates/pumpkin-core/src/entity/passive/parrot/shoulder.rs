@@ -8,6 +8,8 @@ use crate::entity::{
 use pumpkin_nbt::compound::NbtCompound;
 use std::sync::{Weak, atomic::Ordering::Relaxed};
 
+const RIDE_COOLDOWN: i32 = 100;
+
 pub(super) struct LandOnShoulderGoal {
     parrot: Weak<ParrotEntity>,
     perched: bool,
@@ -36,7 +38,7 @@ impl Goal for LandOnShoulderGoal {
             return false;
         };
         !parrot.is_ordered_to_sit()
-            && e.tick_count.load(Relaxed) > 100
+            && e.tick_count.load(Relaxed) > RIDE_COOLDOWN
             && !owner.is_spectator()
             && !owner.get_entity().is_in_water()
             && !owner.get_entity().is_in_powder_snow()

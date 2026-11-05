@@ -1,6 +1,7 @@
 use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::pathfinder::node::PathType;
+use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::tag::{self, Taggable};
@@ -97,11 +98,7 @@ impl FollowOwnerGoal {
             let target_z = owner_pos.z.floor() as i32 + dz;
 
             let at = BlockPos(Vector3::new(target_x, target_y, target_z));
-            let mut context =
-                crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext::new(
-                    mob_entity.block_pos.load().0,
-                    world.clone(),
-                );
+            let mut context = PathfindingContext::new(mob_entity.block_pos.load().0, world.clone());
             if context.get_land_node_type(at.0) != PathType::Walkable {
                 continue;
             }

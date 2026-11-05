@@ -1,7 +1,3 @@
-mod jukebox;
-#[cfg(test)]
-#[path = "parrot/tests.rs"]
-mod regression_tests;
 mod shoulder;
 use std::sync::{Arc, Weak, atomic::Ordering};
 
@@ -33,6 +29,9 @@ use crate::entity::{
 /// Duration in ticks of the poison a parrot gets from eating a cookie, matching
 /// vanilla `Parrot.mobInteract`.
 const COOKIE_POISON_DURATION: i32 = 900;
+const AMBIENT_IMITATION_INTERVAL: i32 = 1000;
+const NEARBY_IMITATION_INTERVAL: i32 = 400;
+const IMITATION_VOLUME: f32 = 0.7;
 
 /// Represents a Parrot, a passive flying mob that can mimic nearby mob sounds.
 ///
@@ -44,8 +43,6 @@ pub struct ParrotEntity {
     variant: AtomicCell<ParrotVariant>,
     flap_speed: AtomicCell<f32>,
     next_flap: AtomicCell<f32>,
-    jukebox: AtomicCell<Option<BlockPos>>,
-    party: std::sync::atomic::AtomicBool,
 }
 
 impl ParrotEntity {
@@ -81,7 +78,7 @@ impl ParrotEntity {
                 *sound,
                 entity.sound_source(),
                 &e.pos.load(),
-                0.7,
+                IMITATION_VOLUME,
                 Self::pitch(),
             );
             return true;
@@ -97,7 +94,7 @@ impl ParrotEntity {
     pub(crate) fn ambient(world: &crate::world::World) -> Sound {
         let mut rng = rand::rng();
         if world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful
-            && rng.random_range(0..1000) == 0
+            && rng.random_range(0..AMBIENT_IMITATION_INTERVAL) == 0
         {
             IMITATIONS[rng.random_range(0..IMITATIONS.len())].1
         } else {
@@ -132,8 +129,6 @@ impl ParrotEntity {
             variant: AtomicCell::new(ParrotVariant::DEFAULT),
             flap_speed: AtomicCell::new(0.0),
             next_flap: AtomicCell::new(1.0),
-            jukebox: AtomicCell::new(None),
-            party: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(parrot);
         let mob_weak: Weak<dyn Mob> = {
@@ -252,12 +247,6 @@ impl Mob for ParrotEntity {
                 .no_ai(self.get_mob_entity().is_no_ai()),
         )
     }
-    fn for_each_game_event_listener(
-        &self,
-        visit: &mut dyn FnMut(&dyn crate::world::game_event::GameEventListener),
-    ) {
-        visit(&jukebox::JukeboxListener(self));
-    }
     fn can_push_entity(&self, other: &dyn EntityBase) -> bool {
         other.get_player().is_none()
     }
@@ -352,18 +341,7 @@ impl Mob for ParrotEntity {
     }
 
     fn mob_ai_step(&self) {
-        if let Some(pos) = self.jukebox.load() {
-            let e = self.get_entity();
-            if pos.to_centered_f64().squared_distance_to_vec(&e.pos.load()) >= 3.46 * 3.46
-                || e.world.load().get_block(&pos).id != pumpkin_data::Block::JUKEBOX.id
-            {
-                self.party.store(false, Ordering::Relaxed);
-                self.jukebox.store(None);
-            }
-        } else {
-            self.party.store(false, Ordering::Relaxed);
-        }
-        if self.get_random().random_range(0..400) == 0 {
+        if self.get_random().random_range(0..NEARBY_IMITATION_INTERVAL) == 0 {
             Self::imitate_nearby(self);
         }
         // Vanilla `calculateFlapping`.
@@ -528,9 +506,15 @@ const IMITATIONS: &[(&EntityType, Sound)] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::COOKIE_POISON_DURATION;
+    use super::*;
+    use crate::entity::{
+        ageable::AgeableMob, ai::test_support::world, passive::tamable::TamableAnimal,
+    };
     use pumpkin_data::item::Item;
     use pumpkin_data::tag::{self, Taggable};
+    use pumpkin_util::math::vector3::Vector3;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     /// The interaction is gated on the vanilla `parrot_poisonous_food` tag rather than
     /// on a hardcoded cookie id, so check the tag actually resolves the way the
@@ -550,5 +534,67 @@ mod tests {
     #[test]
     fn poison_lasts_45_seconds() {
         assert_eq!(COOKIE_POISON_DURATION, 900);
+    }
+
+    #[tokio::test]
+    async fn loading_a_perched_parrot_preserves_owner_variant_and_sit_order() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let parrot = ParrotEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PARROT,
+        ));
+        let owner = uuid::Uuid::new_v4();
+        let mut saved = NbtCompound::new();
+        saved.put_string("id", "minecraft:parrot".to_string());
+        saved.put_int("Variant", 3);
+        saved.put_uuid("Owner", owner);
+        saved.put_bool("Sitting", true);
+        EntityBase::read_nbt_non_mut(parrot.as_ref(), &saved);
+        assert!(parrot.is_tame());
+        assert!(parrot.is_ordered_to_sit());
+        assert!(parrot.is_in_sitting_pose());
+        assert_eq!(parrot.get_owner(), Some(owner));
+        let mut written = NbtCompound::new();
+        EntityBase::write_nbt(parrot.as_ref(), &mut written);
+        assert_eq!(written.get_int("Variant"), Some(3));
+        assert_eq!(written.get_uuid("Owner"), Some(owner));
+        assert_eq!(written.get_bool("Sitting"), Some(true));
+        // Vanilla's legacy integer codec clamps out-of-range IDs and defaults a missing ID.
+        for (id, expected) in [(-1, 0), (5, 4), (i32::MAX, 4)] {
+            saved.put_int("Variant", id);
+            parrot.mob_read_nbt(&saved);
+            parrot.mob_write_nbt(&mut written);
+            assert_eq!(written.get_int("Variant"), Some(expected));
+        }
+        parrot.mob_read_nbt(&NbtCompound::new());
+        parrot.mob_write_nbt(&mut written);
+        assert_eq!(written.get_int("Variant"), Some(0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn negative_age_does_not_turn_a_parrot_into_a_baby_or_disable_its_loot() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let parrot = ParrotEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::PARROT,
+        ));
+        let mut nbt = NbtCompound::new();
+        nbt.put_int("Age", -24000);
+        EntityBase::read_nbt_non_mut(parrot.as_ref(), &nbt);
+        assert_eq!(parrot.get_age(), 0);
+        assert!(!parrot.is_baby());
+        assert!(!parrot.mob_entity.living_entity.is_baby());
+        assert!(parrot.mob_entity.living_entity.should_drop_loot());
+        let mut saved = NbtCompound::new();
+        EntityBase::write_nbt(parrot.as_ref(), &mut saved);
+        assert!(saved.get("Age").is_none());
+        world.level.shutdown().await;
+        Ok(())
     }
 }
