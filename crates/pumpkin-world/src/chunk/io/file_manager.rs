@@ -596,6 +596,7 @@ mod tests {
             data: Mutex::new(Vec::new()),
             live: AtomicBool::new(false),
             dirty: AtomicBool::new(true),
+            read_failed: AtomicBool::new(false),
         }
     }
 
@@ -640,6 +641,39 @@ mod tests {
         fn position(&self) -> (i32, i32) {
             self.chunk.position()
         }
+    }
+
+    #[tokio::test]
+    async fn read_failed_entity_chunk_is_not_saved() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let folder = folder(dir.path());
+        let entities = &folder.entities_folder;
+        let manager =
+            ChunkFileManager::<AnvilRegion, ChunkEntityData>::new(AnvilChunkConfig::default());
+
+        let chunk = Arc::new(entity_chunk(0));
+        let mut entity = pumpkin_nbt::compound::NbtCompound::new();
+        entity.put_string("id", "minecraft:item".into());
+        entity.put_int("Age", 123);
+        chunk.data.lock().unwrap().push(entity);
+        manager
+            .save_chunks(&folder, vec![(Vector2::new(0, 0), chunk)])
+            .await
+            .unwrap();
+        manager.flush_all().await;
+
+        let path = entities.join("r.0.0.mca");
+        let stored = std::fs::read(&path).unwrap();
+
+        let placeholder = entity_chunk(0);
+        placeholder.read_failed.store(true, Ordering::Relaxed);
+        manager
+            .save_chunks(&folder, vec![(Vector2::new(0, 0), Arc::new(placeholder))])
+            .await
+            .unwrap();
+        manager.flush_all().await;
+
+        assert_eq!(std::fs::read(path).unwrap(), stored);
     }
 
     #[tokio::test]
