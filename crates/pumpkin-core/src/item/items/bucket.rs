@@ -350,11 +350,10 @@ fn try_place_powder_snow(
         pos.offset(direction.to_offset())
     };
     let target_state = world.get_block_state(&target_pos);
-    let can_place = if let Some(player) = player {
-        target_state.replaceable() && !world.is_in_spawn_protection(player, &target_pos)
-    } else {
-        target_state.is_air()
-    };
+    let can_place = player.map_or_else(
+        || target_state.is_air(),
+        |player| target_state.replaceable() && !world.is_in_spawn_protection(player, &target_pos),
+    );
     if !can_place {
         return None;
     }
