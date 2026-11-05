@@ -3562,12 +3562,7 @@ impl Player {
             return;
         }
         // Fall damage comes with the move packet, the glide wall damage with the tick after it
-        self.living_entity.fall(
-            self,
-            movement.y,
-            on_ground,
-            self.gamemode.load() == GameMode::Creative,
-        );
+        self.living_entity.fall(self, movement.y, on_ground);
         if horizontal_collision && self.living_entity.entity.is_fall_flying() {
             self.handle_fall_flying_collision(
                 last_move.horizontal_length(),

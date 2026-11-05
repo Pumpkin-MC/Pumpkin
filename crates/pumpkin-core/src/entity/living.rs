@@ -2237,13 +2237,7 @@ impl LivingEntity {
         strength
     }
 
-    pub fn fall(
-        &self,
-        caller: &dyn EntityBase,
-        height_difference: f64,
-        ground: bool,
-        dont_damage: bool,
-    ) {
+    pub fn fall(&self, caller: &dyn EntityBase, height_difference: f64, ground: bool) {
         if caller
             .get_mob()
             .is_some_and(|mob| !mob.should_check_fall_damage())
@@ -2265,11 +2259,11 @@ impl LivingEntity {
                     );
                 }
             }
+            // Vanilla `fallOn` runs for creative players and fall immune mobs too (farmland,
+            // turtle eggs); `cause_fall_damage` filters the damage itself
             if fall_distance <= 0.0
-                || dont_damage
                 || self.should_prevent_fall_damage()
                 || self.should_prevent_fall_damage_in_area()
-                || self.is_immune_to_fall_damage()
             {
                 return;
             }

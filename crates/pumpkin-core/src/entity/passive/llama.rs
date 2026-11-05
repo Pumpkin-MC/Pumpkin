@@ -304,11 +304,6 @@ impl AgeableMob for LlamaEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
     }
-
-    fn age_boundary_reached(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
-    }
 }
 
 impl Animal for LlamaEntity {

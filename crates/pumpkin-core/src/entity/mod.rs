@@ -3222,7 +3222,7 @@ impl Entity {
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
-            living.fall(caller, final_move.y, on_ground, false);
+            living.fall(caller, final_move.y, on_ground);
         }
 
         let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);

@@ -200,8 +200,6 @@ impl PiglinEntity {
     pub fn set_baby(&self, baby: bool) {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::piglin::DATA_BABY_ID, baby);
-        let entity = &self.mob_entity.living_entity.entity;
-        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, baby));
     }
 
     #[must_use]
