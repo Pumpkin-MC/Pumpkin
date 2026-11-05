@@ -113,7 +113,10 @@ pub trait BlockEntity: Any + Send + Sync {
             .unwrap_or(0) as u32
     }
 
-    /// Obtain NBT data for sending to the client in `ChunkData`
+    /// Obtain the block entity's own NBT for persistence and client updates.
+    ///
+    /// Client-bound data goes through [`block_entity_update_tag`], which keeps
+    /// container contents out of chunk and update packets.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
     }
@@ -165,6 +168,36 @@ pub trait BlockEntity: Any + Send + Sync {
     }
     fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
         None
+    }
+}
+
+/// NBT sent to clients for a block entity, matching vanilla's `getUpdateTag`.
+///
+/// Container contents reach the client only when a window opens, so their
+/// update tag is empty even though the saved tag carries the inventory.
+#[must_use]
+pub fn block_entity_update_tag(resource_location: &str, saved: NbtCompound) -> NbtCompound {
+    let name = resource_location
+        .strip_prefix("minecraft:")
+        .unwrap_or(resource_location);
+    if matches!(
+        name,
+        "chest"
+            | "trapped_chest"
+            | "barrel"
+            | "shulker_box"
+            | "dispenser"
+            | "dropper"
+            | "hopper"
+            | "furnace"
+            | "blast_furnace"
+            | "smoker"
+            | "brewing_stand"
+            | "crafter"
+    ) {
+        NbtCompound::new()
+    } else {
+        saved
     }
 }
 
@@ -447,12 +480,46 @@ pub fn create_block_entity(
 
 #[cfg(test)]
 mod test {
-    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
+    use super::{
+        BlockEntity, block_entity_from_nbt, block_entity_update_tag, furnace::FurnaceBlockEntity,
+    };
     use pumpkin_data::{item::Item, item_stack::ItemStack};
     use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use std::sync::Arc;
+
+    #[test]
+    fn container_update_tags_are_empty() {
+        let mut saved = NbtCompound::new();
+        saved.put_string("id", "minecraft:chest".to_string());
+        saved.put_string("CustomName", "stored".to_string());
+
+        for id in [
+            "minecraft:chest",
+            "minecraft:trapped_chest",
+            "minecraft:barrel",
+            "minecraft:shulker_box",
+            "minecraft:dispenser",
+            "minecraft:dropper",
+            "minecraft:hopper",
+            "minecraft:furnace",
+            "minecraft:blast_furnace",
+            "minecraft:smoker",
+            "minecraft:brewing_stand",
+            "minecraft:crafter",
+        ] {
+            assert!(
+                block_entity_update_tag(id, saved.clone()).is_empty(),
+                "{id} must not send its saved contents"
+            );
+        }
+
+        assert_eq!(
+            block_entity_update_tag("minecraft:sign", saved.clone()),
+            saved
+        );
+    }
 
     /// A loaded block entity is serialized back into its chunk with
     /// `write_internal`, so whatever it holds has to survive that round trip or
