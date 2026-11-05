@@ -54,6 +54,23 @@ impl SplashPotionEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *write = item_stack;
     }
+
+    pub fn hurts_water_sensitive_entities(&self) -> bool {
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(potion) = stack
+            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+            .and_then(|contents| contents.potion_id)
+            .and_then(|id| u8::try_from(id).ok())
+            .and_then(pumpkin_data::potion::Potion::from_id)
+        else {
+            return false;
+        };
+        let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
+        names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
+    }
 }
 
 fn is_water_potion(stack: &ItemStack) -> bool {

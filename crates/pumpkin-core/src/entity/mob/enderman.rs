@@ -13,7 +13,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
+    enchantment_provider::EnchantmentProvider,
     entity::EntityType,
+    item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
@@ -444,6 +446,44 @@ impl Mob for EndermanEntity {
         self.get_carried_block().is_some()
     }
 
+    fn on_die(&self, source: Option<&dyn EntityBase>) {
+        let Some(block_state_id) = self.get_carried_block() else {
+            return;
+        };
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_drops {
+            return;
+        }
+
+        let (block, state) = pumpkin_data::BlockState::from_id_with_block(block_state_id);
+        let Some(loot_table) = block.loot_table.and_then(|key| world.get_loot_table(key)) else {
+            return;
+        };
+        let mut tool = pumpkin_data::item_stack::ItemStack::new(1, &Item::DIAMOND_AXE);
+        EnchantmentProvider::ENDERMAN_LOOT_DROP.apply_to_stack(&mut tool, 0.0);
+        let params = crate::world::loot::LootContextParameters {
+            world: Some(&world),
+            block_state: Some(state),
+            this_entity: Some(self),
+            killer_entity: source,
+            direct_killer_entity: source,
+            position: Some(entity.pos.load()),
+            world_time: world.level_info.load().day_time as u64,
+            tool: Some(tool),
+            killed_by_player: Some(source.is_some_and(|source| source.get_player().is_some())),
+            ..Default::default()
+        };
+        let pos = entity.block_pos.load();
+        for stack in crate::world::loot::generate_loot_from_handle(
+            &loot_table,
+            self.get_random().random(),
+            &params,
+        ) {
+            world.drop_stack(&pos, stack);
+        }
+    }
+
     fn get_ambient_sound(&self) -> Option<Sound> {
         Some(if self.is_creepy() {
             Sound::EntityEndermanScream
@@ -515,13 +555,25 @@ impl Mob for EndermanEntity {
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         let is_projectile = is_projectile_damage(damage_type);
         if is_projectile {
-            for _ in 0..64 {
-                if self.teleport_randomly() {
-                    return false;
-                }
-            }
+            return !self.repeatedly_try_to_teleport();
         }
         true
+    }
+
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if let Some(potion) = source.and_then(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+        }) {
+            return potion.hurts_water_sensitive_entities();
+        }
+        self.pre_damage(damage_type, source)
     }
 
     fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
@@ -532,5 +584,29 @@ impl Mob for EndermanEntity {
         if should_teleport {
             self.teleport_randomly();
         }
+    }
+
+    fn on_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if source.is_some_and(|source| {
+            source
+                .cast_any()
+                .is::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+        }) {
+            self.repeatedly_try_to_teleport();
+            return true;
+        }
+        self.on_damage(damage_type, source);
+        true
+    }
+}
+
+impl EndermanEntity {
+    fn repeatedly_try_to_teleport(&self) -> bool {
+        (0..64).any(|_| self.teleport_randomly())
     }
 }
