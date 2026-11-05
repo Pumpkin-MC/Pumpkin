@@ -156,6 +156,10 @@ impl BlockEntity for HopperBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    fn client_update_tag(&self, _saved: NbtCompound) -> NbtCompound {
+        NbtCompound::new()
+    }
+
     fn bedrock_block_actor_data(
         &self,
         _state_id: pumpkin_data::BlockStateId,
