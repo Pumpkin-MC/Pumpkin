@@ -13,7 +13,7 @@ use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
-use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
+use pumpkin_util::math::boundingbox::BoundingBox;
 
 /// No anger pending.
 pub const NO_ANGER_END_TIME: i64 = -1;
@@ -323,7 +323,6 @@ pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
         return;
     }
 
-    let player_uuid = player.get_entity().entity_uuid;
     let pos = player.get_entity().block_pos.load().to_f64();
     let search_box = BoundingBox::new(pos, pos.add_raw(1.0, 1.0, 1.0)).expand(
         DEATH_NOTICE_RANGE_XZ,

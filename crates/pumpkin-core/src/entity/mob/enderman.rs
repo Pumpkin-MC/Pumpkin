@@ -460,6 +460,10 @@ impl NeutralMob for EndermanEntity {
 }
 
 impl Mob for EndermanEntity {
+    fn is_sensitive_to_water(&self) -> bool {
+        true
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }

@@ -280,10 +280,14 @@ impl EntityBase for SplashPotionEntity {
         let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
+                let distance_squared = cand
+                    .get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&hit_pos);
                 if hurts_water_sensitive_entities
-                    && cand
-                        .cast_any()
-                        .is::<crate::entity::mob::enderman::EndermanEntity>()
+                    && cand.is_sensitive_to_water()
+                    && distance_squared < radius * radius
                 {
                     cand.damage_with_context(
                         cand.as_ref(),
