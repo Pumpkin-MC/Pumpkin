@@ -1,4 +1,5 @@
-//! Vanilla `Panda` sneezing: the sneeze counter flow of `Panda.tick` and `afterSneeze`.
+//! Vanilla `Panda` sneezing: the sneeze counter flow of `Panda.tick`, `afterSneeze` and the
+//! `PandaSneezeGoal` that starts it.
 
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -7,12 +8,17 @@ use pumpkin_data::sound::Sound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use rand::RngExt;
 
-use super::PandaEntity;
+use super::{PandaEntity, as_panda};
 use crate::entity::EntityBase;
 use crate::entity::ageable::AgeableMob;
+use crate::entity::ai::goal::{Goal, GoalReach, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
+/// `PandaSneezeGoal.canUse`: a weak baby sneezes on one in this many `nextInt` rolls.
+const WEAK_BABY_SNEEZE_BOUND: i32 = 500;
+/// `PandaSneezeGoal.canUse`: any baby sneezes on one in this many `nextInt` rolls.
+const BABY_SNEEZE_BOUND: i32 = 6000;
 /// `Panda.tick` ends the sneeze once the sneeze counter has passed this value.
 const SNEEZE_COUNTER_END: i32 = 20;
 /// `Panda.afterSneeze` makes the pandas inside the bounding box inflated by this much jump.
@@ -20,7 +26,21 @@ const SNEEZE_JUMP_RANGE: f64 = 10.0;
 /// `BuiltInLootTables.PANDA_SNEEZE`.
 const PANDA_SNEEZE_LOOT_TABLE: &str = "minecraft:gameplay/panda_sneeze";
 
+/// Vanilla `PandaSneezeGoal.canUse` after the baby and `canPerformAction` checks: a weak panda
+/// first rolls the short odds and falls back to the long odds, any other panda only rolls the
+/// long ones. `next_int(bound)` stands for vanilla's `RandomSource.nextInt`, and both bounds go
+/// through `reducedTickDelay` because the selector asks every second tick.
+fn rolls_sneeze(weak: bool, mut next_int: impl FnMut(i32) -> i32) -> bool {
+    (weak && next_int(to_goal_ticks(WEAK_BABY_SNEEZE_BOUND)) == 1)
+        || next_int(to_goal_ticks(BABY_SNEEZE_BOUND)) == 1
+}
+
 impl PandaEntity {
+    /// The condition of `PandaSneezeGoal.canUse` before the random roll.
+    fn can_sneeze(&self) -> bool {
+        self.is_baby() && self.can_perform_action()
+    }
+
     /// Vanilla `Panda.sneeze`: starts or ends the sneeze flag; ending it resets the counter.
     pub fn sneeze(&self, value: bool) {
         self.set_flag(super::FLAG_SNEEZE, value);
@@ -128,6 +148,44 @@ impl PandaEntity {
     }
 }
 
+/// Vanilla `PandaSneezeGoal` (goal priority 8, no control flags): a baby that can act sneezes
+/// now and then, a weak one much more often. The goal only raises the sneeze flag; the counter,
+/// the sounds and the effects are driven by the panda tick.
+#[derive(Default)]
+pub struct PandaSneezeGoal;
+
+impl Goal for PandaSneezeGoal {
+    /// Vanilla `PandaSneezeGoal.canUse`: a baby that `canPerformAction` and wins the roll.
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(panda) = as_panda(mob) else {
+            return false;
+        };
+        if !panda.can_sneeze() {
+            return false;
+        }
+        let mut rng = mob.get_random();
+        rolls_sneeze(panda.is_weak(), |bound| rng.random_range(0..bound))
+    }
+
+    /// Vanilla `PandaSneezeGoal.canContinueToUse`: never, the goal is over right after `start`.
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
+        false
+    }
+
+    /// Vanilla `PandaSneezeGoal.start`: `sneeze(true)`.
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(panda) = as_panda(mob) {
+            panda.sneeze(true);
+        }
+    }
+
+    /// The goal only reads the panda itself and raises its sneeze flag, so it reaches no other
+    /// entity. The 10 block sneeze effect belongs to the panda tick, not to this goal.
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        Some(GoalReach::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -186,6 +244,28 @@ mod tests {
         panda.get_entity().velocity.load().y
     }
 
+    /// Runs `rolls_sneeze` against scripted `(bound, result)` random calls.
+    fn roll(weak: bool, calls: &[(i32, i32)]) -> bool {
+        let mut script = calls.iter();
+        let sneezes = rolls_sneeze(weak, |bound| {
+            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
+            assert_eq!(bound, expected_bound);
+            result
+        });
+        assert!(script.next().is_none(), "unused scripted random calls");
+        sneezes
+    }
+
+    #[test]
+    fn weak_babies_roll_the_short_odds_first_and_others_only_the_long_ones() {
+        // Reduced tick delay halves the vanilla bounds 500 and 6000.
+        assert!(roll(true, &[(250, 1)]));
+        assert!(roll(true, &[(250, 0), (3000, 1)]));
+        assert!(!roll(true, &[(250, 0), (3000, 0)]));
+        assert!(roll(false, &[(3000, 1)]));
+        assert!(!roll(false, &[(3000, 0)]));
+    }
+
     #[tokio::test]
     async fn sneeze_counter_runs_for_twenty_one_ticks_then_resets() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -211,6 +291,31 @@ mod tests {
         panda.tick_sneeze();
         assert!(!panda.is_sneezing());
         assert_eq!(panda.get_sneeze_counter(), 0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sneeze_goal_needs_a_baby_that_can_act_and_only_raises_the_flag() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mut goal = PandaSneezeGoal;
+
+        assert!(!panda.can_sneeze(), "an adult may sneeze");
+        panda.set_age(-24000);
+        assert!(panda.can_sneeze());
+        panda.set_sitting(true);
+        assert!(!panda.can_sneeze(), "a sitting baby may sneeze");
+        panda.set_sitting(false);
+
+        goal.start(panda.as_ref());
+        assert!(panda.is_sneezing());
+        assert_eq!(panda.get_sneeze_counter(), 0);
+        assert!(!goal.should_continue(panda.as_ref()));
+        // The panda tick ends the sneeze, not the goal.
+        goal.stop(panda.as_ref());
+        assert!(panda.is_sneezing());
         world.level.shutdown().await;
         Ok(())
     }

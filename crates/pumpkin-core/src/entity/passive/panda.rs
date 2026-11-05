@@ -47,6 +47,7 @@ use goals::{
     PandaBreedGoal, PandaGoal, PandaPanicGoal, PandaSitGoal, attack_goal, hurt_by_target_goal,
 };
 use move_control::PandaMoveControl;
+use sneeze::PandaSneezeGoal;
 
 mod goals;
 mod move_control;
@@ -233,6 +234,7 @@ impl PandaEntity {
             );
             fleeing::apply(goal_selector, PANDA_FLEES);
             goal_selector.add_goal(7, Box::new(PandaSitGoal::default()));
+            goal_selector.add_goal(8, Box::new(PandaSneezeGoal));
             goal_selector.add_goal(
                 9,
                 Box::new(PandaGoal::new(
