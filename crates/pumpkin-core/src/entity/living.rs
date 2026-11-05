@@ -1792,10 +1792,13 @@ impl LivingEntity {
         }
 
         for entity in pushable {
-            if let Some(mob) = dyn_self.get_mob() {
+            let mob = dyn_self.get_mob();
+            if let Some(mob) = mob {
                 mob.do_push(&entity);
             }
-            entity.push(dyn_self);
+            if mob.is_none_or(|mob| mob.can_push_entity(entity.as_ref())) {
+                entity.push(dyn_self);
+            }
         }
     }
 

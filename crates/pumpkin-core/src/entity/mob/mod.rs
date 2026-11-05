@@ -2511,6 +2511,14 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.is_pushable()
     }
 
+    fn can_push_entity(&self, _other: &dyn EntityBase) -> bool {
+        true
+    }
+
+    fn can_fly_to_owner(&self) -> bool {
+        false
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
