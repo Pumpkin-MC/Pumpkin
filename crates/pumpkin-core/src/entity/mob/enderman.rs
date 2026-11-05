@@ -258,9 +258,9 @@ impl EndermanEntity {
         world.sync_world_event(
             pumpkin_data::world::WorldEvent::ParticlesEndermanTeleport,
             origin_block_pos,
-            ((difference.0.x & 0xff) << 16)
-                | ((difference.0.y & 0xff) << 8)
-                | (difference.0.z & 0xff),
+            (((difference.0.x + 127) & 0xff) << 16)
+                | (((difference.0.y + 127) & 0xff) << 8)
+                | ((difference.0.z + 127) & 0xff),
         );
 
         self.mob_entity.steered().navigator().stop();
