@@ -1522,6 +1522,10 @@ impl GenerationSchedule {
                             node.pos.y - write_radius,
                             write_radius << 1 | 1,
                         );
+                        cache.read_failed = self
+                            .chunk_map
+                            .get(&node.pos)
+                            .is_some_and(|holder| holder.read_failed);
 
                         if node.stage == StagedChunkEnum::Surface {
                             let mut neighborhood =
