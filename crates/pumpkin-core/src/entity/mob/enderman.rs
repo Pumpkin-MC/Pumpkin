@@ -219,6 +219,12 @@ impl EndermanEntity {
         }
 
         let bb = BoundingBox::new_from_pos(x, target_y, z, &entity.entity_dimension.load());
+        if BlockPos::iterate(bb.min_block_pos(), bb.max_block_pos()).any(|pos| {
+            pumpkin_data::Block::from_state_id(world.get_block_state_id(&pos))
+                .has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO)
+        }) {
+            return false;
+        }
         if !world.is_space_empty(bb) || world.contains_any_liquid(bb) {
             return false;
         }
