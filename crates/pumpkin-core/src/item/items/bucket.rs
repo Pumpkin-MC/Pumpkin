@@ -329,33 +329,45 @@ pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64
 
 fn try_place_powder_snow(
     world: &Arc<World>,
+    player: Option<&Player>,
     pos: BlockPos,
     direction: BlockDirection,
 ) -> Option<BlockPos> {
     let state = world.get_block_state(&pos);
-    let target_pos = if state.replaceable() {
+    let dispensing = player.is_none();
+    let target_pos = if !dispensing && state.replaceable() {
         pos
     } else {
         pos.offset(direction.to_offset())
     };
     let target_state = world.get_block_state(&target_pos);
-    if !target_state.is_air() && !target_state.is_liquid() && !target_state.replaceable() {
+    let can_place = if let Some(player) = player {
+        target_state.replaceable() && !world.is_in_spawn_protection(player, &target_pos)
+    } else {
+        target_state.is_air()
+    };
+    if !can_place {
         return None;
     }
-    if !target_state.is_air() && !target_state.is_liquid() {
-        world.break_block(&target_pos, None, BlockFlags::NOTIFY_ALL);
-    }
-    world.set_block_state(
+    let mut flags = BlockFlags::NOTIFY_ALL;
+    flags.set(BlockFlags::SKIP_DROPS, !dispensing);
+    world.set_block_state_if(
         &target_pos,
         Block::POWDER_SNOW.default_state.id,
-        BlockFlags::NOTIFY_ALL,
-    );
+        flags,
+        |current| current == target_state.id,
+    )?;
+    if dispensing {
+        world.emit_game_event(GameEvent::FluidPlace.name(), target_pos.to_centered_f64());
+    }
     world.play_sound(
         Sound::ItemBucketEmptyPowderSnow,
         SoundCategory::Blocks,
         &target_pos.to_f64(),
     );
-    world.emit_game_event(GameEvent::FluidPlace.name(), target_pos.to_f64());
+    if !dispensing {
+        world.emit_game_event(GameEvent::BlockPlace.name(), target_pos.to_centered_f64());
+    }
     Some(target_pos)
 }
 
@@ -391,7 +403,7 @@ pub(crate) fn try_place_filled_bucket(
     }
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
-        return try_place_powder_snow(world, pos, direction);
+        return try_place_powder_snow(world, player, pos, direction);
     }
 
     let (fluid, fluid_block) = if item.id == Item::LAVA_BUCKET.id {
@@ -430,6 +442,7 @@ pub(crate) fn try_place_filled_bucket(
             fluid,
         });
     } else {
+        let (_, previous_fluid_state) = world.get_fluid_and_fluid_state(&place_pos);
         let cause = player.and_then(|player| world.get_player_by_uuid(player.gameprofile.id));
         if !state.is_air()
             && !state.is_liquid()
@@ -439,11 +452,19 @@ pub(crate) fn try_place_filled_bucket(
         {
             return None;
         }
-        world.set_block_state(
-            &place_pos,
-            fluid_block.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
+        let fluid_state_id = fluid_block.default_state.id;
+        if world
+            .set_block_state_if(
+                &place_pos,
+                fluid_state_id,
+                BlockFlags::NOTIFY_ALL,
+                |current| current != fluid_state_id,
+            )
+            .is_none()
+            && !previous_fluid_state.is_source
+        {
+            return None;
+        }
     }
     Some(place_pos)
 }
