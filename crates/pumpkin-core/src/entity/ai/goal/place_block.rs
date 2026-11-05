@@ -3,9 +3,9 @@ use std::sync::Arc;
 use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -69,6 +69,21 @@ impl Goal for PlaceBlockGoal {
         let (below_block, below_state) = world.get_block_and_state(&below_pos);
         if !below_state.is_solid() || !below_state.is_full_cube() || below_block == &Block::BEDROCK
         {
+            return;
+        }
+
+        let (block, state) = BlockState::from_id_with_block(block_state_id);
+        if !world.block_registry.can_place_at(
+            None,
+            Some(&**world),
+            &**world,
+            None,
+            block,
+            state,
+            &target_pos,
+            None,
+            None,
+        ) {
             return;
         }
 
