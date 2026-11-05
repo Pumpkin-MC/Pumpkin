@@ -161,6 +161,33 @@ pub(super) async fn test_setblock_reports_only_changes(
     Ok(())
 }
 
+pub(super) async fn test_fill_reports_only_changed_blocks(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    let pos = BlockPos::new(1, 1, 1);
+    let changed = helper
+        .execute_command(&pos, "fill ~ ~ ~ ~2 ~ ~2 minecraft:stone")
+        .await?;
+    helper.assert_true(changed == 9, "fill should report the nine changed blocks")?;
+
+    let unchanged = helper
+        .execute_command(&pos, "fill ~ ~ ~ ~2 ~ ~2 minecraft:stone")
+        .await;
+    helper.assert_true(unchanged.is_err(), "fill should fail when no block changes")?;
+
+    helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:air")
+        .await?;
+
+    let partial = helper
+        .execute_command(&pos, "fill ~ ~ ~ ~2 ~ ~2 minecraft:stone")
+        .await?;
+    helper.assert_true(partial == 1, "fill should report only the changed block")?;
+
+    helper.succeed();
+    Ok(())
+}
+
 pub(super) async fn test_tnt_redstone_ignites(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 5, 5).await?;
 

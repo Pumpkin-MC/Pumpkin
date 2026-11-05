@@ -67,6 +67,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:scaffolding_distance_and_collapse",
     "pumpkin:command_block_chain_execution",
     "pumpkin:setblock_reports_only_changes",
+    "pumpkin:fill_reports_only_changed_blocks",
     "pumpkin:hopper_transfers_to_chest",
     "pumpkin:tnt_redstone_ignites",
     "pumpkin:furnace_ignites_and_smelts",
@@ -438,6 +439,13 @@ pub fn ensure_builtin_game_tests_registered() {
             20,
             0,
             containers_and_commands::test_setblock_reports_only_changes,
+        );
+        register_function_test(
+            "pumpkin:fill_reports_only_changed_blocks",
+            "pumpkin:empty_5x5x5",
+            20,
+            0,
+            containers_and_commands::test_fill_reports_only_changed_blocks,
         );
         register_function_test(
             "pumpkin:hopper_transfers_to_chest",

@@ -159,6 +159,7 @@ fn fill_blocks(
                                     || global_z == min_z
                                     || global_z == max_z;
 
+                                let mut destroyed = false;
                                 let block_to_place = match mode {
                                     FillMode::Outline => is_edge.then_some(target_state_id),
                                     FillMode::Hollow => {
@@ -169,6 +170,9 @@ fn fill_blocks(
                                         }
                                     }
                                     FillMode::Destroy => {
+                                        // Vanilla destroys non-air blocks in destroy mode,
+                                        // even when the target state is already present.
+                                        destroyed = !current_block.is_air();
                                         if current_state_id != target_state_id {
                                             world.break_block(
                                                 &pos,
@@ -184,10 +188,13 @@ fn fill_blocks(
                                 };
 
                                 if let Some(state_id) = block_to_place {
-                                    if current_block.default_state.block_entity_type != u16::MAX {
+                                    if (mode == FillMode::Destroy || current_state_id != state_id)
+                                        && current_block.default_state.block_entity_type != u16::MAX
+                                    {
                                         block_entities_to_remove.push(pos);
                                     }
-                                    updates_for_chunk.push((rel_x, y, rel_z, state_id, pos));
+                                    updates_for_chunk
+                                        .push((rel_x, y, rel_z, state_id, pos, destroyed));
                                 }
                             }
                         }
@@ -200,14 +207,16 @@ fn fill_blocks(
 
                 let batch_inputs = updates_for_chunk
                     .iter()
-                    .map(|&(rx, y, rz, sid, _)| (rx, y, rz, sid));
+                    .map(|&(rx, y, rz, sid, _, _)| (rx, y, rz, sid));
                 // One result per input, since every queued position is inside an existing section.
                 let replaced = chunk.set_blocks_batch(batch_inputs);
 
                 let chunk_changed = updates_for_chunk
                     .into_iter()
                     .zip(replaced)
-                    .map(|((_, _, _, new_id, pos), (_, _, _, old_id))| (pos, old_id, new_id))
+                    .filter_map(|((_, _, _, new_id, pos, destroyed), (_, _, _, old_id))| {
+                        (destroyed || old_id != new_id).then_some((pos, old_id, new_id))
+                    })
                     .collect::<Vec<_>>();
 
                 (chunk_changed, block_entities_to_remove)
