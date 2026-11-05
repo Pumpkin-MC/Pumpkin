@@ -889,10 +889,7 @@ impl EntityBase for ArrowEntity {
                 ..
             } => {
                 let target_entity_id = target.get_entity().entity_id;
-                self.pierced_entities
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(target_entity_id);
+                let target_pos = target.get_entity().pos.load();
 
                 // Calculate damage
                 let velocity = entity.velocity.load();
@@ -927,6 +924,18 @@ impl EntityBase for ArrowEntity {
                     // Like vanilla, an ownerless arrow is its own cause.
                     Some(owner_entity.as_deref().unwrap_or(self)),
                 );
+
+                if is_enderman && !damage_succeeded && target.get_entity().pos.load() != target_pos
+                {
+                    entity.set_pos(hit_pos);
+                    self.has_hit.store(false, Ordering::Relaxed);
+                    return;
+                }
+
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(target_entity_id);
 
                 if let Some(living) = target.get_living_entity() {
                     if punch > 0 {
