@@ -16,6 +16,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
@@ -37,8 +38,11 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
 use crate::world::World;
-use goals::{PandaBreedGoal, PandaGoal, PandaPanicGoal, attack_goal, hurt_by_target_goal};
+use goals::{
+    PandaBreedGoal, PandaGoal, PandaPanicGoal, PandaSitGoal, attack_goal, hurt_by_target_goal,
+};
 use move_control::PandaMoveControl;
 
 mod goals;
@@ -224,6 +228,7 @@ impl PandaEntity {
                 )),
             );
             fleeing::apply(goal_selector, PANDA_FLEES);
+            goal_selector.add_goal(7, Box::new(PandaSitGoal::default()));
             goal_selector.add_goal(
                 9,
                 Box::new(PandaGoal::new(
@@ -465,6 +470,67 @@ impl PandaEntity {
     fn set_main_hand_item(&self, stack: ItemStack) -> ItemStack {
         self.mob_entity
             .set_item_slot(&EquipmentSlot::MAIN_HAND, stack)
+    }
+
+    /// Vanilla `spawnAtLocation(held)` followed by `setItemSlot(MAINHAND, EMPTY)`. A plugin can
+    /// cancel the drop through `EntityDropItemEvent`, and the panda then keeps what it holds.
+    /// Returns whether the panda held anything.
+    pub fn drop_main_hand_item(&self) -> bool {
+        self.drop_main_hand_item_if(|held| self.plugin_allows_drop(held))
+    }
+
+    /// `drop_main_hand_item` with the plugin decision passed in: the mouth is only emptied once
+    /// the drop is allowed.
+    fn drop_main_hand_item_if(&self, allowed: impl FnOnce(&ItemStack) -> bool) -> bool {
+        let held = self.main_hand_item();
+        if held.is_empty() {
+            return false;
+        }
+        if allowed(&held) {
+            let held = self.set_main_hand_item(ItemStack::EMPTY.clone());
+            self.get_entity().spawn_at_location(held);
+        }
+        true
+    }
+
+    /// Vanilla `spawnAtLocation(stack)` at the panda's feet, with the plugin hook. Returns whether
+    /// an item entity was spawned.
+    fn spawn_stack_at_feet(&self, stack: ItemStack) -> bool {
+        if stack.is_empty() || !self.plugin_allows_drop(&stack) {
+            return false;
+        }
+        self.get_entity().spawn_at_location(stack);
+        true
+    }
+
+    /// Fires `EntityDropItemEvent` for a drop at the panda's feet; false when a plugin cancelled it.
+    fn plugin_allows_drop(&self, stack: &ItemStack) -> bool {
+        let entity = self.get_entity();
+        let mut drop_event = EntityDropItemEvent::new(
+            entity.entity_id,
+            format!("minecraft:{}", stack.item.registry_key),
+            stack.item_count,
+        );
+        if let Some(server) = entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut drop_event);
+        }
+        !drop_event.cancelled
+    }
+
+    /// Vanilla `tryToSit`: out of the water the panda stops walking and sits down.
+    pub fn try_to_sit(&self) {
+        if self.get_entity().is_in_water() {
+            return;
+        }
+        let living = &self.mob_entity.living_entity;
+        let input = living.movement_input.load();
+        living
+            .movement_input
+            .store(Vector3::new(input.x, input.y, 0.0));
+        self.mob_entity.steered().navigator().stop();
+        self.set_sitting(true);
     }
 
     /// Vanilla `handleEating` with `next_int(bound)` standing for `RandomSource.nextInt`: a
@@ -761,6 +827,7 @@ mod tests {
     use super::*;
     use crate::entity::ai::goal::Goal;
     use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
+    use crate::entity::ai::pathfinder::NavigatorGoal;
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::creeper::CreeperEntity;
     use pumpkin_data::Block;
@@ -1426,6 +1493,34 @@ mod tests {
         world.level.shutdown().await;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn a_cancelled_drop_keeps_the_held_item_and_an_allowed_one_drops_it() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+
+        assert!(
+            !panda.drop_main_hand_item_if(|_| unreachable!("an empty mouth asked a plugin")),
+            "an empty mouth dropped something"
+        );
+        hold(&panda, &Item::BAMBOO);
+        assert!(panda.drop_main_hand_item_if(|_| false));
+        assert_eq!(
+            held_item(&panda).id,
+            Item::BAMBOO.id,
+            "a cancelled drop emptied the mouth"
+        );
+        assert_eq!(dropped_items(&world, &panda), 0);
+
+        assert!(panda.drop_main_hand_item_if(|held| held.item.id == Item::BAMBOO.id));
+        assert!(panda.main_hand_item().is_empty());
+        assert_eq!(dropped_items(&world, &panda), 1);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     /// Puts one of `item` into the panda's mouth.
     fn hold(panda: &PandaEntity, item: &'static Item) {
         panda.set_main_hand_item(ItemStack::new(1, item));
@@ -1433,6 +1528,203 @@ mod tests {
 
     fn held_item(panda: &PandaEntity) -> &'static Item {
         panda.main_hand_item().item
+    }
+
+    fn set_tick(panda: &PandaEntity, tick: i32) {
+        panda.get_entity().tick_count.store(tick, Ordering::Relaxed);
+    }
+
+    /// Item entities next to the panda.
+    fn dropped_items(world: &Arc<World>, panda: &PandaEntity) -> usize {
+        let area = panda.get_entity().bounding_box.load().expand(3.0, 3.0, 3.0);
+        world
+            .get_entities_at_box(&area)
+            .iter()
+            .filter(|entity| *entity.get_entity().entity_type == EntityType::ITEM)
+            .count()
+    }
+
+    #[tokio::test]
+    async fn sit_goal_starts_only_for_an_adult_that_holds_an_item_and_can_act() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let mut goal = PandaSitGoal::default();
+        let check = |goal: &mut PandaSitGoal| goal.can_start(panda.as_ref());
+
+        assert!(!check(&mut goal), "a panda with an empty mouth sat");
+        hold(&panda, &Item::BAMBOO);
+        assert!(check(&mut goal));
+
+        panda.set_unhappy_counter(3);
+        assert!(!check(&mut goal), "a sulking panda sat");
+        panda.set_unhappy_counter(0);
+        panda.eat(true);
+        assert!(!check(&mut goal), "an eating panda sat");
+        panda.eat(false);
+        panda
+            .get_entity()
+            .touching_water
+            .store(true, Ordering::Relaxed);
+        assert!(!check(&mut goal), "a panda in the water sat");
+        panda
+            .get_entity()
+            .touching_water
+            .store(false, Ordering::Relaxed);
+
+        panda.set_age(-100);
+        assert!(!check(&mut goal), "a baby sat");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sit_goal_start_sits_down_and_drops_the_route() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let living = &panda.mob_entity.living_entity;
+        panda
+            .mob_entity
+            .steered()
+            .navigator()
+            .set_progress(NavigatorGoal::new(
+                Vector3::new(0.5, 64.0, 0.5),
+                Vector3::new(5.5, 64.0, 0.5),
+                1.0,
+            ));
+        living.movement_input.store(Vector3::new(0.0, 0.0, 1.0));
+        assert!(!panda.is_navigator_idle());
+
+        hold(&panda, &Item::BAMBOO);
+        let mut goal = PandaSitGoal::default();
+        assert!(goal.can_start(panda.as_ref()));
+        goal.start(panda.as_ref());
+        assert!(panda.is_sitting());
+        assert!(
+            panda.is_navigator_idle(),
+            "the route was kept while sitting"
+        );
+        assert!(
+            living.movement_input.load().z.abs() < f64::EPSILON,
+            "the panda kept its forward input"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sit_goal_stop_drops_the_item_and_waits_before_the_next_sit() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mut goal = PandaSitGoal::default();
+        hold(&panda, &Item::BAMBOO);
+        panda.set_sitting(true);
+        set_tick(&panda, 100);
+
+        // The wait is `nextInt(150) + 10` seconds: 15 seconds here.
+        goal.leave_sit(&panda, |bound| {
+            assert_eq!(bound, 150);
+            5
+        });
+        assert!(!panda.is_sitting() && !panda.is_holding_item());
+        assert_eq!(dropped_items(&world, &panda), 1, "the item was not dropped");
+        hold(&panda, &Item::BAMBOO);
+        set_tick(&panda, 399);
+        assert!(!goal.can_start(panda.as_ref()), "the panda sat too early");
+        set_tick(&panda, 400);
+        assert!(goal.can_start(panda.as_ref()), "the panda waited too long");
+
+        // A lazy panda draws from 50 seconds: at most 59 seconds, so tick 1280 at the latest.
+        let lazy = self::panda(&world);
+        set_genes(&lazy, PandaGene::Lazy, PandaGene::Normal);
+        hold(&lazy, &Item::BAMBOO);
+        lazy.set_sitting(true);
+        set_tick(&lazy, 100);
+        goal.leave_sit(&lazy, |bound| {
+            assert_eq!(bound, 50);
+            bound - 1
+        });
+        hold(&lazy, &Item::BAMBOO);
+        set_tick(&lazy, 1279);
+        assert!(!goal.can_start(lazy.as_ref()));
+        set_tick(&lazy, 1280);
+        assert!(goal.can_start(lazy.as_ref()));
+
+        // Standing up without an item draws no wait and sets no cooldown.
+        let empty = self::panda(&world);
+        let mut fresh_goal = PandaSitGoal::default();
+        empty.set_sitting(true);
+        let mut drew_a_wait = false;
+        fresh_goal.leave_sit(&empty, |_| {
+            drew_a_wait = true;
+            0
+        });
+        assert!(!drew_a_wait, "a wait was drawn without an item");
+        assert!(!empty.is_sitting());
+        hold(&empty, &Item::BAMBOO);
+        assert!(fresh_goal.can_start(empty.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sit_goal_ends_by_chance_and_in_the_water() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let keeps = |panda: &PandaEntity, rolls: &[i32]| {
+            let mut asked = Vec::new();
+            let mut rolls = rolls.iter();
+            let kept = PandaSitGoal::keeps_sitting(panda, |bound| {
+                asked.push(bound);
+                rolls.next().copied().unwrap_or(0)
+            });
+            (kept, asked)
+        };
+
+        // Goal tick counts are half of the server ticks: 600 -> 300 and 2000 -> 1000.
+        assert_eq!(keeps(&panda, &[0, 0]), (true, vec![300, 1000]));
+        assert_eq!(keeps(&panda, &[1]), (false, vec![300]));
+        assert_eq!(keeps(&panda, &[0, 1]), (false, vec![300, 1000]));
+
+        set_genes(&panda, PandaGene::Lazy, PandaGene::Normal);
+        assert_eq!(keeps(&panda, &[0]), (true, vec![1000]));
+        assert_eq!(keeps(&panda, &[1]), (false, vec![1000]));
+
+        panda
+            .get_entity()
+            .touching_water
+            .store(true, Ordering::Relaxed);
+        assert_eq!(keeps(&panda, &[]), (false, vec![]));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn registered_sit_goal_sits_a_panda_that_holds_an_item() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        hold(&panda, &Item::BAMBOO);
+        let steps = |from: i32, to: i32| {
+            for tick in from..to {
+                set_tick(&panda, tick);
+                panda
+                    .mob_entity
+                    .server_ai_step(panda.as_ref(), panda.as_ref());
+            }
+        };
+
+        steps(1, 11);
+        assert!(panda.mob_entity.goals_selector.is_running::<PandaSitGoal>());
+        assert!(panda.is_sitting(), "the panda did not sit down");
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -1539,6 +1831,23 @@ mod tests {
         panda.post_tick();
         assert_eq!(panda.get_eat_counter(), 2);
         assert!(synched.is_dirty(), "the counter step was not synched");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn item_in_the_mouth_survives_nbt_and_makes_the_panda_sit() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let source = panda(&world);
+        hold(&source, &Item::BAMBOO);
+        let mut nbt = NbtCompound::new();
+        source.write_nbt(&mut nbt);
+
+        let loaded = panda(&world);
+        loaded.read_nbt_non_mut(&nbt);
+        assert_eq!(held_item(&loaded), &Item::BAMBOO);
+        assert!(PandaSitGoal::default().can_start(loaded.as_ref()));
         world.level.shutdown().await;
         Ok(())
     }

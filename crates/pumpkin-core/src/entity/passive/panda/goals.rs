@@ -7,14 +7,16 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use super::{PandaEntity, TOTAL_UNHAPPY_TIME, as_panda};
 use crate::entity::EntityBase;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::try_find_water::TryFindWaterGoal;
-use crate::entity::ai::goal::{Controls, Goal, GoalReach};
+use crate::entity::ai::goal::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::mob::Mob;
@@ -28,6 +30,16 @@ const VERTICAL_RANGE: i32 = 4;
 /// `PandaBreedGoal` looks for bamboo in rings of radius 0 to 7 and at 0 to 2 blocks above.
 const BAMBOO_SEARCH_RADIUS: i32 = 7;
 const BAMBOO_SEARCH_HEIGHT: i32 = 2;
+/// `canContinueToUse` of `PandaSitGoal`: 1 in this many goal ticks ends the sit, unless lazy.
+const SIT_END_ODDS: i32 = 600;
+/// `canContinueToUse` of `PandaSitGoal`: 1 in this many goal ticks ends the sit, lazy or not.
+const SIT_FORCED_END_ODDS: i32 = 2000;
+/// `PandaSitGoal.stop` waits `nextInt(bound) + SIT_COOLDOWN_MIN_SECONDS` seconds before it sits
+/// again: the bound is 50 for a lazy panda and 150 for any other.
+const LAZY_SIT_COOLDOWN_RANGE_SECONDS: i32 = 50;
+const SIT_COOLDOWN_RANGE_SECONDS: i32 = 150;
+const SIT_COOLDOWN_MIN_SECONDS: i32 = 10;
+const TICKS_PER_SECOND: i32 = 20;
 /// Server ticks the panda waits after a sulk before it sulks about missing bamboo again.
 const UNHAPPY_COOLDOWN_TICKS: i32 = 600;
 
@@ -355,4 +367,102 @@ pub fn hurt_by_target_goal() -> RevengeGoal {
                 !panda.got_bamboo.load(Relaxed) && !panda.did_bite.load(Relaxed)
             })
         })
+}
+
+/// Vanilla `PandaSitGoal`: a panda that holds an item sits down with it (and eats it, see
+/// `Panda.handleEating`). Leaving the goal drops the item and keeps the panda from sitting
+/// for a while. The ground item branch of `canUse`/`start` (walk to a thrown bamboo or cake
+/// within 6 and 8 blocks) belongs to the item pick-up, which is not ported yet, so a panda
+/// that holds nothing never starts this goal.
+#[derive(Default)]
+pub struct PandaSitGoal {
+    /// Vanilla `cooldown`: the `tick_count` before which the panda does not sit again.
+    cooldown: i32,
+}
+
+impl PandaSitGoal {
+    /// Vanilla `canContinueToUse` with `next_int(bound)` standing for `RandomSource.nextInt`: a
+    /// panda leaves the water and the sit with small random chances per goal tick.
+    pub(super) fn keeps_sitting(panda: &PandaEntity, mut next_int: impl FnMut(i32) -> i32) -> bool {
+        if panda.get_entity().is_in_water() {
+            return false;
+        }
+        if !panda.is_lazy() && next_int(to_goal_ticks(SIT_END_ODDS)) == 1 {
+            return false;
+        }
+        next_int(to_goal_ticks(SIT_FORCED_END_ODDS)) != 1
+    }
+
+    /// Vanilla `stop` with `next_int(bound)` standing for `RandomSource.nextInt`: an item in the
+    /// mouth is dropped and the panda waits before it sits down again. It stands up either way.
+    pub(super) fn leave_sit(&mut self, panda: &PandaEntity, mut next_int: impl FnMut(i32) -> i32) {
+        if panda.drop_main_hand_item() {
+            let range = if panda.is_lazy() {
+                LAZY_SIT_COOLDOWN_RANGE_SECONDS
+            } else {
+                SIT_COOLDOWN_RANGE_SECONDS
+            };
+            let wait_seconds = next_int(range) + SIT_COOLDOWN_MIN_SECONDS;
+            self.cooldown =
+                panda.get_entity().tick_count.load(Relaxed) + wait_seconds * TICKS_PER_SECOND;
+        }
+        panda.set_sitting(false);
+    }
+}
+
+impl Goal for PandaSitGoal {
+    /// Vanilla `canUse`: not in cooldown, an adult out of the water that can act, not sulking
+    /// and holding an item.
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(panda) = as_panda(mob) else {
+            return false;
+        };
+        self.cooldown <= panda.get_entity().tick_count.load(Relaxed)
+            && !panda.is_baby()
+            && !panda.get_entity().is_in_water()
+            && panda.can_perform_action()
+            && panda.get_unhappy_counter() <= 0
+            && panda.is_holding_item()
+    }
+
+    /// Vanilla `canContinueToUse`.
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        as_panda(mob).is_some_and(|panda| {
+            let mut rng = panda.get_random();
+            Self::keeps_sitting(panda, |bound| rng.random_range(0..bound))
+        })
+    }
+
+    /// Vanilla `start`: sit down with the held item and clear the cooldown.
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(panda) = as_panda(mob)
+            && panda.is_holding_item()
+        {
+            panda.try_to_sit();
+        }
+        self.cooldown = 0;
+    }
+
+    /// Vanilla `tick`: a panda that stood up with an item in its mouth sits down again.
+    fn tick(&mut self, mob: &dyn Mob) {
+        if let Some(panda) = as_panda(mob)
+            && !panda.is_sitting()
+            && panda.is_holding_item()
+        {
+            panda.try_to_sit();
+        }
+    }
+
+    /// Vanilla `stop`.
+    fn stop(&mut self, mob: &dyn Mob) {
+        if let Some(panda) = as_panda(mob) {
+            let mut rng = panda.get_random();
+            self.leave_sit(panda, |bound| rng.random_range(0..bound));
+        }
+    }
+
+    /// Vanilla `PandaSitGoal` flags: move only.
+    fn controls(&self) -> Controls {
+        Controls::MOVE
+    }
 }
