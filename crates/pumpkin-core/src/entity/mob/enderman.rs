@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
@@ -69,6 +69,7 @@ pub struct EndermanEntity {
     creepy: AtomicBool,
     provoked: AtomicBool,
     speed_boosted: AtomicBool,
+    target_change_time: AtomicI32,
 }
 
 impl EndermanEntity {
@@ -81,6 +82,7 @@ impl EndermanEntity {
             creepy: AtomicBool::new(false),
             provoked: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
+            target_change_time: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -142,7 +144,8 @@ impl EndermanEntity {
         let target_pos = target.get_entity().pos.load();
 
         let dx = pos.x - target_pos.x;
-        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET) - (target_pos.y + target.get_entity().get_eye_height());
+        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET)
+            - (target_pos.y + target.get_entity().get_eye_height());
         let dz = pos.z - target_pos.z;
         let dist = (dx * dx + dy * dy + dz * dz).sqrt();
 
@@ -258,6 +261,14 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
+        self.target_change_time.store(
+            self.mob_entity
+                .living_entity
+                .entity
+                .tick_count
+                .load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         let mut mob_target = self
             .mob_entity
             .target
@@ -446,6 +457,31 @@ impl Mob for EndermanEntity {
             .living_entity
             .jumping
             .store(false, Ordering::Relaxed);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if self.mob_entity.get_target().is_none()
+            || entity.tick_count.load(Ordering::Relaxed)
+                < self.target_change_time.load(Ordering::Relaxed) + 600
+        {
+            return;
+        }
+
+        let world = entity.world.load();
+        if !world.is_bright_outside() {
+            return;
+        }
+        let pos = entity.block_pos.load();
+        let brightness = world.get_light_level_dependent_magic_value(&pos);
+        if brightness <= 0.5 || !world.can_see_sky(&pos) {
+            return;
+        }
+
+        if self.get_random().random::<f32>() * 30.0 < (brightness - 0.4) * 2.0 {
+            self.set_target(None);
+            self.teleport_randomly();
+        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
