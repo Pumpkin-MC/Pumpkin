@@ -125,16 +125,19 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::STATE,
             VarInt(state.id()),
         );
-        // Vanilla `Sniffer.getDefaultDimensions`: 0.4 lower while digging
+        self.update_dimensions();
+    }
+
+    /// Vanilla `Sniffer.getDefaultDimensions`: 0.4 lower while digging, by age otherwise.
+    fn update_dimensions(&self) {
+        let entity = self.get_entity();
         let baby = entity.age.load(Ordering::Relaxed) < 0;
-        let dimensions = if state == SnifferState::Digging {
+        let dimensions = if self.get_state() == SnifferState::Digging {
             let size = Entity::type_dimensions(&EntityType::SNIFFER);
             let digging = EntityDimensions::new(size.width, size.height - 0.4, 0.81);
             if baby { digging.scale(0.5) } else { digging }
-        } else if baby {
-            Entity::age_dimensions(&EntityType::SNIFFER, true)
         } else {
-            Entity::type_dimensions(&EntityType::SNIFFER)
+            Entity::age_dimensions(&EntityType::SNIFFER, baby)
         };
         entity.set_default_dimensions(dimensions);
     }
@@ -326,6 +329,10 @@ impl AgeableMob for SnifferEntity {
 
     fn get_baby_start_age(&self) -> i32 {
         SNIFFER_BABY_START_AGE
+    }
+
+    fn age_boundary_reached(&self) {
+        self.update_dimensions();
     }
 }
 

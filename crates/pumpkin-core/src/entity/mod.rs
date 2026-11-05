@@ -1307,10 +1307,8 @@ fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) 
         .map(|pose| &pose.attachments)
         .or_else(|| entity_type.baby_attachments.as_ref().filter(|_| baby))
         .unwrap_or(&entity_type.attachments);
-    let scale = living.map_or(1.0, |living| {
-        living.get_attribute_value(&pumpkin_data::attributes::Attributes::SCALE)
-    });
-    (attachments, scale)
+    // The scale the current dimensions were built with, like vanilla's scaled attachments
+    (attachments, f64::from(base.scale.load()))
 }
 
 pub(crate) fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {

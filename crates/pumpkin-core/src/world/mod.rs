@@ -1725,7 +1725,12 @@ impl World {
             let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
-            entity.get_entity().tick_count.fetch_add(1, Relaxed);
+            let base = entity.get_entity();
+            base.tick_count.fetch_add(1, Relaxed);
+            // Vanilla `rideTick`: a rider starts its tick without motion
+            if base.has_vehicle() {
+                base.velocity.store(Vector3::default());
+            }
             entity.tick(entity.as_ref(), server_ref);
         };
         if let Some(islands) = islands {
