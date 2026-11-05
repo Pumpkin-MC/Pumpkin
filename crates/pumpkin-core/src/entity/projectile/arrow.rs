@@ -925,9 +925,12 @@ impl EntityBase for ArrowEntity {
                     Some(owner_entity.as_deref().unwrap_or(self)),
                 );
 
-                if is_enderman && !damage_succeeded && target.get_entity().pos.load() != target_pos
-                {
+                if is_enderman && !damage_succeeded {
                     entity.set_pos(hit_pos);
+                    if target.get_entity().pos.load() == target_pos {
+                        entity.velocity.store(velocity.multiply(-0.1, -0.1, -0.1));
+                        entity.set_rotation(entity.yaw.load() + 180.0, entity.pitch.load());
+                    }
                     self.has_hit.store(false, Ordering::Relaxed);
                     return;
                 }
