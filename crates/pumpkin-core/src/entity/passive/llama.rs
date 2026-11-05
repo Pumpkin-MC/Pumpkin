@@ -4,32 +4,23 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{
-    DataComponentImpl, EquipmentSlot, EquippableImpl, LlamaVariantImpl,
-};
+use pumpkin_data::data_component_impl::{DataComponentImpl, EquipmentSlot, LlamaVariantImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::LlamaVariant;
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{BlockState, tracked_data};
 use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::bedrock::client::set_actor_data::{
     MetadataValue, SyncedActorDataList, entity_data_key,
 };
-use pumpkin_protocol::bedrock::client::update_equip::HORSE_CONTAINER_TYPE;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
@@ -39,8 +30,8 @@ use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::passive::abstract_horse::{
-    AbstractHorse, AbstractHorseData, FLAG_TAME, follow_mommy, generate_jump_strength,
-    generate_max_health, generate_speed,
+    AbstractHorse, AbstractHorseData, BEDROCK_CHESTED_INVENTORY_SIZE, FLAG_TAME,
+    bedrock_equip_slot_nbt, follow_mommy, generate_max_health, spawn_age_up_particle, start_riding,
 };
 use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
@@ -64,8 +55,6 @@ const MAX_TEMPER: i32 = 30;
 const FOLLOW_CARAVAN_SPEED: f64 = 2.1;
 const FOLLOW_LEASH_SPEED: f64 = 2.0;
 const LLAMA_SAFE_FALL_DISTANCE: f32 = 6.0;
-const BABY_SCALE: f32 = 0.5;
-const BEDROCK_CONTAINER_SIZE: i32 = 16;
 const BEDROCK_CONTAINER_STRENGTH_MODIFIER: i32 = 3;
 
 /// Vanilla `Wolf.avoidLlama`: the stronger the llama, the likelier a wolf flees.
@@ -233,12 +222,6 @@ impl LlamaEntity {
         data
     }
 
-    fn randomize_attributes(&self) {
-        let mut rng = self.get_random();
-        let max_health = generate_max_health(|bound| rng.random_range(0..bound));
-        self.mob_entity.living_entity.set_max_health(max_health);
-    }
-
     #[must_use]
     pub fn in_caravan(&self) -> bool {
         self.caravan_head.load().is_some()
@@ -297,13 +280,104 @@ impl LlamaEntity {
         self.did_spit.store(true, Relaxed);
     }
 
-    fn play_eating_sound_varied(&self, sound: Sound) {
-        let mut rng = self.get_random();
-        self.play_entity_sound(
-            sound,
-            1.0,
-            1.0 + (rng.random::<f32>() - rng.random::<f32>()) * 0.2,
+    fn make_new_llama(&self) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            entity.entity_type,
         );
+        if self.is_trader_llama() {
+            let trader = TraderLlamaEntity::new(baby);
+            trader
+                .get_mob_entity()
+                .persistence_required
+                .store(true, Relaxed);
+            trader
+        } else {
+            Self::new(baby)
+        }
+    }
+}
+
+impl AgeableMob for LlamaEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+
+    fn age_boundary_reached(&self) {
+        let entity = self.get_entity();
+        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
+    }
+}
+
+impl Animal for LlamaEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_LLAMA_FOOD)
+    }
+
+    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
+        as_llama(partner).is_some_and(|partner| self.can_parent() && partner.can_parent())
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let baby = self.make_new_llama();
+        if let Some(baby_llama) = as_llama(baby.as_ref())
+            && let Some(other) = as_llama(partner)
+        {
+            self.set_offspring_attributes(partner, baby.as_ref());
+            let mut rng = self.get_random();
+            let mut strength =
+                rng.random_range(0..self.get_strength().max(other.get_strength())) + 1;
+            if rng.random::<f32>() < 0.03 {
+                strength += 1;
+            }
+            baby_llama.set_strength(strength);
+            baby_llama.set_variant(if rng.random::<bool>() {
+                self.get_variant()
+            } else {
+                other.get_variant()
+            });
+        }
+        baby
+    }
+}
+
+impl AbstractHorse for LlamaEntity {
+    fn horse_data(&self) -> &AbstractHorseData {
+        &self.horse_data
+    }
+
+    fn get_max_temper(&self) -> i32 {
+        MAX_TEMPER
+    }
+
+    fn get_chest_equip_sound(&self) -> Sound {
+        Sound::EntityLlamaChest
+    }
+
+    fn can_carry_chest(&self) -> bool {
+        true
+    }
+
+    fn can_perform_rearing(&self) -> bool {
+        false
+    }
+
+    fn can_eat_grass(&self) -> bool {
+        false
+    }
+
+    fn randomize_attributes(&self) {
+        let mut rng = self.get_random();
+        let max_health = generate_max_health(|bound| rng.random_range(0..bound));
+        self.mob_entity.living_entity.set_max_health(max_health);
+    }
+
+    fn follow_mommy(&self) {
+        if !self.in_caravan() && self.is_baby() {
+            follow_mommy(self);
+        }
     }
 
     fn handle_eating(&self, player: &Arc<Player>, stack: &ItemStack) -> bool {
@@ -331,23 +405,7 @@ impl LlamaEntity {
         }
 
         if self.is_baby() && age_up > 0 && !self.is_age_locked() {
-            let entity = self.get_entity();
-            let width = f64::from(entity.width());
-            let height = f64::from(entity.height());
-            let mut rng = self.get_random();
-            let pos = entity.pos.load()
-                + Vector3::new(
-                    (rng.random::<f64>() * 2.0 - 1.0) * width,
-                    rng.random::<f64>() * height + 0.5,
-                    (rng.random::<f64>() * 2.0 - 1.0) * width,
-                );
-            entity.world.load().spawn_particle(
-                pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                1,
-                Particle::HappyVillager,
-            );
+            spawn_age_up_particle(self.get_entity(), &mut self.get_random());
             self.age_up(age_up, false);
             item_used = true;
         }
@@ -361,209 +419,15 @@ impl LlamaEntity {
         }
 
         if item_used {
-            self.play_eating_sound_varied(Sound::EntityLlamaEat);
+            self.play_varied_sound(Sound::EntityLlamaEat);
         }
         item_used
     }
 
-    fn fed_food(&self, player: &Arc<Player>, stack: &mut ItemStack) -> bool {
-        let ate = self.handle_eating(player, stack);
-        if ate {
-            stack.decrement_unless_creative(player.gamemode.load(), 1);
-        }
-        ate
-    }
-
-    fn equip_chest(&self, player: &Arc<Player>, stack: &mut ItemStack) {
-        self.set_chest(true);
-        let mut rng = self.get_random();
-        self.play_entity_sound(
-            Sound::EntityLlamaChest,
-            1.0,
-            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0,
-        );
-        stack.decrement_unless_creative(player.gamemode.load(), 1);
-        self.create_inventory();
-    }
-
-    fn equip_body_armor(&self, player: &Arc<Player>, stack: &mut ItemStack) {
-        let mut equipped = stack.clone();
-        equipped.item_count = 1;
-        stack.decrement_unless_creative(player.gamemode.load(), 1);
-        let equip_sound = equipped
-            .get_data_component::<EquippableImpl>()
-            .map(|equippable| equippable.equip_sound.clone());
-        self.mob_entity
-            .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, equipped);
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        if let Some(sound) = equip_sound
-            && !entity.is_silent()
-        {
-            world.play_sound_event(&sound, self.sound_source(), &entity.pos.load());
-        }
-        world.emit_game_event(GameEvent::Equip.name(), entity.pos.load());
-    }
-
     fn do_player_ride(&self, player: &Arc<Player>) {
-        let entity = self.get_entity();
-        if self.is_trader_llama() && self.is_leashed_to_wandering_trader() {
-            return;
+        if !(self.is_trader_llama() && self.is_leashed_to_wandering_trader()) {
+            start_riding(self, player);
         }
-        self.set_eating(false);
-        player
-            .get_entity()
-            .set_rotation(entity.yaw.load(), entity.pitch.load());
-        let world = entity.world.load();
-        if let Some(vehicle) = world.get_entity_by_id(entity.entity_id) {
-            entity.add_passenger(vehicle, player.clone());
-        }
-    }
-
-    fn make_new_llama(&self) -> Arc<dyn EntityBase> {
-        let entity = self.get_entity();
-        let baby = Entity::new(
-            entity.world.load_full(),
-            entity.pos.load(),
-            entity.entity_type,
-        );
-        if self.is_trader_llama() {
-            let trader = TraderLlamaEntity::new(baby);
-            trader
-                .get_mob_entity()
-                .persistence_required
-                .store(true, Relaxed);
-            trader
-        } else {
-            Self::new(baby)
-        }
-    }
-
-    fn set_offspring_attributes(&self, partner: &dyn EntityBase, baby: &Self) {
-        let Some(partner) = partner.get_living_entity() else {
-            return;
-        };
-        let living = &self.mob_entity.living_entity;
-        let baby_living = &baby.mob_entity.living_entity;
-        let mut rng = self.get_random();
-        let mut offspring = |attribute: &Attributes, min: f64, max: f64| {
-            create_offspring_attribute(
-                living.get_attribute_base(attribute),
-                partner.get_attribute_base(attribute),
-                min,
-                max,
-                &mut rng,
-            )
-        };
-        let health = offspring(
-            &Attributes::MAX_HEALTH,
-            f64::from(generate_max_health(|_| 0)),
-            f64::from(generate_max_health(|bound| bound - 1)),
-        );
-        let jump = offspring(
-            &Attributes::JUMP_STRENGTH,
-            f64::from(generate_jump_strength(|| 0.0) as f32),
-            f64::from(generate_jump_strength(|| 1.0) as f32),
-        );
-        let speed = offspring(
-            &Attributes::MOVEMENT_SPEED,
-            f64::from(generate_speed(|| 0.0) as f32),
-            f64::from(generate_speed(|| 1.0) as f32),
-        );
-        baby_living.set_max_health(health as f32);
-        baby_living.set_attribute_base(&Attributes::JUMP_STRENGTH, jump);
-        baby_living.set_attribute_base(&Attributes::MOVEMENT_SPEED, speed);
-    }
-}
-
-fn create_offspring_attribute(
-    parent_a: f64,
-    parent_b: f64,
-    min: f64,
-    max: f64,
-    rng: &mut impl rand::Rng,
-) -> f64 {
-    let parent_a = parent_a.clamp(min, max);
-    let parent_b = parent_b.clamp(min, max);
-    let margin = 0.15 * (max - min);
-    let range = (parent_a - parent_b).abs() + margin * 2.0;
-    let average = f64::midpoint(parent_a, parent_b);
-    let baby_quality =
-        (rng.random::<f64>() + rng.random::<f64>() + rng.random::<f64>()) / 3.0 - 0.5;
-    let value = average + range * baby_quality;
-    if value > max {
-        max - (value - max)
-    } else if value < min {
-        min + (min - value)
-    } else {
-        value
-    }
-}
-
-impl AgeableMob for LlamaEntity {
-    fn get_ageable_data(&self) -> &AgeableData {
-        &self.ageable_data
-    }
-
-    fn age_boundary_reached(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(if self.is_baby() {
-            // Trader llama babies use the llama size too.
-            let llama = Entity::type_dimensions(&EntityType::LLAMA);
-            EntityDimensions::new(
-                llama.width * BABY_SCALE,
-                llama.height * BABY_SCALE,
-                llama.eye_height * BABY_SCALE,
-            )
-        } else {
-            Entity::type_dimensions(entity.entity_type)
-        });
-    }
-}
-
-impl Animal for LlamaEntity {
-    fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack.item.has_tag(&tag::Item::MINECRAFT_LLAMA_FOOD)
-    }
-
-    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
-        as_llama(partner).is_some_and(|partner| self.can_parent() && partner.can_parent())
-    }
-
-    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
-        let baby = self.make_new_llama();
-        if let Some(baby_llama) = as_llama(baby.as_ref())
-            && let Some(other) = as_llama(partner)
-        {
-            self.set_offspring_attributes(partner, baby_llama);
-            let mut rng = self.get_random();
-            let mut strength =
-                rng.random_range(0..self.get_strength().max(other.get_strength())) + 1;
-            if rng.random::<f32>() < 0.03 {
-                strength += 1;
-            }
-            baby_llama.set_strength(strength);
-            baby_llama.set_variant(if rng.random::<bool>() {
-                self.get_variant()
-            } else {
-                other.get_variant()
-            });
-        }
-        baby
-    }
-}
-
-impl AbstractHorse for LlamaEntity {
-    fn horse_data(&self) -> &AbstractHorseData {
-        &self.horse_data
-    }
-
-    fn get_max_temper(&self) -> i32 {
-        MAX_TEMPER
-    }
-
-    fn get_angry_sound(&self) -> Option<Sound> {
-        Some(Sound::EntityLlamaAngry)
     }
 
     fn bedrock_equip_slot(&self) -> usize {
@@ -571,38 +435,22 @@ impl AbstractHorse for LlamaEntity {
     }
 
     fn bedrock_equip_slots(&self) -> NbtCompound {
-        let carpet = || {
-            let mut item = NbtCompound::new();
-            // Any data value of the Bedrock carpet item.
-            item.put_short("Aux", i16::MAX);
-            item.put_string("Name", "minecraft:carpet".to_string());
-            item
-        };
-        let mut accepted = NbtCompound::new();
-        accepted.put_compound("slotItem", carpet());
-        let mut slot = NbtCompound::new();
-        slot.put_list("acceptedItems", vec![NbtTag::Compound(accepted)]);
-        slot.put_compound("item", carpet());
-        slot.put_int("slotNumber", 1);
-        let mut data = NbtCompound::new();
-        data.put_list("slots", vec![NbtTag::Compound(slot)]);
-        data
+        bedrock_equip_slot_nbt("minecraft:carpet", 1)
+    }
+
+    fn bedrock_inventory_size(&self) -> i32 {
+        BEDROCK_CHESTED_INVENTORY_SIZE
     }
 
     fn bedrock_container_data(&self) -> SyncedActorDataList {
         let mut data = SyncedActorDataList::new();
-        let container_type = if self.is_tamed() {
-            HORSE_CONTAINER_TYPE as i8
-        } else {
-            0
-        };
         data.set(
             entity_data_key::CONTAINER_TYPE,
-            MetadataValue::Byte(container_type),
+            MetadataValue::Byte(self.bedrock_container_type()),
         );
         data.set(
             entity_data_key::CONTAINER_SIZE,
-            MetadataValue::Int(BEDROCK_CONTAINER_SIZE),
+            MetadataValue::Int(self.bedrock_inventory_size()),
         );
         data.set(
             entity_data_key::CONTAINER_STRENGTH_MODIFIER,
@@ -621,19 +469,6 @@ impl AbstractHorse for LlamaEntity {
         } else {
             0
         }
-    }
-}
-
-impl LlamaEntity {
-    fn can_parent(&self) -> bool {
-        let entity = self.get_entity();
-        let living = &self.mob_entity.living_entity;
-        !entity.has_passengers()
-            && !entity.has_vehicle()
-            && self.is_tamed()
-            && !self.is_baby()
-            && living.health.load() >= living.get_max_health()
-            && self.mob_entity.is_in_love()
     }
 }
 
@@ -742,16 +577,7 @@ impl Mob for LlamaEntity {
     }
 
     fn mob_ai_step(&self) {
-        let living = &self.mob_entity.living_entity;
-        if !living.is_alive() {
-            return;
-        }
-        if self.get_random().random_range(0..900) == 0 && living.death_time.load(Relaxed) == 0 {
-            living.heal(1.0);
-        }
-        if !self.in_caravan() && self.is_baby() {
-            follow_mommy(self);
-        }
+        self.horse_ai_step();
     }
 
     fn finalize_spawn(
@@ -838,10 +664,8 @@ impl Mob for LlamaEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        if self.is_baby() {
-            entity.set_synced_data(tracked_data::llama::DATA_BABY_ID, true);
-        }
         self.init_horse_data_tracker();
+        self.init_chested_horse_data_tracker();
         entity.set_synced_data(
             tracked_data::llama::DATA_STRENGTH_ID,
             VarInt(self.get_strength()),
@@ -853,60 +677,13 @@ impl Mob for LlamaEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        // The lead, name tags and spawn eggs come before the llama's own handling.
-        if self
-            .mob_entity
-            .mob_interact(player, item_stack, self.can_be_leashed())
-        {
-            return true;
+        if let Some(result) = self.handle_important_interactions(player, item_stack) {
+            return result;
         }
-        if item_stack.item == &Item::NAME_TAG
-            || item_stack.item.registry_key.ends_with("_spawn_egg")
-        {
-            return false;
+        if let Some(result) = self.interact_with_held_item(player, item_stack, true) {
+            return result;
         }
-
-        let entity = self.get_entity();
-        let is_vehicle = entity.has_passengers();
-        let is_baby = self.is_baby();
-        let tamed = self.is_tamed();
-        let secondary_use = player.get_entity().is_sneaking();
-
-        let opens_inventory = !is_baby && tamed && secondary_use;
-        if !is_vehicle
-            && !opens_inventory
-            && (!is_baby || item_stack.item != &Item::GOLDEN_DANDELION)
-            && !item_stack.is_empty()
-        {
-            if self.is_food(item_stack) {
-                return self.fed_food(player, item_stack);
-            }
-            if !tamed {
-                self.make_mad();
-                return true;
-            }
-            if !self.has_chest() && item_stack.item == &Item::CHEST {
-                self.equip_chest(player, item_stack);
-                return true;
-            }
-        }
-
-        if is_vehicle || is_baby {
-            return self.animal_interact(player, item_stack, Sound::EntityLlamaAmbient);
-        }
-        if tamed && secondary_use {
-            self.open_custom_inventory_screen(player);
-            return true;
-        }
-        if !item_stack.is_empty()
-            && self.is_equippable_in_slot(item_stack, &EquipmentSlot::BODY)
-            && self.mob_entity.is_slot_empty(&EquipmentSlot::BODY)
-        {
-            self.equip_body_armor(player, item_stack);
-            return true;
-        }
-        self.do_player_ride(player);
-        true
+        self.horse_mob_interact(player, item_stack)
     }
 }
 
