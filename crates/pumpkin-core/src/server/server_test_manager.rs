@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock, Mutex as StdMutex};
+use std::sync::{Arc, Mutex as StdMutex};
 
 use async_trait::async_trait;
 use pumpkin_data::{BlockState, BlockStateId};
@@ -25,35 +25,18 @@ use crate::{
     world::World,
 };
 
-static GAME_TEST_QUEUE: LazyLock<StdMutex<Vec<GameTestQueueEntry>>> =
-    LazyLock::new(|| StdMutex::new(Vec::new()));
-static STOP_GAME_TESTS: AtomicBool = AtomicBool::new(false);
-static PENDING_GAME_TESTS: AtomicUsize = AtomicUsize::new(0);
+#[derive(Default)]
+pub(crate) struct GameTestServerState {
+    queue: StdMutex<Vec<GameTestQueueEntry>>,
+    stop: AtomicBool,
+    pending: AtomicUsize,
+}
 
 #[must_use]
-pub fn has_pending_game_tests() -> bool {
-    STOP_GAME_TESTS.load(Ordering::Acquire) || PENDING_GAME_TESTS.load(Ordering::Acquire) > 0
+pub fn has_pending_game_tests(server: &Server) -> bool {
+    server.game_test_state.stop.load(Ordering::Acquire)
+        || server.game_test_state.pending.load(Ordering::Acquire) > 0
 }
-
-#[derive(Clone, Copy)]
-struct ForcedGameTestChunk {
-    users: usize,
-    was_forced: bool,
-}
-
-/// `GameTest` structures must keep their chunks loaded and ticking just like vanilla's
-/// `TestInstanceBlockEntity::forceLoadChunks`. Keep a small reference count so
-/// overlapping tests share the same force-load lease and pre-existing `/forceload`
-/// chunks are never released by the `GameTest` runtime.
-/// Key uniquely identifying a force-loaded chunk requested by a `GameTest`.
-type ForcedGameTestChunkKey = (uuid::Uuid, i32, i32);
-
-/// Reference-counted map of chunks force-loaded by active `GameTest`s.
-type ForcedGameTestChunkMap = StdMutex<HashMap<ForcedGameTestChunkKey, ForcedGameTestChunk>>;
-
-/// Global registry of chunks force-loaded by the `GameTest` runtime.
-static FORCED_GAME_TEST_CHUNKS: LazyLock<ForcedGameTestChunkMap> =
-    LazyLock::new(|| StdMutex::new(HashMap::new()));
 
 pub struct GameTestQueueEntry {
     test_id: String,
@@ -115,23 +98,36 @@ impl GameTestReporter for GameTestWorldReporter {
 }
 
 pub fn enqueue_game_test(request: GameTestQueueEntry) {
-    let mut queue = GAME_TEST_QUEUE
+    let Some(server) = request.world.server.upgrade() else {
+        request.report.fail_to_start(&GameTestError::World(
+            "World is not attached to a running server".to_string(),
+        ));
+        return;
+    };
+    let mut queue = server
+        .game_test_state
+        .queue
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     queue.push(request);
-    PENDING_GAME_TESTS.store(queue.len(), Ordering::Release);
+    server
+        .game_test_state
+        .pending
+        .store(queue.len(), Ordering::Release);
 }
 
-pub fn stop_game_tests() {
+pub fn stop_game_tests(server: &Server) {
     // Keep the queue mutex held while publishing the stop request. drain_game_test_queue
-    // takes the same mutex before consuming STOP_GAME_TESTS, so a stop+new-run command
+    // takes the same mutex before consuming the stop flag, so a stop+new-run command
     // cannot race between the runner-clear and queue-drain phases.
-    let mut queue = GAME_TEST_QUEUE
+    let mut queue = server
+        .game_test_state
+        .queue
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     queue.clear();
-    PENDING_GAME_TESTS.store(0, Ordering::Release);
-    STOP_GAME_TESTS.store(true, Ordering::Release);
+    server.game_test_state.pending.store(0, Ordering::Release);
+    server.game_test_state.stop.store(true, Ordering::Release);
 }
 
 pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRunner) {
@@ -139,13 +135,15 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     // flag and draining requests. This closes the async race where a new /test run
     // could otherwise be drained before the old runner was cleared.
     let queued = {
-        let mut queue = GAME_TEST_QUEUE
+        let mut queue = server
+            .game_test_state
+            .queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if STOP_GAME_TESTS.swap(false, Ordering::AcqRel) {
+        if server.game_test_state.stop.swap(false, Ordering::AcqRel) {
             runner.clear();
         }
-        PENDING_GAME_TESTS.store(0, Ordering::Release);
+        server.game_test_state.pending.store(0, Ordering::Release);
         std::mem::take(&mut *queue)
     };
 
@@ -256,9 +254,7 @@ pub async fn prepare_test_run_with_reporter(
 
 struct ServerGameTestWorld {
     world: Arc<World>,
-    /// Chunks for which this logical test owns one reference in
-    /// `FORCED_GAME_TEST_CHUNKS`. The same adapter is retained across copy-reset
-    /// retries, so the chunks stay active for the complete retry lifecycle.
+    /// Chunks leased by this test across copy-reset retries.
     forced_chunks: StdMutex<HashSet<(i32, i32)>>,
 }
 
@@ -356,24 +352,14 @@ impl Drop for ServerGameTestWorld {
 }
 
 fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
-    let key = (world.uuid, chunk.x, chunk.y);
-    let mut leases = FORCED_GAME_TEST_CHUNKS
+    let mut leases = world
+        .game_test_forced_chunks
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(lease) = leases.get_mut(&key) {
-        lease.users = lease.users.saturating_add(1);
+    if let Some(users) = leases.get_mut(&chunk) {
+        *users = users.saturating_add(1);
         return;
     }
-
-    let was_forced = {
-        let mut forced_chunks = world
-            .forced_chunks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let was_forced = forced_chunks.contains(&chunk);
-        forced_chunks.insert(chunk);
-        was_forced
-    };
     let mut chunk_loading = world
         .level
         .chunk_loading
@@ -382,30 +368,25 @@ fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
     chunk_loading.add_force_ticket(chunk);
     chunk_loading.send_change();
     drop(chunk_loading);
-    leases.insert(
-        key,
-        ForcedGameTestChunk {
-            users: 1,
-            was_forced,
-        },
-    );
+    leases.insert(chunk, 1);
+    drop(leases);
+    world.update_active_chunks();
 }
 
 fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
-    let key = (world.uuid, chunk.x, chunk.y);
-    let mut leases = FORCED_GAME_TEST_CHUNKS
+    let mut leases = world
+        .game_test_forced_chunks
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let release_world_chunk = match leases.get_mut(&key) {
-        Some(lease) if lease.users > 1 => {
-            lease.users -= 1;
+    match leases.get_mut(&chunk) {
+        Some(users) if *users > 1 => {
+            *users -= 1;
             return;
         }
-        Some(lease) => !lease.was_forced,
+        Some(_) => {}
         None => return,
-    };
-    leases.remove(&key);
-    drop(leases);
+    }
+    leases.remove(&chunk);
 
     let mut chunk_loading = world
         .level
@@ -416,13 +397,8 @@ fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
     chunk_loading.send_change();
     drop(chunk_loading);
 
-    if release_world_chunk {
-        world
-            .forced_chunks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&chunk);
-    }
+    drop(leases);
+    world.update_active_chunks();
 }
 
 #[async_trait]

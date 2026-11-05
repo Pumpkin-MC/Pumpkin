@@ -280,6 +280,8 @@ pub struct World {
     tick_spawns: std::sync::Mutex<Vec<(u64, i32)>>,
     active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
+    /// `GameTest` force leases, separate from persistent `/forceload` chunks.
+    pub(crate) game_test_forced_chunks: std::sync::Mutex<FxHashMap<Vector2<i32>, usize>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
@@ -438,6 +440,7 @@ impl World {
             tick_spawns: std::sync::Mutex::new(Vec::new()),
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
+            game_test_forced_chunks: std::sync::Mutex::new(FxHashMap::default()),
             server,
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
@@ -447,16 +450,27 @@ impl World {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "active chunk tracking combines players and force tickets"
+    )]
     pub fn update_active_chunks(&self) {
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         let players = self.players.load();
-        let forced_chunks = self
+        let mut forced_chunks = self
             .forced_chunks
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
+        forced_chunks.extend(
+            self.game_test_forced_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .keys()
+                .copied(),
+        );
         let mut tracker = self
             .active_chunk_tracker
             .lock()

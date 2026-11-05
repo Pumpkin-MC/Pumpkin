@@ -106,6 +106,7 @@ pub struct Server {
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
     pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
+    game_test_state: server_test_manager::GameTestServerState,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -319,6 +320,7 @@ impl Server {
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            game_test_state: server_test_manager::GameTestServerState::default(),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),

@@ -134,10 +134,9 @@ impl CommandExecutor for RunExecutor {
             ));
         }
 
-        // Vanilla TestCommand::run always clears the current GameTestTicker first.
-        // Without this, issuing another /test run with a different retry mode lets
-        // two runners own the same controller/structure concurrently.
-        stop_game_tests();
+        // Vanilla TestCommand::run stops the current tests before starting a new run.
+        // Clear this server's active tests before the replacement requests are drained.
+        stop_game_tests(context.server());
 
         let number_was_supplied = context.arguments.contains_key(ARG_NUMBER_OF_TIMES);
         let number_of_times = if number_was_supplied {
@@ -224,8 +223,8 @@ impl CommandExecutor for RunExecutor {
 struct StopExecutor;
 
 impl CommandExecutor for StopExecutor {
-    fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
-        stop_game_tests();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        stop_game_tests(context.server());
         Ok(1)
     }
 }

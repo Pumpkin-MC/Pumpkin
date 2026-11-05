@@ -95,7 +95,7 @@ impl Ticker {
             }
 
             let should_tick_game_tests = (manager.runs_normally() || sprinting)
-                && (has_pending_game_tests() || !game_test_runner.is_empty());
+                && (has_pending_game_tests(server) || !game_test_runner.is_empty());
 
             if sprinting {
                 manager.start_sprint_tick_work();
