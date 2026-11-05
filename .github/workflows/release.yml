@@ -43,25 +43,9 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install musl-tools (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-
       - name: Build Release
         shell: bash
-        run: |
-          cargo build --verbose --release
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            if [ "${{ runner.arch }}" == "X64" ]; then
-              TARGET="x86_64-unknown-linux-musl"
-            elif [ "${{ runner.arch }}" == "ARM64" ]; then
-              TARGET="aarch64-unknown-linux-musl"
-            fi
-            rustup target add "$TARGET"
-            cargo build --verbose --release --target "$TARGET"
-          fi
+        run: cargo build --verbose --release
 
       - name: Prepare artifacts
         shell: bash
@@ -70,14 +54,6 @@ jobs:
           EXT=""
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            if [ "${{ runner.arch }}" == "X64" ]; then
-              TARGET="x86_64-unknown-linux-musl"
-            elif [ "${{ runner.arch }}" == "ARM64" ]; then
-              TARGET="aarch64-unknown-linux-musl"
-            fi
-            cp "target/$TARGET/release/pumpkin" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}-musl"
-          fi
 
       - name: Upload unsigned Windows executable
         if: runner.os == 'Windows'
