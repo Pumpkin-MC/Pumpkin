@@ -627,8 +627,9 @@ impl Mob for EndermanEntity {
 
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         let is_projectile = is_projectile_damage(damage_type);
-        if is_projectile {
-            return !self.repeatedly_try_to_teleport();
+        if is_projectile && !self.mob_entity.living_entity.entity.has_vehicle() {
+            self.repeatedly_try_to_teleport();
+            return false;
         }
         true
     }
@@ -680,6 +681,7 @@ impl Mob for EndermanEntity {
 
 impl EndermanEntity {
     fn repeatedly_try_to_teleport(&self) -> bool {
-        (0..64).any(|_| self.teleport_randomly())
+        !self.mob_entity.living_entity.entity.has_vehicle()
+            && (0..64).any(|_| self.teleport_randomly())
     }
 }
