@@ -59,16 +59,6 @@ pub const fn should_stop_being_angry(still_angry: bool, keeps_valid_player_targe
     !still_angry && !keeps_valid_player_target
 }
 
-#[must_use]
-const fn anger_target_matches_player(anger_target: Option<Uuid>, player: Uuid) -> bool {
-    matches!(anger_target, Some(target) if target.as_u128() == player.as_u128())
-}
-
-#[must_use]
-const fn should_refresh_anger(stays_angry: bool, target_is_alive: bool) -> bool {
-    stays_angry && target_is_alive
-}
-
 /// Players live in their own list, everything else in the entity list.
 #[must_use]
 pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
@@ -278,7 +268,7 @@ pub trait NeutralMob: Mob {
                 };
                 self.set_persistent_anger_target(Some(target.get_entity().entity_uuid));
                 self.set_anger_end_time(now + i64::from(ticks));
-            } else if should_refresh_anger(stays_angry, is_alive_target(target.as_ref())) {
+            } else if stays_angry {
                 self.start_persistent_anger_timer_at(now);
             }
         }
@@ -333,9 +323,7 @@ pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
         entity
             .get_mob()
             .and_then(Mob::as_neutral)
-            .is_some_and(|neutral| {
-                anger_target_matches_player(neutral.get_persistent_anger_target(), player_uuid)
-            })
+            .is_some_and(|neutral| neutral.get_persistent_anger_target() == Some(player_uuid))
     });
     for entity in angry_neutral_mobs {
         if let Some(neutral) = entity.get_mob().and_then(Mob::as_neutral) {
@@ -371,8 +359,7 @@ macro_rules! impl_neutral_mob {
 mod tests {
     use super::{
         DEFAULT_ANGER_DURATION, NO_ANGER_END_TIME, NeutralData, anger_end_time_from_nbt,
-        anger_target_matches_player, is_angry_at_time, should_refresh_anger,
-        should_stop_being_angry,
+        is_angry_at_time, should_stop_being_angry,
     };
     use pumpkin_nbt::compound::NbtCompound;
     use std::sync::atomic::Ordering::Relaxed;
@@ -416,24 +403,6 @@ mod tests {
         for keeps in [false, true] {
             assert!(!should_stop_being_angry(true, keeps));
         }
-    }
-
-    #[test]
-    fn dead_target_does_not_refresh_persistent_anger() {
-        assert!(!should_refresh_anger(true, false));
-        assert!(should_refresh_anger(true, true));
-        assert!(!should_refresh_anger(false, true));
-    }
-
-    #[test]
-    fn dead_player_matches_only_their_persistent_grudge() {
-        let player = uuid::Uuid::from_u128(1);
-        assert!(anger_target_matches_player(Some(player), player));
-        assert!(!anger_target_matches_player(
-            Some(uuid::Uuid::from_u128(2)),
-            player
-        ));
-        assert!(!anger_target_matches_player(None, player));
     }
 
     #[test]
