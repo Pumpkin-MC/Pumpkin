@@ -58,6 +58,7 @@ pub mod bat;
 pub mod blaze;
 pub mod breeze;
 pub mod cave_spider;
+pub mod conversion;
 pub mod creaking;
 pub mod creeper;
 pub mod crossbow_attack_mob;
@@ -145,6 +146,7 @@ pub struct MobEntity {
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
     brain: std::sync::Mutex<Option<Brain>>,
     brain_memory_clear_requested: AtomicBool,
+    brain_refresh_requested: AtomicBool,
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
@@ -293,6 +295,7 @@ impl MobEntity {
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
             brain: std::sync::Mutex::new(None),
             brain_memory_clear_requested: AtomicBool::new(false),
+            brain_refresh_requested: AtomicBool::new(false),
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
@@ -732,10 +735,17 @@ impl MobEntity {
         });
     }
 
+    pub fn request_refresh_brain(&self) {
+        self.brain_refresh_requested.store(true, Ordering::Release);
+    }
+
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
         self.with_brain(mob, |brain| brain.tick(&world, mob, time));
+        if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
+            self.refresh_brain(mob);
+        }
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -1549,25 +1559,11 @@ pub trait Mob: EntityBase + Send + Sync {
         self.mob_metadata().map(|m| m.to_bedrock_actor_data())
     }
 
-    fn get_job_site(&self) -> Option<BlockPos> {
-        None
-    }
-
-    fn is_job_site_pending(&self) -> bool {
-        false
-    }
-
-    fn release_pending_job_site(&self, _position: BlockPos) {}
-
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
     fn clear_trading_player(&self) {}
-
-    fn get_home(&self) -> Option<BlockPos> {
-        None
-    }
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
@@ -1677,6 +1673,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_max_air_supply(&self) -> i32 {
         crate::entity::breath::MAX_AIR
+    }
+
+    fn mob_decrease_air_supply(&self, current: i32) -> i32 {
+        let oxygen_bonus = self
+            .get_mob_entity()
+            .living_entity
+            .get_attribute_value(&Attributes::OXYGEN_BONUS);
+        if oxygen_bonus <= 0.0 || self.get_random().random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
+            current.wrapping_sub(1)
+        } else {
+            current
+        }
     }
 
     fn mob_increase_air_supply(&self, current: i32) -> i32 {
@@ -1840,6 +1848,9 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn on_removed(&self) {}
 
+    /// Runs when the mob dies, before the death effects, where vanilla subclasses override `die`.
+    fn on_die(&self, _source: Option<&dyn EntityBase>) {}
+
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
         None
     }
@@ -1887,6 +1898,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {}
+
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        self.get_mob_entity().try_attack(self.get_entity(), target)
+    }
+
+    fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
     fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {
@@ -2049,6 +2066,10 @@ pub trait Mob: EntityBase + Send + Sync {
     ) -> Option<spawn::SpawnGroupData> {
         self.default_finalize_spawn(world, group_data)
     }
+
+    /// The part of `finalize_spawn` that reads the biome, for spawns made while the chunk is
+    /// still being generated and `World::get_biome` cannot see it.
+    fn finalize_spawn_in_biome(&self, _biome: &'static pumpkin_data::chunk::Biome) {}
 
     /// The `finalize_spawn` of mobs without their own, for overrides that extend it.
     fn default_finalize_spawn(
@@ -2490,6 +2511,14 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.is_pushable()
     }
 
+    fn can_push_entity(&self, _other: &dyn EntityBase) -> bool {
+        true
+    }
+
+    fn can_fly_to_owner(&self) -> bool {
+        false
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -2743,14 +2772,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             || self
                 .get_mob_entity()
                 .brain_has_memory_value(crate::entity::ai::brain::memory::types::IS_PANICKING.id())
-    }
-
-    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_job_site(self)
-    }
-
-    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_home(self)
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {

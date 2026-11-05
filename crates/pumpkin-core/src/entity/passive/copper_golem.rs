@@ -46,6 +46,8 @@ use crate::entity::{
     player::Player,
 };
 
+pub const EQUIPMENT_SLOT_ANTENNA: EquipmentSlot = EquipmentSlot::SADDLE;
+
 const IGNORE_WEATHERING_TICK: i64 = -2;
 const UNSET_WEATHERING_TICK: i64 = -1;
 const WEATHERING_TICK_FROM: i64 = 504_000;
@@ -374,7 +376,7 @@ impl CopperGolemEntity {
             .entity_equipment
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .get(&EquipmentSlot::SADDLE);
+            .get(&EQUIPMENT_SLOT_ANTENNA);
         if antenna
             .item
             .has_tag(&tag::Item::MINECRAFT_SHEARABLE_FROM_COPPER_GOLEM)
@@ -394,7 +396,7 @@ impl CopperGolemEntity {
             }
             let stack = self
                 .mob_entity
-                .set_item_slot(&EquipmentSlot::SADDLE, ItemStack::EMPTY.clone());
+                .set_item_slot(&EQUIPMENT_SLOT_ANTENNA, ItemStack::EMPTY.clone());
             let pos = entity.pos.load();
             if !world.spawn_entity(Arc::new(ItemEntity::new(
                 Entity::new(
@@ -404,7 +406,8 @@ impl CopperGolemEntity {
                 ),
                 stack.clone(),
             ))) {
-                self.mob_entity.set_item_slot(&EquipmentSlot::SADDLE, stack);
+                self.mob_entity
+                    .set_item_slot(&EQUIPMENT_SLOT_ANTENNA, stack);
                 return true;
             }
             world.play_sound(Sound::EntityCopperGolemShear, SoundCategory::Players, &pos);

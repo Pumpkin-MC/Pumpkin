@@ -158,7 +158,7 @@ impl RabbitEntity {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(ClimbOnTopOfPowderSnowGoal::default()));
+            goal_selector.add_goal(1, Box::new(ClimbOnTopOfPowderSnowGoal));
             goal_selector.add_goal(1, Box::new(RabbitPanicGoal::new(FLEE_SPEED_MOD)));
             goal_selector.add_goal(2, BreedGoal::new(BREED_SPEED_MOD));
             goal_selector.add_goal(

@@ -9,6 +9,7 @@ use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 
 pub const TEMPTATION_COOLDOWN: i32 = 100;
+pub const DEFAULT_CLOSE_ENOUGH_DIST: f64 = 2.5;
 /// It never times out; it runs while the player keeps tempting.
 const NO_TIMEOUT: i32 = i32::MAX / 2;
 

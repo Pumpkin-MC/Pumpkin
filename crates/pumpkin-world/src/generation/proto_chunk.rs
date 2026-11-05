@@ -1124,9 +1124,16 @@ impl ProtoChunk {
 
         block_registry.spawn_mobs_for_chunk_generation(cache, biome, x, z);
 
-        let entities = cache
-            .get_center_chunk_mut()
-            .take_pending_structure_entities();
+        let center = cache.get_center_chunk_mut();
+        let entities = center
+            .take_pending_structure_entities()
+            .into_iter()
+            .map(|nbt| {
+                let entity_biome = structure_entity_position(&nbt)
+                    .map_or(biome, |(x, y, z)| center.get_terrain_gen_biome(x, y, z));
+                (nbt, entity_biome)
+            })
+            .collect();
         block_registry.spawn_structure_entities(entities);
 
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
@@ -1999,4 +2006,14 @@ impl GenerationCache for ProtoChunk {
     fn get_sea_level(&self) -> i32 {
         Self::get_sea_level(self)
     }
+}
+
+fn structure_entity_position(nbt: &NbtCompound) -> Option<(i32, i32, i32)> {
+    let pos = nbt.get_list("Pos")?;
+    let coordinate = |index: usize| {
+        pos.get(index)?
+            .extract_double()
+            .map(|value| value.floor() as i32)
+    };
+    Some((coordinate(0)?, coordinate(1)?, coordinate(2)?))
 }

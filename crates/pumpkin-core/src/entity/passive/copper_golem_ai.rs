@@ -6,8 +6,7 @@ use crate::entity::{
         activity::ActivityData,
         behavior::{
             AnimalPanic, CountDownCooldownTicks, DoNothing, LookAtTargetSink, MoveToTargetSink,
-            Timed, interact_with_door, random_stroll, run_one_with_conditions,
-            set_entity_look_target_sometimes,
+            Timed, door, random_stroll, run_one_with_conditions, set_entity_look_target_sometimes,
             transport_items_between_containers::TransportItemsBetweenContainers,
         },
         memory::{MemoryStatus, PackedMemories, types},
@@ -35,7 +34,7 @@ fn get_activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                 Box::new(Timed::new(AnimalPanic::new(1.5))),
                 Box::new(Timed::new(LookAtTargetSink::new(45, 90))),
                 Box::new(Timed::new(MoveToTargetSink::default())),
-                Box::new(interact_with_door::create()),
+                Box::new(door::create()),
                 Box::new(CountDownCooldownTicks::new(types::GAZE_COOLDOWN_TICKS)),
                 Box::new(CountDownCooldownTicks::new(
                     types::TRANSPORT_ITEMS_COOLDOWN_TICKS,

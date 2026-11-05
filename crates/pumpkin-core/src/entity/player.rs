@@ -1,4 +1,5 @@
 pub mod advancement;
+mod shoulders;
 pub mod statistics;
 
 use core::f32;
@@ -770,6 +771,7 @@ pub struct Player {
     pub post_effects: std::sync::Mutex<Vec<String>>,
     /// Inbound packets waiting to be processed during player tick.
     pub inbound_packets: SegQueue<RawPacket>,
+    shoulders: Mutex<shoulders::Shoulders>,
 }
 
 use base64::prelude::*;
@@ -983,6 +985,7 @@ impl Player {
 
         Self {
             living_entity,
+            shoulders: Mutex::new(shoulders::Shoulders::default()),
             config: ArcSwap::new(Arc::new(config)),
             advancements: Arc::new(Mutex::new(
                 server
@@ -1731,21 +1734,7 @@ impl Player {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
-        if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
-            for (enchantment, level) in enchantments.enchantment.iter() {
-                for post_effect in enchantment.get_post_attack_effects() {
-                    if post_effect.affected
-                        == Some(pumpkin_data::enchantment::EnchantmentTarget::Victim)
-                        && let pumpkin_data::enchantment::EnchantmentEntityEffect::Ignite {
-                            duration,
-                        } = &post_effect.effect
-                    {
-                        let duration_seconds = duration.calculate(*level);
-                        victim_entity.set_on_fire_for_ticks((duration_seconds * 20.0) as u32);
-                    }
-                }
-            }
-        }
+        crate::enchantment::EnchantmentHelper::on_post_attack(victim_entity, &item_stack);
 
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
@@ -3110,6 +3099,7 @@ impl Player {
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
         self.process_inbound_packets();
+        self.tick_shoulders();
 
         if self.is_spectator() {
             self.living_entity
@@ -4927,6 +4917,11 @@ impl Player {
             return false;
         }
         // TODO: Vanilla `Player.hurtServer` difficulty scaling when `scalesWithDifficulty`
+        if !self.get_entity().is_invulnerable_to(&damage_type, cause)
+            && !self.living_entity.is_dead_or_dying()
+        {
+            self.release_shoulders();
+        }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
     }
@@ -5051,10 +5046,8 @@ impl Player {
             let pos_f64 = self.living_entity.entity.pos.load();
 
             let village_pos = world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_nearest_job_site(player_pos, 64)
+                .is_village(&player_pos)
+                .then_some(player_pos)
                 .or_else(|| {
                     world.raids.try_lock().ok().and_then(|raids| {
                         raids
@@ -5352,6 +5345,7 @@ impl Player {
     }
 
     pub fn handle_killed(&self, death_msg: &TextComponent) {
+        self.release_shoulders();
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         );
@@ -5451,6 +5445,7 @@ impl Player {
 
         // Stop elytra flight and reset sneaking when switching to spectator mode
         if gamemode == GameMode::Spectator {
+            self.release_shoulders();
             let entity = self.get_entity();
             if entity.is_fall_flying() {
                 entity.set_fall_flying(false);
@@ -7663,6 +7658,7 @@ impl EntityBase for Player {
 
     #[expect(clippy::too_many_lines)]
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_shoulders(nbt);
         nbt.put_int("DataVersion", DATA_VERSION);
         self.inventory.write_nbt(nbt);
         self.ender_chest_inventory.write_nbt(nbt);
@@ -7785,6 +7781,7 @@ impl EntityBase for Player {
 
     #[expect(clippy::too_many_lines)]
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.read_shoulders(nbt);
         self.inventory.read_nbt_non_mut(nbt);
         self.ender_chest_inventory.read_nbt_non_mut(nbt);
         self.living_entity

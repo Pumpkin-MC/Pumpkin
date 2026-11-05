@@ -29,7 +29,7 @@ use rand::RngExt;
 use rand::seq::IndexedRandom;
 
 use super::villager::{
-    apply_potion, apply_random_dye, apply_random_stew_effect, trigger_trade_advancement,
+    apply_potion, apply_random_dye, apply_stew_effect, trigger_trade_advancement,
 };
 use crate::entity::ageable::{AgeableData, AgeableMob};
 use crate::entity::ai::behavior::fleeing::{self, Flee};
@@ -93,8 +93,8 @@ fn add_offers_from_dynamic_trades(
                     apply_potion(&mut output, potion_name);
                 }
             }
-            DynamicTradeModifier::SuspiciousStew => {
-                apply_random_stew_effect(rng, &mut output);
+            DynamicTradeModifier::SuspiciousStew(effects) => {
+                apply_stew_effect(rng, &mut output, effects);
             }
             DynamicTradeModifier::Potion(potion) => apply_potion(&mut output, potion),
             _ => {}
