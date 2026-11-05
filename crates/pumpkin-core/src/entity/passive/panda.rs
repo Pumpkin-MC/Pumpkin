@@ -653,6 +653,20 @@ impl PandaEntity {
         true
     }
 
+    /// Item entities within `range` blocks of the panda's box that it would pick up and eat, as
+    /// vanilla `getEntitiesOfClass(ItemEntity.class, box.inflate(range), Panda::canPickUpAndEat)`.
+    fn ground_items_to_eat(&self, range: f64) -> Vec<Arc<dyn EntityBase>> {
+        let entity = self.get_entity();
+        let area = entity.bounding_box.load().expand(range, range, range);
+        entity
+            .world
+            .load()
+            .get_entities_at_box(&area)
+            .into_iter()
+            .filter(|candidate| candidate.get_item_entity().is_some_and(can_pick_up_and_eat))
+            .collect()
+    }
+
     /// Vanilla `canPerformAction`: the panda is free to walk, attack, flee and look around.
     #[must_use]
     pub fn can_perform_action(&self) -> bool {
@@ -2166,6 +2180,48 @@ mod tests {
         assert!(panda.drop_main_hand_item());
         crate::entity::mob::pick_up_nearby_items(panda.as_ref());
         assert!(panda.is_holding_item());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sit_goal_looks_for_food_on_the_ground_and_walks_to_it() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mut goal = PandaSitGoal::default();
+
+        // Nothing to eat: not even a stick (not in the tag) nor an item that cannot be taken yet.
+        drop_item(&world, ItemStack::new(1, &Item::STICK), 3.5, 0.5);
+        let delayed = drop_item(&world, ItemStack::new(1, &Item::BAMBOO), 3.5, 0.5);
+        delayed.set_pickup_delay(ItemEntity::DEFAULT_PICKUP_DELAY);
+        assert!(!goal.can_start(panda.as_ref()));
+        goal.start(panda.as_ref());
+        assert!(
+            panda.is_navigator_idle(),
+            "walked to something it cannot eat"
+        );
+        assert!(!panda.is_sitting());
+
+        // Food beyond 6 blocks does not start the goal, but the start still walks to it (8 blocks).
+        delayed.set_pickup_delay(0);
+        delayed.get_entity().set_pos(Vector3::new(7.5, 64.0, 0.5));
+        assert!(!goal.can_start(panda.as_ref()));
+        goal.start(panda.as_ref());
+        assert!(!panda.is_navigator_idle());
+        assert!(!panda.is_sitting(), "sat down with an empty mouth");
+        let speed = panda.mob_entity.steered().navigator().get_speed_modifier();
+        assert!((speed - 1.2).abs() < 1e-9, "walking speed was {speed}");
+
+        // Within 6 blocks it starts, and a sulking panda or one that cannot act does not.
+        delayed.get_entity().set_pos(Vector3::new(5.5, 64.0, 0.5));
+        assert!(goal.can_start(panda.as_ref()));
+        panda.set_unhappy_counter(3);
+        assert!(!goal.can_start(panda.as_ref()));
+        panda.set_unhappy_counter(0);
+        panda.set_on_back(true);
+        assert!(!goal.can_start(panda.as_ref()));
         world.level.shutdown().await;
         Ok(())
     }

@@ -40,6 +40,12 @@ const LAZY_SIT_COOLDOWN_RANGE_SECONDS: i32 = 50;
 const SIT_COOLDOWN_RANGE_SECONDS: i32 = 150;
 const SIT_COOLDOWN_MIN_SECONDS: i32 = 10;
 const TICKS_PER_SECOND: i32 = 20;
+/// `PandaSitGoal.canUse` looks for food on the ground within this many blocks of the panda's box.
+const SIT_GROUND_ITEM_START_RANGE: f64 = 6.0;
+/// `PandaSitGoal.start` walks to the first food within this many blocks of the panda's box.
+const SIT_GROUND_ITEM_WALK_RANGE: f64 = 8.0;
+/// Speed modifier with which `PandaSitGoal.start` walks to the food.
+const SIT_GROUND_ITEM_SPEED: f64 = 1.2;
 /// Server ticks the panda waits after a sulk before it sulks about missing bamboo again.
 const UNHAPPY_COOLDOWN_TICKS: i32 = 600;
 
@@ -370,10 +376,10 @@ pub fn hurt_by_target_goal() -> RevengeGoal {
 }
 
 /// Vanilla `PandaSitGoal`: a panda that holds an item sits down with it (and eats it, see
-/// `Panda.handleEating`). Leaving the goal drops the item and keeps the panda from sitting
-/// for a while. The ground item branch of `canUse`/`start` (walk to a thrown bamboo or cake
-/// within 6 and 8 blocks) belongs to the item pick-up, which is not ported yet, so a panda
-/// that holds nothing never starts this goal.
+/// `Panda.handleEating`). A panda with an empty mouth starts the goal when there is something
+/// to eat on the ground within 6 blocks and walks towards it; picking it up is
+/// `Panda.pickUpItem`. Leaving the goal drops the item and keeps the panda from sitting for a
+/// while.
 #[derive(Default)]
 pub struct PandaSitGoal {
     /// Vanilla `cooldown`: the `tick_count` before which the panda does not sit again.
@@ -412,7 +418,7 @@ impl PandaSitGoal {
 
 impl Goal for PandaSitGoal {
     /// Vanilla `canUse`: not in cooldown, an adult out of the water that can act, not sulking
-    /// and holding an item.
+    /// and either holding an item or with food on the ground nearby.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -422,7 +428,10 @@ impl Goal for PandaSitGoal {
             && !panda.get_entity().is_in_water()
             && panda.can_perform_action()
             && panda.get_unhappy_counter() <= 0
-            && panda.is_holding_item()
+            && (panda.is_holding_item()
+                || !panda
+                    .ground_items_to_eat(SIT_GROUND_ITEM_START_RANGE)
+                    .is_empty())
     }
 
     /// Vanilla `canContinueToUse`.
@@ -433,12 +442,24 @@ impl Goal for PandaSitGoal {
         })
     }
 
-    /// Vanilla `start`: sit down with the held item and clear the cooldown.
+    /// Vanilla `start`: sit down with the held item, or with an empty mouth walk to the first
+    /// food on the ground. Either way the cooldown is cleared.
     fn start(&mut self, mob: &dyn Mob) {
-        if let Some(panda) = as_panda(mob)
-            && panda.is_holding_item()
-        {
-            panda.try_to_sit();
+        if let Some(panda) = as_panda(mob) {
+            if panda.is_holding_item() {
+                panda.try_to_sit();
+            } else if let Some(item) = panda
+                .ground_items_to_eat(SIT_GROUND_ITEM_WALK_RANGE)
+                .first()
+            {
+                let pos = panda.get_entity().pos.load();
+                let target = item.get_entity().pos.load();
+                panda
+                    .mob_entity
+                    .steered()
+                    .navigator()
+                    .set_progress(NavigatorGoal::new(pos, target, SIT_GROUND_ITEM_SPEED));
+            }
         }
         self.cooldown = 0;
     }
