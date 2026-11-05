@@ -48,7 +48,8 @@ impl TeleportTowardsPlayerGoal {
 
     /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
-        !player.get_entity().has_vehicle()
+        player.living_entity.is_alive()
+            && !player.get_entity().has_vehicle()
             && (self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world))
     }
 
@@ -102,7 +103,10 @@ impl Goal for TeleportTowardsPlayerGoal {
         } else if self.target_player.is_some() {
             false
         } else if let Some(target) = &self.committed_target {
-            if !target.get_entity().is_alive() {
+            if target
+                .get_living_entity()
+                .is_none_or(|living| !living.is_alive())
+            {
                 return false;
             }
             let mob_entity = mob.get_mob_entity();

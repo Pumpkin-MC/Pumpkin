@@ -4,13 +4,11 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
-use crate::entity::predicate::EntityPredicate;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
@@ -60,6 +58,16 @@ pub const fn should_stop_being_angry(still_angry: bool, keeps_valid_player_targe
     !still_angry && !keeps_valid_player_target
 }
 
+#[must_use]
+const fn anger_target_matches_player(anger_target: Option<Uuid>, player: Uuid) -> bool {
+    matches!(anger_target, Some(target) if target.as_u128() == player.as_u128())
+}
+
+#[must_use]
+const fn should_refresh_anger(stays_angry: bool, target_is_alive: bool) -> bool {
+    stays_angry && target_is_alive
+}
+
 /// Players live in their own list, everything else in the entity list.
 #[must_use]
 pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
@@ -72,6 +80,12 @@ pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
 /// A player the mob may hold a grudge against.
 fn is_valid_player_target(target: &dyn EntityBase) -> bool {
     target.get_player().is_some_and(Player::is_valid_mob_target)
+}
+
+fn is_alive_target(target: &dyn EntityBase) -> bool {
+    target
+        .get_living_entity()
+        .is_some_and(|living| living.is_alive())
 }
 
 /// a timed grudge plus the entity it is held against.
@@ -210,7 +224,7 @@ pub trait NeutralMob: Mob {
             return;
         };
         if let Some(target) = find_by_uuid(world, uuid)
-            && target.get_entity().is_alive()
+            && is_alive_target(target.as_ref())
             && self.can_attack(target.as_ref())
         {
             self.set_mob_target(Some(target), TargetReason::Angry);
@@ -232,7 +246,7 @@ pub trait NeutralMob: Mob {
 
         // Grudge holder killed by someone else
         if let Some(previous) = &target
-            && !previous.get_entity().is_alive()
+            && !is_alive_target(previous.as_ref())
             && previous.get_mob().is_some()
             && anger_target.is_some_and(|angry_at| angry_at == previous.get_entity().entity_uuid)
         {
@@ -240,9 +254,18 @@ pub trait NeutralMob: Mob {
             return;
         }
 
+        if let Some(previous) = &target
+            && !is_alive_target(previous.as_ref())
+        {
+            self.set_mob_target(None, TargetReason::ForgotTarget);
+        }
+
         let stays_angry = self.stays_angry_with_target();
 
-        if let Some(target) = &target {
+        if let Some(target) = target
+            .as_ref()
+            .filter(|target| is_alive_target(target.as_ref()))
+        {
             let is_new =
                 anger_target.is_none_or(|angry_at| angry_at != target.get_entity().entity_uuid);
             if is_new {
@@ -254,15 +277,15 @@ pub trait NeutralMob: Mob {
                 };
                 self.set_persistent_anger_target(Some(target.get_entity().entity_uuid));
                 self.set_anger_end_time(now + i64::from(ticks));
-            } else if stays_angry {
+            } else if should_refresh_anger(stays_angry, is_alive_target(target.as_ref())) {
                 self.start_persistent_anger_timer_at(now);
             }
         }
 
         let keeps_valid_player_target = stays_angry
-            && target
-                .as_ref()
-                .is_some_and(|target| is_valid_player_target(target.as_ref()));
+            && target.as_ref().is_some_and(|target| {
+                is_alive_target(target.as_ref()) && is_valid_player_target(target.as_ref())
+            });
         if anger_target.is_some()
             && should_stop_being_angry(self.is_angry_at_age(now), keeps_valid_player_target)
         {
@@ -297,27 +320,24 @@ pub trait NeutralMob: Mob {
     }
 }
 
-/// Vanilla `tellNeutralMobsThatIDied` range.
-const DEATH_NOTICE_RANGE_XZ: f64 = 32.0;
-const DEATH_NOTICE_RANGE_Y: f64 = 10.0;
-
-/// Neutral mobs near a dead player drop the grudge, when `forgive_dead_players` is on.
+/// Neutral mobs holding a grudge against a dead player drop it when `forgive_dead_players` is on.
 pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
     if !world.level_info.load().game_rules.forgive_dead_players {
         return;
     }
 
-    let pos = player.get_entity().block_pos.load().to_f64();
-    let search_box = BoundingBox::new(pos, pos.add_raw(1.0, 1.0, 1.0)).expand(
-        DEATH_NOTICE_RANGE_XZ,
-        DEATH_NOTICE_RANGE_Y,
-        DEATH_NOTICE_RANGE_XZ,
-    );
-    for other in world.get_entities_at_box(&search_box) {
-        if !EntityPredicate::ExceptSpectator.test(other.get_entity()) {
-            continue;
-        }
-        if let Some(neutral) = other.get_mob().and_then(Mob::as_neutral) {
+    let player_uuid = player.get_entity().entity_uuid;
+    let mut angry_neutral_mobs = Vec::new();
+    world.extend_entities_where(&mut angry_neutral_mobs, usize::MAX, |entity| {
+        entity
+            .get_mob()
+            .and_then(Mob::as_neutral)
+            .is_some_and(|neutral| {
+                anger_target_matches_player(neutral.get_persistent_anger_target(), player_uuid)
+            })
+    });
+    for entity in angry_neutral_mobs {
+        if let Some(neutral) = entity.get_mob().and_then(Mob::as_neutral) {
             neutral.player_died(player, world);
         }
     }
@@ -350,7 +370,8 @@ macro_rules! impl_neutral_mob {
 mod tests {
     use super::{
         DEFAULT_ANGER_DURATION, NO_ANGER_END_TIME, NeutralData, anger_end_time_from_nbt,
-        is_angry_at_time, should_stop_being_angry,
+        anger_target_matches_player, is_angry_at_time, should_refresh_anger,
+        should_stop_being_angry,
     };
     use pumpkin_nbt::compound::NbtCompound;
     use std::sync::atomic::Ordering::Relaxed;
@@ -394,6 +415,24 @@ mod tests {
         for keeps in [false, true] {
             assert!(!should_stop_being_angry(true, keeps));
         }
+    }
+
+    #[test]
+    fn dead_target_does_not_refresh_persistent_anger() {
+        assert!(!should_refresh_anger(true, false));
+        assert!(should_refresh_anger(true, true));
+        assert!(!should_refresh_anger(false, true));
+    }
+
+    #[test]
+    fn dead_player_matches_only_their_persistent_grudge() {
+        let player = uuid::Uuid::from_u128(1);
+        assert!(anger_target_matches_player(Some(player), player));
+        assert!(!anger_target_matches_player(
+            Some(uuid::Uuid::from_u128(2)),
+            player
+        ));
+        assert!(!anger_target_matches_player(None, player));
     }
 
     #[test]
