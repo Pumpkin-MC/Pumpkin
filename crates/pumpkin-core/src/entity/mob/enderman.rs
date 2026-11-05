@@ -142,7 +142,7 @@ impl EndermanEntity {
         let target_pos = target.get_entity().pos.load();
 
         let dx = pos.x - target_pos.x;
-        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET) - (target_pos.y + PLAYER_EYE_HEIGHT);
+        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET) - (target_pos.y + target.get_entity().get_eye_height());
         let dz = pos.z - target_pos.z;
         let dist = (dx * dx + dy * dy + dz * dz).sqrt();
 
@@ -167,6 +167,9 @@ impl EndermanEntity {
 
     pub fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
+        if entity.has_vehicle() {
+            return false;
+        }
         let origin = entity.pos.load();
         let world = entity.world.load();
 
@@ -207,17 +210,6 @@ impl EndermanEntity {
 
         let new_pos = Vector3::new(x, target_y, z);
 
-        for pos in &[origin, new_pos] {
-            world.spawn_particle(
-                *pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                128,
-                Particle::Portal,
-            );
-            world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
-        }
-
         if let Some(server) = world.server.upgrade() {
             let mut event =
                 crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
@@ -232,6 +224,32 @@ impl EndermanEntity {
         }
 
         entity.teleport(new_pos, None, None, &world);
+        world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::Teleport.name(),
+            new_pos,
+        );
+        for pos in &[origin, new_pos] {
+            world.spawn_particle(
+                *pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                128,
+                Particle::Portal,
+            );
+            world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
+        }
+        let difference = BlockPos::new(
+            ((new_pos.x - origin.x) as i32).clamp(-127, 127),
+            ((new_pos.y - origin.y) as i32).clamp(-127, 127),
+            ((new_pos.z - origin.z) as i32).clamp(-127, 127),
+        );
+        world.sync_world_event(
+            pumpkin_data::world::WorldEvent::ParticlesEndermanTeleport,
+            entity.block_pos.load(),
+            ((difference.0.x & 0xff) << 16)
+                | ((difference.0.y & 0xff) << 8)
+                | (difference.0.z & 0xff),
+        );
 
         self.mob_entity.steered().navigator().stop();
 
@@ -397,12 +415,37 @@ impl Mob for EndermanEntity {
         if let Some(block_state) = self.carried_block.load() {
             nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
         }
+        self.write_anger_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(block_state) = nbt.get_int("carriedBlockState") {
-            self.set_carried_block(BlockStateId::new(block_state as u16));
+        if let Some(Some(block_state)) = nbt
+            .get_int("carriedBlockState")
+            .map(|block_state| BlockStateId::new(block_state as u16))
+            && block_state != BlockStateId::AIR
+        {
+            self.set_carried_block(Some(block_state));
         }
+        self.read_anger_nbt(nbt);
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        self.get_carried_block().is_some()
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.is_creepy() {
+            Sound::EntityEndermanScream
+        } else {
+            Sound::EntityEndermanAmbient
+        })
+    }
+
+    fn mob_ai_step(&self) {
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(false, Ordering::Relaxed);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

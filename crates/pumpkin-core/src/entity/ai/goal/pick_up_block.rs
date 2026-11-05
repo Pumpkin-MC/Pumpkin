@@ -4,6 +4,7 @@ use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
 use pumpkin_data::BlockStateId;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -91,8 +92,8 @@ impl Goal for PickUpBlockGoal {
             return;
         }
 
-        // TODO: Emit game event (BLOCK_DESTROY)
         world.set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+        world.emit_game_event(GameEvent::BlockDestroy.name(), target_pos.to_f64());
         self.enderman.set_carried_block(Some(default_state_id));
     }
 }
