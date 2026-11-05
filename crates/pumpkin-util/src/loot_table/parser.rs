@@ -4,7 +4,7 @@ use super::{
     DynamicLootCondition as Condition, DynamicLootEntry as Entry,
     DynamicLootEntryKind as EntryKind, DynamicLootFunction as Function, DynamicLootPool as Pool,
     DynamicLootTable as Table, LootBonusFormula, LootEntityTarget, LootFunctionKind,
-    LootNumberProvider,
+    LootNumberProvider, LootStewEffect,
 };
 
 const MAX_PREDICATE_DEPTH: usize = 128;
@@ -56,6 +56,20 @@ fn many(value: &Value) -> &[Value] {
     value
         .as_array()
         .map_or_else(|| std::slice::from_ref(value), Vec::as_slice)
+}
+
+fn stew_effects(function: &Value) -> Option<Vec<LootStewEffect>> {
+    function
+        .get("effects")
+        .map_or(&[][..], many)
+        .iter()
+        .map(|effect| {
+            Some(LootStewEffect {
+                effect: effect.get("type")?.as_str()?.to_owned().into(),
+                duration: provider(effect.get("duration")?)?,
+            })
+        })
+        .collect()
 }
 
 fn all(conditions: Vec<Condition>) -> Condition {
@@ -508,6 +522,9 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
                         LootFunctionKind::LimitCount { min, max }
                     }
                     "explosion_decay" => LootFunctionKind::ExplosionDecay,
+                    "set_stew_effect" => {
+                        LootFunctionKind::SetStewEffect(stew_effects(function)?.into())
+                    }
                     _ => return None,
                 };
                 let enchantment = function
