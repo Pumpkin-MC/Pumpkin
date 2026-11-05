@@ -247,13 +247,6 @@ impl EndermanEntity {
         entity.teleport(new_pos, None, None, &world);
         world.emit_game_event(pumpkin_data::game_event::GameEvent::Teleport.name(), origin);
         for pos in &[origin, new_pos] {
-            world.spawn_particle(
-                *pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                128,
-                Particle::Portal,
-            );
             world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
         }
         let destination_block_pos = entity.block_pos.load();
