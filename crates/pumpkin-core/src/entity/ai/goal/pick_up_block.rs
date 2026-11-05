@@ -78,7 +78,7 @@ impl Goal for PickUpBlockGoal {
             return;
         }
 
-        let default_state_id = block.default_state.id;
+        let carried_state_id = world.get_block_state_id(&target_pos);
         let mut event =
             crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
                 entity.entity_id,
@@ -94,6 +94,6 @@ impl Goal for PickUpBlockGoal {
 
         world.set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
         world.emit_game_event(GameEvent::BlockDestroy.name(), target_pos.to_f64());
-        self.enderman.set_carried_block(Some(default_state_id));
+        self.enderman.set_carried_block(Some(carried_state_id));
     }
 }

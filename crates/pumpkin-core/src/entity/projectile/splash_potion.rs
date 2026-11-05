@@ -283,7 +283,11 @@ impl EntityBase for SplashPotionEntity {
         let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
-                if hurts_water_sensitive_entities {
+                if hurts_water_sensitive_entities
+                    && cand
+                        .cast_any()
+                        .is::<crate::entity::mob::enderman::EndermanEntity>()
+                {
                     cand.damage_with_context(
                         cand.as_ref(),
                         1.0,
