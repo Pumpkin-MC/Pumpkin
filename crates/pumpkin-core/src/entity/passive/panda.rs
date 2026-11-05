@@ -8,7 +8,6 @@ use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::PandaGene;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
@@ -20,10 +19,15 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
-    ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+    ai::{
+        behavior::fleeing::{self, Flee},
+        goal::{
+            avoid_entity::not_spectator, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+            follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+            wander_around::WanderAroundGoal,
+        },
+        target_match::TargetMatch,
     },
     mob::{
         Mob, MobEntity,
@@ -37,7 +41,15 @@ use move_control::PandaMoveControl;
 
 mod move_control;
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::BAMBOO];
+/// Vanilla `PandaAvoidGoal` x2: a worried panda keeps clear of players and monsters.
+const PANDA_FLEES: &[Flee] = &[
+    Flee::new(6, TargetMatch::Type(&EntityType::PLAYER), 8.0, 2.0, 2.0)
+        .when(is_worried_and_can_perform_action)
+        .matching(not_spectator),
+    Flee::new(6, TargetMatch::Monster, 4.0, 2.0, 2.0)
+        .when(is_worried_and_can_perform_action)
+        .matching(not_spectator),
+];
 
 /// Vanilla `Mob.rotlerp`: moves `from` towards `to` by at most `max` degrees and leaves the
 /// result signed. `MoveControl::rotlerp` wraps into 0 to 360 instead, which would turn a pitch
@@ -128,6 +140,11 @@ fn as_panda(mob: &dyn Mob) -> Option<&PandaEntity> {
     mob.cast_any().downcast_ref::<PandaEntity>()
 }
 
+/// Whether a worried panda may flee: vanilla `PandaAvoidGoal.canUse` before the avoid check.
+fn is_worried_and_can_perform_action(mob: &dyn Mob) -> bool {
+    as_panda(mob).is_some_and(|panda| panda.is_worried() && panda.can_perform_action())
+}
+
 /// Vanilla `Level.isThundering`, without the check that the dimension has weather.
 fn is_thundering(world: &World) -> bool {
     let weather = world.weather.lock().unwrap_or_else(PoisonError::into_inner);
@@ -178,16 +195,24 @@ impl PandaEntity {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
+            goal_selector.add_goal(2, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                7,
+                4,
+                Box::new(TemptGoal::with_tag(
+                    1.0,
+                    &tag::Item::MINECRAFT_PANDA_FOOD,
+                    false,
+                )),
+            );
+            fleeing::apply(goal_selector, PANDA_FLEES);
+            goal_selector.add_goal(
+                9,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(13, Box::new(FollowParentGoal::new(1.25)));
+            goal_selector.add_goal(14, Box::new(WanderAroundGoal::water_avoiding(1.0)));
         };
 
         mob_arc
@@ -581,8 +606,15 @@ impl Mob for PandaEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::ai::goal::avoid_entity::AvoidEntityGoal;
     use crate::entity::ai::test_support::world;
+    use crate::entity::mob::creeper::CreeperEntity;
+    use pumpkin_data::Block;
+    use pumpkin_data::item::Item;
+    use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::chunk::ChunkData;
+    use pumpkin_world::world::BlockFlags;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -720,6 +752,55 @@ mod tests {
         let expected = if foal.is_weak() { 10.0 } else { 20.0 };
         assert!((foal.mob_entity.living_entity.get_max_health() - expected).abs() < f32::EPSILON);
         Ok(())
+    }
+
+    fn stone_floor(world: &Arc<World>) {
+        for chunk_x in -2..=1 {
+            for chunk_z in -2..=1 {
+                world.level.loaded_chunks.insert(
+                    Vector2::new(chunk_x, chunk_z),
+                    ChunkData::empty_sync(chunk_x, chunk_z),
+                );
+            }
+        }
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        for x in -20..=20 {
+            for z in -20..=20 {
+                world.set_block_state(
+                    &BlockPos::new(x, 63, z),
+                    Block::STONE.default_state.id,
+                    flags,
+                );
+            }
+        }
+    }
+
+    /// Spawns a panda standing on the stone floor.
+    fn spawn_panda(world: &Arc<World>, x: f64, z: f64) -> Arc<PandaEntity> {
+        let panda = PandaEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(x, 64.0, z),
+            &EntityType::PANDA,
+        ));
+        panda.get_entity().on_ground.store(true, Ordering::Relaxed);
+        world.spawn_entity(panda.clone());
+        panda
+    }
+
+    /// Runs `ticks` AI steps and tells whether the avoid goal ran during any of them.
+    fn ran_avoid_goal(panda: &Arc<PandaEntity>, ticks: i32) -> bool {
+        let mut ran = false;
+        for tick in 1..=ticks {
+            panda.get_entity().tick_count.store(tick, Ordering::Relaxed);
+            panda
+                .mob_entity
+                .server_ai_step(panda.as_ref(), panda.as_ref());
+            ran |= panda
+                .mob_entity
+                .goals_selector
+                .is_running::<AvoidEntityGoal>();
+        }
+        ran
     }
 
     fn set_thunder(world: &World, level: f32) {
@@ -889,6 +970,36 @@ mod tests {
             (pitch + 45.0).abs() < 0.01,
             "the pitch towards an elevated target was {pitch}"
         );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn only_a_worried_panda_that_can_act_flees_a_monster() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let creeper = CreeperEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(3.5, 64.0, 0.5),
+            &EntityType::CREEPER,
+        ));
+        creeper
+            .get_entity()
+            .on_ground
+            .store(true, Ordering::Relaxed);
+        world.spawn_entity(creeper);
+
+        let calm = spawn_panda(&world, 0.5, 0.5);
+        let sitting = spawn_panda(&world, 0.5, 2.5);
+        set_genes(&sitting, PandaGene::Worried, PandaGene::Normal);
+        sitting.set_sitting(true);
+        let worried = spawn_panda(&world, 6.5, 0.5);
+        set_genes(&worried, PandaGene::Worried, PandaGene::Normal);
+
+        assert!(!ran_avoid_goal(&calm, 40), "a calm panda fled");
+        assert!(!ran_avoid_goal(&sitting, 40), "a sitting panda fled");
+        assert!(ran_avoid_goal(&worried, 40), "a worried panda never fled");
         world.level.shutdown().await;
         Ok(())
     }
