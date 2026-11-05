@@ -21,6 +21,7 @@ pub struct EscapeDangerGoal {
     target: Option<Vector3<f64>>,
     running: bool,
     calm_while_mob_controlled: bool,
+    teleport_to_owner: bool,
 }
 
 impl EscapeDangerGoal {
@@ -32,7 +33,15 @@ impl EscapeDangerGoal {
             target: None,
             running: false,
             calm_while_mob_controlled: false,
+            teleport_to_owner: false,
         })
+    }
+
+    #[must_use]
+    pub fn tamable(speed: f64) -> Box<Self> {
+        let mut goal = Self::new(speed);
+        goal.teleport_to_owner = true;
+        goal
     }
 
     /// Horses don't panic while they count as mob controlled.
@@ -156,6 +165,12 @@ impl Goal for EscapeDangerGoal {
     fn stop(&mut self, _mob: &dyn Mob) {
         self.target = None;
         self.running = false;
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        if self.teleport_to_owner {
+            super::follow_owner::FollowOwnerGoal::teleport_if_needed(mob);
+        }
     }
 
     fn controls(&self) -> Controls {

@@ -10,6 +10,7 @@ pub struct WaterAvoidingRandomFlyingGoal {
     speed: f64,
     target: Option<Vector3<f64>>,
     chance: i32,
+    perch_in_trees: bool,
 }
 
 impl WaterAvoidingRandomFlyingGoal {
@@ -20,7 +21,56 @@ impl WaterAvoidingRandomFlyingGoal {
             speed,
             target: None,
             chance: to_goal_ticks(120),
+            perch_in_trees: false,
         }
+    }
+
+    #[must_use]
+    pub const fn parrot(speed: f64) -> Self {
+        let mut goal = Self::new(speed);
+        goal.perch_in_trees = true;
+        goal
+    }
+
+    fn parrot_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
+        use pumpkin_data::tag::{self, Taggable};
+        use pumpkin_util::math::position::BlockPos;
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let mut target = if entity.is_in_water() {
+            crate::entity::ai::util::land_random_pos::get_pos(mob, 15, 15)
+        } else {
+            None
+        };
+        if mob.get_random().random::<f32>() >= super::wander_around::PROBABILITY {
+            target = None;
+            // BlockPos.betweenClosed iterates x fastest, then y, then z.
+            'search: for z in (pos.z - 3.0).floor() as i32..=(pos.z + 3.0).floor() as i32 {
+                for y in (pos.y - 6.0).floor() as i32..=(pos.y + 6.0).floor() as i32 {
+                    for x in (pos.x - 3.0).floor() as i32..=(pos.x + 3.0).floor() as i32 {
+                        let at = BlockPos::new(x, y, z);
+                        if at == entity.block_pos.load() {
+                            continue;
+                        }
+                        let below = world.get_block(&at.down());
+                        if (below.has_tag(&tag::Block::MINECRAFT_LEAVES)
+                            || below.has_tag(&tag::Block::MINECRAFT_LOGS))
+                            && world.get_block_state(&at).is_air()
+                            && world.get_block_state(&at.up()).is_air()
+                        {
+                            target = Some(Vector3::new(
+                                f64::from(x) + 0.5,
+                                f64::from(y),
+                                f64::from(z) + 0.5,
+                            ));
+                            break 'search;
+                        }
+                    }
+                }
+            }
+        }
+        target.or_else(|| Self::get_position(mob))
     }
 
     /// Prefers a spot to hover over the ground, and falls back to open air or water.
@@ -53,6 +103,16 @@ impl WaterAvoidingRandomFlyingGoal {
 
 impl Goal for WaterAvoidingRandomFlyingGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.perch_in_trees
+            && mob
+                .get_mob_entity()
+                .living_entity
+                .no_action_time
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= 100
+        {
+            return false;
+        }
         if mob.get_entity().has_passengers() {
             return false;
         }
@@ -61,7 +121,11 @@ impl Goal for WaterAvoidingRandomFlyingGoal {
             return false;
         }
 
-        self.target = Self::get_position(mob);
+        self.target = if self.perch_in_trees {
+            Self::parrot_position(mob)
+        } else {
+            Self::get_position(mob)
+        };
         self.target.is_some()
     }
 
