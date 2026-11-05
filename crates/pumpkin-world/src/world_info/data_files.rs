@@ -6,6 +6,7 @@ use std::{
 
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
+use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -175,6 +176,65 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
     root.put_compound("data", data_comp);
     pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+}
+
+/// Reads persistent `/forceload` chunks for one dimension.
+pub fn read_forced_chunks(dimension_folder: &Path) -> Vec<Vector2<i32>> {
+    let path = dimension_folder.join("data/minecraft/forced_chunks.dat");
+    let file = match File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) => {
+            warn!("Failed to open {}: {error}", path.display());
+            return Vec::new();
+        }
+    };
+    match read_gzip_compound_tag(file) {
+        Ok(root) => root
+            .get_list("chunks")
+            .into_iter()
+            .flatten()
+            .filter_map(|tag| match tag {
+                NbtTag::IntArray(coords) if coords.len() == 2 => {
+                    Some(Vector2::new(coords[0], coords[1]))
+                }
+                _ => None,
+            })
+            .collect(),
+        Err(error) => {
+            warn!(
+                "Failed to read forced chunks from {}: {error}",
+                path.display()
+            );
+            Vec::new()
+        }
+    }
+}
+
+/// Saves persistent `/forceload` chunks for one dimension.
+pub fn write_forced_chunks(
+    dimension_folder: &Path,
+    chunks: impl IntoIterator<Item = Vector2<i32>>,
+) -> Result<(), WorldInfoError> {
+    let directory = dimension_folder.join("data/minecraft");
+    fs::create_dir_all(&directory)?;
+    let path = directory.join("forced_chunks.dat");
+    let temporary = directory.join("forced_chunks.dat.tmp");
+    let mut root = NbtCompound::new();
+    root.put(
+        "chunks",
+        NbtTag::List(
+            chunks
+                .into_iter()
+                .map(|pos| NbtTag::IntArray(vec![pos.x, pos.y]))
+                .collect(),
+        ),
+    );
+    let file = File::create(&temporary)?;
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
+        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+    fs::rename(temporary, path)?;
+    Ok(())
 }
 
 #[must_use]
