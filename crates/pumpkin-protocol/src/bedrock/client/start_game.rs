@@ -141,6 +141,7 @@ pub struct LevelSettings {
     pub editor_world_type: VarInt,
     pub is_created_in_editor: bool,
     pub is_exported_from_editor: bool,
+    pub editor_level_migration_version: u8,
     pub day_cycle_stop_time: VarInt,
     pub education_edition_offer: VarUInt,
     pub has_education_features_enabled: bool,

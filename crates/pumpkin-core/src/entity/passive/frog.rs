@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,6 +11,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -95,6 +97,10 @@ impl AgeableMob for FrogEntity {
 }
 
 impl Animal for FrogEntity {
+    fn play_eating_sound(&self) {
+        self.play_entity_sound(Sound::EntityFrogEat, 2.0, 1.0);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FROG_FOOD)
             || FROG_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -102,6 +108,17 @@ impl Animal for FrogEntity {
 }
 
 impl Mob for FrogEntity {
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.mob_entity
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+            - 5
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityFrogStep, 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,
@@ -168,6 +185,6 @@ impl Mob for FrogEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

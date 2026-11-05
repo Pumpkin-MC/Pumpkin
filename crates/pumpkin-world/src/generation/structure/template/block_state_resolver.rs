@@ -9,6 +9,34 @@ use tracing::warn;
 
 use super::PaletteEntry;
 
+fn has_transformable_property(properties: &[pumpkin_data::Property]) -> bool {
+    use pumpkin_data::block_properties::Property;
+    properties.iter().any(|prop| {
+        matches!(
+            prop,
+            Property::Facing(_)
+                | Property::StairsShape(_)
+                | Property::Hinge(_)
+                | Property::RailShape(_)
+                | Property::North(_)
+                | Property::South(_)
+                | Property::East(_)
+                | Property::West(_)
+                | Property::NorthWall(_)
+                | Property::SouthWall(_)
+                | Property::EastWall(_)
+                | Property::WestWall(_)
+                | Property::NorthRedstone(_)
+                | Property::SouthRedstone(_)
+                | Property::EastRedstone(_)
+                | Property::WestRedstone(_)
+                | Property::Orientation(_)
+                | Property::Axis(_)
+                | Property::Rotation(_)
+        )
+    })
+}
+
 /// Resolves template palette entries to block state IDs.
 ///
 /// This resolver handles:
@@ -27,6 +55,23 @@ impl BlockStateResolver {
         rotation: Rotation,
         mirror: Mirror,
     ) -> Option<&'static BlockState> {
+        if let Some(state_id) = entry.state_id {
+            if (rotation == Rotation::None && mirror == Mirror::None)
+                || !has_transformable_property(&entry.properties)
+            {
+                return Some(BlockState::from_id(state_id));
+            }
+            let block = Block::from_state_id(state_id);
+            let transformed_props = pumpkin_data::transform_block_properties(
+                &entry.name,
+                &entry.properties,
+                rotation,
+                mirror,
+            );
+            let rotated_id = block.from_properties(&transformed_props).to_state_id(block);
+            return Some(BlockState::from_id(rotated_id));
+        }
+
         // Strip minecraft: prefix if present
         let block_name = entry.name.strip_prefix("minecraft:").unwrap_or(&entry.name);
 

@@ -1,17 +1,29 @@
 use std::ops::BitOr;
 
 use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use rand::RngExt;
 
 use super::{Controls, Goal};
+use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
+use crate::entity::passive::copper_golem::EQUIPMENT_SLOT_ANTENNA;
 
 pub const OFFER_TICKS: i32 = 400;
+const OFFER_TARGET_RANGE: f64 = 6.0;
+const OFFER_CHANCE: i32 = 8000;
+const BOUNDING_BOX_INFLATE_XZ: f64 = 6.0;
+const BOUNDING_BOX_INFLATE_Y: f64 = 2.0;
 
 pub struct OfferFlowerGoal {
     pub target_entity_id: Option<i32>,
     pub tick: i32,
+    offer_targeting: TargetPredicate,
 }
 
 impl Default for OfferFlowerGoal {
@@ -22,74 +34,57 @@ impl Default for OfferFlowerGoal {
 
 impl OfferFlowerGoal {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             target_entity_id: None,
             tick: 0,
+            offer_targeting: TargetPredicate::create_non_attackable()
+                .set_base_max_distance(OFFER_TARGET_RANGE),
         }
+    }
+
+    fn golem_bounding_box(mob: &dyn Mob) -> BoundingBox {
+        mob.get_entity().bounding_box.load().expand(
+            BOUNDING_BOX_INFLATE_XZ,
+            BOUNDING_BOX_INFLATE_Y,
+            BOUNDING_BOX_INFLATE_XZ,
+        )
     }
 }
 
 impl Goal for OfferFlowerGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let world = mob.get_entity().world.load();
-        let is_night = world
-            .level_time
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_night();
-        if is_night {
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        if !world.is_bright_outside() || mob.get_random().random_range(0..OFFER_CHANCE) != 0 {
             return false;
         }
 
-        if mob.get_random().random_range(0..8000) != 0 {
-            return false;
-        }
-
-        let golem_entity = mob.get_entity();
-        let golem_pos = golem_entity.pos.load();
-        let bb = golem_entity.bounding_box.load().expand(6.0, 2.0, 6.0);
-        let nearby = world.get_entities_at_box(&bb);
-
-        let mut closest: Option<(i32, f64)> = None;
-
-        for candidate in nearby {
-            let cand_entity = candidate.get_entity();
-            if cand_entity.entity_id == golem_entity.entity_id {
-                continue;
-            }
-
-            if !cand_entity
-                .entity_type
-                .has_tag(&tag::EntityType::MINECRAFT_CANDIDATE_FOR_IRON_GOLEM_GIFT)
-            {
-                continue;
-            }
-
-            let cand_pos = cand_entity.pos.load();
-            let dx = cand_pos.x - golem_pos.x;
-            let dy = cand_pos.y - golem_pos.y;
-            let dz = cand_pos.z - golem_pos.z;
-            let dist_sq = dx * dx + dy * dy + dz * dz;
-
-            if dist_sq <= 36.0 {
-                if let Some((_, closest_dist)) = closest {
-                    if dist_sq < closest_dist {
-                        closest = Some((cand_entity.entity_id, dist_sq));
-                    }
-                } else {
-                    closest = Some((cand_entity.entity_id, dist_sq));
-                }
-            }
-        }
-
-        if let Some((id, _)) = closest {
-            self.target_entity_id = Some(id);
-            true
-        } else {
-            self.target_entity_id = None;
-            false
-        }
+        let position = entity.pos.load();
+        let nearest = world
+            .get_entities_at_box(&Self::golem_bounding_box(mob))
+            .into_iter()
+            .filter(|candidate| {
+                candidate
+                    .get_entity()
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_CANDIDATE_FOR_IRON_GOLEM_GIFT)
+                    && self
+                        .offer_targeting
+                        .test(&world, Some(mob), candidate.as_ref())
+            })
+            .min_by(|a, b| {
+                let distance = |entity: &dyn EntityBase| {
+                    entity
+                        .get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&position)
+                };
+                distance(a.as_ref()).total_cmp(&distance(b.as_ref()))
+            });
+        self.target_entity_id = nearest.map(|nearest| nearest.get_entity().entity_id);
+        self.target_entity_id.is_some()
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
@@ -103,7 +98,11 @@ impl Goal for OfferFlowerGoal {
         } else {
             let entity = mob.get_entity();
             let world = entity.world.load();
-            world.send_entity_status(entity, EntityStatus::OfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::OfferFlower,
+                ActorEventID::StartOfferFlower,
+            );
         }
     }
 
@@ -113,23 +112,35 @@ impl Goal for OfferFlowerGoal {
         } else {
             let entity = mob.get_entity();
             let world = entity.world.load();
-            world.send_entity_status(entity, EntityStatus::StopOfferFlower, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::StopOfferFlower,
+                ActorEventID::StopOfferFlower,
+            );
         }
 
         if self.tick == 0
             && let Some(target_id) = self.target_entity_id
         {
             let world = mob.get_entity().world.load();
-            if let Some(target) = world.get_entity_by_id(target_id) {
-                let target_entity = target.get_entity();
-                let bb = mob.get_entity().bounding_box.load().expand(6.0, 2.0, 6.0);
-                if target_entity
+            if let Some(target) = world.get_entity_by_id(target_id)
+                && let Some(target_mob) = target.get_mob()
+                && target
+                    .get_entity()
                     .entity_type
                     .has_tag(&tag::EntityType::MINECRAFT_ACCEPTS_IRON_GOLEM_GIFT)
-                    && bb.intersects(&target_entity.bounding_box.load())
-                {
-                    // TODO: hand the poppy over once mobs can hold equipment gifts.
-                }
+                && target_mob
+                    .get_mob_entity()
+                    .is_slot_empty(&EQUIPMENT_SLOT_ANTENNA)
+                && Self::golem_bounding_box(mob)
+                    .intersects(&target.get_entity().bounding_box.load())
+            {
+                target_mob
+                    .get_mob_entity()
+                    .set_item_slot_and_drop_when_killed(
+                        &EQUIPMENT_SLOT_ANTENNA,
+                        ItemStack::new(1, &Item::POPPY),
+                    );
             }
         }
 

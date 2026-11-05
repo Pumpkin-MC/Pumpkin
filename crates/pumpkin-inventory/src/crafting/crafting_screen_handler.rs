@@ -14,6 +14,8 @@
 //! - Transmute recipes (upgrading items)
 //! - Special recipes (like decorated pots)
 
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
 use std::any::Any;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -53,6 +55,7 @@ pub struct RecipeResult {
     pub item_id: String,
     pub count: u8,
     pub pot_decorations: Option<[u16; 4]>,
+    pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
 }
 
 impl RecipeResult {
@@ -65,6 +68,9 @@ impl RecipeResult {
         let item = pumpkin_data::item::Item::from_registry_key(key)
             .unwrap_or(&pumpkin_data::item::Item::AIR);
         let mut stack = ItemStack::new(self.count, item);
+        for (component, value) in self.components {
+            stack.patch.push((*component, Some(value.clone_dyn())));
+        }
         if let Some(sherds) = self.pot_decorations {
             let sherd_names = sherds
                 .into_iter()
@@ -205,6 +211,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingShapeless {
@@ -233,6 +240,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingTransmute {
@@ -257,6 +265,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingDecoratedPot { .. }) => {
@@ -282,6 +291,7 @@ fn recipe_matches(
                 item_id: "minecraft:decorated_pot".to_string(),
                 count: 1,
                 pot_decorations: Some(sherds),
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
@@ -334,6 +344,7 @@ fn recipe_matches(
                 item_id: result.item_id.clone(),
                 count: result.count,
                 pot_decorations: None,
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shapeless {
@@ -362,6 +373,7 @@ fn recipe_matches(
                 item_id: result.item_id.clone(),
                 count: result.count,
                 pot_decorations: None,
+                components: &[],
             })
         }
         _ => None,

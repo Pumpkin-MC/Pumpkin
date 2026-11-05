@@ -61,8 +61,20 @@ impl CustomSound for MagmaCubeEntity {
 }
 
 impl Mob for MagmaCubeEntity {
+    fn xp_reward(&self) -> u32 {
+        self.slime.xp_reward()
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         self.slime.get_mob_entity()
+    }
+
+    fn mob_passenger_attachment_point(
+        &self,
+        passenger: &dyn crate::entity::EntityBase,
+        index: usize,
+    ) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
+        self.slime.mob_passenger_attachment_point(passenger, index)
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
