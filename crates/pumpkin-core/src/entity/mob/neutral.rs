@@ -10,14 +10,20 @@ use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
+use crate::entity::predicate::EntityPredicate;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
+use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
 
 /// No anger pending.
 pub const NO_ANGER_END_TIME: i64 = -1;
 
 /// Vanilla `PERSISTENT_ANGER_TIME`: 20 to 39 seconds.
 pub const DEFAULT_ANGER_DURATION: RangeInclusive<i32> = 400..=780;
+
+/// Vanilla `tellNeutralMobsThatIDied` search bounds.
+const DEATH_NOTICE_RANGE_XZ: f64 = 32.0;
+const DEATH_NOTICE_RANGE_Y: f64 = 10.0;
 
 pub struct NeutralData {
     /// World age at which the anger runs out. `-1` means not angry.
@@ -318,14 +324,16 @@ pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
     }
 
     let player_uuid = player.get_entity().entity_uuid;
-    let mut angry_neutral_mobs = Vec::new();
-    world.extend_entities_where(&mut angry_neutral_mobs, usize::MAX, |entity| {
-        entity
-            .get_mob()
-            .and_then(Mob::as_neutral)
-            .is_some_and(|neutral| neutral.get_persistent_anger_target() == Some(player_uuid))
-    });
-    for entity in angry_neutral_mobs {
+    let pos = player.get_entity().block_pos.load().to_f64();
+    let search_box = BoundingBox::new(pos, pos.add_raw(1.0, 1.0, 1.0)).expand(
+        DEATH_NOTICE_RANGE_XZ,
+        DEATH_NOTICE_RANGE_Y,
+        DEATH_NOTICE_RANGE_XZ,
+    );
+    for entity in world.get_entities_at_box(&search_box) {
+        if !EntityPredicate::ExceptSpectator.test(entity.get_entity()) {
+            continue;
+        }
         if let Some(neutral) = entity.get_mob().and_then(Mob::as_neutral) {
             neutral.player_died(player, world);
         }
