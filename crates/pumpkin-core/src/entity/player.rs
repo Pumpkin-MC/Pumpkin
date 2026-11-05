@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use crate::entity::attributes::{Modifier, ModifierOperation};
+use crate::entity::passive::abstract_horse::player_jump_pending_scale;
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
@@ -306,6 +307,7 @@ use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent;
+use crate::plugin::api::events::entity::horse_jump::HorseJumpEvent;
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -323,7 +325,7 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::mob::warden_spawn_tracker::WardenSpawnTracker;
-use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use super::{Entity, EntityBase, GearDamage, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -1729,21 +1731,7 @@ impl Player {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
-        if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
-            for (enchantment, level) in enchantments.enchantment.iter() {
-                for post_effect in enchantment.get_post_attack_effects() {
-                    if post_effect.affected
-                        == Some(pumpkin_data::enchantment::EnchantmentTarget::Victim)
-                        && let pumpkin_data::enchantment::EnchantmentEntityEffect::Ignite {
-                            duration,
-                        } = &post_effect.effect
-                    {
-                        let duration_seconds = duration.calculate(*level);
-                        victim_entity.set_on_fire_for_ticks((duration_seconds * 20.0) as u32);
-                    }
-                }
-            }
-        }
+        crate::enchantment::EnchantmentHelper::on_post_attack(victim_entity, &item_stack);
 
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
@@ -5056,10 +5044,8 @@ impl Player {
             let pos_f64 = self.living_entity.entity.pos.load();
 
             let village_pos = world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_nearest_job_site(player_pos, 64)
+                .is_village(&player_pos)
+                .then_some(player_pos)
                 .or_else(|| {
                     world.raids.try_lock().ok().and_then(|raids| {
                         raids
@@ -6419,6 +6405,33 @@ impl Player {
         true
     }
 
+    /// Only rears and plays the sound; the rider's client simulates the jump itself.
+    pub fn start_riding_jump(&self, server: &Arc<Server>, jump_scale: i32) {
+        let Some(vehicle) = self.get_entity().get_vehicle() else {
+            return;
+        };
+        if vehicle
+            .get_controlling_passenger()
+            .is_none_or(|rider| rider.get_entity().entity_id != self.entity_id())
+        {
+            return;
+        }
+        let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) else {
+            return;
+        };
+        if !horse.can_jump() || jump_scale <= 0 {
+            return;
+        }
+        let mut event = HorseJumpEvent::new(
+            vehicle.get_entity().entity_id,
+            player_jump_pending_scale(jump_scale),
+        );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        if !event.cancelled {
+            horse.handle_start_jump(jump_scale);
+        }
+    }
+
     pub fn open_mount_screen(
         &self,
         inventory_columns: i32,
@@ -7487,6 +7500,18 @@ impl EntityBase for Player {
         cause: Option<&dyn EntityBase>,
     ) -> bool {
         self.damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    fn hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        match gear {
+            GearDamage::Armor => &[
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+            ],
+            GearDamage::Helmet => &[EquipmentSlot::HEAD],
+        }
     }
 
     fn teleport(

@@ -4,6 +4,8 @@ use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+type PositionProvider = fn(&dyn Mob) -> Option<Vector3<f64>>;
+
 pub const DEFAULT_INTERVAL: i32 = 120;
 pub const PROBABILITY: f32 = 0.001;
 
@@ -14,6 +16,9 @@ pub struct WanderAroundGoal {
     interval: i32,
     force_trigger: bool,
     water_avoiding_probability: Option<f32>,
+    position: Option<PositionProvider>,
+    start_condition: Option<fn(&dyn Mob) -> bool>,
+    entity_reach: f64,
 }
 
 impl WanderAroundGoal {
@@ -31,6 +36,9 @@ impl WanderAroundGoal {
             interval,
             force_trigger: false,
             water_avoiding_probability: None,
+            position: None,
+            start_condition: None,
+            entity_reach: 0.0,
         }
     }
 
@@ -39,6 +47,19 @@ impl WanderAroundGoal {
         let mut goal = Self::new(speed);
         goal.water_avoiding_probability = Some(PROBABILITY);
         goal
+    }
+
+    #[must_use]
+    pub const fn with_position(mut self, position: PositionProvider, entity_reach: f64) -> Self {
+        self.position = Some(position);
+        self.entity_reach = entity_reach;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_start_condition(mut self, start_condition: fn(&dyn Mob) -> bool) -> Self {
+        self.start_condition = Some(start_condition);
+        self
     }
 
     /// Run once on the next check, ignoring the interval.
@@ -51,6 +72,9 @@ impl WanderAroundGoal {
     }
 
     fn get_position(&self, mob: &dyn Mob) -> Option<Vector3<f64>> {
+        if let Some(position) = self.position {
+            return position(mob);
+        }
         let Some(probability) = self.water_avoiding_probability else {
             return default_random_pos::get_pos(mob, 10, 7);
         };
@@ -68,11 +92,18 @@ impl Goal for WanderAroundGoal {
     fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
         Some(GoalReach {
             speed: self.speed,
+            entities: self.entity_reach,
             ..GoalReach::default()
         })
     }
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if let Some(start_condition) = self.start_condition
+            && !start_condition(mob)
+        {
+            return false;
+        }
+
         // Every mob that carries a passenger is controlled by it.
         if mob.get_entity().has_passengers() {
             return false;

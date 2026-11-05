@@ -391,6 +391,10 @@ impl AgeableMob for FoxEntity {
 }
 
 impl Animal for FoxEntity {
+    fn play_eating_sound(&self) {
+        self.play_entity_sound(Sound::EntityFoxEat, 1.0, 1.0);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FOX_FOOD)
             || FOX_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -585,6 +589,6 @@ impl Mob for FoxEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
+        self.animal_interact(player, item_stack)
     }
 }
