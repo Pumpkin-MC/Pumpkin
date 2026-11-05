@@ -363,6 +363,7 @@ impl Registrations {
 /// services, or holds its instance.
 ///
 /// `commands`: its commands stay in the command tree, the library is kept right away.
+/// A loader without `can_unload` keeps it right away too, without an error.
 ///
 /// Anything still running or held after `HANDLER_DRAIN_TIMEOUT` keeps the library
 /// loaded for good, releasing it would pull the code out from under that call. That is
@@ -375,6 +376,13 @@ async fn release_library(
     loader_data: Box<dyn Any + Send + Sync>,
     commands: bool,
 ) -> Result<(), LoaderError> {
+    // Loader keeps the library: untracked plugin work can still run its code
+    if !loader.can_unload() {
+        drop(registrations);
+        drop(instance);
+        Box::leak(loader_data);
+        return Ok(());
+    }
     // Tree never drops nodes: executors and argument types run its code
     // TODO: remove a plugin's nodes from the command tree after reload
     if commands {
