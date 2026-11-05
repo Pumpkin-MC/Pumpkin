@@ -429,6 +429,23 @@ impl PandaEntity {
         self.is_worried() && is_thundering(&self.get_entity().world.load())
     }
 
+    /// The start of vanilla `Panda.mobInteract`: a scared panda ignores the player (`Some(false)`),
+    /// a panda on its back gets up (`Some(true)`), and feeding bamboo to a panda that has a target
+    /// makes it forget the grudge later. `None` leaves the interaction to the feeding code.
+    fn interact_before_feeding(&self, item_stack: &ItemStack) -> Option<bool> {
+        if self.is_scared() {
+            return Some(false);
+        }
+        if self.is_on_back() {
+            self.set_on_back(false);
+            return Some(true);
+        }
+        if self.is_food(item_stack) && self.mob_entity.get_target().is_some() {
+            self.got_bamboo.store(true, Ordering::Relaxed);
+        }
+        None
+    }
+
     /// Vanilla `canPerformAction`: the panda is free to walk, attack, flee and look around.
     #[must_use]
     pub fn can_perform_action(&self) -> bool {
@@ -631,7 +648,12 @@ impl Mob for PandaEntity {
         self.play_entity_sound(Sound::EntityPandaBite, 1.0, 1.0);
     }
 
+    /// Vanilla `Panda.mobInteract`: the checks before feeding come from
+    /// `interact_before_feeding`, the rest is the shared animal feeding.
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if let Some(handled) = self.interact_before_feeding(item_stack) {
+            return handled;
+        }
         self.animal_interact(player, item_stack)
     }
 }
@@ -1271,6 +1293,39 @@ mod tests {
         );
         goal.stop(victim.as_ref());
         assert!(victim.mob_entity.get_target().is_none());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn scared_panda_ignores_players_and_a_panda_on_its_back_gets_up() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let bamboo = ItemStack::new(1, &Item::BAMBOO);
+        let target = self::panda(&world);
+
+        set_genes(&panda, PandaGene::Worried, PandaGene::Normal);
+        set_thunder(&world, 1.0);
+        panda.set_on_back(true);
+        assert_eq!(panda.interact_before_feeding(&bamboo), Some(false));
+        assert!(panda.is_on_back(), "a scared panda got up for a player");
+
+        set_thunder(&world, 0.0);
+        assert_eq!(panda.interact_before_feeding(&bamboo), Some(true));
+        assert!(!panda.is_on_back());
+
+        // Bamboo only calms a panda that has something to be angry at.
+        assert_eq!(panda.interact_before_feeding(&bamboo), None);
+        assert!(!panda.got_bamboo.load(Ordering::Relaxed));
+        panda.mob_entity.set_target(Some(target));
+        assert_eq!(
+            panda.interact_before_feeding(&ItemStack::new(1, &Item::CAKE)),
+            None
+        );
+        assert!(!panda.got_bamboo.load(Ordering::Relaxed));
+        assert_eq!(panda.interact_before_feeding(&bamboo), None);
+        assert!(panda.got_bamboo.load(Ordering::Relaxed));
         world.level.shutdown().await;
         Ok(())
     }
