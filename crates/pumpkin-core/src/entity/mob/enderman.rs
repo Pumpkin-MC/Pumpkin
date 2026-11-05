@@ -645,6 +645,7 @@ impl Mob for EndermanEntity {
                 .cast_any()
                 .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
         }) {
+            self.repeatedly_try_to_teleport();
             return potion.hurts_water_sensitive_entities();
         }
         self.pre_damage(damage_type, source)
@@ -671,7 +672,6 @@ impl Mob for EndermanEntity {
                 .cast_any()
                 .is::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
         }) {
-            self.repeatedly_try_to_teleport();
             return true;
         }
         self.on_damage(damage_type, source);
