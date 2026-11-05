@@ -72,6 +72,7 @@ pub struct EndermanEntity {
     provoked: AtomicBool,
     speed_boosted: AtomicBool,
     target_change_time: AtomicI32,
+    last_stare_sound: AtomicI32,
 }
 
 impl EndermanEntity {
@@ -85,6 +86,7 @@ impl EndermanEntity {
             provoked: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
             target_change_time: AtomicI32::new(0),
+            last_stare_sound: AtomicI32::new(i32::MIN),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -348,6 +350,31 @@ impl EndermanEntity {
 
     pub fn get_carried_block(&self) -> Option<BlockStateId> {
         self.carried_block.load()
+    }
+
+    pub fn play_stare_sound(&self, player: &Player) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let tick = entity.tick_count.load(Ordering::Relaxed);
+        let last_played = self.last_stare_sound.load(Ordering::Relaxed);
+        if (last_played != i32::MIN && tick.wrapping_sub(last_played) < 400)
+            || self
+                .last_stare_sound
+                .compare_exchange(last_played, tick, Ordering::Relaxed, Ordering::Relaxed)
+                .is_err()
+        {
+            return;
+        }
+
+        let pos = entity.pos.load();
+        let eye_pos = Vector3::new(pos.x, pos.y + ENDERMAN_EYE_HEIGHT, pos.z);
+        entity.world.load().play_sound_raw_expect(
+            player,
+            Sound::EntityEndermanStare as u16,
+            SoundCategory::Hostile,
+            &eye_pos,
+            2.5,
+            1.0,
+        );
     }
 
     pub fn is_player_staring(&self, player: &Player) -> bool {
