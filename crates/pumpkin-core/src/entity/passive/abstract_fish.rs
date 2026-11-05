@@ -40,25 +40,17 @@ pub fn initialize_fish_movement(mob: &mut MobEntity) {
 }
 
 const PANIC_SPEED: f64 = 1.25;
-const AVOID_PLAYER_RANGE: f64 = 8.0;
-const AVOID_PLAYER_WALK_SPEED: f64 = 1.6;
-const AVOID_PLAYER_SPRINT_SPEED: f64 = 1.4;
 const RANDOM_SWIM_SPEED: f64 = 1.0;
 const RANDOM_SWIM_INTERVAL: i32 = 40;
 
 pub fn register_fish_goals(mob: &MobEntity) {
-    use crate::entity::ai::goal::{avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal};
+    use crate::entity::ai::{
+        behavior::fleeing::{self, FISH_FLEES},
+        goal::escape_danger::EscapeDangerGoal,
+    };
     let goals = &mob.goals_selector;
     goals.add_goal(0, EscapeDangerGoal::new(PANIC_SPEED));
-    goals.add_goal(
-        2,
-        Box::new(AvoidEntityGoal::new(
-            &pumpkin_data::entity::EntityType::PLAYER,
-            AVOID_PLAYER_RANGE,
-            AVOID_PLAYER_WALK_SPEED,
-            AVOID_PLAYER_SPRINT_SPEED,
-        )),
-    );
+    fleeing::apply(goals, FISH_FLEES);
     goals.add_goal(4, Box::new(FishSwimGoal::default()));
 }
 
@@ -263,6 +255,14 @@ macro_rules! impl_abstract_fish {
 #[macro_export]
 macro_rules! fish_mob_hooks {
     () => {
+        /// Vanilla `AbstractFish` steps silently.
+        fn mob_play_step_sound(
+            &self,
+            _pos: &pumpkin_util::math::position::BlockPos,
+            _state: &pumpkin_data::BlockState,
+        ) {
+        }
+
         fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
             &self.mob_entity
         }

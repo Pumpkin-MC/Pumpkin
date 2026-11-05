@@ -68,7 +68,7 @@ impl BlockEntity for HangingSignBlockEntity {
         &self,
         _state_id: pumpkin_data::BlockStateId,
     ) -> Option<NbtCompound> {
-        Some(crate::block::entities::bedrock::build_sign_actor(
+        Some(crate::block::entities::sign::build_sign_actor(
             self.position,
             true,
             &self.front_text,

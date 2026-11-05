@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag;
 use pumpkin_util::math::vector3::Vector3;
@@ -115,8 +116,8 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown_item_entity.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown_item_entity.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -146,8 +147,7 @@ impl EntityBase for WindChargeEntity {
         let hit_pos = hit.hit_pos();
         if let ProjectileHit::Entity { ref entity, .. } = hit {
             let world = self.get_entity().world.load();
-            let owner_id = self.thrown_item_entity.owner_id;
-            let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
+            let owner = self.thrown_item_entity.owner.get(&world);
 
             let _ = entity.damage_with_context(
                 entity.as_ref(),

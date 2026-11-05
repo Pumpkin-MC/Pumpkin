@@ -4,9 +4,12 @@ use super::{
     DynamicLootCondition, DynamicLootEntry, DynamicLootEntryKind, DynamicLootFunction,
     DynamicLootPool, DynamicLootTable, Item, ItemStack, LootCondition, LootContextParameters,
     LootEntry, LootEntryKind, LootFunction, LootFunctionKind, LootNumberProvider, LootPool,
-    LootTable, LootTableHandle, RandomImpl, Taggable, Xoroshiro, apply_bonus_formula,
-    check_condition, check_dynamic_condition, get_loot_table, smelt,
+    LootTable, LootTableHandle, RandomImpl, Taggable, Xoroshiro, add_stew_effect,
+    apply_bonus_formula, check_condition, check_dynamic_condition, get_loot_table, smelt,
 };
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
+use pumpkin_data::effect::StatusEffect;
 
 #[derive(Clone, Copy)]
 pub(super) enum Table<'a> {
@@ -168,7 +171,7 @@ impl<'a> Entry<'a> {
     }
 }
 impl<'a> Functions<'a> {
-    fn iter(self) -> impl Iterator<Item = (LootFunctionKind, Condition<'a>, Option<&'a str>)> {
+    fn iter(self) -> impl Iterator<Item = (&'a LootFunctionKind, Condition<'a>, Option<&'a str>)> {
         let (s, d): (&[_], &[_]) = match self {
             Self::Static(functions) => (functions, &[]),
             Self::Dynamic(functions) => (&[], functions),
@@ -176,14 +179,14 @@ impl<'a> Functions<'a> {
         s.iter()
             .map(|function: &LootFunction| {
                 (
-                    function.kind,
+                    &function.kind,
                     Condition::Static(function.condition),
                     function.enchantment,
                 )
             })
             .chain(d.iter().map(|function: &DynamicLootFunction| {
                 (
-                    function.kind,
+                    &function.kind,
                     Condition::Dynamic(&function.condition),
                     function.enchantment.as_deref(),
                 )
@@ -205,6 +208,7 @@ struct Candidate<'a> {
 struct Stack {
     item: &'static Item,
     count: i32,
+    patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
 }
 
 pub(super) fn generate(
@@ -235,7 +239,15 @@ pub(super) fn generate(
         let mut count = stack.count;
         while count > 0 {
             let split = count.min(max_count);
-            result.push(ItemStack::new(split as u8, stack.item));
+            let mut item_stack = ItemStack::new(split as u8, stack.item);
+            item_stack.patch = stack
+                .patch
+                .iter()
+                .map(|(component, value)| {
+                    (*component, value.as_ref().map(|value| value.clone_dyn()))
+                })
+                .collect();
+            result.push(item_stack);
             count -= split;
         }
     }
@@ -433,13 +445,29 @@ impl Generator<'_, '_> {
         output: &mut Vec<Stack>,
     ) {
         if let Some(item) = candidate.item {
-            self.emit(Stack { item, count: 1 }, functions, output);
+            self.emit(
+                Stack {
+                    item,
+                    count: 1,
+                    patch: Vec::new(),
+                },
+                functions,
+                output,
+            );
             return;
         }
         match candidate.entry.kind() {
             Kind::Item(name) => {
                 if let Some(item) = Item::from_registry_key(name.trim_start_matches("minecraft:")) {
-                    self.emit(Stack { item, count: 1 }, functions, output);
+                    self.emit(
+                        Stack {
+                            item,
+                            count: 1,
+                            patch: Vec::new(),
+                        },
+                        functions,
+                        output,
+                    );
                 }
             }
             // Dynamic drops emit nothing without a block-registered callback.
@@ -449,7 +477,15 @@ impl Generator<'_, '_> {
                     if let Some(item) =
                         Item::from_registry_key(name.trim_start_matches("minecraft:"))
                     {
-                        self.emit(Stack { item, count: 1 }, functions, output);
+                        self.emit(
+                            Stack {
+                                item,
+                                count: 1,
+                                patch: Vec::new(),
+                            },
+                            functions,
+                            output,
+                        );
                     }
                 }
             }
@@ -481,7 +517,7 @@ impl Generator<'_, '_> {
                 if !self.test(condition) {
                     continue;
                 }
-                match kind {
+                match kind.clone() {
                     LootFunctionKind::SetCount { count, add } => {
                         let count = self.number_int(count);
                         stack.count = if add {
@@ -549,6 +585,21 @@ impl Generator<'_, '_> {
                         let (item, count) = smelt(stack.item, stack.count);
                         stack.item = item;
                         stack.count = count;
+                    }
+                    LootFunctionKind::SetStewEffect(effects) => {
+                        if stack.item != &Item::SUSPICIOUS_STEW || effects.is_empty() {
+                            continue;
+                        }
+                        let entry =
+                            &effects[self.rng.next_bounded_i32(effects.len() as i32) as usize];
+                        let duration = self.number_int(entry.duration);
+                        let Some(effect) = StatusEffect::from_minecraft_name(&entry.effect) else {
+                            continue;
+                        };
+                        let mut template = ItemStack::new(1, stack.item);
+                        template.patch = std::mem::take(&mut stack.patch);
+                        add_stew_effect(&mut template, effect, duration);
+                        stack.patch = template.patch;
                     }
                 }
             }

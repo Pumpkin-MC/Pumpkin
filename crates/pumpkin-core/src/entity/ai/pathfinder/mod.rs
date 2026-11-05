@@ -417,6 +417,12 @@ pub trait PathNavigationTrait: Send + Sync {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path>;
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path>;
     fn recompute_path(&mut self, entity: &LivingEntity);
     fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool;
     fn set_avoid_sun(&mut self, avoid_sun: bool);
@@ -656,6 +662,15 @@ impl PathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
+        self.compute_path_to_targets(entity, &[BlockPos::floored_v(destination)], reach_range)
+    }
+
+    pub fn compute_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
         let world_change = self.prepare_evaluator(entity);
 
         let max_path_length = self.mob_max_follow_range(entity);
@@ -673,9 +688,9 @@ impl PathNavigation {
             );
             self.update_pathfinder_max_visited_nodes = false;
         }
-        let mut path = finder.find_path_single(
+        let mut path = finder.find_path(
             &mut self.evaluator,
-            BlockPos::floored_v(destination),
+            targets,
             max_path_length,
             reach_range,
             self.max_visited_nodes_multiplier,
@@ -726,6 +741,37 @@ impl PathNavigation {
             return Some(path.clone());
         }
         let path = self.compute_path(entity, target.0.to_f64(), reach_range);
+        if let Some(path) = &path {
+            self.target_pos = Some(path.get_target());
+            self.reach_range = reach_range;
+            self.reset_stuck_timeout();
+        }
+        path
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        if targets.is_empty() {
+            return None;
+        }
+        let world = entity.entity.world.load_full();
+        if entity.entity.pos.load().y < f64::from(world.get_bottom_y())
+            || !self.can_update_path(entity)
+        {
+            return None;
+        }
+        if let Some(target) = self.target_pos
+            && let Some(path) = &self.path
+            && !path.is_done()
+            && targets.contains(&target)
+        {
+            return Some(path.clone());
+        }
+        let path = self.compute_path_to_targets(entity, targets, reach_range);
         if let Some(path) = &path {
             self.target_pos = Some(path.get_target());
             self.reach_range = reach_range;
@@ -922,7 +968,9 @@ impl PathNavigation {
         }
     }
 
-    const fn can_cut_corner(path_type: PathType) -> bool {
+    /// Vanilla `PathNavigation.canCutCorner`.
+    #[must_use]
+    pub const fn can_cut_corner(path_type: PathType) -> bool {
         !matches!(
             path_type,
             PathType::DangerFire | PathType::DangerOther | PathType::WalkableDoor
@@ -1044,33 +1092,24 @@ impl PathNavigation {
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
-                let target_pos = Vector3::new(
-                    f64::from(next_block.0.x) + 0.5,
-                    f64::from(next_block.0.y),
-                    f64::from(next_block.0.z) + 0.5,
-                );
-
                 let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-
-                let horizontal_dist_sq = dx * dx + dz * dz;
-                let horizontal_dist = horizontal_dist_sq.sqrt();
+                // Vanilla followThePath compares |dx| and |dz| separately
+                let x_distance = (current_pos.x - (f64::from(next_block.0.x) + 0.5)).abs();
+                let y_distance = (current_pos.y - f64::from(next_block.0.y)).abs();
+                let z_distance = (current_pos.z - (f64::from(next_block.0.z) + 0.5)).abs();
+                let dy = f64::from(next_block.0.y) - current_pos.y;
 
                 let width = entity.entity.width();
                 self.max_distance_to_waypoint = Self::waypoint_margin(width);
+                let reach = f64::from(self.max_distance_to_waypoint);
 
-                if !on_ground
-                    && horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy < -0.5
-                {
+                if !on_ground && x_distance < reach && z_distance < reach && dy < -0.5 {
                     path.advance();
                     return self.ground_target(entity);
                 }
 
-                let close_enough = horizontal_dist < f64::from(self.max_distance_to_waypoint)
-                    && dy.abs() < NODE_REACH_Y;
+                let close_enough =
+                    x_distance < reach && z_distance < reach && y_distance < NODE_REACH_Y;
 
                 let corner_cut = path
                     .get_next_node()
@@ -1250,6 +1289,16 @@ impl PathNavigationTrait for GroundPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -1515,6 +1564,16 @@ impl PathNavigationTrait for FlyingPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -1802,6 +1861,16 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
+    }
+
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
     }
@@ -2040,6 +2109,16 @@ impl PathNavigationTrait for WallClimberNavigation {
     ) -> Option<Path> {
         self.path_to_position = Some(BlockPos::floored_v(destination));
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -2297,6 +2376,16 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -2609,6 +2698,38 @@ mod tests {
         world.level.shutdown().await;
 
         assert_eq!((first, second), (Some(1), Some(2)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn waypoint_reach_advances_on_a_diagonal_inside_the_axis_box() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = living(world.clone(), &EntityType::CREEPER);
+        // Width 0.6 → radius 0.45. 0.40 on both axes is inside vanilla's box and
+        // outside a hypot circle of the same radius. Stay on the approach side so
+        // corner-cutting cannot hide a hypot-only reach check.
+        living.entity.pos.store(Vector3::new(0.1, 64.0, 0.1));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.move_to_path(
+            Some(Path::new(
+                vec![
+                    Node::new(BlockPos::new(0, 64, 0)),
+                    Node::new(BlockPos::new(1, 64, 1)),
+                ],
+                BlockPos::new(1, 64, 1),
+                true,
+            )),
+            1.0,
+            &living,
+        );
+
+        navigation.tick(&living);
+        let next = navigation.get_path().map(Path::get_next_node_index);
+        world.level.shutdown().await;
+
+        assert_eq!(next, Some(1));
         Ok(())
     }
 

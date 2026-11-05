@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicI32, AtomicU64, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -11,6 +12,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -284,6 +286,10 @@ impl AgeableMob for ArmadilloEntity {
 }
 
 impl Animal for ArmadilloEntity {
+    fn play_eating_sound(&self) {
+        self.make_sound(Sound::EntityArmadilloEat);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack
             .item
@@ -293,6 +299,10 @@ impl Animal for ArmadilloEntity {
 }
 
 impl Mob for ArmadilloEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityArmadilloStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -422,6 +432,6 @@ impl Mob for ArmadilloEntity {
         if self.is_scared() {
             return false;
         }
-        self.animal_interact(player, item_stack, Sound::EntityArmadilloAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

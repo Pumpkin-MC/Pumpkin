@@ -11,6 +11,7 @@ use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
 /// No anger pending.
@@ -89,6 +90,11 @@ pub trait NeutralMob: Mob {
         DEFAULT_ANGER_DURATION
     }
 
+    /// A fresh grudge against `target` for `ticks`. `None` refuses it, e.g. a cancelled plugin event.
+    fn approve_grudge(&self, _target: &dyn EntityBase, ticks: i32) -> Option<i32> {
+        Some(ticks)
+    }
+
     /// Whether an already angry mob keeps refreshing its timer while the target stays.
     fn stays_angry_with_target(&self) -> bool {
         true
@@ -152,7 +158,7 @@ pub trait NeutralMob: Mob {
             .living_entity
             .set_last_hurt_by_mob(None);
         self.set_persistent_anger_target(None);
-        self.set_mob_target(None);
+        self.set_mob_target(None, TargetReason::ForgotTarget);
         self.set_anger_end_time(NO_ANGER_END_TIME);
     }
 
@@ -207,7 +213,7 @@ pub trait NeutralMob: Mob {
             && target.get_entity().is_alive()
             && self.can_attack(target.as_ref())
         {
-            self.set_mob_target(Some(target));
+            self.set_mob_target(Some(target), TargetReason::Angry);
         }
     }
 
@@ -240,9 +246,15 @@ pub trait NeutralMob: Mob {
             let is_new =
                 anger_target.is_none_or(|angry_at| angry_at != target.get_entity().entity_uuid);
             if is_new {
+                let ticks = rand::random_range(self.anger_duration());
+                let Some(ticks) = self.approve_grudge(target.as_ref(), ticks) else {
+                    // Refused: drop the target too, else the grudge is offered again every tick.
+                    self.set_mob_target(None, TargetReason::ForgotTarget);
+                    return;
+                };
                 self.set_persistent_anger_target(Some(target.get_entity().entity_uuid));
-            }
-            if is_new || stays_angry {
+                self.set_anger_end_time(now + i64::from(ticks));
+            } else if stays_angry {
                 self.start_persistent_anger_timer_at(now);
             }
         }

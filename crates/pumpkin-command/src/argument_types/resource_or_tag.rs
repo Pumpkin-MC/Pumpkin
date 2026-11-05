@@ -46,6 +46,24 @@ impl ResourceOrTag {
         }
     }
 
+    /// The ids of the biomes this names: the entry itself or the tag's members.
+    #[must_use]
+    pub fn biome_ids(&self) -> Vec<u8> {
+        use pumpkin_data::biome::Biome;
+        match self {
+            Self::Resource(id) => Biome::from_name(id.path())
+                .map(|b| b.id)
+                .into_iter()
+                .collect(),
+            Self::Tag(id) => tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
+                .into_iter()
+                .flatten()
+                .filter_map(|name| Biome::from_name(name))
+                .map(|b| b.id)
+                .collect(),
+        }
+    }
+
     fn from_string_reader(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
         if reader.peek() == Some('#') {
             reader.skip();
