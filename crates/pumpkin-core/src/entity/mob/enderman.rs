@@ -178,6 +178,7 @@ impl EndermanEntity {
             return false;
         }
         let origin = entity.pos.load();
+        let origin_block_pos = entity.block_pos.load();
         let world = entity.world.load();
 
         let min_y = f64::from(world.dimension.min_y);
@@ -238,7 +239,7 @@ impl EndermanEntity {
         entity.teleport(new_pos, None, None, &world);
         world.emit_game_event(
             pumpkin_data::game_event::GameEvent::Teleport.name(),
-            new_pos,
+            origin,
         );
         for pos in &[origin, new_pos] {
             world.spawn_particle(
@@ -250,14 +251,15 @@ impl EndermanEntity {
             );
             world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
         }
+        let destination_block_pos = entity.block_pos.load();
         let difference = BlockPos::new(
-            ((new_pos.x - origin.x) as i32).clamp(-127, 127),
-            ((new_pos.y - origin.y) as i32).clamp(-127, 127),
-            ((new_pos.z - origin.z) as i32).clamp(-127, 127),
+            (destination_block_pos.0.x - origin_block_pos.0.x).clamp(-127, 127),
+            (destination_block_pos.0.y - origin_block_pos.0.y).clamp(-127, 127),
+            (destination_block_pos.0.z - origin_block_pos.0.z).clamp(-127, 127),
         );
         world.sync_world_event(
             pumpkin_data::world::WorldEvent::ParticlesEndermanTeleport,
-            entity.block_pos.load(),
+            origin_block_pos,
             ((difference.0.x & 0xff) << 16)
                 | ((difference.0.y & 0xff) << 8)
                 | (difference.0.z & 0xff),
@@ -599,7 +601,6 @@ impl Mob for EndermanEntity {
         self.set_target(target);
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
