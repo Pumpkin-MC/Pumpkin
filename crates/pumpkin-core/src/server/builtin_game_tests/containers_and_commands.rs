@@ -121,6 +121,46 @@ pub(super) async fn test_hopper_transfers_to_chest(helper: GameTestHelper) -> Ga
     Ok(())
 }
 
+pub(super) async fn test_setblock_reports_only_changes(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    let pos = BlockPos::new(1, 1, 1);
+    helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:stone")
+        .await?;
+
+    let unchanged = helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:stone")
+        .await;
+    helper.assert_true(
+        unchanged.is_err(),
+        "setblock should fail when the block is already the target state",
+    )?;
+
+    let strict_unchanged = helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:stone strict")
+        .await;
+    helper.assert_true(
+        strict_unchanged.is_err(),
+        "strict setblock should fail when the block is already the target state",
+    )?;
+
+    helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:air")
+        .await?;
+
+    let keep_unchanged = helper
+        .execute_command(&pos, "setblock ~ ~ ~ minecraft:air keep")
+        .await;
+    helper.assert_true(
+        keep_unchanged.is_err(),
+        "keep setblock should fail when the block is already air",
+    )?;
+
+    helper.succeed();
+    Ok(())
+}
+
 pub(super) async fn test_tnt_redstone_ignites(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 5, 5).await?;
 
