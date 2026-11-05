@@ -46,8 +46,7 @@ impl TeleportTowardsPlayerGoal {
 
     /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
-        player.living_entity.is_alive()
-            && !player.get_entity().has_vehicle()
+        !self.enderman.hasIndirectPassenger(player)
             && (self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world))
     }
 
