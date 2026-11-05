@@ -2235,16 +2235,8 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = spawn_persistent(self);
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
-        let spawn_passives = spawn_passives && spawn_mobs;
-
-        let spawn_list = natural_spawner::get_filtered_spawning_categories(
-            &spawn_state,
-            spawn_mobs,
-            spawn_enemies,
-            spawn_passives,
-        );
+        let spawn_list = spawn_list_for_tick(self, &spawn_state, spawn_mobs, spawn_enemies);
 
         // 5. Sequential Chunk Spawners (vanilla `tickSpawningChunks`)
         if !spawn_list.is_empty() {
@@ -7728,6 +7720,21 @@ fn spawn_persistent(world: &World) -> bool {
     world.get_world_age() % 400 == 0
 }
 
+fn spawn_list_for_tick(
+    world: &World,
+    spawn_state: &SpawnState,
+    spawn_mobs: bool,
+    spawn_enemies: bool,
+) -> Vec<&'static MobCategory> {
+    let spawn_passives = spawn_persistent(world) && spawn_mobs;
+    natural_spawner::get_filtered_spawning_categories(
+        spawn_state,
+        spawn_mobs,
+        spawn_enemies,
+        spawn_passives,
+    )
+}
+
 pub struct WorldPortal(pub Arc<World>);
 
 // Pure Beauty :cap:
@@ -7918,7 +7925,7 @@ mod tests {
 
     use super::{
         NaturalSpawnChunkCache, World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
-        merge_entity_records, natural_spawn_chunk_count, spawn_persistent,
+        merge_entity_records, natural_spawn_chunk_count, spawn_list_for_tick,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -8376,21 +8383,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn passive_cadence_uses_world_age() -> Result<(), Box<dyn std::error::Error>> {
+    async fn passive_cadence_selects_persistent_categories_by_world_age()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::world::natural_spawner::SpawnState;
+        use pumpkin_data::entity::MobCategory;
+
         let folder = tempfile::tempdir()?;
         let world = crate::entity::ai::test_support::world(&folder);
+        let mut state = SpawnState::empty();
+        state.set_spawnable_chunk_count(289);
+
         world
             .level_time
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .load_from(400, 1);
-        assert!(!spawn_persistent(&world));
+        let categories = spawn_list_for_tick(&world, &state, true, false);
+        assert!(
+            !categories
+                .iter()
+                .any(|category| category.id == MobCategory::CREATURE.id)
+        );
+
         world
             .level_time
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .load_from(1, 400);
-        assert!(spawn_persistent(&world));
+        let categories = spawn_list_for_tick(&world, &state, true, false);
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.id == MobCategory::CREATURE.id)
+        );
+
         world.level.shutdown().await;
         Ok(())
     }
