@@ -6,8 +6,10 @@ use std::sync::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockState;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::PandaGene;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
@@ -74,6 +76,16 @@ const UNHAPPY_SOUND_TICKS: [i32; 2] = [29, 14];
 const UNHAPPY_LOOK_ANGLE: f32 = 90.0;
 /// Vanilla `isThundering` needs the thunder level above this.
 const THUNDERING_LEVEL: f32 = 0.9;
+
+/// A sitting panda that holds an item starts to eat with a chance of 1 in this many per tick.
+const EATING_START_ODDS: i32 = 80;
+/// Once the eat counter is above this, each tick has 1 chance in `EATING_STOP_ODDS` to end the meal.
+const EATING_MIN_TICKS_BEFORE_STOP: i32 = 80;
+const EATING_STOP_ODDS: i32 = 20;
+/// A meal that ends with the eat counter above this finishes the held item.
+const EATING_MIN_TICKS_TO_FINISH_ITEM: i32 = 100;
+/// The eat sound and the client's item particles come every this many ticks of the eat counter.
+const EATING_EFFECT_INTERVAL: i32 = 5;
 
 const GENE_RANDOM_BOUND: i32 = 16;
 const MUTATION_CHANCE: i32 = 32;
@@ -410,17 +422,99 @@ impl PandaEntity {
     /// Vanilla `isEating`: the eat counter is running.
     #[must_use]
     pub fn is_eating(&self) -> bool {
-        self.eat_counter.load(Ordering::Relaxed) > 0
+        self.get_eat_counter() > 0
+    }
+
+    /// Vanilla `getEatCounter`.
+    #[must_use]
+    fn get_eat_counter(&self) -> i32 {
+        self.eat_counter.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `setEatCounter`: also synched, the client counts item particles from it.
+    fn set_eat_counter(&self, value: i32) {
+        self.eat_counter.store(value, Ordering::Relaxed);
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::panda::EAT_COUNTER,
+            VarInt(value),
+        );
     }
 
     /// Vanilla `eat`: starts or stops the eat counter.
     pub fn eat(&self, value: bool) {
-        let counter = i32::from(value);
-        self.eat_counter.store(counter, Ordering::Relaxed);
-        self.get_entity().set_synced_data(
-            pumpkin_data::tracked_data::panda::EAT_COUNTER,
-            VarInt(counter),
-        );
+        self.set_eat_counter(i32::from(value));
+    }
+
+    /// Vanilla `getItemBySlot(MAINHAND)`: what the panda holds in its mouth.
+    fn main_hand_item(&self) -> ItemStack {
+        self.mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&EquipmentSlot::MAIN_HAND)
+    }
+
+    /// Whether the main hand holds anything: vanilla `!getItemBySlot(MAINHAND).isEmpty()`.
+    #[must_use]
+    pub fn is_holding_item(&self) -> bool {
+        !self.mob_entity.is_slot_empty(&EquipmentSlot::MAIN_HAND)
+    }
+
+    /// Vanilla `setItemSlot(MAINHAND, stack)`: tells the tracking clients and returns what was held.
+    fn set_main_hand_item(&self, stack: ItemStack) -> ItemStack {
+        self.mob_entity
+            .set_item_slot(&EquipmentSlot::MAIN_HAND, stack)
+    }
+
+    /// Vanilla `handleEating` with `next_int(bound)` standing for `RandomSource.nextInt`: a
+    /// sitting panda that holds an item starts to eat now and then, the meal sounds every
+    /// `EATING_EFFECT_INTERVAL` ticks, and a long meal ends. The item particles are made by the
+    /// client from the synched eat counter and the held item, so none are sent.
+    fn handle_eating_with(&self, mut next_int: impl FnMut(i32) -> i32) {
+        let holds_item = self.is_holding_item();
+        if !self.is_eating()
+            && self.is_sitting()
+            && !self.is_scared()
+            && holds_item
+            && next_int(EATING_START_ODDS) == 1
+        {
+            self.eat(true);
+        } else if !holds_item || !self.is_sitting() {
+            self.eat(false);
+        }
+        if !self.is_eating() {
+            return;
+        }
+
+        let counter = self.get_eat_counter();
+        if counter % EATING_EFFECT_INTERVAL == 0 {
+            let volume = 0.5 + 0.5 * f32::from(rand::random::<bool>());
+            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0);
+            self.play_entity_sound(Sound::EntityPandaEat, volume, pitch);
+        }
+        if counter > EATING_MIN_TICKS_BEFORE_STOP && next_int(EATING_STOP_ODDS) == 1 {
+            if counter > EATING_MIN_TICKS_TO_FINISH_ITEM
+                && self
+                    .main_hand_item()
+                    .item
+                    .has_tag(&tag::Item::MINECRAFT_PANDA_EATS_FROM_GROUND)
+            {
+                self.set_main_hand_item(ItemStack::EMPTY.clone());
+                let entity = self.get_entity();
+                entity.emit_own_game_event(self, GameEvent::Eat);
+                self.set_sitting(false);
+            }
+            self.eat(false);
+            return;
+        }
+        self.set_eat_counter(counter + 1);
+    }
+
+    /// Vanilla `handleEating` with the real random source.
+    fn handle_eating(&self) {
+        let mut rng = self.get_random();
+        self.handle_eating_with(|bound| rng.random_range(0..bound));
     }
 
     /// Vanilla `isScared`: a worried panda during a thunderstorm.
@@ -610,7 +704,8 @@ impl Mob for PandaEntity {
     }
 
     /// Vanilla `Panda.tick` after the super tick: worried pandas sit through thunderstorms, a lost
-    /// target clears the bamboo and bite state, and the unhappy counter counts down.
+    /// target clears the bamboo and bite state, the unhappy counter counts down, a sitting panda
+    /// has pitch 0 and `handleEating` runs.
     fn post_tick(&self) {
         if self.is_worried() {
             if self.is_scared() && !self.get_entity().is_in_water() {
@@ -641,6 +736,8 @@ impl Mob for PandaEntity {
         if self.is_sitting() {
             self.get_entity().set_pitch(0.0);
         }
+
+        self.handle_eating();
     }
 
     /// Vanilla `Panda.playAttackSound`, which `Mob.doHurtTarget` plays after a hit that hurt.
@@ -1326,6 +1423,122 @@ mod tests {
         assert!(!panda.got_bamboo.load(Ordering::Relaxed));
         assert_eq!(panda.interact_before_feeding(&bamboo), None);
         assert!(panda.got_bamboo.load(Ordering::Relaxed));
+        world.level.shutdown().await;
+        Ok(())
+    }
+    /// Puts one of `item` into the panda's mouth.
+    fn hold(panda: &PandaEntity, item: &'static Item) {
+        panda.set_main_hand_item(ItemStack::new(1, item));
+    }
+
+    fn held_item(panda: &PandaEntity) -> &'static Item {
+        panda.main_hand_item().item
+    }
+
+    #[tokio::test]
+    async fn eating_starts_and_stops_with_the_sit_and_the_item() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let always = |bound: i32| {
+            assert_eq!(bound, 80);
+            1
+        };
+
+        hold(&panda, &Item::BAMBOO);
+        panda.handle_eating_with(always);
+        assert!(!panda.is_eating(), "a standing panda ate");
+
+        panda.set_sitting(true);
+        panda.handle_eating_with(|_| 0);
+        assert!(!panda.is_eating(), "eating needs a roll of 1 in 80");
+        panda.handle_eating_with(always);
+        // `eat(true)` sets 1 and the same tick counts on.
+        assert_eq!(panda.get_eat_counter(), 2);
+        panda.handle_eating_with(|_| 0);
+        assert_eq!(panda.get_eat_counter(), 3);
+
+        panda.set_sitting(false);
+        panda.handle_eating_with(|_| 0);
+        assert!(!panda.is_eating(), "a standing panda kept eating");
+
+        panda.set_sitting(true);
+        panda.eat(true);
+        panda.set_main_hand_item(ItemStack::EMPTY.clone());
+        panda.handle_eating_with(|_| 0);
+        assert!(!panda.is_eating(), "the panda ate without an item");
+
+        let scared = self::panda(&world);
+        set_genes(&scared, PandaGene::Worried, PandaGene::Normal);
+        set_thunder(&world, 1.0);
+        hold(&scared, &Item::BAMBOO);
+        scared.set_sitting(true);
+        scared.handle_eating_with(|_| 1);
+        assert!(!scared.is_eating(), "a scared panda started to eat");
+        set_thunder(&world, 0.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_meal_ends_after_80_ticks_and_finishes_the_item_after_100() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let meal = |panda: &PandaEntity, counter: i32, item: &'static Item, roll: i32| {
+            hold(panda, item);
+            panda.set_sitting(true);
+            panda.set_eat_counter(counter);
+            panda.handle_eating_with(|bound| {
+                assert_eq!(bound, 20, "only the end of the meal is rolled");
+                roll
+            });
+        };
+
+        hold(&panda, &Item::BAMBOO);
+        panda.set_sitting(true);
+        panda.set_eat_counter(80);
+        panda.handle_eating_with(|bound| {
+            assert_eq!(bound, 80, "the end of a meal is rolled only above 80 ticks");
+            0
+        });
+        assert_eq!(panda.get_eat_counter(), 81);
+
+        meal(&panda, 81, &Item::BAMBOO, 0);
+        assert_eq!(panda.get_eat_counter(), 82);
+        meal(&panda, 100, &Item::BAMBOO, 1);
+        assert!(!panda.is_eating());
+        assert_eq!(held_item(&panda), &Item::BAMBOO);
+        assert!(panda.is_sitting(), "a short meal stood the panda up");
+
+        meal(&panda, 101, &Item::BAMBOO, 1);
+        assert!(!panda.is_eating());
+        assert!(!panda.is_holding_item(), "the food was not eaten");
+        assert!(!panda.is_sitting(), "the panda did not get up after eating");
+
+        // Only `#panda_eats_from_ground` items are eaten up.
+        meal(&panda, 101, &Item::STICK, 1);
+        assert!(!panda.is_eating());
+        assert_eq!(held_item(&panda), &Item::STICK);
+        assert!(panda.is_sitting());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn panda_tick_runs_the_meal_and_synchs_the_eat_counter() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        hold(&panda, &Item::BAMBOO);
+        panda.set_sitting(true);
+        panda.eat(true);
+        let synched = &panda.get_entity().synched_data;
+        synched.clear_dirty();
+
+        panda.post_tick();
+        assert_eq!(panda.get_eat_counter(), 2);
+        assert!(synched.is_dirty(), "the counter step was not synched");
         world.level.shutdown().await;
         Ok(())
     }
