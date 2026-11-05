@@ -16,7 +16,6 @@ use pumpkin_data::{
     enchantment_provider::EnchantmentProvider,
     entity::EntityType,
     item::Item,
-    particle::Particle,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
@@ -519,7 +518,6 @@ impl Mob for EndermanEntity {
             killed_by_player: Some(source.is_some_and(|source| source.get_player().is_some())),
             ..Default::default()
         };
-        let pos = entity.block_pos.load();
         for stack in crate::world::loot::generate_loot_from_handle(
             &loot_table,
             self.get_random().random(),
@@ -542,36 +540,6 @@ impl Mob for EndermanEntity {
             .living_entity
             .jumping
             .store(false, Ordering::Relaxed);
-    }
-
-    fn post_tick(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let position = entity.pos.load();
-        let dimensions = entity.entity_dimension.load();
-        let mut rng = self.get_random();
-        for _ in 0..2 {
-            let particle_position = Vector3::new(
-                position.x + (rng.random::<f64>() - 0.5) * f64::from(dimensions.width),
-                position.y + rng.random::<f64>() * f64::from(dimensions.height) - 0.25,
-                position.z + (rng.random::<f64>() - 0.5) * f64::from(dimensions.width),
-            );
-            let velocity = Vector3::new(
-                rng.random::<f64>() * 2.0 - 1.0,
-                -rng.random::<f64>(),
-                rng.random::<f64>() * 2.0 - 1.0,
-            );
-            entity.world.load().spawn_particle(
-                particle_position,
-                velocity.to_f32_lossy(),
-                1.0,
-                0,
-                Particle::Portal,
-            );
-        }
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
