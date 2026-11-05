@@ -3540,8 +3540,8 @@ impl Player {
                 1.0,
                 1.0,
             );
-            self.living_entity
-                .damage(self, damage, DamageType::FLY_INTO_WALL);
+            // Through the player checks (creative, loading in, shoulders)
+            self.damage(self, damage, DamageType::FLY_INTO_WALL);
         }
     }
 
