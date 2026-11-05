@@ -1,6 +1,6 @@
 use std::sync::{
-    Arc, Weak,
-    atomic::{AtomicI32, AtomicU8, Ordering},
+    Arc, PoisonError, Weak,
+    atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -33,13 +33,30 @@ use crate::entity::{
     player::Player,
 };
 use crate::world::World;
+use move_control::PandaMoveControl;
+
+mod move_control;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::BAMBOO];
+
+/// Vanilla `Mob.rotlerp`: moves `from` towards `to` by at most `max` degrees and leaves the
+/// result signed. `MoveControl::rotlerp` wraps into 0 to 360 instead, which would turn a pitch
+/// of -45 into 315 and `set_pitch` would clamp that to +90.
+fn rotlerp(from: f32, to: f32, max: f32) -> f32 {
+    from + pumpkin_util::math::wrap_degrees(to - from).clamp(-max, max)
+}
 
 pub const FLAG_SNEEZE: u8 = 2;
 pub const FLAG_ROLL: u8 = 4;
 pub const FLAG_SIT: u8 = 8;
 pub const FLAG_ON_BACK: u8 = 16;
+
+/// Unhappy counter values at which the panda whines about the missing bamboo.
+const UNHAPPY_SOUND_TICKS: [i32; 2] = [29, 14];
+/// Vanilla turns the panda to its target by up to this many degrees per axis while it sulks.
+const UNHAPPY_LOOK_ANGLE: f32 = 90.0;
+/// Vanilla `isThundering` needs the thunder level above this.
+const THUNDERING_LEVEL: f32 = 0.9;
 
 const GENE_RANDOM_BOUND: i32 = 16;
 const MUTATION_CHANCE: i32 = 32;
@@ -106,6 +123,17 @@ fn genes_from_parents(
     (main_gene, hidden_gene)
 }
 
+/// The panda behind a goal's mob.
+fn as_panda(mob: &dyn Mob) -> Option<&PandaEntity> {
+    mob.cast_any().downcast_ref::<PandaEntity>()
+}
+
+/// Vanilla `Level.isThundering`, without the check that the dimension has weather.
+fn is_thundering(world: &World) -> bool {
+    let weather = world.weather.lock().unwrap_or_else(PoisonError::into_inner);
+    weather.thunder_level * weather.rain_level > THUNDERING_LEVEL
+}
+
 pub struct PandaEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -115,11 +143,18 @@ pub struct PandaEntity {
     pub eat_counter: AtomicI32,
     pub sneeze_counter: AtomicI32,
     pub unhappy_counter: AtomicI32,
+    got_bamboo: AtomicBool,
+    did_bite: AtomicBool,
 }
 
 impl PandaEntity {
+    /// Vanilla `Panda` constructor: registers the goals and swaps in the panda move control.
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner) = Box::new(PandaMoveControl::default());
         mob_entity.set_can_pick_up_loot(true);
         let panda = Self {
             mob_entity,
@@ -130,6 +165,8 @@ impl PandaEntity {
             eat_counter: AtomicI32::new(0),
             sneeze_counter: AtomicI32::new(0),
             unhappy_counter: AtomicI32::new(0),
+            got_bamboo: AtomicBool::new(false),
+            did_bite: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(panda);
         let mob_weak: Weak<dyn Mob> = {
@@ -274,6 +311,30 @@ impl PandaEntity {
         self.set_flag(FLAG_SIT, val);
     }
 
+    /// Vanilla `Mob.lookAt(entity, yMax, xMax)`: turns the panda's body yaw and pitch towards the
+    /// target right away, by at most the given angles per axis. Unlike the look control this does
+    /// not wait for the next tick and does not move the head only.
+    fn turn_towards(&self, target: &Arc<dyn EntityBase>, max_yaw: f32, max_pitch: f32) {
+        let entity = self.get_entity();
+        let pos = entity.pos.load();
+        let target_entity = target.get_entity();
+        let target_pos = target_entity.pos.load();
+        let xd = target_pos.x - pos.x;
+        let zd = target_pos.z - pos.z;
+        let yd = if target.get_living_entity().is_some() {
+            target_entity.get_eye_y() - entity.get_eye_y()
+        } else {
+            let bounding_box = target_entity.bounding_box.load();
+            f64::midpoint(bounding_box.min.y, bounding_box.max.y) - entity.get_eye_y()
+        };
+        let y_rot_d = (zd.atan2(xd).to_degrees() as f32) - 90.0;
+        let x_rot_d = -(yd.atan2(xd.hypot(zd)).to_degrees() as f32);
+        entity.set_pitch(rotlerp(entity.pitch.load(), x_rot_d, max_pitch));
+        entity
+            .yaw
+            .store(rotlerp(entity.yaw.load(), y_rot_d, max_yaw));
+    }
+
     #[must_use]
     pub fn is_on_back(&self) -> bool {
         self.has_flag(FLAG_ON_BACK)
@@ -290,6 +351,53 @@ impl PandaEntity {
 
     pub fn set_rolling(&self, val: bool) {
         self.set_flag(FLAG_ROLL, val);
+    }
+
+    /// Vanilla `getUnhappyCounter`.
+    #[must_use]
+    pub fn get_unhappy_counter(&self) -> i32 {
+        self.unhappy_counter.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `setUnhappyCounter`.
+    pub fn set_unhappy_counter(&self, value: i32) {
+        self.unhappy_counter.store(value, Ordering::Relaxed);
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::panda::UNHAPPY_COUNTER,
+            VarInt(value),
+        );
+    }
+
+    /// Vanilla `isEating`: the eat counter is running.
+    #[must_use]
+    pub fn is_eating(&self) -> bool {
+        self.eat_counter.load(Ordering::Relaxed) > 0
+    }
+
+    /// Vanilla `eat`: starts or stops the eat counter.
+    pub fn eat(&self, value: bool) {
+        let counter = i32::from(value);
+        self.eat_counter.store(counter, Ordering::Relaxed);
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::panda::EAT_COUNTER,
+            VarInt(counter),
+        );
+    }
+
+    /// Vanilla `isScared`: a worried panda during a thunderstorm.
+    #[must_use]
+    pub fn is_scared(&self) -> bool {
+        self.is_worried() && is_thundering(&self.get_entity().world.load())
+    }
+
+    /// Vanilla `canPerformAction`: the panda is free to walk, attack, flee and look around.
+    #[must_use]
+    pub fn can_perform_action(&self) -> bool {
+        !self.is_on_back()
+            && !self.is_scared()
+            && !self.is_eating()
+            && !self.is_rolling()
+            && !self.is_sitting()
     }
 }
 
@@ -429,6 +537,40 @@ impl Mob for PandaEntity {
             pumpkin_data::tracked_data::panda::EAT_COUNTER,
             VarInt(self.eat_counter.load(Ordering::Relaxed)),
         );
+    }
+
+    /// Vanilla `Panda.tick` after the super tick: worried pandas sit through thunderstorms, a lost
+    /// target clears the bamboo and bite state, and the unhappy counter counts down.
+    fn post_tick(&self) {
+        if self.is_worried() {
+            if self.is_scared() && !self.get_entity().is_in_water() {
+                self.set_sitting(true);
+                self.eat(false);
+            } else if !self.is_eating() {
+                self.set_sitting(false);
+            }
+        }
+
+        let target = self.mob_entity.get_target();
+        if target.is_none() {
+            self.got_bamboo.store(false, Ordering::Relaxed);
+            self.did_bite.store(false, Ordering::Relaxed);
+        }
+
+        let unhappy_counter = self.get_unhappy_counter();
+        if unhappy_counter > 0 {
+            if let Some(target) = &target {
+                self.turn_towards(target, UNHAPPY_LOOK_ANGLE, UNHAPPY_LOOK_ANGLE);
+            }
+            if UNHAPPY_SOUND_TICKS.contains(&unhappy_counter) {
+                self.play_entity_sound(Sound::EntityPandaCantBreed, 1.0, 1.0);
+            }
+            self.set_unhappy_counter(unhappy_counter - 1);
+        }
+
+        if self.is_sitting() {
+            self.get_entity().set_pitch(0.0);
+        }
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -577,6 +719,177 @@ mod tests {
         // A mutation can make the foal normal, so compare against its own variant.
         let expected = if foal.is_weak() { 10.0 } else { 20.0 };
         assert!((foal.mob_entity.living_entity.get_max_health() - expected).abs() < f32::EPSILON);
+        Ok(())
+    }
+
+    fn set_thunder(world: &World, level: f32) {
+        let mut weather = world
+            .weather
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        weather.rain_level = level;
+        weather.thunder_level = level;
+    }
+
+    #[tokio::test]
+    async fn panda_only_walks_while_it_can_perform_an_action() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let wanted_speed =
+            |panda: &Arc<PandaEntity>| f64::from(panda.mob_entity.living_entity.get_speed());
+        let tick_move_control = |panda: &Arc<PandaEntity>| {
+            panda
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .tick(panda.as_ref());
+        };
+        panda
+            .mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_wanted_position(8.5, 64.0, 0.5, 1.0);
+
+        panda.set_sitting(true);
+        tick_move_control(&panda);
+        assert!(wanted_speed(&panda).abs() < 1e-9, "a sitting panda walked");
+        assert!(
+            panda
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .has_wanted(),
+            "the wanted position was dropped while sitting"
+        );
+
+        panda.set_sitting(false);
+        tick_move_control(&panda);
+        assert!(
+            wanted_speed(&panda) > 0.0,
+            "the panda never started walking"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn worried_panda_sits_through_a_thunderstorm_and_gets_up_after() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let worried = panda(&world);
+        set_genes(&worried, PandaGene::Worried, PandaGene::Normal);
+        let normal = panda(&world);
+        normal.set_sitting(true);
+
+        set_thunder(&world, 1.0);
+        worried.post_tick();
+        normal.post_tick();
+        assert!(worried.is_scared() && worried.is_sitting());
+        assert!(!worried.can_perform_action());
+        // Only worried pandas react to the thunder, and only they stand up by themselves.
+        assert!(!normal.is_scared() && normal.is_sitting());
+
+        // A panda that is eating keeps sitting once the storm is over.
+        worried.eat(true);
+        set_thunder(&world, 0.0);
+        worried.post_tick();
+        assert!(worried.is_sitting());
+        worried.eat(false);
+        worried.post_tick();
+        assert!(!worried.is_sitting());
+        assert!(worried.can_perform_action());
+        normal.post_tick();
+        assert!(normal.is_sitting());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn panda_forgets_bamboo_and_bite_when_the_target_is_gone() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        let target = self::panda(&world);
+        panda.mob_entity.set_target(Some(target));
+        panda.got_bamboo.store(true, Ordering::Relaxed);
+        panda.did_bite.store(true, Ordering::Relaxed);
+
+        panda.post_tick();
+        assert!(panda.got_bamboo.load(Ordering::Relaxed));
+        assert!(panda.did_bite.load(Ordering::Relaxed));
+
+        panda.mob_entity.set_target(None);
+        panda.post_tick();
+        assert!(!panda.got_bamboo.load(Ordering::Relaxed));
+        assert!(!panda.did_bite.load(Ordering::Relaxed));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unhappy_counter_counts_down_to_zero() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let panda = panda(&world);
+        panda.set_unhappy_counter(2);
+        panda.post_tick();
+        assert_eq!(panda.get_unhappy_counter(), 1);
+        panda.post_tick();
+        assert_eq!(panda.get_unhappy_counter(), 0);
+        panda.post_tick();
+        assert_eq!(panda.get_unhappy_counter(), 0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unhappy_panda_turns_its_body_to_the_target_at_once_by_at_most_90_degrees() -> TestResult
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let place = |entity: &Arc<PandaEntity>, x: f64, z: f64| {
+            entity.get_entity().pos.store(Vector3::new(x, 64.0, z));
+        };
+        let unhappy = panda(&world);
+        let east = panda(&world);
+        let north_east = panda(&world);
+        let above = panda(&world);
+        place(&unhappy, 0.5, 0.5);
+        place(&east, 5.5, 0.5);
+        place(&north_east, 5.5, -4.5);
+        above.get_entity().pos.store(Vector3::new(5.5, 69.0, 0.5));
+        let yaw_off_by = |expected: f32| {
+            pumpkin_util::math::wrap_degrees(unhappy.get_entity().yaw.load() - expected).abs()
+        };
+
+        // Due east is yaw -90 and within the 90 degree limit, so one tick is enough.
+        unhappy.get_entity().yaw.store(0.0);
+        unhappy.mob_entity.set_target(Some(east));
+        unhappy.set_unhappy_counter(3);
+        unhappy.post_tick();
+        assert!(yaw_off_by(-90.0) < 0.01, "the panda did not turn at once");
+
+        // North east is yaw -135, which is 45 degrees further than the limit allows from yaw 0.
+        unhappy.get_entity().yaw.store(0.0);
+        unhappy.mob_entity.set_target(Some(north_east));
+        unhappy.post_tick();
+        assert!(yaw_off_by(-90.0) < 0.01, "the turn was not capped at 90");
+
+        // A target 5 blocks away and 5 blocks higher is 45 degrees up: a pitch of -45, not 315.
+        unhappy.get_entity().yaw.store(0.0);
+        unhappy.get_entity().pitch.store(0.0);
+        unhappy.mob_entity.set_target(Some(above));
+        unhappy.post_tick();
+        let pitch = unhappy.get_entity().pitch.load();
+        assert!(
+            (pitch + 45.0).abs() < 0.01,
+            "the pitch towards an elevated target was {pitch}"
+        );
+        world.level.shutdown().await;
         Ok(())
     }
 }
