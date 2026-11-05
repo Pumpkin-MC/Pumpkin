@@ -557,6 +557,28 @@ impl MobEntity {
             .unwrap_or(crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE)
     }
 
+    pub fn set_persistence_required(&self) {
+        self.persistence_required.store(true, Relaxed);
+    }
+
+    pub fn look_at(&self, target: &Entity, max_yaw: f32, max_pitch: f32) {
+        let entity = &self.living_entity.entity;
+        let pos = entity.pos.load();
+        let target_pos = target.pos.load();
+        let dx = target_pos.x - pos.x;
+        let dz = target_pos.z - pos.z;
+        let dy = target.get_eye_y() - entity.get_eye_y();
+        let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
+        let pitch = -(dy.atan2(dx.hypot(dz)).to_degrees() as f32);
+        let rotlerp = |from: f32, to: f32, max: f32| {
+            from + pumpkin_util::math::wrap_degrees(to - from).clamp(-max, max)
+        };
+        entity
+            .pitch
+            .store(rotlerp(entity.pitch.load(), pitch, max_pitch));
+        entity.yaw.store(rotlerp(entity.yaw.load(), yaw, max_yaw));
+    }
+
     pub fn set_guaranteed_drop(&self, slot: &EquipmentSlot) {
         self.living_entity
             .equipment_drop_chances
@@ -1434,6 +1456,10 @@ pub trait Mob: EntityBase + Send + Sync {
         1.0
     }
 
+    fn mob_is_stepping_carefully(&self) -> bool {
+        self.get_entity().is_sneaking()
+    }
+
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         self.as_animal().is_none()
     }
@@ -2026,6 +2052,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_cat(&self) -> Option<&crate::entity::passive::cat::CatEntity> {
+        None
+    }
+
     fn as_patrolling_monster(&self) -> Option<&dyn patrol::PatrollingMonster> {
         None
     }
@@ -2530,6 +2560,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn is_stepping_carefully(&self) -> bool {
+        self.mob_is_stepping_carefully()
+    }
+
     fn is_pushed_by_fluids(&self) -> bool {
         self.mob_is_pushed_by_fluids()
     }

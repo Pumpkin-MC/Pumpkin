@@ -75,6 +75,15 @@ impl TemptGoal {
         self.running
     }
 
+    #[must_use]
+    pub const fn target_player(&self) -> Option<&Arc<Player>> {
+        self.target_player.as_ref()
+    }
+
+    pub const fn set_can_scare(&mut self, can_scare: bool) {
+        self.can_scare = can_scare;
+    }
+
     fn is_tempt_item(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
         stack.item_count > 0
             && match self.tempt_items {

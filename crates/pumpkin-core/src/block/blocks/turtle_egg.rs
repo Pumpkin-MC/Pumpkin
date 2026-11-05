@@ -114,7 +114,7 @@ impl BlockBehaviour for TurtleEggBlock {
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
-        if !args.entity.get_entity().is_sneaking() {
+        if !args.entity.is_stepping_carefully() {
             Self::destroy_egg(
                 args.world,
                 args.position,
