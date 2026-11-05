@@ -1897,6 +1897,15 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Called after the base damage attempt, whether or not it applied damage.
+    fn post_damage_with_context(
+        &self,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) {
+    }
+
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
@@ -2701,6 +2710,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             source,
             cause,
         );
+        self.post_damage_with_context(damage_type, source, cause);
         if damaged {
             return self.on_damage_with_context(damage_type, source, cause);
         }

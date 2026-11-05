@@ -269,10 +269,10 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
-        let staring_player = target
+        let is_staring_player = target
             .as_ref()
             .and_then(|target| target.get_player())
-            .filter(|player| self.is_player_staring(player));
+            .is_some_and(|player| self.is_player_staring(&player));
         let target_change_time = if is_some {
             self.mob_entity
                 .living_entity
@@ -293,7 +293,7 @@ impl EndermanEntity {
         drop(mob_target);
 
         if is_some {
-            if staring_player.is_some() {
+            if is_staring_player {
                 self.play_stare_sound();
             }
             self.set_creepy(true);
@@ -596,16 +596,6 @@ impl Mob for EndermanEntity {
         let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
         let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
         if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
-            if !entity.has_vehicle()
-                && self
-                    .mob_entity
-                    .living_entity
-                    .hurt_cooldown
-                    .load(Ordering::Relaxed)
-                    > 10
-            {
-                self.teleport_randomly();
-            }
             caller.damage(caller, 1.0, DamageType::DROWN);
         }
     }
@@ -636,31 +626,27 @@ impl Mob for EndermanEntity {
         self.pre_damage(damage_type, source)
     }
 
-    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
-        if source.is_some_and(|s| s.get_living_entity().is_some()) {
+    fn post_damage_with_context(
+        &self,
+        _damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        if cause
+            .or(source)
+            .is_some_and(|entity| entity.get_living_entity().is_some())
+            || source.is_some_and(|source| {
+                source
+                    .cast_any()
+                    .is::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+            })
+        {
             return;
         }
         let should_teleport = self.get_random().random_range(0..10) != 0;
         if should_teleport {
             self.teleport_randomly();
         }
-    }
-
-    fn on_damage_with_context(
-        &self,
-        damage_type: DamageType,
-        source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        if source.is_some_and(|source| {
-            source
-                .cast_any()
-                .is::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
-        }) {
-            return true;
-        }
-        self.on_damage(damage_type, source);
-        true
     }
 }
 
