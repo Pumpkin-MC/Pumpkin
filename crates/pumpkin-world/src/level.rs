@@ -1084,6 +1084,9 @@ impl Level {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chunk::format::anvil::AnvilRegion;
+    use crate::chunk::io::RegionFile;
+    use pumpkin_config::chunk::{AnvilChunkConfig, ChunkConfig};
     use pumpkin_config::world::LevelConfig;
     use tempfile::TempDir;
 
@@ -1140,5 +1143,59 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn corrupt_entity_region_is_not_rewritten_after_read_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig {
+            chunk: ChunkConfig::Anvil(AnvilChunkConfig::default()),
+            ..LevelConfig::default()
+        };
+        let level = Level::from_root_folder(&config, root, 0, Dimension::OVERWORLD);
+
+        for x in 0..2 {
+            let chunk = Arc::new(ChunkEntityData {
+                x,
+                z: 0,
+                data: Mutex::new(Vec::new()),
+                live: AtomicBool::new(false),
+                dirty: AtomicBool::new(true),
+                read_failed: AtomicBool::new(false),
+            });
+            level
+                .write_entity_chunks(vec![(Vector2::new(x, 0), chunk)])
+                .await;
+        }
+        level.entity_saver.flush_all().await;
+
+        let path = level
+            .level_folder
+            .entities_folder
+            .join(AnvilRegion::file_name(Vector2::new(0, 0)));
+        let mut corrupt = std::fs::read(&path).unwrap();
+        for index in 0..2 {
+            let location =
+                u32::from_be_bytes(corrupt[index * 4..index * 4 + 4].try_into().unwrap());
+            assert_ne!(location, 0, "entity chunk {index} was not written");
+            let sector = (location >> 8) as usize;
+            corrupt[sector * 4096 + 4] = 5;
+        }
+        std::fs::write(&path, &corrupt).unwrap();
+
+        let chunk = level.get_entity_chunk(Vector2::new(0, 0)).await;
+        assert!(chunk.read_failed.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+
+        let mut receiver = level.receive_entity_chunks(vec![Vector2::new(1, 0)]);
+        let (chunk, _) = receiver.recv().await.expect("entity chunk response");
+        let chunk = chunk.upgrade().expect("entity chunk retained");
+        assert!(chunk.read_failed.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+
+        level.shutdown().await;
+
+        assert_eq!(std::fs::read(path).unwrap(), corrupt);
     }
 }
