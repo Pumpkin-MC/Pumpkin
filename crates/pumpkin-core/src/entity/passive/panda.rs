@@ -48,11 +48,13 @@ use goals::{
 };
 use lie_on_back::PandaLieOnBackGoal;
 use move_control::PandaMoveControl;
+use roll::PandaRollGoal;
 use sneeze::PandaSneezeGoal;
 
 mod goals;
 mod lie_on_back;
 mod move_control;
+mod roll;
 mod sneeze;
 
 /// Vanilla `PandaAvoidGoal` x2: a worried panda keeps clear of players and monsters.
@@ -188,6 +190,10 @@ pub struct PandaEntity {
     pub eat_counter: AtomicI32,
     pub sneeze_counter: AtomicI32,
     pub unhappy_counter: AtomicI32,
+    /// Vanilla `rollCounter`: the step of the roll in progress.
+    roll_counter: AtomicI32,
+    /// Vanilla `rollDelta`: the horizontal push the roll keeps up.
+    roll_delta: AtomicCell<Vector3<f64>>,
     got_bamboo: AtomicBool,
     did_bite: AtomicBool,
 }
@@ -210,6 +216,8 @@ impl PandaEntity {
             eat_counter: AtomicI32::new(0),
             sneeze_counter: AtomicI32::new(0),
             unhappy_counter: AtomicI32::new(0),
+            roll_counter: AtomicI32::new(0),
+            roll_delta: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             got_bamboo: AtomicBool::new(false),
             did_bite: AtomicBool::new(false),
         };
@@ -246,6 +254,7 @@ impl PandaEntity {
                 )),
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(12, Box::new(PandaRollGoal));
             goal_selector.add_goal(13, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(14, Box::new(WanderAroundGoal::water_avoiding(1.0)));
 
@@ -870,7 +879,7 @@ impl Mob for PandaEntity {
 
     /// Vanilla `Panda.tick` after the super tick: worried pandas sit through thunderstorms, a lost
     /// target clears the bamboo and bite state, the unhappy counter counts down, a sitting panda
-    /// has pitch 0 and `handleEating` runs.
+    /// has pitch 0, `handleEating` runs and a rolling panda takes its next roll step.
     fn post_tick(&self) {
         if self.is_worried() {
             if self.is_scared() && !self.get_entity().is_in_water() {
@@ -899,6 +908,7 @@ impl Mob for PandaEntity {
         }
 
         self.tick_sneeze();
+        self.tick_roll();
 
         if self.is_sitting() {
             self.get_entity().set_pitch(0.0);
