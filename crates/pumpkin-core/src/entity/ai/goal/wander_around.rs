@@ -15,6 +15,7 @@ pub struct WanderAroundGoal {
     speed: f64,
     target: Option<Vector3<f64>>,
     interval: i32,
+    check_no_action_time: bool,
     force_trigger: bool,
     water_avoiding_probability: Option<f32>,
     position: Option<PositionProvider>,
@@ -35,6 +36,7 @@ impl WanderAroundGoal {
             speed,
             target: None,
             interval,
+            check_no_action_time: true,
             force_trigger: false,
             water_avoiding_probability: None,
             position: None,
@@ -60,6 +62,12 @@ impl WanderAroundGoal {
     #[must_use]
     pub const fn with_start_condition(mut self, start_condition: fn(&dyn Mob) -> bool) -> Self {
         self.start_condition = Some(start_condition);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_check_no_action_time(mut self, check_no_action_time: bool) -> Self {
+        self.check_no_action_time = check_no_action_time;
         self
     }
 
@@ -111,12 +119,13 @@ impl Goal for WanderAroundGoal {
         }
 
         if !self.force_trigger {
-            if mob
-                .get_mob_entity()
-                .living_entity
-                .no_action_time
-                .load(std::sync::atomic::Ordering::Relaxed)
-                >= NO_ACTION_TIME_LIMIT
+            if self.check_no_action_time
+                && mob
+                    .get_mob_entity()
+                    .living_entity
+                    .no_action_time
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    >= NO_ACTION_TIME_LIMIT
             {
                 return false;
             }
@@ -189,6 +198,40 @@ mod tests {
         goal.trigger();
         assert!(goal.can_start(cow.as_ref()));
         assert!(!goal.can_start(cow.as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn idle_golems_can_start_village_goals() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::goal::{
+            golem_random_stroll_in_village::golem_random_stroll_in_village,
+            move_back_to_village::move_back_to_village,
+        };
+        use crate::entity::passive::iron_golem::IronGolemEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let golem = IronGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::IRON_GOLEM,
+        ));
+        golem
+            .get_mob_entity()
+            .living_entity
+            .no_action_time
+            .store(100, Relaxed);
+        for goal in [
+            golem_random_stroll_in_village(0.6),
+            move_back_to_village(0.6),
+        ] {
+            let mut goal = goal
+                .with_start_condition(|_| true)
+                .with_position(|_| Some(Vector3::new(1.0, 64.0, 0.0)), 0.0);
+            goal.set_interval(1);
+            assert!(goal.can_start(golem.as_ref()));
+        }
         world.level.shutdown().await;
         Ok(())
     }

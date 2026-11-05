@@ -196,7 +196,6 @@ impl BedrockClient {
         }
 
         if input_data.get(InputData::StartSpinAttack as usize) {
-            player.release_shoulders();
             entity.set_pose(EntityPose::SpinAttack);
         } else if input_data.get(InputData::StopSpinAttack as usize) {
             player.update_player_pose();

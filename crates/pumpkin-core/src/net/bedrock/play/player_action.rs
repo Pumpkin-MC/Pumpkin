@@ -245,7 +245,6 @@ impl BedrockClient {
                 player.update_player_pose();
             }
             PlayerAction::StartSpinAttack => {
-                player.release_shoulders();
                 player
                     .get_entity()
                     .set_pose(pumpkin_data::entity::EntityPose::SpinAttack);

@@ -18,6 +18,7 @@ const SECTION_SEARCH_RADIUS: i32 = 2;
 #[must_use]
 pub const fn move_back_to_village(speed: f64) -> WanderAroundGoal {
     WanderAroundGoal::with_interval(speed, INTERVAL)
+        .with_check_no_action_time(false)
         .with_start_condition(is_outside_village)
         .with_position(get_position, 0.0)
 }
