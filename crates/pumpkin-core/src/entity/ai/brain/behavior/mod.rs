@@ -38,6 +38,7 @@ pub mod stop_attacking_if_target_invalid;
 pub mod swim;
 pub mod timed;
 pub mod try_find_land;
+pub mod try_find_liquid;
 pub mod try_lay_spawn_on_fluid_near_land;
 pub mod update_activity_from_schedule;
 pub mod utils;
