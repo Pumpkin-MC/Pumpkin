@@ -4,12 +4,20 @@ use std::sync::{
 };
 
 use super::BlockEntity;
+use crate::entity::player::Player;
+use crate::world::World;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 
 pub use pumpkin_data::dye_color::DyeColor;
+
+/// Extra reach allowed when checking that a sign editor is still near the sign.
+///
+/// Added on top of the block interaction range. Vanilla passes the same value to
+/// `Player#isWithinBlockInteractionRange` from `SignBlockEntity#playerIsTooFarAwayToEdit`.
+pub const SIGN_EDIT_RANGE_BUFFER: f64 = 4.0;
 
 pub struct SignBlockEntity {
     pub front_text: SignText,
@@ -497,6 +505,32 @@ impl<'a> SignEntityRef<'a> {
             Self::Sign(s) => &s.currently_editing_player,
             Self::Hanging(s) => &s.currently_editing_player,
         }
+    }
+
+    /// Returns the sign's block position.
+    #[must_use]
+    pub fn block_pos(&self) -> BlockPos {
+        match self {
+            Self::Sign(s) => s.get_position(),
+            Self::Hanging(s) => s.get_position(),
+        }
+    }
+
+    /// Mirrors the gate in `SignBlockEntity#updateSignText`: only the player the editor was
+    /// opened for may write text, and only while they can still reach the sign. Vanilla keeps
+    /// that registration from going stale in `SignBlockEntity#tick`; Pumpkin has no sign
+    /// ticker, so `SignBlockEntity#playerIsTooFarAwayToEdit` is checked here instead.
+    #[must_use]
+    pub fn may_update_text(&self, world: &World, player: &Player) -> bool {
+        let pos = self.block_pos();
+        !self.is_waxed()
+            && *self
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                == Some(player.gameprofile.id)
+            && world.level.is_chunk_loaded(&pos.chunk_position())
+            && player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER)
     }
 }
 

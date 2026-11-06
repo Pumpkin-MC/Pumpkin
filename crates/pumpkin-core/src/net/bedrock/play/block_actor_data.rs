@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_protocol::bedrock::server::block_actor_data::SBlockActorData;
+use tracing::warn;
 
 fn parse_bedrock_sign_lines(text: &str) -> [Box<str>; 4] {
     let mut lines = [Box::from(""), Box::from(""), Box::from(""), Box::from("")];
@@ -76,17 +77,11 @@ impl BedrockClient {
         else {
             return;
         };
-        if sign_entity.is_waxed() {
-            return;
-        }
-
-        let currently_editing = *sign_entity
-            .currently_editing_player()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(editor_id) = currently_editing
-            && editor_id != player.gameprofile.id
-        {
+        if !sign_entity.may_update_text(&world, player) {
+            warn!(
+                "Player {} just tried to change non-editable sign",
+                player.gameprofile.name
+            );
             return;
         }
 
