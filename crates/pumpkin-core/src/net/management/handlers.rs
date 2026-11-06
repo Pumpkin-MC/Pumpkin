@@ -1389,6 +1389,18 @@ fn get_gamerules(server: &Server) -> Vec<TypedGameRule> {
     rules
 }
 
+fn apply_game_rule(server: &Server, rule: &GameRule, value: &GameRuleValue<i64, bool>) {
+    let worlds = server.worlds.load();
+    if *rule == GameRule::AdvanceTime {
+        for world in worlds.iter() {
+            world.set_game_rule(rule, value);
+        }
+    } else if let Some(world) = worlds.first() {
+        // Every world shares the same level data, so only advance_time needs all worlds.
+        world.set_game_rule(rule, value);
+    }
+}
+
 fn update_gamerule(
     server: &Server,
     rule: &GameRule,
@@ -1405,9 +1417,7 @@ fn update_gamerule(
                         "Stated type mismatches with actual type of gamerule \"{rule}\""
                     )))
                 })?;
-            for world in server.worlds.load().iter() {
-                world.set_game_rule(rule, &GameRuleValue::Int(int_val));
-            }
+            apply_game_rule(server, rule, &GameRuleValue::Int(int_val));
             Ok(TypedGameRule {
                 key: rule.to_string(),
                 type_name: "integer".to_string(),
@@ -1423,9 +1433,7 @@ fn update_gamerule(
                         "Stated type mismatches with actual type of gamerule \"{rule}\""
                     )))
                 })?;
-            for world in server.worlds.load().iter() {
-                world.set_game_rule(rule, &GameRuleValue::Bool(bool_val));
-            }
+            apply_game_rule(server, rule, &GameRuleValue::Bool(bool_val));
             Ok(TypedGameRule {
                 key: rule.to_string(),
                 type_name: "boolean".to_string(),
