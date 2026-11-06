@@ -45,6 +45,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Extract release tag
+        run: |
+          VERSION=$(awk -F '"' '/^version/ {print $2}' Cargo.toml)
+          echo "PUMPKIN_TAG=$VERSION" >> "$GITHUB_ENV"
+
       - name: Login to GitHub CR
         uses: docker/login-action@v4
         with:
@@ -69,6 +74,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+          build-args: |
+            PUMPKIN_TAG=${{ env.PUMPKIN_TAG }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
