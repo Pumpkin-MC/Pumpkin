@@ -96,6 +96,8 @@ pub struct JavaClient {
     pub server_address: String,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
+    /// Whether the play login packet has been queued to this client.
+    pub login_sent: AtomicBool,
     /// The client's IP address. Direct field (lock-free).
     pub address: SocketAddr,
     /// The client's brand or modpack information. Lock-free `ArcSwap`.
@@ -157,6 +159,7 @@ impl JavaClient {
             server_address: pending.server_address,
             address: pending.address,
             connection_state: pending.connection_state,
+            login_sent: AtomicBool::new(false),
             close_token: pending.close_token,
             tasks: TaskTracker::new(),
             rt_handle: tokio::runtime::Handle::current(),

@@ -23,6 +23,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -31,7 +32,7 @@ use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
-use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
+use pumpkin_protocol::java::client::play::{CChangeDifficulty, CGameEvent, CTabList, GameEvent};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
@@ -977,6 +978,32 @@ impl Server {
                 },
             );
         }
+    }
+
+    /// Notifies clients about game rule changes that they mirror locally.
+    pub fn on_game_rule_changed(&self, rule: &GameRule, value: &GameRuleValue<i64, bool>) {
+        if *rule != GameRule::ImmediateRespawn {
+            return;
+        }
+
+        let GameRuleValue::Bool(immediate_respawn) = value else {
+            return;
+        };
+        // Vanilla's `IMMEDIATE_RESPAWN` event: 1 hides the client's death screen.
+        let packet = CGameEvent::new(
+            GameEvent::EnabledRespawnScreen,
+            if *immediate_respawn { 1.0 } else { 0.0 },
+        );
+        let players = self.get_all_players();
+        World::broadcast_java_clients(
+            &packet,
+            players.iter().filter_map(|player| {
+                player
+                    .client
+                    .java()
+                    .filter(|client| client.login_sent.load(Ordering::Relaxed))
+            }),
+        );
     }
 
     /// Sets the difficulty lock status of the server and broadcasts the update to all players.

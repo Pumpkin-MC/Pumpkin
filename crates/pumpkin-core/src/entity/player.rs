@@ -625,6 +625,15 @@ pub enum SpamType {
 /// Center chunk and levels of the view and simulation tickets a player holds.
 pub type HeldChunkTickets = (Vector2<i32>, Option<i8>, Option<i8>);
 
+/// Tracks client-requested respawns that overlap a running respawn.
+#[derive(Debug, Default)]
+pub struct RespawnRequestState {
+    /// Whether a respawn task is currently running.
+    pub in_progress: bool,
+    /// Whether another respawn request arrived while one was running.
+    pub pending: bool,
+}
+
 #[repr(C)]
 pub struct Player {
     /// The underlying living entity object that represents the player.
@@ -714,6 +723,8 @@ pub struct Player {
     pub subscribed_debug_sample: AtomicBool,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    /// Tracks client-requested respawns, including requests received while one is running.
+    pub respawn_state: Mutex<RespawnRequestState>,
     pub bedrock_spawned: AtomicBool,
     /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
     pub is_movement_locked: AtomicBool,
@@ -1040,6 +1051,7 @@ impl Player {
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(initially_loaded),
+            respawn_state: Mutex::new(RespawnRequestState::default()),
             bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),
