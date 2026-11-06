@@ -266,6 +266,7 @@ impl ToFromWasmEvent for PlayerLeaveEvent {
                 let player = consume_player(state, &data.player);
                 let mut event =
                     Self::new(player, consume_text_component(state, &data.leave_message));
+                event.transfer_requested = data.transfer_requested;
                 event.cancelled = data.cancelled;
                 event
             }

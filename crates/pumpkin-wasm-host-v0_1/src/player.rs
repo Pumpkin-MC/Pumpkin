@@ -2388,12 +2388,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         port: u16,
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
-        if matches!(
-            player.client.as_ref(),
-            pumpkin_core::net::ClientPlatform::Java(_)
-        ) {
-            player.transfer(&host, port);
-        }
+        player.transfer(&host, port);
         Ok(())
     }
 
