@@ -914,6 +914,11 @@ impl EntityBase for ArrowEntity {
 
                 let owner_entity = self.owner.get(&world);
 
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(target_entity_id);
+
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
@@ -925,15 +930,9 @@ impl EntityBase for ArrowEntity {
                 );
 
                 if is_enderman && !damage_succeeded {
-                    entity.set_pos(hit_pos);
                     self.has_hit.store(false, Ordering::Relaxed);
                     return;
                 }
-
-                self.pierced_entities
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(target_entity_id);
 
                 if let Some(living) = target.get_living_entity() {
                     if punch > 0 {
