@@ -626,7 +626,6 @@ impl Mob for EndermanEntity {
                 .cast_any()
                 .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
         }) {
-            self.repeatedly_try_to_teleport();
             return potion.hurts_water_sensitive_entities();
         }
         self.pre_damage(damage_type, source)
@@ -638,14 +637,19 @@ impl Mob for EndermanEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
+        if let Some(potion) = source.and_then(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+        }) {
+            if potion.hurts_water_sensitive_entities() && self.mob_entity.living_entity.is_alive() {
+                self.repeatedly_try_to_teleport();
+            }
+            return;
+        }
         if cause
             .or(source)
             .is_some_and(|entity| entity.get_living_entity().is_some())
-            || source.is_some_and(|source| {
-                source
-                    .cast_any()
-                    .is::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
-            })
         {
             return;
         }
