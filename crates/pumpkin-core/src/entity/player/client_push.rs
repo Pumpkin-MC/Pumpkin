@@ -131,6 +131,35 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .layer(client.client_delta.load(), push, lookback);
+        client.push_motion_age.store(self.world().get_world_age());
+        self.send_own_motion(motion);
+    }
+
+    /// Push motions sent before the server saw a jump start replace the jump's vertical
+    /// speed on arrival, so the jump speed follows them.
+    // TODO: The client still dips back toward the ground briefly before the resend lands,
+    // the resulting movement is correct.
+    pub fn resend_pushed_jump(&self, jump_started: bool) {
+        let Some(client) = self.client.bedrock().filter(|_| jump_started) else {
+            return;
+        };
+        let round_trip = bedrock_round_trip_ticks(self.ping.load(Ordering::Relaxed));
+        let since_push = self
+            .world()
+            .get_world_age()
+            .saturating_sub(client.push_motion_age.load());
+        if since_push > i64::from(round_trip) {
+            return;
+        }
+        let motion = client
+            .push_residual
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .layer(
+                client.client_delta.load(),
+                Vector3::default(),
+                round_trip as usize - 1,
+            );
         self.send_own_motion(motion);
     }
 }

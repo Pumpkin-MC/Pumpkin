@@ -39,6 +39,7 @@ impl BedrockClient {
         let horizontal_collision = flags.get(InputData::HorizontalCollision as usize);
 
         self.store_input_state(&packet, on_ground);
+        player.resend_pushed_jump(flags.get(InputData::StartJumping as usize));
 
         let sneaking = sneaking_from_auth(player, flags);
         let was_sneaking = entity.is_sneaking();
