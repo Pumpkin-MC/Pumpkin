@@ -756,27 +756,22 @@ fn execute_click_commands_if_present(
     };
 
     // Collect the commands first so no sign lock is held while a command runs.
-    let commands: Vec<Box<str>> = {
-        let messages = text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        messages
-            .iter()
-            .filter_map(|msg| {
-                if msg.is_empty() || !msg.starts_with('{') {
-                    return None;
-                }
-                let component = serde_json::from_str::<TextComponent>(msg).ok()?;
-                let ClickEvent::RunCommand { command } = component.0.style.click_event? else {
-                    return None;
-                };
-                Some(Box::from(
-                    command.strip_prefix('/').unwrap_or(command.as_ref()),
-                ))
-            })
-            .collect()
-    };
+    let messages = text.get_messages(player.is_text_filtering_enabled());
+    let commands: Vec<Box<str>> = messages
+        .iter()
+        .filter_map(|msg| {
+            if msg.is_empty() || !msg.starts_with('{') {
+                return None;
+            }
+            let component = serde_json::from_str::<TextComponent>(msg).ok()?;
+            let ClickEvent::RunCommand { command } = component.0.style.click_event? else {
+                return None;
+            };
+            Some(Box::from(
+                command.strip_prefix('/').unwrap_or(command.as_ref()),
+            ))
+        })
+        .collect();
     let has_run_command = !commands.is_empty();
 
     // Parsing is only used to decide whether the disabled overlay applies.
