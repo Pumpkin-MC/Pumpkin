@@ -9,6 +9,11 @@ impl PendingConnection {
     ) -> Option<PacketHandlerResult> {
         debug!("Handling plugin");
         let proxy_config = &server.advanced_config.networking.proxy;
+        // The request side is gated on this too, so forwarding must not stay
+        // reachable through an unsolicited response while proxy mode is off.
+        if !proxy_config.enabled {
+            return None;
+        }
         if proxy_config.vine.enabled {
             let expected_challenge = self.vine_challenge.take();
             match vine::receive_vine_plugin_response(
