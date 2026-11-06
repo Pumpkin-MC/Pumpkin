@@ -33,11 +33,17 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let method = quote! {
         #[expect(unused_mut)]
         fn #fn_name(#fn_inputs) -> PluginFuture<'_, #output_type> {
-            crate::GLOBAL_RUNTIME.block_on(async move {
-                Box::pin(async move {
-                    #fn_body
-                })
-            })
+            let mut __pumpkin_plugin_future = Box::pin(async move {
+                #fn_body
+            });
+
+            Box::pin(std::future::poll_fn(move |__pumpkin_context| {
+                let _guard = crate::GLOBAL_RUNTIME.enter();
+                std::future::Future::poll(
+                    __pumpkin_plugin_future.as_mut(),
+                    __pumpkin_context,
+                )
+            }))
         }
     }
     .to_string();
