@@ -60,6 +60,8 @@ impl BedrockClient {
     }
 
     fn handle_sign_block_actor_data(player: &Arc<Player>, packet: &SBlockActorData) {
+        player.update_last_action_time();
+
         let world = player.get_entity().world.load_full();
         let Some(block_entity) = world.get_block_entity(&packet.block_position) else {
             return;
