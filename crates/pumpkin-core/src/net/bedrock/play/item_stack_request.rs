@@ -95,6 +95,14 @@ impl BedrockClient {
                             source,
                             destination,
                         } => {
+                            if !can_take_bedrock_armor_slot(
+                                &*screen_handler,
+                                player.as_ref(),
+                                &source,
+                            ) {
+                                result = 1;
+                                break;
+                            }
                             let mut source_stack =
                                 get_slot_stack(&*screen_handler, &source, created_item.as_ref());
                             if source_stack.is_empty() && created_item.is_none() {
@@ -259,6 +267,18 @@ impl BedrockClient {
                             }
                         }
                         ItemStackRequestAction::Swap { slot1, slot2 } => {
+                            if !can_take_bedrock_armor_slot(
+                                &*screen_handler,
+                                player.as_ref(),
+                                &slot1,
+                            ) || !can_take_bedrock_armor_slot(
+                                &*screen_handler,
+                                player.as_ref(),
+                                &slot2,
+                            ) {
+                                result = 1;
+                                break;
+                            }
                             if get_output_screen_slot(&*screen_handler, &slot1).is_some()
                                 || get_output_screen_slot(&*screen_handler, &slot2).is_some()
                             {
@@ -292,6 +312,14 @@ impl BedrockClient {
                             source,
                             randomly: _,
                         } => {
+                            if !can_take_bedrock_armor_slot(
+                                &*screen_handler,
+                                player.as_ref(),
+                                &source,
+                            ) {
+                                result = 1;
+                                break;
+                            }
                             let mut source_stack =
                                 get_slot_stack(&*screen_handler, &source, created_item.as_ref());
                             if source_stack.is_empty() {
@@ -374,6 +402,14 @@ impl BedrockClient {
                                 continue;
                             }
 
+                            if !can_take_bedrock_armor_slot(
+                                &*screen_handler,
+                                player.as_ref(),
+                                &source,
+                            ) {
+                                result = 1;
+                                break;
+                            }
                             let mut source_stack =
                                 get_slot_stack(&*screen_handler, &source, created_item.as_ref());
                             if source_stack.is_empty() {
@@ -1209,6 +1245,32 @@ pub(crate) fn record_update(
             count,
             stack_id,
         });
+    }
+}
+
+// Bedrock item-stack actions bypass Java's screen-handler click checks.
+fn can_take_bedrock_armor_slot(
+    screen_handler: &dyn ScreenHandler,
+    player: &dyn InventoryPlayer,
+    slot_info: &ItemStackRequestSlotInfo,
+) -> bool {
+    if screen_handler.window_type().is_some() {
+        return true;
+    }
+
+    let mapped_slot = map_bedrock_container_slot(
+        screen_handler,
+        slot_info.container_name.container_name,
+        slot_info.slot_id,
+    );
+    match mapped_slot {
+        Some(index) if (5..9).contains(&index) => screen_handler
+            .get_behaviour()
+            .slots
+            .get(index)
+            .is_some_and(|slot| slot.can_take_items(player)),
+        None if slot_info.container_name.container_name == ContainerName::Armor => false,
+        _ => true,
     }
 }
 
