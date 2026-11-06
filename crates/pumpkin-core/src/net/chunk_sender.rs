@@ -76,13 +76,22 @@ impl EncodedChunk {
     }
 }
 
+/// A committed Bedrock dispatch whose packet is still being encoded.
+#[derive(Debug)]
+struct AwaitingDelivery {
+    token: u64,
+    /// The client already held a copy before this dispatch.
+    held_before: bool,
+    /// Superseded dispatches of the position that may still queue the chunk.
+    earlier: Vec<u64>,
+}
+
 #[derive(Debug)]
 pub struct ChunkSender {
     pub pending_chunks: FxHashSet<Vector2<i32>>,
     sent_chunks: FxHashSet<Vector2<i32>>,
-    /// Committed Bedrock chunks packets are still being encoded, by dispatch token and
-    /// whether the client already held an earlier copy.
-    awaiting_delivery: FxHashMap<Vector2<i32>, (u64, bool)>,
+    /// Committed Bedrock chunks whose packets are still being encoded.
+    awaiting_delivery: FxHashMap<Vector2<i32>, AwaitingDelivery>,
     /// Failed Bedrock encode attempts per chunk.
     encode_failures: FxHashMap<Vector2<i32>, u8>,
     /// Chunks cancelled by `ChunkSend`, by the tick they become pending again.
@@ -147,10 +156,17 @@ impl ChunkSender {
     pub fn mark_delivered(&mut self, deliveries: &[(Vector2<i32>, u64)]) -> Vec<Vector2<i32>> {
         let mut delivered = Vec::with_capacity(deliveries.len());
         for &(pos, token) in deliveries {
-            if self.awaiting_delivery.get(&pos).map(|d| d.0) == Some(token) {
+            let Some(awaiting) = self.awaiting_delivery.get_mut(&pos) else {
+                continue;
+            };
+            if awaiting.token == token {
                 self.awaiting_delivery.remove(&pos);
                 self.encode_failures.remove(&pos);
                 delivered.push(pos);
+            } else if let Some(i) = awaiting.earlier.iter().position(|&t| t == token) {
+                // A superseded dispatch queued the chunk, so the client holds a copy now
+                awaiting.earlier.swap_remove(i);
+                awaiting.held_before = true;
             }
         }
         delivered
@@ -175,6 +191,7 @@ impl ChunkSender {
 
     /// Holds a cancelled chunk back from batches until its retry tick.
     fn park(&mut self, pos: Vector2<i32>) {
+        self.pending_chunks.remove(&pos);
         let release_tick = self.batch_tick + CANCELLED_RETRY_TICKS;
         self.parked_chunks.insert(pos, release_tick);
         self.park_queue.push_back((release_tick, pos));
@@ -199,15 +216,25 @@ impl ChunkSender {
     /// and is kept.
     pub fn fail_delivery(&mut self, failed: &[(Vector2<i32>, u64, DeliveryFailure)]) {
         for &(pos, token, failure) in failed {
-            let Some(&(current, held_before)) = self.awaiting_delivery.get(&pos) else {
+            let Some(awaiting) = self.awaiting_delivery.get_mut(&pos) else {
                 continue;
             };
-            if current != token {
+            if awaiting.token != token {
+                // A superseded dispatch failed; the newer one decides the outcome
+                if let Some(i) = awaiting.earlier.iter().position(|&t| t == token) {
+                    awaiting.earlier.swap_remove(i);
+                }
                 continue;
             }
-            self.awaiting_delivery.remove(&pos);
-            if !held_before {
-                self.sent_chunks.remove(&pos);
+            if let Some(earlier) = awaiting.earlier.pop() {
+                // An earlier dispatch could still queue the chunk, so it stays sent
+                awaiting.token = earlier;
+            } else {
+                let held_before = awaiting.held_before;
+                self.awaiting_delivery.remove(&pos);
+                if !held_before {
+                    self.sent_chunks.remove(&pos);
+                }
             }
 
             let retry = match failure {
@@ -246,6 +273,7 @@ impl ChunkSender {
     /// Records a chunk sent outside the batch path as held.
     pub fn mark_sent_out_of_band(&mut self, pos: Vector2<i32>) {
         self.pending_chunks.remove(&pos);
+        self.parked_chunks.remove(&pos);
         self.awaiting_delivery.remove(&pos);
         self.sent_chunks.insert(pos);
     }
@@ -524,13 +552,22 @@ impl ChunkSender {
 
             let delivery_token = self.next_delivery_token;
             self.next_delivery_token += 1;
-            let held_before = self
-                .awaiting_delivery
-                .get(&candidate.position)
-                .map_or_else(|| self.sent_chunks.contains(&candidate.position), |d| d.1);
+            let (held_before, earlier) = match self.awaiting_delivery.remove(&candidate.position) {
+                Some(mut previous) => {
+                    previous.earlier.push(previous.token);
+                    (previous.held_before, previous.earlier)
+                }
+                None => (self.sent_chunks.contains(&candidate.position), Vec::new()),
+            };
             self.sent_chunks.insert(candidate.position);
-            self.awaiting_delivery
-                .insert(candidate.position, (delivery_token, held_before));
+            self.awaiting_delivery.insert(
+                candidate.position,
+                AwaitingDelivery {
+                    token: delivery_token,
+                    held_before,
+                    earlier,
+                },
+            );
             dispatched_chunks.push(DispatchedChunk {
                 position: candidate.position,
                 chunk: candidate.chunk.clone(),
@@ -828,6 +865,82 @@ mod tests {
         )]);
 
         assert!(sender.is_chunk_ready(&position));
+        assert!(sender.parked_chunks.contains_key(&position));
+    }
+
+    #[test]
+    fn failed_redispatch_keeps_chunk_sent_while_an_earlier_one_is_in_flight() {
+        let position = Vector2::new(1, 1);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let first = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.enqueue_chunk(position);
+        let second = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+
+        sender.fail_delivery(&[(
+            position,
+            second[0].delivery_token,
+            DeliveryFailure::Cancelled,
+        )]);
+        assert!(sender.is_chunk_sent(&position));
+
+        // The earlier dispatch then queues the chunk
+        let delivered = sender.mark_delivered(&[(position, first[0].delivery_token)]);
+        assert_eq!(delivered, vec![position]);
+        assert!(sender.is_chunk_ready(&position));
+    }
+
+    #[test]
+    fn earlier_dispatch_delivered_before_a_failed_redispatch_keeps_chunk_held() {
+        let position = Vector2::new(1, 2);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let first = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.enqueue_chunk(position);
+        let second = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+
+        sender.mark_delivered(&[(position, first[0].delivery_token)]);
+        sender.fail_delivery(&[(
+            position,
+            second[0].delivery_token,
+            DeliveryFailure::Deferred,
+        )]);
+
+        assert!(sender.is_chunk_ready(&position));
+        assert!(sender.pending_chunks.contains(&position));
+    }
+
+    #[test]
+    fn out_of_band_send_and_re_enqueue_leave_no_parked_entry() {
+        let position = Vector2::new(6, 6);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+        sender.cancel_pending(&batch_for(position, 0), 0, &[position]);
+
+        sender.mark_sent_out_of_band(position);
+        sender.batch_tick += CANCELLED_RETRY_TICKS;
+        sender.release_parked();
+
+        assert!(!sender.pending_chunks.contains(&position));
+    }
+
+    #[test]
+    fn cancelled_redispatch_waits_for_its_retry_tick() {
+        let position = Vector2::new(-4, -4);
+        let mut sender = ChunkSender::new();
+
+        sender.enqueue_chunk(position);
+        let dispatch = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
+        sender.enqueue_chunk(position);
+        sender.fail_delivery(&[(
+            position,
+            dispatch[0].delivery_token,
+            DeliveryFailure::Cancelled,
+        )]);
+
+        assert!(!sender.pending_chunks.contains(&position));
         assert!(sender.parked_chunks.contains_key(&position));
     }
 
