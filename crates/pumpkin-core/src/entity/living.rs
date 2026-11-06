@@ -2260,6 +2260,7 @@ impl LivingEntity {
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.on_landed_upon(OnLandedUponArgs {
                     world: &world,
+                    block,
                     fall_distance,
                     entity: caller,
                 });

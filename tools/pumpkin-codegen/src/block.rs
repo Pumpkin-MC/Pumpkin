@@ -886,6 +886,8 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// Jump velocity multiplier applied when jumping from this block.
     pub jump_velocity_multiplier: f32,
+    /// Fraction of fall distance ignored when an entity lands on this block.
+    pub fall_distance_reduction: f32,
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
@@ -917,6 +919,7 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
+        let fall_distance_reduction = &self.fall_distance_reduction;
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
@@ -956,6 +959,7 @@ impl ToTokens for Block {
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
+                fall_distance_reduction: #fall_distance_reduction,
                 item_id: #item_id,
                 default_state: &#default_state,
                 states: &[#(#states),*],
