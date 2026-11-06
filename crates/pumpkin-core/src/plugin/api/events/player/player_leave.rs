@@ -17,6 +17,9 @@ pub struct PlayerLeaveEvent {
 
     /// The message to display when the player leaves.
     pub leave_message: TextComponent,
+
+    /// Whether this session requested a server transfer; destination arrival is not confirmed.
+    pub transfer_requested: bool,
 }
 
 impl PlayerLeaveEvent {
@@ -28,10 +31,12 @@ impl PlayerLeaveEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerLeaveEvent`.
-    pub const fn new(player: Arc<Player>, leave_message: TextComponent) -> Self {
+    pub fn new(player: Arc<Player>, leave_message: TextComponent) -> Self {
+        let transfer_requested = player.transfer_requested();
         Self {
             player,
             leave_message,
+            transfer_requested,
             cancelled: false,
         }
     }

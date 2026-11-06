@@ -3032,14 +3032,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         port: u16,
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
-        if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
-                    &host,
-                    pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
-                ))
-                .await;
-        }
+        player.transfer(&host, port);
         Ok(())
     }
 
