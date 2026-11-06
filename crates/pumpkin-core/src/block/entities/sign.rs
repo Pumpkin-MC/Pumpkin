@@ -402,6 +402,8 @@ impl BlockEntity for SignBlockEntity {
 
     fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
         apply_sign_item_components(&self.front_text, &self.back_text, &self.is_waxed, stack);
+        // Item data must not be able to enable op-level click commands.
+        self.allow_op_features.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -930,5 +932,18 @@ mod tests {
         nbt.put_bool("allow_op_features", false);
         let untrusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
         assert!(!untrusted.front_text.has_any_click_commands(false));
+    }
+
+    #[test]
+    fn item_components_do_not_enable_op_features() {
+        let sign = SignBlockEntity::empty(BlockPos::new(1, 64, 2));
+        sign.allow_op_features.store(true, Ordering::Relaxed);
+
+        sign.apply_item_components(&pumpkin_data::item_stack::ItemStack::new(
+            1,
+            &pumpkin_data::item::Item::OAK_SIGN,
+        ));
+
+        assert!(!sign.allow_op_features.load(Ordering::Relaxed));
     }
 }

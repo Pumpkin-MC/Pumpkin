@@ -101,6 +101,8 @@ impl BlockEntity for HangingSignBlockEntity {
             &self.is_waxed,
             stack,
         );
+        // Item data must not be able to enable op-level click commands.
+        self.allow_op_features.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
