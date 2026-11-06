@@ -23,6 +23,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -483,6 +484,16 @@ impl Server {
         self.tasks.spawn_on(task, &self.runtime)
     }
 
+    /// Returns whether the dimension is enabled in the server configuration.
+    #[must_use]
+    pub fn is_dimension_enabled(&self, dimension: &Dimension) -> bool {
+        match dimension.minecraft_name {
+            name if name == Dimension::THE_NETHER.minecraft_name => self.basic_config.allow_nether,
+            name if name == Dimension::THE_END.minecraft_name => self.basic_config.allow_end,
+            _ => true,
+        }
+    }
+
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         let worlds = self.worlds.load();
         worlds
@@ -496,7 +507,16 @@ impl Server {
             })
     }
 
+    /// Creates a world, or returns the overworld if its dimension is disabled.
     pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        if !self.is_dimension_enabled(&dimension) {
+            warn!(
+                "Cannot create world '{name}': dimension {} is disabled",
+                dimension.minecraft_name
+            );
+            return self.get_world_from_dimension(&Dimension::OVERWORLD);
+        }
+
         {
             let worlds = self.worlds.load();
             let world = worlds
@@ -647,6 +667,32 @@ impl Server {
         Ok(())
     }
 
+    /// Discards placement from a disabled dimension before falling back to world spawn.
+    fn saved_login_world(&self, data: &mut NbtCompound) -> Option<Arc<World>> {
+        let key = data.get_string("Dimension")?;
+        let Some(dimension) = Dimension::from_name(key) else {
+            warn!("Invalid dimension key in player data: {key}");
+            return None;
+        };
+        if self.is_dimension_enabled(dimension) {
+            return Some(self.get_world_from_dimension(dimension));
+        }
+
+        for tag in [
+            "Pos",
+            "Rotation",
+            "Motion",
+            "OnGround",
+            "fall_distance",
+            "FallDistance",
+            "RootVehicle",
+            "SleepTimer",
+        ] {
+            data.child_tags.remove(tag);
+        }
+        None
+    }
+
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -685,24 +731,15 @@ impl Server {
             .gamemode;
 
         let first_world = self.worlds.load().first().cloned()?;
-
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    (world, Some(data))
-                } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
-                    (first_world, Some(data))
-                }
-            } else {
-                // Player data exists but doesn't have a "Dimension" key.
-                (first_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            (first_world, None)
-        };
+        let mut nbt = self
+            .player_data_storage
+            .load_data(&profile.id)
+            .ok()
+            .flatten();
+        let world = nbt
+            .as_mut()
+            .and_then(|data| self.saved_login_world(data))
+            .unwrap_or(first_world);
 
         let mut player = Player::new(
             client,
@@ -714,9 +751,11 @@ impl Server {
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data);
-            // The data file itself proves this is a returning player. Older Bedrock
-            // sessions could persist HasPlayedBefore as false and mask a valid Pos.
-            player.has_played_before.store(true, Ordering::Relaxed);
+            // Older Bedrock saves can have a valid Pos even when HasPlayedBefore is false.
+            let has_position = nbt_data.get_list("Pos").is_some_and(|pos| pos.len() >= 3);
+            player
+                .has_played_before
+                .store(has_position, Ordering::Relaxed);
         }
 
         // Wrap in Arc after data is loaded

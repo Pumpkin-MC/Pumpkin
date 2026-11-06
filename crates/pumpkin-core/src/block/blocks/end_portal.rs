@@ -18,7 +18,13 @@ impl BlockBehaviour for EndPortalBlock {
         BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.75, 1.0))
     }
 
+    /// Teleports a colliding entity between the Overworld and the End; does nothing when the End is
+    /// disabled.
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if !args.server.basic_config.allow_end {
+            return;
+        }
+
         let target_world =
             if args.world.dimension.minecraft_name == Dimension::THE_END.minecraft_name {
                 args.server.get_world_from_dimension(&Dimension::OVERWORLD)

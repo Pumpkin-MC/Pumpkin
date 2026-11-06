@@ -1,5 +1,6 @@
 mod block_tuning_and_invert;
 mod commands_and_gamemode;
+mod disabled_dimensions;
 mod embedded_stop;
 mod login_and_movement;
 mod loot_tables;
@@ -14,6 +15,7 @@ use std::{net::SocketAddr, sync::Arc};
 use pumpkin_core::server::Server;
 use pumpkin_gametest::GameTestRunner;
 
+/// Runs every bot test against the shared test server and records a summary line for each.
 pub async fn run_bot_tests(
     server: &Arc<Server>,
     addr: SocketAddr,
@@ -24,6 +26,8 @@ pub async fn run_bot_tests(
 
     let (mut bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
+
+    disabled_dimensions::run_disabled_dimensions_tests(server, summary_lines).await?;
 
     commands_and_gamemode::run_commands_and_gamemode_tests(
         server,

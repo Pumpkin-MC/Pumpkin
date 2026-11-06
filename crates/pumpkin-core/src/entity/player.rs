@@ -2226,6 +2226,9 @@ impl Player {
         } else {
             self.world()
         };
+        if world.dimension != respawn_point.dimension {
+            return None;
+        }
         let pos = &respawn_point.position;
 
         // Ensure chunks around the spawn position are fetched
@@ -4497,6 +4500,10 @@ impl Player {
                 let yaw = event.yaw;
                 let pitch = event.pitch;
                 let new_world = event.new_world;
+
+                if !server.is_dimension_enabled(&new_world.dimension) {
+                    return;
+                }
 
                 self.set_client_loaded(false);
                 let Some(player) = current_world.remove_player(self, false).await else {
