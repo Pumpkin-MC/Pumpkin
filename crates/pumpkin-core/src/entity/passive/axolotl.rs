@@ -181,6 +181,8 @@ fn as_axolotl(mob: &dyn Mob) -> Option<&AxolotlEntity> {
     mob.cast_any().downcast_ref::<AxolotlEntity>()
 }
 
+/// Vanilla `TOTAL_PLAYDEAD_TIME`: the ticks a hit sets the play dead memory to.
+const TOTAL_PLAYDEAD_TIME: i32 = 200;
 /// Vanilla `PLAYER_REGEN_DETECTION_RANGE`: how far from the axolotl a player has to be to be
 /// thanked for a kill.
 const PLAYER_REGEN_DETECTION_RANGE: f64 = 20.0;
@@ -188,6 +190,31 @@ const PLAYER_REGEN_DETECTION_RANGE: f64 = 20.0;
 const REGEN_BUFF_MAX_DURATION: i32 = 2400;
 /// What `applySupportingEffects` adds to the regeneration a player has.
 const REGEN_BUFF_BASE_DURATION: i32 = 100;
+
+/// What `Axolotl.hurtServer` looks at to decide that a hit makes the axolotl play dead.
+struct HurtCheck {
+    no_ai: bool,
+    damage: f32,
+    health: f32,
+    max_health: f32,
+    in_water: bool,
+    has_attacker: bool,
+    playing_dead: bool,
+}
+
+/// The condition of vanilla `hurtServer` in its own order, so that the random numbers drawn (and
+/// how many) are the vanilla ones: without AI none, then one in three, then a second draw below
+/// the damage or less than half of the health left, then the damage below the health, in the
+/// water, with an entity behind the hit, and not already playing dead.
+fn plays_dead_when_hurt<R: Rng + ?Sized>(rng: &mut R, hit: &HurtCheck) -> bool {
+    !hit.no_ai
+        && rng.random_range(0..3) == 0
+        && (f32::from(rng.random_range(0..3i16)) < hit.damage || hit.health / hit.max_health < 0.5)
+        && hit.damage < hit.health
+        && hit.in_water
+        && hit.has_attacker
+        && !hit.playing_dead
+}
 
 /// The regeneration duration `Axolotl.applySupportingEffects` gives a player whose regeneration
 /// is `current` (`(ticks left, amplifier)`, `None` when it has none), or `None` when it gives
@@ -318,6 +345,15 @@ impl AxolotlEntity {
             pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
             playing_dead,
         );
+    }
+
+    /// The ambient sound `playAmbientSound` plays: none while playing dead.
+    fn audible_ambient_sound(&self) -> Option<Sound> {
+        if self.is_playing_dead() {
+            None
+        } else {
+            self.get_ambient_sound()
+        }
     }
 
     /// Vanilla `getTarget` is `getTargetFromBrain`, the attack target memory. The `target` of the
@@ -552,6 +588,44 @@ impl Mob for AxolotlEntity {
         );
         living.make_move(caller);
         entity.velocity.store(entity.velocity.load() * WATER_DRAG);
+    }
+
+    /// Vanilla `Axolotl.hurtServer`, the part before `super`: a hit may make the axolotl play dead
+    /// (see [`plays_dead_when_hurt`]), which sets the `PLAY_DEAD_TICKS` memory to 200.
+    fn before_hurt(
+        &self,
+        amount: f32,
+        _damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let living = &self.mob_entity.living_entity;
+        let hit = HurtCheck {
+            no_ai: self.mob_entity.is_no_ai(),
+            damage: amount,
+            health: living.health.load(),
+            max_health: living.get_max_health(),
+            in_water: self.get_entity().is_in_water(),
+            has_attacker: source.is_some() || cause.is_some(),
+            playing_dead: self.is_playing_dead(),
+        };
+        if plays_dead_when_hurt(&mut self.get_random(), &hit) {
+            self.mob_entity.with_brain(self, |brain| {
+                brain.set(types::PLAY_DEAD_TICKS, TOTAL_PLAYDEAD_TIME);
+            });
+        }
+    }
+
+    /// Vanilla `Axolotl.canBeSeenAsEnemy`: not while playing dead.
+    fn mob_can_be_seen_as_enemy(&self) -> bool {
+        !self.is_playing_dead()
+    }
+
+    /// Vanilla `Axolotl.playAmbientSound`: silent while playing dead.
+    fn play_ambient_sound(&self) {
+        if let Some(sound) = self.audible_ambient_sound() {
+            self.make_sound(sound);
+        }
     }
 
     /// Vanilla `Axolotl.getAmbientSound`: the water sound in water, the air sound outside. The
@@ -1914,5 +1988,206 @@ mod tests {
         // A stronger level is never replaced by the level 0 reward, however little is left of it.
         assert_eq!(supporting_regeneration_duration(Some((100, 1))), None);
         assert_eq!(supporting_regeneration_duration(Some((0, 2))), None);
+    }
+
+    /// A hit in the water by an entity on an unhurt-looking axolotl; the tests change one thing at
+    /// a time from it.
+    fn hit() -> HurtCheck {
+        HurtCheck {
+            no_ai: false,
+            damage: 1.0,
+            health: 10.0,
+            max_health: 14.0,
+            in_water: true,
+            has_attacker: true,
+            playing_dead: false,
+        }
+    }
+
+    /// The outcome of the play dead rule for the scripted draws, and how many draws are left.
+    fn plays_dead(hit: &HurtCheck, draws: &[u32]) -> (bool, usize) {
+        let mut rng = ScriptedRng::new(
+            &draws
+                .iter()
+                .map(|index| ScriptedRng::pick(*index, 3))
+                .collect::<Vec<_>>(),
+        );
+        let result = plays_dead_when_hurt(&mut rng, hit);
+        (result, rng.remaining())
+    }
+
+    /// The first draw has to be a 0 of 3 and the second one below the damage (here 1: only a 0),
+    /// and the second draw is only made after the first one passed.
+    #[test]
+    fn a_hit_plays_dead_one_time_in_three_and_then_by_the_damage() {
+        let one = hit();
+        let two = HurtCheck {
+            damage: 2.0,
+            ..hit()
+        };
+
+        assert_eq!(plays_dead(&one, &[1, 0]), (false, 1));
+        assert_eq!(plays_dead(&one, &[2, 0]), (false, 1));
+        assert_eq!(plays_dead(&one, &[0, 0]), (true, 0));
+        assert_eq!(plays_dead(&one, &[0, 1]), (false, 0));
+        assert_eq!(plays_dead(&two, &[0, 1]), (true, 0));
+        assert_eq!(plays_dead(&two, &[0, 2]), (false, 0));
+    }
+
+    /// Under half of the health the second draw does not matter (it is still made), exactly half
+    /// does not count.
+    #[test]
+    fn under_half_of_the_health_a_second_draw_is_not_needed() {
+        let low = HurtCheck {
+            health: 6.9,
+            ..hit()
+        };
+        let half = HurtCheck {
+            health: 7.0,
+            ..hit()
+        };
+
+        assert_eq!(plays_dead(&low, &[0, 2]), (true, 0));
+        assert_eq!(plays_dead(&half, &[0, 2]), (false, 0));
+        assert_eq!(plays_dead(&half, &[0, 0]), (true, 0));
+    }
+
+    /// A hit that would kill it, or only just not, and the other conditions: all of them are
+    /// needed, and without AI not even the first random number is drawn.
+    #[test]
+    fn a_deadly_hit_or_a_missing_condition_keeps_it_standing() {
+        let deadly = HurtCheck {
+            damage: 10.0,
+            ..hit()
+        };
+        let nearly = HurtCheck {
+            damage: 9.99,
+            ..hit()
+        };
+        let dry = HurtCheck {
+            in_water: false,
+            ..hit()
+        };
+        let unseen = HurtCheck {
+            has_attacker: false,
+            ..hit()
+        };
+        let already = HurtCheck {
+            playing_dead: true,
+            ..hit()
+        };
+        let no_ai = HurtCheck {
+            no_ai: true,
+            ..hit()
+        };
+
+        assert_eq!(plays_dead(&deadly, &[0, 0]), (false, 0));
+        assert_eq!(plays_dead(&nearly, &[0, 0]), (true, 0));
+        assert_eq!(plays_dead(&dry, &[0, 0]), (false, 0));
+        assert_eq!(plays_dead(&unseen, &[0, 0]), (false, 0));
+        assert_eq!(plays_dead(&already, &[0, 0]), (false, 0));
+        assert_eq!(plays_dead(&no_ai, &[0, 0]), (false, 2));
+    }
+
+    /// A weak hit from an entity in the water sets the memory to 200 (a source or a cause alone is
+    /// enough), whatever the dice say if it is repeated often enough (the chance that 300 hits all miss is below one in 10^50). Hits
+    /// without an entity behind them (the dry out), out of the water, without AI, while already
+    /// playing dead and killing hits leave the memory alone.
+    #[tokio::test]
+    async fn hits_set_the_play_dead_memory_only_when_the_conditions_hold() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let attacker = cod(&world, 2.0);
+        let play_dead_ticks = |axolotl: &Arc<AxolotlEntity>| {
+            axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+                brain.get(types::PLAY_DEAD_TICKS).copied()
+            })
+        };
+        let hurt = |axolotl: &Arc<AxolotlEntity>, amount: f32, by_source: bool, by_cause: bool| {
+            let source: Option<&dyn EntityBase> = by_source.then_some(attacker.as_ref());
+            let cause: Option<&dyn EntityBase> = by_cause.then_some(attacker.as_ref());
+            for _ in 0..300 {
+                EntityBase::damage_with_context(
+                    axolotl.as_ref(),
+                    axolotl.as_ref(),
+                    amount,
+                    DamageType::MOB_ATTACK,
+                    None,
+                    source,
+                    cause,
+                );
+            }
+        };
+        let wet = |health: f32| {
+            let axolotl = axolotl(&world);
+            axolotl
+                .get_entity()
+                .touching_water
+                .store(true, Ordering::Relaxed);
+            axolotl.mob_entity.living_entity.health.store(health);
+            axolotl
+        };
+
+        let hit = wet(4.0);
+        hurt(&hit, 0.1, true, true);
+        let only_source = wet(4.0);
+        hurt(&only_source, 0.1, true, false);
+        let only_cause = wet(4.0);
+        hurt(&only_cause, 0.1, false, true);
+        let dry_out = wet(4.0);
+        hurt(&dry_out, 0.1, false, false);
+        let out_of_water = wet(4.0);
+        out_of_water
+            .get_entity()
+            .touching_water
+            .store(false, Ordering::Relaxed);
+        hurt(&out_of_water, 0.1, true, true);
+        let no_ai = wet(4.0);
+        no_ai.mob_entity.set_no_ai(true);
+        hurt(&no_ai, 0.1, true, true);
+        let killing = wet(4.0);
+        hurt(&killing, 4.0, true, true);
+        let resting = wet(4.0);
+        resting.set_playing_dead(true);
+        resting.mob_entity.with_brain(resting.as_ref(), |brain| {
+            brain.set(types::PLAY_DEAD_TICKS, 77);
+        });
+        hurt(&resting, 0.1, true, true);
+        world.level.shutdown().await;
+
+        assert_eq!(play_dead_ticks(&hit), Some(200));
+        assert_eq!(play_dead_ticks(&only_source), Some(200));
+        assert_eq!(play_dead_ticks(&only_cause), Some(200));
+        assert_eq!(play_dead_ticks(&dry_out), None);
+        assert_eq!(play_dead_ticks(&out_of_water), None);
+        assert_eq!(play_dead_ticks(&no_ai), None);
+        assert_eq!(play_dead_ticks(&killing), None);
+        assert_eq!(play_dead_ticks(&resting), Some(77));
+        Ok(())
+    }
+
+    /// Playing dead takes the axolotl out of what monsters see as an enemy, and its idle sound
+    /// is not played.
+    #[tokio::test]
+    async fn playing_dead_hides_it_from_enemies_and_silences_it() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+
+        let awake = (
+            axolotl.can_be_seen_as_enemy(),
+            axolotl.audible_ambient_sound(),
+        );
+        axolotl.set_playing_dead(true);
+        let asleep = (
+            axolotl.can_be_seen_as_enemy(),
+            axolotl.audible_ambient_sound(),
+        );
+        axolotl.set_playing_dead(false);
+        world.level.shutdown().await;
+
+        assert_eq!(awake, (true, Some(Sound::EntityAxolotlIdleAir)));
+        assert_eq!(asleep, (false, None));
+        Ok(())
     }
 }
