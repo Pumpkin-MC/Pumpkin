@@ -37,15 +37,7 @@ fn apply_sign_text(
     }
 
     let sign_text = sign_entity.get_text(is_front);
-    sign_text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone_from(&lines);
-    *sign_text
-        .filtered_messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = lines;
+    sign_text.set_client_messages(&lines);
 
     if let Some(color_val) = text_comp.get_int("SignTextColor") {
         let dye = crate::block::entities::sign::bedrock_sign_text_color_to_dye_color(color_val);

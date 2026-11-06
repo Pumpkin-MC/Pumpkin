@@ -1,16 +1,21 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 use pumpkin_core::{
     block::entities::{
         hanging_sign::HangingSignBlockEntity,
-        sign::{SignBlockEntity, SignEntityRef},
+        sign::{DyeColor, SignBlockEntity, SignEntityRef},
     },
     entity::EntityBase,
     server::Server,
 };
-use pumpkin_data::{Block, dimension::Dimension};
+use pumpkin_data::{Block, dimension::Dimension, item::Item, item_stack::ItemStack};
 use pumpkin_protocol::java::server::play::SUpdateSign;
-use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos, math::vector3::Vector3};
+use pumpkin_util::{
+    GameMode, Hand, PermissionLvl, math::position::BlockPos, math::vector3::Vector3,
+};
 
 use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
@@ -33,6 +38,17 @@ fn stored_text(world: &pumpkin_core::world::World, pos: BlockPos) -> String {
         .unwrap_or(raw)
 }
 
+fn sign_editor(world: &pumpkin_core::world::World, pos: BlockPos) -> Option<uuid::Uuid> {
+    world.get_block_entity(&pos).and_then(|entity| {
+        SignEntityRef::from_block_entity(&*entity).and_then(|sign| {
+            *sign
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        })
+    })
+}
+
 fn set_editor(world: &pumpkin_core::world::World, pos: BlockPos, editor: Option<uuid::Uuid>) {
     if let Some(entity) = world.get_block_entity(&pos)
         && let Some(sign) = SignEntityRef::from_block_entity(&*entity)
@@ -44,11 +60,79 @@ fn set_editor(world: &pumpkin_core::world::World, pos: BlockPos, editor: Option<
     }
 }
 
+fn set_allow_op_features(world: &pumpkin_core::world::World, pos: BlockPos, allow: bool) {
+    if let Some(entity) = world.get_block_entity(&pos)
+        && let Some(SignEntityRef::Sign(sign)) = SignEntityRef::from_block_entity(&*entity)
+    {
+        sign.allow_op_features.store(allow, Ordering::Relaxed);
+    }
+}
+
+fn set_click_component(
+    world: &pumpkin_core::world::World,
+    pos: BlockPos,
+    line: &str,
+    allow_op_features: bool,
+) {
+    if let Some(entity) = world.get_block_entity(&pos)
+        && let Some(SignEntityRef::Sign(sign)) = SignEntityRef::from_block_entity(&*entity)
+    {
+        let messages = [
+            Box::<str>::from(line),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ];
+        sign.front_text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone_from(&messages);
+        *sign
+            .front_text
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = messages;
+        sign.allow_op_features
+            .store(allow_op_features, Ordering::Relaxed);
+        *sign
+            .currently_editing_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+}
+
 async fn tick(server: &Arc<Server>, count: usize) {
     for _ in 0..count {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
     }
+}
+
+fn sign_color(world: &pumpkin_core::world::World, pos: BlockPos) -> Option<DyeColor> {
+    world.get_block_entity(&pos).and_then(|entity| {
+        SignEntityRef::from_block_entity(&*entity).map(|sign| sign.front_text().get_color())
+    })
+}
+
+fn sign_is_glowing(world: &pumpkin_core::world::World, pos: BlockPos) -> bool {
+    world.get_block_entity(&pos).is_some_and(|entity| {
+        SignEntityRef::from_block_entity(&*entity)
+            .is_some_and(|sign| sign.front_text().has_glowing_text())
+    })
+}
+
+fn sign_is_waxed(world: &pumpkin_core::world::World, pos: BlockPos) -> bool {
+    world.get_block_entity(&pos).is_some_and(|entity| {
+        SignEntityRef::from_block_entity(&*entity).is_some_and(|sign| sign.is_waxed())
+    })
+}
+
+fn crafted_click_line(marker: BlockPos) -> String {
+    format!(
+        r#"{{"text":"click","click_event":{{"action":"run_command","command":"/setblock {} {} {} minecraft:emerald_block"}}}}"#,
+        marker.0.x, marker.0.y, marker.0.z
+    )
 }
 
 async fn move_to_and_wait(
@@ -89,6 +173,18 @@ async fn send_update(bot: &mut HeadlessBot, pos: BlockPos, line: &str) -> Result
         line_4: "",
     })
     .await
+}
+
+async fn click_and_wait(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    pos: BlockPos,
+    sequence: i32,
+) -> Result<(), String> {
+    bot.use_block(pos, sequence).await?;
+    // The click command runs during the interaction, so a short window is enough.
+    tick(server, 40).await;
+    Ok(())
 }
 
 async fn run_authorization_cases(
@@ -189,6 +285,143 @@ async fn run_authorization_cases(
     Ok(())
 }
 
+async fn run_click_command_cases(
+    server: &Arc<Server>,
+    world: &pumpkin_core::world::World,
+    bot: &mut HeadlessBot,
+    player: &pumpkin_core::entity::player::Player,
+    base: BlockPos,
+) -> Result<(), String> {
+    let marker = base.offset(Vector3::new(0, 5, 0));
+    world
+        .level
+        .set_block_state(&marker, Block::AIR.default_state.id);
+    let crafted = crafted_click_line(marker);
+
+    // A client-submitted line that looks like a component must stay literal.
+    let crafted_pos = base.offset(Vector3::new(5, 0, 0));
+    place_sign(server, world, crafted_pos).await;
+    set_editor(world, crafted_pos, Some(player.gameprofile.id));
+    send_update(bot, crafted_pos, &crafted).await?;
+    tick(server, 20).await;
+
+    click_and_wait(server, bot, crafted_pos, 900).await?;
+    if world.get_block(&marker).id == Block::EMERALD_BLOCK.id {
+        return Err("a normal sign executed a run_command click event".to_string());
+    }
+
+    // A sign that allows op features follows vanilla and does execute.
+    set_click_component(world, crafted_pos, &crafted, true);
+    click_and_wait(server, bot, crafted_pos, 901).await?;
+    if world.get_block(&marker).id != Block::EMERALD_BLOCK.id {
+        return Err("an allow_op_features sign did not execute its click command".to_string());
+    }
+
+    // The same stored component without allow_op_features must not execute.
+    world
+        .level
+        .set_block_state(&marker, Block::AIR.default_state.id);
+    set_click_component(world, crafted_pos, &crafted, false);
+    click_and_wait(server, bot, crafted_pos, 902).await?;
+    if world.get_block(&marker).id == Block::EMERALD_BLOCK.id {
+        return Err("a sign without allow_op_features executed a click command".to_string());
+    }
+    if sign_editor(world, crafted_pos).is_some() {
+        return Err("a disabled sign click opened the editor instead of the overlay".to_string());
+    }
+
+    // Editing a sign that allows op features must not let a client inject a new
+    // click command; the submitted line is still stored literally.
+    place_sign(server, world, crafted_pos).await;
+    set_editor(world, crafted_pos, Some(player.gameprofile.id));
+    send_update(bot, crafted_pos, "trusted").await?;
+    tick(server, 20).await;
+    set_allow_op_features(world, crafted_pos, true);
+    set_editor(world, crafted_pos, Some(player.gameprofile.id));
+    send_update(bot, crafted_pos, &crafted).await?;
+    tick(server, 20).await;
+    if stored_text(world, crafted_pos) != crafted {
+        return Err(
+            "client text on an allow_op_features sign was not stored literally".to_string(),
+        );
+    }
+
+    world
+        .level
+        .set_block_state(&marker, Block::AIR.default_state.id);
+    click_and_wait(server, bot, crafted_pos, 903).await?;
+    if world.get_block(&marker).id == Block::EMERALD_BLOCK.id {
+        return Err("editing an allow_op_features sign injected a click command".to_string());
+    }
+
+    Ok(())
+}
+
+async fn run_applicator_cases(
+    server: &Arc<Server>,
+    world: &pumpkin_core::world::World,
+    bot: &mut HeadlessBot,
+    player: &pumpkin_core::entity::player::Player,
+    base: BlockPos,
+) -> Result<(), String> {
+    // Dyeing a sign with a disabled click command must not run it.
+    let marker = base.offset(Vector3::new(0, 5, 0));
+    world
+        .level
+        .set_block_state(&marker, Block::AIR.default_state.id);
+    let crafted = crafted_click_line(marker);
+    let click_apply_pos = base.offset(Vector3::new(3, 0, 1));
+    place_sign(server, world, click_apply_pos).await;
+    set_editor(world, click_apply_pos, Some(player.gameprofile.id));
+    send_update(bot, click_apply_pos, "apply click").await?;
+    tick(server, 20).await;
+    set_click_component(world, click_apply_pos, &crafted, false);
+
+    let inventory = player.inventory();
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::RED_DYE));
+    click_and_wait(server, bot, click_apply_pos, 904).await?;
+    if sign_color(world, click_apply_pos) != Some(DyeColor::Red) {
+        return Err("dye did not apply to a sign with a click command".to_string());
+    }
+    if world.get_block(&marker).id == Block::EMERALD_BLOCK.id {
+        return Err("dye application executed a disabled click command".to_string());
+    }
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::EMPTY.clone());
+
+    let pos = base.offset(Vector3::new(1, 0, 1));
+    place_sign(server, world, pos).await;
+    set_editor(world, pos, Some(player.gameprofile.id));
+    send_update(bot, pos, "APPLY").await?;
+    tick(server, 20).await;
+
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::RED_DYE));
+    click_and_wait(server, bot, pos, 905).await?;
+    if sign_color(world, pos) != Some(DyeColor::Red) {
+        return Err("dye did not apply to a sign".to_string());
+    }
+
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::GLOW_INK_SAC));
+    click_and_wait(server, bot, pos, 906).await?;
+    if !sign_is_glowing(world, pos) {
+        return Err("glow ink sac did not apply to a sign".to_string());
+    }
+
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::INK_SAC));
+    click_and_wait(server, bot, pos, 907).await?;
+    if sign_is_glowing(world, pos) {
+        return Err("ink sac did not remove glowing text".to_string());
+    }
+
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::HONEYCOMB));
+    click_and_wait(server, bot, pos, 908).await?;
+    if !sign_is_waxed(world, pos) {
+        return Err("honeycomb did not wax a sign".to_string());
+    }
+    inventory.set_stack_in_hand(Hand::Right, ItemStack::EMPTY.clone());
+
+    Ok(())
+}
+
 pub async fn run_sign_authorization_tests(
     server: &Arc<Server>,
     addr: std::net::SocketAddr,
@@ -211,7 +444,9 @@ pub async fn run_sign_authorization_tests(
     );
 
     run_authorization_cases(server, &world, &mut bot, &player, base).await?;
+    run_click_command_cases(server, &world, &mut bot, &player, base).await?;
+    run_applicator_cases(server, &world, &mut bot, &player, base).await?;
 
-    summary_lines.push("[PASS] bot:sign_authorization".to_string());
+    summary_lines.push("[PASS] bot:sign_authorization_click_commands_and_applicators".to_string());
     Ok(())
 }
