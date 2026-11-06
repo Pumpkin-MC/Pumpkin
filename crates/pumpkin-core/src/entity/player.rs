@@ -7599,6 +7599,10 @@ impl EntityBase for Player {
         self.gamemode.load() == GameMode::Spectator
     }
 
+    fn can_hit(&self) -> bool {
+        !self.is_spectator() && !self.living_entity.entity.is_removed()
+    }
+
     fn can_be_seen_as_enemy(&self) -> bool {
         !self
             .abilities

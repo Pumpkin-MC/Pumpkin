@@ -169,6 +169,10 @@ impl FireballEntity {
 }
 
 impl EntityBase for FireballEntity {
+    fn can_hit(&self) -> bool {
+        !self.get_entity().is_removed()
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
