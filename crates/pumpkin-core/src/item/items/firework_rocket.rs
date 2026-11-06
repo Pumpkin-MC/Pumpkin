@@ -16,6 +16,10 @@ use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+/// Vanilla offsets a block-launched rocket's spawn point by this many blocks along the
+/// clicked face, so it doesn't spawn embedded in the block.
+const ROCKET_PLACEMENT_OFFSET: f64 = 0.15;
+
 pub struct FireworkRocketItem;
 
 impl ItemMetadata for FireworkRocketItem {
@@ -24,9 +28,13 @@ impl ItemMetadata for FireworkRocketItem {
     }
 }
 
-const ROCKET_PLACEMENT_OFFSET: f64 = 0.15;
-
 impl ItemBehaviour for FireworkRocketItem {
+    // A firework rocket always launches, whether or not the player is gliding - it's a
+    // functional item in its own right (decorative in the open, a boost while gliding), not
+    // an elytra-only action. The boost itself is gated separately, inside the spawned
+    // entity's own tick logic (`FireworkRocketEntity::tick`), based on the owner's
+    // fall-flying state at the time - so spawning unconditionally here is what lets both
+    // cases (plain launch, and launch-while-gliding boost) share one code path.
     fn use_on_block(
         &self,
         item: &mut ItemStack,
@@ -41,6 +49,9 @@ impl ItemBehaviour for FireworkRocketItem {
             return BlockActionResult::Pass;
         }
         let world = player.world();
+        // The exact click point, nudged just outside the clicked face so the rocket doesn't
+        // spawn embedded in the block. Ownerless (no shooter attached), matching a dispensed
+        // rocket - this isn't the gliding-boost case, so it shouldn't follow the player around.
         let step = face.to_offset();
         let entity = Entity::new(
             world.clone(),
@@ -68,6 +79,7 @@ impl ItemBehaviour for FireworkRocketItem {
         self.normal_use_with_hand(item, player, yaw, pitch, pumpkin_util::Hand::Right);
     }
 
+    // Same reasoning as `use_on_block`: always launches, boost is gated inside the entity's tick.
     fn normal_use_with_hand(
         &self,
         _item: &Item,
@@ -76,16 +88,17 @@ impl ItemBehaviour for FireworkRocketItem {
         _pitch: f32,
         hand: pumpkin_util::Hand,
     ) {
-        if player.get_entity().is_fall_flying() {
-            let mut held = match hand {
-                pumpkin_util::Hand::Right => player.inventory().held_item(),
-                pumpkin_util::Hand::Left => player.inventory().off_hand_item(),
-            };
-            if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
-                return;
-            }
+        let mut held = match hand {
+            pumpkin_util::Hand::Right => player.inventory().held_item(),
+            pumpkin_util::Hand::Left => player.inventory().off_hand_item(),
+        };
+        if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
+            return;
+        }
 
-            let world = player.world();
+        let world = player.world();
+        // Vanilla only breaks leashes while the launch is a glide boost.
+        if player.get_entity().is_fall_flying() {
             let search_box = player
                 .get_entity()
                 .bounding_box
@@ -115,29 +128,29 @@ impl ItemBehaviour for FireworkRocketItem {
                     1.0,
                 );
             }
-
-            let entity = Entity::new(
-                world.clone(),
-                player.get_entity().pos.load(),
-                &EntityType::FIREWORK_ROCKET,
-            );
-            let entity = FireworkRocketEntity::new_shot_with_stack(
-                entity,
-                player.get_entity(),
-                held.copy_with_count(1),
-            );
-            world.spawn_entity(Arc::new(entity));
-
-            let item_id = held.item.id;
-            held.decrement_unless_creative(player.gamemode.load(), 1);
-            match hand {
-                pumpkin_util::Hand::Right => player.inventory().set_held_item(held),
-                pumpkin_util::Hand::Left => player
-                    .inventory()
-                    .set_stack_in_hand(pumpkin_util::Hand::Left, held),
-            }
-            player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
         }
+
+        let entity = Entity::new(
+            world.clone(),
+            player.get_entity().pos.load(),
+            &EntityType::FIREWORK_ROCKET,
+        );
+        let entity = FireworkRocketEntity::new_shot_with_stack(
+            entity,
+            player.get_entity(),
+            held.copy_with_count(1),
+        );
+        world.spawn_entity(Arc::new(entity));
+
+        let item_id = held.item.id;
+        held.decrement_unless_creative(player.gamemode.load(), 1);
+        match hand {
+            pumpkin_util::Hand::Right => player.inventory().set_held_item(held),
+            pumpkin_util::Hand::Left => player
+                .inventory()
+                .set_stack_in_hand(pumpkin_util::Hand::Left, held),
+        }
+        player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
