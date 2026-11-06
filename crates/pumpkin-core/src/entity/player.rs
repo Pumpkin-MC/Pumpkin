@@ -238,9 +238,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{
-    EquipmentSlot, EquippableImpl, GliderImpl, ToolImpl, WeaponImpl,
-};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, MovementEmission};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
@@ -2532,18 +2530,9 @@ impl Player {
 
     pub fn try_start_fall_flying(&self, server: &Arc<Server>) {
         let entity = self.get_entity();
-        let has_glider = self
-            .living_entity
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .equipment
-            .values()
-            .any(|stack| {
-                stack.get_data_component::<GliderImpl>().is_some()
-                    && !stack.next_damage_will_break()
-            });
-        let fall_flying = entity.check_fall_flying() && has_glider;
+        // Flight and gliding are mutually exclusive in vanilla.
+        let fall_flying =
+            !self.is_flying() && entity.check_fall_flying() && self.living_entity.can_glide();
         if fall_flying && !entity.is_fall_flying() {
             let mut event = EntityToggleGlideEvent::new(entity.entity_id, true);
             server.plugin_manager.fire_blocking(server, &mut event);
@@ -5129,6 +5118,12 @@ impl Player {
     pub fn set_flying(&self, flying: bool) {
         if flying {
             self.living_entity.fall_distance.store(0.0);
+            // Creative/spectator flight and elytra gliding are mutually exclusive in vanilla; a
+            // player that's mid-glide when flight is enabled shouldn't stay stuck in the glide
+            // pose/motion.
+            if self.get_entity().is_fall_flying() {
+                self.get_entity().set_fall_flying(false);
+            }
         }
         self.abilities
             .lock()
