@@ -1509,7 +1509,9 @@ pub struct Entity {
     pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
-    /// Vanilla `needsSync`: tracker resyncs position and velocity of entities
+    /// Vanilla `needsSync`: consumed by the tracker after the entity tick.
+    pub needs_sync: AtomicBool,
+    /// Coalesces immediate velocity sends to watchers and self.
     pub velocity_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
@@ -1754,6 +1756,7 @@ impl Entity {
             first_tick: AtomicBool::new(true),
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
+            needs_sync: AtomicBool::new(false),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
