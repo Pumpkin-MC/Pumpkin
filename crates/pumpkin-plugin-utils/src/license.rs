@@ -1,20 +1,24 @@
 //! License validation, leasing, and offline grace periods.
 
-use crate::{
-    http::{HttpClient, HttpError},
-    models::{CheckLicenseResponse, LicenseLease, LicenseStatus, PumpkinMetadata},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::http::{HttpClient, HttpError};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::models::CheckLicenseResponse;
+use crate::models::LicenseLease;
+use crate::models::{LicenseStatus, PumpkinMetadata};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, info};
 
 /// License checking and verification errors.
 #[derive(Debug, Error)]
 pub enum LicenseError {
     /// HTTP communication error with marketplace.
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("Marketplace HTTP error: {0}")]
     Http(#[from] HttpError),
     /// Metadata validation error (e.g. missing license on paid plugin).
@@ -45,6 +49,7 @@ pub enum LicenseError {
 /// Manages license checks, cached leases, and offline grace periods.
 pub struct LicenseChecker {
     data_folder: PathBuf,
+    #[cfg(not(target_arch = "wasm32"))]
     http_client: HttpClient,
 }
 
@@ -55,6 +60,7 @@ impl LicenseChecker {
         let folder = data_folder.as_ref().to_path_buf();
         Self {
             data_folder: folder,
+            #[cfg(not(target_arch = "wasm32"))]
             http_client: HttpClient::default(),
         }
     }
@@ -153,6 +159,7 @@ impl LicenseChecker {
     /// # Errors
     ///
     /// Returns `LicenseError` if the HTTP request fails or no license key is available.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn check_license_online(
         &self,
         metadata: &PumpkinMetadata,
@@ -212,6 +219,7 @@ impl LicenseChecker {
 }
 
 /// Minimal URL encoding helper for query parameters.
+#[cfg(not(target_arch = "wasm32"))]
 fn urlencoding(input: &str) -> String {
     let mut encoded = String::with_capacity(input.len());
     for byte in input.bytes() {
