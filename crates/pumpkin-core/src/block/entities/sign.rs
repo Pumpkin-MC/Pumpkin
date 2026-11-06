@@ -98,6 +98,16 @@ fn literal_message(raw: &str, original: &str) -> Box<str> {
     component_to_json(&component)
 }
 
+/// Returns whether a stored line has visible component text rather than only structure.
+fn message_has_text(message: &str) -> bool {
+    if message.is_empty() {
+        return false;
+    }
+    serde_json::from_str::<TextComponent>(message).map_or(true, |component| {
+        !component.0.to_bedrock_string().is_empty()
+    })
+}
+
 #[allow(clippy::fallible_impl_from)]
 impl From<SignText> for NbtTag {
     fn from(value: SignText) -> Self {
@@ -285,10 +295,11 @@ impl SignText {
             .clone()
     }
 
+    /// Returns whether any line has visible text content.
     #[must_use]
     pub fn has_message(&self, should_filter: bool) -> bool {
         let messages = self.get_messages(should_filter);
-        messages.iter().any(|msg| !msg.is_empty())
+        messages.iter().any(|msg| message_has_text(msg))
     }
 
     #[must_use]
@@ -932,6 +943,21 @@ mod tests {
         nbt.put_bool("allow_op_features", false);
         let untrusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
         assert!(!untrusted.front_text.has_any_click_commands(false));
+    }
+
+    #[test]
+    fn empty_literal_messages_are_not_content() {
+        let text = SignText::default();
+        text.set_client_messages(&[Box::from(""), Box::from(""), Box::from(""), Box::from("")]);
+        assert!(!text.has_message(false));
+
+        text.set_client_messages(&[
+            Box::from("visible"),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+        assert!(text.has_message(false));
     }
 
     #[test]
