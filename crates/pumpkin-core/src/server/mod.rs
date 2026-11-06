@@ -565,7 +565,34 @@ impl Server {
         Ok(())
     }
 
+    /// Copies the overworld clock into the level data so `level.dat` keeps the
+    /// game time and time of day across restarts, like vanilla.
+    fn sync_level_time(&self) {
+        let Some((day_time, game_time)) = self
+            .worlds
+            .load()
+            .iter()
+            .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+            .map(|world| {
+                let time = world
+                    .level_time
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                (time.time_of_day, time.world_age)
+            })
+        else {
+            return;
+        };
+        self.level_info.rcu(|info| {
+            let mut info = (**info).clone();
+            info.day_time = day_time;
+            info.game_time = game_time;
+            info
+        });
+    }
+
     pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
+        self.sync_level_time();
         let level_data = self.level_info.load();
         self.world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
@@ -845,6 +872,7 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
+        self.sync_level_time();
         let level_data = self.level_info.load();
         // then lets save the world info
 
