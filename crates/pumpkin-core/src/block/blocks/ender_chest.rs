@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use crate::block::blocks::chests::is_chest_blocked;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::{
     BlockBehaviour, GetScreenHandlerFactoryArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
     OnPlaceArgs, OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
     registry::BlockActionResult,
 };
-use crate::world::World;
 use pumpkin_data::block_properties::LadderLikeProperties;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockState, BlockStateId, translation};
@@ -19,7 +19,6 @@ use pumpkin_inventory::{
     screen_handler::{InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 
@@ -150,15 +149,6 @@ impl BlockBehaviour for EnderChestBlock {
     }
 }
 
-fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos)
-}
-fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
-    let above_pos = block_pos.up();
-    let above_state = world.get_block_state(&above_pos);
-    above_state.is_solid_block()
-}
 impl EnderChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }
