@@ -41,6 +41,8 @@ interface event {
     record player-leave-event-data {
         player: player,
         leave-message: text-component,
+        /// Whether this session requested a transfer; destination arrival is not confirmed.
+        transfer-requested: bool,
         cancelled: bool
     }
 

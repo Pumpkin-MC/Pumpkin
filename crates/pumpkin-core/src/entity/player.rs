@@ -633,6 +633,7 @@ pub struct Player {
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<ClientPlatform>,
+    transfer_requested: AtomicBool,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's `EnderChest` inventory.
@@ -1045,6 +1046,7 @@ impl Player {
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
             using_item: AtomicBool::new(false),
+            transfer_requested: AtomicBool::new(false),
             item_use_start_time: AtomicI32::new(0),
             using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.
@@ -4778,6 +4780,28 @@ impl Player {
     #[must_use]
     pub fn may_build(&self) -> bool {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
+    }
+
+    /// Requests a transfer to another server without waiting for the client to reconnect.
+    pub fn transfer(&self, host: &str, port: u16) {
+        if self.client.closed() {
+            return;
+        }
+        // Mark before queuing: the client may disconnect as soon as it receives the packet.
+        self.transfer_requested.store(true, Ordering::Relaxed);
+        self.try_enqueue_packet_editioned(
+            &pumpkin_protocol::java::client::play::CTransfer::new(host, VarInt(i32::from(port))),
+            &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
+                host.to_string(),
+                port,
+                false,
+            ),
+        );
+    }
+
+    /// Returns whether this session has requested a transfer, not whether it succeeded.
+    pub fn transfer_requested(&self) -> bool {
+        self.transfer_requested.load(Ordering::Relaxed)
     }
 
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {
@@ -9071,6 +9095,100 @@ mod tests {
         nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
 
         assert_eq!(read_root_vehicle(&nbt), Some(expected));
+    }
+
+    #[tokio::test]
+    async fn transfer_marks_leave_event_before_sending_packet()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use super::Player;
+        use crate::{
+            data::VanillaData,
+            net::{
+                ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+                java::{JavaClient, pending::PendingConnection},
+            },
+            plugin::api::events::player::player_leave::PlayerLeaveEvent,
+            server::Server,
+        };
+        use arc_swap::ArcSwap;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_data::packet::CURRENT_MC_VERSION;
+        use pumpkin_protocol::{
+            ConnectionState,
+            java::{
+                client::play::{CKeepAlive, CTransfer},
+                packet_decoder::TCPNetworkDecoder,
+            },
+            packet::MultiVersionJavaPacket,
+        };
+        use pumpkin_util::{GameMode, text::TextComponent};
+        use std::{sync::Arc, time::Duration};
+
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let (transport, peer) = tokio::io::duplex(8192);
+        let (read, write) = tokio::io::split(transport);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "TransferTest".into(),
+            properties: ArcSwap::from_pointee(vec![]),
+            profile_actions: None,
+        };
+        let mut client =
+            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::Java(client)),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            GameMode::Survival,
+        ));
+        assert!(!PlayerLeaveEvent::new(player.clone(), TextComponent::text("")).transfer_requested);
+
+        player.transfer("localhost", 25566);
+        // The writer has not run yet on this current-thread runtime.
+        assert!(PlayerLeaveEvent::new(player.clone(), TextComponent::text("")).transfer_requested);
+        let client = player.client.java().ok_or("No Java client")?;
+        client.try_send_packet(&CKeepAlive::new(1));
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+        let packet =
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CTransfer::to_id(CURRENT_MC_VERSION));
+        // Java transfer payload: UTF-8 host preceded by its length, followed by VarInt port.
+        assert_eq!(packet.payload.as_ref(), b"\x09localhost\xde\xc7\x01");
+        client.close();
+        client.await_tasks().await;
+        Ok(())
     }
 
     #[test]
