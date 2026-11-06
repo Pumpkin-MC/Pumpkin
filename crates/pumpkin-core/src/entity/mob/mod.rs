@@ -1,5 +1,7 @@
 use super::{
-    Entity, EntityBase, GearDamage, LeashTick, ai::pathfinder::Navigator, living::LivingEntity,
+    Entity, EntityBase, GearDamage, LeashTick,
+    ai::pathfinder::{Navigator, NavigatorGoal},
+    living::LivingEntity,
 };
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
@@ -823,6 +825,20 @@ impl MobEntity {
         self.target_selector.add_goal(priority, Box::new(goal));
     }
 
+    pub fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.steered()
+            .navigator()
+            .set_progress(NavigatorGoal::new(from, to, speed));
+    }
+
+    pub fn stop_navigation(&self) {
+        self.steered().navigator().stop();
+    }
+
+    pub fn set_navigation_speed(&self, speed: f64) {
+        self.steered().navigator().set_speed(speed);
+    }
+
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mut t = self
             .target
@@ -1385,6 +1401,18 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Takes the navigation lock, so callers must not already hold it.
     fn is_navigator_idle(&self) -> bool {
         self.get_mob_entity().steered().navigator().is_idle()
+    }
+
+    fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.get_mob_entity().navigate_to(from, to, speed);
+    }
+
+    fn stop_navigation(&self) {
+        self.get_mob_entity().stop_navigation();
+    }
+
+    fn set_navigation_speed(&self, speed: f64) {
+        self.get_mob_entity().set_navigation_speed(speed);
     }
 
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
@@ -2212,6 +2240,15 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
+
+    /// Vanilla `Mob.onOffspringSpawnedFromEgg`: hook called on an offspring mob when spawned
+    /// by right-clicking an adult mob with a spawn egg.
+    fn on_offspring_spawned_from_egg(
+        &self,
+        _spawner: &crate::entity::player::Player,
+        _parent: &dyn EntityBase,
+    ) {
+    }
 
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {

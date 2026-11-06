@@ -45,7 +45,11 @@ impl FleeSunGoal {
             let block_above = world.get_block_state(&check_pos.up());
             let block_below = world.get_block_state(&check_pos.down());
 
-            if !block_at.is_solid() && !block_above.is_solid() && block_below.is_solid() {
+            if !block_at.is_solid()
+                && !block_at.is_liquid()
+                && !block_above.is_solid()
+                && block_below.is_solid()
+            {
                 return Some(Vector3::new(
                     f64::from(check_pos.0.x) + 0.5,
                     f64::from(check_pos.0.y),

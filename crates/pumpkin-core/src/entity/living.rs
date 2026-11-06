@@ -1870,7 +1870,11 @@ impl LivingEntity {
                 super::player::Player::get_off_ground_speed,
             )
         };
-        let friction = block_friction * air_drag;
+        let friction = if self.entity.on_ground.load(Relaxed) {
+            block_friction * air_drag
+        } else {
+            air_drag
+        };
 
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -4146,24 +4150,7 @@ impl EntityBase for LivingEntity {
                     });
                 }
 
-                if let Some(stew) = item
-                    .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
-                {
-                    for entry in stew.effects.iter() {
-                        if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect)
-                        {
-                            self.add_effect(Effect {
-                                effect_type,
-                                duration: entry.duration,
-                                amplifier: 0,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            });
-                        }
-                    }
-                }
+                self.apply_suspicious_stew_effects(item);
 
                 if let Some(player) = caller.get_player() {
                     player.trigger_advancement(
@@ -4368,7 +4355,7 @@ impl LivingEntity {
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
-    fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
+    pub fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
@@ -4461,6 +4448,27 @@ impl LivingEntity {
                             &self.entity.pos.load(),
                         );
                     }
+                }
+            }
+        }
+    }
+
+    /// Applies stored status effects from suspicious stew when consumed.
+    pub fn apply_suspicious_stew_effects(&self, item: &ItemStack) {
+        if let Some(stew) = item
+            .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
+        {
+            for entry in stew.effects.iter() {
+                if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect) {
+                    self.add_effect(Effect {
+                        effect_type,
+                        duration: entry.duration,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    });
                 }
             }
         }
