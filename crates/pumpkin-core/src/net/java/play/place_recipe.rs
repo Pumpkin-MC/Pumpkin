@@ -10,7 +10,7 @@ impl JavaClient {
         packet: &SPlaceRecipe,
     ) {
         use crate::net::java::recipe_helper::{
-            GenericIngredient, compute_biggest_craftable, take_n_ingredient,
+            GenericIngredient, compute_biggest_craftable, take_ingredients,
         };
         use crate::server::recipe::DynamicRecipe;
         use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING};
@@ -205,12 +205,20 @@ impl JavaClient {
         let amount_to_craft = if use_max {
             compute_biggest_craftable(&active_ingredients, &player.inventory)
         } else if recipe_matches {
-            current_min.saturating_add(1)
+            current_min.saturating_add(1).min(compute_biggest_craftable(
+                &active_ingredients,
+                &player.inventory,
+            ))
         } else {
             1
         };
 
-        if amount_to_craft == 0 {
+        let taken = if amount_to_craft == 0 {
+            None
+        } else {
+            take_ingredients(&player.inventory, &active_ingredients, amount_to_craft)
+        };
+        let Some(taken) = taken else {
             let screen_handler_arc = player
                 .current_screen_handler
                 .lock()
@@ -221,15 +229,15 @@ impl JavaClient {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .send_content_updates();
             return;
-        }
+        };
 
         // Fill each grid slot with exactly `amount_to_craft` matching items.
-        for (idx, ing) in ingredient_slots.iter().enumerate() {
-            let Some(ingredient) = ing else { continue };
-            let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft);
-            if !taken.is_empty() {
-                crafting_inv.set_stack(idx, taken);
-            }
+        let slots = ingredient_slots
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, ing)| ing.is_some().then_some(idx));
+        for (idx, stack) in slots.zip(taken) {
+            crafting_inv.set_stack(idx, stack);
         }
 
         let screen_handler_arc = player
