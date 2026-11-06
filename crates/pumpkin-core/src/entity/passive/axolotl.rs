@@ -11,17 +11,21 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, RngExt, seq::IndexedRandom};
 
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob, BABY_START_AGE},
-    ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
-        wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+            follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+            swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
+            wander_around::WanderAroundGoal,
+        },
+        pathfinder::node::PathType,
     },
     mob::{
         Mob, MobEntity,
@@ -42,6 +46,8 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 const MAX_HEAD_X_ROT: f32 = 1.0;
 /// `Axolotl.getMaxHeadYRot`: how far the head may turn away from the body.
 const MAX_HEAD_Y_ROT: f32 = 1.0;
+/// Per tick factor of `Axolotl.travelInWater` on the velocity after the move.
+const WATER_DRAG: f64 = 0.9;
 /// Vanilla `Axolotl.RARE_VARIANT_CHANCE`: one in this many babies takes the rare variant.
 const RARE_VARIANT_CHANCE: u32 = 1200;
 /// Members already in a spawn group from which `Axolotl.finalizeSpawn` makes babies.
@@ -149,6 +155,12 @@ impl AxolotlEntity {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Box::new(AxolotlLookControl::default());
+        // `setPathfindingMalus(PathType.WATER, 0.0F)`: water costs nothing to path through.
+        mob_entity
+            .navigator
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_pathfinding_malus(PathType::Water, 0.0);
         let axolotl = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
@@ -368,6 +380,30 @@ impl Mob for AxolotlEntity {
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.set_variant(read_variant(nbt));
         self.set_from_bucket(nbt.get_bool("FromBucket").unwrap_or(false));
+    }
+
+    /// Vanilla `Axolotl.getWalkTargetValue`: no spot is better than another, unlike the grass and
+    /// light preference of other animals.
+    fn get_walk_target_value(&self, _pos: &BlockPos) -> f32 {
+        0.0
+    }
+
+    /// Vanilla `Axolotl.isPushedByFluid`.
+    fn mob_is_pushed_by_fluids(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `Axolotl.travelInWater`: it swims by its own `getSpeed()` with neither gravity nor
+    /// the jump out of the water of other mobs, and the water slows it by a tenth each tick.
+    fn travel_in_water(&self, caller: &dyn EntityBase, _gravity: f64, _falling: bool) {
+        let living = &self.mob_entity.living_entity;
+        let entity = &living.entity;
+        entity.update_velocity_from_input(
+            living.movement_input.load(),
+            f64::from(living.get_speed()),
+        );
+        living.make_move(caller);
+        entity.velocity.store(entity.velocity.load() * WATER_DRAG);
     }
 
     /// Vanilla `Axolotl.getMaxHeadXRot`.
@@ -1047,6 +1083,75 @@ mod tests {
 
         BodyRotationControl::new().client_tick(axolotl.as_ref());
         assert!((entity.body_yaw.load() - 29.0).abs() < 1e-4);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Water costs nothing to path through (a normal mob pays for it) and no spot is a favourite
+    /// walk target, not even grass, which makes the animal default rate 10.
+    #[tokio::test]
+    async fn axolotl_paths_through_water_and_has_no_favourite_spot() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        chunk.set_block_absolute_y(0, 63, 0, pumpkin_data::Block::GRASS_BLOCK.default_state.id);
+        world
+            .level
+            .loaded_chunks
+            .insert(pumpkin_util::math::vector2::Vector2::new(0, 0), chunk);
+        let axolotl = axolotl(&world);
+
+        assert!(PathType::Water.get_malus() > 0.0);
+        let water_malus = axolotl
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_pathfinding_malus(PathType::Water);
+        assert!(water_malus.abs() < 1e-6, "{water_malus}");
+
+        let on_grass = BlockPos::new(0, 64, 0);
+        assert!((axolotl.animal_walk_target_value(&on_grass) - 10.0).abs() < 1e-6);
+        assert!(axolotl.get_walk_target_value(&on_grass).abs() < 1e-6);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Currents and bubble columns do not push an axolotl.
+    #[tokio::test]
+    async fn fluids_do_not_push_the_axolotl() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        assert!(!EntityBase::is_pushed_by_fluids(axolotl(&world).as_ref()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// In water the axolotl accelerates by its own speed (`getSpeed()`, here 0.5) along the way it
+    /// faces, loses a tenth of the velocity each tick and does not sink, where the generic water
+    /// travel would add gravity and the jump out of the water.
+    #[tokio::test]
+    async fn travel_in_water_swims_with_its_speed_and_no_gravity() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let living = &axolotl.mob_entity.living_entity;
+        let entity = axolotl.get_entity();
+        entity.touching_water.store(true, Ordering::Relaxed);
+        axolotl.mob_entity.set_speed(0.5);
+        living.movement_input.store(Vector3::new(0.0, 0.0, 1.0));
+
+        axolotl.travel_in_water(axolotl.as_ref(), 0.08, false);
+        let velocity = entity.velocity.load();
+        assert!((velocity.z - 0.45).abs() < 1e-6, "{velocity:?}");
+        assert!(
+            velocity.x.abs() < 1e-9 && velocity.y.abs() < 1e-9,
+            "{velocity:?}"
+        );
+        assert!(entity.pos.load().z > 0.4);
+
+        axolotl.travel_in_water(axolotl.as_ref(), 0.08, false);
+        assert!((entity.velocity.load().z - 0.855).abs() < 1e-6);
         world.level.shutdown().await;
         Ok(())
     }
