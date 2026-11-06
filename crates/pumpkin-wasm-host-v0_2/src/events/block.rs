@@ -310,6 +310,7 @@ impl ToFromWasmEvent for BlockFromToEvent {
         Event::BlockFromToEvent(BlockFromToEventData {
             from_pos: to_wasm_block_position(self.from_pos),
             to_pos: to_wasm_block_position(self.to_pos),
+            block: to_wasm_block_name(self.block),
             cancelled: self.cancelled,
         })
     }
@@ -319,7 +320,7 @@ impl ToFromWasmEvent for BlockFromToEvent {
             Event::BlockFromToEvent(data) => Self {
                 from_pos: from_wasm_block_position(data.from_pos),
                 to_pos: from_wasm_block_position(data.to_pos),
-                block: &pumpkin_data::Block::WATER,
+                block: from_wasm_block_name(&data.block),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
