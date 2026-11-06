@@ -116,7 +116,12 @@ impl Player {
             return;
         }
         let push = entity.push_impulse.swap(Vector3::default());
-        if push == Vector3::default() {
+        // A motion replaces the vertical speed too, so a jump or bounce isn't pushed
+        let airborne = !client.client_on_ground.load(Ordering::Relaxed)
+            && !self.is_flying()
+            && !entity.is_fall_flying()
+            && !entity.is_in_liquid();
+        if push == Vector3::default() || airborne {
             return;
         }
         // The delta left half a round trip ago, the motion lands half a round trip later
