@@ -52,8 +52,10 @@ impl ItemBehaviour for EndCrystalItem {
         );
 
         if !world.get_block_state(&location).is_air()
-            || !world.get_entities_at_box(&bounding_box).is_empty()
-            || !world.get_players_at_box(&bounding_box).is_empty()
+            || world
+                .get_all_at_box(&bounding_box)
+                .iter()
+                .any(|entity| !entity.is_spectator())
         {
             return BlockActionResult::Fail;
         }
