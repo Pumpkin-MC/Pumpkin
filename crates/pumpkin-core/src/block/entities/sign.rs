@@ -64,10 +64,19 @@ fn component_to_json(component: &TextComponent) -> Box<str> {
     Box::from(component.to_json_for_version(&CURRENT_MC_VERSION))
 }
 
-/// Converts a stored NBT message to JSON, treating string tags as literal text.
-fn nbt_message_to_json(tag: &NbtTag) -> Box<str> {
+/// Converts a stored NBT message to JSON.
+///
+/// String tags are literal text unless the sign allows op features, where they may be
+/// component JSON written by an older Pumpkin version.
+fn nbt_message_to_json(tag: &NbtTag, allow_op_features: bool) -> Box<str> {
     match tag {
-        NbtTag::String(value) => component_to_json(&TextComponent::text(value.to_string())),
+        NbtTag::String(value) => {
+            if allow_op_features && let Ok(component) = serde_json::from_str::<TextComponent>(value)
+            {
+                return component_to_json(&component);
+            }
+            component_to_json(&TextComponent::text(value.to_string()))
+        }
         _ => component_to_json(&TextComponent::from_nbt(tag)),
     }
 }
@@ -128,13 +137,22 @@ impl From<SignText> for NbtTag {
 
 impl From<NbtTag> for SignText {
     fn from(tag: NbtTag) -> Self {
+        Self::from_nbt_tag(&tag, false)
+    }
+}
+
+impl SignText {
+    /// Converts a sign text compound, preserving legacy component strings only for trusted signs.
+    pub fn from_nbt_tag(tag: &NbtTag, allow_op_features: bool) -> Self {
         let Some(nbt) = tag.extract_compound() else {
             return Self::default();
         };
         let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
         let color = nbt.get_string("color").unwrap_or("black");
         let messages: Vec<Box<str>> = nbt.get_list("messages").map_or_else(Vec::new, |list| {
-            list.iter().map(nbt_message_to_json).collect()
+            list.iter()
+                .map(|tag| nbt_message_to_json(tag, allow_op_features))
+                .collect()
         });
         let get_message =
             |i: usize| -> Box<str> { messages.get(i).cloned().unwrap_or_else(|| Box::from("")) };
@@ -146,9 +164,12 @@ impl From<NbtTag> for SignText {
             get_message(3),
         ];
 
-        let filtered_messages: Option<Vec<Box<str>>> = nbt
-            .get_list("filtered_messages")
-            .map(|list| list.iter().map(nbt_message_to_json).collect());
+        let filtered_messages: Option<Vec<Box<str>>> =
+            nbt.get_list("filtered_messages").map(|list| {
+                list.iter()
+                    .map(|tag| nbt_message_to_json(tag, allow_op_features))
+                    .collect()
+            });
 
         let parsed_filtered = filtered_messages.map_or_else(
             || parsed_messages.clone(),
@@ -321,18 +342,16 @@ impl BlockEntity for SignBlockEntity {
     where
         Self: Sized,
     {
+        let allow_op_features = nbt.get_bool("allow_op_features").unwrap_or(false);
         let front_text = nbt
             .get("front_text")
-            .cloned()
-            .map(SignText::from)
+            .map(|tag| SignText::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let back_text = nbt
             .get("back_text")
-            .cloned()
-            .map(SignText::from)
+            .map(|tag| SignText::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let is_waxed = nbt.get_bool("is_waxed").unwrap_or(false);
-        let allow_op_features = nbt.get_bool("allow_op_features").unwrap_or(false);
         Self {
             position,
             front_text,
@@ -885,5 +904,31 @@ mod tests {
 
         assert!(!text.has_any_click_commands(false));
         assert_eq!(plain_text(&text.get_message(0, false)), crafted);
+    }
+
+    #[test]
+    fn trusted_legacy_string_components_load_as_components() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("allow_op_features", true);
+        let mut front = NbtCompound::new();
+        front.put_list(
+            "messages",
+            vec![
+                NbtTag::String(Box::from(crafted)),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+            ],
+        );
+        nbt.put_compound("front_text", front);
+
+        let trusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
+        assert!(trusted.front_text.has_any_click_commands(false));
+
+        nbt.put_bool("allow_op_features", false);
+        let untrusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
+        assert!(!untrusted.front_text.has_any_click_commands(false));
     }
 }

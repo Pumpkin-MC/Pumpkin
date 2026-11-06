@@ -31,18 +31,16 @@ impl BlockEntity for HangingSignBlockEntity {
     where
         Self: Sized,
     {
+        let allow_op_features = nbt.get_bool("allow_op_features").unwrap_or(false);
         let front_text = nbt
             .get("front_text")
-            .cloned()
-            .map(Text::from)
+            .map(|tag| Text::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let back_text = nbt
             .get("back_text")
-            .cloned()
-            .map(Text::from)
+            .map(|tag| Text::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let is_waxed = nbt.get_bool("is_waxed").unwrap_or(false);
-        let allow_op_features = nbt.get_bool("allow_op_features").unwrap_or(false);
         Self {
             position,
             front_text,
