@@ -4466,6 +4466,59 @@ impl LivingEntity {
         }
     }
 
+    pub fn random_teleport(
+        &self,
+        target: Vector3<f64>,
+        show_particles: bool,
+        is_invalid: impl Fn(&pumpkin_data::Block) -> bool,
+    ) -> bool {
+        let world = self.entity.world.load_full();
+        let (x, z) = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clamp_to_bound(target.x, target.z);
+        let mut y = target.y;
+        let mut pos = BlockPos::floored(x, y, z);
+        if world.get_block_state_if_loaded(&pos).is_none() {
+            return false;
+        }
+        while pos.0.y > world.get_bottom_y() {
+            pos = pos.down();
+            let block = world.get_block(&pos);
+            if block.has_tag(&tag::Block::MINECRAFT_ENTITIES_CAN_TELEPORT_TO) {
+                if is_invalid(block) {
+                    return false;
+                }
+                let dimensions = self.entity.entity_dimension.load();
+                let bounding_box = BoundingBox::new_from_pos(x, y, z, &dimensions);
+                if !world.is_space_empty(bounding_box)
+                    || !world.no_entity_collision(self, bounding_box)
+                    || world.contains_any_liquid(bounding_box)
+                {
+                    return false;
+                }
+                if BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+                    .any(|block_pos| is_invalid(world.get_block(&block_pos)))
+                {
+                    return false;
+                }
+                self.entity
+                    .teleport(Vector3::new(x, y, z), None, None, &world);
+                if show_particles {
+                    world.send_entity_status(
+                        &self.entity,
+                        EntityStatus::Teleport,
+                        ActorEventID::None,
+                    );
+                }
+                return true;
+            }
+            y -= 1.0;
+        }
+        false
+    }
+
     fn find_random_teleport_target(&self, diameter: f32) -> Option<Vector3<f64>> {
         let center = self.entity.pos.load();
         let world = self.entity.world.load();

@@ -200,6 +200,22 @@ impl Worldborder {
         let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
     }
+
+    #[must_use]
+    pub fn clamp_to_bound(&self, x: f64, z: f64) -> (f64, f64) {
+        let half = self.new_diameter / 2.0;
+        let max_offset = f64::from(1.0E-5f32);
+        (
+            x.clamp(
+                self.center_x - half,
+                (self.center_x + half - max_offset).max(self.center_x - half),
+            ),
+            z.clamp(
+                self.center_z - half,
+                (self.center_z + half - max_offset).max(self.center_z - half),
+            ),
+        )
+    }
 }
 
 #[cfg(test)]
