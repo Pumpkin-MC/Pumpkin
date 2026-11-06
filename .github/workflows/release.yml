@@ -126,7 +126,7 @@ jobs:
           targets: aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2
