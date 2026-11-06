@@ -5,9 +5,11 @@ use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::{Block, BlockDirection, translation};
+use pumpkin_data::{Block, BlockDirection, BlockId, translation};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -19,14 +21,15 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;
 
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, RandomTickArgs,
-    registry::BlockActionResult,
+    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, GetStateForNeighborUpdateArgs,
+    NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
+    RandomTickArgs, registry::BlockActionResult,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -78,6 +81,218 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 
 // Shared chest behavior implementations
 const LID_ANIMATION_EVENT_TYPE: u8 = 1;
+
+fn connected_direction(props: ChestLikeProperties) -> HorizontalFacing {
+    if props.r#type == ChestType::Left {
+        props.facing.rotate_clockwise()
+    } else {
+        props.facing.rotate_counter_clockwise()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ChestContainer {
+    pub inventory: Arc<dyn Inventory>,
+    pub positions: Vec<BlockPos>,
+    halves: Vec<Arc<dyn Inventory>>,
+}
+
+impl ChestContainer {
+    pub(crate) fn single(position: BlockPos, inventory: Arc<dyn Inventory>) -> Self {
+        Self {
+            inventory: inventory.clone(),
+            positions: vec![position],
+            halves: vec![inventory],
+        }
+    }
+
+    pub fn same_inventory(&self, other: &Self) -> bool {
+        self.halves.len() == other.halves.len()
+            && self
+                .halves
+                .iter()
+                .zip(&other.halves)
+                .all(|(left, right)| Arc::ptr_eq(left, right))
+    }
+
+    pub fn try_start_open(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        for (index, half) in self.halves.iter().enumerate() {
+            let acquired = chest_reservation(half.as_ref()).is_some_and(|(reserved, viewers)| {
+                viewers == 0
+                    && reserved
+                        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                        .is_ok()
+            });
+            if !acquired {
+                for previous in &self.halves[..index] {
+                    if let Some((reserved, _)) = chest_reservation(previous.as_ref()) {
+                        reserved.store(false, Ordering::Release);
+                    }
+                }
+                return false;
+            }
+        }
+        self.inventory.on_open();
+        true
+    }
+
+    pub fn stop_open(&self) {
+        self.inventory.on_close();
+        for half in &self.halves {
+            if let Some((reserved, _)) = chest_reservation(half.as_ref()) {
+                reserved.store(false, std::sync::atomic::Ordering::Release);
+            }
+        }
+    }
+
+    pub fn modify_stack<R>(
+        &self,
+        mut slot: usize,
+        update: impl FnOnce(&mut ItemStack) -> R,
+    ) -> Option<R> {
+        for half in &self.halves {
+            if slot >= half.size() {
+                slot -= half.size();
+                continue;
+            }
+            if let Some(chest) = half.as_any().downcast_ref::<ChestBlockEntity>() {
+                return chest.modify_stack(slot, update);
+            }
+            if let Some(chest) = half
+                .as_any()
+                .downcast_ref::<crate::block::entities::trapped_chest::TrappedChestBlockEntity>(
+            ) {
+                return chest.modify_stack(slot, update);
+            }
+            return None;
+        }
+        None
+    }
+
+    pub fn is_open(&self, world: &World) -> bool {
+        self.positions.iter().any(|position| {
+            world.get_block_entity(position).is_some_and(|entity| {
+                entity
+                    .as_any()
+                    .downcast_ref::<ChestBlockEntity>()
+                    .is_some_and(|chest| chest.get_viewer_count() > 0)
+                    || entity
+                        .as_any()
+                        .downcast_ref::<crate::block::entities::trapped_chest::TrappedChestBlockEntity>()
+                        .is_some_and(|chest| chest.get_viewer_count() > 0)
+            })
+        })
+    }
+
+    pub fn unpack_loot(&self, world: &World) {
+        for position in &self.positions {
+            if let Some(entity) = world.get_block_entity(position) {
+                unpack_chest_loot(&entity, world, position, None);
+            }
+        }
+    }
+}
+
+fn chest_reservation(inventory: &dyn Inventory) -> Option<(&std::sync::atomic::AtomicBool, u16)> {
+    inventory
+        .as_any()
+        .downcast_ref::<ChestBlockEntity>()
+        .map(|chest| (&chest.golem_reserved, chest.get_viewer_count()))
+        .or_else(|| {
+            inventory
+                .as_any()
+                .downcast_ref::<crate::block::entities::trapped_chest::TrappedChestBlockEntity>()
+                .map(|chest| (&chest.golem_reserved, chest.get_viewer_count()))
+        })
+}
+
+pub(crate) fn get_chest_container(world: &World, position: &BlockPos) -> Option<ChestContainer> {
+    let (block, state) = world.get_block_and_state(position);
+    if !block.id.has_tag(pumpkin_data::tag::Block::C_CHESTS_WOODEN)
+        && !block
+            .id
+            .has_tag(pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+        && block != &Block::TRAPPED_CHEST
+    {
+        return None;
+    }
+    if is_chest_blocked(world, position) {
+        return None;
+    }
+    let first = world.get_block_entity(position)?.get_inventory()?;
+    let props = ChestLikeProperties::from_state_id(state.id);
+    let direction = match props.r#type {
+        ChestType::Single => {
+            return Some(ChestContainer::single(*position, first));
+        }
+        ChestType::Left => props.facing.rotate_clockwise(),
+        ChestType::Right => props.facing.rotate_counter_clockwise(),
+    };
+    let neighbor = position.offset(direction.to_offset());
+    get_chest_properties_if_can_connect(
+        world,
+        block,
+        position,
+        props.facing,
+        direction,
+        props.r#type.opposite(),
+    )?;
+    if is_chest_blocked(world, &neighbor) {
+        return None;
+    }
+    let second = world.get_block_entity(&neighbor)?.get_inventory()?;
+    let (first, second) = if props.r#type == ChestType::Right {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    let inventory = DoubleInventory::new(first.clone(), second.clone());
+    Some(ChestContainer {
+        inventory,
+        positions: vec![*position, neighbor],
+        halves: vec![first, second],
+    })
+}
+
+/// Vanilla `RandomizableContainer.unpackLootTable`; luck and `this_entity` only come from a player.
+fn unpack_chest_loot(
+    entity: &Arc<dyn BlockEntity>,
+    world: &World,
+    position: &BlockPos,
+    player: Option<&Player>,
+) {
+    if let Some((loot_key, seed)) = entity.take_loot_table()
+        && let Some(table) = get_loot_table(&loot_key)
+        && let Some(inventory) = entity.clone().get_inventory()
+    {
+        if let Some(player) = player {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                    loot_table_id: loot_key.clone(),
+                },
+            );
+        }
+        fill_chest_inventory_handle(
+            &inventory,
+            &crate::world::loot::LootTableHandle::Static(table),
+            seed,
+            &LootContextParameters {
+                world: Some(world),
+                position: Some(position.to_f64()),
+                this_entity: player.map(|player| player as &dyn EntityBase),
+                luck: player.map_or(0.0, |player| {
+                    player
+                        .living_entity
+                        .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
+                        as f32
+                }),
+                ..Default::default()
+            },
+        );
+        inventory.mark_dirty();
+    }
+}
 
 fn on_place_chest_impl(args: &OnPlaceArgs<'_>) -> BlockStateId {
     let mut chest_props = ChestLikeProperties::default(args.block);
@@ -194,39 +409,9 @@ fn get_chest_screen_handler_factory(
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
-    let unpack = |entity: &Arc<dyn BlockEntity>| {
-        if let Some((loot_key, seed)) = entity.take_loot_table()
-            && let Some(table) = get_loot_table(&loot_key)
-            && let Some(inv) = entity.clone().get_inventory()
-        {
-            args.player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
-                    loot_table_id: loot_key.clone(),
-                },
-            );
-            fill_chest_inventory_handle(
-                &inv,
-                &crate::world::loot::LootTableHandle::Static(table),
-                seed,
-                &LootContextParameters {
-                    world: Some(args.world),
-                    position: Some(args.position.to_f64()),
-                    this_entity: Some(args.player.as_ref()),
-                    luck: args
-                        .player
-                        .living_entity
-                        .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
-                        as f32,
-                    ..Default::default()
-                },
-            );
-            inv.mark_dirty();
-        }
-    };
-
     // Unpack deferred loot table on first open (non-spectator only).
     if !player_is_spectator && let Some(ref entity) = first_chest {
-        unpack(entity);
+        unpack_chest_loot(entity, args.world, args.position, Some(args.player));
     }
 
     let first_loot_pending = first_chest
@@ -252,7 +437,7 @@ fn get_chest_screen_handler_factory(
             .world
             .get_block_entity(&args.position.offset(direction.to_offset()))
     {
-        unpack(&second);
+        unpack_chest_loot(&second, args.world, args.position, Some(args.player));
     }
 
     let loot_pending = first_loot_pending
@@ -381,6 +566,80 @@ impl BlockBehaviour for ChestBlock {
 pub struct CopperChestBlock;
 
 impl CopperChestBlock {
+    pub(crate) fn get_from_copper_block(
+        copper: &Block,
+        facing: HorizontalFacing,
+        world: &World,
+        position: &BlockPos,
+    ) -> BlockStateId {
+        let chest = match copper.id {
+            BlockId::EXPOSED_COPPER => &Block::EXPOSED_COPPER_CHEST,
+            BlockId::WEATHERED_COPPER => &Block::WEATHERED_COPPER_CHEST,
+            BlockId::OXIDIZED_COPPER => &Block::OXIDIZED_COPPER_CHEST,
+            BlockId::WAXED_COPPER_BLOCK => &Block::WAXED_COPPER_CHEST,
+            BlockId::WAXED_EXPOSED_COPPER => &Block::WAXED_EXPOSED_COPPER_CHEST,
+            BlockId::WAXED_WEATHERED_COPPER => &Block::WAXED_WEATHERED_COPPER_CHEST,
+            BlockId::WAXED_OXIDIZED_COPPER => &Block::WAXED_OXIDIZED_COPPER_CHEST,
+            _ => &Block::COPPER_CHEST,
+        };
+        let mut props = ChestLikeProperties::default(chest);
+        props.facing = facing;
+        props.r#type = get_chest_type(world, chest, position, facing);
+        Self::get_least_oxidized_chest_of_connected_blocks(
+            props.to_state_id(chest),
+            world,
+            position,
+        )
+    }
+
+    fn get_least_oxidized_chest_of_connected_blocks(
+        state: BlockStateId,
+        world: &World,
+        position: &BlockPos,
+    ) -> BlockStateId {
+        let props = ChestLikeProperties::from_state_id(state);
+        let direction = match props.r#type {
+            ChestType::Single => return state,
+            ChestType::Left => props.facing.rotate_clockwise(),
+            ChestType::Right => props.facing.rotate_counter_clockwise(),
+        };
+        let block = Block::from_state_id(state);
+        let neighbor = world.get_block(&position.offset(direction.to_offset()));
+        if !neighbor
+            .id
+            .has_tag(pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+        {
+            return state;
+        }
+        let (age, waxed) = Self::weather_state(block);
+        let (neighbor_age, neighbor_waxed) = Self::weather_state(neighbor);
+        let least = if age <= neighbor_age { block } else { neighbor };
+        let least = if waxed == neighbor_waxed {
+            least
+        } else {
+            Self::unwax_block(least)
+        };
+        props.to_state_id(least)
+    }
+
+    fn weather_state(block: &Block) -> (super::weathering_copper::WeatherState, bool) {
+        use super::weathering_copper::WeatherState;
+        let unwaxed = Self::unwax_block(block);
+        let age = super::weathering_copper::get_weather_state(unwaxed)
+            .unwrap_or(WeatherState::Unaffected);
+        (age, block != unwaxed)
+    }
+
+    const fn unwax_block(block: &Block) -> &Block {
+        match block.id {
+            BlockId::WAXED_COPPER_CHEST => &Block::COPPER_CHEST,
+            BlockId::WAXED_EXPOSED_COPPER_CHEST => &Block::EXPOSED_COPPER_CHEST,
+            BlockId::WAXED_WEATHERED_COPPER_CHEST => &Block::WEATHERED_COPPER_CHEST,
+            BlockId::WAXED_OXIDIZED_COPPER_CHEST => &Block::OXIDIZED_COPPER_CHEST,
+            _ => block,
+        }
+    }
+
     pub(crate) fn get_hinge_sound(block: &Block, open: bool) -> Sound {
         let (open_sound, close_sound) = if block == &Block::WEATHERED_COPPER_CHEST
             || block == &Block::WAXED_WEATHERED_COPPER_CHEST
@@ -440,7 +699,49 @@ impl crate::block::blocks::weathering_copper::WeatheringCopper for CopperChestBl
 
 impl BlockBehaviour for CopperChestBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        on_place_chest_impl(&args)
+        Self::get_least_oxidized_chest_of_connected_blocks(
+            on_place_chest_impl(&args),
+            args.world,
+            args.position,
+        )
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut props = ChestLikeProperties::from_state_id(args.state_id);
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+        let neighbor = Block::from_state_id(args.neighbor_state_id);
+        let can_connect = chest_can_connect_to(args.block, neighbor);
+        if can_connect && args.direction.is_horizontal() {
+            let neighbor_props = ChestLikeProperties::from_state_id(args.neighbor_state_id);
+            if props.r#type == ChestType::Single
+                && neighbor_props.r#type != ChestType::Single
+                && props.facing == neighbor_props.facing
+                && connected_direction(neighbor_props).to_offset()
+                    == args.direction.opposite().to_offset()
+            {
+                props.r#type = neighbor_props.r#type.opposite();
+            }
+        } else if connected_direction(props).to_offset() == args.direction.to_offset() {
+            props.r#type = ChestType::Single;
+        }
+        if can_connect
+            && props.r#type != ChestType::Single
+            && connected_direction(props).to_offset() == args.direction.to_offset()
+        {
+            props.to_state_id(neighbor)
+        } else {
+            props.to_state_id(args.block)
+        }
     }
 
     fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
@@ -590,7 +891,7 @@ fn compute_chest_props(
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state_id(&block_pos.offset(face.to_offset()));
 
-        if clicked_block == block {
+        if chest_can_connect_to(block, clicked_block) {
             let clicked_props = ChestLikeProperties::from_state_id(clicked_block_state);
 
             if clicked_props.r#type != ChestType::Single {
@@ -607,6 +908,18 @@ fn compute_chest_props(
         return (ChestType::Single, chest_facing);
     }
 
+    (
+        get_chest_type(world, block, block_pos, chest_facing),
+        chest_facing,
+    )
+}
+
+fn get_chest_type(
+    world: &World,
+    block: &Block,
+    block_pos: &BlockPos,
+    chest_facing: HorizontalFacing,
+) -> ChestType {
     if get_chest_properties_if_can_connect(
         world,
         block,
@@ -617,7 +930,7 @@ fn compute_chest_props(
     )
     .is_some()
     {
-        (ChestType::Left, chest_facing)
+        ChestType::Left
     } else if get_chest_properties_if_can_connect(
         world,
         block,
@@ -628,9 +941,9 @@ fn compute_chest_props(
     )
     .is_some()
     {
-        (ChestType::Right, chest_facing)
+        ChestType::Right
     } else {
-        (ChestType::Single, chest_facing)
+        ChestType::Single
     }
 }
 
@@ -645,7 +958,7 @@ fn get_chest_properties_if_can_connect(
     let (neighbor_block, neighbor_block_state) =
         world.get_block_and_state_id(&block_pos.offset(direction.to_offset()));
 
-    if neighbor_block != block {
+    if !chest_can_connect_to(block, neighbor_block) {
         return None;
     }
 
@@ -655,6 +968,16 @@ fn get_chest_properties_if_can_connect(
     }
 
     None
+}
+
+fn chest_can_connect_to(block: &Block, neighbor: &Block) -> bool {
+    block == neighbor
+        || (block
+            .id
+            .has_tag(pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+            && neighbor
+                .id
+                .has_tag(pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS))
 }
 
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
@@ -678,5 +1001,36 @@ impl ChestTypeExt for ChestType {
             Self::Left => Self::Right,
             Self::Right => Self::Left,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChestBlockEntity, ChestContainer, DoubleInventory};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_util::math::position::BlockPos;
+    use std::sync::Arc;
+
+    #[test]
+    fn failed_double_chest_reservation_releases_the_first_half() {
+        let first = Arc::new(ChestBlockEntity::new(BlockPos::new(0, 0, 0)));
+        let second = Arc::new(ChestBlockEntity::new(BlockPos::new(1, 0, 0)));
+        let container = ChestContainer {
+            inventory: DoubleInventory::new(first.clone(), second.clone()),
+            positions: vec![first.position, second.position],
+            halves: vec![first.clone(), second.clone()],
+        };
+        second.on_open();
+        assert!(!container.try_start_open());
+        assert_eq!(first.get_viewer_count(), 0);
+        assert_eq!(second.get_viewer_count(), 1);
+        second.on_close();
+        assert!(container.try_start_open());
+        assert!(!container.try_start_open());
+        container.stop_open();
+        assert_eq!(first.get_viewer_count(), 0);
+        assert_eq!(second.get_viewer_count(), 0);
+        assert!(container.try_start_open());
+        container.stop_open();
     }
 }

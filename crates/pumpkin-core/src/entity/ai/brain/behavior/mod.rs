@@ -30,6 +30,7 @@ pub mod shuffling_list;
 pub mod stay_close_to_target;
 pub mod swim;
 pub mod timed;
+pub mod transport_items_between_containers;
 pub mod update_activity_from_schedule;
 pub mod utils;
 pub mod work;

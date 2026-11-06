@@ -74,6 +74,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:detector_rail_minecart",
     "pumpkin:tripwire_entity_collision",
     "pumpkin:snow_golem_pattern_spawns",
+    "pumpkin:copper_golem_collects_items_at_path_end",
     "pumpkin:iron_golem_pattern_spawns",
     "pumpkin:wither_pattern_spawns",
     "pumpkin:item_entities_merge",
@@ -486,6 +487,13 @@ pub fn ensure_builtin_game_tests_registered() {
             20,
             0,
             golems::test_snow_golem_pattern_spawns,
+        );
+        register_function_test(
+            "pumpkin:copper_golem_collects_items_at_path_end",
+            "pumpkin:empty_5x5x5",
+            400,
+            0,
+            golems::test_copper_golem_collects_items_at_path_end,
         );
         register_function_test(
             "pumpkin:iron_golem_pattern_spawns",

@@ -13,11 +13,20 @@ const SWIM_XY_DISTANCE_TIERS: [(i32, i32); 6] = [(1, 1), (3, 3), (5, 5), (6, 5),
 
 #[must_use]
 pub fn stroll(speed_modifier: f32) -> OneShot {
+    stroll_with_distance(speed_modifier, MAX_XZ_DIST, MAX_Y_DIST)
+}
+
+#[must_use]
+pub fn stroll_with_distance(
+    speed_modifier: f32,
+    horizontal_distance: i32,
+    vertical_distance: i32,
+) -> OneShot {
     OneShot::new(
         "RandomStroll",
         vec![(types::WALK_TARGET.id(), MemoryStatus::ValueAbsent)],
         move |tick| {
-            let target = land_random_pos::get_pos(tick.mob, MAX_XZ_DIST, MAX_Y_DIST);
+            let target = land_random_pos::get_pos(tick.mob, horizontal_distance, vertical_distance);
             tick.state.set_optional(
                 types::WALK_TARGET,
                 target.map(|pos| WalkTarget::from_vec(pos, speed_modifier, 0)),
