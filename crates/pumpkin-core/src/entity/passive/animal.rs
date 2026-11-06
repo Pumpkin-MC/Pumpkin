@@ -71,6 +71,11 @@ pub trait Animal: Mob {
 
     fn play_eating_sound(&self) {}
 
+    /// Vanilla `Mob.usePlayerItem`: uses up one fed item, which creative players keep.
+    fn use_player_item(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
+        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+    }
+
     fn write_animal_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let mob_entity = self.get_mob_entity();
         let in_love = mob_entity
@@ -99,8 +104,8 @@ pub trait Animal: Mob {
                 .load(std::sync::atomic::Ordering::Relaxed);
 
             if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                 if self.set_in_love(player) {
+                    self.use_player_item(player, item_stack);
                     self.play_eating_sound();
                 }
                 return true;
@@ -109,7 +114,7 @@ pub trait Animal: Mob {
             if let Some(ageable) = self.as_ageable()
                 && ageable.can_age_up()
             {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                self.use_player_item(player, item_stack);
                 ageable.age_up(
                     crate::entity::ageable::get_speed_up_seconds_when_feeding(-age),
                     true,

@@ -164,6 +164,12 @@ const fn next_air_supply(
     }
 }
 
+/// What `Axolotl.usePlayerItem` gives back for a fed item instead of just using it up: the
+/// tropical fish bucket turns into a water bucket.
+fn fed_item_remainder(item: &Item) -> Option<&'static Item> {
+    (item == &Item::TROPICAL_FISH_BUCKET).then_some(&Item::WATER_BUCKET)
+}
+
 /// Reads the `Variant` tag the way vanilla's legacy codec does: a missing tag is the default
 /// variant and an unknown id falls back to it too.
 fn read_variant(nbt: &NbtCompound) -> AxolotlVariant {
@@ -393,6 +399,21 @@ impl Animal for AxolotlEntity {
     /// Vanilla `Axolotl.isFood`: only the `axolotl_food` item tag.
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_AXOLOTL_FOOD)
+    }
+
+    /// Vanilla `Axolotl.usePlayerItem`: the tropical fish bucket becomes a water bucket
+    /// (`ItemUtils.createFilledResult`), anything else is used up as usual.
+    fn use_player_item(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
+        if let Some(remainder) = fed_item_remainder(item_stack.get_item()) {
+            crate::item::items::bucket::create_filled_result(
+                item_stack,
+                player,
+                ItemStack::new(1, remainder),
+                true,
+            );
+        } else {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 }
 
@@ -1505,5 +1526,23 @@ mod tests {
         }
         world.level.shutdown().await;
         Ok(())
+    }
+
+    /// Feeding a tropical fish bucket gives back a water bucket; nothing else leaves anything
+    /// behind (the raw fish, other buckets and the water bucket itself).
+    #[test]
+    fn only_the_tropical_fish_bucket_leaves_a_water_bucket_when_fed() {
+        assert_eq!(
+            fed_item_remainder(&Item::TROPICAL_FISH_BUCKET),
+            Some(&Item::WATER_BUCKET)
+        );
+        for item in [
+            &Item::TROPICAL_FISH,
+            &Item::COD_BUCKET,
+            &Item::WATER_BUCKET,
+            &Item::BUCKET,
+        ] {
+            assert_eq!(fed_item_remainder(item), None, "{}", item.registry_key);
+        }
     }
 }
