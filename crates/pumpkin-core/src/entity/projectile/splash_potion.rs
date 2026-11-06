@@ -63,6 +63,37 @@ fn is_water_potion(stack: &ItemStack) -> bool {
         == Some(pumpkin_data::potion::Potion::WATER.id as i32)
 }
 
+/// Vanilla `PotionContents.is(PotionTags.REHYDRATES_AXOLOTLS)`.
+fn rehydrates_axolotls(stack: &ItemStack) -> bool {
+    let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_REHYDRATES_AXOLOTLS;
+    stack
+        .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+        .and_then(|contents| contents.potion_id)
+        .and_then(|id| u8::try_from(id).ok())
+        .and_then(pumpkin_data::potion::Potion::from_id)
+        .is_some_and(|potion| names.contains(&potion.name) || ids.contains(&u16::from(potion.id)))
+}
+
+/// Vanilla `AbstractThrownPotion.affectEntitiesAround`: a potion that rehydrates axolotls gives
+/// air back to those within 4 blocks sideways and 2 blocks up and down of the thrown potion.
+pub(crate) fn rehydrate_axolotls_around(
+    world: &Arc<crate::world::World>,
+    potion_bounds: &BoundingBox,
+    stack: &ItemStack,
+) {
+    if !rehydrates_axolotls(stack) {
+        return;
+    }
+    for entity in world.get_entities_at_box(&potion_bounds.expand(4.0, 2.0, 4.0)) {
+        if let Some(axolotl) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>()
+        {
+            axolotl.rehydrate();
+        }
+    }
+}
+
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
 fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
     let air_state_id = Block::AIR.default_state.id;
@@ -214,7 +245,9 @@ impl EntityBase for SplashPotionEntity {
         );
 
         // If no effects, just splash (like water bottles)
+        let potion_bounds = self.get_entity().bounding_box.load();
         if effects.is_empty() {
+            rehydrate_axolotls_around(&world, &potion_bounds, &stack);
             return;
         }
 
@@ -263,6 +296,9 @@ impl EntityBase for SplashPotionEntity {
             }
             affected.retain(|(c, _)| event.affected_entities.contains(&c.get_entity().entity_id));
         }
+        // Only a splash that no plugin cancelled rehydrates (a water potion with a custom effect
+        // goes through the event above).
+        rehydrate_axolotls_around(&world, &potion_bounds, &stack);
 
         let owner = self.thrown.owner.get(&world);
         for (cand, scale) in affected {
@@ -279,5 +315,133 @@ impl EntityBase for SplashPotionEntity {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use pumpkin_data::{
+        data_component::DataComponent, data_component_impl::PotionContentsImpl, entity::EntityType,
+        item::Item, potion::Potion,
+    };
+
+    use super::*;
+    use crate::entity::{ai::test_support::world, passive::axolotl::AxolotlEntity};
+    use crate::item::items::glass_bottle::water_bottle;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn potion_stack(potion: &Potion) -> ItemStack {
+        ItemStack::new_with_component(
+            1,
+            &Item::SPLASH_POTION,
+            vec![(
+                DataComponent::PotionContents,
+                Some(Box::new(PotionContentsImpl {
+                    potion_id: Some(i32::from(potion.id)),
+                    custom_color: None,
+                    custom_effects: Vec::new(),
+                    custom_name: None,
+                }) as Box<_>),
+            )],
+        )
+    }
+
+    fn axolotl_at(world: &Arc<crate::world::World>, x: f64, y: f64) -> Arc<AxolotlEntity> {
+        let axolotl = AxolotlEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(x, y, 0.0),
+            &EntityType::AXOLOTL,
+        ));
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(100, Ordering::Relaxed);
+        world.spawn_entity(axolotl.clone());
+        axolotl
+    }
+
+    /// Only the water potion is in the `rehydrates_axolotls` tag: not another potion, not a splash
+    /// potion without potion contents.
+    #[test]
+    fn only_the_water_potion_rehydrates_axolotls() {
+        assert!(rehydrates_axolotls(&potion_stack(&Potion::WATER)));
+        assert!(rehydrates_axolotls(&water_bottle()));
+        assert!(!rehydrates_axolotls(&potion_stack(&Potion::AWKWARD)));
+        assert!(!rehydrates_axolotls(&ItemStack::new(
+            1,
+            &Item::SPLASH_POTION
+        )));
+    }
+
+    /// A water potion gives 1800 air to the axolotls within 4 blocks sideways and 2 up or down of
+    /// it and to no others, and another potion gives none.
+    #[tokio::test]
+    async fn splash_water_rehydrates_the_axolotls_around_it() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let near = axolotl_at(&world, 3.0, 64.0);
+        let above = axolotl_at(&world, 0.0, 65.5);
+        let too_high = axolotl_at(&world, 0.0, 68.0);
+        let too_far = axolotl_at(&world, 8.0, 64.0);
+        let potion = BoundingBox::new(
+            Vector3::new(-0.125, 64.0, -0.125),
+            Vector3::new(0.125, 64.25, 0.125),
+        );
+
+        rehydrate_axolotls_around(&world, &potion, &potion_stack(&Potion::AWKWARD));
+        for axolotl in [&near, &above, &too_high, &too_far] {
+            assert_eq!(axolotl.get_entity().air_supply.load(Ordering::Relaxed), 100);
+        }
+
+        rehydrate_axolotls_around(&world, &potion, &potion_stack(&Potion::WATER));
+        let airs: Vec<i32> = [&near, &above, &too_high, &too_far]
+            .iter()
+            .map(|axolotl| axolotl.get_entity().air_supply.load(Ordering::Relaxed))
+            .collect();
+        assert_eq!(airs, [1900, 1900, 100, 100]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// A water potion that hits the ground rehydrates the axolotls around it through the real
+    /// `on_hit` path, and a potion that is not in the tag does not.
+    #[tokio::test]
+    async fn a_thrown_water_potion_rehydrates_the_axolotls_it_lands_next_to() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let throw = |stack: ItemStack| {
+            let potion = SplashPotionEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 64.0, 0.0),
+                &EntityType::SPLASH_POTION,
+            ));
+            *potion
+                .item_stack
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+            potion.on_hit(crate::entity::projectile::ProjectileHit::Block {
+                pos: BlockPos(Vector3::new(0, 63, 0)),
+                face: pumpkin_data::BlockDirection::Up,
+                hit_pos: Vector3::new(0.0, 64.0, 0.0),
+                normal: Vector3::new(0.0, 1.0, 0.0),
+            });
+        };
+        let air =
+            |axolotl: &Arc<AxolotlEntity>| axolotl.get_entity().air_supply.load(Ordering::Relaxed);
+        let near = axolotl_at(&world, 2.0, 64.0);
+        let far = axolotl_at(&world, 9.0, 64.0);
+
+        throw(potion_stack(&Potion::AWKWARD));
+        let awkward = (air(&near), air(&far));
+        throw(potion_stack(&Potion::WATER));
+        let water = (air(&near), air(&far));
+        world.level.shutdown().await;
+
+        assert_eq!(awkward, (100, 100));
+        assert_eq!(water, (1900, 100));
+        Ok(())
     }
 }

@@ -13,10 +13,20 @@ const SWIM_XY_DISTANCE_TIERS: [(i32, i32); 6] = [(1, 1), (3, 3), (5, 5), (6, 5),
 
 #[must_use]
 pub fn stroll(speed_modifier: f32) -> OneShot {
+    stroll_with(speed_modifier, true)
+}
+
+/// Vanilla `RandomStroll.stroll(speedModifier, mayStrollFromWater)`: with `may_stroll_from_water`
+/// false the stroll only starts while the mob is out of the water.
+#[must_use]
+pub fn stroll_with(speed_modifier: f32, may_stroll_from_water: bool) -> OneShot {
     OneShot::new(
         "RandomStroll",
         vec![(types::WALK_TARGET.id(), MemoryStatus::ValueAbsent)],
         move |tick| {
+            if !may_stroll_from_water && tick.mob.get_entity().is_in_water() {
+                return false;
+            }
             let target = land_random_pos::get_pos(tick.mob, MAX_XZ_DIST, MAX_Y_DIST);
             tick.state.set_optional(
                 types::WALK_TARGET,
@@ -114,4 +124,64 @@ fn get_target_fly_pos(
         wander_direction.z,
         f64::from(std::f32::consts::FRAC_PI_2),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::*;
+    use crate::entity::ai::brain::BrainTick;
+    use crate::entity::ai::brain::behavior::BehaviorControl;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::passive::cow::CowEntity;
+    use crate::entity::{Entity, EntityBase};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// Whether the behavior starts for a mob that is in the water or out of it.
+    fn starts(mut behavior: OneShot, in_water: bool) -> Result<bool, Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        cow.get_entity()
+            .touching_water
+            .store(in_water, Ordering::Relaxed);
+        let mut state = crate::entity::ai::brain::BrainState::default();
+        for id in behavior.required_memories() {
+            state.register_memory(*id);
+        }
+        let started = behavior.try_start(&mut BrainTick {
+            state: &mut state,
+            world: &world,
+            mob: &*cow,
+            time: 0,
+        });
+        Ok(started)
+    }
+
+    /// `stroll(speed, false)` is the stroll that does not begin in water; the plain `stroll` and
+    /// the `true` form still do, as before.
+    #[tokio::test]
+    async fn a_stroll_that_may_not_start_in_water_waits_for_dry_land() -> TestResult {
+        let not_from_water = stroll_with(0.15, false);
+        let from_water = stroll_with(0.15, true);
+        let default = stroll(0.15);
+        let results = (
+            starts(not_from_water, true)?,
+            starts(stroll_with(0.15, false), false)?,
+            starts(from_water, true)?,
+            starts(default, true)?,
+        );
+
+        assert_eq!(results, (false, true, true, true));
+        Ok(())
+    }
 }
