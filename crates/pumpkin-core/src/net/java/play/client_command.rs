@@ -3,6 +3,15 @@ use super::*;
 use pumpkin_data::game_rules::GameRule;
 use pumpkin_protocol::java::client::play::CGameRuleValues;
 
+/// Clears the respawn flag when the respawn task ends or is dropped.
+struct RespawnGuard(Arc<Player>);
+
+impl Drop for RespawnGuard {
+    fn drop(&mut self) {
+        self.0.respawn_in_progress.store(false, Ordering::Relaxed);
+    }
+}
+
 impl JavaClient {
     pub fn handle_client_status(&self, player: &Arc<Player>, client_status: &SClientCommand) {
         player.update_last_action_time();
@@ -15,8 +24,8 @@ impl JavaClient {
                     return;
                 }
                 let player_c = player.clone();
+                let guard = RespawnGuard(player.clone());
                 let Some(server) = player.world().server.upgrade() else {
-                    player.respawn_in_progress.store(false, Ordering::Relaxed);
                     return;
                 };
                 let hardcore = server.basic_config.hardcore;
@@ -26,7 +35,7 @@ impl JavaClient {
                         .clone()
                         .respawn_player(&player_c, false)
                         .await;
-                    player_c.respawn_in_progress.store(false, Ordering::Relaxed);
+                    drop(guard);
                     if hardcore {
                         player_c.set_gamemode(GameMode::Spectator);
                     }
