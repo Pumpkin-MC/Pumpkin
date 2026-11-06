@@ -70,3 +70,35 @@ pub(super) async fn test_zombie_pathfinds_to_villager(
     })?;
     Ok(())
 }
+
+pub(super) async fn test_minecart_drops_item_when_destroyed(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    helper
+        .spawn_entity_at("minecraft:minecart", Vector3::new(2.5, 1.0, 2.5))
+        .await?;
+    let center = BlockPos::new(2, 1, 2);
+
+    helper
+        .start_sequence()
+        .then_execute(move |helper| async move {
+            helper
+                .execute_command(
+                    &center,
+                    "damage @e[type=minecraft:minecart,distance=..2,limit=1] 50",
+                )
+                .await
+                .map(|_| ())
+        })
+        .then_wait_until(move |helper| async move {
+            helper
+                .assert_entity_not_present("minecraft:minecart")
+                .await?;
+            helper
+                .assert_item_entity_present("minecraft:minecart", &center, 1.0)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}
