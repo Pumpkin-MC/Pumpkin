@@ -1365,6 +1365,30 @@ impl LivingEntity {
                 .insert(effect.effect_type, effect);
         }
         self.sync_effect_particles();
+        self.trigger_effects_changed(None);
+    }
+
+    /// Vanilla fires `EFFECTS_CHANGED` from `ServerPlayer.onEffectAdded`, `onEffectUpdated` and
+    /// `onEffectsRemoved`, so every effect source reaches it. Don't call this while holding
+    /// `active_effects`, the criterion reads them.
+    fn trigger_effects_changed(&self, source: Option<&dyn EntityBase>) {
+        if self.entity.entity_type != &EntityType::PLAYER {
+            return;
+        }
+        let Some(player) = self
+            .entity
+            .world
+            .load()
+            .get_player_by_id(self.entity.entity_id)
+        else {
+            return;
+        };
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged {
+                source_type: source
+                    .map(|source| source.get_entity().entity_type.resource_name.to_string()),
+            },
+        );
     }
 
     fn sync_effect_particles(&self) {
@@ -1462,6 +1486,7 @@ impl LivingEntity {
 
         if succeeded {
             self.sync_effect_particles();
+            self.trigger_effects_changed(None);
         }
 
         succeeded
@@ -2810,6 +2835,7 @@ impl LivingEntity {
     fn tick_effects(&self) {
         let mut effects_to_remove = Vec::new();
         let mut effects_to_apply = Vec::new();
+        let mut effects_updated = false;
 
         {
             let Ok(mut effects) = self.active_effects.try_lock() else {
@@ -2837,6 +2863,11 @@ impl LivingEntity {
                 if effect.duration != -1 {
                     effect.duration -= 1;
                 }
+
+                // `tickEffects` calls `onEffectUpdated` every 600 ticks of remaining duration.
+                if effect.duration > 0 && effect.duration % 600 == 0 {
+                    effects_updated = true;
+                }
             }
         }
 
@@ -2847,6 +2878,10 @@ impl LivingEntity {
 
         for (mob_effect, amplifier) in effects_to_apply {
             mob_effect.apply_effect_tick(self, amplifier);
+        }
+
+        if effects_updated {
+            self.trigger_effects_changed(None);
         }
     }
 
