@@ -27,6 +27,11 @@ pub trait Behavior: Send + Sync {
 
     fn stop(&mut self, _tick: &mut BrainTick<'_>) {}
 
+    /// Stops with the same timeout result vanilla exposes to its behavior callbacks.
+    fn stop_with_timeout(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
+        self.stop(tick);
+    }
+
     fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
         false
     }
@@ -111,7 +116,8 @@ impl<B: Behavior> BehaviorControl for Timed<B> {
 
     fn do_stop(&mut self, tick: &mut BrainTick<'_>) {
         self.status = Status::Stopped;
-        self.inner.stop(tick);
+        self.inner
+            .stop_with_timeout(tick, self.has_timed_out(tick.time));
     }
 
     fn debug_string(&self) -> String {

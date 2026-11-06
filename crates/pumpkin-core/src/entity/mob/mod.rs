@@ -866,7 +866,7 @@ impl MobEntity {
     }
 
     pub fn is_breeding_ready(&self) -> bool {
-        self.living_entity.entity.age.load(Relaxed) >= 0
+        self.living_entity.entity.age.load(Relaxed) == 0
             && self.breeding_cooldown.load(Relaxed) <= 0
     }
 

@@ -8,6 +8,8 @@ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+pub(crate) const PARENT_AGE_AFTER_BREEDING: i32 = 6000;
+
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
 
@@ -19,6 +21,10 @@ pub trait Animal: Mob {
             &entity.world.load(),
             uuid::Uuid::new_v4(),
         )
+    }
+
+    fn spawn_child_from_breeding(&self, partner: &dyn EntityBase) {
+        crate::entity::ai::goal::breed::BreedGoal::breed(self, partner);
     }
 
     /// Extra partner checks on top of the type and love checks in `BreedGoal`.

@@ -3837,6 +3837,11 @@ impl LivingEntity {
         }
 
         // Vanilla parity: actuallyHurt
+        if let Some(mob) = caller.get_mob()
+            && mob.as_animal().is_some()
+        {
+            mob.get_mob_entity().reset_love_ticks();
+        }
         let original_damage = damage_amount;
         let current_abs = self.absorption.load();
         let dmg_to_health = (original_damage - current_abs).max(0.0);
