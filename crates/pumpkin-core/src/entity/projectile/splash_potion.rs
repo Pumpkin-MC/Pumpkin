@@ -278,6 +278,7 @@ impl EntityBase for SplashPotionEntity {
 
         let owner = self.thrown.owner.get(&world);
         let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
+        let water_damage_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
                 let distance_squared = cand
@@ -287,6 +288,11 @@ impl EntityBase for SplashPotionEntity {
                     .squared_distance_to_vec(&hit_pos);
                 if hurts_water_sensitive_entities
                     && cand.is_sensitive_to_water()
+                    && cand
+                        .get_entity()
+                        .bounding_box
+                        .load()
+                        .intersects(&water_damage_box)
                     && distance_squared < radius * radius
                 {
                     cand.damage_with_context(
