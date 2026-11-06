@@ -265,6 +265,28 @@ async fn run_authorization_cases(
         return Err("SIGN_UPDATE from the registered editor in range was rejected".to_string());
     }
 
+    // Opening through the plugin API registers the player as the editor.
+    let plugin_editor = base.offset(Vector3::new(1, 0, 2));
+    place_sign(server, world, plugin_editor).await;
+    player.open_sign_editor(plugin_editor, true);
+    tick(server, 2).await;
+    send_update(bot, plugin_editor, "PLUGIN").await?;
+    tick(server, 20).await;
+    if stored_text(world, plugin_editor) != "PLUGIN" {
+        return Err("plugin-opened sign editor rejected its update".to_string());
+    }
+
+    // Opening through player interaction registers the editor too.
+    let interacted_editor = base.offset(Vector3::new(3, 0, 2));
+    place_sign(server, world, interacted_editor).await;
+    bot.use_block(interacted_editor, 899).await?;
+    tick(server, 2).await;
+    send_update(bot, interacted_editor, "OPENED").await?;
+    tick(server, 20).await;
+    if stored_text(world, interacted_editor) != "OPENED" {
+        return Err("player-opened sign editor rejected its update".to_string());
+    }
+
     // Hanging signs use the same gate.
     let hanging = base.offset(Vector3::new(5, 0, 1));
     world
