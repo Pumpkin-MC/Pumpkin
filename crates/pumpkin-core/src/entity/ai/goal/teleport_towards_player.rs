@@ -46,6 +46,15 @@ impl TeleportTowardsPlayerGoal {
 
     /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
+        let enderman_id = self.enderman.mob_entity.living_entity.entity.entity_id;
+        let mut vehicle = player.get_entity().get_vehicle();
+        while let Some(current) = vehicle {
+            if current.get_entity().entity_id == enderman_id {
+                return false;
+            }
+            vehicle = current.get_entity().get_vehicle();
+        }
+
         self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world)
     }
 
@@ -75,6 +84,11 @@ impl Goal for TeleportTowardsPlayerGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.enderman.take_daylight_deaggression() {
+            self.target_player = None;
+            self.committed_target = None;
+            return false;
+        }
         if let Some(target) = &self.target_player
             && let Some(player) = target.get_player()
         {
@@ -99,7 +113,10 @@ impl Goal for TeleportTowardsPlayerGoal {
         } else if self.target_player.is_some() {
             false
         } else if let Some(target) = &self.committed_target {
-            if !target.get_entity().is_alive() {
+            if target
+                .get_living_entity()
+                .is_none_or(|living| !living.is_alive())
+            {
                 return false;
             }
             let mob_entity = mob.get_mob_entity();

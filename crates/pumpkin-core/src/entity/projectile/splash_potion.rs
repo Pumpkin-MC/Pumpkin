@@ -54,6 +54,23 @@ impl SplashPotionEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *write = item_stack;
     }
+
+    pub fn hurts_water_sensitive_entities(&self) -> bool {
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(potion) = stack
+            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+            .and_then(|contents| contents.potion_id)
+            .and_then(|id| u8::try_from(id).ok())
+            .and_then(pumpkin_data::potion::Potion::from_id)
+        else {
+            return false;
+        };
+        let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
+        names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
+    }
 }
 
 fn is_water_potion(stack: &ItemStack) -> bool {
@@ -213,11 +230,6 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
-        // If no effects, just splash (like water bottles)
-        if effects.is_empty() {
-            return;
-        }
-
         let radius = 4.0f64;
         let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
         let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
@@ -265,18 +277,45 @@ impl EntityBase for SplashPotionEntity {
         }
 
         let owner = self.thrown.owner.get(&world);
+        let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
+        let water_damage_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
-                crate::item::potion::PotionContents::apply_effects_to(
-                    living,
-                    effects.clone(),
-                    scale,
-                    crate::item::potion::PotionApplicationSource::Normal,
-                    Some(crate::entity::living::EffectSource {
-                        direct: self,
-                        owner: owner.as_deref(),
-                    }),
-                );
+                let distance_squared = cand
+                    .get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&hit_pos);
+                if hurts_water_sensitive_entities
+                    && cand.is_sensitive_to_water()
+                    && cand
+                        .get_entity()
+                        .bounding_box
+                        .load()
+                        .intersects(&water_damage_box)
+                    && distance_squared < radius * radius
+                {
+                    cand.damage_with_context(
+                        cand.as_ref(),
+                        1.0,
+                        pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
+                        Some(hit_pos),
+                        Some(self),
+                        owner.as_deref(),
+                    );
+                }
+                if !effects.is_empty() {
+                    crate::item::potion::PotionContents::apply_effects_to(
+                        living,
+                        effects.clone(),
+                        scale,
+                        crate::item::potion::PotionApplicationSource::Normal,
+                        Some(crate::entity::living::EffectSource {
+                            direct: self,
+                            owner: owner.as_deref(),
+                        }),
+                    );
+                }
             }
         }
     }

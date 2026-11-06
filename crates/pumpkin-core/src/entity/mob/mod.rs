@@ -1351,6 +1351,10 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    fn is_sensitive_to_water(&self) -> bool {
+        false
+    }
+
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
     }
@@ -1897,6 +1901,15 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Called after the base damage attempt, whether or not it applied damage.
+    fn post_damage_with_context(
+        &self,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) {
+    }
+
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
@@ -2212,6 +2225,8 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
+
+    fn mob_remove_nbt(&self, _removed: &[Box<str>]) {}
 
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
@@ -2699,6 +2714,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             source,
             cause,
         );
+        self.post_damage_with_context(damage_type, source, cause);
         if damaged {
             return self.on_damage_with_context(damage_type, source, cause);
         }
@@ -2810,6 +2826,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             neutral.read_anger_nbt(nbt);
         }
         self.mob_read_nbt(nbt);
+    }
+
+    fn remove_custom_nbt(&self, removed: &[Box<str>]) {
+        self.mob_remove_nbt(removed);
     }
 
     fn get_gravity(&self) -> f64 {

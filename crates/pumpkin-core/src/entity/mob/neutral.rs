@@ -4,21 +4,26 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
+use pumpkin_util::math::boundingbox::BoundingBox;
 
 /// No anger pending.
 pub const NO_ANGER_END_TIME: i64 = -1;
 
 /// Vanilla `PERSISTENT_ANGER_TIME`: 20 to 39 seconds.
 pub const DEFAULT_ANGER_DURATION: RangeInclusive<i32> = 400..=780;
+
+/// Vanilla `tellNeutralMobsThatIDied` search bounds.
+const DEATH_NOTICE_RANGE_XZ: f64 = 32.0;
+const DEATH_NOTICE_RANGE_Y: f64 = 10.0;
 
 pub struct NeutralData {
     /// World age at which the anger runs out. `-1` means not angry.
@@ -72,6 +77,12 @@ pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
 /// A player the mob may hold a grudge against.
 fn is_valid_player_target(target: &dyn EntityBase) -> bool {
     target.get_player().is_some_and(Player::is_valid_mob_target)
+}
+
+fn is_alive_target(target: &dyn EntityBase) -> bool {
+    target
+        .get_living_entity()
+        .is_some_and(LivingEntity::is_alive)
 }
 
 /// a timed grudge plus the entity it is held against.
@@ -210,7 +221,7 @@ pub trait NeutralMob: Mob {
             return;
         };
         if let Some(target) = find_by_uuid(world, uuid)
-            && target.get_entity().is_alive()
+            && is_alive_target(target.as_ref())
             && self.can_attack(target.as_ref())
         {
             self.set_mob_target(Some(target), TargetReason::Angry);
@@ -232,7 +243,7 @@ pub trait NeutralMob: Mob {
 
         // Grudge holder killed by someone else
         if let Some(previous) = &target
-            && !previous.get_entity().is_alive()
+            && !is_alive_target(previous.as_ref())
             && previous.get_mob().is_some()
             && anger_target.is_some_and(|angry_at| angry_at == previous.get_entity().entity_uuid)
         {
@@ -240,9 +251,18 @@ pub trait NeutralMob: Mob {
             return;
         }
 
+        if let Some(previous) = &target
+            && !is_alive_target(previous.as_ref())
+        {
+            self.set_mob_target(None, TargetReason::ForgotTarget);
+        }
+
         let stays_angry = self.stays_angry_with_target();
 
-        if let Some(target) = &target {
+        if let Some(target) = target
+            .as_ref()
+            .filter(|target| is_alive_target(target.as_ref()))
+        {
             let is_new =
                 anger_target.is_none_or(|angry_at| angry_at != target.get_entity().entity_uuid);
             if is_new {
@@ -260,9 +280,9 @@ pub trait NeutralMob: Mob {
         }
 
         let keeps_valid_player_target = stays_angry
-            && target
-                .as_ref()
-                .is_some_and(|target| is_valid_player_target(target.as_ref()));
+            && target.as_ref().is_some_and(|target| {
+                is_alive_target(target.as_ref()) && is_valid_player_target(target.as_ref())
+            });
         if anger_target.is_some()
             && should_stop_being_angry(self.is_angry_at_age(now), keeps_valid_player_target)
         {
@@ -297,11 +317,7 @@ pub trait NeutralMob: Mob {
     }
 }
 
-/// Vanilla `tellNeutralMobsThatIDied` range.
-const DEATH_NOTICE_RANGE_XZ: f64 = 32.0;
-const DEATH_NOTICE_RANGE_Y: f64 = 10.0;
-
-/// Neutral mobs near a dead player drop the grudge, when `forgive_dead_players` is on.
+/// Neutral mobs holding a grudge against a dead player drop it when `forgive_dead_players` is on.
 pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
     if !world.level_info.load().game_rules.forgive_dead_players {
         return;
@@ -313,11 +329,11 @@ pub fn tell_neutral_mobs_player_died(player: &dyn EntityBase, world: &World) {
         DEATH_NOTICE_RANGE_Y,
         DEATH_NOTICE_RANGE_XZ,
     );
-    for other in world.get_entities_at_box(&search_box) {
-        if !EntityPredicate::ExceptSpectator.test(other.get_entity()) {
+    for entity in world.get_entities_at_box(&search_box) {
+        if !EntityPredicate::ExceptSpectator.test(entity.get_entity()) {
             continue;
         }
-        if let Some(neutral) = other.get_mob().and_then(Mob::as_neutral) {
+        if let Some(neutral) = entity.get_mob().and_then(Mob::as_neutral) {
             neutral.player_died(player, world);
         }
     }

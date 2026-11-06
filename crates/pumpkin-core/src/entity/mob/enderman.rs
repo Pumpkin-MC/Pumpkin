@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
@@ -13,8 +13,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
+    enchantment_provider::EnchantmentProvider,
     entity::EntityType,
-    particle::Particle,
+    item::Item,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
@@ -68,7 +69,9 @@ pub struct EndermanEntity {
     /// Synced CREEPY flag, the open-mouth pose. Anger lives in `NeutralMob`.
     creepy: AtomicBool,
     provoked: AtomicBool,
+    daylight_deaggression: AtomicBool,
     speed_boosted: AtomicBool,
+    target_change_time: AtomicI32,
 }
 
 impl EndermanEntity {
@@ -80,7 +83,9 @@ impl EndermanEntity {
             carried_block: AtomicCell::new(None),
             creepy: AtomicBool::new(false),
             provoked: AtomicBool::new(false),
+            daylight_deaggression: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
+            target_change_time: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -142,7 +147,8 @@ impl EndermanEntity {
         let target_pos = target.get_entity().pos.load();
 
         let dx = pos.x - target_pos.x;
-        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET) - (target_pos.y + PLAYER_EYE_HEIGHT);
+        let dy = (pos.y + ENDERMAN_BODY_Y_OFFSET)
+            - (target_pos.y + target.get_entity().get_eye_height());
         let dz = pos.z - target_pos.z;
         let dist = (dx * dx + dy * dy + dz * dz).sqrt();
 
@@ -167,7 +173,11 @@ impl EndermanEntity {
 
     pub fn teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
+        if entity.has_vehicle() {
+            return false;
+        }
         let origin = entity.pos.load();
+        let origin_block_pos = entity.block_pos.load();
         let world = entity.world.load();
 
         let min_y = f64::from(world.dimension.min_y);
@@ -193,6 +203,11 @@ impl EndermanEntity {
             return false;
         };
 
+        let ground_block =
+            pumpkin_data::Block::from_state_id(world.get_block_state_id(&ground_pos));
+        if ground_block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO) {
+            return false;
+        }
         if world
             .get_fluid(&ground_pos)
             .has_tag(&tag::Fluid::MINECRAFT_WATER)
@@ -201,22 +216,17 @@ impl EndermanEntity {
         }
 
         let bb = BoundingBox::new_from_pos(x, target_y, z, &entity.entity_dimension.load());
+        if BlockPos::iterate(bb.min_block_pos(), bb.max_block_pos()).any(|pos| {
+            pumpkin_data::Block::from_state_id(world.get_block_state_id(&pos))
+                .has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO)
+        }) {
+            return false;
+        }
         if !world.is_space_empty(bb) || world.contains_any_liquid(bb) {
             return false;
         }
 
         let new_pos = Vector3::new(x, target_y, z);
-
-        for pos in &[origin, new_pos] {
-            world.spawn_particle(
-                *pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                128,
-                Particle::Portal,
-            );
-            world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
-        }
 
         if let Some(server) = world.server.upgrade() {
             let mut event =
@@ -232,6 +242,23 @@ impl EndermanEntity {
         }
 
         entity.teleport(new_pos, None, None, &world);
+        world.emit_game_event(pumpkin_data::game_event::GameEvent::Teleport.name(), origin);
+        for pos in &[origin, new_pos] {
+            world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
+        }
+        let destination_block_pos = entity.block_pos.load();
+        let difference = BlockPos::new(
+            (destination_block_pos.0.x - origin_block_pos.0.x).clamp(-127, 127),
+            (destination_block_pos.0.y - origin_block_pos.0.y).clamp(-127, 127),
+            (destination_block_pos.0.z - origin_block_pos.0.z).clamp(-127, 127),
+        );
+        world.sync_world_event(
+            pumpkin_data::world::WorldEvent::ParticlesEndermanTeleport,
+            origin_block_pos,
+            (((difference.0.x + 127) & 0xff) << 16)
+                | (((difference.0.y + 127) & 0xff) << 8)
+                | ((difference.0.z + 127) & 0xff),
+        );
 
         self.mob_entity.steered().navigator().stop();
 
@@ -240,6 +267,17 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
+        let target_change_time = if is_some {
+            self.mob_entity
+                .living_entity
+                .entity
+                .tick_count
+                .load(Ordering::Relaxed)
+        } else {
+            0
+        };
+        self.target_change_time
+            .store(target_change_time, Ordering::Relaxed);
         let mut mob_target = self
             .mob_entity
             .target
@@ -319,6 +357,10 @@ impl EndermanEntity {
         self.carried_block.load()
     }
 
+    pub(crate) fn take_daylight_deaggression(&self) -> bool {
+        self.daylight_deaggression.swap(false, Ordering::Relaxed)
+    }
+
     pub fn is_player_staring(&self, player: &Player) -> bool {
         let equipment = player.living_entity.entity_equipment.try_lock();
         if let Ok(equipment) = equipment
@@ -389,6 +431,10 @@ impl NeutralMob for EndermanEntity {
 }
 
 impl Mob for EndermanEntity {
+    fn is_sensitive_to_water(&self) -> bool {
+        true
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
@@ -397,11 +443,108 @@ impl Mob for EndermanEntity {
         if let Some(block_state) = self.carried_block.load() {
             nbt.put_int("carriedBlockState", block_state.as_u16() as i32);
         }
+        self.write_anger_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(block_state) = nbt.get_int("carriedBlockState") {
-            self.set_carried_block(BlockStateId::new(block_state as u16));
+        if let Some(value) = nbt.get_int("carriedBlockState") {
+            self.set_carried_block(
+                BlockStateId::new(value as u16).filter(|id| *id != BlockStateId::AIR),
+            );
+        }
+        self.read_anger_nbt(nbt);
+    }
+
+    fn mob_remove_nbt(&self, removed: &[Box<str>]) {
+        if removed
+            .iter()
+            .any(|key| key.as_ref() == "carriedBlockState")
+        {
+            self.set_carried_block(None);
+        }
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        self.get_carried_block().is_some()
+    }
+
+    fn on_die(&self, source: Option<&dyn EntityBase>) {
+        let Some(block_state_id) = self.get_carried_block() else {
+            return;
+        };
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_drops {
+            return;
+        }
+
+        let (block, state) = pumpkin_data::BlockState::from_id_with_block(block_state_id);
+        let Some(loot_table) = block.loot_table.and_then(|key| world.get_loot_table(key)) else {
+            return;
+        };
+        let mut tool = pumpkin_data::item_stack::ItemStack::new(1, &Item::DIAMOND_AXE);
+        EnchantmentProvider::ENDERMAN_LOOT_DROP.apply_to_stack(&mut tool, 0.0);
+        let params = crate::world::loot::LootContextParameters {
+            world: Some(&world),
+            block_state: Some(state),
+            this_entity: Some(self),
+            killer_entity: source,
+            direct_killer_entity: source,
+            position: Some(entity.pos.load()),
+            world_time: world.level_info.load().day_time as u64,
+            tool: Some(tool),
+            killed_by_player: Some(source.is_some_and(|source| source.get_player().is_some())),
+            ..Default::default()
+        };
+        for stack in crate::world::loot::generate_loot_from_handle(
+            &loot_table,
+            self.get_random().random(),
+            &params,
+        ) {
+            entity.spawn_at_location(stack);
+        }
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.is_creepy() {
+            Sound::EntityEndermanScream
+        } else {
+            Sound::EntityEndermanAmbient
+        })
+    }
+
+    fn mob_ai_step(&self) {
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(false, Ordering::Relaxed);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let ticks_since_target_change = entity
+            .tick_count
+            .load(Ordering::Relaxed)
+            .wrapping_sub(self.target_change_time.load(Ordering::Relaxed))
+            as u32;
+        if ticks_since_target_change < 600 {
+            return;
+        }
+
+        let world = entity.world.load();
+        if !world.is_bright_outside() {
+            return;
+        }
+        let pos = entity.block_pos.load();
+        let brightness = world.get_light_level_dependent_magic_value(&pos);
+        if brightness <= 0.5 || !world.can_see_sky(&pos) {
+            return;
+        }
+
+        if self.get_random().random::<f32>() * 30.0 < (brightness - 0.4) * 2.0 {
+            self.daylight_deaggression.store(true, Ordering::Relaxed);
+            self.set_target(None);
+            self.teleport_randomly();
         }
     }
 
@@ -418,7 +561,6 @@ impl Mob for EndermanEntity {
         self.set_target(target);
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, ambient sound override
     fn mob_tick(&self, caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
@@ -435,23 +577,71 @@ impl Mob for EndermanEntity {
 
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
         let is_projectile = is_projectile_damage(damage_type);
-        if is_projectile {
-            for _ in 0..64 {
-                if self.teleport_randomly() {
-                    return false;
-                }
-            }
+        if is_projectile
+            && !self.mob_entity.living_entity.entity.has_vehicle()
+            && self.repeatedly_try_to_teleport()
+        {
+            return false;
         }
         true
     }
 
-    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
-        if source.is_some_and(|s| s.get_living_entity().is_some()) {
+    fn pre_damage_with_context(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self
+            .mob_entity
+            .living_entity
+            .entity
+            .is_invulnerable_to(&damage_type, cause)
+        {
+            return false;
+        }
+        if let Some(potion) = source.and_then(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+        }) {
+            return potion.hurts_water_sensitive_entities();
+        }
+        self.pre_damage(damage_type, source)
+    }
+
+    fn post_damage_with_context(
+        &self,
+        _damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        if let Some(potion) = source.and_then(|source| {
+            source
+                .cast_any()
+                .downcast_ref::<crate::entity::projectile::splash_potion::SplashPotionEntity>()
+        }) {
+            if potion.hurts_water_sensitive_entities() && self.mob_entity.living_entity.is_alive() {
+                self.repeatedly_try_to_teleport();
+            }
+            return;
+        }
+        if cause
+            .or(source)
+            .is_some_and(|entity| entity.get_living_entity().is_some())
+        {
             return;
         }
         let should_teleport = self.get_random().random_range(0..10) != 0;
         if should_teleport {
             self.teleport_randomly();
         }
+    }
+}
+
+impl EndermanEntity {
+    fn repeatedly_try_to_teleport(&self) -> bool {
+        !self.mob_entity.living_entity.entity.has_vehicle()
+            && (0..64).any(|_| self.teleport_randomly())
     }
 }
