@@ -286,6 +286,10 @@ impl AgeableMob for ArmadilloEntity {
 }
 
 impl Animal for ArmadilloEntity {
+    fn play_eating_sound(&self) {
+        self.make_sound(Sound::EntityArmadilloEat);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack
             .item
@@ -428,6 +432,6 @@ impl Mob for ArmadilloEntity {
         if self.is_scared() {
             return false;
         }
-        self.animal_interact(player, item_stack, Sound::EntityArmadilloAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

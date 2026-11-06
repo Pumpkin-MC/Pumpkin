@@ -126,6 +126,17 @@ impl NeutralMob for ZombifiedPiglinEntity {
 }
 
 impl Mob for ZombifiedPiglinEntity {
+    fn xp_reward(&self) -> u32 {
+        super::zombie::zombie_xp_reward(
+            self.mob_entity
+                .living_entity
+                .entity
+                .entity_type
+                .experience_reward,
+            self.mob_entity.living_entity.is_baby(),
+        )
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityZombieStep, 0.15, 1.0);
     }

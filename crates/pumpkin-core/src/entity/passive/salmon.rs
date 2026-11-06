@@ -93,6 +93,7 @@ impl Mob for SalmonEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<crate::world::World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<crate::entity::mob::spawn::SpawnGroupData>,
     ) -> Option<crate::entity::mob::spawn::SpawnGroupData> {
         self.set_variant(self.random_spawn_variant());

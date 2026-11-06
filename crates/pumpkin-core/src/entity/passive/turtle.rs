@@ -57,7 +57,7 @@ impl TurtleEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(3, BreedGoal::new(1.0));
@@ -161,6 +161,6 @@ impl Mob for TurtleEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityTurtleAmbientLand)
+        self.animal_interact(player, item_stack)
     }
 }

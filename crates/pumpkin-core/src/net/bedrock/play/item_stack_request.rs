@@ -2,6 +2,7 @@
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
 use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::{
     anvil::anvil_screen_handler::AnvilScreenHandler, beacon_screen_handler::BeaconScreenHandler,
     cartography_table_screen_handler::CartographyTableScreenHandler,
@@ -797,6 +798,7 @@ impl BedrockClient {
                             }
                         }
                         ItemStackRequestAction::CraftResultsDeprecated { .. }
+                        | ItemStackRequestAction::CraftReserved { .. }
                         | ItemStackRequestAction::Create { .. }
                         | ItemStackRequestAction::LabTableCombine
                         | ItemStackRequestAction::CraftNonImplemented => {
@@ -905,12 +907,29 @@ pub(crate) fn map_bedrock_container_slot(
     container_name: ContainerName,
     slot_id: u8,
 ) -> Option<usize> {
-    let is_player_screen = screen_handler.window_type().is_none();
+    let mount_equip_slot = screen_handler
+        .as_any()
+        .downcast_ref::<MountScreenHandler>()
+        .and_then(|mount| mount.bedrock_equip_slot);
+    let is_player_screen = screen_handler.window_type().is_none() && mount_equip_slot.is_none();
     let container_slots = screen_handler
         .get_behaviour()
         .slots
         .len()
         .saturating_sub(PlayerInventory::MAIN_SIZE);
+
+    if let Some(equip_slot) = mount_equip_slot {
+        match container_name {
+            ContainerName::HorseEquip => return Some(equip_slot),
+            ContainerName::LevelEntity => {
+                let slot = slot_id as usize + 1;
+                return (slot >= MountScreenHandler::SLOT_INVENTORY_START
+                    && slot < container_slots)
+                    .then_some(slot);
+            }
+            _ => {}
+        }
+    }
 
     match container_name {
         ContainerName::HotBar => {
@@ -1265,6 +1284,8 @@ fn update_slot_stack(
                         let equipment = &[(EquipmentSlot::MAIN_HAND, new_stack.clone())];
                         player.living_entity.send_equipment_changes(equipment);
                     }
+                } else if screen_slot == 45 {
+                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &new_stack);
                 }
             }
         }

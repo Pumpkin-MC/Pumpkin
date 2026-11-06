@@ -4,6 +4,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::Hand;
+use rand::RngExt;
 use std::sync::Arc;
 
 pub type CanUsePredicate = Arc<dyn Fn(&dyn Mob) -> bool + Send + Sync>;
@@ -41,38 +42,22 @@ impl Goal for UseItemGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        if let Ok(mut eq) = mob
-            .get_mob_entity()
-            .living_entity
-            .entity_equipment
-            .try_lock()
-        {
-            eq.put(&EquipmentSlot::MAIN_HAND, self.item.clone());
-        }
-        mob.get_mob_entity().living_entity.set_active_hand(
+        let mob_entity = mob.get_mob_entity();
+        mob_entity.set_item_slot(&EquipmentSlot::MAIN_HAND, self.item.clone());
+        mob_entity.living_entity.set_active_hand(
             Hand::Right,
             self.item.clone(),
-            i32::MAX,
+            self.item.get_max_use_time(),
         );
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
-        if let Ok(mut eq) = mob
-            .get_mob_entity()
-            .living_entity
-            .entity_equipment
-            .try_lock()
-        {
-            eq.put(&EquipmentSlot::MAIN_HAND, ItemStack::EMPTY.clone());
-        }
-        mob.get_mob_entity().living_entity.clear_active_hand();
+        let mob_entity = mob.get_mob_entity();
+        mob_entity.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::EMPTY.clone());
+        mob_entity.living_entity.clear_active_hand();
         if let Some(sound) = self.finish_sound {
-            let pos = mob.get_entity().pos.load();
-            mob.get_entity().world.load().play_sound(
-                sound,
-                pumpkin_data::sound::SoundCategory::Hostile,
-                &pos,
-            );
+            let pitch = mob.get_random().random::<f32>().mul_add(0.2, 0.9);
+            mob.play_entity_sound(sound, 1.0, pitch);
         }
     }
 

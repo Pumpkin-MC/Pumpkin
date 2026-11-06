@@ -98,10 +98,24 @@ thread_local! {
 fn cell_offsets(seed: i64, x: i32, y: i32, z: i32) -> CellOffsets {
     let key = (seed, x, y, z);
     LAST_CELL_OFFSETS.with_borrow_mut(|last| {
-        if let Some((last_key, offsets)) = last
-            && *last_key == key
-        {
-            return *offsets;
+        if let Some((last_key, prev_offsets)) = last {
+            if *last_key == key {
+                return *prev_offsets;
+            }
+            if *last_key == (seed, x, y + 1, z) {
+                let mut offsets = [[0.0; 3]; 8];
+                for permutation in 0..8 {
+                    if (permutation & 0b010) != 0 {
+                        offsets[permutation] = prev_offsets[permutation & !0b010];
+                    } else {
+                        let shifted_x = if (permutation & 0b100) == 0 { x } else { x + 1 };
+                        let shifted_z = if (permutation & 0b001) == 0 { z } else { z + 1 };
+                        offsets[permutation] = corner_offset(seed, shifted_x, y, shifted_z);
+                    }
+                }
+                *last = Some((key, offsets));
+                return offsets;
+            }
         }
         let mut offsets = [[0.0; 3]; 8];
         for (permutation, offset) in offsets.iter_mut().enumerate() {

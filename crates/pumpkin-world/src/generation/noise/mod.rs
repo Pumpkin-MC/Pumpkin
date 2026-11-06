@@ -170,7 +170,11 @@ impl<'a> ChunkNoiseGenerator<'a> {
         };
         let state_sampler = ChainedBlockStateSampler::new(samplers);
 
-        let router = ChunkNoiseRouter::generate(noise_router_base, &builder_options);
+        let router = if ore_veins {
+            ChunkNoiseRouter::generate(noise_router_base, &builder_options)
+        } else {
+            ChunkNoiseRouter::generate_without_veins(noise_router_base, &builder_options)
+        };
 
         Self {
             state_sampler,
@@ -227,5 +231,15 @@ impl<'a> ChunkNoiseGenerator<'a> {
     #[must_use]
     pub const fn height(&self) -> u16 {
         self.generation_shape.height
+    }
+
+    #[must_use]
+    pub fn into_aquifer(self) -> Option<Box<WorldAquiferSampler>> {
+        for sampler in self.state_sampler.samplers {
+            if let BlockStateSampler::Aquifer(AquiferSampler::Aquifer(aquifer)) = sampler {
+                return Some(Box::new(aquifer));
+            }
+        }
+        None
     }
 }
