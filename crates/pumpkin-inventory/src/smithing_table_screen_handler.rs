@@ -1,22 +1,27 @@
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::crafting::recipe_provider::RecipeProvider;
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
-use crate::slot::{NormalSlot, Slot};
+use crate::slot::Slot;
 
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
 use pumpkin_data::data_component_impl::{ProvidesTrimMaterialImpl, TrimImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::recipes::{get_smithing_transform_recipe, get_smithing_trim_recipe};
+use pumpkin_data::recipes::{
+    RECIPES_SMITHING_TRANSFORM, RECIPES_SMITHING_TRIM, RecipeIngredientTypes,
+    get_smithing_transform_recipe, get_smithing_trim_recipe,
+};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::codec::recipe::DynamicRecipe;
+use pumpkin_protocol::codec::recipe::{DynamicRecipe, OwnedRecipeIngredient};
 use pumpkin_protocol::java::server::play::SlotActionType;
 
 pub struct SmithingTableScreenHandler {
@@ -40,20 +45,26 @@ impl SmithingTableScreenHandler {
             behaviour,
             input_inventory,
             output_inventory,
-            recipe_provider,
+            recipe_provider: recipe_provider.clone(),
         };
 
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             0,
+            0,
+            recipe_provider.clone(),
         )));
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             1,
+            1,
+            recipe_provider.clone(),
         )));
-        handler.add_slot(Arc::new(NormalSlot::new(
+        handler.add_slot(Arc::new(SmithingInputSlot::new(
             handler.input_inventory.clone(),
             2,
+            2,
+            recipe_provider,
         )));
         handler.add_slot(Arc::new(SmithingOutputSlot::new(
             handler.output_inventory.clone(),
@@ -231,7 +242,6 @@ impl ScreenHandler for SmithingTableScreenHandler {
                 stack = slot_stack.clone();
                 match slot_index.cmp(&3) {
                     std::cmp::Ordering::Equal => {
-                        // From output slot to player inventory
                         if !self.insert_item(&mut slot_stack, 4, 40, true) {
                             return ItemStack::EMPTY.clone();
                         }
@@ -241,13 +251,11 @@ impl ScreenHandler for SmithingTableScreenHandler {
                         slot.on_take_item(player, &taken_stack);
                     }
                     std::cmp::Ordering::Less => {
-                        // From input slots to player inventory
                         if !self.insert_item(&mut slot_stack, 4, 40, true) {
                             return ItemStack::EMPTY.clone();
                         }
                     }
                     std::cmp::Ordering::Greater => {
-                        // From player inventory into input slots (0..3)
                         if !self.insert_item(&mut slot_stack, 0, 3, false) {
                             return ItemStack::EMPTY.clone();
                         }
@@ -268,6 +276,152 @@ impl ScreenHandler for SmithingTableScreenHandler {
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
         self.drop_inventory(player, self.input_inventory.clone());
+    }
+}
+
+pub struct SmithingInputSlot {
+    pub inventory: Arc<dyn Inventory>,
+    pub index: usize,
+    pub slot_type: u8,
+    pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    valid_cache: Mutex<HashMap<u16, bool>>,
+    pub id: AtomicU8,
+}
+
+impl SmithingInputSlot {
+    pub fn new(
+        inventory: Arc<dyn Inventory>,
+        index: usize,
+        slot_type: u8,
+        recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    ) -> Self {
+        Self {
+            inventory,
+            index,
+            slot_type,
+            recipe_provider,
+            valid_cache: Mutex::new(HashMap::new()),
+            id: AtomicU8::new(0),
+        }
+    }
+
+    fn compute_valid(&self, item: &Item) -> bool {
+        let matches_static_role = |template: &RecipeIngredientTypes,
+                                   base: &RecipeIngredientTypes,
+                                   addition: &RecipeIngredientTypes|
+         -> bool {
+            match self.slot_type {
+                0 => template.match_item(item),
+                1 => base.match_item(item),
+                2 => addition.match_item(item),
+                _ => false,
+            }
+        };
+
+        if RECIPES_SMITHING_TRIM
+            .iter()
+            .any(|r| matches_static_role(&r.template, &r.base, &r.addition))
+        {
+            return true;
+        }
+        if RECIPES_SMITHING_TRANSFORM
+            .iter()
+            .any(|r| matches_static_role(&r.template, &r.base, &r.addition))
+        {
+            return true;
+        }
+
+        if let Some(provider) = &self.recipe_provider {
+            let matches_dynamic_role = |template: &OwnedRecipeIngredient,
+                                        base: &OwnedRecipeIngredient,
+                                        addition: &OwnedRecipeIngredient|
+             -> bool {
+                match self.slot_type {
+                    0 => template.match_item(item),
+                    1 => base.match_item(item),
+                    2 => addition.match_item(item),
+                    _ => false,
+                }
+            };
+
+            for dynamic in provider.get_dynamic_recipes() {
+                let ok = match dynamic {
+                    DynamicRecipe::SmithingTransform(recipe) => {
+                        matches_dynamic_role(&recipe.template, &recipe.base, &recipe.addition)
+                    }
+                    DynamicRecipe::SmithingTrim(recipe) => {
+                        matches_dynamic_role(&recipe.template, &recipe.base, &recipe.addition)
+                    }
+                    _ => false,
+                };
+
+                if ok {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn is_valid_for_slot(&self, stack: &ItemStack) -> bool {
+        if stack.is_empty() {
+            return true;
+        }
+
+        let item_id = stack.item.id;
+
+        if let Ok(cache) = self.valid_cache.lock()
+            && let Some(&cached) = cache.get(&item_id)
+        {
+            return cached;
+        }
+
+        let result = self.compute_valid(stack.item);
+
+        if let Ok(mut cache) = self.valid_cache.lock() {
+            cache.insert(item_id, result);
+        }
+
+        result
+    }
+}
+
+impl Slot for SmithingInputSlot {
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&self, id: usize) {
+        self.id.store(id as u8, Ordering::Relaxed);
+    }
+
+    fn can_insert(&self, stack: &ItemStack) -> bool {
+        self.is_valid_for_slot(stack)
+    }
+
+    fn get_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
+    }
+
+    fn get_cloned_stack(&self) -> ItemStack {
+        self.inventory.get_stack(self.index)
+    }
+
+    fn has_stack(&self) -> bool {
+        !self.inventory.get_stack(self.index).is_empty()
+    }
+
+    fn set_stack(&self, stack: ItemStack) {
+        self.inventory.set_stack(self.index, stack);
+    }
+
+    fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
     }
 }
 
@@ -336,10 +490,6 @@ impl Slot for SmithingOutputSlot {
 
     fn set_stack(&self, stack: ItemStack) {
         self.inventory.set_stack(self.index, stack);
-    }
-
-    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-        // Do nothing
     }
 
     fn mark_dirty(&self) {
