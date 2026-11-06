@@ -66,7 +66,7 @@ impl PendingConnection {
             let id = if server.advanced_config.networking.java.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name).unwrap_or_else(|_| uuid::Uuid::nil())
+                offline_uuid(&login_start.name)
             };
 
             let profile = GameProfile {
