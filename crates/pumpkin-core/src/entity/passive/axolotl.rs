@@ -406,6 +406,21 @@ impl Mob for AxolotlEntity {
         entity.velocity.store(entity.velocity.load() * WATER_DRAG);
     }
 
+    /// Vanilla `Axolotl.getAmbientSound`: the water sound in water, the air sound outside. The
+    /// animal default is silent, so axolotls did not make idle sounds at all before.
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.get_entity().is_in_water() {
+            Sound::EntityAxolotlIdleWater
+        } else {
+            Sound::EntityAxolotlIdleAir
+        })
+    }
+
+    /// Vanilla `Axolotl.playAttackSound`, played when the axolotl hurts its target.
+    fn on_attack(&self, _target: &dyn EntityBase) {
+        self.play_entity_sound(Sound::EntityAxolotlAttack, 1.0, 1.0);
+    }
+
     /// Vanilla `Axolotl.getMaxHeadXRot`.
     fn get_max_look_pitch_change(&self) -> f32 {
         MAX_HEAD_X_ROT
@@ -1152,6 +1167,60 @@ mod tests {
 
         axolotl.travel_in_water(axolotl.as_ref(), 0.08, false);
         assert!((entity.velocity.load().z - 0.855).abs() < 1e-6);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// The idle sound is the water one in water and the air one outside, and it exists at all
+    /// (the animal default has none).
+    #[tokio::test]
+    async fn idle_sound_depends_on_the_water() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+
+        assert_eq!(
+            axolotl.get_ambient_sound(),
+            Some(Sound::EntityAxolotlIdleAir)
+        );
+        entity.touching_water.store(true, Ordering::Relaxed);
+        assert_eq!(
+            axolotl.get_ambient_sound(),
+            Some(Sound::EntityAxolotlIdleWater)
+        );
+        entity.touching_water.store(false, Ordering::Relaxed);
+        assert_eq!(
+            axolotl.get_ambient_sound(),
+            Some(Sound::EntityAxolotlIdleAir)
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// The sounds the axolotl takes from its entity data: hurt, death, swimming and the splash
+    /// when it enters water are the axolotl ones, not the generic ones.
+    #[tokio::test]
+    async fn hurt_death_swim_and_splash_sounds_are_the_axolotls() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        assert_eq!(
+            EntityType::AXOLOTL.hurt_sound,
+            Some(Sound::EntityAxolotlHurt)
+        );
+        assert_eq!(
+            EntityType::AXOLOTL.death_sound,
+            Some(Sound::EntityAxolotlDeath)
+        );
+        assert_eq!(
+            EntityBase::get_swim_sound(axolotl.as_ref()),
+            Some(Sound::EntityAxolotlSwim)
+        );
+        assert_eq!(
+            EntityBase::get_swim_splash_sound(axolotl.as_ref()),
+            Some(Sound::EntityAxolotlSplash)
+        );
         world.level.shutdown().await;
         Ok(())
     }
