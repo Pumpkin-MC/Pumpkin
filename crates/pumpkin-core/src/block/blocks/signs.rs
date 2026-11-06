@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::block::entities::hanging_sign::HangingSignBlockEntity;
-use crate::block::entities::sign::{SignBlockEntity, SignEntityRef, Text};
+use crate::block::entities::sign::{SIGN_EDIT_RANGE_BUFFER, SignBlockEntity, SignEntityRef, Text};
 use crate::command::CommandSender;
 use crate::command::context::command_source::CommandSource;
 use pumpkin_data::Block;
@@ -11,6 +11,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::translation;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -18,6 +19,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::tick::TickPriority;
 use uuid::Uuid;
 
@@ -559,8 +561,13 @@ impl BlockBehaviour for SignBlock {
             is_facing_front_text(args.world, args.position, args.block, args.player);
         let text = sign_entity.get_text(is_front_text);
 
-        let executed_click_command =
-            execute_click_commands_if_present(args.world, args.player, args.position, text);
+        let executed_click_command = execute_click_commands_if_present(
+            args.world,
+            args.player,
+            args.position,
+            text,
+            sign_entity.allow_op_features(),
+        );
 
         if sign_entity.is_waxed() {
             let is_hanging = args.block.name.contains("hanging");
@@ -647,7 +654,13 @@ impl BlockBehaviour for SignBlock {
             }
 
             if result == BlockActionResult::Success {
-                execute_click_commands_if_present(args.world, args.player, args.position, text);
+                execute_click_commands_if_present(
+                    args.world,
+                    args.player,
+                    args.position,
+                    text,
+                    sign_entity.allow_op_features(),
+                );
                 if pumpkin_item.as_any().is::<GlowingInkSacItem>() {
                     args.player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign,
@@ -693,7 +706,7 @@ fn other_player_is_editing_sign(
     if let Some(editing_player_id) = *currently_editing
         && editing_player_id != player.gameprofile.id
         && let Some(editing_player) = world.get_player_by_uuid(editing_player_id)
-        && editing_player.can_interact_with_block_at(position, 4.0)
+        && editing_player.can_interact_with_block_at(position, SIGN_EDIT_RANGE_BUFFER)
     {
         return true;
     }
@@ -736,24 +749,36 @@ fn execute_click_commands_if_present(
     player: &Arc<Player>,
     position: &BlockPos,
     text: &Text,
+    allow_op_features: bool,
 ) -> bool {
     let Some(server) = world.server.upgrade() else {
         return false;
     };
 
-    let messages = text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // Collect the commands first so no sign lock is held while a command runs.
+    let messages = text.get_messages(player.is_text_filtering_enabled());
+    let commands: Vec<Box<str>> = messages
+        .iter()
+        .filter_map(|msg| {
+            if msg.is_empty() || !msg.starts_with('{') {
+                return None;
+            }
+            let component = serde_json::from_str::<TextComponent>(msg).ok()?;
+            let ClickEvent::RunCommand { command } = component.0.style.click_event? else {
+                return None;
+            };
+            Some(Box::from(
+                command.strip_prefix('/').unwrap_or(command.as_ref()),
+            ))
+        })
+        .collect();
+    let has_run_command = !commands.is_empty();
 
-    let mut has_run_command = false;
-    for msg in messages.iter() {
-        if msg.is_empty() || !msg.starts_with('{') {
-            continue;
-        }
-        if let Ok(component) = serde_json::from_str::<TextComponent>(msg)
-            && let Some(ClickEvent::RunCommand { command }) = &component.0.style.click_event
-        {
+    // Parsing is only used to decide whether the disabled overlay applies.
+    // The command itself runs only when the sign allows op features.
+    if allow_op_features {
+        let dispatcher = server.command_dispatcher.load();
+        for command in commands {
             let source = CommandSource::new(
                 CommandSender::Dummy,
                 world.clone(),
@@ -764,12 +789,16 @@ fn execute_click_commands_if_present(
                 player.get_display_name(),
                 server.clone(),
             );
-            let command_str = command.strip_prefix('/').unwrap_or(command);
-            let dispatcher = server.command_dispatcher.load();
-            dispatcher.handle_command(&source, command_str);
-            has_run_command = true;
+            dispatcher.handle_command(&source, &command);
         }
+    } else if has_run_command {
+        player.send_system_message_raw(
+            &TextComponent::translate(translation::java::SIGN_CLICK_ACTIONS_DISABLED, [])
+                .color_named(NamedColor::Red),
+            true,
+        );
     }
+
     has_run_command
 }
 
