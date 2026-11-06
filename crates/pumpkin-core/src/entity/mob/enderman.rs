@@ -72,7 +72,6 @@ pub struct EndermanEntity {
     daylight_deaggression: AtomicBool,
     speed_boosted: AtomicBool,
     target_change_time: AtomicI32,
-    last_stare_sound: AtomicI32,
 }
 
 impl EndermanEntity {
@@ -87,7 +86,6 @@ impl EndermanEntity {
             daylight_deaggression: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
             target_change_time: AtomicI32::new(0),
-            last_stare_sound: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -269,10 +267,6 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
-        let is_staring_player = target
-            .as_ref()
-            .and_then(|target| target.get_player())
-            .is_some_and(|player| self.is_player_staring(&player));
         let target_change_time = if is_some {
             self.mob_entity
                 .living_entity
@@ -293,9 +287,6 @@ impl EndermanEntity {
         drop(mob_target);
 
         if is_some {
-            if is_staring_player {
-                self.play_stare_sound();
-            }
             self.set_creepy(true);
             // Use attribute modifier instead of direct speed arithmetic
             if !self.speed_boosted.swap(true, Ordering::Relaxed) {
@@ -368,26 +359,6 @@ impl EndermanEntity {
 
     pub(crate) fn take_daylight_deaggression(&self) -> bool {
         self.daylight_deaggression.swap(false, Ordering::Relaxed)
-    }
-
-    fn play_stare_sound(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-        let tick = entity.tick_count.load(Ordering::Relaxed);
-        let last_played = self.last_stare_sound.load(Ordering::Relaxed);
-        if tick < last_played.saturating_add(400) || entity.is_silent() {
-            return;
-        }
-        self.last_stare_sound.store(tick, Ordering::Relaxed);
-
-        let pos = entity.pos.load();
-        let eye_pos = Vector3::new(pos.x, pos.y + ENDERMAN_EYE_HEIGHT, pos.z);
-        entity.world.load().play_sound_raw(
-            Sound::EntityEndermanStare as u16,
-            SoundCategory::Hostile,
-            &eye_pos,
-            2.5,
-            1.0,
-        );
     }
 
     pub fn is_player_staring(&self, player: &Player) -> bool {
