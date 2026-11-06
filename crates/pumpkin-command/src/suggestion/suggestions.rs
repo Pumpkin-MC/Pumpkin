@@ -178,6 +178,24 @@ impl SuggestionsBuilder {
         self
     }
 
+    /// Like [`Self::filter_and_suggest_iter`], but filters on each `match_text` and
+    /// suggests the paired `text`, for when the suggestion is not what the user types.
+    #[must_use]
+    pub fn filter_and_suggest_matching(
+        mut self,
+        values: impl IntoIterator<Item = (impl AsRef<str>, impl Into<SuggestionText>)>,
+    ) -> Self {
+        for (match_text, text) in values {
+            if Self::matches_substr(
+                self.remaining_lowercase(),
+                &match_text.as_ref().to_lowercase(),
+            ) {
+                self = self.suggest(text);
+            }
+        }
+        self
+    }
+
     fn matches_substr(pattern: &str, input: &str) -> bool {
         let mut current_str = input;
         while !current_str.starts_with(pattern) {

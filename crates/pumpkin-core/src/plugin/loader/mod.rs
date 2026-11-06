@@ -61,6 +61,16 @@ pub enum LoaderError {
     #[error("Runtime error: {0}")]
     RuntimeError(String),
 
+    #[error(
+        "Event handlers, services or IPC calls of the plugin are still in use, its library stays loaded until restart"
+    )]
+    LibraryInUse,
+
+    #[error(
+        "Commands of the plugin stay in the command tree, its library stays loaded until restart"
+    )]
+    CommandsResident,
+
     #[error("Invalid loader data")]
     InvalidLoaderData,
 
