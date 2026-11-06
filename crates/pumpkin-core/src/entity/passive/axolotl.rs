@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::AxolotlVariant;
 use pumpkin_data::item::Item;
@@ -27,6 +28,7 @@ use crate::entity::{
         },
         pathfinder::node::PathType,
     },
+    breath::DROWNING_INTERVAL,
     mob::{
         Mob, MobEntity,
         spawn::{EntitySpawnReason, SpawnGroupData},
@@ -46,6 +48,12 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 const MAX_HEAD_X_ROT: f32 = 1.0;
 /// `Axolotl.getMaxHeadYRot`: how far the head may turn away from the body.
 const MAX_HEAD_Y_ROT: f32 = 1.0;
+/// Vanilla `AXOLOTL_TOTAL_AIR_SUPPLY`: `getMaxAirSupply`, 5 minutes against the default 15 seconds.
+const AXOLOTL_TOTAL_AIR_SUPPLY: i32 = 6000;
+/// Vanilla `REHYDRATE_AIR_SUPPLY`: what `rehydrate` adds.
+const REHYDRATE_AIR_SUPPLY: i32 = 1800;
+/// The damage `Axolotl.handleAirSupply` deals with `DamageSources.dryOut`.
+const DRY_OUT_DAMAGE: f32 = 2.0;
 /// Per tick factor of `Axolotl.travelInWater` on the velocity after the move.
 const WATER_DRAG: f64 = 0.9;
 /// Vanilla `Axolotl.RARE_VARIANT_CHANCE`: one in this many babies takes the rare variant.
@@ -121,6 +129,41 @@ fn join_spawn_group<R: Rng + ?Sized>(
     )
 }
 
+/// The air of an axolotl after one tick and whether it dried out in it.
+struct NextAirSupply {
+    air_supply: i32,
+    dries_out: bool,
+}
+
+/// Vanilla `Axolotl.handleAirSupply`: out of water and rain the air runs down by one from what
+/// it was before this tick, and at the drowning threshold it is set to 0 and the axolotl dries
+/// out; in water or rain (or when dead) it is the maximum at once.
+const fn next_air_supply(
+    alive: bool,
+    in_water_or_rain: bool,
+    pre_tick_air_supply: i32,
+    max_air_supply: i32,
+) -> NextAirSupply {
+    if !alive || in_water_or_rain {
+        return NextAirSupply {
+            air_supply: max_air_supply,
+            dries_out: false,
+        };
+    }
+    let air_supply = pre_tick_air_supply.saturating_sub(1);
+    if air_supply <= -DROWNING_INTERVAL {
+        NextAirSupply {
+            air_supply: 0,
+            dries_out: true,
+        }
+    } else {
+        NextAirSupply {
+            air_supply,
+            dries_out: false,
+        }
+    }
+}
+
 /// Reads the `Variant` tag the way vanilla's legacy codec does: a missing tag is the default
 /// variant and an unknown id falls back to it too.
 fn read_variant(nbt: &NbtCompound) -> AxolotlVariant {
@@ -144,6 +187,9 @@ pub struct AxolotlEntity {
 
 impl AxolotlEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        entity
+            .air_supply
+            .store(AXOLOTL_TOTAL_AIR_SUPPLY, Ordering::Relaxed);
         let mut mob_entity = MobEntity::new(entity);
         *mob_entity
             .move_control
@@ -256,6 +302,32 @@ impl AxolotlEntity {
             pumpkin_data::tracked_data::axolotl::DATA_VARIANT,
             VarInt(variant.id()),
         );
+    }
+
+    /// Vanilla `Axolotl.handleAirSupply`: applies [`next_air_supply`] and hurts the axolotl when
+    /// it dries out.
+    fn handle_air_supply(&self, pre_tick_air_supply: i32) {
+        let entity = self.get_entity();
+        let air = next_air_supply(
+            self.mob_entity.living_entity.is_alive(),
+            entity.is_in_water_or_rain(),
+            pre_tick_air_supply,
+            self.get_max_air_supply(),
+        );
+        entity.set_air_supply(air.air_supply);
+        if air.dries_out {
+            self.damage(self, DRY_OUT_DAMAGE, DamageType::DRY_OUT);
+        }
+    }
+
+    /// Vanilla `Axolotl.rehydrate`: adds `REHYDRATE_AIR_SUPPLY` air, up to the maximum.
+    pub fn rehydrate(&self) {
+        let entity = self.get_entity();
+        let air_supply = entity
+            .air_supply
+            .load(Ordering::Relaxed)
+            .saturating_add(REHYDRATE_AIR_SUPPLY);
+        entity.set_air_supply(air_supply.min(self.get_max_air_supply()));
     }
 
     #[must_use]
@@ -380,6 +452,22 @@ impl Mob for AxolotlEntity {
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.set_variant(read_variant(nbt));
         self.set_from_bucket(nbt.get_bool("FromBucket").unwrap_or(false));
+    }
+
+    /// Vanilla `Axolotl.getMaxAirSupply`.
+    fn mob_max_air_supply(&self) -> i32 {
+        AXOLOTL_TOTAL_AIR_SUPPLY
+    }
+
+    /// Vanilla `Axolotl.baseTick`: `handleAirSupply` replaces the air rules of `LivingEntity`
+    /// (water breathers never drown, the rest of the air logic), except without AI, where only
+    /// those run and the air of an axolotl on land refills instead of running out.
+    fn base_tick(&self) {
+        if self.mob_entity.is_no_ai() {
+            self.mob_entity.living_entity.tick_air_supply(self);
+        } else {
+            self.handle_air_supply(self.get_entity().air_supply.load(Ordering::Relaxed));
+        }
     }
 
     /// Vanilla `Axolotl.getWalkTargetValue`: no spot is better than another, unlike the grass and
@@ -1221,6 +1309,200 @@ mod tests {
             EntityBase::get_swim_splash_sound(axolotl.as_ref()),
             Some(Sound::EntityAxolotlSplash)
         );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    fn air_supply(axolotl: &Arc<AxolotlEntity>) -> i32 {
+        axolotl.get_entity().air_supply.load(Ordering::Relaxed)
+    }
+
+    /// An axolotl holds its breath for 6000 ticks, starts with all of it, and an `Air` tag that is
+    /// missing means a full supply (not the 300 of other mobs) while a saved one is kept.
+    #[tokio::test]
+    async fn axolotl_air_supply_is_6000() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        assert_eq!(axolotl.get_max_air_supply(), 6000);
+        assert_eq!(air_supply(&axolotl), 6000);
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:axolotl".to_string());
+        axolotl.get_entity().air_supply.store(10, Ordering::Relaxed);
+        EntityBase::read_nbt_non_mut(axolotl.as_ref(), &nbt);
+        assert_eq!(air_supply(&axolotl), 6000);
+        nbt.put_short("Air", 4321);
+        EntityBase::read_nbt_non_mut(axolotl.as_ref(), &nbt);
+        assert_eq!(air_supply(&axolotl), 4321);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Out of the water the air drops by one a tick. In water it is full at once, whatever it was.
+    #[tokio::test]
+    async fn air_runs_down_on_land_and_refills_in_water() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+
+        axolotl.base_tick();
+        axolotl.base_tick();
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 5997);
+        assert!(
+            axolotl
+                .mob_entity
+                .living_entity
+                .get_last_damage_source()
+                .is_none()
+        );
+
+        axolotl
+            .get_entity()
+            .touching_water
+            .store(true, Ordering::Relaxed);
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 6000);
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(-15, Ordering::Relaxed);
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 6000);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// The pure air rule: one less a tick on land, dry out at -20 with the air back at 0, the maximum
+    /// in water or rain and when dead, and the drop always starts from the air before the tick.
+    #[test]
+    fn next_air_supply_follows_the_vanilla_rule() {
+        let cases = [
+            // (alive, wet, before, air, dries out)
+            (true, false, 6000, 5999, false),
+            (true, false, 1, 0, false),
+            (true, false, -18, -19, false),
+            (true, false, -19, 0, true),
+            (true, false, -20, 0, true),
+            (true, false, i32::MIN, 0, true),
+            (true, true, 100, 6000, false),
+            (true, true, -50, 6000, false),
+            (false, false, 100, 6000, false),
+            (false, true, -50, 6000, false),
+        ];
+        for (alive, wet, before, air, dries_out) in cases {
+            let next = next_air_supply(alive, wet, before, 6000);
+            assert_eq!(
+                (next.air_supply, next.dries_out),
+                (air, dries_out),
+                "alive {alive}, wet {wet}, before {before}"
+            );
+        }
+    }
+
+    /// At -20 air the axolotl dries out: the air is set to 0 and it is hurt by `DRY_OUT` for 2, then
+    /// again each time 20 more ticks have gone by. (The test world has no server, so the damage
+    /// stops after it has been recorded: the health stays, the record shows the hit.)
+    #[tokio::test]
+    async fn axolotl_dries_out_once_the_air_is_below_minus_20() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let living = &axolotl.mob_entity.living_entity;
+        assert!(living.get_last_damage_source().is_none());
+
+        axolotl.get_entity().air_supply.store(1, Ordering::Relaxed);
+        for tick in 1..=20 {
+            axolotl.base_tick();
+            assert_eq!(air_supply(&axolotl), 1 - tick, "tick {tick}");
+            assert!(
+                living.get_last_damage_source().is_none(),
+                "hurt too early at tick {tick}"
+            );
+        }
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 0);
+        assert_eq!(
+            living.get_last_damage_source(),
+            Some((DamageType::DRY_OUT, 0))
+        );
+        assert!((living.last_damage_taken.load() - 2.0).abs() < 1e-6);
+
+        living.last_damage_taken.store(0.0);
+        living.hurt_cooldown.store(0, Ordering::Relaxed);
+        for _ in 0..19 {
+            axolotl.base_tick();
+        }
+        assert!(
+            living.last_damage_taken.load().abs() < 1e-6,
+            "hurt again too early"
+        );
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 0);
+        assert!((living.last_damage_taken.load() - 2.0).abs() < 1e-6);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Without AI the dry out rule does not run: the air of an axolotl on land refills by 4 a tick
+    /// (the `LivingEntity` rule) up to the maximum instead.
+    #[tokio::test]
+    async fn axolotl_without_ai_does_not_dry_out() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        axolotl.mob_entity.set_no_ai(true);
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(100, Ordering::Relaxed);
+
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 104);
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(5999, Ordering::Relaxed);
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), 6000);
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(-100, Ordering::Relaxed);
+        axolotl.base_tick();
+        assert_eq!(air_supply(&axolotl), -96);
+        assert!(
+            axolotl
+                .mob_entity
+                .living_entity
+                .get_last_damage_source()
+                .is_none()
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// `rehydrate` adds 1800 air and stops at the maximum.
+    #[tokio::test]
+    async fn rehydrate_adds_1800_air_up_to_the_maximum() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        for (before, after) in [
+            (1000, 2800),
+            (-50, 1750),
+            (4200, 6000),
+            (5000, 6000),
+            (6000, 6000),
+        ] {
+            axolotl
+                .get_entity()
+                .air_supply
+                .store(before, Ordering::Relaxed);
+            axolotl.rehydrate();
+            assert_eq!(air_supply(&axolotl), after, "from {before}");
+        }
         world.level.shutdown().await;
         Ok(())
     }
