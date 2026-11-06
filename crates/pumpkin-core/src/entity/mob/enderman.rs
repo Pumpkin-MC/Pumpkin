@@ -619,8 +619,16 @@ impl Mob for EndermanEntity {
         &self,
         damage_type: DamageType,
         source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool {
+        if self
+            .mob_entity
+            .living_entity
+            .entity
+            .is_invulnerable_to(&damage_type, cause)
+        {
+            return false;
+        }
         if let Some(potion) = source.and_then(|source| {
             source
                 .cast_any()
