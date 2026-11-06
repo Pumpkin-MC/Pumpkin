@@ -32,8 +32,16 @@ use crate::entity::{
 };
 use crate::world::World;
 
+use controls::{AxolotlLookControl, AxolotlMoveControl};
+
+mod controls;
+
 const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
+/// `Axolotl.getMaxHeadXRot`: how far the head may turn up or down per tick.
+const MAX_HEAD_X_ROT: f32 = 1.0;
+/// `Axolotl.getMaxHeadYRot`: how far the head may turn away from the body.
+const MAX_HEAD_Y_ROT: f32 = 1.0;
 /// Vanilla `Axolotl.RARE_VARIANT_CHANCE`: one in this many babies takes the rare variant.
 const RARE_VARIANT_CHANCE: u32 = 1200;
 /// Members already in a spawn group from which `Axolotl.finalizeSpawn` makes babies.
@@ -114,6 +122,11 @@ fn read_variant(nbt: &NbtCompound) -> AxolotlVariant {
         .map_or(AxolotlVariant::DEFAULT, AxolotlVariant::by_id)
 }
 
+/// The axolotl behind a control's mob.
+fn as_axolotl(mob: &dyn Mob) -> Option<&AxolotlEntity> {
+    mob.cast_any().downcast_ref::<AxolotlEntity>()
+}
+
 pub struct AxolotlEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -125,7 +138,17 @@ pub struct AxolotlEntity {
 
 impl AxolotlEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mut mob_entity = MobEntity::new(entity);
+        *mob_entity
+            .move_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(AxolotlMoveControl::default());
+        *mob_entity
+            .look_control
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(AxolotlLookControl::default());
         let axolotl = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
@@ -347,6 +370,16 @@ impl Mob for AxolotlEntity {
         self.set_from_bucket(nbt.get_bool("FromBucket").unwrap_or(false));
     }
 
+    /// Vanilla `Axolotl.getMaxHeadXRot`.
+    fn get_max_look_pitch_change(&self) -> f32 {
+        MAX_HEAD_X_ROT
+    }
+
+    /// Vanilla `Axolotl.getMaxHeadYRot`.
+    fn get_max_head_rotation(&self) -> f32 {
+        MAX_HEAD_Y_ROT
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -416,7 +449,10 @@ mod tests {
     use core::convert::Infallible;
     use std::collections::VecDeque;
 
-    use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+    use pumpkin_util::{
+        math::{vector3::Vector3, wrap_degrees},
+        text::TextComponent,
+    };
     use rand::TryRng;
 
     use super::*;
@@ -778,6 +814,240 @@ mod tests {
                 item.registry_key
             );
         }
+        Ok(())
+    }
+
+    fn tick_move_control(axolotl: &Arc<AxolotlEntity>) {
+        axolotl
+            .mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(axolotl.as_ref());
+    }
+
+    /// Points the move control at `(x, y, z)` and gives the navigator a one node path there, so
+    /// the control has something to follow: it only steers while the navigation is not done.
+    fn move_towards(axolotl: &Arc<AxolotlEntity>, x: f64, y: f64, z: f64) {
+        use crate::entity::ai::pathfinder::{node::Node, path::Path};
+        let target = pumpkin_util::math::position::BlockPos::floored(x, y, z);
+        axolotl
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .move_to_path(
+                Some(Path::new(vec![Node::new(target)], target, true)),
+                1.0,
+                &axolotl.mob_entity.living_entity,
+            );
+        axolotl
+            .mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_wanted_position(x, y, z, 1.0);
+    }
+
+    fn walking_speed(axolotl: &Arc<AxolotlEntity>) -> f32 {
+        axolotl.mob_entity.living_entity.get_speed()
+    }
+
+    /// The axolotl swims at a tenth of its speed attribute in water and walks at half of it on
+    /// land, and it tilts towards a target below or above it, never by more than the 5 degrees
+    /// of one tick (and with the right sign for a target above it).
+    #[tokio::test]
+    async fn move_control_uses_the_axolotl_swim_and_walk_speeds() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+        let attribute_speed = axolotl
+            .mob_entity
+            .living_entity
+            .get_attribute_value(&pumpkin_data::attributes::Attributes::MOVEMENT_SPEED)
+            as f32;
+
+        // On land the wanted position is straight ahead (yaw 0 faces +z), so no turning is left.
+        move_towards(&axolotl, 0.0, 64.0, 8.0);
+        tick_move_control(&axolotl);
+        assert!((walking_speed(&axolotl) - attribute_speed * 0.5).abs() < 1e-6);
+
+        entity.touching_water.store(true, Ordering::Relaxed);
+        tick_move_control(&axolotl);
+        assert!((walking_speed(&axolotl) - attribute_speed * 0.1).abs() < 1e-6);
+
+        move_towards(&axolotl, 0.0, 62.0, 8.0);
+        tick_move_control(&axolotl);
+        assert!(
+            (entity.pitch.load() - 5.0).abs() < 1e-4,
+            "{}",
+            entity.pitch.load()
+        );
+        let input = axolotl.mob_entity.living_entity.movement_input.load();
+        assert!(input.y < 0.0 && input.z > 0.0);
+
+        entity.pitch.store(0.0);
+        move_towards(&axolotl, 0.0, 66.0, 8.0);
+        tick_move_control(&axolotl);
+        assert!(
+            (entity.pitch.load() + 5.0).abs() < 1e-4,
+            "{}",
+            entity.pitch.load()
+        );
+        assert!(axolotl.mob_entity.living_entity.movement_input.load().y > 0.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// A target to the side turns the body by at most 10 degrees a tick (`maxTurnY`), and a
+    /// target straight below tilts the nose down by 5 degrees a tick until it is 85 degrees
+    /// down (`maxTurnX`), not the 90 degrees that point at the target.
+    #[tokio::test]
+    async fn move_control_limits_how_far_it_turns() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+        entity.touching_water.store(true, Ordering::Relaxed);
+
+        // Yaw 0 faces +z, so a target along +x is 90 degrees to the left (yaw -90).
+        move_towards(&axolotl, 8.0, 64.0, 0.0);
+        tick_move_control(&axolotl);
+        assert!(
+            wrap_degrees(entity.yaw.load() + 10.0).abs() < 1e-3,
+            "{}",
+            entity.yaw.load()
+        );
+        tick_move_control(&axolotl);
+        assert!(
+            wrap_degrees(entity.yaw.load() + 20.0).abs() < 1e-3,
+            "{}",
+            entity.yaw.load()
+        );
+
+        move_towards(&axolotl, 0.0, 40.0, 0.0);
+        for _ in 0..30 {
+            tick_move_control(&axolotl);
+        }
+        assert!(
+            (entity.pitch.load() - 85.0).abs() < 1e-3,
+            "{}",
+            entity.pitch.load()
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// A playing dead axolotl keeps its wanted position but neither turns nor moves, and swims
+    /// on once it gets up.
+    #[tokio::test]
+    async fn move_control_waits_while_the_axolotl_plays_dead() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        move_towards(&axolotl, 0.0, 64.0, 8.0);
+
+        axolotl.set_playing_dead(true);
+        tick_move_control(&axolotl);
+        assert!(walking_speed(&axolotl).abs() < 1e-9, "a dead axolotl moved");
+        assert!(
+            axolotl
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .has_wanted(),
+            "the wanted position was dropped while playing dead"
+        );
+
+        axolotl.set_playing_dead(false);
+        tick_move_control(&axolotl);
+        assert!(walking_speed(&axolotl) > 0.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// Looks at a point 10 blocks to the side and 10 blocks above the eyes, then runs the look
+    /// control for one tick.
+    fn look_up_and_aside(axolotl: &Arc<AxolotlEntity>) {
+        let entity = axolotl.get_entity();
+        let pos = entity.pos.load();
+        let mut look = axolotl
+            .mob_entity
+            .look_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        look.look_at(
+            axolotl.as_ref(),
+            pos.x + 10.0,
+            entity.get_eye_y() + 10.0,
+            pos.z,
+        );
+        look.tick(axolotl.as_ref());
+    }
+
+    /// The head turns 10 degrees per tick towards a target 20 degrees past the target (the
+    /// smooth swimming offset) and tilts by one degree per tick (`getMaxHeadXRot`), so a target
+    /// above makes a small negative pitch. The body stays until the head is more than 20 degrees
+    /// (`maxYRotFromCenter`) off it, then it follows 4 degrees per tick.
+    #[tokio::test]
+    async fn look_control_turns_the_head_slowly() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+
+        look_up_and_aside(&axolotl);
+        assert!((entity.head_yaw.load() + 10.0).abs() < 1e-4);
+        assert!((entity.pitch.load() + 1.0).abs() < 1e-4);
+        look_up_and_aside(&axolotl);
+        assert!((entity.head_yaw.load() + 20.0).abs() < 1e-4);
+        assert!(
+            entity.body_yaw.load().abs() < 1e-4,
+            "the body turned at 20 degrees"
+        );
+        look_up_and_aside(&axolotl);
+        assert!((entity.head_yaw.load() + 30.0).abs() < 1e-4);
+        assert!((entity.body_yaw.load() + 4.0).abs() < 1e-4);
+        assert!((entity.pitch.load() + 3.0).abs() < 1e-4);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn look_control_waits_while_the_axolotl_plays_dead() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+
+        axolotl.set_playing_dead(true);
+        look_up_and_aside(&axolotl);
+        assert!(entity.head_yaw.load().abs() < 1e-9);
+        assert!(entity.pitch.load().abs() < 1e-9);
+
+        axolotl.set_playing_dead(false);
+        look_up_and_aside(&axolotl);
+        assert!(entity.head_yaw.load() < 0.0 && entity.pitch.load() < 0.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// The body follows a turned head to within one degree (`getMaxHeadYRot` is 1), where a
+    /// default mob lets the head turn 75 degrees away from a body that stays put.
+    #[tokio::test]
+    async fn body_follows_the_head_to_within_one_degree() -> TestResult {
+        use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let entity = axolotl.get_entity();
+        entity.head_yaw.store(30.0);
+
+        BodyRotationControl::new().client_tick(axolotl.as_ref());
+        assert!((entity.body_yaw.load() - 29.0).abs() < 1e-4);
+        world.level.shutdown().await;
         Ok(())
     }
 }
