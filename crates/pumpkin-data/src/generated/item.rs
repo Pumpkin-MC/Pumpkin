@@ -16409,7 +16409,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -16777,14 +16777,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -16885,14 +16885,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -16993,14 +16993,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -17101,14 +17101,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -23480,14 +23480,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.200000047683716f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -23741,14 +23741,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -24053,14 +24053,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -24443,14 +24443,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -24551,14 +24551,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -24674,14 +24674,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -24917,14 +24917,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -25023,14 +25023,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -25260,14 +25260,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -25379,14 +25379,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 2.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -25504,14 +25504,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.8235294818878174f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -25659,14 +25659,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -26753,7 +26753,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -34779,14 +34779,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -34972,14 +34972,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -35080,14 +35080,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -35188,14 +35188,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -35296,14 +35296,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -35419,14 +35419,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 11f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -35520,14 +35520,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -35626,14 +35626,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 11f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -35795,14 +35795,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -35914,14 +35914,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 4.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -36039,14 +36039,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.0476189851760864f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -36194,14 +36194,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -37134,7 +37134,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -44498,14 +44498,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -44623,14 +44623,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -44817,14 +44817,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -44993,14 +44993,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -45101,14 +45101,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -45224,14 +45224,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 7f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -45325,14 +45325,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -45431,14 +45431,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 7f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -45532,14 +45532,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -45651,14 +45651,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -45776,14 +45776,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.9473683834075928f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -45931,14 +45931,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -51915,14 +51915,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.0999999046325684f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -52176,14 +52176,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -52352,14 +52352,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -52597,14 +52597,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -52705,14 +52705,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -52828,14 +52828,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -53003,14 +53003,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -53109,14 +53109,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -53346,14 +53346,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -53465,14 +53465,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 3.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -53590,14 +53590,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.9473683834075928f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -53745,14 +53745,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -56634,14 +56634,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -56742,14 +56742,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -56850,14 +56850,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -56956,14 +56956,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -57057,14 +57057,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -62436,14 +62436,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -70657,14 +70657,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 9f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -70862,21 +70862,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.boots",
+                            id: Cow::Borrowed("minecraft:armor.boots"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Feet,
@@ -70983,21 +70983,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.chestplate",
+                            id: Cow::Borrowed("minecraft:armor.chestplate"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Chest,
@@ -71104,21 +71104,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -71225,14 +71225,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -71354,21 +71354,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 19f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -71548,21 +71548,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.leggings",
+                            id: Cow::Borrowed("minecraft:armor.leggings"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Legs,
@@ -71667,21 +71667,21 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 19f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::KNOCKBACK_RESISTANCE,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0.10000000149011612f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -71781,14 +71781,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -71980,14 +71980,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 5.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -72111,14 +72111,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.13043475151062f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -72272,14 +72272,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 7f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -79959,7 +79959,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -82080,7 +82080,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -97839,7 +97839,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -102779,14 +102779,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.200000047683716f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -103244,14 +103244,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -103369,14 +103369,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -103556,14 +103556,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 2.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -103749,14 +103749,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.666666626930237f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -103972,14 +103972,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 4f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -109394,14 +109394,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 8f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.9000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -110612,14 +110612,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 2f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.helmet",
+                            id: Cow::Borrowed("minecraft:armor.helmet"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Head,
@@ -120425,7 +120425,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,
@@ -120656,14 +120656,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ARMOR,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 11f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
                         },
                         Modifier {
                             r#type: &Attributes::ARMOR_TOUGHNESS,
-                            id: "minecraft:armor.body",
+                            id: Cow::Borrowed("minecraft:armor.body"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::Body,
@@ -120834,14 +120834,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 6f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3.200000047683716f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -120970,14 +120970,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -121106,14 +121106,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.799999952316284f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -121236,14 +121236,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 1.5f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -121372,14 +121372,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 0f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4615384340286255f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -121538,14 +121538,14 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[
                         Modifier {
                             r#type: &Attributes::ATTACK_DAMAGE,
-                            id: "minecraft:base_attack_damage",
+                            id: Cow::Borrowed("minecraft:base_attack_damage"),
                             amount: 3f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
                         },
                         Modifier {
                             r#type: &Attributes::ATTACK_SPEED,
-                            id: "minecraft:base_attack_speed",
+                            id: Cow::Borrowed("minecraft:base_attack_speed"),
                             amount: -2.4000000953674316f64,
                             operation: Operation::AddValue,
                             slot: AttributeModifierSlot::MainHand,
@@ -123491,7 +123491,7 @@ impl Item {
                 &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[Modifier {
                         r#type: &Attributes::WAYPOINT_TRANSMIT_RANGE,
-                        id: "minecraft:waypoint_transmit_range_hide",
+                        id: Cow::Borrowed("minecraft:waypoint_transmit_range_hide"),
                         amount: -1f64,
                         operation: Operation::AddMultipliedTotal,
                         slot: AttributeModifierSlot::Head,

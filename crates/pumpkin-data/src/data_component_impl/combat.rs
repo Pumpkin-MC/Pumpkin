@@ -28,7 +28,7 @@ pub enum Operation {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub r#type: &'static Attributes,
-    pub id: &'static str,
+    pub id: Cow<'static, str>,
     pub amount: f64,
     pub operation: Operation,
     pub slot: crate::AttributeModifierSlot,
@@ -43,18 +43,168 @@ impl Hash for Modifier {
     }
 }
 
+impl Operation {
+    /// Name used by vanilla in NBT, e.g. `add_value`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::AddValue => "add_value",
+            Self::AddMultipliedBase => "add_multiplied_base",
+            Self::AddMultipliedTotal => "add_multiplied_total",
+        }
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "add_value" => Some(Self::AddValue),
+            "add_multiplied_base" => Some(Self::AddMultipliedBase),
+            "add_multiplied_total" => Some(Self::AddMultipliedTotal),
+            _ => None,
+        }
+    }
+
+    /// Network id, in vanilla declaration order.
+    #[must_use]
+    pub const fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::AddValue),
+            1 => Some(Self::AddMultipliedBase),
+            2 => Some(Self::AddMultipliedTotal),
+            _ => None,
+        }
+    }
+}
+
+impl crate::AttributeModifierSlot {
+    /// Name used by vanilla in NBT, e.g. `mainhand`.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::MainHand => "mainhand",
+            Self::OffHand => "offhand",
+            Self::Hand => "hand",
+            Self::Feet => "feet",
+            Self::Legs => "legs",
+            Self::Chest => "chest",
+            Self::Head => "head",
+            Self::Armor => "armor",
+            Self::Body => "body",
+            Self::Saddle => "saddle",
+        }
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "any" => Self::Any,
+            "mainhand" => Self::MainHand,
+            "offhand" => Self::OffHand,
+            "hand" => Self::Hand,
+            "feet" => Self::Feet,
+            "legs" => Self::Legs,
+            "chest" => Self::Chest,
+            "head" => Self::Head,
+            "armor" => Self::Armor,
+            "body" => Self::Body,
+            "saddle" => Self::Saddle,
+            _ => return None,
+        })
+    }
+
+    /// Network id, in vanilla `EquipmentSlotGroup` order.
+    #[must_use]
+    pub const fn id(&self) -> i32 {
+        match self {
+            Self::Any => 0,
+            Self::MainHand => 1,
+            Self::OffHand => 2,
+            Self::Hand => 3,
+            Self::Feet => 4,
+            Self::Legs => 5,
+            Self::Chest => 6,
+            Self::Head => 7,
+            Self::Armor => 8,
+            Self::Body => 9,
+            Self::Saddle => 10,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_id(id: i32) -> Option<Self> {
+        Some(match id {
+            0 => Self::Any,
+            1 => Self::MainHand,
+            2 => Self::OffHand,
+            3 => Self::Hand,
+            4 => Self::Feet,
+            5 => Self::Legs,
+            6 => Self::Chest,
+            7 => Self::Head,
+            8 => Self::Armor,
+            9 => Self::Body,
+            10 => Self::Saddle,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct AttributeModifiersImpl {
     pub attribute_modifiers: Cow<'static, [Modifier]>,
 }
 impl AttributeModifiersImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+    /// Reads a list of `{type, id, amount, operation, slot}` compounds.
+    /// Entries with an unknown attribute, operation or slot are skipped.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let list = data.extract_list()?;
+        let modifiers = list
+            .iter()
+            .filter_map(|entry| {
+                let compound = entry.extract_compound()?;
+                let type_name = compound.get_string("type")?;
+                let r#type = Attributes::ALL.iter().find(|a| {
+                    a.name == type_name || a.name.strip_prefix("minecraft:") == Some(type_name)
+                })?;
+                Some(Modifier {
+                    r#type,
+                    id: Cow::Owned(compound.get_string("id")?.to_owned()),
+                    amount: compound.get("amount")?.as_numeric_double()?,
+                    operation: Operation::from_name(compound.get_string("operation")?)?,
+                    slot: compound
+                        .get_string("slot")
+                        .map_or(Some(crate::AttributeModifierSlot::Any), |name| {
+                            crate::AttributeModifierSlot::from_name(name)
+                        })?,
+                })
+            })
+            .collect::<Vec<_>>();
         Some(Self {
-            attribute_modifiers: Cow::Borrowed(&[]),
+            attribute_modifiers: Cow::Owned(modifiers),
         })
     }
 }
 impl DataComponentImpl for AttributeModifiersImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.attribute_modifiers
+                .iter()
+                .map(|m| {
+                    let mut compound = NbtCompound::new();
+                    compound.put_string("type", m.r#type.name.to_string());
+                    compound.put_string("id", m.id.to_string());
+                    compound.put_double("amount", m.amount);
+                    compound.put_string("operation", m.operation.name().to_string());
+                    // Vanilla leaves out the default slot.
+                    if m.slot != crate::AttributeModifierSlot::Any {
+                        compound.put_string("slot", m.slot.name().to_string());
+                    }
+                    NbtTag::Compound(compound)
+                })
+                .collect(),
+        )
+    }
     default_impl!(AttributeModifiers);
 }
 
