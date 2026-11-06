@@ -11,6 +11,9 @@ pub struct ChunkHolder {
     pub dependency_stage: StagedChunkEnum,
     pub current_stage: StagedChunkEnum,
     pub chunk: Option<Chunk>,
+    /// Set when the stored chunk could not be read. The generated placeholder must not be
+    /// written back over the copy that failed to load.
+    pub read_failed: bool,
     pub occupied: NodeKey,
     pub occupied_by: EdgeKey,
     pub public: bool,
@@ -24,6 +27,7 @@ impl Default for ChunkHolder {
             dependency_stage: StagedChunkEnum::None,
             current_stage: StagedChunkEnum::None,
             chunk: None,
+            read_failed: false,
             occupied: NodeKey::null(),
             occupied_by: EdgeKey::null(),
             public: false,

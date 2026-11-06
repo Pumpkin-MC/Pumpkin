@@ -15,7 +15,11 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
 pub enum RecvChunk {
-    IO(Chunk),
+    IO {
+        chunk: Chunk,
+        /// The stored chunk failed to load, so this placeholder must not be saved.
+        read_failed: bool,
+    },
     Generation(Cache),
     GenerationFailure {
         pos: ChunkPos,
@@ -57,6 +61,14 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
 
 fn load_proto_chunk(chunk: &crate::chunk::ChunkData, level: &Level) -> ProtoChunk {
     ProtoChunk::from_chunk_data(chunk, &level.world_gen.load())
+}
+
+fn empty_proto_chunk(pos: ChunkPos, level: &Level) -> Chunk {
+    Chunk::Proto(Box::new(ProtoChunk::new(
+        pos.x,
+        pos.y,
+        &level.world_gen.load(),
+    )))
 }
 
 fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> Chunk {
@@ -145,7 +157,10 @@ pub async fn io_read_work(
                     let level = level.clone();
                     let result = run_blocking(move || process_loaded_chunk(chunk, &level)).await;
                     let received = match result {
-                        Ok(processed) => RecvChunk::IO(processed),
+                        Ok(processed) => RecvChunk::IO {
+                            chunk: processed,
+                            read_failed: false,
+                        },
                         Err(err) => RecvChunk::GenerationFailure {
                             pos,
                             stage: StagedChunkEnum::Empty,
@@ -156,15 +171,31 @@ pub async fn io_read_work(
                         break;
                     }
                 }
-                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                LoadedData::Missing(pos) => {
                     if send
                         .send((
                             pos,
-                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
-                                pos.x,
-                                pos.y,
-                                &level.world_gen.load(),
-                            )))),
+                            RecvChunk::IO {
+                                chunk: empty_proto_chunk(pos, &level),
+                                read_failed: false,
+                            },
+                        ))
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                LoadedData::Error((pos, err)) => {
+                    error!(
+                        "Failed to load chunk {pos:?} from disk; leaving the stored chunk untouched: {err}"
+                    );
+                    if send
+                        .send((
+                            pos,
+                            RecvChunk::IO {
+                                chunk: empty_proto_chunk(pos, &level),
+                                read_failed: true,
+                            },
                         ))
                         .is_err()
                     {

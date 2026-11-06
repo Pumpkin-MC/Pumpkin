@@ -348,12 +348,21 @@ impl Level {
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
+        self.spawn_empty_entity_chunk(pos, false);
+    }
+
+    fn spawn_empty_entity_chunk(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+        read_failed: bool,
+    ) -> SyncEntityChunk {
         let arc_chunk = Arc::new(ChunkEntityData {
             x: pos.x,
             z: pos.y,
             data: std::sync::Mutex::new(Vec::new()),
             live: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            read_failed: AtomicBool::new(read_failed),
         });
 
         self.loaded_entity_chunks.insert(pos, arc_chunk.clone());
@@ -363,6 +372,7 @@ impl Level {
                 let _ = tx.send(arc_chunk.clone());
             }
         }
+        arc_chunk
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
@@ -772,7 +782,7 @@ impl Level {
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
                                 let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
-                            LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                            LoadedData::Missing(pos) => {
                                 let (tx, rx) = oneshot::channel();
                                 match level.pending_entity_generations.entry(pos) {
                                     dashmap::mapref::entry::Entry::Occupied(mut entry) => {
@@ -790,6 +800,13 @@ impl Level {
                                             sender_clone.send((Arc::downgrade(&chunk), true)).await;
                                     }
                                 });
+                            }
+                            LoadedData::Error((pos, err)) => {
+                                error!(
+                                    "Failed to load entity chunk {pos:?} from disk; leaving the stored chunk untouched: {err}"
+                                );
+                                let chunk = level.spawn_empty_entity_chunk(pos, true);
+                                let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
                         }
                     }
@@ -810,29 +827,39 @@ impl Level {
             return chunk.clone();
         }
 
-        if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
-            self.loaded_entity_chunks.insert(pos, chunk.clone());
-            chunk
-        } else {
-            let (tx, rx) = oneshot::channel();
-            match self.pending_entity_generations.entry(pos) {
-                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                    entry.get_mut().push(tx);
-                }
-                dashmap::mapref::entry::Entry::Vacant(entry) => {
-                    entry.insert(vec![tx]);
-                    self.spawn_entity_generation(pos);
-                }
+        match self.load_single_entity_chunk(pos).await {
+            Ok((chunk, _)) => {
+                self.loaded_entity_chunks.insert(pos, chunk.clone());
+                chunk
             }
-            rx.await.unwrap_or_else(|_| {
-                Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: std::sync::Mutex::new(Vec::new()),
-                    live: AtomicBool::new(false),
-                    dirty: AtomicBool::new(false),
+            Err(ChunkReadingError::ChunkNotExist) => {
+                let (tx, rx) = oneshot::channel();
+                match self.pending_entity_generations.entry(pos) {
+                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                        entry.get_mut().push(tx);
+                    }
+                    dashmap::mapref::entry::Entry::Vacant(entry) => {
+                        entry.insert(vec![tx]);
+                        self.spawn_entity_generation(pos);
+                    }
+                }
+                rx.await.unwrap_or_else(|_| {
+                    Arc::new(ChunkEntityData {
+                        x: pos.x,
+                        z: pos.y,
+                        data: std::sync::Mutex::new(Vec::new()),
+                        live: AtomicBool::new(false),
+                        dirty: AtomicBool::new(false),
+                        read_failed: AtomicBool::new(false),
+                    })
                 })
-            })
+            }
+            Err(err) => {
+                error!(
+                    "Failed to load entity chunk {pos:?} from disk; leaving the stored chunk untouched: {err}"
+                );
+                self.spawn_empty_entity_chunk(pos, true)
+            }
         }
     }
 
@@ -1057,6 +1084,9 @@ impl Level {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chunk::format::anvil::AnvilRegion;
+    use crate::chunk::io::RegionFile;
+    use pumpkin_config::chunk::{AnvilChunkConfig, ChunkConfig};
     use pumpkin_config::world::LevelConfig;
     use tempfile::TempDir;
 
@@ -1113,5 +1143,59 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn corrupt_entity_region_is_not_rewritten_after_read_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig {
+            chunk: ChunkConfig::Anvil(AnvilChunkConfig::default()),
+            ..LevelConfig::default()
+        };
+        let level = Level::from_root_folder(&config, root, 0, Dimension::OVERWORLD);
+
+        for x in 0..2 {
+            let chunk = Arc::new(ChunkEntityData {
+                x,
+                z: 0,
+                data: Mutex::new(Vec::new()),
+                live: AtomicBool::new(false),
+                dirty: AtomicBool::new(true),
+                read_failed: AtomicBool::new(false),
+            });
+            level
+                .write_entity_chunks(vec![(Vector2::new(x, 0), chunk)])
+                .await;
+        }
+        level.entity_saver.flush_all().await;
+
+        let path = level
+            .level_folder
+            .entities_folder
+            .join(AnvilRegion::file_name(Vector2::new(0, 0)));
+        let mut corrupt = std::fs::read(&path).unwrap();
+        for index in 0..2 {
+            let location =
+                u32::from_be_bytes(corrupt[index * 4..index * 4 + 4].try_into().unwrap());
+            assert_ne!(location, 0, "entity chunk {index} was not written");
+            let sector = (location >> 8) as usize;
+            corrupt[sector * 4096 + 4] = 5;
+        }
+        std::fs::write(&path, &corrupt).unwrap();
+
+        let chunk = level.get_entity_chunk(Vector2::new(0, 0)).await;
+        assert!(chunk.read_failed.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+
+        let mut receiver = level.receive_entity_chunks(vec![Vector2::new(1, 0)]);
+        let (chunk, _) = receiver.recv().await.expect("entity chunk response");
+        let chunk = chunk.upgrade().expect("entity chunk retained");
+        assert!(chunk.read_failed.load(Ordering::Relaxed));
+        chunk.mark_dirty(true);
+
+        level.shutdown().await;
+
+        assert_eq!(std::fs::read(path).unwrap(), corrupt);
     }
 }
