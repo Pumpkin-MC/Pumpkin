@@ -18,11 +18,8 @@ pub struct PathNode {
 }
 
 /// Checks if a position has a hole (downward flow opportunity) below it.
-fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
-    let below_pos = pos.down();
-    let below_state = world.get_block_state(&below_pos);
-    let below_block = Block::from_state_id(below_state.id);
-    physics::can_be_replaced(below_state, below_block, fluid)
+fn is_hole(world: &Arc<World>, pos: &BlockPos) -> bool {
+    physics::can_hold_fluid(world.get_block(&pos.down()))
 }
 
 /// Determines valid spread directions for fluid flow using hole-first priority.
@@ -54,7 +51,7 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         let side_fluid_props = fluid_impl.get_effective_props(fluid, side_state_id);
 
         // Check if we can pass through (not a solid source block or waterlogged)
-        if !physics::can_be_replaced(side_state, side_block, fluid)
+        if !physics::can_hold_fluid(side_block)
             || side_fluid_props
                 .as_ref()
                 .is_some_and(|p| p.level == Level::L8 && p.falling != Falling::True)
@@ -70,7 +67,7 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         let new_state_id = new_fluid_props.to_state_id(fluid);
 
         // Holes get distance 0
-        let slope_dist = if is_hole(world, fluid, &side_pos) {
+        let slope_dist = if is_hole(world, &side_pos) {
             0
         } else {
             get_in_flow_down_distance_iterative(
@@ -169,10 +166,7 @@ pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
         }
 
         // Check for hole (downward flow opportunity)
-        let below_pos = node.pos.down();
-        let below_state = world.get_block_state(&below_pos);
-        let below_block = Block::from_state_id(below_state.id);
-        if physics::can_be_replaced(below_state, below_block, fluid) {
+        if physics::can_hold_fluid(world.get_block(&node.pos.down())) {
             return node.distance;
         }
 
@@ -188,9 +182,7 @@ pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
 
             let next_pos = node.pos.offset(direction.to_offset());
 
-            let next_state = world.get_block_state(&next_pos);
-            let next_block = Block::from_state_id(next_state.id);
-            if !physics::can_be_replaced(next_state, next_block, fluid) {
+            if !physics::can_hold_fluid(world.get_block(&next_pos)) {
                 continue;
             }
 
