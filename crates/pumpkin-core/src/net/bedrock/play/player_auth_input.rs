@@ -38,8 +38,7 @@ impl BedrockClient {
             && !entity.has_vehicle();
         let horizontal_collision = flags.get(InputData::HorizontalCollision as usize);
 
-        self.store_input_state(&packet, on_ground);
-        player.resend_pushed_jump(flags.get(InputData::StartJumping as usize));
+        self.store_input_state(&packet);
 
         let sneaking = sneaking_from_auth(player, flags);
         let was_sneaking = entity.is_sneaking();
@@ -177,16 +176,11 @@ impl BedrockClient {
     }
 
     /// Client state at this input, which push motions build on.
-    fn store_input_state(&self, packet: &SPlayerAuthInput, on_ground: bool) {
+    fn store_input_state(&self, packet: &SPlayerAuthInput) {
         self.input_tick.store(packet.tick.0, Ordering::Relaxed);
         // Client predicted end-of-tick velocity. Knockback is an absolute `SetActorMotion`.
         // later entity pushes layer on this delta once that motion is no longer in flight.
         self.client_delta.store(packet.delta.to_f64());
-        // A held jump starts the next jump on landing, so it counts as in the air
-        let jumping = packet.input_data.get(InputData::Jumping as usize)
-            || packet.input_data.get(InputData::StartJumping as usize);
-        self.client_on_ground
-            .store(on_ground && !jumping, Ordering::Relaxed);
     }
 
     /// Inputs are ignored until the client reaches a pending teleport, so stale

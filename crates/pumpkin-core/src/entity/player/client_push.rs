@@ -1,7 +1,9 @@
 //! Entity pushes on a player, one path for Java and Bedrock.
 //!
-//! The server pushes every player like vanilla. Java clients predict the same pushes,
-//! Bedrock clients don't predict entity pushes, so they get them as `SetActorMotion`.
+//! The server pushes every player like vanilla. Java clients predict the same pushes.
+//! Bedrock clients don't, so they get them as `SetActorMotion` tagged with the last
+//! `PlayerAuthInput` tick. Rewind history applies that motion at that tick and replays
+//! later inputs, so a jump is not overwritten.
 
 use std::sync::atomic::Ordering;
 
@@ -116,53 +118,16 @@ impl Player {
             return;
         }
         let push = entity.push_impulse.swap(Vector3::default());
-        // A motion replaces the vertical speed too, so a jump or bounce isn't pushed
-        let airborne = !client.client_on_ground.load(Ordering::Relaxed)
-            && !self.is_flying()
-            && !entity.is_fall_flying()
-            && !entity.is_in_liquid();
-        if push == Vector3::default() || airborne {
+        if push == Vector3::default() {
             return;
         }
-        // The delta left half a round trip ago, the motion lands half a round trip later
+        // The delta is from the tagged tick; rewind replays anything after it, including a jump
         let lookback = round_trip as usize - 1;
         let motion = client
             .push_residual
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .layer(client.client_delta.load(), push, lookback);
-        client.push_motion_age.store(self.world().get_world_age());
-        self.send_own_motion(motion);
-    }
-
-    /// Push motions sent before the server saw a jump start replace the jump's vertical
-    /// speed on arrival, so the jump speed follows them.
-    // TODO: The client still dips back toward the ground briefly before the resend lands,
-    // the resulting movement is correct.
-    pub fn resend_pushed_jump(&self, jump_started: bool) {
-        let Some(client) = self.client.bedrock().filter(|_| jump_started) else {
-            return;
-        };
-        let round_trip = bedrock_round_trip_ticks(self.ping.load(Ordering::Relaxed));
-        let since_push = self
-            .world()
-            .get_world_age()
-            .saturating_sub(client.push_motion_age.load());
-        // A later own motion like knockback replaced the push
-        if since_push > i64::from(round_trip)
-            || client.own_motion_age.load() >= client.push_motion_age.load()
-        {
-            return;
-        }
-        let motion = client
-            .push_residual
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .layer(
-                client.client_delta.load(),
-                Vector3::default(),
-                round_trip as usize - 1,
-            );
         self.send_own_motion(motion);
     }
 }
