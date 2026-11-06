@@ -4,6 +4,8 @@ use crate::{ExecutionDomain, SchedulerTaskId};
 
 #[derive(Debug, Error)]
 pub enum SchedulerError {
+    #[error("scheduler task {task:?} was cancelled")]
+    Cancelled { task: SchedulerTaskId },
     #[error("scheduler capacity for {domain:?} is full")]
     QueueFull { domain: ExecutionDomain },
     #[error("scheduler does not support domain {domain:?}")]
