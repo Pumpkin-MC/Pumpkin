@@ -1,0 +1,25 @@
+package pumpkin:helpers@0.1.0;
+
+/// Pure registry-key operations supplied by a component embedded during plugin builds.
+interface registry-keys {
+    /// Adds the minecraft namespace to unqualified keys
+    qualify-key: func(key: string) -> string;
+
+    /// Returns the canonical key of a known item from this component's extracted data
+    ///
+    /// Returns none for unknown keys, including custom items. Matching is case-sensitive
+    item-key: func(name: string) -> option<string>;
+
+    /// Returns the canonical key of a known block from this component's extracted data
+    ///
+    /// Returns none for unknown keys, including custom blocks. Matching is case-sensitive
+    block-key: func(name: string) -> option<string>;
+}
+
+world helpers {
+    export registry-keys;
+}
+
+world helper-client {
+    import registry-keys;
+}
