@@ -750,3 +750,64 @@ fn end_stage_parity_hashes() {
         pumpkin_util::read_data_from_file!("../../../../../assets/tests/end_stage_hashes.json");
     verify_stage_parity(0, &stages);
 }
+
+#[test]
+fn surface_builder_preserves_tree_features_across_border() {
+    let seed = Seed(0);
+    let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+    let WorldGenerator::Noise(generator) = &*world_gen else {
+        unreachable!()
+    };
+
+    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    chunk.step_to_biomes(generator);
+    chunk.set_structure_starts(generator);
+    chunk.set_structure_references(generator);
+    chunk.step_to_noise(generator);
+    // Simulate an adjacent chunk placing a tree that crosses into (x=15, z=15)
+    let test_x = 15;
+    let test_z = 15;
+    let ground_y = chunk.top_block_height_exclusive(test_x, test_z);
+    let log_y = ground_y + 2;
+    let leaf_y = ground_y + 3;
+
+    chunk.set_block_state(
+        test_x,
+        log_y,
+        test_z,
+        pumpkin_data::Block::OAK_LOG.default_state,
+    );
+    chunk.set_block_state(
+        test_x,
+        leaf_y,
+        test_z,
+        pumpkin_data::Block::OAK_LEAVES.default_state,
+    );
+
+    // Run build_surface
+    let center_surface_biomes = surface_biomes(&world_gen, 0, 0);
+    chunk.step_to_surface(generator, &center_surface_biomes);
+
+    // Assert that oak leaves and log were NOT overwritten with grass or dirt
+    let state_leaf = chunk
+        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(
+            test_x, leaf_y, test_z,
+        ))
+        .to_state();
+    let state_log = chunk
+        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(
+            test_x, log_y, test_z,
+        ))
+        .to_state();
+
+    assert_eq!(
+        state_leaf.id,
+        pumpkin_data::Block::OAK_LEAVES.default_state.id,
+        "Surface builder must not replace tree canopy with grass!"
+    );
+    assert_eq!(
+        state_log.id,
+        pumpkin_data::Block::OAK_LOG.default_state.id,
+        "Surface builder must not replace tree trunk with dirt!"
+    );
+}
