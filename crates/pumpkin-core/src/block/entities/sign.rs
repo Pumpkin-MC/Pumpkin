@@ -81,10 +81,14 @@ fn nbt_message_to_json(tag: &NbtTag, allow_op_features: bool) -> Box<str> {
     }
 }
 
+/// Converts a stored JSON message to NBT, writing parsed components as compounds.
+///
+/// Writing a simple literal back as a string tag would let an enabled sign promote
+/// saved client text into a component with click actions on the next load.
 fn json_message_to_nbt(message: &str) -> NbtTag {
     serde_json::from_str::<TextComponent>(message).map_or_else(
         |_| NbtTag::String(Box::from(message)),
-        |component| component.to_nbt_tag_for_version(&CURRENT_MC_VERSION),
+        |component| NbtTag::Compound(component.to_nbt_compound_for_version(&CURRENT_MC_VERSION)),
     )
 }
 
@@ -896,6 +900,31 @@ mod tests {
 
         assert_eq!(plain_text(&loaded.get_message(0, false)), "hello");
         assert!(loaded.has_any_click_commands(false));
+    }
+
+    #[test]
+    fn client_text_stays_literal_after_enabled_sign_reload() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let pos = BlockPos::new(1, 64, 2);
+        let sign = SignBlockEntity::empty(pos);
+        sign.allow_op_features.store(true, Ordering::Relaxed);
+        sign.front_text.set_client_messages(&[
+            Box::from(crafted),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        let mut nbt = NbtCompound::new();
+        sign.write_nbt(&mut nbt);
+        let reloaded = SignBlockEntity::from_nbt(&nbt, pos);
+
+        assert!(!reloaded.front_text.has_any_click_commands(false));
+        assert_eq!(
+            plain_text(&reloaded.front_text.get_message(0, false)),
+            crafted
+        );
     }
 
     #[test]
