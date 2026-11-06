@@ -1,13 +1,15 @@
 use std::sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::AxolotlVariant;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
@@ -19,12 +21,9 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob, BABY_START_AGE},
     ai::{
-        goal::{
-            active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-            follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-            swim::SwimGoal, tempt::TemptGoal, try_find_water::TryFindWaterGoal,
-            wander_around::WanderAroundGoal,
+        brain::{
+            Brain, BrainTick,
+            memory::{PackedMemories, types},
         },
         pathfinder::node::PathType,
     },
@@ -36,13 +35,13 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
 use controls::{AxolotlLookControl, AxolotlMoveControl};
 
+mod ai;
 mod controls;
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
 /// `Axolotl.getMaxHeadXRot`: how far the head may turn up or down per tick.
 const MAX_HEAD_X_ROT: f32 = 1.0;
@@ -182,13 +181,55 @@ fn as_axolotl(mob: &dyn Mob) -> Option<&AxolotlEntity> {
     mob.cast_any().downcast_ref::<AxolotlEntity>()
 }
 
+/// Vanilla `PLAYER_REGEN_DETECTION_RANGE`: how far from the axolotl a player has to be to be
+/// thanked for a kill.
+const PLAYER_REGEN_DETECTION_RANGE: f64 = 20.0;
+/// Vanilla `REGEN_BUFF_MAX_DURATION`.
+const REGEN_BUFF_MAX_DURATION: i32 = 2400;
+/// What `applySupportingEffects` adds to the regeneration a player has.
+const REGEN_BUFF_BASE_DURATION: i32 = 100;
+
+/// The regeneration duration `Axolotl.applySupportingEffects` gives a player whose regeneration
+/// is `current` (`(ticks left, amplifier)`, `None` when it has none), or `None` when it gives
+/// nothing: only a missing effect or one that ends within 2399 ticks is renewed, by 100 more
+/// ticks up to 2400. An infinite effect (a negative duration) never ends, so it is left alone.
+/// A stronger effect (amplifier 1 or more) is left alone too: in vanilla the new level 0 effect
+/// cannot replace it, while here adding an effect replaces the one that is active.
+fn supporting_regeneration_duration(current: Option<(i32, i32)>) -> Option<i32> {
+    if current.is_some_and(|(_, amplifier)| amplifier > 0) {
+        return None;
+    }
+    let left = current.map(|(left, _)| left);
+    let renewed = left.is_none_or(|left| (0..REGEN_BUFF_MAX_DURATION).contains(&left));
+    renewed.then_some((REGEN_BUFF_BASE_DURATION + left.unwrap_or(0)).min(REGEN_BUFF_MAX_DURATION))
+}
+
+/// Vanilla `Axolotl.applySupportingEffects`: regeneration for the player (see
+/// [`supporting_regeneration_duration`]) and the end of mining fatigue.
+fn apply_supporting_effects(player: &Player) {
+    let current = player
+        .get_effect(&StatusEffect::REGENERATION)
+        .map(|effect| (effect.duration, i32::from(effect.amplifier)));
+    if let Some(duration) = supporting_regeneration_duration(current) {
+        player.add_effect(Effect {
+            effect_type: &StatusEffect::REGENERATION,
+            duration,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        });
+    }
+    player.remove_effect(&StatusEffect::MINING_FATIGUE);
+}
+
 pub struct AxolotlEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
     pub variant: AtomicI32,
     pub playing_dead: AtomicBool,
     pub from_bucket: AtomicBool,
-    pub play_dead_ticks: AtomicI32,
 }
 
 impl AxolotlEntity {
@@ -219,79 +260,8 @@ impl AxolotlEntity {
             variant: AtomicI32::new(AxolotlVariant::DEFAULT.id()),
             playing_dead: AtomicBool::new(false),
             from_bucket: AtomicBool::new(false),
-            play_dead_ticks: AtomicI32::new(0),
         };
-        let mob_arc = Arc::new(axolotl);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.2, false)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                7,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-        };
-
-        {
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::DROWNED, false),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::GUARDIAN, false),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::ELDER_GUARDIAN,
-                    false,
-                ),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SQUID, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::GLOW_SQUID, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::COD, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SALMON, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::TROPICAL_FISH,
-                    false,
-                ),
-            );
-        };
-
-        mob_arc
+        Arc::new(axolotl)
     }
 
     /// Vanilla `Axolotl.getVariant`.
@@ -348,6 +318,75 @@ impl AxolotlEntity {
             pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
             playing_dead,
         );
+    }
+
+    /// Vanilla `getTarget` is `getTargetFromBrain`, the attack target memory. The `target` of the
+    /// mob is what the rest of the server reads (`execute on target`, plugins), so it follows the
+    /// memory: a new target and a lost one both go through `EntityTargetEvent`, and the brain is
+    /// then made to agree with the target the mob ended up with (a plugin may have refused the
+    /// change or replaced the target).
+    fn follow_attack_target(&self, attack_target: Option<Arc<dyn EntityBase>>) {
+        self.follow_attack_target_with(attack_target, |target, reason| {
+            self.set_mob_target(target, reason)
+        });
+    }
+
+    /// `follow_attack_target` with the target change passed in: it returns whether the change
+    /// was not refused, and may leave the mob with another target than the one asked for.
+    fn follow_attack_target_with(
+        &self,
+        attack_target: Option<Arc<dyn EntityBase>>,
+        set_target: impl FnOnce(Option<Arc<dyn EntityBase>>, TargetReason) -> bool,
+    ) {
+        let entity_id = |target: &Option<Arc<dyn EntityBase>>| {
+            target.as_ref().map(|t| t.get_entity().entity_id)
+        };
+        let wanted = entity_id(&attack_target);
+        if entity_id(&self.mob_entity.get_target()) == wanted {
+            return;
+        }
+        let reason = if wanted.is_some() {
+            TargetReason::ClosestEntity
+        } else {
+            TargetReason::ForgotTarget
+        };
+        set_target(attack_target, reason);
+        let settled = self.mob_entity.get_target();
+        if entity_id(&settled) == wanted {
+            return;
+        }
+        self.mob_entity.with_brain(self, |brain| match settled {
+            Some(target) => brain.set(types::ATTACK_TARGET, target),
+            None => brain.erase(types::ATTACK_TARGET.id()),
+        });
+    }
+
+    /// Vanilla `Axolotl.onStopAttacking`: when the target that ended the fight died to a player
+    /// within 20 blocks of the axolotl, the axolotl thanks the player with [`apply_supporting_effects`].
+    fn on_stop_attacking(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
+        let Some(living) = target.get_living_entity() else {
+            return;
+        };
+        if !living.is_dead_or_dying() {
+            return;
+        }
+        let Some((_, killer)) = living.get_last_damage_source() else {
+            return;
+        };
+        let range = tick
+            .mob
+            .get_entity()
+            .bounding_box
+            .load()
+            .expand_all(PLAYER_REGEN_DETECTION_RANGE);
+        if let Some(player) = tick
+            .world
+            .get_players_at_box(&range)
+            .into_iter()
+            .find(|player| player.get_entity().entity_id == killer)
+        {
+            apply_supporting_effects(&player);
+        }
     }
 
     #[must_use]
@@ -544,15 +583,25 @@ impl Mob for AxolotlEntity {
         &self.mob_entity
     }
 
+    fn make_brain(&self, packed: &PackedMemories) -> Brain {
+        ai::make_brain(self, packed)
+    }
+
+    /// Vanilla `Axolotl.customServerAiStep`: the brain ticks, the activity is chosen, and the
+    /// playing dead flag follows the `PLAY_DEAD_TICKS` memory unless the axolotl has no AI.
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
-        let play_dead_ticks = self.play_dead_ticks.load(Ordering::Relaxed);
-        if play_dead_ticks > 0 {
-            let remaining = play_dead_ticks - 1;
-            self.play_dead_ticks.store(remaining, Ordering::Relaxed);
-            if remaining == 0 {
-                self.set_playing_dead(false);
-            }
+        self.mob_entity.tick_brain(self);
+        let (play_dead_ticks, attack_target) = self.mob_entity.with_brain(self, |brain| {
+            ai::update_activity(brain);
+            (
+                brain.get(types::PLAY_DEAD_TICKS).copied(),
+                brain.get(types::ATTACK_TARGET).cloned(),
+            )
+        });
+        if !self.mob_entity.is_no_ai() {
+            self.set_playing_dead(play_dead_ticks.is_some_and(|ticks| ticks > 0));
         }
+        self.follow_attack_target(attack_target);
     }
 
     fn mob_init_data_tracker(&self) {
@@ -609,6 +658,7 @@ mod tests {
     use core::convert::Infallible;
     use std::collections::VecDeque;
 
+    use pumpkin_data::environment_attribute::Activity;
     use pumpkin_util::{
         math::{vector3::Vector3, wrap_degrees},
         text::TextComponent,
@@ -1544,5 +1594,325 @@ mod tests {
         ] {
             assert_eq!(fed_item_remainder(item), None, "{}", item.registry_key);
         }
+    }
+
+    fn cod(world: &Arc<World>, x: f64) -> Arc<crate::entity::passive::cod::CodEntity> {
+        let entity = Entity::new(world.clone(), Vector3::new(x, 64.0, 0.0), &EntityType::COD);
+        entity.touching_water.store(true, Ordering::Relaxed);
+        crate::entity::passive::cod::CodEntity::new(entity)
+    }
+
+    fn brain_value<R>(
+        axolotl: &Arc<AxolotlEntity>,
+        read: impl FnOnce(&crate::entity::ai::brain::Brain) -> R,
+    ) -> R {
+        axolotl
+            .mob_entity
+            .with_brain(axolotl.as_ref(), |brain| read(brain))
+    }
+
+    /// The playing dead flag follows the `PLAY_DEAD_TICKS` memory on every AI step, after the
+    /// brain has counted it down by one: on while the memory is still above 0, so 2 ticks left
+    /// are on and 1 tick left is off, and off at 0 and without the memory. An axolotl without AI
+    /// keeps whatever flag it had.
+    #[tokio::test]
+    async fn the_playing_dead_flag_follows_the_memory_unless_there_is_no_ai() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let flag_after = |ticks: Option<i32>| {
+            axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+                brain.set_optional(types::PLAY_DEAD_TICKS, ticks);
+            });
+            axolotl.custom_server_ai_step(axolotl.as_ref());
+            axolotl.is_playing_dead()
+        };
+
+        let results = [
+            flag_after(None),
+            flag_after(Some(200)),
+            flag_after(Some(2)),
+            flag_after(Some(1)),
+            flag_after(Some(0)),
+            flag_after(Some(5)),
+            flag_after(None),
+        ];
+        axolotl.mob_entity.set_no_ai(true);
+        axolotl.set_playing_dead(true);
+        let no_ai_stays_on = flag_after(None);
+        axolotl.set_playing_dead(false);
+        let no_ai_stays_off = flag_after(Some(100));
+        world.level.shutdown().await;
+
+        assert_eq!(results, [false, true, true, false, false, true, false]);
+        assert!(no_ai_stays_on);
+        assert!(!no_ai_stays_off);
+        Ok(())
+    }
+
+    /// The target the mob reports (what `execute on target` and plugins read) is the attack
+    /// target memory, set when the brain picks a target and cleared when it forgets it.
+    #[tokio::test]
+    async fn the_mob_target_follows_the_attack_target_memory() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let prey = cod(&world, 2.0);
+        let prey_id = prey.get_entity().entity_id;
+        let target_id = |axolotl: &Arc<AxolotlEntity>| {
+            axolotl
+                .mob_entity
+                .get_target()
+                .map(|target| target.get_entity().entity_id)
+        };
+
+        axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+            brain.set(types::ATTACK_TARGET, prey as Arc<dyn EntityBase>);
+        });
+        axolotl.custom_server_ai_step(axolotl.as_ref());
+        let after_set = target_id(&axolotl);
+        axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+            brain.erase(types::ATTACK_TARGET.id());
+        });
+        axolotl.custom_server_ai_step(axolotl.as_ref());
+        let after_forgetting = target_id(&axolotl);
+        world.level.shutdown().await;
+
+        assert_eq!(after_set, Some(prey_id));
+        assert_eq!(after_forgetting, None);
+        Ok(())
+    }
+
+    /// A plugin that redirects the new target (or clears it) leaves the mob with another target
+    /// than the brain asked for: the brain follows. A refused change leaves the old target, and
+    /// a lost target is announced as `ForgotTarget` and cannot be kept by the brain alone.
+    #[tokio::test]
+    async fn the_brain_follows_the_target_the_event_settled_on() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        let wanted = cod(&world, 2.0);
+        let redirected = cod(&world, 3.0);
+        let old = cod(&world, 4.0);
+        let id =
+            |entity: &Arc<crate::entity::passive::cod::CodEntity>| entity.get_entity().entity_id;
+        let brain_target = |axolotl: &Arc<AxolotlEntity>| {
+            axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+                brain
+                    .get(types::ATTACK_TARGET)
+                    .map(|target| target.get_entity().entity_id)
+            })
+        };
+        let mob_target = |axolotl: &Arc<AxolotlEntity>| {
+            axolotl
+                .mob_entity
+                .get_target()
+                .map(|target| target.get_entity().entity_id)
+        };
+        let mut reasons = Vec::new();
+
+        // Redirected: the mob ends up with another cod, the brain takes that one.
+        let other: Arc<dyn EntityBase> = redirected.clone();
+        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, reason| {
+            reasons.push(reason);
+            axolotl.mob_entity.set_target(Some(other));
+            true
+        });
+        let after_redirect = (mob_target(&axolotl), brain_target(&axolotl));
+
+        // Refused while the mob has another target: the brain gets that one back.
+        axolotl.mob_entity.set_target(Some(old.clone()));
+        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, reason| {
+            reasons.push(reason);
+            false
+        });
+        let after_refusal = (mob_target(&axolotl), brain_target(&axolotl));
+
+        // Refused with no target at all: the brain forgets it.
+        axolotl.mob_entity.set_target(None);
+        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, _| false);
+        let after_refusal_without_target = (mob_target(&axolotl), brain_target(&axolotl));
+
+        // A lost target: asked through the event, and a refusal keeps it in the brain too.
+        axolotl.mob_entity.set_target(Some(old.clone()));
+        axolotl.follow_attack_target_with(None, |target, reason| {
+            assert!(target.is_none());
+            reasons.push(reason);
+            false
+        });
+        let after_refused_loss = (mob_target(&axolotl), brain_target(&axolotl));
+        axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+            brain.erase(types::ATTACK_TARGET.id());
+        });
+        axolotl.follow_attack_target_with(None, |_, reason| {
+            reasons.push(reason);
+            axolotl.mob_entity.set_target(None);
+            true
+        });
+        let after_loss = (mob_target(&axolotl), brain_target(&axolotl));
+        world.level.shutdown().await;
+
+        assert_eq!(
+            after_redirect,
+            (Some(id(&redirected)), Some(id(&redirected)))
+        );
+        assert_eq!(after_refusal, (Some(id(&old)), Some(id(&old))));
+        assert_eq!(after_refusal_without_target, (None, None));
+        assert_eq!(after_refused_loss, (Some(id(&old)), Some(id(&old))));
+        assert_eq!(after_loss, (None, None));
+        assert_eq!(
+            reasons,
+            [
+                TargetReason::ClosestEntity,
+                TargetReason::ClosestEntity,
+                TargetReason::ForgotTarget,
+                TargetReason::ForgotTarget
+            ]
+        );
+        Ok(())
+    }
+
+    /// The whole hunt through the real brain: a cod in the water within 8 blocks becomes the
+    /// nearest attackable, the axolotl starts attacking and fights, and bites it with
+    /// `MOB_ATTACK` once it is in reach. When the cod dies the fight ends and the hunting
+    /// cooldown starts.
+    #[tokio::test]
+    async fn the_brain_hunts_a_cod_in_the_water_and_rests_after_the_kill() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let axolotl = axolotl(&world);
+        axolotl
+            .get_entity()
+            .touching_water
+            .store(true, Ordering::Relaxed);
+        let prey = cod(&world, 1.0);
+        let everyone: Vec<Arc<dyn EntityBase>> = vec![axolotl.clone(), prey.clone()];
+        world.entities.store(Arc::new(everyone));
+        let step = |time: i64| {
+            axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
+                brain.tick(&world, axolotl.as_ref(), time);
+                ai::update_activity(brain);
+            });
+        };
+
+        for time in 0..60 {
+            step(time);
+        }
+        let hunting = brain_value(&axolotl, |brain| {
+            (
+                brain.get_active_non_core_activity(),
+                brain
+                    .get(types::ATTACK_TARGET)
+                    .map(|target| target.get_entity().entity_id),
+            )
+        });
+        let bite = prey.mob_entity.living_entity.get_last_damage_source();
+        prey.mob_entity.living_entity.health.store(0.0);
+        for time in 60..64 {
+            step(time);
+        }
+        let after_the_kill = brain_value(&axolotl, |brain| {
+            (
+                brain.get_active_non_core_activity(),
+                brain.has_memory_value(types::ATTACK_TARGET.id()),
+                brain.is_value(types::HAS_HUNTING_COOLDOWN, &true),
+            )
+        });
+        world.level.shutdown().await;
+
+        assert_eq!(
+            hunting,
+            (Some(Activity::Fight), Some(prey.get_entity().entity_id))
+        );
+        assert_eq!(
+            bite,
+            Some((DamageType::MOB_ATTACK, axolotl.get_entity().entity_id))
+        );
+        assert_eq!(after_the_kill, (Some(Activity::Idle), false, true));
+        Ok(())
+    }
+
+    /// The memories vanilla saves survive a save and load: the play dead ticks (and the playing
+    /// dead flag that follows them) and the hunting cooldown with its ticks left. The attack
+    /// target is not saved.
+    #[tokio::test]
+    async fn the_saved_memories_come_back_from_nbt() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let original = axolotl(&world);
+        let prey = cod(&world, 2.0);
+        original.mob_entity.with_brain(original.as_ref(), |brain| {
+            brain.set(types::PLAY_DEAD_TICKS, 120);
+            brain.set_with_expiry(types::HAS_HUNTING_COOLDOWN, true, 1500);
+            brain.set(types::ATTACK_TARGET, prey as Arc<dyn EntityBase>);
+        });
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:axolotl".to_owned());
+        original.write_nbt(&mut nbt);
+
+        let loaded = axolotl(&world);
+        loaded.read_nbt_non_mut(&nbt);
+        let flag_before = loaded.is_playing_dead();
+        loaded.custom_server_ai_step(loaded.as_ref());
+        let restored = brain_value(&loaded, |brain| {
+            (
+                brain.get(types::PLAY_DEAD_TICKS).copied(),
+                brain.time_until_expiry(types::HAS_HUNTING_COOLDOWN.id()),
+                brain.has_memory_value(types::ATTACK_TARGET.id()),
+                brain.get_active_non_core_activity(),
+            )
+        });
+        world.level.shutdown().await;
+
+        assert!(!flag_before);
+        assert!(loaded.is_playing_dead());
+        let (play_dead, cooldown, target, activity) = restored;
+        assert!(matches!(play_dead, Some(119..=120)), "{play_dead:?}");
+        assert!(matches!(cooldown, Some(1495..=1500)), "{cooldown:?}");
+        assert!(!target);
+        assert_eq!(
+            activity,
+            Some(pumpkin_data::environment_attribute::Activity::PlayDead)
+        );
+        Ok(())
+    }
+
+    /// The regeneration a player gets for a kill: 100 ticks when there is none, 100 more on top
+    /// of what is left up to 2400, nothing when 2400 or more are left (or it never ends).
+    #[test]
+    fn supporting_regeneration_adds_100_ticks_up_to_2400() {
+        let given: Vec<Option<i32>> = [
+            None,
+            Some(0),
+            Some(50),
+            Some(2299),
+            Some(2300),
+            Some(2399),
+            Some(2400),
+            Some(5000),
+            Some(-1),
+        ]
+        .into_iter()
+        .map(|left| supporting_regeneration_duration(left.map(|left| (left, 0))))
+        .collect();
+
+        assert_eq!(
+            given,
+            vec![
+                Some(100),
+                Some(100),
+                Some(150),
+                Some(2399),
+                Some(2400),
+                Some(2400),
+                None,
+                None,
+                None
+            ]
+        );
+
+        // A stronger level is never replaced by the level 0 reward, however little is left of it.
+        assert_eq!(supporting_regeneration_duration(Some((100, 1))), None);
+        assert_eq!(supporting_regeneration_duration(Some((0, 2))), None);
     }
 }
