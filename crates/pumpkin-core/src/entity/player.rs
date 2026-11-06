@@ -714,6 +714,8 @@ pub struct Player {
     pub subscribed_debug_sample: AtomicBool,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    /// Whether a client-requested respawn is currently running.
+    pub respawn_in_progress: AtomicBool,
     pub bedrock_spawned: AtomicBool,
     /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
     pub is_movement_locked: AtomicBool,
@@ -1040,6 +1042,7 @@ impl Player {
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(initially_loaded),
+            respawn_in_progress: AtomicBool::new(false),
             bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),

@@ -9,11 +9,14 @@ impl JavaClient {
         match client_status.action_id.0 {
             SClientCommand::PERFORM_RESPAWN => {
                 // Perform respawn
-                if player.living_entity.health.load() > 0.0 {
+                if player.living_entity.health.load() > 0.0
+                    || player.respawn_in_progress.swap(true, Ordering::Relaxed)
+                {
                     return;
                 }
                 let player_c = player.clone();
                 let Some(server) = player.world().server.upgrade() else {
+                    player.respawn_in_progress.store(false, Ordering::Relaxed);
                     return;
                 };
                 let hardcore = server.basic_config.hardcore;
@@ -23,6 +26,7 @@ impl JavaClient {
                         .clone()
                         .respawn_player(&player_c, false)
                         .await;
+                    player_c.respawn_in_progress.store(false, Ordering::Relaxed);
                     if hardcore {
                         player_c.set_gamemode(GameMode::Spectator);
                     }

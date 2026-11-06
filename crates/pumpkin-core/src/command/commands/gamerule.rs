@@ -87,6 +87,9 @@ impl CommandExecutor for SetBoolExecutor {
         }
 
         context.server().level_info.store(Arc::new(new_info));
+        context
+            .server()
+            .on_game_rule_changed(&self.0, &GameRuleValue::Bool(arg_value));
 
         if self.0 == GameRule::SpectatorsGenerateChunks {
             let server = context.server();

@@ -1406,7 +1406,7 @@ fn update_gamerule(
                     )))
                 })?;
             for world in server.worlds.load().iter() {
-                world.set_game_rule(rule, GameRuleValue::Int(int_val));
+                world.set_game_rule(rule, &GameRuleValue::Int(int_val));
             }
             Ok(TypedGameRule {
                 key: rule.to_string(),
@@ -1424,7 +1424,7 @@ fn update_gamerule(
                     )))
                 })?;
             for world in server.worlds.load().iter() {
-                world.set_game_rule(rule, GameRuleValue::Bool(bool_val));
+                world.set_game_rule(rule, &GameRuleValue::Bool(bool_val));
             }
             Ok(TypedGameRule {
                 key: rule.to_string(),
