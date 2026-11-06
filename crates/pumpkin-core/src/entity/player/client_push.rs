@@ -148,7 +148,10 @@ impl Player {
             .world()
             .get_world_age()
             .saturating_sub(client.push_motion_age.load());
-        if since_push > i64::from(round_trip) {
+        // A later own motion like knockback replaced the push
+        if since_push > i64::from(round_trip)
+            || client.own_motion_age.load() >= client.push_motion_age.load()
+        {
             return;
         }
         let motion = client
