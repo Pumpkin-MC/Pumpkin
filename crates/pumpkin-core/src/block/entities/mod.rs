@@ -113,9 +113,17 @@ pub trait BlockEntity: Any + Send + Sync {
             .unwrap_or(0) as u32
     }
 
-    /// Obtain NBT data for sending to the client in `ChunkData`
+    /// Obtain the block entity's own NBT for persistence.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
+    }
+
+    /// Returns the tag sent to clients for this block entity, given its saved tag.
+    ///
+    /// This mirrors vanilla's `getUpdateTag`. Container contents only reach the
+    /// client when a window opens, so containers override this with an empty tag.
+    fn client_update_tag(&self, saved: NbtCompound) -> NbtCompound {
+        saved
     }
 
     /// Obtain block actor NBT for fields Bedrock does not include in its block state.
@@ -447,12 +455,50 @@ pub fn create_block_entity(
 
 #[cfg(test)]
 mod test {
-    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use super::{
+        BlockEntity, barrel::BarrelBlockEntity, blasting_furnace::BlastingFurnaceBlockEntity,
+        block_entity_from_nbt, brewing_stand::BrewingStandBlockEntity, chest::ChestBlockEntity,
+        crafter::CrafterBlockEntity, dispenser::DispenserBlockEntity, dropper::DropperBlockEntity,
+        furnace::FurnaceBlockEntity, hopper::HopperBlockEntity, shulker_box::ShulkerBoxBlockEntity,
+        sign::SignBlockEntity, smoker::SmokerBlockEntity, trapped_chest::TrappedChestBlockEntity,
+    };
+    use pumpkin_data::{block_properties::FacingHopper, item::Item, item_stack::ItemStack};
     use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use std::sync::Arc;
+
+    #[test]
+    fn container_update_tags_are_empty() {
+        let position = BlockPos::new(0, 0, 0);
+        let mut saved = NbtCompound::new();
+        saved.put_string("CustomName", "stored".to_string());
+
+        let containers: [Arc<dyn BlockEntity>; 12] = [
+            Arc::new(ChestBlockEntity::new(position)),
+            Arc::new(TrappedChestBlockEntity::new(position)),
+            Arc::new(BarrelBlockEntity::new(position)),
+            Arc::new(ShulkerBoxBlockEntity::new(position)),
+            Arc::new(DispenserBlockEntity::new(position)),
+            Arc::new(DropperBlockEntity::new(position)),
+            Arc::new(HopperBlockEntity::new(position, FacingHopper::Down)),
+            Arc::new(FurnaceBlockEntity::new(position)),
+            Arc::new(BlastingFurnaceBlockEntity::new(position)),
+            Arc::new(SmokerBlockEntity::new(position)),
+            Arc::new(BrewingStandBlockEntity::new(position)),
+            Arc::new(CrafterBlockEntity::new(position)),
+        ];
+        for container in containers {
+            assert!(
+                container.client_update_tag(saved.clone()).is_empty(),
+                "{} must not send its saved contents",
+                container.resource_location()
+            );
+        }
+
+        let sign = SignBlockEntity::empty(position);
+        assert_eq!(sign.client_update_tag(saved.clone()), saved);
+    }
 
     /// A loaded block entity is serialized back into its chunk with
     /// `write_internal`, so whatever it holds has to survive that round trip or
