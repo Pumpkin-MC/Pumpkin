@@ -32,6 +32,7 @@ impl PendingConnection {
                 self.address.port(),
                 &proxy_config.velocity,
                 plugin_response,
+                &mut self.velocity_message_id,
             ) {
                 Ok((profile, new_address)) => {
                     self.gameprofile = Some(profile.clone());

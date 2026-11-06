@@ -72,6 +72,7 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    pub velocity_message_id: Option<i32>,
     /// Whether a login was started. Used to reject a second `SLoginStart`, which
     /// would otherwise replace an already authenticated profile.
     pub login_started: bool,
@@ -129,6 +130,7 @@ impl PendingConnection {
             login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
+            velocity_message_id: None,
             server,
         }
     }
