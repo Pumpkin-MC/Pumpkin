@@ -635,6 +635,13 @@ impl PathNavigation {
             mob_data.set_pathfinding_malus(path_type, malus);
         }
 
+        // Sniffer.onPathfindingStart permits water only while escaping fire or already immersed.
+        if entity.entity.entity_type == &pumpkin_data::entity::EntityType::SNIFFER
+            && (entity.entity.fire_ticks.load(Ordering::Relaxed) > 0 || entity.is_in_water())
+        {
+            mob_data.set_pathfinding_malus(PathType::Water, 0.0);
+        }
+
         self.evaluator.set_can_float(self.can_float);
         self.evaluator.set_can_open_doors(self.can_open_doors);
         self.evaluator.set_can_pass_doors(self.can_pass_doors);
@@ -2535,6 +2542,42 @@ mod tests {
             Vector3::new(0.5, 64.0, 0.5),
             entity_type,
         ))
+    }
+
+    #[tokio::test]
+    async fn sniffer_water_cost_changes_only_during_fire_or_immersion() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        for entity_type in [&EntityType::SNIFFER, &EntityType::COW] {
+            let living = living(world.clone(), entity_type);
+            let mut navigation = GroundPathNavigation::new();
+            navigation.set_can_float(true);
+            navigation.set_pathfinding_malus(PathType::Water, -1.0);
+            for (fire, water) in [(0, false), (20, false), (0, true), (0, false)] {
+                living.entity.fire_ticks.store(fire, Ordering::Relaxed);
+                living.entity.touching_water.store(water, Ordering::Relaxed);
+                navigation.inner.prepare_evaluator(&living);
+                let EvaluatorKind::Walk(evaluator) = &navigation.inner.evaluator else {
+                    return Err("expected ground evaluator".into());
+                };
+                let data = evaluator
+                    .base
+                    .mob_data
+                    .as_ref()
+                    .ok_or("missing path data")?;
+                let water_permitted = entity_type == &EntityType::SNIFFER && (fire > 0 || water);
+                assert!(
+                    (data.get_pathfinding_malus(PathType::Water)
+                        - if water_permitted { 0.0 } else { -1.0 })
+                    .abs()
+                        < f32::EPSILON
+                );
+                navigation.inner.evaluator.done();
+                assert!(navigation.get_pathfinding_malus(PathType::Water) < 0.0);
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]
