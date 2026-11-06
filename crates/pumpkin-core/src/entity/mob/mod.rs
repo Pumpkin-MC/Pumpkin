@@ -1885,6 +1885,25 @@ pub trait Mob: EntityBase + Send + Sync {
         self.pre_damage(damage_type, source)
     }
 
+    /// Runs first in the damage chain, before the invulnerability checks and `pre_damage`, with the
+    /// amount the hit was dealt with. This is where a vanilla mob's `hurtServer` override acts
+    /// before it calls `super` (the axolotl deciding to play dead), so it hears every hit, also the
+    /// ones that end up doing nothing.
+    fn before_hurt(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) {
+    }
+
+    /// What a mob adds to vanilla's `canBeSeenAsEnemy` (`!invulnerable && canBeSeenByAnyone`): it
+    /// can only take it away, as the axolotl does while it plays dead.
+    fn mob_can_be_seen_as_enemy(&self) -> bool {
+        true
+    }
+
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
     fn on_damage_with_context(
@@ -2534,6 +2553,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_is_pushed_by_fluids()
     }
 
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.mob_can_be_seen_as_enemy()
+            && self
+                .get_living_entity()
+                .is_some_and(|living| !living.entity.invulnerable.load(Relaxed))
+            && self.can_be_seen_by_anyone()
+    }
+
     fn sound_source(&self) -> SoundCategory {
         self.mob_sound_source()
     }
@@ -2685,6 +2712,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
+        self.before_hurt(amount, damage_type, source, cause);
         // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
         if !self.pre_damage_with_context(damage_type, source, cause) {
             return false;
@@ -3338,6 +3366,157 @@ mod lifecycle_tests {
         assert!(cow_navigating);
         assert!(!rider_navigating);
         assert!(steers_itself);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod hurt_hook_tests {
+    use std::sync::Mutex;
+
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::passive::cow::CowEntity;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// What `before_hurt` heard: the amount, the damage type and whether a source and a cause
+    /// came with it.
+    type Heard = (f32, DamageType, bool, bool);
+
+    /// A mob that records every hit it is told about before the damage chain runs, and that
+    /// refuses all damage from `pre_damage` when asked to.
+    struct Listener {
+        mob_entity: MobEntity,
+        heard: Mutex<Vec<Heard>>,
+        refuses_damage: bool,
+        seen_as_enemy: bool,
+    }
+
+    impl Listener {
+        fn new(world: &Arc<World>, refuses_damage: bool, seen_as_enemy: bool) -> Self {
+            Self {
+                mob_entity: MobEntity::new(Entity::new(
+                    world.clone(),
+                    Vector3::new(0.0, 64.0, 0.0),
+                    &EntityType::COW,
+                )),
+                heard: Mutex::new(Vec::new()),
+                refuses_damage,
+                seen_as_enemy,
+            }
+        }
+
+        fn heard(&self) -> Vec<Heard> {
+            self.heard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        }
+    }
+
+    impl Mob for Listener {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.mob_entity
+        }
+
+        fn before_hurt(
+            &self,
+            amount: f32,
+            damage_type: DamageType,
+            source: Option<&dyn EntityBase>,
+            cause: Option<&dyn EntityBase>,
+        ) {
+            self.heard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((amount, damage_type, source.is_some(), cause.is_some()));
+        }
+
+        fn pre_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
+            !self.refuses_damage
+        }
+
+        fn mob_can_be_seen_as_enemy(&self) -> bool {
+            self.seen_as_enemy
+        }
+    }
+
+    /// The hook hears the amount, the type and which of source and cause there are, for hits
+    /// that go through and for hits that `pre_damage` or invulnerability turn down.
+    #[tokio::test]
+    async fn before_hurt_hears_every_hit_even_one_that_is_refused() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let attacker = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let by = |mob: &Listener, amount, damage_type, with_source: bool, with_cause: bool| {
+            let source: Option<&dyn EntityBase> = with_source.then_some(attacker.as_ref());
+            let cause: Option<&dyn EntityBase> = with_cause.then_some(attacker.as_ref());
+            EntityBase::damage_with_context(mob, mob, amount, damage_type, None, source, cause)
+        };
+
+        let open = Listener::new(&world, false, true);
+        by(&open, 3.0, DamageType::MOB_ATTACK, true, true);
+        by(&open, 0.5, DamageType::DRY_OUT, false, false);
+        by(&open, 2.0, DamageType::ARROW, true, false);
+        by(&open, 1.0, DamageType::THORNS, false, true);
+        let refusing = Listener::new(&world, true, true);
+        let refused = by(&refusing, 4.0, DamageType::MOB_ATTACK, true, true);
+        let invulnerable = Listener::new(&world, false, true);
+        invulnerable.get_entity().invulnerable.store(true, Relaxed);
+        let ignored = by(&invulnerable, 5.0, DamageType::MOB_ATTACK, true, true);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            open.heard(),
+            vec![
+                (3.0, DamageType::MOB_ATTACK, true, true),
+                (0.5, DamageType::DRY_OUT, false, false),
+                (2.0, DamageType::ARROW, true, false),
+                (1.0, DamageType::THORNS, false, true),
+            ]
+        );
+        assert!(!refused);
+        assert_eq!(
+            refusing.heard(),
+            vec![(4.0, DamageType::MOB_ATTACK, true, true)]
+        );
+        assert!(!ignored);
+        assert_eq!(
+            invulnerable.heard(),
+            vec![(5.0, DamageType::MOB_ATTACK, true, true)]
+        );
+        Ok(())
+    }
+
+    /// A mob can only take away from `canBeSeenAsEnemy`: the default is the living, visible and
+    /// not invulnerable rule, and a mob that says no stays unseen even when the rule says yes.
+    #[tokio::test]
+    async fn a_mob_can_only_take_away_from_being_seen_as_an_enemy() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let seen = Listener::new(&world, false, true);
+        let hidden = Listener::new(&world, false, false);
+        let invulnerable = Listener::new(&world, false, true);
+        invulnerable.get_entity().invulnerable.store(true, Relaxed);
+        let dead = Listener::new(&world, false, true);
+        dead.mob_entity.living_entity.health.store(0.0);
+        let plain = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        world.level.shutdown().await;
+
+        assert!(plain.can_be_seen_as_enemy());
+        assert!(seen.can_be_seen_as_enemy());
+        assert!(!hidden.can_be_seen_as_enemy());
+        assert!(!invulnerable.can_be_seen_as_enemy());
+        assert!(!dead.can_be_seen_as_enemy());
         Ok(())
     }
 }
