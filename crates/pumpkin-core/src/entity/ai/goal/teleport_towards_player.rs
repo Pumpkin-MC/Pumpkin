@@ -46,14 +46,16 @@ impl TeleportTowardsPlayerGoal {
 
     /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
-        !player
-            .get_entity()
-            .get_root_vehicle()
-            .is_some_and(|vehicle| {
-                vehicle.get_entity().entity_id
-                    == self.enderman.mob_entity.living_entity.entity.entity_id
-            })
-            && (self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world))
+        let enderman_id = self.enderman.mob_entity.living_entity.entity.entity_id;
+        let mut vehicle = player.get_entity().get_vehicle();
+        while let Some(current) = vehicle {
+            if current.get_entity().entity_id == enderman_id {
+                return false;
+            }
+            vehicle = current.get_entity().get_vehicle();
+        }
+
+        self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world)
     }
 
     fn find_staring_player(&self) -> Option<Arc<Player>> {
