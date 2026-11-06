@@ -997,7 +997,12 @@ impl Server {
         let players = self.get_all_players();
         World::broadcast_java_clients(
             &packet,
-            players.iter().filter_map(|player| player.client.java()),
+            players.iter().filter_map(|player| {
+                player
+                    .client
+                    .java()
+                    .filter(|client| client.login_sent.load(Ordering::Relaxed))
+            }),
         );
     }
 

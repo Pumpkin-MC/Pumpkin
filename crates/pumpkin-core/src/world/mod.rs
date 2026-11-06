@@ -3473,10 +3473,11 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let enabled_respawn_screen = !matches!(
+        let immediate_respawn = matches!(
             self.get_game_rule(&GameRule::ImmediateRespawn),
             GameRuleValue::Bool(true)
         );
+        let enabled_respawn_screen = !immediate_respawn;
         // Send the login packet for our new player
         client
             .send_packet(&CLogin::new(
@@ -3527,6 +3528,22 @@ impl World {
                 true,
             ))
             .await;
+        client.login_sent.store(true, Ordering::Relaxed);
+
+        // A rule change can land between reading the rule above and queuing the
+        // login packet, so send the current value once the client is in play.
+        let current_immediate_respawn = matches!(
+            self.get_game_rule(&GameRule::ImmediateRespawn),
+            GameRuleValue::Bool(true)
+        );
+        if immediate_respawn != current_immediate_respawn {
+            player
+                .send_client_packet(&CGameEvent::new(
+                    GameEvent::EnabledRespawnScreen,
+                    if current_immediate_respawn { 1.0 } else { 0.0 },
+                ))
+                .await;
+        }
 
         self.pair_new_player_with_tracked_entities(player);
 
