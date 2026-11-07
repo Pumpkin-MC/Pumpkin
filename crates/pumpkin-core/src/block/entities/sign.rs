@@ -304,7 +304,7 @@ impl BlockEntity for SignBlockEntity {
         &self,
         _state_id: pumpkin_data::BlockStateId,
     ) -> Option<NbtCompound> {
-        Some(crate::block::entities::bedrock::build_sign_actor(
+        Some(build_sign_actor(
             self.position,
             false,
             &self.front_text,
@@ -497,5 +497,147 @@ impl<'a> SignEntityRef<'a> {
             Self::Sign(s) => &s.currently_editing_player,
             Self::Hanging(s) => &s.currently_editing_player,
         }
+    }
+}
+
+/// Converts a [`DyeColor`] into the signed 32-bit ARGB integer used by Bedrock signs.
+#[must_use]
+pub const fn dye_color_to_bedrock_sign_text_color(color: DyeColor) -> i32 {
+    match color {
+        DyeColor::White => -986896,
+        DyeColor::Orange => -425955,
+        DyeColor::Magenta => -3715395,
+        DyeColor::LightBlue => -12930086,
+        DyeColor::Yellow => -75715,
+        DyeColor::Lime => -8337633,
+        DyeColor::Pink => -816214,
+        DyeColor::Gray => -12103854,
+        DyeColor::LightGray => -6447721,
+        DyeColor::Cyan => -15295332,
+        DyeColor::Purple => -7785800,
+        DyeColor::Blue => -12827478,
+        DyeColor::Brown => -8170446,
+        DyeColor::Green => -10585066,
+        DyeColor::Red => -5231066,
+        DyeColor::Black => -16777216,
+    }
+}
+
+/// Maps a Bedrock sign text color ARGB integer back to a [`DyeColor`].
+#[must_use]
+pub const fn bedrock_sign_text_color_to_dye_color(color: i32) -> DyeColor {
+    match color {
+        -986896 => DyeColor::White,
+        -425955 => DyeColor::Orange,
+        -3715395 => DyeColor::Magenta,
+        -12930086 => DyeColor::LightBlue,
+        -75715 => DyeColor::Yellow,
+        -8337633 => DyeColor::Lime,
+        -816214 => DyeColor::Pink,
+        -12103854 => DyeColor::Gray,
+        -6447721 => DyeColor::LightGray,
+        -15295332 => DyeColor::Cyan,
+        -7785800 => DyeColor::Purple,
+        -12827478 => DyeColor::Blue,
+        -8170446 => DyeColor::Brown,
+        -10585066 => DyeColor::Green,
+        -5231066 => DyeColor::Red,
+        _ => DyeColor::Black,
+    }
+}
+
+/// Builds the Bedrock sub-compound for sign text (`FrontText` or `BackText`).
+#[must_use]
+pub fn build_sign_text_compound(sign_text: &SignText) -> NbtCompound {
+    let mut compound = NbtCompound::new();
+    let messages = sign_text.get_messages(false);
+    let text = messages.join("\n");
+    compound.put_string("Text", text);
+    compound.put_int(
+        "SignTextColor",
+        dye_color_to_bedrock_sign_text_color(sign_text.get_color()),
+    );
+    compound.put_bool("IgnoreLighting", sign_text.has_glowing_text());
+    compound.put_bool("PersistFormatting", true);
+    compound
+}
+
+/// Builds the complete Bedrock block-actor NBT for standard or hanging signs.
+#[must_use]
+pub fn build_sign_actor(
+    position: BlockPos,
+    is_hanging: bool,
+    front_text: &SignText,
+    back_text: &SignText,
+    is_waxed: bool,
+) -> NbtCompound {
+    let id = if is_hanging { "HangingSign" } else { "Sign" };
+    super::bedrock::BedrockBlockActorBuilder::new(id, position)
+        .put_compound("FrontText", build_sign_text_compound(front_text))
+        .put_compound("BackText", build_sign_text_compound(back_text))
+        .put_bool("IsWaxed", is_waxed)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_actor_builder() {
+        let pos = BlockPos::new(1, 64, -2);
+        let front = SignText::from_messages([
+            Box::from("Welcome"),
+            Box::from("To"),
+            Box::from("Pumpkin"),
+            Box::from("Server"),
+        ]);
+        front.set_color(DyeColor::Red);
+        front.set_has_glowing_text(true);
+
+        let back = SignText::from_messages([
+            Box::from("Back"),
+            Box::from("Side"),
+            Box::from(""),
+            Box::from(""),
+        ]);
+        back.set_color(DyeColor::Blue);
+
+        let nbt = build_sign_actor(pos, false, &front, &back, false);
+        assert_eq!(nbt.get_string("id"), Some("Sign"));
+        assert_eq!(nbt.get_int("x"), Some(1));
+        assert_eq!(nbt.get_int("y"), Some(64));
+        assert_eq!(nbt.get_int("z"), Some(-2));
+        assert_eq!(nbt.get_bool("isMovable"), Some(true));
+        assert_eq!(nbt.get_bool("IsWaxed"), Some(false));
+
+        let front_nbt = nbt.get_compound("FrontText").expect("FrontText missing");
+        assert_eq!(
+            front_nbt.get_string("Text"),
+            Some("Welcome\nTo\nPumpkin\nServer")
+        );
+        assert_eq!(
+            front_nbt.get_int("SignTextColor"),
+            Some(dye_color_to_bedrock_sign_text_color(DyeColor::Red))
+        );
+        assert_eq!(front_nbt.get_bool("IgnoreLighting"), Some(true));
+
+        let back_nbt = nbt.get_compound("BackText").expect("BackText missing");
+        assert_eq!(back_nbt.get_string("Text"), Some("Back\nSide\n\n"));
+        assert_eq!(
+            back_nbt.get_int("SignTextColor"),
+            Some(dye_color_to_bedrock_sign_text_color(DyeColor::Blue))
+        );
+        assert_eq!(back_nbt.get_bool("IgnoreLighting"), Some(false));
+    }
+
+    #[test]
+    fn hanging_sign_actor_id() {
+        let pos = BlockPos::new(0, 70, 0);
+        let front = SignText::default();
+        let back = SignText::default();
+        let nbt = build_sign_actor(pos, true, &front, &back, true);
+        assert_eq!(nbt.get_string("id"), Some("HangingSign"));
+        assert_eq!(nbt.get_bool("IsWaxed"), Some(true));
     }
 }

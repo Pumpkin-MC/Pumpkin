@@ -6,7 +6,7 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, BlockState,
     data_component_impl::{
         BucketEntityDataImpl, CustomNameImpl, EquipmentSlot, SulfurCubeContentImpl,
     },
@@ -107,7 +107,7 @@ const fn get_fill_sound(item: &Item) -> Sound {
 fn give_filled_bucket_stack(
     stack: &mut ItemStack,
     player: &Player,
-    mut filled: ItemStack,
+    filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
     player.trigger_advancement(
@@ -115,6 +115,15 @@ fn give_filled_bucket_stack(
             item_id: filled.item.registry_key.to_string(),
         },
     );
+    create_filled_result(stack, player, filled, limit_creative_stack_size);
+}
+
+pub(crate) fn create_filled_result(
+    stack: &mut ItemStack,
+    player: &Player,
+    mut filled: ItemStack,
+    limit_creative_stack_size: bool,
+) {
     if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
@@ -299,6 +308,12 @@ pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64
     );
 }
 
+fn can_be_replaced_by_fluid(block: &Block, state: &BlockState) -> bool {
+    block.id != Block::END_PORTAL.id
+        && block.id != Block::END_GATEWAY.id
+        && (state.replaceable() || !state.is_solid())
+}
+
 fn try_place_powder_snow(
     world: &Arc<World>,
     pos: BlockPos,
@@ -360,8 +375,9 @@ fn try_place_liquid(
     let can_waterlog_target = is_water
         && target_block.is_waterloggable()
         && !target_block.is_waterlogged(target_state.id);
-    let can_replace_target =
-        target_state.is_air() || target_state.is_liquid() || target_state.replaceable();
+    let can_replace_target = target_state.is_air()
+        || target_state.is_liquid()
+        || can_be_replaced_by_fluid(target_block, target_state);
 
     if !can_waterlog_target && !can_replace_target {
         return None;
@@ -473,22 +489,16 @@ impl ItemBehaviour for EmptyBucketItem {
             );
             fill_mob_bucket_stack(item, player, &Item::SULFUR_CUBE_BUCKET, entity.as_ref());
             ent.remove();
-        } else if (entity_type == &EntityType::MOOSHROOM || entity_type == &EntityType::GOAT)
-            && ent.age.load(Ordering::Relaxed) >= 0
-        {
+        } else if entity_type == &EntityType::GOAT && ent.age.load(Ordering::Relaxed) >= 0 {
             let world = ent.world.load();
-            let sound = if entity_type == &EntityType::GOAT {
-                if let Some(goat) = entity
-                    .cast_any()
-                    .downcast_ref::<crate::entity::passive::goat::GoatEntity>()
-                    && goat.is_screaming()
-                {
-                    Sound::EntityGoatScreamingMilk
-                } else {
-                    Sound::EntityGoatMilk
-                }
+            let sound = if let Some(goat) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::goat::GoatEntity>(
+            ) && goat.is_screaming()
+            {
+                Sound::EntityGoatScreamingMilk
             } else {
-                Sound::EntityCowMilk
+                Sound::EntityGoatMilk
             };
             world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
             fill_bucket_stack(item, player, &Item::MILK_BUCKET);
@@ -570,7 +580,12 @@ impl ItemBehaviour for FilledBucketItem {
             );
             let mob = from_type(entity_type, spawn_coord, &world, Uuid::new_v4());
             if mob.get_mob().and_then(|mob| mob.as_bucketable()).is_some() {
-                crate::entity::mob::spawn::finalize_spawn(&mob, &world, None);
+                crate::entity::mob::spawn::finalize_spawn(
+                    &mob,
+                    &world,
+                    crate::entity::mob::spawn::EntitySpawnReason::Bucket,
+                    None,
+                );
                 apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
                 if world.spawn_creature(
                     mob.clone(),
@@ -610,13 +625,8 @@ impl ItemBehaviour for FilledBucketItem {
         }
         if item.item.id == Item::WATER_BUCKET.id {
             let entity_type = entity.get_entity().entity_type;
-            let result_item = if entity_type == &EntityType::AXOLOTL {
-                Some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl))
-            } else if entity_type == &EntityType::TADPOLE {
-                Some((&Item::TADPOLE_BUCKET, Sound::ItemBucketFillTadpole))
-            } else {
-                None
-            };
+            let result_item = (entity_type == &EntityType::AXOLOTL)
+                .then_some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl));
 
             if let Some((mob_bucket, sound)) = result_item {
                 let ent = entity.get_entity();

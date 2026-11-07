@@ -1,4 +1,6 @@
-use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase, GearDamage, LeashTick, ai::pathfinder::Navigator, living::LivingEntity,
+};
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
 use crate::entity::ai::brain::Brain;
@@ -9,22 +11,27 @@ use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::control::{LookControlTrait, MoveControlTrait};
-use crate::entity::ai::goal::{Controls, GoalReach, goal_selector::GoalSelector};
+use crate::entity::ai::goal::{
+    Controls, GoalReach, escape_danger::EscapeDangerGoal, goal_selector::GoalSelector,
+};
 use crate::entity::ai::sensing::Sensing;
+use crate::entity::living::prevents_armor_change;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
+use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crate::world::entity_islands::{self, AuditedReach};
 use crate::world::game_event::notified_area;
+use crate::world::natural_spawner::is_valid_spawn_floor;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
@@ -32,7 +39,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -51,6 +58,7 @@ pub mod bat;
 pub mod blaze;
 pub mod breeze;
 pub mod cave_spider;
+pub mod conversion;
 pub mod creaking;
 pub mod creeper;
 pub mod crossbow_attack_mob;
@@ -138,9 +146,12 @@ pub struct MobEntity {
     pub body_rotation_control: std::sync::Mutex<BodyRotationControl>,
     brain: std::sync::Mutex<Option<Brain>>,
     brain_memory_clear_requested: AtomicBool,
+    brain_refresh_requested: AtomicBool,
     removal_cleanup_done: AtomicBool,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
+    /// Set while a leash holds the home, so dropping the leash clears it.
+    was_leashed: AtomicBool,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
@@ -149,8 +160,23 @@ pub struct MobEntity {
     pub death_loot_table_seed: AtomicI64,
     pub ambient_sound_time: AtomicI32,
     pending_riders: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
+    pending_vehicle: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     mob_flags: AtomicU8,
 }
+
+const FOLLOW_LEASH_WANTED_DISTANCE: f32 = 2.0;
+
+/// Slots whose equipment adds experience: every slot but the saddle.
+const EXPERIENCE_EQUIPMENT_SLOTS: [EquipmentSlot; 7] = [
+    EquipmentSlot::MAIN_HAND,
+    EquipmentSlot::OFF_HAND,
+    EquipmentSlot::FEET,
+    EquipmentSlot::LEGS,
+    EquipmentSlot::CHEST,
+    EquipmentSlot::HEAD,
+    EquipmentSlot::BODY,
+];
+
 impl MobEntity {
     /// Vanilla `Mob.getNavigation`/`getMoveControl`: a rider steering a mob drives that mob.
     /// Only the mob's own AI step ticks its own navigator and move control directly.
@@ -196,6 +222,7 @@ impl MobEntity {
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE: f32 = 0.1087;
     pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
+    pub const ITEM_PICKUP_REACH: Vector3<f64> = Vector3::new(1.0, 0.0, 1.0);
     pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
     pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
     pub const GUARANTEED_DROP_CHANCE: f32 = 2.0;
@@ -268,9 +295,11 @@ impl MobEntity {
             body_rotation_control: std::sync::Mutex::new(BodyRotationControl::default()),
             brain: std::sync::Mutex::new(None),
             brain_memory_clear_requested: AtomicBool::new(false),
+            brain_refresh_requested: AtomicBool::new(false),
             removal_cleanup_done: AtomicBool::new(false),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
+            was_leashed: AtomicBool::new(false),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
@@ -279,8 +308,67 @@ impl MobEntity {
             death_loot_table_seed: AtomicI64::new(0),
             ambient_sound_time: AtomicI32::new(0),
             pending_riders: std::sync::Mutex::new(Vec::new()),
+            pending_vehicle: std::sync::Mutex::new(None),
             mob_flags: AtomicU8::new(0),
         }
+    }
+
+    pub fn set_home_to(&self, center: BlockPos, radius: i32) {
+        self.position_target.store(center);
+        self.position_target_range.store(radius, Relaxed);
+    }
+
+    pub fn clear_home(&self) {
+        self.position_target_range.store(-1, Relaxed);
+    }
+
+    /// Runs the mob side of [`Entity::tick_leash`].
+    fn tick_leash(&self, mob: &dyn Mob) {
+        let entity = &self.living_entity.entity;
+        match entity.tick_leash(mob) {
+            LeashTick::NotLeashed => {}
+            LeashTick::Snapped => self.goals_selector.disable_control(Controls::MOVE),
+            LeashTick::Elastic(holder) => {
+                self.when_leashed_to(&*holder);
+                entity.check_fall_distance_accumulation(&self.living_entity);
+                mob.on_elastic_leash_pull();
+            }
+            LeashTick::CloseRange(holder) => {
+                self.when_leashed_to(&*holder);
+                self.close_range_leash_behaviour(mob, &*holder);
+            }
+        }
+        if !entity.is_leashed() && self.was_leashed.swap(false, Relaxed) {
+            self.clear_home();
+        }
+    }
+
+    fn when_leashed_to(&self, holder: &dyn EntityBase) {
+        self.was_leashed.store(true, Relaxed);
+        self.set_home_to(
+            holder.get_entity().block_pos.load(),
+            Entity::LEASH_ELASTIC_DISTANCE as i32 - 1,
+        );
+    }
+
+    fn close_range_leash_behaviour(&self, mob: &dyn Mob, holder: &dyn EntityBase) {
+        if !mob.should_stay_close_to_leash_holder() || mob.is_panicking() {
+            return;
+        }
+        self.goals_selector.enable_control(Controls::MOVE);
+        let pos = self.living_entity.entity.pos.load();
+        let holder_pos = holder.get_entity().pos.load();
+        let distance = pos.squared_distance_to_vec(&holder_pos).sqrt() as f32;
+        let delta = (holder_pos - pos).normalize()
+            * f64::from((distance - FOLLOW_LEASH_WANTED_DISTANCE).max(0.0));
+        let target = pos + delta;
+        self.steered().navigator().move_to_coords(
+            target.x,
+            target.y,
+            target.z,
+            mob.follow_leash_speed(),
+            &self.living_entity,
+        );
     }
 
     pub fn has_position_target(&self) -> bool {
@@ -424,13 +512,13 @@ impl MobEntity {
             move_control.tick(mob);
         };
 
-        {
+        if mob.ticks_look_control() {
             let mut look_control = self
                 .look_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             look_control.tick(mob);
-        };
+        }
 
         self.jump_control
             .lock()
@@ -493,6 +581,35 @@ impl MobEntity {
     pub fn set_item_slot_and_drop_when_killed(&self, slot: &EquipmentSlot, stack: ItemStack) {
         self.set_item_slot(slot, stack);
         self.set_guaranteed_drop(slot);
+    }
+
+    pub fn first_passenger(&self) -> Option<Arc<dyn EntityBase>> {
+        self.living_entity
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .first()
+            .cloned()
+    }
+
+    pub fn is_slot_empty(&self, slot: &EquipmentSlot) -> bool {
+        self.living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(slot)
+            .is_none_or(ItemStack::is_empty)
+    }
+
+    pub fn read_legacy_saddle(&self, saddled: bool) {
+        if saddled && self.is_slot_empty(&EquipmentSlot::SADDLE) {
+            self.set_item_slot_and_drop_when_killed(
+                &EquipmentSlot::SADDLE,
+                ItemStack::new(1, &Item::SADDLE),
+            );
+        }
     }
 
     fn write_drop_chances(&self, nbt: &mut NbtCompound) {
@@ -569,6 +686,19 @@ impl MobEntity {
 
     /// Accesses the species' brain, building it on first use.
     /// Neither `make_brain` nor the callback may lock this brain again; Brain callbacks use `BrainTick`.
+    /// Reads another mob's brain without building one. A brain busy in its own tick reads as
+    /// empty, so a mob checks itself through its `BrainTick` instead.
+    pub fn brain_has_memory_value(
+        &self,
+        id: crate::entity::ai::brain::memory::MemoryModuleId,
+    ) -> bool {
+        self.brain
+            .try_lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().map(|brain| brain.has_memory_value(id)))
+            .unwrap_or(false)
+    }
+
     pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
         let result = {
             let mut slot = self
@@ -605,10 +735,17 @@ impl MobEntity {
         });
     }
 
+    pub fn request_refresh_brain(&self) {
+        self.brain_refresh_requested.store(true, Ordering::Release);
+    }
+
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
         self.with_brain(mob, |brain| brain.tick(&world, mob, time));
+        if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
+            self.refresh_brain(mob);
+        }
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -774,46 +911,69 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
-    pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
-        let below = pos.down();
-        let state = world.get_block_state(&below);
-        state.is_side_solid(BlockDirection::Up)
+    pub fn check_mob_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        reason: spawn::EntitySpawnReason,
+    ) -> bool {
+        reason.is_spawner() || is_valid_spawn_floor(world.get_block_state(&pos.down()), entity_type)
     }
 
-    pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
-        if world.level_info.load().difficulty == Difficulty::Peaceful {
-            return false;
-        }
-
-        if !Self::is_dark_enough_to_spawn(world, pos, is_thundering) {
-            return false;
-        }
-
-        Self::check_mob_spawn_rules(world, pos)
-    }
-
-    pub fn check_any_light_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
-        if world.level_info.load().difficulty == Difficulty::Peaceful {
-            return false;
-        }
-
-        Self::check_mob_spawn_rules(world, pos)
-    }
-
-    pub fn check_surface_monsters_spawn_rules(
+    pub fn check_monster_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
+        reason: spawn::EntitySpawnReason,
     ) -> bool {
-        Self::check_monster_spawn_rules(world, pos, is_thundering) && world.can_see_sky(pos)
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        if !reason.ignores_light_requirements()
+            && !Self::is_dark_enough_to_spawn(world, pos, is_thundering)
+        {
+            return false;
+        }
+
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
     }
 
-    pub fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_any_light_monster_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        reason: spawn::EntitySpawnReason,
+    ) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        Self::check_mob_spawn_rules(entity_type, world, pos, reason)
+    }
+
+    pub fn check_surface_monsters_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+        reason: spawn::EntitySpawnReason,
+    ) -> bool {
+        Self::check_monster_spawn_rules(entity_type, world, pos, is_thundering, reason)
+            && (reason.is_spawner() || world.can_see_sky(pos))
+    }
+
+    pub fn check_animal_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        reason: spawn::EntitySpawnReason,
+    ) -> bool {
         let below = pos.down();
         world
             .get_block(&below)
             .has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
-            && Self::is_bright_enough_to_spawn(world, pos)
+            && (reason.ignores_light_requirements() || Self::is_bright_enough_to_spawn(world, pos))
     }
 
     pub fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
@@ -1014,6 +1174,37 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
+    let living = &mob.get_mob_entity().living_entity;
+    let entity = &living.entity;
+    let world = entity.world.load();
+    if !mob.can_pick_up_loot(None)
+        || !living.is_alive()
+        || living.dead.load(Relaxed)
+        || !world.level_info.load().game_rules.mob_griefing
+    {
+        return;
+    }
+    let reach = mob.get_pickup_reach();
+    let area = entity.bounding_box.load().expand(reach.x, reach.y, reach.z);
+    for candidate in world.get_entities_at_box(&area) {
+        let Some(item) = candidate.get_item_entity() else {
+            continue;
+        };
+        if item.get_entity().is_removed() || item.get_pickup_delay() != 0 {
+            continue;
+        }
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if !stack.is_empty() && mob.wants_to_pick_up(&stack) {
+            mob.pick_up_item(item);
+        }
+    }
+}
+
 fn has_game_event_listener(mob: &dyn Mob) -> bool {
     let mut listens = false;
     mob.for_each_game_event_listener(&mut |_| listens = true);
@@ -1175,6 +1366,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        self.can_attack_base(target)
+    }
+
+    fn can_attack_base(&self, target: &dyn EntityBase) -> bool {
         let target_entity = target.get_entity();
         if target_entity.entity_type == &EntityType::GHAST {
             return false;
@@ -1221,6 +1416,24 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        true
+    }
+
+    fn mob_support_quad_leash(&self) -> bool {
+        false
+    }
+
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        false
+    }
+
+    fn on_elastic_leash_pull(&self) {}
+
+    fn follow_leash_speed(&self) -> f64 {
+        1.0
+    }
+
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         self.as_animal().is_none()
     }
@@ -1237,6 +1450,14 @@ pub trait Mob: EntityBase + Send + Sync {
         75.0
     }
 
+    fn ticks_look_control(&self) -> bool {
+        true
+    }
+
+    fn ticks_body_rotation(&self) -> bool {
+        true
+    }
+
     /// Vanilla `LookControl.resetXRotOnTick`: the look control levels the pitch each tick.
     fn look_resets_pitch(&self) -> bool {
         true
@@ -1248,18 +1469,55 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.is_dead_or_dying()
     }
 
+    /// See [`EntityBase::passenger_attachment_point`].
+    fn mob_passenger_attachment_point(
+        &self,
+        _passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        None
+    }
+
+    fn mob_vehicle_attachment_point(&self, _vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        None
+    }
+
+    fn mob_on_rider_positioned(&self, _passenger: &dyn EntityBase) {}
+
+    fn mob_consume_sound(&self, _stack: &ItemStack) -> Option<pumpkin_data::sound::Sound> {
+        None
+    }
+
+    fn mob_hurt_gear_slots(&self, _gear: GearDamage) -> &'static [EquipmentSlot] {
+        &[]
+    }
+
     fn mob_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
-        if self.get_mob_entity().is_no_ai() {
-            return None;
-        }
-        let first = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .first()
-            .cloned();
-        first.filter(|passenger| passenger.get_mob().is_some() && passenger.can_control_vehicle())
+        let first = self.get_mob_entity().first_passenger()?;
+        self.mob_rider_controller(first)
+    }
+
+    fn saddled_controlling_passenger(
+        &self,
+        steering_item: Option<&Item>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        let first = self.get_mob_entity().first_passenger()?;
+        let Some(player) = first.get_player() else {
+            return self.mob_rider_controller(first);
+        };
+        let steers = self.is_saddled()
+            && steering_item.is_none_or(|item| {
+                let inventory = player.inventory();
+                inventory.held_item().item == item || inventory.off_hand_item().item == item
+            });
+        steers.then_some(first)
+    }
+
+    fn mob_rider_controller(&self, first: Arc<dyn EntityBase>) -> Option<Arc<dyn EntityBase>> {
+        (!self.get_mob_entity().is_no_ai()
+            && first.get_mob().is_some()
+            && first.can_control_vehicle())
+        .then_some(first)
     }
 
     fn omnidirectional_air_mover(&self) -> bool {
@@ -1301,25 +1559,11 @@ pub trait Mob: EntityBase + Send + Sync {
         self.mob_metadata().map(|m| m.to_bedrock_actor_data())
     }
 
-    fn get_job_site(&self) -> Option<BlockPos> {
-        None
-    }
-
-    fn is_job_site_pending(&self) -> bool {
-        false
-    }
-
-    fn release_pending_job_site(&self, _position: BlockPos) {}
-
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
 
     fn clear_trading_player(&self) {}
-
-    fn get_home(&self) -> Option<BlockPos> {
-        None
-    }
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
@@ -1329,15 +1573,94 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn can_use_slot(&self, _slot: &EquipmentSlot) -> bool {
+        true
+    }
+
+    fn is_equippable_in_slot(&self, stack: &ItemStack, slot: &EquipmentSlot) -> bool {
+        equipment::is_equippable_in_slot(self.get_entity().entity_type, stack, slot)
+            && self.can_use_slot(slot)
+    }
+
     fn is_saddled(&self) -> bool {
-        false
+        self.get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .get(&EquipmentSlot::SADDLE)
+            .is_some_and(|saddle| {
+                !saddle.is_empty() && self.is_equippable_in_slot(saddle, &EquipmentSlot::SADDLE)
+            })
     }
 
-    fn can_be_saddled(&self) -> bool {
-        false
+    fn get_equip_sound(&self, _slot: &EquipmentSlot) -> Option<pumpkin_data::sound::Sound> {
+        None
     }
 
-    fn set_saddled(&self, _saddled: bool) {}
+    fn can_shear_equipment(&self, _player: &Player) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
+    fn attempt_to_shear_equipment(&self, player: &Arc<Player>, shears: &mut ItemStack) -> bool {
+        let mob_entity = self.get_mob_entity();
+        let living = &mob_entity.living_entity;
+        let creative = player.gamemode.load() == pumpkin_util::GameMode::Creative;
+        let sheared = {
+            let equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            [
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::OFF_HAND,
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]
+            .into_iter()
+            .find_map(|slot| {
+                let stack = equipment.equipment.get(&slot)?;
+                let shearing_sound = stack
+                    .get_data_component::<EquippableImpl>()
+                    .filter(|equippable| equippable.can_be_sheared)?
+                    .shearing_sound
+                    .clone();
+                (creative || !prevents_armor_change(stack))
+                    .then(|| (slot, stack.clone(), shearing_sound))
+            })
+        };
+        let Some((slot, stack, shearing_sound)) = sheared else {
+            return false;
+        };
+
+        let entity = &living.entity;
+        let world = entity.world.load();
+        if let Some(server) = world.server.upgrade() {
+            let mut event = PlayerShearEntityEvent {
+                player: player.clone(),
+                entity_id: entity.entity_id,
+                hand: 0,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+
+        let _ = player.damage_item_stack(shears, 1);
+        mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
+        world.emit_game_event(GameEvent::Unequip.name(), entity.pos.load());
+        world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
+        entity.spawn_at_location(stack);
+        world.play_sound_event(&shearing_sound, SoundCategory::Neutral, &entity.pos.load());
+        true
+    }
 
     fn check_spawn_obstruction(&self, world: &World) -> bool {
         let bounding_box = self.get_entity().bounding_box.load();
@@ -1348,7 +1671,33 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
+    fn mob_max_air_supply(&self) -> i32 {
+        crate::entity::breath::MAX_AIR
+    }
+
+    fn mob_decrease_air_supply(&self, current: i32) -> i32 {
+        let oxygen_bonus = self
+            .get_mob_entity()
+            .living_entity
+            .get_attribute_value(&Attributes::OXYGEN_BONUS);
+        if oxygen_bonus <= 0.0 || self.get_random().random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
+            current.wrapping_sub(1)
+        } else {
+            current
+        }
+    }
+
+    fn mob_increase_air_supply(&self, current: i32) -> i32 {
+        current
+            .wrapping_add(crate::entity::breath::AIR_RECOVERY_RATE)
+            .min(self.mob_max_air_supply())
+    }
+
     fn mob_is_pushed_by_fluids(&self) -> bool {
+        true
+    }
+
+    fn pushes_entities(&self) -> bool {
         true
     }
 
@@ -1384,6 +1733,19 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_ai_step(&self) {}
 
+    fn tick_jump_control(&self, jump: bool) {
+        self.get_mob_entity()
+            .living_entity
+            .jumping
+            .store(jump, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn jump_power_multiplier(&self) -> f32 {
+        1.0
+    }
+
+    fn on_jump_from_ground(&self) {}
+
     fn travel_in_water(&self, caller: &dyn EntityBase, gravity: f64, falling: bool) {
         self.get_mob_entity()
             .living_entity
@@ -1398,8 +1760,20 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
-    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
-        false
+    fn can_hold_item(&self, _stack: &ItemStack) -> bool {
+        true
+    }
+
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        self.can_hold_item(stack)
+    }
+
+    fn get_pickup_reach(&self) -> Vector3<f64> {
+        MobEntity::ITEM_PICKUP_REACH
+    }
+
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        equipment::pick_up_item_as_equipment(self, item);
     }
 
     fn can_pick_up_loot(&self, _brain: Option<&crate::entity::ai::brain::BrainState>) -> bool {
@@ -1416,6 +1790,21 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    /// Retained entities accessed regardless of their distance from the mob.
+    fn tick_links(&self) -> Vec<i32> {
+        Vec::new()
+    }
+
+    /// Additional player search range for the conservative island bound.
+    fn player_tick_range(&self) -> f64 {
+        0.0
+    }
+
+    /// Movement before normal travel that the conservative island bound must include.
+    fn additional_tick_movement(&self) -> f64 {
+        0.0
+    }
+
     fn mob_considers_entity_as_ally(
         &self,
         _other: &dyn EntityBase,
@@ -1427,14 +1816,40 @@ pub trait Mob: EntityBase + Send + Sync {
     fn drop_inventory(&self) {}
 
     fn can_dispenser_equip_into_slot(&self, _slot: &EquipmentSlot) -> bool {
-        true
+        self.get_mob_entity().can_pick_up_loot()
+    }
+
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        self.get_mob_entity().living_entity.cause_fall_damage(
+            caller,
+            fall_distance,
+            damage_modifier,
+        )
+    }
+
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.get_mob_entity()
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
     }
 
     fn should_check_fall_damage(&self) -> bool {
         true
     }
 
+    fn ignores_block_triggers(&self) -> bool {
+        false
+    }
+
     fn on_removed(&self) {}
+
+    /// Runs when the mob dies, before the death effects, where vanilla subclasses override `die`.
+    fn on_die(&self, _source: Option<&dyn EntityBase>) {}
 
     fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
         None
@@ -1483,6 +1898,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {}
+
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        self.get_mob_entity().try_attack(self.get_entity(), target)
+    }
+
+    fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
     fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {
@@ -1539,13 +1960,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn make_sound(&self, sound: pumpkin_data::sound::Sound) {
         let custom_sound = self.as_custom_sound();
-        self.get_mob_entity().living_entity.make_sound(
+        let living_entity = &self.get_mob_entity().living_entity;
+        living_entity.make_sound(
             sound,
-            custom_sound.map_or(
-                pumpkin_data::sound::SoundCategory::Players,
+            custom_sound.map_or_else(
+                || self.sound_source(),
                 crate::entity::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, crate::entity::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || living_entity.get_pitch(),
+                crate::entity::custom_sound::CustomSound::voice_pitch,
+            ),
         );
     }
 
@@ -1581,6 +2007,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_abstract_horse(
+        &self,
+    ) -> Option<&dyn crate::entity::passive::abstract_horse::AbstractHorse> {
         None
     }
 
@@ -1628,9 +2060,34 @@ pub trait Mob: EntityBase + Send + Sync {
     /// `add_pending_rider` are added by the world together with the mob.
     fn finalize_spawn(
         &self,
-        _world: &Arc<World>,
+        world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<spawn::SpawnGroupData>,
     ) -> Option<spawn::SpawnGroupData> {
+        self.default_finalize_spawn(world, group_data)
+    }
+
+    /// The part of `finalize_spawn` that reads the biome, for spawns made while the chunk is
+    /// still being generated and `World::get_biome` cannot see it.
+    fn finalize_spawn_in_biome(&self, _biome: &'static pumpkin_data::chunk::Biome) {}
+
+    /// The `finalize_spawn` of mobs without their own, for overrides that extend it.
+    fn default_finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        group_data: Option<spawn::SpawnGroupData>,
+    ) -> Option<spawn::SpawnGroupData> {
+        let entity = self.get_entity();
+        if equipment::EQUIPMENT_REGISTRY
+            .get(entity.entity_type.resource_name)
+            .is_some_and(|def| def.can_pick_up_loot)
+        {
+            let difficulty = equipment::RegionalDifficulty::at(world, entity.pos.load());
+            self.get_mob_entity().set_can_pick_up_loot(
+                rand::random::<f32>()
+                    < MobEntity::MAX_PICKUP_LOOT_CHANCE * difficulty.special_multiplier,
+            );
+        }
         self.finalize_spawn_super(group_data)
     }
 
@@ -1967,8 +2424,42 @@ pub trait Mob: EntityBase + Send + Sync {
             .is_some_and(crate::entity::passive::tamable::TamableAnimal::is_tame)
     }
 
-    fn get_base_experience_reward(&self) -> u32 {
+    /// Experience before the equipment bonus.
+    fn xp_reward(&self) -> u32 {
         self.get_entity().entity_type.experience_reward
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        // The extracted value is a single roll for animals.
+        if self.as_animal().is_some() {
+            return crate::entity::passive::animal::experience_reward(self);
+        }
+        let xp_reward = self.xp_reward();
+        if xp_reward == 0 {
+            return 0;
+        }
+        let living = &self.get_mob_entity().living_entity;
+        let drop_chances = living
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let equipment = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut rng = self.get_random();
+        let mut result = xp_reward;
+        for slot in &EXPERIENCE_EQUIPMENT_SLOTS {
+            let drop_chance = drop_chances
+                .get(slot)
+                .copied()
+                .unwrap_or(equipment::DEFAULT_EQUIPMENT_DROP_CHANCE);
+            if !equipment.get(slot).is_empty() && drop_chance <= 1.0 {
+                result += 1 + rng.random_range(0..3);
+            }
+        }
+        result
     }
 
     fn should_drop_loot(&self) -> bool {
@@ -2016,6 +2507,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
     fn mob_set_sound_variant_name(&self, _name: &str) {}
 
+    fn mob_is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
+    fn can_push_entity(&self, _other: &dyn EntityBase) -> bool {
+        true
+    }
+
+    fn can_fly_to_owner(&self) -> bool {
+        false
+    }
+
     fn mob_on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -2060,7 +2563,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_pushable(&self) -> bool {
-        self.get_mob_entity().living_entity.is_pushable()
+        self.mob_is_pushable()
+    }
+
+    fn support_quad_leash(&self) -> bool {
+        self.mob_support_quad_leash()
+    }
+
+    fn support_quad_leash_as_holder(&self) -> bool {
+        self.mob_support_quad_leash_as_holder()
     }
 
     fn on_lightning_strike(
@@ -2086,19 +2597,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_init_data_tracker();
         let world = self.get_mob_entity().living_entity.entity.world.load();
         crate::entity::mob::equipment::equip_mob_on_spawn(self as &dyn EntityBase, &world);
-
-        let entity_name = self.get_entity().entity_type.resource_name;
-        if let Some(def) = crate::entity::mob::equipment::EQUIPMENT_REGISTRY.get(entity_name)
-            && def.can_pick_up_loot
-        {
-            let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(
-                &world,
-                self.get_entity().pos.load(),
-            );
-            let pickup_chance = 0.55 * difficulty.special_multiplier;
-            self.get_mob_entity()
-                .set_can_pick_up_loot(rand::random::<f32>() < pickup_chance);
-        }
     }
 
     fn set_variant_name(&self, name: &str) {
@@ -2121,7 +2619,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.process_navigation_updates();
-        mob_entity.living_entity.entity.tick_leash();
+        mob_entity.tick_leash(self);
         sun_burn::tick(self);
 
         if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
@@ -2208,6 +2706,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::SHEARS
+            && self.can_shear_equipment(player)
+            && !player.get_entity().is_sneaking()
+            && self.attempt_to_shear_equipment(player, item_stack)
+        {
+            return true;
+        }
         self.mob_interact(player, item_stack)
             || self
                 .as_ageable()
@@ -2260,14 +2765,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn is_panicking(&self) -> bool {
         self.get_path_aware_entity()
             .is_some_and(PathAwareEntity::is_panicking)
-    }
-
-    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_job_site(self)
-    }
-
-    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        <T as Mob>::get_home(self)
+            || self
+                .get_mob_entity()
+                .goals_selector
+                .is_running::<EscapeDangerGoal>()
+            || self
+                .get_mob_entity()
+                .brain_has_memory_value(crate::entity::ai::brain::memory::types::IS_PANICKING.id())
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
@@ -2328,6 +2832,26 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_controlling_passenger()
     }
 
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        index: usize,
+    ) -> Option<Vector3<f64>> {
+        self.mob_passenger_attachment_point(passenger, index)
+    }
+
+    fn hurt_gear_slots(&self, gear: GearDamage) -> &'static [EquipmentSlot] {
+        self.mob_hurt_gear_slots(gear)
+    }
+
+    fn vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        self.mob_vehicle_attachment_point(vehicle)
+    }
+
+    fn on_rider_positioned(&self, passenger: &dyn EntityBase) {
+        self.mob_on_rider_positioned(passenger);
+    }
+
     fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
         // TODO: apply enchantment processing like in vanilla
         Mob::get_base_experience_reward(self)
@@ -2369,22 +2893,6 @@ pub trait PathAwareEntity: Mob + Send + Sync {
     // TODO: implement
     fn is_panicking(&self) -> bool {
         false
-    }
-
-    fn should_follow_leash(&self) -> bool {
-        true
-    }
-
-    fn on_short_leash_tick(&self) {
-        // TODO: implement
-    }
-
-    fn before_leash_tick(&self) {
-        // TODO: implement
-    }
-
-    fn get_follow_leash_speed(&self) -> f32 {
-        1.0
     }
 }
 

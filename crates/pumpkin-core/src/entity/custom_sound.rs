@@ -10,6 +10,10 @@ pub trait CustomSound: Mob {
     }
 
     fn sound_category(&self) -> SoundCategory {
-        SoundCategory::Players
+        self.sound_source()
+    }
+
+    fn voice_pitch(&self) -> f32 {
+        self.get_mob_entity().living_entity.get_pitch()
     }
 }

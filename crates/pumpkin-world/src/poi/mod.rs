@@ -6,9 +6,18 @@ use tracing::{info, warn};
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+use pumpkin_data::poi_type::PoiType;
+use pumpkin_data::tag::{PointOfInterestType, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
+
+mod record;
+mod section_pos;
+
+pub use record::{Occupancy, PoiRecord};
+pub use section_pos::SectionPos;
 
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -76,8 +85,8 @@ pub struct PoiChunkData {
 /// POI data for a single region (32x32 chunks) using MCA format
 #[derive(Debug, Default)]
 pub struct PoiRegion {
-    /// Entries indexed by position
-    entries: FxHashMap<(i32, i32, i32), PoiEntry>,
+    /// Entries indexed by section, then by block position
+    sections: FxHashMap<SectionPos, FxHashMap<(i32, i32, i32), PoiEntry>>,
     /// Track which chunks are dirty
     dirty_chunks: rustc_hash::FxHashSet<(i32, i32)>,
     dirty: bool,
@@ -100,36 +109,60 @@ impl PoiRegion {
         ((local_z << 5) | local_x) as usize
     }
 
-    /// Returns section key as just the Y section coordinate (like vanilla)
-    fn section_key(pos: &BlockPos) -> String {
-        let section_y = pos.0.y >> 4;
-        section_y.to_string()
-    }
-
-    pub fn add(&mut self, entry: PoiEntry) {
-        let chunk_x = entry.x >> 4;
-        let chunk_z = entry.z >> 4;
+    fn mark_dirty(&mut self, chunk_x: i32, chunk_z: i32) {
         self.dirty_chunks.insert((chunk_x, chunk_z));
-        let key = (entry.x, entry.y, entry.z);
-        self.entries.insert(key, entry);
         self.dirty = true;
     }
 
-    pub fn remove(&mut self, pos: &BlockPos) -> bool {
+    fn section_entries(
+        &self,
+        section: SectionPos,
+    ) -> Option<&FxHashMap<(i32, i32, i32), PoiEntry>> {
+        self.sections.get(&section)
+    }
+
+    fn entry_at(&self, pos: &BlockPos) -> Option<&PoiEntry> {
+        self.section_entries(SectionPos::of(pos))?
+            .get(&Self::pos_key(pos))
+    }
+
+    fn entry_at_mut(&mut self, pos: &BlockPos) -> Option<&mut PoiEntry> {
+        let section = SectionPos::of(pos);
         let key = Self::pos_key(pos);
-        if self.entries.remove(&key).is_some() {
-            let chunk_x = pos.0.x >> 4;
-            let chunk_z = pos.0.z >> 4;
-            self.dirty_chunks.insert((chunk_x, chunk_z));
-            self.dirty = true;
-            return true;
+        if !self.sections.get(&section)?.contains_key(&key) {
+            return None;
         }
-        false
+        self.mark_dirty(pos.0.x >> 4, pos.0.z >> 4);
+        self.sections.get_mut(&section)?.get_mut(&key)
+    }
+
+    pub fn add(&mut self, entry: PoiEntry) {
+        self.mark_dirty(entry.x >> 4, entry.z >> 4);
+        let section = SectionPos::of(&entry.pos());
+        let key = (entry.x, entry.y, entry.z);
+        self.sections.entry(section).or_default().insert(key, entry);
+    }
+
+    pub fn remove(&mut self, pos: &BlockPos) -> bool {
+        let section = SectionPos::of(pos);
+        let key = Self::pos_key(pos);
+        let removed = self
+            .sections
+            .get_mut(&section)
+            .and_then(|entries| entries.remove(&key))
+            .is_some();
+        if removed {
+            self.mark_dirty(pos.0.x >> 4, pos.0.z >> 4);
+        }
+        removed
     }
 
     #[must_use]
     pub fn get_all(&self) -> Vec<&PoiEntry> {
-        self.entries.values().collect()
+        self.sections
+            .values()
+            .flat_map(|entries| entries.values())
+            .collect()
     }
 
     #[must_use]
@@ -146,22 +179,19 @@ impl PoiRegion {
     fn get_chunk_data(&self, chunk_x: i32, chunk_z: i32) -> Option<PoiChunkData> {
         let mut sections: FxHashMap<String, PoiSectionData> = FxHashMap::default();
 
-        for entry in self.entries.values() {
-            let entry_chunk_x = entry.x >> 4;
-            let entry_chunk_z = entry.z >> 4;
-
-            if entry_chunk_x != chunk_x || entry_chunk_z != chunk_z {
+        for (section_pos, entries) in &self.sections {
+            if section_pos.x != chunk_x || section_pos.z != chunk_z {
                 continue;
             }
 
-            let section_key = Self::section_key(&entry.pos());
+            let section_key = section_pos.y.to_string();
             let section = sections
                 .entry(section_key)
                 .or_insert_with(|| PoiSectionData {
                     valid: 1,
                     records: Vec::new(),
                 });
-            section.records.push(entry.clone());
+            section.records.extend(entries.values().cloned());
         }
 
         if sections.is_empty() {
@@ -258,7 +288,7 @@ impl PoiRegion {
             return Ok(());
         }
 
-        if self.entries.is_empty() {
+        if self.sections.values().all(FxHashMap::is_empty) {
             // Don't save empty regions, delete the file if it exists
             if path.exists() {
                 std::fs::remove_file(path)?;
@@ -274,8 +304,8 @@ impl PoiRegion {
         // Collect all unique chunks that have entries
         let mut chunks_with_data: rustc_hash::FxHashSet<(i32, i32)> =
             rustc_hash::FxHashSet::default();
-        for entry in self.entries.values() {
-            chunks_with_data.insert((entry.x >> 4, entry.z >> 4));
+        for section in self.sections.keys() {
+            chunks_with_data.insert((section.x, section.z));
         }
 
         for (chunk_x, chunk_z) in &chunks_with_data {
@@ -408,8 +438,13 @@ impl PoiRegion {
                 Ok(chunk_data) => {
                     for (_section_key, section) in chunk_data.sections {
                         for entry in section.records {
+                            let section_pos = SectionPos::of(&entry.pos());
                             let key = (entry.x, entry.y, entry.z);
-                            region.entries.insert(key, entry);
+                            region
+                                .sections
+                                .entry(section_pos)
+                                .or_default()
+                                .insert(key, entry);
                         }
                     }
                 }
@@ -422,6 +457,68 @@ impl PoiRegion {
         region.dirty = false;
         Ok(region)
     }
+}
+
+fn poi_type_string(poi_type: PoiType) -> String {
+    format!("minecraft:{}", poi_type.name())
+}
+
+fn typed_record(entry: &PoiEntry) -> Option<PoiRecord> {
+    Some(PoiRecord {
+        pos: entry.pos(),
+        poi_type: PoiType::from_name(&entry.poi_type)?,
+        free_tickets: entry.free_tickets,
+    })
+}
+
+fn distance_sq(center: BlockPos, pos: BlockPos) -> i64 {
+    let dx = i64::from(pos.0.x) - i64::from(center.0.x);
+    let dy = i64::from(pos.0.y) - i64::from(center.0.y);
+    let dz = i64::from(pos.0.z) - i64::from(center.0.z);
+    dx * dx + dy * dy + dz * dz
+}
+
+fn sort_records(records: &mut [PoiRecord], center: BlockPos) {
+    records.sort_unstable_by_key(|record| {
+        (
+            distance_sq(center, record.pos),
+            record.pos.0.x,
+            record.pos.0.y,
+            record.pos.0.z,
+        )
+    });
+}
+
+fn sections_at_distance(section: SectionPos, distance: i32) -> Vec<SectionPos> {
+    if distance == 0 {
+        return vec![section];
+    }
+
+    let mut result = Vec::new();
+    for dx in -distance..=distance {
+        let dx_abs = dx.abs();
+        for dy in -distance..=distance {
+            let remaining = distance - dx_abs - dy.abs();
+            if remaining < 0 {
+                continue;
+            }
+            if remaining == 0 {
+                result.push(SectionPos::new(section.x + dx, section.y + dy, section.z));
+            } else {
+                result.push(SectionPos::new(
+                    section.x + dx,
+                    section.y + dy,
+                    section.z + remaining,
+                ));
+                result.push(SectionPos::new(
+                    section.x + dx,
+                    section.y + dy,
+                    section.z - remaining,
+                ));
+            }
+        }
+    }
+    result
 }
 
 /// Region-based POI storage using MCA format
@@ -463,6 +560,66 @@ impl PoiStorage {
         })
     }
 
+    fn records_in_square(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<PoiRecord> {
+        let min_x = center.0.x - radius;
+        let max_x = center.0.x + radius;
+        let min_z = center.0.z - radius;
+        let max_z = center.0.z + radius;
+        let min_section_x = min_x >> 4;
+        let max_section_x = max_x >> 4;
+        let min_section_z = min_z >> 4;
+        let max_section_z = max_z >> 4;
+
+        let mut records = Vec::new();
+        for rx in (min_section_x >> 5)..=(max_section_x >> 5) {
+            for rz in (min_section_z >> 5)..=(max_section_z >> 5) {
+                let region = self.get_or_load_region(rx, rz);
+                for (section, entries) in &region.sections {
+                    if section.x < min_section_x
+                        || section.x > max_section_x
+                        || section.z < min_section_z
+                        || section.z > max_section_z
+                    {
+                        continue;
+                    }
+                    for entry in entries.values() {
+                        if entry.x < min_x || entry.x > max_x || entry.z < min_z || entry.z > max_z
+                        {
+                            continue;
+                        }
+                        let Some(record) = typed_record(entry) else {
+                            continue;
+                        };
+                        if predicate(record.poi_type) && occupancy.test(&record) {
+                            records.push(record);
+                        }
+                    }
+                }
+            }
+        }
+        records
+    }
+
+    fn is_village_center(&mut self, section: SectionPos) -> bool {
+        let region = self.get_or_load_region(section.x >> 5, section.z >> 5);
+        region.section_entries(section).is_some_and(|entries| {
+            entries.values().any(|entry| {
+                typed_record(entry).is_some_and(|record| {
+                    record
+                        .poi_type
+                        .has_tag(&PointOfInterestType::MINECRAFT_VILLAGE)
+                        && record.is_occupied()
+                })
+            })
+        })
+    }
+
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) {
         self.add_with_free_tickets(pos, poi_type, 0);
     }
@@ -487,6 +644,231 @@ impl PoiStorage {
         let (rx, rz) = Self::region_coords(pos);
         let region = self.get_or_load_region(rx, rz);
         region.remove(pos)
+    }
+
+    pub fn add_poi(&mut self, pos: BlockPos, poi_type: PoiType) -> bool {
+        let (rx, rz) = Self::region_coords(&pos);
+        let region = self.get_or_load_region(rx, rz);
+        if region
+            .entry_at(&pos)
+            .is_some_and(|entry| PoiType::from_name(&entry.poi_type) == Some(poi_type))
+        {
+            return false;
+        }
+        region.add(PoiEntry {
+            x: pos.0.x,
+            y: pos.0.y,
+            z: pos.0.z,
+            poi_type: poi_type_string(poi_type),
+            free_tickets: poi_type.max_tickets(),
+        });
+        true
+    }
+
+    pub fn get_type(&mut self, pos: &BlockPos) -> Option<PoiType> {
+        let (rx, rz) = Self::region_coords(pos);
+        let region = self.get_or_load_region(rx, rz);
+        let entry = region.entry_at(pos)?;
+        PoiType::from_name(&entry.poi_type)
+    }
+
+    pub fn exists(&mut self, pos: &BlockPos, predicate: &dyn Fn(PoiType) -> bool) -> bool {
+        self.get_type(pos).is_some_and(predicate)
+    }
+
+    pub fn get_records_in_square(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<PoiRecord> {
+        let mut records = self.records_in_square(predicate, center, radius, occupancy);
+        sort_records(&mut records, center);
+        records
+    }
+
+    pub fn get_records_in_range(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<PoiRecord> {
+        let radius_sqr = i64::from(radius) * i64::from(radius);
+        let mut records = self.records_in_square(predicate, center, radius, occupancy);
+        records.retain(|record| distance_sq(center, record.pos) <= radius_sqr);
+        sort_records(&mut records, center);
+        records
+    }
+
+    pub fn find_closest(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: &dyn Fn(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Option<BlockPos> {
+        self.get_records_in_range(predicate, center, radius, occupancy)
+            .into_iter()
+            .find(|record| filter(record.pos))
+            .map(|record| record.pos)
+    }
+
+    pub fn find_closest_with_type(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Option<(PoiType, BlockPos)> {
+        self.get_records_in_range(predicate, center, radius, occupancy)
+            .into_iter()
+            .next()
+            .map(|record| (record.poi_type, record.pos))
+    }
+
+    pub fn find_all_closest_first_with_type(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: &dyn Fn(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<(PoiType, BlockPos)> {
+        self.get_records_in_range(predicate, center, radius, occupancy)
+            .into_iter()
+            .filter(|record| filter(record.pos))
+            .map(|record| (record.poi_type, record.pos))
+            .collect()
+    }
+
+    pub fn take(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: &dyn Fn(PoiType, BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+    ) -> Option<BlockPos> {
+        let record = self
+            .get_records_in_range(predicate, center, radius, Occupancy::HasSpace)
+            .into_iter()
+            .find(|record| filter(record.poi_type, record.pos))?;
+        self.acquire_ticket(&record.pos).then_some(record.pos)
+    }
+
+    pub fn get_random<R: rand::Rng + ?Sized>(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: &dyn Fn(BlockPos) -> bool,
+        occupancy: Occupancy,
+        center: BlockPos,
+        radius: i32,
+        rng: &mut R,
+    ) -> Option<BlockPos> {
+        let mut records = self.get_records_in_range(predicate, center, radius, occupancy);
+        records.shuffle(rng);
+        records
+            .into_iter()
+            .find(|record| filter(record.pos))
+            .map(|record| record.pos)
+    }
+
+    pub fn release(&mut self, pos: &BlockPos) -> bool {
+        let (rx, rz) = Self::region_coords(pos);
+        let region = self.get_or_load_region(rx, rz);
+        let Some(entry) = region.entry_at(pos) else {
+            return false;
+        };
+        let Some(poi_type) = PoiType::from_name(&entry.poi_type) else {
+            return false;
+        };
+        if entry.free_tickets >= poi_type.max_tickets() {
+            return false;
+        }
+        let Some(entry) = region.entry_at_mut(pos) else {
+            return false;
+        };
+        entry.free_tickets += 1;
+        true
+    }
+
+    pub fn acquire_ticket(&mut self, pos: &BlockPos) -> bool {
+        let (rx, rz) = Self::region_coords(pos);
+        let region = self.get_or_load_region(rx, rz);
+        let Some(entry) = region.entry_at(pos) else {
+            return false;
+        };
+        if PoiType::from_name(&entry.poi_type).is_none() || entry.free_tickets <= 0 {
+            return false;
+        }
+        let Some(entry) = region.entry_at_mut(pos) else {
+            return false;
+        };
+        entry.free_tickets -= 1;
+        true
+    }
+
+    pub const MAX_VILLAGE_DISTANCE: i32 = 6;
+
+    pub fn sections_to_village(&mut self, section: SectionPos) -> i32 {
+        for distance in 0..=Self::MAX_VILLAGE_DISTANCE {
+            if sections_at_distance(section, distance)
+                .into_iter()
+                .any(|candidate| self.is_village_center(candidate))
+            {
+                return distance;
+            }
+        }
+        Self::MAX_VILLAGE_DISTANCE + 1
+    }
+
+    pub fn refresh_section(&mut self, section: SectionPos, found: &[(BlockPos, PoiType)]) {
+        let region = self.get_or_load_region(section.x >> 5, section.z >> 5);
+
+        let found_positions: FxHashMap<(i32, i32, i32), PoiType> = found
+            .iter()
+            .map(|(pos, poi_type)| ((pos.0.x, pos.0.y, pos.0.z), *poi_type))
+            .collect();
+
+        let stale: Vec<(i32, i32, i32)> = region
+            .section_entries(section)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|(key, entry)| {
+                        if PoiType::from_name(&entry.poi_type).is_none()
+                            || found_positions.contains_key(key)
+                        {
+                            None
+                        } else {
+                            Some(*key)
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for key in stale {
+            region.remove(&BlockPos(Vector3::new(key.0, key.1, key.2)));
+        }
+
+        for (pos, poi_type) in found {
+            let unchanged = region
+                .entry_at(pos)
+                .is_some_and(|entry| PoiType::from_name(&entry.poi_type) == Some(*poi_type));
+            if unchanged {
+                continue;
+            }
+            region.add(PoiEntry {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+                poi_type: poi_type_string(*poi_type),
+                free_tickets: poi_type.max_tickets(),
+            });
+        }
     }
 
     /// Get all POI positions within a square radius (for portal search)
@@ -544,6 +926,15 @@ impl PoiStorage {
         radius: i32,
         matches: impl Fn(&str) -> bool,
     ) -> Option<(BlockPos, String)> {
+        self.find_closest_where(center, radius, |poi_type, _| matches(poi_type))
+    }
+
+    pub fn find_closest_where(
+        &mut self,
+        center: BlockPos,
+        radius: i32,
+        matches: impl Fn(&str, BlockPos) -> bool,
+    ) -> Option<(BlockPos, String)> {
         let min_rx = ((center.0.x - radius) >> 4) >> 5;
         let max_rx = ((center.0.x + radius) >> 4) >> 5;
         let min_rz = ((center.0.z - radius) >> 4) >> 5;
@@ -557,7 +948,7 @@ impl PoiStorage {
                 for entry in region.get_all() {
                     if (entry.x - center.0.x).abs() > radius
                         || (entry.z - center.0.z).abs() > radius
-                        || !matches(&entry.poi_type)
+                        || !matches(&entry.poi_type, entry.pos())
                     {
                         continue;
                     }
@@ -701,6 +1092,216 @@ mod tests {
             Some(POI_TYPE_NETHER_PORTAL),
         );
         assert_eq!(results2.len(), 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn poi_ticket_round_trip() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_ticket_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut storage = PoiStorage::new(dir);
+
+        let meeting = BlockPos(Vector3::new(0, 64, 0));
+        let home = BlockPos(Vector3::new(5, 64, 0));
+        assert!(storage.add_poi(meeting, PoiType::Meeting));
+        assert!(storage.add_poi(home, PoiType::Home));
+
+        let meeting_records = storage.get_records_in_range(
+            &|poi_type| poi_type == PoiType::Meeting,
+            meeting,
+            1,
+            Occupancy::Any,
+        );
+        assert_eq!(meeting_records.len(), 1);
+        assert_eq!(
+            meeting_records[0].free_tickets,
+            PoiType::Meeting.max_tickets()
+        );
+
+        let center = BlockPos(Vector3::new(0, 64, 0));
+        assert_eq!(
+            storage.take(
+                &|poi_type| poi_type == PoiType::Home,
+                &|_, _| true,
+                center,
+                16
+            ),
+            Some(home)
+        );
+        assert_eq!(
+            storage.take(
+                &|poi_type| poi_type == PoiType::Home,
+                &|_, _| true,
+                center,
+                16
+            ),
+            None
+        );
+        assert!(storage.release(&home));
+        assert!(!storage.release(&home));
+        assert!(storage.acquire_ticket(&home));
+        assert!(!storage.acquire_ticket(&home));
+    }
+
+    #[test]
+    fn poi_occupancy_filters() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_occupancy_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut storage = PoiStorage::new(dir);
+
+        let meeting = BlockPos(Vector3::new(0, 64, 0));
+        let home = BlockPos(Vector3::new(10, 64, 0));
+        assert!(storage.add_poi(meeting, PoiType::Meeting));
+        assert!(storage.add_poi(home, PoiType::Home));
+        assert_eq!(
+            storage.take(&|poi_type| poi_type == PoiType::Home, &|_, _| true, home, 1),
+            Some(home)
+        );
+
+        let has_space = storage.get_records_in_range(&|_| true, meeting, 32, Occupancy::HasSpace);
+        assert_eq!(has_space.len(), 1);
+        assert_eq!(has_space[0].pos, meeting);
+
+        let occupied = storage.get_records_in_range(&|_| true, meeting, 32, Occupancy::IsOccupied);
+        assert_eq!(occupied.len(), 1);
+        assert_eq!(occupied[0].pos, home);
+
+        let any = storage.get_records_in_range(&|_| true, meeting, 32, Occupancy::Any);
+        assert_eq!(any.len(), 2);
+    }
+
+    #[test]
+    fn poi_sections_to_village() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_village_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut storage = PoiStorage::new(dir);
+
+        let home = BlockPos(Vector3::new(0, 64, 0));
+        assert!(storage.add_poi(home, PoiType::Home));
+        let origin = SectionPos::of(&home);
+        assert_eq!(
+            storage.sections_to_village(origin),
+            PoiStorage::MAX_VILLAGE_DISTANCE + 1
+        );
+
+        assert_eq!(
+            storage.take(&|poi_type| poi_type == PoiType::Home, &|_, _| true, home, 1),
+            Some(home)
+        );
+        assert_eq!(storage.sections_to_village(origin), 0);
+        assert_eq!(
+            storage.sections_to_village(SectionPos::new(origin.x + 3, origin.y, origin.z)),
+            3
+        );
+        assert_eq!(
+            storage.sections_to_village(SectionPos::new(origin.x, origin.y, origin.z + 6)),
+            6
+        );
+        assert_eq!(
+            storage.sections_to_village(SectionPos::new(origin.x, origin.y + 7, origin.z)),
+            PoiStorage::MAX_VILLAGE_DISTANCE + 1
+        );
+    }
+
+    #[test]
+    fn poi_refresh_section() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_refresh_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut storage = PoiStorage::new(dir);
+
+        let keep = BlockPos(Vector3::new(1, 64, 1));
+        let replace = BlockPos(Vector3::new(2, 64, 2));
+        let stale = BlockPos(Vector3::new(3, 64, 3));
+        let unknown = BlockPos(Vector3::new(4, 64, 4));
+        let new = BlockPos(Vector3::new(5, 64, 5));
+
+        assert!(storage.add_poi(keep, PoiType::Home));
+        assert!(storage.add_poi(replace, PoiType::Home));
+        assert!(storage.add_poi(stale, PoiType::Home));
+        storage.add(unknown, "minecraft:unknown_poi");
+        assert_eq!(
+            storage.take(&|poi_type| poi_type == PoiType::Home, &|_, _| true, keep, 0),
+            Some(keep)
+        );
+
+        let section = SectionPos::of(&keep);
+        storage.refresh_section(
+            section,
+            &[
+                (keep, PoiType::Home),
+                (replace, PoiType::Meeting),
+                (new, PoiType::Home),
+            ],
+        );
+
+        assert_eq!(storage.get_type(&keep), Some(PoiType::Home));
+        assert!(!storage.acquire_ticket(&keep));
+        assert_eq!(storage.get_type(&replace), Some(PoiType::Meeting));
+        let replaced = storage.get_records_in_range(
+            &|poi_type| poi_type == PoiType::Meeting,
+            replace,
+            0,
+            Occupancy::Any,
+        );
+        assert_eq!(replaced.len(), 1);
+        assert_eq!(replaced[0].free_tickets, PoiType::Meeting.max_tickets());
+        assert_eq!(storage.get_type(&stale), None);
+        assert_eq!(
+            storage.get_in_square(unknown, 0, Some("minecraft:unknown_poi")),
+            vec![unknown]
+        );
+        assert_eq!(storage.get_type(&new), Some(PoiType::Home));
+        assert!(storage.acquire_ticket(&new));
+        assert_eq!(storage.total_poi_count(), 4);
+    }
+
+    #[test]
+    fn poi_save_and_reload_typed() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_typed_reload_test");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let home = BlockPos(Vector3::new(0, 64, 0));
+        let meeting = BlockPos(Vector3::new(20, 64, 0));
+        let mut storage = PoiStorage::new(dir.join("poi"));
+        assert!(storage.add_poi(home, PoiType::Home));
+        assert!(storage.add_poi(meeting, PoiType::Meeting));
+        assert_eq!(
+            storage.take(&|poi_type| poi_type == PoiType::Home, &|_, _| true, home, 1),
+            Some(home)
+        );
+        storage.save_all().unwrap();
+
+        let mut reloaded = PoiStorage::new(dir.join("poi"));
+        assert_eq!(reloaded.get_type(&home), Some(PoiType::Home));
+        let home_records = reloaded.get_records_in_range(
+            &|poi_type| poi_type == PoiType::Home,
+            home,
+            8,
+            Occupancy::IsOccupied,
+        );
+        assert_eq!(home_records.len(), 1);
+        assert_eq!(home_records[0].free_tickets, 0);
+        let meeting_records = reloaded.get_records_in_range(
+            &|poi_type| poi_type == PoiType::Meeting,
+            home,
+            32,
+            Occupancy::Any,
+        );
+        assert_eq!(meeting_records.len(), 1);
+        assert_eq!(
+            meeting_records[0].free_tickets,
+            PoiType::Meeting.max_tickets()
+        );
+        assert_eq!(
+            reloaded.find_closest_with_type(
+                &|poi_type| poi_type == PoiType::Meeting,
+                home,
+                32,
+                Occupancy::Any
+            ),
+            Some((PoiType::Meeting, meeting))
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

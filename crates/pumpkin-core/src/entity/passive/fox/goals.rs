@@ -7,8 +7,8 @@ use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::rot_lerp;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{rot_lerp, signum};
 use rand::RngExt;
 
 use super::{FoxEntity, as_fox};
@@ -394,11 +394,6 @@ impl Goal for StalkPreyGoal {
     fn controls(&self) -> Controls {
         Controls::MOVE | Controls::LOOK
     }
-}
-
-/// Java `Math.signum`, which keeps zero.
-fn signum(value: f64) -> f64 {
-    if value == 0.0 { value } else { value.signum() }
 }
 
 /// Vanilla `FoxPounceGoal`: the leap from a full crouch, nose first into snow when it lands there.
