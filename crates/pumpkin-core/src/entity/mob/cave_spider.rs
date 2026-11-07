@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
@@ -6,6 +7,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::behavior::{fleeing, hunting};
 use crate::entity::mob::spider::{SPIDER_FLEES, SPIDER_HUNTS};
@@ -18,14 +20,20 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
+const VEHICLE_SEAT_HEIGHT: f64 = 0.218_75;
+
 pub struct CaveSpiderEntity {
     pub mob_entity: MobEntity,
+    pub is_climbing: AtomicBool,
 }
 
 impl CaveSpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let cave_spider = Self { mob_entity };
+        let cave_spider = Self {
+            mob_entity,
+            is_climbing: AtomicBool::new(false),
+        };
         let mob_arc = Arc::new(cave_spider);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -55,6 +63,14 @@ impl CaveSpiderEntity {
 }
 
 impl Mob for CaveSpiderEntity {
+    fn mob_vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        super::spider::small_vehicle_attachment_point(
+            &self.mob_entity,
+            vehicle,
+            VEHICLE_SEAT_HEIGHT,
+        )
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
     }
@@ -62,13 +78,34 @@ impl Mob for CaveSpiderEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<crate::world::World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<super::spawn::SpawnGroupData>,
     ) -> Option<super::spawn::SpawnGroupData> {
-        super::spider::finalize_spider_spawn(&self.mob_entity, world, group_data)
+        super::spider::finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_climbable(&self) -> bool {
+        self.is_climbing.load(Ordering::Relaxed)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new().no_ai(self.mob_entity.is_no_ai());
+        if self.is_climbing.load(Ordering::Relaxed) {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        super::spider::tick_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::cave_spider::DATA_FLAGS_ID,
+        );
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {

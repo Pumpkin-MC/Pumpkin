@@ -47,7 +47,7 @@ fn apply_sign_text(
         .unwrap_or_else(std::sync::PoisonError::into_inner) = lines;
 
     if let Some(color_val) = text_comp.get_int("SignTextColor") {
-        let dye = crate::block::entities::bedrock::bedrock_sign_text_color_to_dye_color(color_val);
+        let dye = crate::block::entities::sign::bedrock_sign_text_color_to_dye_color(color_val);
         sign_text.set_color(dye);
     }
     if let Some(glowing) = text_comp

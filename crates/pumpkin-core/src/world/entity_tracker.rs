@@ -29,7 +29,7 @@ use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::{get_section_cord, pack_degrees};
+use pumpkin_util::math::{pack_degrees, position::chunk_section_from_pos};
 use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
@@ -107,11 +107,7 @@ impl TrackedEntity {
         base.last_sent_pitch.store(rot[0], Relaxed);
         base.last_sent_yaw.store(rot[1], Relaxed);
         base.last_sent_head_yaw.store(rot[2], Relaxed);
-        let last_section_pos = Vector3::new(
-            get_section_cord(pos.x.floor() as i32),
-            get_section_cord(pos.y.floor() as i32),
-            get_section_cord(pos.z.floor() as i32),
-        );
+        let last_section_pos = chunk_section_from_pos(&base.block_pos.load());
         Self {
             entity,
             entity_id,
@@ -200,6 +196,12 @@ impl TrackedEntity {
             }
         }
 
+        // Vanilla `ServerEntity.sendChanges`: after the needsSync block, `syncVelocity`
+        // (`hurtMarked`) sends motion to tracking players (and self, for players).
+        if entity.sync_velocity.swap(false, Ordering::SeqCst) {
+            self.send_motion(entity, world);
+        }
+
         // Java `CHeadRot` is per-tick. Bedrock watchers of this entity get head yaw from
         // `send_bedrock_move` (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
         let head_yaw = pack_degrees(entity.head_yaw.load());
@@ -262,14 +264,13 @@ impl TrackedEntity {
 
     fn send_motion(&self, entity: &Entity, world: &World) {
         let velocity = entity.velocity.load();
-        let diff = (velocity - entity.last_sent_velocity.load()).length_squared();
-        if diff > 1.0e-7 || (diff > 0.0 && velocity.length_squared() == 0.0) {
+        if entity.velocity_changed_since_sent() {
             entity.last_sent_velocity.store(velocity);
             self.send_to_tracking_players_editioned(
                 &CEntityVelocity::new(VarInt(self.entity_id), velocity),
                 &CSetActorMotion {
                     target_runtime_id: VarULong(self.entity_id as u64),
-                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    motion: velocity.to_f32_lossy(),
                     tick: VarULong(0),
                 },
                 world,
@@ -529,12 +530,25 @@ impl TrackedEntity {
         }
 
         let vel = self.entity.get_entity().velocity.load();
-        if vel.length_squared() > 1e-4
-            && let ClientPlatform::Java(client) = player.client.as_ref()
-        {
-            let motion = CEntityVelocity::new(self.entity_id.into(), vel);
-            if let Ok(data) = client.serialize_packet(&motion) {
-                client.try_enqueue_packet(data);
+        if vel.length_squared() > 1e-4 {
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => {
+                    let motion = CEntityVelocity::new(self.entity_id.into(), vel);
+                    if let Ok(data) = client.serialize_packet(&motion) {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+                ClientPlatform::Bedrock(client) => {
+                    let motion =
+                        pumpkin_protocol::bedrock::client::set_actor_motion::CSetActorMotion {
+                            target_runtime_id: (self.entity_id as u64).into(),
+                            motion: vel.to_f32_lossy(),
+                            tick: 0u64.into(),
+                        };
+                    if let Ok(data) = client.serialize_packet(&motion) {
+                        client.try_enqueue_packet(data);
+                    }
+                }
             }
         }
 
@@ -554,25 +568,147 @@ impl TrackedEntity {
             }
         }
 
-        if let Some(living) = self.entity.get_living_entity()
-            && let Ok(equipment_guard) = living.entity_equipment.try_lock()
-        {
-            let mut equipment_list = Vec::new();
-            for (slot, item_stack) in &equipment_guard.equipment {
-                if !item_stack.is_empty() {
-                    equipment_list.push((slot.discriminant(), item_stack.clone()));
+        if let Some(living) = self.entity.get_living_entity() {
+            if let Ok(equipment_guard) = living.entity_equipment.try_lock() {
+                let mut equipment_list = Vec::new();
+                for (slot, item_stack) in &equipment_guard.equipment {
+                    if !item_stack.is_empty() {
+                        equipment_list.push((slot.discriminant(), item_stack.clone()));
+                    }
+                }
+                if !equipment_list.is_empty() {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(client) => {
+                            let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
+                                .iter()
+                                .map(|(slot, stack)| {
+                                    (*slot, ItemStackSerializer::from(stack.clone()))
+                                })
+                                .collect();
+                            let packet = CSetEquipment::new(self.entity_id.into(), equipment);
+                            if let Ok(data) = client.serialize_packet(&packet) {
+                                client.try_enqueue_packet(data);
+                            }
+                        }
+                        ClientPlatform::Bedrock(client) => {
+                            use pumpkin_data::data_component_impl::EquipmentSlot;
+                            use pumpkin_protocol::bedrock::{
+                                client::{
+                                    mob_armor_equipment::CMobArmorEquipment,
+                                    mob_equipment::CMobEquipment,
+                                },
+                                network_item::NetworkItemStackDescriptor,
+                            };
+
+                            if let Some(main_hand) =
+                                equipment_guard.equipment.get(&EquipmentSlot::MAIN_HAND)
+                                && !main_hand.is_empty()
+                            {
+                                let pkt = CMobEquipment {
+                                    target_runtime_id: (self.entity_id as u64).into(),
+                                    item: main_hand.into(),
+                                    slot: 0,
+                                    selected_slot: 0,
+                                    container_id: 0,
+                                };
+                                if let Ok(data) = client.serialize_packet(&pkt) {
+                                    client.try_enqueue_packet(data);
+                                }
+                            }
+                            if let Some(off_hand) =
+                                equipment_guard.equipment.get(&EquipmentSlot::OFF_HAND)
+                                && !off_hand.is_empty()
+                            {
+                                let pkt = CMobEquipment {
+                                    target_runtime_id: (self.entity_id as u64).into(),
+                                    item: off_hand.into(),
+                                    slot: 0,
+                                    selected_slot: 0,
+                                    container_id: 119,
+                                };
+                                if let Ok(data) = client.serialize_packet(&pkt) {
+                                    client.try_enqueue_packet(data);
+                                }
+                            }
+                            let get_desc = |slot: &EquipmentSlot| {
+                                equipment_guard.equipment.get(slot).map_or_else(
+                                    NetworkItemStackDescriptor::default,
+                                    NetworkItemStackDescriptor::from,
+                                )
+                            };
+                            let has_armor = [
+                                &EquipmentSlot::HEAD,
+                                &EquipmentSlot::CHEST,
+                                &EquipmentSlot::LEGS,
+                                &EquipmentSlot::FEET,
+                                &EquipmentSlot::BODY,
+                            ]
+                            .into_iter()
+                            .any(|s| {
+                                equipment_guard
+                                    .equipment
+                                    .get(s)
+                                    .is_some_and(|stack| !stack.is_empty())
+                            });
+                            if has_armor {
+                                let armor = CMobArmorEquipment {
+                                    target_runtime_id: (self.entity_id as u64).into(),
+                                    head: get_desc(&EquipmentSlot::HEAD),
+                                    chest: get_desc(&EquipmentSlot::CHEST),
+                                    legs: get_desc(&EquipmentSlot::LEGS),
+                                    feet: get_desc(&EquipmentSlot::FEET),
+                                    body: get_desc(&EquipmentSlot::BODY),
+                                };
+                                if let Ok(data) = client.serialize_packet(&armor) {
+                                    client.try_enqueue_packet(data);
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            if !equipment_list.is_empty() {
-                let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
-                    .iter()
-                    .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
-                    .collect();
-                let packet = CSetEquipment::new(self.entity_id.into(), equipment);
-                if let ClientPlatform::Java(client) = player.client.as_ref()
-                    && let Ok(data) = client.serialize_packet(&packet)
-                {
-                    client.try_enqueue_packet(data);
+
+            if let Ok(effects_guard) = living.active_effects.try_lock() {
+                for effect in effects_guard.values() {
+                    match player.client.as_ref() {
+                        ClientPlatform::Java(client) => {
+                            let mut flags: i8 = 0;
+                            if effect.ambient {
+                                flags |= 0x01;
+                            }
+                            if effect.show_particles {
+                                flags |= 0x02;
+                            }
+                            if effect.show_icon {
+                                flags |= 0x04;
+                            }
+                            let pkt = pumpkin_protocol::java::client::play::CUpdateMobEffect::new(
+                                self.entity_id.into(),
+                                i32::from(effect.effect_type.id).into(),
+                                i32::from(effect.amplifier).into(),
+                                effect.duration.into(),
+                                flags,
+                            );
+                            if let Ok(data) = client.serialize_packet(&pkt) {
+                                client.try_enqueue_packet(data);
+                            }
+                        }
+                        ClientPlatform::Bedrock(client) => {
+                            let pkt = pumpkin_protocol::bedrock::client::CMobEffect {
+                                target_runtime_id: (self.entity_id as u64).into(),
+                                event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+                                effect_id: effect.effect_type.to_bedrock_id().into(),
+                                effect_amplifier: i32::from(effect.amplifier).into(),
+                                show_particles: effect.show_particles,
+                                effect_duration_ticks: effect.duration.into(),
+                                tick: 0u64.into(),
+                                ambient: effect.ambient,
+                            };
+                            if let Ok(data) = client.serialize_packet(&pkt) {
+                                client.try_enqueue_packet(data);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -580,15 +716,34 @@ impl TrackedEntity {
         if let Ok(passengers) = self.entity.get_entity().passengers.try_lock()
             && !passengers.is_empty()
         {
-            let passenger_ids: Vec<VarInt> = passengers
-                .iter()
-                .map(|p| VarInt(p.get_entity().entity_id))
-                .collect();
-            let packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
-            if let ClientPlatform::Java(client) = player.client.as_ref()
-                && let Ok(data) = client.serialize_packet(&packet)
-            {
-                client.try_enqueue_packet(data);
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => {
+                    let passenger_ids: Vec<VarInt> = passengers
+                        .iter()
+                        .map(|p| VarInt(p.get_entity().entity_id))
+                        .collect();
+                    let packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+                    if let Ok(data) = client.serialize_packet(&packet) {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+                ClientPlatform::Bedrock(client) => {
+                    for (idx, p) in passengers.iter().enumerate() {
+                        let link = pumpkin_protocol::bedrock::client::CSetActorLink {
+                            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                                ridden_unique_id: i64::from(self.entity_id).into(),
+                                rider_unique_id: i64::from(p.get_entity().entity_id).into(),
+                                link_type: if idx == 0 { 1 } else { 2 },
+                                immediate: true,
+                                rider_initiated: false,
+                                vehicle_angular_velocity: 0.0,
+                            },
+                        };
+                        if let Ok(data) = client.serialize_packet(&link) {
+                            client.try_enqueue_packet(data);
+                        }
+                    }
+                }
             }
         }
 
@@ -596,16 +751,38 @@ impl TrackedEntity {
             && let Some(vehicle) = vehicle_guard.as_ref()
             && let Ok(vehicle_passengers) = vehicle.get_entity().passengers.try_lock()
         {
-            let passenger_ids: Vec<VarInt> = vehicle_passengers
-                .iter()
-                .map(|p| VarInt(p.get_entity().entity_id))
-                .collect();
-            let packet =
-                CSetPassengers::new(VarInt(vehicle.get_entity().entity_id), &passenger_ids);
-            if let ClientPlatform::Java(client) = player.client.as_ref()
-                && let Ok(data) = client.serialize_packet(&packet)
-            {
-                client.try_enqueue_packet(data);
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => {
+                    let passenger_ids: Vec<VarInt> = vehicle_passengers
+                        .iter()
+                        .map(|p| VarInt(p.get_entity().entity_id))
+                        .collect();
+                    let packet =
+                        CSetPassengers::new(VarInt(vehicle.get_entity().entity_id), &passenger_ids);
+                    if let Ok(data) = client.serialize_packet(&packet) {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+                ClientPlatform::Bedrock(client) => {
+                    let vehicle_id = vehicle.get_entity().entity_id;
+                    for (idx, p) in vehicle_passengers.iter().enumerate() {
+                        if p.get_entity().entity_id == self.entity_id {
+                            let link = pumpkin_protocol::bedrock::client::CSetActorLink {
+                                link: pumpkin_protocol::bedrock::client::common::ActorLink {
+                                    ridden_unique_id: i64::from(vehicle_id).into(),
+                                    rider_unique_id: i64::from(self.entity_id).into(),
+                                    link_type: if idx == 0 { 1 } else { 2 },
+                                    immediate: true,
+                                    rider_initiated: false,
+                                    vehicle_angular_velocity: 0.0,
+                                },
+                            };
+                            if let Ok(data) = client.serialize_packet(&link) {
+                                client.try_enqueue_packet(data);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -949,12 +1126,7 @@ impl EntityTracker {
     }
 
     pub fn update_player_position(&self, player: &Arc<Player>, world: &World) {
-        let pos = player.get_entity().pos.load();
-        let new_pos = Vector3::new(
-            get_section_cord(pos.x.floor() as i32),
-            get_section_cord(pos.y.floor() as i32),
-            get_section_cord(pos.z.floor() as i32),
-        );
+        let new_pos = chunk_section_from_pos(&player.get_entity().block_pos.load());
         if let Some(tracked) = self.entity_map.get(&player.get_entity().entity_id) {
             tracked.last_section_pos.store(new_pos);
         }
@@ -970,12 +1142,7 @@ impl EntityTracker {
 
     pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
         if let Some(tracked) = self.entity_map.get(&entity.get_entity().entity_id) {
-            let pos = entity.get_entity().pos.load();
-            let new_pos = Vector3::new(
-                get_section_cord(pos.x.floor() as i32),
-                get_section_cord(pos.y.floor() as i32),
-                get_section_cord(pos.z.floor() as i32),
-            );
+            let new_pos = chunk_section_from_pos(&entity.get_entity().block_pos.load());
             tracked.last_section_pos.store(new_pos);
             let players = world.players.load();
             tracked.update_players(players.as_ref(), world);
@@ -988,12 +1155,7 @@ impl EntityTracker {
 
         for entry in &self.entity_map {
             let tracked = entry.value();
-            let pos = tracked.entity.get_entity().pos.load();
-            let new_pos = Vector3::new(
-                get_section_cord(pos.x.floor() as i32),
-                get_section_cord(pos.y.floor() as i32),
-                get_section_cord(pos.z.floor() as i32),
-            );
+            let new_pos = chunk_section_from_pos(&tracked.entity.get_entity().block_pos.load());
             let old_pos = tracked.last_section_pos.load();
             if old_pos != new_pos {
                 tracked.update_players(players.as_ref(), world);
