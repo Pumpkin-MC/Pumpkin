@@ -817,6 +817,9 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
 }
 
 impl Player {
+    pub const FULL_SLEEP_TICKS: u8 = 100;
+    pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
+
     pub async fn fetch_skin(
         properties: &[Property],
     ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
@@ -2631,8 +2634,13 @@ impl Player {
             &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
         );
 
-        self.sleeping_since.store(None);
+        self.sleeping_since.store(Some(Self::FULL_SLEEP_TICKS));
         self.sleeping_bed_pos.store(None);
+    }
+
+    #[must_use]
+    pub fn get_sleep_timer(&self) -> u8 {
+        self.sleeping_since.load().unwrap_or(0)
     }
 
     pub fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -3242,10 +3250,19 @@ impl Player {
             .entity
             .tick_count
             .fetch_add(1, Ordering::Relaxed);
-        if let Some(sleeping_since) = self.sleeping_since.load()
-            && sleeping_since < 101
-        {
-            self.sleeping_since.store(Some(sleeping_since + 1));
+        if let Some(sleeping_since) = self.sleeping_since.load() {
+            if self.is_sleeping() {
+                self.sleeping_since.store(Some(
+                    sleeping_since.saturating_add(1).min(Self::FULL_SLEEP_TICKS),
+                ));
+            } else if sleeping_since > 0
+                && sleeping_since.saturating_add(1) < Self::SLEEP_TIMER_RESET_TICKS
+            {
+                self.sleeping_since
+                    .store(Some(sleeping_since.saturating_add(1)));
+            } else {
+                self.sleeping_since.store(None);
+            }
         }
 
         if self.mining.load(Ordering::Relaxed)

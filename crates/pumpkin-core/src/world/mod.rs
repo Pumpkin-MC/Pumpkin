@@ -201,6 +201,7 @@ use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
+pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -4509,10 +4510,7 @@ impl World {
         let sleeping_player_count = eligible_players
             .iter()
             .filter(|player| {
-                player
-                    .sleeping_since
-                    .load()
-                    .is_some_and(|since| since >= 100)
+                player.is_sleeping() && player.get_sleep_timer() >= Player::FULL_SLEEP_TICKS
             })
             .count();
         drop(players);
@@ -5866,6 +5864,12 @@ impl World {
     pub fn get_moon_phase(&self) -> MoonPhase {
         self.environment_attributes()
             .get_dimension_value_moon_phase()
+    }
+
+    #[must_use]
+    pub fn get_moon_brightness(&self, pos: &BlockPos) -> f32 {
+        let moon_phase = self.environment_attributes().get_value_moon_phase(pos);
+        MOON_BRIGHTNESS_PER_PHASE[usize::from(moon_phase.index())]
     }
 
     #[must_use]
