@@ -1631,6 +1631,11 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    /// Extra check a random teleport target must pass for this mob.
+    fn can_randomly_teleport_to(&self, _x: f64, _y: f64, _z: f64) -> bool {
+        true
+    }
+
     /// Whether a projectile that starts inside this mob's box still hits it.
     fn can_be_picked_from_inside(&self) -> bool {
         true

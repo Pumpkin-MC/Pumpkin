@@ -737,7 +737,7 @@ impl CatRelaxOnOwnerGoal {
         );
         cat.mob_entity
             .living_entity
-            .random_teleport(target, false, |block| {
+            .random_teleport(cat, target, false, |block| {
                 block.has_tag(&tag::Block::MINECRAFT_CAT_DOES_NOT_TELEPORT_TO)
             });
         let cat_pos = entity.block_pos.load();

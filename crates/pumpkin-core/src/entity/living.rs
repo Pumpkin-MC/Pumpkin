@@ -4549,57 +4549,87 @@ impl LivingEntity {
         }
     }
 
+    /// Teleports to the first standable block at or below the target, when the spot is free.
     pub fn random_teleport(
         &self,
+        caller: &dyn EntityBase,
         target: Vector3<f64>,
         show_particles: bool,
         is_invalid: impl Fn(&pumpkin_data::Block) -> bool,
     ) -> bool {
-        let world = self.entity.world.load_full();
+        let entity = &self.entity;
+        let world = entity.world.load_full();
         let (x, z) = world
             .worldborder
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clamp_to_bound(target.x, target.z);
-        let mut y = target.y;
-        let mut pos = BlockPos::floored(x, y, z);
-        if world.get_block_state_if_loaded(&pos).is_none() {
+        let block_x = x.floor() as i32;
+        let block_z = z.floor() as i32;
+        let min_y = world.dimension.min_y;
+        let mut block_y = target.y.floor() as i32;
+        let column_pos = BlockPos::new(
+            block_x,
+            block_y.clamp(min_y, min_y + world.dimension.height - 1),
+            block_z,
+        );
+        if !world.is_loaded(&column_pos) {
             return false;
         }
-        while pos.0.y > world.get_bottom_y() {
-            pos = pos.down();
-            let block = world.get_block(&pos);
+
+        // Walks down to the first block an entity can stand on, keeping the fractional Y.
+        let mut y = target.y;
+        let ground = loop {
+            if block_y <= min_y {
+                return false;
+            }
+            block_y -= 1;
+            let block = world.get_block(&BlockPos::new(block_x, block_y, block_z));
             if block.has_tag(&tag::Block::MINECRAFT_ENTITIES_CAN_TELEPORT_TO) {
-                if is_invalid(block) {
-                    return false;
-                }
-                let dimensions = self.entity.entity_dimension.load();
-                let bounding_box = BoundingBox::new_from_pos(x, y, z, &dimensions);
-                if !world.is_space_empty(bounding_box)
-                    || !world.no_entity_collision(self, bounding_box)
-                    || world.contains_any_liquid(bounding_box)
-                {
-                    return false;
-                }
-                if BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
-                    .any(|block_pos| is_invalid(world.get_block(&block_pos)))
-                {
-                    return false;
-                }
-                self.entity
-                    .teleport(Vector3::new(x, y, z), None, None, &world);
-                if show_particles {
-                    world.send_entity_status(
-                        &self.entity,
-                        EntityStatus::Teleport,
-                        ActorEventID::None,
-                    );
-                }
-                return true;
+                break block;
             }
             y -= 1.0;
+        };
+        if is_invalid(ground) {
+            return false;
         }
-        false
+        let bounding_box = BoundingBox::new_from_pos(x, y, z, &entity.entity_dimension.load());
+        if !world.is_space_empty(bounding_box)
+            || !world.no_entity_collision(caller, bounding_box)
+            || world.contains_any_liquid(bounding_box)
+            || BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+                .any(|pos| is_invalid(world.get_block(&pos)))
+        {
+            return false;
+        }
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.can_randomly_teleport_to(x, y, z))
+        {
+            return false;
+        }
+
+        let new_pos = Vector3::new(x, y, z);
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
+                    entity.entity_id,
+                    entity.pos.load(),
+                    new_pos,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+        entity.teleport(new_pos, None, None, &world);
+        if show_particles {
+            world.send_entity_status(entity, EntityStatus::Teleport, ActorEventID::None);
+        }
+        if let Some(mob) = caller.get_mob() {
+            mob.get_mob_entity().steered().navigator().stop();
+        }
+        true
     }
 
     fn find_random_teleport_target(&self, diameter: f32) -> Option<Vector3<f64>> {
