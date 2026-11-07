@@ -116,6 +116,19 @@ pub struct LevelData {
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(skip_serializing, default)]
     pub weather_phases: Vec<data_files::SavedWeatherPhase>,
+    /// Persisted to `data/minecraft/wandering_trader.dat`.
+    #[serde(
+        rename = "WanderingTraderSpawnDelay",
+        skip_serializing,
+        default = "data_files::default_wandering_trader_delay"
+    )]
+    pub wandering_trader_spawn_delay: i32,
+    #[serde(
+        rename = "WanderingTraderSpawnChance",
+        skip_serializing,
+        default = "data_files::default_wandering_trader_chance"
+    )]
+    pub wandering_trader_spawn_chance: i32,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -580,6 +593,8 @@ impl LevelData {
             thundering: false,
             thunder_time: 0,
             weather_phases: Vec::new(),
+            wandering_trader_spawn_delay: data_files::DEFAULT_WANDERING_TRADER_SPAWN_DELAY,
+            wandering_trader_spawn_chance: data_files::DEFAULT_WANDERING_TRADER_SPAWN_CHANCE,
         }
     }
 

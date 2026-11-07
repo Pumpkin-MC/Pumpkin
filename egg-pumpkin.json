@@ -10,7 +10,6 @@
     "description": "Pumpkin is a Minecraft server built entirely in Rust, offering a fast, efficient, and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.",
     "features": null,
     "docker_images": {
-        "Alpine": "ghcr.io\/pterodactyl\/yolks:alpine",
         "Debian": "ghcr.io\/pterodactyl\/yolks:debian"
     },
     "file_denylist": [],
@@ -23,9 +22,9 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!\/bin\/ash\r\nset -eux\r\n\r\napk add --no-cache curl jq\r\nmkdir -p \/mnt\/server\r\ncd \/mnt\/server\r\n\r\nARCH=$(uname -m)\r\ncase \"$ARCH\" in\r\n    x86_64|amd64)\r\n        PUMPKIN_ARCH=\"X64\"\r\n        ;;\r\n    aarch64|arm64)\r\n        PUMPKIN_ARCH=\"ARM64\"\r\n        ;;\r\n    *)\r\n        echo \"Unsupported architecture: $ARCH\"\r\n        exit 1\r\n        ;;\r\nesac\r\n\r\nBINARY_NAME=\"pumpkin-${PUMPKIN_ARCH}-Linux-musl\"\r\n\r\nif [ -n \"${DOWNLOAD_URL:-}\" ]; then\r\n    URL=\"$DOWNLOAD_URL\"\r\nelif [ \"${VERSION:-nightly}\" = \"latest\" ] || [ \"${VERSION:-nightly}\" = \"nightly\" ]; then\r\n    URL=\"https:\/\/github.com\/${GITHUB_PACKAGE:-Pumpkin-MC\/Pumpkin}\/releases\/download\/nightly\/${BINARY_NAME}\"\r\nelse\r\n    URL=\"https:\/\/github.com\/${GITHUB_PACKAGE:-Pumpkin-MC\/Pumpkin}\/releases\/download\/${VERSION}\/${BINARY_NAME}\"\r\nfi\r\n\r\necho \"Downloading Pumpkin from: $URL\"\r\ncurl -fsSL \"$URL\" -o \/mnt\/server\/pumpkin\r\nchmod +x \/mnt\/server\/pumpkin\r\n\r\n# Quickly start and kill server to generate initial configuration if not present\r\nif [ ! -f \/mnt\/server\/pumpkin.toml ]; then\r\n    timeout 2 .\/pumpkin || true\r\nfi",
-            "container": "ghcr.io\/pterodactyl\/installers:alpine",
-            "entrypoint": "ash"
+            "script": "#!\/bin\/bash\r\nset -eux\r\n\r\napt-get update\r\napt-get install -y --no-install-recommends curl ca-certificates\r\nmkdir -p \/mnt\/server\r\ncd \/mnt\/server\r\n\r\nARCH=$(uname -m)\r\ncase \"$ARCH\" in\r\n    x86_64|amd64)\r\n        PUMPKIN_ARCH=\"X64\"\r\n        ;;\r\n    aarch64|arm64)\r\n        PUMPKIN_ARCH=\"ARM64\"\r\n        ;;\r\n    *)\r\n        echo \"Unsupported architecture: $ARCH\"\r\n        exit 1\r\n        ;;\r\nesac\r\n\r\nBINARY_NAME=\"pumpkin-${PUMPKIN_ARCH}-Linux\"\r\n\r\nif [ -n \"${DOWNLOAD_URL:-}\" ]; then\r\n    URL=\"$DOWNLOAD_URL\"\r\nelif [ \"${VERSION:-nightly}\" = \"latest\" ] || [ \"${VERSION:-nightly}\" = \"nightly\" ]; then\r\n    URL=\"https:\/\/github.com\/${GITHUB_PACKAGE:-Pumpkin-MC\/Pumpkin}\/releases\/download\/nightly\/${BINARY_NAME}\"\r\nelse\r\n    URL=\"https:\/\/github.com\/${GITHUB_PACKAGE:-Pumpkin-MC\/Pumpkin}\/releases\/download\/${VERSION}\/${BINARY_NAME}\"\r\nfi\r\n\r\necho \"Downloading Pumpkin from: $URL\"\r\ncurl -fsSL \"$URL\" -o \/mnt\/server\/pumpkin\r\nchmod +x \/mnt\/server\/pumpkin\r\n\r\n# Quickly start and kill server to generate initial configuration if not present\r\nif [ ! -f \/mnt\/server\/pumpkin.toml ]; then\r\n    timeout 2 .\/pumpkin || true\r\nfi",
+            "container": "ghcr.io\/pterodactyl\/installers:debian",
+            "entrypoint": "bash"
         }
     },
     "variables": [

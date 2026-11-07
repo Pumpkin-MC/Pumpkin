@@ -1,9 +1,10 @@
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
+    atomic::{AtomicBool, AtomicI64, Ordering},
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EquipmentSlot, PotionContentsImpl};
 use pumpkin_data::entity::{EntityStatus, EntityType};
@@ -11,6 +12,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::{
     Hand,
     math::{position::BlockPos, vector3::Vector3},
@@ -42,7 +44,6 @@ mod vibration;
 
 const DUPLICATION_COOLDOWN_TICKS: i64 = 6000;
 const ITEM_PICKUP_REACH: Vector3<f64> = Vector3::new(1.0, 1.0, 1.0);
-const AMBIENT_SOUND_INTERVAL: i32 = 80;
 const THROW_SOUND_PITCHES: &[f32] = &[
     0.5625, 0.625, 0.75, 0.9375, 1.0, 1.0, 1.125, 1.25, 1.5, 1.875, 2.0, 2.25, 2.5, 3.0, 3.75, 4.0,
 ];
@@ -54,7 +55,6 @@ pub struct AllayEntity {
     inventory: Mutex<ItemStack>,
     jukebox_pos: AtomicCell<Option<BlockPos>>,
     vibration: Mutex<vibration::VibrationData>,
-    ambient_sound_time: AtomicI32,
     noteblock_chunk: Mutex<Option<chunk_loading::NoteBlockChunk>>,
 }
 
@@ -81,7 +81,6 @@ impl AllayEntity {
             inventory: Mutex::new(ItemStack::EMPTY.clone()),
             jukebox_pos: AtomicCell::new(None),
             vibration: Mutex::new(vibration::VibrationData::default()),
-            ambient_sound_time: AtomicI32::new(0),
             noteblock_chunk: Mutex::new(None),
         })
     }
@@ -183,66 +182,6 @@ impl AllayEntity {
             );
             stack.decrement(count);
             stored.increment(count);
-        }
-    }
-
-    fn pick_up_items(&self) {
-        if self.mob_entity.living_entity.is_dead_or_dying() || !self.can_pick_up_loot(None) {
-            return;
-        }
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let area = entity.bounding_box.load().expand(
-            ITEM_PICKUP_REACH.x,
-            ITEM_PICKUP_REACH.y,
-            ITEM_PICKUP_REACH.z,
-        );
-        for other in world.get_entities_at_box(&area) {
-            let Some(item) = other.cast_any().downcast_ref::<ItemEntity>() else {
-                continue;
-            };
-            if item.get_pickup_delay() != 0 || item.get_entity().is_removed() {
-                continue;
-            }
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if !self.wants_to_pick_up(&stack) {
-                continue;
-            }
-            let count = {
-                let stored = self
-                    .inventory
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                stack.item_count.min(if stored.is_empty() {
-                    stack.get_max_stack_size()
-                } else {
-                    stored.get_max_stack_size() - stored.item_count
-                })
-            };
-            if count == 0
-                || !self
-                    .mob_entity
-                    .living_entity
-                    .pickup(item.get_entity(), u32::from(count))
-            {
-                continue;
-            }
-            let mut ground = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.add_item(&mut ground);
-            let empty = ground.is_empty();
-            drop(ground);
-            if empty {
-                item.get_entity().remove();
-            } else {
-                item.init_data_tracker();
-            }
         }
     }
 
@@ -350,7 +289,11 @@ impl AllayEntity {
             && stack.item.has_tag(&tag::Item::MINECRAFT_DUPLICATES_ALLAYS)
         {
             self.duplicate_allay();
-            world.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+            world.send_entity_status(
+                entity,
+                EntityStatus::InLoveHearts,
+                ActorEventID::InLoveHearts,
+            );
             sound = Sound::BlockAmethystBlockChime;
             stack.decrement_unless_creative(player.gamemode.load(), 1);
         } else if self.sample().is_empty() && !stack.is_empty() {
@@ -413,13 +356,20 @@ impl CustomSound for AllayEntity {
     fn sound_category(&self) -> SoundCategory {
         SoundCategory::Neutral
     }
-    fn on_hurt_sound(&self) {
-        self.ambient_sound_time
-            .store(-AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
-    }
 }
 
 impl Mob for AllayEntity {
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
+    fn mob_is_flapping(&self) -> bool {
+        !self.get_entity().on_ground.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `Allay` steps silently.
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -428,29 +378,12 @@ impl Mob for AllayEntity {
         Some(self)
     }
 
-    fn base_tick(&self) {
-        if !self.mob_entity.living_entity.is_dead_or_dying()
-            && self.get_random().random_range(0..1000)
-                < self.ambient_sound_time.fetch_add(1, Ordering::Relaxed)
-        {
-            self.ambient_sound_time
-                .store(-AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
-            let entity = self.get_entity();
-            if !entity.is_silent() {
-                let sound = if self.sample().is_empty() {
-                    Sound::EntityAllayAmbientWithoutItem
-                } else {
-                    Sound::EntityAllayAmbientWithItem
-                };
-                entity.world.load().play_sound_fine(
-                    sound,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                    self.sound_volume(),
-                    self.mob_entity.living_entity.get_pitch(),
-                );
-            }
-        }
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(if self.sample().is_empty() {
+            Sound::EntityAllayAmbientWithoutItem
+        } else {
+            Sound::EntityAllayAmbientWithItem
+        })
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
@@ -562,9 +495,49 @@ impl Mob for AllayEntity {
             && Self::considers_item_equal(&sample, stack)
     }
 
+    fn get_pickup_reach(&self) -> Vector3<f64> {
+        ITEM_PICKUP_REACH
+    }
+
+    fn pick_up_item(&self, item: &ItemEntity) {
+        let stack = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let count = {
+            let stored = self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            stack.item_count.min(if stored.is_empty() {
+                stack.get_max_stack_size()
+            } else {
+                stored.get_max_stack_size() - stored.item_count
+            })
+        };
+        let living = &self.mob_entity.living_entity;
+        if count == 0 || !living.pickup(item.get_entity(), u32::from(count)) {
+            return;
+        }
+        living.on_item_pickup(item);
+        let empty = {
+            let mut ground = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.add_item(&mut ground);
+            ground.is_empty()
+        };
+        if empty {
+            item.get_entity().remove();
+        } else {
+            item.init_data_tracker();
+        }
+    }
+
     fn post_tick(&self) {
         self.finish_noteblock_chunk();
-        self.pick_up_items();
         let entity = self.get_entity();
         let tick = entity.tick_count.load(Ordering::Relaxed);
         if !self.mob_entity.living_entity.is_dead_or_dying() && tick % 10 == 0 {
@@ -813,7 +786,7 @@ mod tests {
         ));
         item.set_pickup_delay(0);
         world.add_entity_silent(item.clone());
-        allay.pick_up_items();
+        crate::entity::mob::pick_up_nearby_items(allay.as_ref());
         assert_eq!(
             allay
                 .inventory
@@ -836,7 +809,7 @@ mod tests {
         allay.mob_entity.with_brain(allay.as_ref(), |brain| {
             brain.set(types::ITEM_PICKUP_COOLDOWN_TICKS, 60);
         });
-        allay.pick_up_items();
+        crate::entity::mob::pick_up_nearby_items(allay.as_ref());
         assert!(
             allay
                 .inventory

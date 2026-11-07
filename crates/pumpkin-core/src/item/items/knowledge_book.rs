@@ -21,29 +21,13 @@ impl ItemMetadata for KnowledgeBookItem {
 }
 
 fn dynamic_recipe_id(recipe: &DynamicRecipe) -> &str {
-    match recipe {
-        DynamicRecipe::Crafting(crafting) => match crafting {
-            pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped {
-                recipe_id,
-                result,
-                ..
-            }
-            | pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless {
-                recipe_id,
-                result,
-                ..
-            } => recipe_id.as_deref().unwrap_or(&result.item_id),
-        },
-        DynamicRecipe::Cooking(cooking) => match cooking {
-            pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Smelting(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Blasting(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::Smoking(r)
-            | pumpkin_protocol::codec::recipe::OwnedCookingRecipeType::CampfireCooking(r) => {
-                &r.recipe_id
-            }
-        },
-        DynamicRecipe::Brewing(brewing) => &brewing.recipe_id,
-    }
+    recipe.recipe_id().unwrap_or_else(|| match recipe {
+        DynamicRecipe::Crafting(
+            pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped { result, .. }
+            | pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless { result, .. },
+        ) => &result.item_id,
+        _ => "",
+    })
 }
 
 impl ItemBehaviour for KnowledgeBookItem {

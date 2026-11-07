@@ -34,6 +34,9 @@ impl JavaClient {
             .or_else(|| world.get_entity_by_id(entity_id.0));
 
         if let Some(target) = target {
+            if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+                return;
+            }
             if player.gamemode.load() == GameMode::Spectator {
                 player.camera_target_id.store(Some(entity_id.0));
                 player.try_send_client_packet(&CSetCamera::new(entity_id));
@@ -119,7 +122,26 @@ impl JavaClient {
                             if !interacted {
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, event.target);
+                                    .use_on_entity(&mut stack, player, event.target.clone());
+                            }
+                            if interacted || !stack.are_equal(&before) {
+                                let is_baby =
+                                    event.target.get_entity().age.load(Ordering::Relaxed) < 0;
+                                let player_wearing_safe_armor =
+                                    crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(
+                                        &player.living_entity,
+                                    );
+                                player.trigger_advancement(
+                                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerInteractedWithEntity {
+                                        entity_type: format!(
+                                            "minecraft:{}",
+                                            event.target.get_entity().entity_type.resource_name
+                                        ),
+                                        item_id: before.item.registry_key.to_string(),
+                                        is_baby,
+                                        player_wearing_safe_armor,
+                                    },
+                                );
                             }
                             if native_interaction.is_none() && !stack.are_equal(&before) {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
@@ -132,7 +154,7 @@ impl JavaClient {
                                     player.world().send_entity_status(
                                         player.get_entity(),
                                         equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                        None,
+                                        ActorEventID::None,
                                     );
                                 }
                             }

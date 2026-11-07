@@ -1,5 +1,6 @@
 use pumpkin_data::item::Item;
 pub use pumpkin_data::villager::{VillagerProfession, VillagerType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use serde::Serialize;
 
@@ -26,6 +27,22 @@ pub enum GossipType {
     MinorPositive = 2,
     MajorPositive = 3,
     Trading = 4,
+}
+
+const NEXT_LEVEL_XP_THRESHOLDS: [i32; 5] = [0, 10, 70, 150, 250];
+
+#[must_use]
+pub const fn can_level_up(current_level: i32) -> bool {
+    current_level >= 1 && current_level < 5
+}
+
+#[must_use]
+pub const fn get_max_xp_per_level(level: i32) -> i32 {
+    if can_level_up(level) {
+        NEXT_LEVEL_XP_THRESHOLDS[level as usize]
+    } else {
+        0
+    }
 }
 
 impl GossipType {
@@ -81,6 +98,15 @@ impl GossipType {
             Self::MinorNegative => 200,
             Self::MajorPositive => 20,
             Self::MinorPositive | Self::Trading => 25,
+        }
+    }
+
+    #[must_use]
+    pub const fn decay_per_transfer(self) -> i32 {
+        match self {
+            Self::MajorNegative => 10,
+            Self::MinorPositive => 5,
+            Self::MinorNegative | Self::MajorPositive | Self::Trading => 20,
         }
     }
 
@@ -159,5 +185,39 @@ impl VillagerData {
     #[must_use]
     pub fn profession_enum(&self) -> VillagerProfession {
         VillagerProfession::from_i32(self.profession.0).unwrap_or(VillagerProfession::None)
+    }
+
+    #[must_use]
+    pub fn read_nbt(nbt: &NbtCompound, current: Self) -> Self {
+        let r#type = nbt
+            .get_string("type")
+            .and_then(VillagerType::from_name)
+            .or_else(|| nbt.get_int("Type").and_then(VillagerType::from_i32))
+            .unwrap_or_else(|| current.type_enum());
+        let profession = nbt
+            .get_string("profession")
+            .and_then(VillagerProfession::from_name)
+            .or_else(|| {
+                nbt.get_int("Profession")
+                    .and_then(VillagerProfession::from_i32)
+            })
+            .unwrap_or_else(|| current.profession_enum());
+        let level = nbt
+            .get_int("level")
+            .or_else(|| nbt.get_int("Level"))
+            .unwrap_or(current.level.0);
+        Self::new(r#type, profession, level)
+    }
+
+    #[must_use]
+    pub fn write_nbt(&self) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("type", format!("minecraft:{}", self.type_enum().to_name()));
+        nbt.put_string(
+            "profession",
+            format!("minecraft:{}", self.profession_enum().to_name()),
+        );
+        nbt.put_int("level", self.level.0);
+        nbt
     }
 }
