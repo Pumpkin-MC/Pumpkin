@@ -1,7 +1,7 @@
 use crate::plugin::WasmPlugin;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
-use std::sync::atomic::Ordering as AtomicOrdering;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex, Weak};
 
 pub type TaskId = u32;
@@ -12,6 +12,9 @@ pub struct ScheduledTask {
     pub handler_id: u32,
     pub next_tick: u64,
     pub period: Option<u64>,
+    /// Set while a run of this task is still in flight. The tick waits only a bounded time for a
+    /// run, so a slow one can outlive it; further runs are skipped until it finishes.
+    pub running: Arc<AtomicBool>,
 }
 
 impl PartialEq for ScheduledTask {
@@ -80,6 +83,7 @@ impl TaskScheduler {
             handler_id,
             next_tick: current_tick + delay,
             period: None,
+            running: Arc::new(AtomicBool::new(false)),
         };
         self.tasks
             .lock()
@@ -110,6 +114,7 @@ impl TaskScheduler {
             handler_id,
             next_tick: current_tick + delay,
             period: Some(period),
+            running: Arc::new(AtomicBool::new(false)),
         };
         self.tasks
             .lock()
@@ -187,6 +192,21 @@ impl TaskScheduler {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         tasks_to_run.retain(|task| !Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin));
         tasks_to_run
+    }
+
+    /// Puts a due task back unchanged, for a tick that ran out of time before it could run it.
+    /// It keeps its due tick, so the next tick runs it before tasks that became due later.
+    pub fn defer(&self, task: ScheduledTask) {
+        let mut disabled_plugins = self
+            .disabled_plugins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin) {
+            self.tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(task);
+        }
     }
 
     /// Queues a repeating task for its next run, unless its plugin has been disabled in the meantime.
