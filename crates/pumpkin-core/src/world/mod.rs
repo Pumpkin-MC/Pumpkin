@@ -6297,7 +6297,7 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static Fluid {
+    pub(crate) const fn get_fluid_from_state_id(id: BlockStateId) -> &'static Fluid {
         Fluid::of_block_state(id)
     }
 

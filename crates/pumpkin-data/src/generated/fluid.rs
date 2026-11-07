@@ -29,7 +29,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(104u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.22222222f32,
@@ -39,7 +39,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(103u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.33333334f32,
@@ -49,7 +49,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(102u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.44444445f32,
@@ -59,7 +59,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(101u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.5555556f32,
@@ -69,7 +69,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(100u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.6666667f32,
@@ -79,7 +79,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(99u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.7777778f32,
@@ -89,7 +89,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(98u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.8888889f32,
@@ -99,7 +99,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(97u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.11111111f32,
@@ -223,7 +223,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(120u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.22222222f32,
@@ -233,7 +233,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(119u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.33333334f32,
@@ -243,7 +243,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(118u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.44444445f32,
@@ -253,7 +253,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(117u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.5555556f32,
@@ -263,7 +263,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(116u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.6666667f32,
@@ -273,7 +273,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(115u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.7777778f32,
@@ -283,7 +283,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(114u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.8888889f32,
@@ -293,7 +293,7 @@ impl Fluid {
                 block_state_id: BlockStateId::new(113u16).unwrap(),
                 is_still: false,
                 is_source: false,
-                falling: false,
+                falling: true,
             },
             FluidState {
                 height: 0.11111111f32,

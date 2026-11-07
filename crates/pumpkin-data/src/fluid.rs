@@ -1,5 +1,5 @@
+use crate::BlockStateId;
 use crate::tag::{RegistryKey, Taggable};
-use crate::{BlockId, BlockStateId};
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use std::hash::{Hash, Hasher};
 
@@ -114,11 +114,15 @@ impl Fluid {
     /// Vanilla `BlockState.getFluidState().getType()`.
     #[must_use]
     #[inline]
-    pub fn of_block_state(id: BlockStateId) -> &'static Self {
+    pub const fn of_block_state(id: BlockStateId) -> &'static Self {
+        // extractor IS_LIQUID: fluid state not empty
+        if !id.to_state().is_liquid() {
+            return &Self::EMPTY;
+        }
         match Self::from_state_id(id) {
             Some(fluid) => fluid,
-            None if holds_source_water(id) => &Self::WATER,
-            None => &Self::EMPTY,
+            // waterlogged, kelp, seagrass, bubble column
+            None => &Self::WATER,
         }
     }
 
@@ -127,21 +131,16 @@ impl Fluid {
     #[inline]
     pub fn fluid_state_of(id: BlockStateId) -> (&'static Self, FluidState) {
         let fluid = Self::of_block_state(id);
-        if fluid.id == Self::EMPTY.id {
-            return (&Self::EMPTY, Self::EMPTY.default_state().clone());
-        }
-        let flowing = Self::family_id(fluid.id) == fluid.id;
-        if flowing && let Some(mut props) = FlowingFluidProperties::from_state_id(id, fluid) {
+        let state = match FlowingFluidProperties::from_state_id(id, fluid) {
             // LiquidBlock.getFluidState: falling blocks hold amount 8
-            let falling = props.falling == Falling::True;
-            if falling {
-                props.level = Level::L8;
-            }
-            let mut state = fluid.states[props.row()].clone();
-            state.falling = falling;
-            return (fluid, state);
-        }
-        (fluid, fluid.default_state().clone())
+            Some(FlowingFluidProperties {
+                falling: Falling::True,
+                ..
+            }) => &fluid.states[FALLING_ROW],
+            Some(props) => &fluid.states[props.row()],
+            None => fluid.default_state(),
+        };
+        (fluid, state.clone())
     }
 
     #[must_use]
@@ -156,20 +155,6 @@ impl Fluid {
             .iter()
             .any(|state| state.block_state_id == state_id && state.is_source)
     }
-}
-
-/// Blocks holding source water without a `waterlogged` property.
-#[inline]
-fn holds_source_water(id: BlockStateId) -> bool {
-    id.is_waterlogged()
-        || matches!(
-            id.to_block_id(),
-            BlockId::KELP
-                | BlockId::KELP_PLANT
-                | BlockId::SEAGRASS
-                | BlockId::TALL_SEAGRASS
-                | BlockId::BUBBLE_COLUMN
-        )
 }
 
 impl ToResourceLocation for &'static Fluid {
@@ -260,19 +245,29 @@ pub struct FlowingFluidProperties {
     pub level: Level,
 }
 
+/// Rows of a flowing fluid: 8 levels, falling and not.
+const ROWS: usize = 16;
+/// Falling, amount 8.
+const FALLING_ROW: usize = Level::L8 as usize;
+
 impl FlowingFluidProperties {
     // flowing fluid rows: level + 8 * falling
     const fn row(self) -> usize {
         self.level as usize + 8 * self.falling as usize
     }
 
-    /// `None` if `id` is no state of `fluid`.
+    /// `None` if `id` is no flowing state of `fluid`.
     #[must_use]
-    pub fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Option<Self> {
-        let row = fluid
-            .states
-            .iter()
-            .position(|state| state.block_state_id == id)?;
+    #[inline]
+    pub const fn from_state_id(id: BlockStateId, fluid: &Fluid) -> Option<Self> {
+        // flowing rows: ids descend from row 0
+        let row = fluid.states[0]
+            .block_state_id
+            .as_u16()
+            .wrapping_sub(id.as_u16()) as usize;
+        if fluid.states.len() != ROWS || row >= ROWS {
+            return None;
+        }
         Some(Self {
             level: Level::ALL[row % 8],
             falling: if row < 8 {

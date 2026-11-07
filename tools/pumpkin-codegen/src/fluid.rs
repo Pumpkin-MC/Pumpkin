@@ -34,7 +34,7 @@ pub struct Fluid {
     states: Vec<FluidState>,
 }
 
-fn state_tokens(state: &FluidState) -> TokenStream {
+fn state_tokens(state: &FluidState, falling: bool) -> TokenStream {
     let FluidState {
         height,
         level,
@@ -43,7 +43,7 @@ fn state_tokens(state: &FluidState) -> TokenStream {
         block_state_id,
         is_still,
     } = state;
-    // is_source = is_still, falling never set by the extractor
+    // is_source = is_still
     quote! {
         FluidState {
             height: #height,
@@ -53,7 +53,7 @@ fn state_tokens(state: &FluidState) -> TokenStream {
             block_state_id: #block_state_id,
             is_still: #is_still,
             is_source: #is_still,
-            falling: false,
+            falling: #falling,
         }
     }
 }
@@ -98,13 +98,20 @@ pub fn build() -> TokenStream {
                 "{}",
                 fluid.name
             );
+            let first = fluid.states[0].block_state_id.0;
             for (row, state) in fluid.states.iter().enumerate() {
                 assert_eq!(state.level as usize, row % 8 + 1, "{}", fluid.name);
+                assert_eq!(state.block_state_id.0, first - row as u16, "{}", fluid.name);
             }
         }
+        let flowing = fluid.properties.len() == 2;
 
         let (id, name, default_state_index) = (fluid.id, &fluid.name, fluid.default_state_index);
-        let states = fluid.states.iter().map(state_tokens);
+        let states = fluid
+            .states
+            .iter()
+            .enumerate()
+            .map(|(row, state)| state_tokens(state, flowing && row < 8));
         constants.push(quote! {
             pub const #ident: Fluid = Fluid {
                 id: #id,
