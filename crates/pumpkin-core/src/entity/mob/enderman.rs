@@ -449,7 +449,8 @@ impl EndermanEntity {
             pos.z - player_pos.z,
         );
         let dist = dir.length();
-        if !(look.dot(&dir.normalize()) > 1.0 - STARE_CONE_SIZE / dist) {
+        let in_stare_cone = look.dot(&dir.normalize()) > 1.0 - STARE_CONE_SIZE / dist;
+        if !in_stare_cone {
             return false;
         }
 
