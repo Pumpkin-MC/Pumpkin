@@ -1612,9 +1612,13 @@ impl World {
         let players_cache: Vec<_> = players
             .par_iter()
             .map(|player| {
+                let _respawn_guard = player
+                    .respawn_lock
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let entity = player.get_entity();
                 let pos = entity.pos.load();
-                let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
+                let bb = player.pickup_bounding_box();
                 let chunk_pos = Vector2::new(
                     get_section_cord(pos.x.floor() as i32),
                     get_section_cord(pos.z.floor() as i32),
@@ -1746,7 +1750,17 @@ impl World {
                     && (player_pos.z - entity_pos.z).abs() < 5.0
                     && player_bb.intersects(&entity_bb)
                 {
-                    entity.on_player_collision(player);
+                    let _respawn_guard = player
+                        .respawn_lock
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    // Respawning can invalidate the position cached at the start of this tick.
+                    if player.living_entity.health.load() > 0.0
+                        && player.world().uuid == self.uuid
+                        && player.pickup_bounding_box().intersects(&entity_bb)
+                    {
+                        entity.on_player_collision(player);
+                    }
                 }
             }
         };
@@ -4418,22 +4432,26 @@ impl World {
             )
             .await;
 
-        player.living_entity.reset_state();
+        {
+            let _respawn_guard = player
+                .respawn_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !keep_inventory {
+                player.set_experience(0, 0.0, 0);
+                player.inventory.clear();
+            }
+
+            // Publish the respawn position before restoring health and allowing pickups.
+            player.get_entity().set_pos(position);
+            player.get_entity().set_rotation(yaw, pitch);
+            player.get_entity().last_pos.store(position);
+            player.living_entity.reset_state();
+        };
 
         player.send_permission_lvl_update();
 
         player.hunger_manager.restart();
-
-        if !keep_inventory {
-            player.set_experience(0, 0.0, 0);
-            player.inventory.clear();
-        }
-
-        // Set entity position BEFORE loading chunks, so chunks load at the right location
-        // This mirrors the initial spawn flow where update_position is called before teleport
-        player.get_entity().set_pos(position);
-        player.get_entity().set_rotation(yaw, pitch);
-        player.get_entity().last_pos.store(position);
 
         // TODO: difficulty, exp bar, status effect
 
