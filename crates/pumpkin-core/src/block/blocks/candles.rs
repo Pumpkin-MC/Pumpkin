@@ -12,7 +12,7 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{GetStateForNeighborUpdateArgs, can_support_center};
+use crate::block::{PlaceLiquidArgs, can_support_center};
 use crate::{
     block::{
         BlockIsReplacing,
@@ -25,7 +25,51 @@ use crate::{
 #[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
 
+impl CandleBlock {
+    fn extinguish(args: &PlaceLiquidArgs<'_>, mut properties: CandleLikeProperties) {
+        properties.lit = false;
+        args.world.set_block_state(
+            args.position,
+            properties.to_state_id(args.block),
+            BlockFlags::NOTIFY_ALL,
+        );
+        args.world.play_sound(
+            Sound::BlockCandleExtinguish,
+            SoundCategory::Blocks,
+            &args.position.to_f64(),
+        );
+        args.world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
+    }
+}
+
 impl BlockBehaviour for CandleBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        let mut properties = CandleLikeProperties::from_state_id(args.state_id);
+        if properties.waterlogged || args.fluid != &Fluid::WATER {
+            return false;
+        }
+        properties.waterlogged = true;
+        if properties.lit {
+            Self::extinguish(&args, properties);
+        } else {
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+        args.world.schedule_fluid_tick(
+            args.fluid,
+            *args.position,
+            args.fluid.flow_speed as u8,
+            TickPriority::Normal,
+        );
+        true
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let mut properties = CandleLikeProperties::from_state_id(state_id);
@@ -75,22 +119,6 @@ impl BlockBehaviour for CandleBlock {
         args.player.get_entity().pose.load() != EntityPose::Crouching
             && CandleLikeProperties::from_state_id(args.state_id).candles < 4
             && args.block.id == b.id
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let properties = CandleLikeProperties::from_state_id(args.state_id);
-        if properties.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 }
 

@@ -5,12 +5,10 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 
 type IronBarsProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
@@ -30,14 +28,6 @@ impl BlockBehaviour for IronBarsBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let bars_props = IronBarsProperties::from_state_id(args.state_id);
-        if bars_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         compute_bars_state(bars_props, args.world, args.block, args.position)
     }
 

@@ -1,20 +1,27 @@
-use pumpkin_data::block_properties::SlabType;
+use pumpkin_data::block_properties::{SlabProperties, SlabType};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::tick::TickPriority;
 
 use crate::block::{
-    BlockBehaviour, BlockIsReplacing, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    PathComputationType,
+    BlockBehaviour, BlockIsReplacing, CanPlaceLiquidArgs, CanUpdateAtArgs, OnPlaceArgs,
+    PathComputationType, PlaceLiquidArgs,
 };
-
-type SlabProperties = pumpkin_data::block_properties::WhiteWoolSlabLikeProperties;
 
 #[pumpkin_block_from_tag("minecraft:slabs")]
 pub struct SlabBlock;
 
 impl BlockBehaviour for SlabBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        SlabProperties::from_state_id(args.state_id).r#type != SlabType::Double
+            && crate::block::simple_waterlogged::place_liquid(args)
+    }
+
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        args.fluid == &Fluid::WATER
+            && SlabProperties::from_state_id(args.state_id).r#type != SlabType::Double
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id);
@@ -35,22 +42,6 @@ impl BlockBehaviour for SlabBlock {
         };
 
         slab_props.to_state_id(args.block)
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let slab_props = SlabProperties::from_state_id(args.state_id);
-        if slab_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {

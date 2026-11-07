@@ -1,8 +1,6 @@
 use pumpkin_data::{
-    BlockDirection, BlockId, BlockStateId, block_properties::MangroveRootsLikeProperties,
-    fluid::Fluid, tag,
+    BlockDirection, BlockId, BlockStateId, block_properties::MangroveRootsLikeProperties, tag,
 };
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
@@ -59,30 +57,30 @@ impl BlockBehaviour for CoralPlantBlock {
         support_block.is_side_solid(BlockDirection::Up)
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let is_dead = is_dead_coral(args.block);
+        if is_dead {
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
+        }
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down());
             if !support_block.is_side_solid(BlockDirection::Up) {
                 return BlockStateId::AIR;
             }
         }
-        let props = CoralPlantLikeProperties::from_state_id(args.state_id);
-        if !is_dead_coral(args.block)
-            && !props.waterlogged
-            && !scan_for_water(args.world, args.position)
-        {
-            try_schedule_die_tick(args.block, args.world, args.position);
+        if !is_dead {
+            crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
+        let props = CoralPlantLikeProperties::from_state_id(args.state_id);
+        if !is_dead && !props.waterlogged && !scan_for_water(args.world, args.position) {
+            try_schedule_die_tick(args.block, args.world, args.position);
         }
         args.state_id
     }

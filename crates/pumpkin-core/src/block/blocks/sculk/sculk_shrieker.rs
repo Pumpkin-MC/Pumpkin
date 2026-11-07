@@ -3,8 +3,7 @@ use std::sync::atomic::Ordering;
 
 use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityStepArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PlacedArgs,
+    BlockBehaviour, BlockMetadata, OnEntityStepArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::Entity;
 use crate::entity::mob::warden::WardenEntity;
@@ -16,7 +15,6 @@ use pumpkin_data::{
     Block, BlockId, BlockStateId,
     block_properties::SculkShriekerLikeProperties,
     entity::EntityType,
-    fluid::Fluid,
     game_event::GameEvent,
     sound::{Sound, SoundCategory},
     world::WorldEvent,
@@ -206,22 +204,6 @@ impl BlockBehaviour for SculkShriekerBlock {
                 );
             }
         }
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = SculkShriekerLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {

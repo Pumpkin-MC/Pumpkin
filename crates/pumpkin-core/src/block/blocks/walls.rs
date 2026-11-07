@@ -8,12 +8,10 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::NorthWall;
 use pumpkin_data::block_properties::SouthWall;
 use pumpkin_data::block_properties::WestWall;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
@@ -35,14 +33,6 @@ impl BlockBehaviour for WallBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let wall_props = WallProperties::from_state_id(args.state_id);
-        if wall_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         compute_wall_state(wall_props, args.world, args.block, args.position)
     }
 

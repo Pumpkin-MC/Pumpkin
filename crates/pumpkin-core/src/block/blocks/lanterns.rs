@@ -5,11 +5,9 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use pumpkin_data::block_properties::{Facing, LanternLikeProperties};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 
 #[pumpkin_block_from_tag("minecraft:lanterns")]
@@ -58,14 +56,6 @@ impl BlockBehaviour for LanternBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let props = LanternLikeProperties::from_state_id(args.state_id);
-        if props.r#waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         let support_dir = if props.r#hanging {
             BlockDirection::Up
         } else {

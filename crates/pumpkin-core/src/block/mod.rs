@@ -1,3 +1,5 @@
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
@@ -15,6 +17,7 @@ pub mod blocks;
 pub mod entities;
 pub mod fluid;
 pub mod registry;
+pub(crate) mod simple_waterlogged;
 pub mod viewer;
 
 use crate::block::registry::BlockActionResult;
@@ -131,6 +134,31 @@ pub trait BlockBehaviour: Send + Sync {
         false
     }
 
+    /// Marks liquid containers without a waterlogged property, such as kelp.
+    fn is_liquid_block_container(&self) -> bool {
+        false
+    }
+
+    /// Checks whether this container permits the fluid, without changing the world.
+    fn can_place_liquid(&self, args: CanPlaceLiquidArgs<'_>) -> bool {
+        simple_waterlogged::can_place_liquid(args)
+    }
+
+    /// Attempts to fill this container, applying its state changes and effects.
+    /// Bucket use may still succeed when this returns false.
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        simple_waterlogged::place_liquid(args)
+    }
+
+    /// Removes contained water if permitted and returns the bucket item for the caller to give.
+    fn pickup_fluid(&self, args: PickupFluidArgs<'_>) -> Option<&'static Item> {
+        simple_waterlogged::pickup_fluid(args)
+    }
+
+    fn can_be_replaced_with_fluid(&self, state: &BlockState, _fluid: &Fluid) -> bool {
+        state.replaceable() || !state.is_solid()
+    }
+
     /// onBlockAdded in source code
     fn placed(&self, _args: PlacedArgs<'_>) {}
 
@@ -155,6 +183,12 @@ pub trait BlockBehaviour: Send + Sync {
 
     /// Called if a block state is replaced or it replaces another state
     fn prepare(&self, _args: PrepareArgs<'_>) {}
+
+    /// Returns whether this behaviour handles neighbor water ticks itself.
+    /// Override when scheduling must stay inside the neighbor callback to preserve ordering.
+    fn handles_neighbor_water_tick(&self) -> bool {
+        false
+    }
 
     fn get_state_for_neighbor_update(
         &self,
@@ -326,6 +360,31 @@ pub struct CanPlaceAtArgs<'a> {
     pub direction: Option<BlockDirection>,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
+}
+
+#[derive(Clone, Copy)]
+pub struct CanPlaceLiquidArgs<'a> {
+    pub player: Option<&'a Player>,
+    pub state_id: BlockStateId,
+    pub fluid: &'a Fluid,
+}
+
+#[derive(Clone, Copy)]
+pub struct PlaceLiquidArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub position: &'a BlockPos,
+    pub fluid: &'a Fluid,
+}
+
+#[derive(Clone, Copy)]
+pub struct PickupFluidArgs<'a> {
+    pub player: Option<&'a Player>,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub position: &'a BlockPos,
 }
 
 pub struct CanUpdateAtArgs<'a> {
