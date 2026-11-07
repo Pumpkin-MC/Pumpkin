@@ -29,15 +29,16 @@ pub fn tick(scheduler: &TaskScheduler, server: &Arc<Server>) {
     let deadline = Instant::now() + TASK_TICK_BUDGET;
     for task in scheduler.take_due_tasks(current_tick) {
         let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            scheduler.defer(task);
-            continue;
-        }
+        // A task whose previous run is still in flight skips this run either way, so check that
+        // first: deferring it would only make the skipped run happen late.
         if task.running.load(Ordering::Acquire) {
             tracing::debug!(
                 handler_id = task.handler_id,
                 "Skipping Wasm scheduled task run, the previous run is still in flight"
             );
+        } else if remaining.is_zero() {
+            scheduler.defer(task);
+            continue;
         } else {
             run_task(server, &task, remaining);
         }
