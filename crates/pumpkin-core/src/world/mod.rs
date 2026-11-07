@@ -4821,6 +4821,7 @@ impl World {
         if java_client
             .send_chunks(&[chunk])
             .await
+            .sent
             .contains(&center_chunk)
         {
             player

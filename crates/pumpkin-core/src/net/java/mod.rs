@@ -73,6 +73,7 @@ use arc_swap::ArcSwap;
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
+use crate::net::chunk_sender::{ChunkSendOutcome, DeliveryFailure};
 use crate::net::{
     ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
     decrement_pending_bytes,
@@ -333,63 +334,88 @@ impl JavaClient {
         }
     }
 
-    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
+    /// Queues the chunks and reports which were sent and why the others were not.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
+        let mut outcome = ChunkSendOutcome::default();
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
-            return Vec::new();
+            return outcome;
         };
         let Some(server) = player.world().server.upgrade() else {
-            return Vec::new();
+            return outcome;
         };
 
         let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
+        outcome.record_cancelled(chunks, &valid_chunks);
         if valid_chunks.is_empty() {
-            return Vec::new();
+            return outcome;
         }
+        let valid_positions: Vec<_> = valid_chunks
+            .iter()
+            .map(|chunk| Vector2::new(chunk.x, chunk.z))
+            .collect();
 
         let (tx, rx) = oneshot::channel();
         server.compute_pool.spawn(move || {
             let mut serialized = Vec::with_capacity(valid_chunks.len());
             for chunk in valid_chunks {
+                let pos = Vector2::new(chunk.x, chunk.z);
                 let mut buf = Vec::with_capacity(32 * 1024);
                 if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
                 {
                     error!("Failed to write chunk data id: {err:?}");
+                    serialized.push((pos, None));
                     continue;
                 }
                 if let Err(err) =
                     CChunkData(&chunk).write_packet_data(&mut buf, &CURRENT_MC_VERSION)
                 {
                     error!("Failed to write chunk data: {err:?}");
+                    serialized.push((pos, None));
                     continue;
                 }
-                serialized.push((Vector2::new(chunk.x, chunk.z), Bytes::from(buf)));
+                serialized.push((pos, Some(Bytes::from(buf))));
             }
             let _ = tx.send(serialized);
         });
 
         let Ok(serialized) = rx.await else {
-            return Vec::new();
+            // Encoding task died -> counts as an encode failure for every chunk
+            outcome.failed.extend(
+                valid_positions
+                    .into_iter()
+                    .map(|pos| (pos, DeliveryFailure::Unencodable)),
+            );
+            return outcome;
         };
-        if serialized.is_empty() {
-            return Vec::new();
+        if serialized.iter().all(|(_, data)| data.is_none()) {
+            outcome.failed.extend(
+                serialized
+                    .into_iter()
+                    .map(|(pos, _)| (pos, DeliveryFailure::Unencodable)),
+            );
+            return outcome;
         }
 
         self.send_packet(&CChunkBatchStart).await;
 
         // One FIFO per connection: batch start/data/end stay in enqueue order.
-        let mut sent = Vec::with_capacity(serialized.len());
         for (pos, chunk_data) in serialized {
+            let Some(chunk_data) = chunk_data else {
+                outcome.failed.push((pos, DeliveryFailure::Unencodable));
+                continue;
+            };
             if self.send_packet_now_data(chunk_data).await {
-                sent.push(pos);
+                outcome.sent.push(pos);
+            } else {
+                outcome.failed.push((pos, DeliveryFailure::Deferred));
             }
         }
 
         // Count only queued chunks -> a `PacketSentEvent` cancel drops one without closing.
-        self.send_packet(&CChunkBatchEnd::new(sent.len() as u16))
+        self.send_packet(&CChunkBatchEnd::new(outcome.sent.len() as u16))
             .await;
-        sent
+        outcome
     }
 
     pub async fn enqueue_packet(&self, packet_data: Bytes) {

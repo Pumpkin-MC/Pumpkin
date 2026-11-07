@@ -68,7 +68,8 @@ use crate::{
     entity::player::Player,
     net::{
         DisconnectReason, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
-        chunk_sender::DeliveryFailure, decrement_pending_bytes,
+        chunk_sender::{ChunkSendOutcome, DeliveryFailure},
+        decrement_pending_bytes,
     },
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
@@ -150,24 +151,6 @@ pub struct BedrockClient {
     incoming_game_packet_recv: Mutex<Option<Receiver<RawPacket>>>,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
-}
-
-/// Result of [`BedrockClient::send_chunks`].
-#[derive(Default)]
-pub struct BedrockChunkSend {
-    pub sent: Vec<Vector2<i32>>,
-    pub failed: Vec<(Vector2<i32>, DeliveryFailure)>,
-}
-
-impl BedrockChunkSend {
-    /// A chunk with no reported outcome was never attempted -> deferred.
-    #[must_use]
-    pub fn failure(&self, pos: Vector2<i32>) -> DeliveryFailure {
-        self.failed
-            .iter()
-            .find(|(failed, _)| *failed == pos)
-            .map_or(DeliveryFailure::Deferred, |&(_, failure)| failure)
-    }
 }
 
 impl BedrockClient {
@@ -378,8 +361,8 @@ impl BedrockClient {
     }
 
     /// Queues the chunks and reports which were sent and why the others were not.
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> BedrockChunkSend {
-        let mut outcome = BedrockChunkSend::default();
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
+        let mut outcome = ChunkSendOutcome::default();
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
             debug!(
@@ -393,12 +376,7 @@ impl BedrockClient {
         };
 
         let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
-        outcome.failed.extend(
-            chunks
-                .iter()
-                .filter(|chunk| !valid_chunks.iter().any(|valid| Arc::ptr_eq(valid, chunk)))
-                .map(|chunk| (Vector2::new(chunk.x, chunk.z), DeliveryFailure::Cancelled)),
-        );
+        outcome.record_cancelled(chunks, &valid_chunks);
         if valid_chunks.is_empty() {
             return outcome;
         }
@@ -474,7 +452,7 @@ impl BedrockClient {
     async fn queue_chunk_payloads(
         &self,
         encoded_payloads: Vec<(Vector2<i32>, Option<Vec<u8>>)>,
-        outcome: &mut BedrockChunkSend,
+        outcome: &mut ChunkSendOutcome,
     ) {
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {

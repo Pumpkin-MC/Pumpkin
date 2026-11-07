@@ -52,6 +52,34 @@ pub enum DeliveryFailure {
     Unencodable,
 }
 
+/// Result of a client's `send_chunks`, the same for Java and Bedrock.
+#[derive(Default)]
+pub struct ChunkSendOutcome {
+    pub sent: Vec<Vector2<i32>>,
+    pub failed: Vec<(Vector2<i32>, DeliveryFailure)>,
+}
+
+impl ChunkSendOutcome {
+    /// A chunk with no reported outcome was never attempted -> deferred.
+    #[must_use]
+    pub fn failure(&self, pos: Vector2<i32>) -> DeliveryFailure {
+        self.failed
+            .iter()
+            .find(|(failed, _)| *failed == pos)
+            .map_or(DeliveryFailure::Deferred, |&(_, failure)| failure)
+    }
+
+    /// Marks every chunk a `ChunkSend` handler filtered out of `chunks` as cancelled.
+    pub fn record_cancelled(&mut self, chunks: &[SyncChunk], valid: &[SyncChunk]) {
+        self.failed.extend(
+            chunks
+                .iter()
+                .filter(|chunk| !valid.iter().any(|kept| Arc::ptr_eq(kept, chunk)))
+                .map(|chunk| (Vector2::new(chunk.x, chunk.z), DeliveryFailure::Cancelled)),
+        );
+    }
+}
+
 pub struct PreparedBatch {
     pub chunks: Vec<PreparedChunk>,
     pub epoch_snapshot: u32,
@@ -474,6 +502,9 @@ impl ChunkSender {
         output
     }
 
+    // TODO: a chunk's lifecycle is built twice: `commit_batch` (Java, marks sent once queued)
+    // and `commit_bedrock_batch` (Bedrock, marks sent first and settles through
+    // `mark_delivered` / `fail_delivery`). Both should share one token-based path.
     pub fn commit_batch(
         &mut self,
         batch: &PreparedBatch,

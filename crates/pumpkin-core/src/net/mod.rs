@@ -19,7 +19,6 @@ use pumpkin_data::translation;
 use pumpkin_protocol::{BClientPacket, ClientPacket, Property};
 use pumpkin_util::{
     Hand, ProfileAction,
-    math::vector2::Vector2,
     text::TextComponent,
     version::{BedrockMinecraftVersion, JavaMinecraftVersion},
 };
@@ -34,7 +33,7 @@ pub mod authentication;
 pub mod bedrock;
 pub mod chat;
 pub mod chunk_sender;
-pub use chunk_sender::ChunkSender;
+pub use chunk_sender::{ChunkSendOutcome, ChunkSender};
 pub mod java;
 pub mod lan_broadcast;
 pub mod packet_limiter;
@@ -305,11 +304,11 @@ impl ClientPlatform {
         }
     }
 
-    /// Returns the positions actually queued -> cancelled or unencodable chunks are left out.
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
+    /// Reports the positions queued and why the others were not.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
-            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await.sent,
+            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
         }
     }
 
