@@ -226,7 +226,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
@@ -314,7 +314,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
@@ -393,7 +393,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-ndk
       - name: Build release with cargo ndk
