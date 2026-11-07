@@ -230,8 +230,8 @@ impl BedBlock {
             (position.offset(bed_props.facing.to_offset()), *position)
         };
 
-        // Explode if bed rule explodes (EnvironmentAttributes.BED_RULE)
-        if world.dimension.bed_rule.explodes {
+        // BedRule.destroyOnUse: BedBlock explodes
+        if world.dimension.bed_rule.destroy_on_use {
             world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
             world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
 

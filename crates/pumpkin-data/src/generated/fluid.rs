@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use super::{Fluid, FluidState};
+use super::{Fluid, FluidFlow, FluidState};
 use crate::BlockStateId;
 impl Fluid {
     pub const EMPTY: Fluid = Fluid {
@@ -16,6 +16,16 @@ impl Fluid {
             falling: false,
         }],
         default_state_index: 0u16,
+        flow: FluidFlow {
+            tick_delay: 0u8,
+            drop_off: 0u8,
+            slope_find_distance: 0u8,
+        },
+        fast_lava_flow: FluidFlow {
+            tick_delay: 0u8,
+            drop_off: 0u8,
+            slope_find_distance: 0u8,
+        },
     };
     pub const FLOWING_WATER: Fluid = Fluid {
         id: 1u16,
@@ -183,6 +193,16 @@ impl Fluid {
             },
         ],
         default_state_index: 0u16,
+        flow: FluidFlow {
+            tick_delay: 5u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
+        fast_lava_flow: FluidFlow {
+            tick_delay: 5u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
     };
     pub const WATER: Fluid = Fluid {
         id: 2u16,
@@ -210,6 +230,16 @@ impl Fluid {
             },
         ],
         default_state_index: 0u16,
+        flow: FluidFlow {
+            tick_delay: 5u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
+        fast_lava_flow: FluidFlow {
+            tick_delay: 5u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
     };
     pub const FLOWING_LAVA: Fluid = Fluid {
         id: 3u16,
@@ -377,6 +407,16 @@ impl Fluid {
             },
         ],
         default_state_index: 0u16,
+        flow: FluidFlow {
+            tick_delay: 30u8,
+            drop_off: 2u8,
+            slope_find_distance: 2u8,
+        },
+        fast_lava_flow: FluidFlow {
+            tick_delay: 10u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
     };
     pub const LAVA: Fluid = Fluid {
         id: 4u16,
@@ -404,7 +444,19 @@ impl Fluid {
             },
         ],
         default_state_index: 0u16,
+        flow: FluidFlow {
+            tick_delay: 30u8,
+            drop_off: 2u8,
+            slope_find_distance: 2u8,
+        },
+        fast_lava_flow: FluidFlow {
+            tick_delay: 10u8,
+            drop_off: 1u8,
+            slope_find_distance: 4u8,
+        },
     };
+    #[doc = r" Largest `slope_find_distance` of any fluid."]
+    pub const MAX_SLOPE_FIND_DISTANCE: u8 = 4u8;
     #[must_use]
     pub fn from_registry_key(name: &str) -> Option<&'static Self> {
         match name {

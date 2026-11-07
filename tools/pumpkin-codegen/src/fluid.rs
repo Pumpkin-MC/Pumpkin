@@ -24,6 +24,37 @@ struct Property {
     values: Vec<String>,
 }
 
+/// Spread tuning in one level kind.
+#[derive(Deserialize)]
+struct Flow {
+    tick_delay: u8,
+    drop_off: Option<u8>,
+    slope_find_distance: Option<u8>,
+}
+
+impl Flow {
+    fn to_tokens(&self, fluid: &str) -> TokenStream {
+        assert_eq!(
+            self.drop_off.is_some(),
+            self.slope_find_distance.is_some(),
+            "{fluid}"
+        );
+        // no FlowingFluid: no spread
+        let (tick_delay, drop_off, slope_find_distance) = (
+            self.tick_delay,
+            self.drop_off.unwrap_or(0),
+            self.slope_find_distance.unwrap_or(0),
+        );
+        quote! {
+            FluidFlow {
+                tick_delay: #tick_delay,
+                drop_off: #drop_off,
+                slope_find_distance: #slope_find_distance,
+            }
+        }
+    }
+}
+
 /// One fluid entry of `fluids.json`.
 #[derive(Deserialize)]
 pub struct Fluid {
@@ -32,6 +63,8 @@ pub struct Fluid {
     properties: Vec<Property>,
     default_state_index: u16,
     states: Vec<FluidState>,
+    flow: Flow,
+    fast_lava_flow: Flow,
 }
 
 fn state_tokens(state: &FluidState, falling: bool) -> TokenStream {
@@ -107,6 +140,8 @@ pub fn build() -> TokenStream {
         let flowing = fluid.properties.len() == 2;
 
         let (id, name, default_state_index) = (fluid.id, &fluid.name, fluid.default_state_index);
+        let flow = fluid.flow.to_tokens(&fluid.name);
+        let fast_lava_flow = fluid.fast_lava_flow.to_tokens(&fluid.name);
         let states = fluid
             .states
             .iter()
@@ -118,6 +153,8 @@ pub fn build() -> TokenStream {
                 name: #name,
                 states: &[#(#states),*],
                 default_state_index: #default_state_index,
+                flow: #flow,
+                fast_lava_flow: #fast_lava_flow,
             };
         });
         id_arms.push(quote! { #id => Some(&Self::#ident), });
@@ -130,16 +167,26 @@ pub fn build() -> TokenStream {
             quote! { #start..=#end => Some(&Self::#ident), },
         ));
     }
+    let max_slope_find_distance = fluids
+        .iter()
+        .flat_map(|f| [&f.flow, &f.fast_lava_flow])
+        .filter_map(|flow| flow.slope_find_distance)
+        .max()
+        .unwrap();
+
     // narrow ranges first: sources before their flowing family
     state_arms.sort_by_key(|(width, _)| *width);
     let state_arms = state_arms.into_iter().map(|(_, arm)| arm);
 
     quote! {
-        use super::{Fluid, FluidState};
+        use super::{Fluid, FluidFlow, FluidState};
         use crate::BlockStateId;
 
         impl Fluid {
             #(#constants)*
+
+            /// Largest `slope_find_distance` of any fluid.
+            pub const MAX_SLOPE_FIND_DISTANCE: u8 = #max_slope_find_distance;
 
             #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {

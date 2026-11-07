@@ -1084,7 +1084,7 @@ impl BlockBehaviour for WeatheringCopperGrateBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                pumpkin_data::fluid::FluidFlow::WATER.tick_delay,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }
@@ -1181,7 +1181,7 @@ impl BlockBehaviour for CopperGolemStatueBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                pumpkin_data::fluid::FluidFlow::WATER.tick_delay,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }

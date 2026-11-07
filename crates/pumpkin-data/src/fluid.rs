@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 #[path = "generated/fluid.rs"]
 mod generated;
 
-/// Spread tuning of a fluid family, from `FlowingFluid`.
+/// Spread tuning of a fluid, from `FlowingFluid`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FluidFlow {
     /// `getTickDelay`.
@@ -16,43 +16,6 @@ pub struct FluidFlow {
     pub drop_off: u8,
     /// `getSlopeFindDistance`: holes are found up to this + 1 blocks away.
     pub slope_find_distance: u8,
-}
-
-impl FluidFlow {
-    /// `WaterFluid`.
-    pub const WATER: Self = Self {
-        tick_delay: 5,
-        drop_off: 1,
-        slope_find_distance: 4,
-    };
-    /// `LavaFluid`, `isFastLava` false.
-    pub const LAVA: Self = Self {
-        tick_delay: 30,
-        drop_off: 2,
-        slope_find_distance: 2,
-    };
-    /// `LavaFluid`, `isFastLava` true.
-    pub const FAST_LAVA: Self = Self {
-        tick_delay: 10,
-        drop_off: 1,
-        slope_find_distance: 4,
-    };
-    /// Largest `slope_find_distance` of any family.
-    pub const MAX_SLOPE_FIND_DISTANCE: u8 = {
-        let (water, lava, fast) = (
-            Self::WATER.slope_find_distance,
-            Self::LAVA.slope_find_distance,
-            Self::FAST_LAVA.slope_find_distance,
-        );
-        let max = if water > lava { water } else { lava };
-        if max > fast { max } else { fast }
-    };
-    /// `EmptyFluid` never spreads.
-    pub const NONE: Self = Self {
-        tick_delay: 0,
-        drop_off: 0,
-        slope_find_distance: 0,
-    };
 }
 
 #[derive(Clone)]
@@ -73,6 +36,10 @@ pub struct Fluid {
     pub name: &'static str,
     pub states: &'static [FluidState],
     pub default_state_index: u16,
+    /// Levels without `FAST_LAVA`.
+    pub flow: FluidFlow,
+    /// Levels with `FAST_LAVA`.
+    pub fast_lava_flow: FluidFlow,
 }
 
 impl Hash for Fluid {
@@ -100,14 +67,13 @@ impl Fluid {
         Self::same_fluid_type(self.id, other.id)
     }
 
-    /// Spread tuning of this fluid's family.
+    /// Spread tuning in a level with `fast_lava`.
     #[must_use]
-    pub const fn flow(&self, fast_lava: bool) -> FluidFlow {
-        match Self::family_id(self.id) {
-            id if id == Self::FLOWING_WATER.id => FluidFlow::WATER,
-            id if id == Self::FLOWING_LAVA.id && fast_lava => FluidFlow::FAST_LAVA,
-            id if id == Self::FLOWING_LAVA.id => FluidFlow::LAVA,
-            _ => FluidFlow::NONE,
+    pub const fn flow_in(&self, fast_lava: bool) -> FluidFlow {
+        if fast_lava {
+            self.fast_lava_flow
+        } else {
+            self.flow
         }
     }
 

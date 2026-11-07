@@ -5819,6 +5819,15 @@ impl World {
         )
     }
 
+    /// Checks if water evaporates here (`EnvironmentAttributes.WATER_EVAPORATES`).
+    #[must_use]
+    pub fn water_evaporates(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayWaterEvaporates,
+            pos,
+        )
+    }
+
     /// Checks if bees should stay inside beehives/nests (`EnvironmentAttributes.BEES_STAY_IN_HIVE`).
     #[must_use]
     pub fn bees_stay_in_hive(&self, pos: &BlockPos) -> bool {

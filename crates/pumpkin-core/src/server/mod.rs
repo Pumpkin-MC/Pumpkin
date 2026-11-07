@@ -418,6 +418,12 @@ impl Server {
             });
         }
 
+        // datapacks before levels: dimension types
+        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
+        server
+            .datapack_manager
+            .load_all(&world_path, &enabled_packs, &server.recipe_manager);
+
         let mut worlds_vec = Vec::new();
         for dim in &server.dimensions {
             info!(
@@ -427,11 +433,14 @@ impl Server {
                     .to_pretty_console()
             );
             let config = Arc::new(server.advanced_config.world.clone());
+            let dim = server
+                .datapack_manager
+                .with_dimension_type_attributes(dim.clone());
             let level = into_level(dim.clone(), &config, world_path.clone(), seed);
             let world = Arc::new(World::load(
                 level.clone(),
                 server.level_info.clone(),
-                dim.clone(),
+                dim,
                 block_registry.clone(),
                 Arc::downgrade(&server),
             ));
@@ -459,11 +468,6 @@ impl Server {
         server.worlds.store(Arc::new(worlds_vec));
 
         info!("All worlds loaded successfully.");
-
-        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
-        server
-            .datapack_manager
-            .load_all(&world_path, &enabled_packs, &server.recipe_manager);
 
         let source = crate::command::CommandSender::Console.into_source(&server);
         let _ = server
@@ -515,6 +519,9 @@ impl Server {
         let config = Arc::new(self.advanced_config.world.clone());
         let seed = self.level_info.load().world_gen_settings.seed;
 
+        let dimension = self
+            .datapack_manager
+            .with_dimension_type_attributes(dimension);
         let level =
             pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
         let world: World = World::load(level.clone(), l_info, dimension, registry, weak);

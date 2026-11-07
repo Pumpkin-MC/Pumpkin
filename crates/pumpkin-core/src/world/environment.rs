@@ -206,6 +206,7 @@ impl<'a> EnvironmentAttributes<'a> {
     }
 
     /// Evaluates a boolean environment attribute at a position.
+    // TODO: biome attribute layer (EnvironmentAttributeSystem), positional values use the dimension only
     #[must_use]
     pub fn get_value_bool(&self, attribute: EnvironmentAttribute, _pos: &BlockPos) -> bool {
         self.get_dimension_value_bool(attribute)

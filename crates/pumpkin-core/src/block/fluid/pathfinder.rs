@@ -3,7 +3,7 @@ use crate::block::fluid::flowing_trait::FlowingFluid;
 use crate::world::World;
 use pumpkin_data::{
     Block, BlockDirection,
-    fluid::{Falling, FlowingFluidProperties, Fluid, FluidFlow, Level},
+    fluid::{Falling, FlowingFluidProperties, Fluid, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
@@ -99,7 +99,7 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
 }
 
 /// Largest hole search reach: `getSlopeFindDistance` + 1.
-const MAX_REACH: i32 = FluidFlow::MAX_SLOPE_FIND_DISTANCE as i32 + 1;
+const MAX_REACH: i32 = Fluid::MAX_SLOPE_FIND_DISTANCE as i32 + 1;
 /// Grid around the start holding every node within reach.
 const GRID: i32 = 2 * MAX_REACH + 1;
 const CELLS: usize = (GRID * GRID) as usize;

@@ -163,7 +163,7 @@ pub fn build() -> TokenStream {
             .unwrap_or(false);
 
         let bed_rule_obj = attrs.and_then(|a| a.get("minecraft:gameplay/bed_rule"));
-        let (can_sleep_token, can_set_spawn_token, explodes) = if let Some(b) = bed_rule_obj {
+        let (can_sleep_token, can_set_spawn_token, destroy_on_use) = if let Some(b) = bed_rule_obj {
             let can_sleep = b
                 .get("can_sleep")
                 .and_then(|v| v.as_str())
@@ -172,7 +172,10 @@ pub fn build() -> TokenStream {
                 .get("can_set_spawn")
                 .and_then(|v| v.as_str())
                 .unwrap_or("always");
-            let explodes = b.get("explodes").and_then(|v| v.as_bool()).unwrap_or(false);
+            let destroy_on_use = b
+                .get("destroy_on_use")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             let sleep_ident = match can_sleep {
                 "always" => quote!(BedRuleOption::Always),
@@ -184,7 +187,7 @@ pub fn build() -> TokenStream {
                 "never" => quote!(BedRuleOption::Never),
                 _ => quote!(BedRuleOption::Always),
             };
-            (sleep_ident, spawn_ident, explodes)
+            (sleep_ident, spawn_ident, destroy_on_use)
         } else {
             (
                 quote!(BedRuleOption::WhenDark),
@@ -322,7 +325,7 @@ pub fn build() -> TokenStream {
                 bed_rule: BedRule {
                     can_sleep: #can_sleep_token,
                     can_set_spawn: #can_set_spawn_token,
-                    explodes: #explodes,
+                    destroy_on_use: #destroy_on_use,
                 },
                 timelines: #timelines_literal,
             };
@@ -351,7 +354,7 @@ pub fn build() -> TokenStream {
         pub struct BedRule {
             pub can_sleep: BedRuleOption,
             pub can_set_spawn: BedRuleOption,
-            pub explodes: bool,
+            pub destroy_on_use: bool,
         }
 
         impl BedRule {

@@ -15,7 +15,7 @@ pub trait FlowingFluid: Send + Sync {
     fn fluid(&self) -> &'static Fluid;
 
     fn flow(&self, world: &World) -> FluidFlow {
-        self.fluid().flow(world.dimension.fast_lava)
+        self.fluid().flow_in(world.dimension.fast_lava)
     }
 
     fn get_level_decrease_per_block(&self, world: &World) -> i32 {
