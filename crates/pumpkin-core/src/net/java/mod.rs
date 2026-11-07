@@ -899,7 +899,7 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        // Decode as 26.3. `PacketReceivedEvent` can rewrite or cancel first.
+        // Decode as `CURRENT_MC_VERSION`. `PacketReceivedEvent` can rewrite or cancel first.
         let event_payload;
         let (packet_id, mut payload) =
             if server.plugin_manager.has_handlers::<PacketReceivedEvent>() {
@@ -1345,7 +1345,7 @@ async fn run_translations(
 }
 
 /// `PacketSentEvent` for clients the multiversion plugin admitted below
-/// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
+/// `CURRENT_MC_VERSION`: it gets the server's id + payload and rewrites both.
 /// The packet is `None` when cancelled; the extra packets go right after it, as is.
 async fn fire_packet_sent(
     server: &Arc<Server>,

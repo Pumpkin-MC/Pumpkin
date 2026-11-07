@@ -95,7 +95,7 @@ impl ConnectionPacketReceivedEvent {
     }
 }
 
-/// A Java packet to a client below `CURRENT_MC_VERSION` before play, in the 26.3 format.
+/// A Java packet to a client below `CURRENT_MC_VERSION` before play, in the server's format.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct ConnectionPacketSentEvent {

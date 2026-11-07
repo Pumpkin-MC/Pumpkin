@@ -204,7 +204,7 @@ impl PendingConnection {
         }
     }
 
-    /// Connection packet events for clients below 26.3, after handshake.
+    /// Connection packet events for clients below `CURRENT_MC_VERSION`, after handshake.
     fn multiversion_server(&self) -> Option<Arc<Server>> {
         if self.version.load() == CURRENT_MC_VERSION
             || self.connection_state.load() == ConnectionState::HandShake
@@ -214,7 +214,7 @@ impl PendingConnection {
         self.server.upgrade()
     }
 
-    /// Encoded as 26.3. `ConnectionPacketSentEvent` can rewrite it.
+    /// Encoded as `CURRENT_MC_VERSION`. `ConnectionPacketSentEvent` can rewrite it.
     /// `false` when a handler cancelled the packet.
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) -> bool {
         let mut packet_buf = Vec::new();
@@ -232,7 +232,7 @@ impl PendingConnection {
         true
     }
 
-    /// `ConnectionPacketSentEvent` in the server's 26.3 format. `None` when cancelled.
+    /// `ConnectionPacketSentEvent` in the server's `CURRENT_MC_VERSION` format. `None` when cancelled.
     async fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
         let Some(server) = self.multiversion_server() else {
             return Some(packet_data);
@@ -267,7 +267,7 @@ impl PendingConnection {
         Some(framed.into())
     }
 
-    /// `ConnectionPacketReceivedEvent` in the client's format; handlers rewrite to 26.3.
+    /// `ConnectionPacketReceivedEvent` in the client's format; handlers rewrite to `CURRENT_MC_VERSION`.
     /// `None` when cancelled.
     async fn translate_incoming(&self, packet: &RawPacket) -> Option<RawPacket> {
         let Some(server) = self.multiversion_server() else {
