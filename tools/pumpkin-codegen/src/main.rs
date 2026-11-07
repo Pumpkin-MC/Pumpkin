@@ -93,6 +93,7 @@ mod statistic;
 mod structure_metadata;
 mod structure_template;
 mod structures;
+mod sulfur_cube_archetype;
 mod suspicious_effects;
 mod tag;
 mod template_pool;
@@ -217,6 +218,7 @@ pub fn main() {
         (chat_type::build, "chat_type.rs"),
         (decorated_pot_pattern::build, "decorated_pot_pattern.rs"),
         (frog_variant::build, "frog_variant.rs"),
+        (sulfur_cube_archetype::build, "sulfur_cube_archetype.rs"),
         (instrument::build, "instrument.rs"),
         (trim_material::build, "trim_material.rs"),
         (trim_pattern::build, "trim_pattern.rs"),

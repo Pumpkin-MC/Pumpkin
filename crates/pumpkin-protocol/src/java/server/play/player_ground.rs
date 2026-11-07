@@ -8,12 +8,15 @@ use pumpkin_macros::java_packet;
 #[java_packet(MOVE_PLAYER_STATUS_ONLY)]
 pub struct SSetPlayerGround {
     pub on_ground: bool,
+    pub horizontal_collision: bool,
 }
 
 impl<'a> ServerPacket<'a> for SSetPlayerGround {
     fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let flags = bytebuf.get_u8()?;
         Ok(Self {
-            on_ground: bytebuf.get_bool()?,
+            on_ground: flags & super::FLAG_ON_GROUND != 0,
+            horizontal_collision: flags & super::FLAG_HORIZONTAL_COLLISION != 0,
         })
     }
 }

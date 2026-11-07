@@ -21,6 +21,16 @@ pub trait Animal: Mob {
         )
     }
 
+    /// `false` for animals whose breeding spawns no baby right away, like frogs laying spawn.
+    fn spawns_offspring(&self) -> bool {
+        true
+    }
+
+    /// Runs instead of spawning a baby when [`Self::spawns_offspring`] is `false`.
+    /// `brain` is set when the animal's own brain behavior bred it.
+    fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
+    }
+
     /// Extra partner checks on top of the type and love checks in `BreedGoal`.
     fn can_mate(&self, _partner: &dyn EntityBase) -> bool {
         true

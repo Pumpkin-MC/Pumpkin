@@ -1252,6 +1252,9 @@ impl Server {
 
             let players = world.players.load();
             players.par_iter().for_each(|player| {
+                player.process_inbound_packets();
+            });
+            players.par_iter().for_each(|player| {
                 player.tick(self);
             });
         }

@@ -151,7 +151,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
+    math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -179,6 +179,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_touch;
 pub mod scoreboard;
 pub mod weather;
 
@@ -186,6 +187,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::world::player_touch::{pickup_body, touch_entities};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking, WorldSurface};
@@ -1546,24 +1548,26 @@ impl World {
 
         let players = self.players.load();
         let player_count = players.len();
-        let players_cache: Vec<_> = players
-            .par_iter()
-            .map(|player| {
-                let entity = player.get_entity();
-                let pos = entity.pos.load();
-                let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
-                let chunk_pos = Vector2::new(
-                    get_section_cord(pos.x.floor() as i32),
-                    get_section_cord(pos.z.floor() as i32),
-                );
-                (player, pos, bb, chunk_pos)
-            })
-            .collect();
 
         let t_players = std::time::Instant::now();
+        // Vanilla handles all packets before any player ticks
+        players.par_iter().for_each(|player| {
+            player.process_inbound_packets();
+        });
         players.par_iter().for_each(|player| {
             player.tick(server);
         });
+        // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
+        if server.tick_rate_manager.runs_normally() {
+            for player in players.iter() {
+                player.push_entities();
+            }
+        }
+        // One player after another, before entities move, like vanilla `doTick` after the
+        // level tick
+        for player in players.iter() {
+            touch_entities(self, player);
+        }
         let player_elapsed = t_players.elapsed();
 
         let entities_to_tick = self.entities.load();
@@ -1579,11 +1583,7 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity.get_entity().chunk_pos.load();
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }
@@ -1630,12 +1630,10 @@ impl World {
                     .filter(|entity| !ticking.contains(&entity.entity_id))
                     .map(|entity| (entity.entity_id, entity.bounding_box.load()))
                     .collect();
+                // Includes the vehicle, like the pickup area.
                 let player_bodies: Vec<_> = players
                     .iter()
-                    .map(|player| {
-                        let entity = player.get_entity();
-                        (entity.entity_id, entity.bounding_box.load())
-                    })
+                    .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
                     .collect();
                 let mut islands =
                     entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
@@ -1660,32 +1658,16 @@ impl World {
 
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
-            let (entity, entity_chunk) = &tickable[index];
+            let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
-            entity.get_entity().tick_count.fetch_add(1, Relaxed);
-            entity.tick(entity.as_ref(), server_ref);
-            // Riders may tick before or after their vehicle, so both ends re-seat them.
-            crate::entity::ride_tick(entity.as_ref());
-            crate::entity::position_riders(entity.as_ref());
-
-            let entity_inner = entity.get_entity();
-            let entity_pos = entity_inner.pos.load();
-            let entity_bb = entity_inner.bounding_box.load();
-
-            for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                if player.living_entity.health.load() > 0.0
-                    && !player.is_spectator()
-                    && (player_chunk.x - entity_chunk.x).abs() <= 1
-                    && (player_chunk.y - entity_chunk.y).abs() <= 1
-                    && (player_pos.x - entity_pos.x).abs() < 5.0
-                    && (player_pos.y - entity_pos.y).abs() < 5.0
-                    && (player_pos.z - entity_pos.z).abs() < 5.0
-                    && player_bb.intersects(&entity_bb)
-                {
-                    entity.on_player_collision(player);
-                }
+            let base = entity.get_entity();
+            base.tick_count.fetch_add(1, Relaxed);
+            // Vanilla `rideTick`: a rider starts its tick without motion
+            if base.has_vehicle() {
+                base.velocity.store(Vector3::default());
             }
+            entity.tick(entity.as_ref(), server_ref);
         };
         if let Some(islands) = islands {
             islands
@@ -1708,9 +1690,19 @@ impl World {
             }
             order::set_entity_order(None);
         }
+        // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
+        tickable.par_iter().for_each(|(entity, _)| {
+            if !entity.is_passenger() && entity.get_entity().has_passengers() {
+                crate::entity::ride_tick_riders(entity.as_ref());
+            }
+        });
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 
+        // Like vanilla `sendChanges`: before the next tick's packets
+        for player in players.iter() {
+            player.send_velocity_changes();
+        }
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
@@ -2447,6 +2439,8 @@ impl World {
         (collisions, positions)
     }
 
+    /// Vanilla `findFreePosition`: the point in `allowed_centers` closest to `preferred_center`
+    /// where a box of `size` touches no block inside the world border.
     pub fn find_free_position(
         &self,
         source: &dyn EntityBase,
@@ -3034,7 +3028,8 @@ impl World {
             level_name: "Pumpkin world".to_string(),
             premium_world_template_id: String::new(),
             is_trial: false,
-            rewind_history_size: VarInt(0),
+            // Vanilla rewind window so a tick-tagged `SetActorMotion` can replay a jump
+            rewind_history_size: VarInt(40),
             server_authoritative_block_breaking: true,
             current_level_time: self.get_world_age() as _,
             enchantment_seed: VarInt(0),
@@ -4308,6 +4303,8 @@ impl World {
             )
             .await;
 
+        // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
+        player.set_client_loaded(false);
         player.living_entity.reset_state();
 
         player.send_permission_lvl_update();
@@ -6266,6 +6263,26 @@ impl World {
     pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
         let id = self.get_block_state_id(position);
         Self::fluid_state_from_block_state(id)
+    }
+
+    /// Whether the fluid at `position` is in `tag`, with a source counting as the still fluid.
+    pub fn fluid_state_has_tag(
+        &self,
+        position: &BlockPos,
+        tag: &'static pumpkin_data::tag::Tag,
+    ) -> bool {
+        use pumpkin_data::tag::Taggable;
+        let (fluid, state) = self.get_fluid_and_fluid_state(position);
+        let fluid = if !state.is_source {
+            fluid
+        } else if fluid.matches_type(&Fluid::WATER) {
+            &Fluid::WATER
+        } else if fluid.matches_type(&Fluid::LAVA) {
+            &Fluid::LAVA
+        } else {
+            fluid
+        };
+        fluid.has_tag(tag)
     }
 
     /// `FluidState#getHeight` includes the full block when the same fluid is above.

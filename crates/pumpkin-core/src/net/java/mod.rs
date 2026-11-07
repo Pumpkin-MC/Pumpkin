@@ -1065,10 +1065,10 @@ impl JavaClient {
                 );
             }
             id if id == SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(player, &SPlayerRotation::read(&mut payload)?);
+                self.handle_rotation(player, server, &SPlayerRotation::read(&mut payload)?);
             }
             id if id == SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload)?);
+                self.handle_player_ground(player, server, &SSetPlayerGround::read(&mut payload)?);
             }
             id if id == SPickItemFromBlock::PACKET_ID => {
                 self.handle_pick_item_from_block(player, &SPickItemFromBlock::read(&mut payload)?);

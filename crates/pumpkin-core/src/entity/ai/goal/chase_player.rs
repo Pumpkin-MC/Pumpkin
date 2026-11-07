@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
-use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
+use crate::entity::mob::enderman::EndermanEntity;
 
 pub struct ChasePlayerGoal {
     enderman: Arc<EndermanEntity>,
@@ -60,7 +60,7 @@ impl Goal for ChasePlayerGoal {
     fn tick(&mut self, mob: &dyn Mob) {
         if let Some(target) = &self.target {
             let player_pos = target.get_entity().pos.load();
-            let eye_y = player_pos.y + PLAYER_EYE_HEIGHT;
+            let eye_y = target.get_entity().get_eye_y();
             let mut look_control = mob
                 .get_mob_entity()
                 .look_control

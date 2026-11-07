@@ -10,7 +10,7 @@ use crate::{
 #[java_packet(MOVE_PLAYER_POS)]
 pub struct SPlayerPosition {
     pub position: Vector3<f64>,
-    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_IN_WALL`]
+    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_HORIZONTAL_COLLISION`]
     pub collision: u8,
 }
 

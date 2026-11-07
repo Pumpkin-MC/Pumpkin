@@ -1273,6 +1273,7 @@ pub fn deserialize_java_serverbound_packet(
             Some(ServerboundPacket::SSetPlayerGround(
                 crate::pumpkin::plugin::java_packets::SSetPlayerGround {
                     on_ground: p.on_ground.try_into().ok()?,
+                    horizontal_collision: p.horizontal_collision.try_into().ok()?,
                 },
             ))
         }
@@ -1315,6 +1316,7 @@ pub fn deserialize_java_serverbound_packet(
                     yaw: p.yaw.try_into().ok()?,
                     pitch: p.pitch.try_into().ok()?,
                     ground: p.ground.try_into().ok()?,
+                    horizontal_collision: p.horizontal_collision.try_into().ok()?,
                 },
             ))
         }
