@@ -1,4 +1,6 @@
 use crate::entity::living::{LivingEntity, attributes_by_id};
+use crate::entity::player::Player;
+use crate::net::ClientPlatform;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -217,20 +219,20 @@ pub fn apply_attributes(living: &LivingEntity, packed: &[NbtTag]) {
     }
 }
 
-/// Send updates for multiple attributes in a single packet for the given living entity.
-pub fn send_attribute_updates_for_living(
-    living: &crate::entity::living::LivingEntity,
-    attributes: Vec<Attributes>,
-) {
-    use pumpkin_protocol::bedrock::client::update_attributes::{
-        AttributeData as BeAttribute, CUpdateAttributes as BePacket,
-    };
-    use pumpkin_protocol::codec::var_int::VarInt;
-    use pumpkin_protocol::codec::var_ulong::VarULong;
-    use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
-    use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
-    use pumpkin_protocol::java::client::play::Property as JeProperty;
+use pumpkin_protocol::bedrock::client::update_attributes::{
+    AttributeData as BeAttribute, CUpdateAttributes as BePacket,
+};
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
+use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
+use pumpkin_protocol::java::client::play::Property as JeProperty;
 
+/// Builds the Java packet and, when any attribute has a Bedrock name, the Bedrock packet.
+fn build_attribute_packets(
+    living: &LivingEntity,
+    attributes: Vec<Attributes>,
+) -> (JePacket, Option<BePacket>) {
     let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
@@ -294,20 +296,57 @@ pub fn send_attribute_updates_for_living(
     }
 
     let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
-    let world = living.entity.world.load();
     if be_attributes.is_empty() {
-        world.broadcast_packet_all(&je_packet);
-        return;
+        return (je_packet, None);
     }
 
-    let runtime_id = living.entity.entity_id as u64;
     let be_packet = BePacket {
-        target_runtime_id: VarULong(runtime_id),
+        target_runtime_id: VarULong(living.entity.entity_id as u64),
         attribute_list: be_attributes,
         tick: VarULong(0),
     };
+    (je_packet, Some(be_packet))
+}
 
-    world.broadcast_editioned(&je_packet, &be_packet);
+/// Send updates for multiple attributes in a single packet for the given living entity.
+pub fn send_attribute_updates_for_living(living: &LivingEntity, attributes: Vec<Attributes>) {
+    let (je_packet, be_packet) = build_attribute_packets(living, attributes);
+    let world = living.entity.world.load();
+    match be_packet {
+        Some(be_packet) => world.broadcast_editioned(&je_packet, &be_packet),
+        None => world.broadcast_packet_all(&je_packet),
+    }
+}
+
+/// Vanilla `ServerEntity.sendPairingData`: a client that starts tracking a living entity
+/// learns its attributes, since earlier updates were broadcast before it saw the entity.
+pub fn send_attributes_to_pairing_player(living: &LivingEntity, player: &Player) {
+    let attributes: Vec<Attributes> = living
+        .attributes
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .keys()
+        .filter_map(|id| attributes_by_id(*id).cloned())
+        .collect();
+    if attributes.is_empty() {
+        return;
+    }
+
+    let (je_packet, be_packet) = build_attribute_packets(living, attributes);
+    match player.client.as_ref() {
+        ClientPlatform::Java(client) => {
+            if let Ok(data) = client.serialize_packet(&je_packet) {
+                client.try_enqueue_packet(data);
+            }
+        }
+        ClientPlatform::Bedrock(client) => {
+            if let Some(be_packet) = be_packet
+                && let Ok(data) = client.serialize_packet(&be_packet)
+            {
+                client.try_enqueue_packet(data);
+            }
+        }
+    }
 }
 
 impl Clone for AttributeInstance {

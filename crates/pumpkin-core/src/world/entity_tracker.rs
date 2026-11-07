@@ -569,6 +569,8 @@ impl TrackedEntity {
         }
 
         if let Some(living) = self.entity.get_living_entity() {
+            crate::entity::attributes::send_attributes_to_pairing_player(living, player);
+
             if let Ok(equipment_guard) = living.entity_equipment.try_lock() {
                 let mut equipment_list = Vec::new();
                 for (slot, item_stack) in &equipment_guard.equipment {
