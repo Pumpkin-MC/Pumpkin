@@ -1,5 +1,6 @@
 // Last verified for v2169
 
+use bytes::Bytes;
 use pumpkin_macros::packet;
 
 use crate::serial::PacketWrite;
@@ -10,7 +11,7 @@ pub struct MissingBlobData {
     /// 64-bit hash identifier of the blob.
     pub blob_id: u64,
     /// Raw serialized byte payload of the chunk blob.
-    pub blob_data: Vec<u8>,
+    pub blob_data: Bytes,
 }
 
 /// Sent by the server in response to [`SClientCacheBlobStatus`](crate::bedrock::server::client_cache_blob_status::SClientCacheBlobStatus) with requested chunk blobs.

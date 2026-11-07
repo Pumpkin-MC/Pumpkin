@@ -6,6 +6,9 @@ use pumpkin_macros::packet;
 
 use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 
+/// Docs: both id lists hold at most 4095 entries.
+const MAX_BLOB_IDS: usize = 4095;
+
 /// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
 #[packet(135)]
 pub struct SClientCacheBlobStatus {
@@ -18,7 +21,7 @@ pub struct SClientCacheBlobStatus {
 impl PacketRead for SClientCacheBlobStatus {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let miss_count = VarUInt::read(reader)?.0 as usize;
-        if miss_count > 4096 {
+        if miss_count > MAX_BLOB_IDS {
             return Err(Error::new(
                 std::io::ErrorKind::InvalidData,
                 "miss_count exceeds limit",
@@ -30,7 +33,7 @@ impl PacketRead for SClientCacheBlobStatus {
         }
 
         let hit_count = VarUInt::read(reader)?.0 as usize;
-        if hit_count > 4096 {
+        if hit_count > MAX_BLOB_IDS {
             return Err(Error::new(
                 std::io::ErrorKind::InvalidData,
                 "hit_count exceeds limit",

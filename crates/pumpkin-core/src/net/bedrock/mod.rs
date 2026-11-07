@@ -59,6 +59,7 @@ use tokio::{
 
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+pub mod blob_cache;
 pub mod level_chunk;
 pub mod login;
 use self::level_chunk::CLevelChunk;
@@ -140,7 +141,7 @@ pub struct BedrockClient {
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
-    pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
+    pub blob_cache: std::sync::Mutex<blob_cache::BlobCache>,
     pub streaming_packs: std::sync::Mutex<HashMap<String, BedrockStreamingPack>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
@@ -198,7 +199,7 @@ impl BedrockClient {
             inventory_opened: AtomicBool::new(false),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
-            blob_cache: std::sync::Mutex::new(HashMap::new()),
+            blob_cache: std::sync::Mutex::new(blob_cache::BlobCache::new()),
             streaming_packs: std::sync::Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
@@ -459,8 +460,8 @@ impl BedrockClient {
                 .blob_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for (hash, payload) in new_blobs {
-                cache.insert(hash, payload);
+            for (hash, blob) in new_blobs {
+                cache.insert(hash, blob);
             }
         }
 
@@ -958,20 +959,20 @@ impl BedrockClient {
     }
 
     pub fn handle_client_cache_blob_status(&self, packet: SClientCacheBlobStatus) {
-        if packet.miss_hashes.is_empty() {
-            return;
-        }
         let missing_blobs = {
-            let cache = self
+            let mut cache = self
                 .blob_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for hash in packet.hit_hashes {
+                cache.remove(hash);
+            }
             let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
             for hash in packet.miss_hashes {
-                if let Some(payload) = cache.get(&hash) {
+                if let Some(blob) = cache.get(hash) {
                     missing_blobs.push(MissingBlobData {
                         blob_id: hash,
-                        blob_data: payload.clone(),
+                        blob_data: blob.clone(),
                     });
                 } else {
                     warn!("Client requested missing blob {hash:#x} not found in server cache");

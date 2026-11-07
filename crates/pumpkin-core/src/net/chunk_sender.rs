@@ -4,6 +4,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::num::NonZero;
 use std::sync::{Arc, Weak};
+use tracing::warn;
 
 use crate::net::java::chunk_data::CChunkData;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
@@ -253,6 +254,9 @@ impl ChunkSender {
                 self.pending_chunks.insert(pos);
             } else {
                 self.encode_failures.remove(&pos);
+                warn!(
+                    "Giving up on Bedrock chunk {pos:?} after {MAX_ENCODE_ATTEMPTS} encode attempts"
+                );
             }
         }
     }
@@ -511,8 +515,8 @@ impl ChunkSender {
                 self.sent_chunks.insert(chunk.position);
                 dispatched_positions.push(chunk.position);
             } else {
-                // Still owed to the client, so a later batch retries it
-                self.pending_chunks.insert(chunk.position);
+                // Dropped on purpose (e.g. a `PacketSentEvent` cancel) -> offered again later
+                self.park(chunk.position);
             }
         }
 
