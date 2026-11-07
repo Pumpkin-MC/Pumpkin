@@ -239,12 +239,12 @@ impl BlockBehaviour for BubbleColumnBlock {
 #[cfg(test)]
 mod tests {
     use pumpkin_data::BlockStateId;
-    use pumpkin_data::fluid::{Falling, FlowingWaterLikeFluidProperties, FluidProperties, Level};
+    use pumpkin_data::fluid::{Falling, FlowingFluidProperties, Level};
 
     use super::*;
 
     fn flowing_water_state() -> BlockStateId {
-        FlowingWaterLikeFluidProperties {
+        FlowingFluidProperties {
             r#falling: Falling::False,
             r#level: Level::L1,
         }

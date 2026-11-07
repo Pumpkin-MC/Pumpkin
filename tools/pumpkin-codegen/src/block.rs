@@ -94,6 +94,45 @@ enum PropertyType {
     },
 }
 
+impl PropertyType {
+    fn variant_count(&self) -> u16 {
+        match self {
+            Self::Bool => 2,
+            Self::Int { min, max } => u16::from(max - min) + 1,
+            Self::Enum { values, .. } => values.len() as u16,
+        }
+    }
+
+    // slot values, same mapping as to_props
+    fn value_tokens(&self, key: &Ident) -> Vec<TokenStream> {
+        match self {
+            Self::Bool => vec![
+                quote! { Property::#key(true) },
+                quote! { Property::#key(false) },
+            ],
+            Self::Int { min, max } => (*min..=*max)
+                .map(|value| quote! { Property::#key(#value) })
+                .collect(),
+            Self::Enum {
+                values,
+                prop_variant_name,
+                canonical_enum_name,
+                ..
+            } => {
+                let variant = Ident::new(prop_variant_name, Span::call_site());
+                let canonical = Ident::new(canonical_enum_name, Span::call_site());
+                values
+                    .iter()
+                    .map(|value| {
+                        let value = Ident::new(&value.to_upper_camel_case(), Span::call_site());
+                        quote! { Property::#variant(#canonical::#value) }
+                    })
+                    .collect()
+            }
+        }
+    }
+}
+
 /// Maps a single block-property field to its Rust type representation.
 struct PropertyVariantMapping {
     /// The serialized property name as it appears in JSON (e.g., `"facing"`).
@@ -255,25 +294,25 @@ impl ToTokens for BlockPropertyStruct {
             Ident::new(&const_block_name_from_block_name(name), Span::call_site())
         });
 
-        let to_index_logic = self.data.variant_mappings.iter().rev().map(|entry| {
+        let mut stride = 1u16;
+        let mut to_index_logic = Vec::new();
+        for entry in self.data.variant_mappings.iter().rev() {
             let field = Ident::new_raw(&entry.original_name, Span::call_site());
-            match &entry.property_type {
-                PropertyType::Bool => quote! { (!self.#field as u16, 2) },
-                PropertyType::Int { min, max } => {
-                    let count = (max - min + 1) as u16;
-
-                    if *min > 0 {
-                        quote! { ((self.#field - #min) as u16, #count) }
-                    } else {
-                        quote! { (self.#field as u16, #count) }
-                    }
+            let value = match &entry.property_type {
+                PropertyType::Bool => quote! { u16::from(!self.#field) },
+                PropertyType::Int { min, .. } if *min > 0 => {
+                    quote! { u16::from(self.#field - #min) }
                 }
-                PropertyType::Enum { name, .. } => {
-                    let ty = Ident::new(name, Span::call_site());
-                    quote! { (self.#field.to_index(), #ty::variant_count()) }
-                }
-            }
-        });
+                PropertyType::Int { .. } => quote! { u16::from(self.#field) },
+                PropertyType::Enum { .. } => quote! { self.#field.to_index() },
+            };
+            to_index_logic.push(if stride == 1 {
+                value
+            } else {
+                quote! { #value * #stride }
+            });
+            stride *= entry.property_type.variant_count();
+        }
 
         let from_index_body = self
             .data
@@ -468,10 +507,7 @@ impl ToTokens for BlockPropertyStruct {
 
             impl BlockProperties for #name {
                fn to_index(&self) -> u16 {
-                    let (index, _) = [#(#to_index_logic),*]
-                        .iter()
-                        .fold((0, 1), |(curr, mul), &(val, count)| (curr + val * mul, mul * count));
-                    index
+                    #(#to_index_logic)+*
                 }
 
                 #[allow(unused_assignments)]
@@ -486,9 +522,10 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn to_state_id(&self, block: &Block) -> BlockStateId {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", block.name, #struct_name);
-                    }
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", block.name, #struct_name
+                    );
                     block.states[self.to_index() as usize].id
                 }
 
@@ -513,9 +550,10 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default(block: &Block) -> Self {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", block.name, #struct_name);
-                    }
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", block.name, #struct_name
+                    );
                     Self::from_state_id(block.default_state.id)
                 }
 
@@ -888,6 +926,8 @@ pub struct Block {
     spawn_floor_predicate: Option<SpawnFloorPredicate>,
     /// Suffocation predicate for this block, if it differs from the default.
     suffocation_predicate: Option<SuffocationPredicate>,
+    #[serde(skip)]
+    property_slots: Vec<TokenStream>,
 }
 
 impl ToTokens for Block {
@@ -919,6 +959,7 @@ impl ToTokens for Block {
         let first_state = Literal::usize_unsuffixed(self.states[0].id.0 as usize);
         let state_count = Literal::usize_unsuffixed(self.states.len());
         let default_state = Literal::usize_unsuffixed(self.default_state_id.0 as usize);
+        let property_slots = &self.property_slots;
         let flammable = if let Some(flammable) = &self.flammable {
             let flammable_tokens = flammable.to_token_stream();
             quote! { Some(#flammable_tokens) }
@@ -938,6 +979,7 @@ impl ToTokens for Block {
                 item_id: #item_id,
                 default_state: &mappings::BLOCK_STATES[#default_state],
                 states: block_states(#first_state, #state_count),
+                property_slots: &[#(#property_slots),*],
                 flammable: #flammable,
                 experience: #experience,
                 loot_table: #loot_table,
@@ -1341,7 +1383,9 @@ pub fn build() -> TokenStream {
     let mut property_collection_map: BTreeMap<Vec<i32>, PropertyCollectionData> = BTreeMap::new();
     let mut existing_item_ids: HashSet<u16> = HashSet::new();
 
-    for block in blocks_assets.blocks {
+    let mut max_block_properties = 0usize;
+    let mut property_value_consts: BTreeMap<String, Vec<TokenStream>> = BTreeMap::new();
+    for mut block in blocks_assets.blocks {
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
 
@@ -1390,28 +1434,41 @@ pub fn build() -> TokenStream {
             });
         }
 
-        let mut multiplier = 1;
-        let mut property_descriptors = Vec::new();
+        // property slots
+        let mut strides = vec![0u16; property_mapping.len()];
+        let mut multiplier = 1u16;
         let mut waterlogged_multiplier = None;
-        for hash in block.properties.iter().rev() {
-            let gen_prop = generated_prop_map.get(hash).unwrap();
-            if gen_prop.serialized_name == "waterlogged" {
+        for (slot, mapping) in property_mapping.iter().enumerate().rev() {
+            strides[slot] = multiplier;
+            if mapping.original_name == "waterlogged" {
                 waterlogged_multiplier = Some(multiplier);
             }
-            let variant_count = match &gen_prop.property_type {
-                GeneratedPropertyType::Boolean => 2,
-                GeneratedPropertyType::Int { min, max } => (max - min + 1) as u16,
-                GeneratedPropertyType::Enum { values } => values.len() as u16,
-            };
-            property_descriptors.push(quote! {
-                PropertyDescriptor {
-                    hash_key: #hash,
-                    multiplier: #multiplier,
-                    variant_count: #variant_count,
-                }
-            });
-            multiplier *= variant_count;
+            multiplier *= mapping.property_type.variant_count();
         }
+        assert_eq!(multiplier as usize, block.states.len(), "{}", block.name);
+        max_block_properties = max_block_properties.max(property_mapping.len());
+        block.property_slots = property_mapping
+            .iter()
+            .zip(&strides)
+            .zip(&block.properties)
+            .map(|((mapping, stride), hash)| {
+                let key = Ident::new(
+                    &mapping.original_name.to_upper_camel_case(),
+                    Span::call_site(),
+                );
+                let values_name = format!(
+                    "{}_VALUES",
+                    generated_prop_map[hash].enum_name.to_shouty_snake_case()
+                );
+                let values = format_ident!("{}", values_name);
+                property_value_consts
+                    .entry(values_name)
+                    .or_insert_with(|| mapping.property_type.value_tokens(&key));
+                quote! {
+                    PropertySlot { key: PropertyKey::#key, stride: #stride, values: #values }
+                }
+            })
+            .collect();
 
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
@@ -1429,9 +1486,6 @@ pub fn build() -> TokenStream {
                 BlockId::#const_ident => #predicate,
             });
         }
-
-        // let mut block_with_descriptors = block.clone();
-        // block_with_descriptors.property_descriptors = property_descriptors;
 
         constants_list.push(quote! {
             pub const #const_ident: Self = #block;
@@ -1562,6 +1616,10 @@ pub fn build() -> TokenStream {
         .map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
+    let property_value_names = property_value_consts
+        .keys()
+        .map(|name| format_ident!("{}", name));
+    let property_value_lists = property_value_consts.values();
 
     let block_props = block_properties.iter().map(ToTokens::to_token_stream);
     let properties = property_enums.values().map(ToTokens::to_token_stream);
@@ -1611,7 +1669,7 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
+            blocks::{Flammable, PropertySlot, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
         };
         use crate::block_state::{PistonBehavior, SoundType};
         use crate::sound::Sound;
@@ -1621,6 +1679,10 @@ pub fn build() -> TokenStream {
         use std::collections::BTreeMap;
 
         #items
+
+        pub const MAX_BLOCK_PROPERTIES: usize = #max_block_properties;
+
+        #(pub const #property_value_names: &[Property] = &[#(#property_value_lists),*];)*
 
         #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
         pub enum PropertyKey {

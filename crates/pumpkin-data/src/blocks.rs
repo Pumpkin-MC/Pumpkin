@@ -1,5 +1,7 @@
 use crate::{
-    BlockState, BlockStateId,
+    BlockState, BlockStateId, Property, PropertyKey,
+    block_properties::MAX_BLOCK_PROPERTIES,
+    block_rotation::{Mirror, Rotation, transform_block_properties},
     tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
@@ -44,6 +46,32 @@ pub struct Block {
     pub experience: Option<Experience>,
     /// Loot table identifier, `None` when the block has no loot table.
     pub loot_table: Option<&'static str>,
+    /// State layout of each property, in vanilla order.
+    pub property_slots: &'static [PropertySlot],
+}
+
+/// One property of a block: `index = (state - first) / stride % values.len()`.
+#[derive(Debug, Clone, Copy)]
+pub struct PropertySlot {
+    pub key: PropertyKey,
+    pub stride: u16,
+    /// Values in index order, same variants as `to_props`.
+    pub values: &'static [Property],
+}
+
+impl PropertySlot {
+    #[must_use]
+    pub const fn count(&self) -> u16 {
+        self.values.len() as u16
+    }
+
+    #[must_use]
+    pub fn index_of(&self, value: Property) -> Option<u16> {
+        self.values
+            .iter()
+            .position(|slot_value| slot_value.matches_property(value))
+            .map(|index| index as u16)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,12 +214,7 @@ impl Block {
 
     #[must_use]
     pub fn is_waterloggable(&self) -> bool {
-        self.properties(self.default_state.id).is_some_and(|props| {
-            props
-                .to_props()
-                .iter()
-                .any(|p| p.key() == crate::PropertyKey::Waterlogged)
-        })
+        self.property_slot(PropertyKey::Waterlogged).is_some()
     }
 
     /// Returns a new [`BlockStateId`] for the given [`BlockStateId`] with the
@@ -200,39 +223,89 @@ impl Block {
     /// property then `None` is returned.
     #[must_use]
     pub fn set_waterlogged(&self, id: BlockStateId, value: bool) -> Option<BlockStateId> {
-        self.properties(id).and_then(|props| {
-            let mut props = props.to_props();
-            let waterlogged = props.iter_mut().find_map(|p| match p {
-                crate::Property::Waterlogged(w) => Some(w),
-                _ => None,
-            })?;
-            if value == *waterlogged {
-                return None;
-            }
+        if id.is_waterlogged() == value {
+            return None;
+        }
+        self.with_property(id, Property::Waterlogged(value))
+    }
 
-            *waterlogged = value;
-            Some(self.from_properties(&props).to_state_id(self))
-        })
+    #[must_use]
+    pub fn property_slot(&self, key: PropertyKey) -> Option<&'static PropertySlot> {
+        self.property_slots.iter().find(|slot| slot.key == key)
+    }
+
+    // state offset
+    const fn state_offset(&self, id: BlockStateId) -> Option<u16> {
+        let offset = id.as_u16().wrapping_sub(self.states[0].id.as_u16());
+        if (offset as usize) < self.states.len() {
+            Some(offset)
+        } else {
+            None
+        }
+    }
+
+    /// Value index of `key` in `id`; `None` if `id` is not a state of this block.
+    #[must_use]
+    pub fn property_index(&self, id: BlockStateId, key: PropertyKey) -> Option<u16> {
+        let offset = self.state_offset(id)?;
+        let slot = self.property_slot(key)?;
+        Some(offset / slot.stride % slot.count())
+    }
+
+    /// `id` with `key` set to value `index`, by arithmetic.
+    #[must_use]
+    pub fn with_property_index(
+        &self,
+        id: BlockStateId,
+        key: PropertyKey,
+        index: u16,
+    ) -> Option<BlockStateId> {
+        let offset = self.state_offset(id)?;
+        let slot = self.property_slot(key)?;
+        if index >= slot.count() {
+            return None;
+        }
+        let current = offset / slot.stride % slot.count();
+        let offset = offset - current * slot.stride + index * slot.stride;
+        // SAFETY: offset < states.len(), mixed radix of a valid state.
+        Some(unsafe { BlockStateId::new_unchecked(self.states[0].id.as_u16() + offset) })
+    }
+
+    #[must_use]
+    pub fn get_property(&self, id: BlockStateId, key: PropertyKey) -> Option<Property> {
+        let index = self.property_index(id, key)?;
+        Some(self.property_slot(key)?.values[index as usize])
+    }
+
+    /// `id` with `value` applied; `None` if the block has no such value.
+    #[must_use]
+    pub fn with_property(&self, id: BlockStateId, value: Property) -> Option<BlockStateId> {
+        let slot = self.property_slot(value.key())?;
+        self.with_property_index(id, slot.key, slot.index_of(value)?)
+    }
+
+    /// All property values of `id`, no allocation.
+    pub fn property_values(&self, id: BlockStateId) -> impl Iterator<Item = Property> {
+        let offset = self.state_offset(id).unwrap_or(0);
+        self.property_slots
+            .iter()
+            .map(move |slot| slot.values[(offset / slot.stride % slot.count()) as usize])
     }
 
     #[must_use]
     pub fn state_from_properties(
         &'static self,
-        properties: &[crate::Property],
+        properties: &[Property],
     ) -> Option<&'static BlockState> {
-        self.states.iter().find(|state| {
-            let Some(state_properties) = self.properties(state.id) else {
-                return properties.is_empty();
-            };
-            let state_properties = state_properties.to_props();
-
-            state_properties.len() == properties.len()
-                && properties.iter().all(|prop| {
-                    state_properties
-                        .iter()
-                        .any(|state_prop| state_prop.matches_property(*prop))
-                })
-        })
+        if properties.len() != self.property_slots.len() {
+            return None;
+        }
+        let mut offset = 0;
+        for slot in self.property_slots {
+            let value = properties.iter().find_map(|value| slot.index_of(*value))?;
+            offset += value * slot.stride;
+        }
+        self.states.get(offset as usize)
     }
 
     /// Returns whether this block is solid (based on default state)
@@ -248,53 +321,38 @@ impl Block {
     }
 
     #[must_use]
-    pub fn mirror(
-        &self,
-        id: BlockStateId,
-        mirror: crate::block_rotation::Mirror,
-    ) -> &'static BlockState {
-        if mirror == crate::block_rotation::Mirror::None || self.states.len() <= 1 {
-            return BlockState::from_id(id);
-        }
-        if let Some(props) = self.properties(id) {
-            let props_vec = props.to_props();
-            let transformed = crate::block_rotation::transform_block_properties(
-                self.name,
-                &props_vec,
-                crate::block_rotation::Rotation::None,
-                mirror,
-            );
-            let new_props = self.from_properties(&transformed);
-            let new_state_id = new_props.to_state_id(self);
-            BlockState::from_id(new_state_id)
-        } else {
-            BlockState::from_id(id)
-        }
+    pub fn mirror(&self, id: BlockStateId, mirror: Mirror) -> &'static BlockState {
+        self.transform(id, Rotation::None, mirror)
     }
 
     #[must_use]
-    pub fn rotate(
+    pub fn rotate(&self, id: BlockStateId, rotation: Rotation) -> &'static BlockState {
+        self.transform(id, rotation, Mirror::None)
+    }
+
+    fn transform(
         &self,
         id: BlockStateId,
-        rotation: crate::block_rotation::Rotation,
+        rotation: Rotation,
+        mirror: Mirror,
     ) -> &'static BlockState {
-        if rotation == crate::block_rotation::Rotation::None || self.states.len() <= 1 {
+        if (rotation == Rotation::None && mirror == Mirror::None) || self.states.len() <= 1 {
             return BlockState::from_id(id);
         }
-        if let Some(props) = self.properties(id) {
-            let props_vec = props.to_props();
-            let transformed = crate::block_rotation::transform_block_properties(
-                self.name,
-                &props_vec,
-                rotation,
-                crate::block_rotation::Mirror::None,
-            );
-            let new_props = self.from_properties(&transformed);
-            let new_state_id = new_props.to_state_id(self);
-            BlockState::from_id(new_state_id)
-        } else {
-            BlockState::from_id(id)
+        let mut values = [Property::Waterlogged(false); MAX_BLOCK_PROPERTIES];
+        let count = self.property_slots.len();
+        for (slot, value) in values.iter_mut().zip(self.property_values(id)) {
+            *slot = value;
         }
+        let values = &values[..count];
+        let mut new_id = id;
+        for value in transform_block_properties(self.name, values, rotation, mirror) {
+            // changed only
+            if !values.contains(&value) {
+                new_id = self.with_property(new_id, value).unwrap_or(new_id);
+            }
+        }
+        BlockState::from_id(new_id)
     }
 }
 

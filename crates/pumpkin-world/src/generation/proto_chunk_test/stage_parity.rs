@@ -395,28 +395,13 @@ impl crate::generation::proto_chunk::GenerationCache for TestGridCache {
     fn get_fluid_and_fluid_state(
         &self,
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
-    ) -> (pumpkin_data::fluid::Fluid, pumpkin_data::fluid::FluidState) {
-        use pumpkin_data::fluid::Fluid;
-        let id = crate::generation::proto_chunk::GenerationCache::get_block_state(self, pos);
-        let Some(fluid) = Fluid::from_state_id(id) else {
-            let fluid = if id.is_waterlogged()
-                || matches!(
-                    id.to_block_id(),
-                    pumpkin_data::BlockId::KELP
-                        | pumpkin_data::BlockId::KELP_PLANT
-                        | pumpkin_data::BlockId::SEAGRASS
-                        | pumpkin_data::BlockId::TALL_SEAGRASS
-                        | pumpkin_data::BlockId::BUBBLE_COLUMN
-                ) {
-                Fluid::WATER
-            } else {
-                Fluid::EMPTY
-            };
-            let state = fluid.states[0].clone();
-            return (fluid, state);
-        };
-        let state = fluid.states[0].clone();
-        (fluid.clone(), state)
+    ) -> (
+        &'static pumpkin_data::fluid::Fluid,
+        pumpkin_data::fluid::FluidState,
+    ) {
+        pumpkin_data::fluid::Fluid::fluid_state_of(
+            crate::generation::proto_chunk::GenerationCache::get_block_state(self, pos),
+        )
     }
     fn set_block_state(
         &mut self,

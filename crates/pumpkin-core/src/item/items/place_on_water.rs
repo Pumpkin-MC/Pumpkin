@@ -72,15 +72,13 @@ impl ItemBehaviour for PlaceOnWaterBlockItem {
 
         let hit_block = world.get_block(&hit_pos);
         let hit_fluid = world.get_fluid(&hit_pos);
+        // LilyPadBlock / FrogspawnBlock.mayPlaceOn
         let can_support = if item.id == Item::LILY_PAD.id {
             hit_fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
-                || hit_block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
                 || hit_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD)
         } else {
             hit_fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_FROGSPAWN)
                 || hit_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_FROGSPAWN)
-                || *hit_fluid == Fluid::WATER
-                || hit_block == &Block::WATER
         };
         if !can_support {
             return;

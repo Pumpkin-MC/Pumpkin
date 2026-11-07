@@ -244,8 +244,6 @@ pub mod scoreboard;
 pub mod damage;
 
 #[cfg(feature = "fluid")]
-#[rustfmt::skip]
-#[path = "generated/fluid.rs"]
 pub mod fluid;
 
 #[cfg(feature = "block")]

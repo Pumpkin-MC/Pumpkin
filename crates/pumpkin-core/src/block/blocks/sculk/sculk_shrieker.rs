@@ -217,7 +217,7 @@ impl BlockBehaviour for SculkShriekerBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::FluidFlow::WATER.tick_delay,
                 TickPriority::Normal,
             );
         }

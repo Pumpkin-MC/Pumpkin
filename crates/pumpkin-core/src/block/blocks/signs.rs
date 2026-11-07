@@ -297,44 +297,20 @@ impl SignBlock {
 
     /// Applies placement properties to a block.
     fn apply_placement_properties(block: &Block, placement: &SignPlacement) -> BlockStateId {
-        let mut props = block
-            .properties(block.default_state.id)
-            .map(|p| p.to_props())
-            .unwrap_or_default();
-
-        if let Some(facing) = placement.facing
-            && let Some(prop) = props.iter_mut().find_map(|p| match p {
-                pumpkin_data::Property::Facing(f) => Some(f),
-                _ => None,
-            })
-        {
-            *prop = facing;
-        }
-
-        if let Some(rotation) = placement.rotation
-            && let Some(prop) = props.iter_mut().find_map(|p| match p {
-                pumpkin_data::Property::Rotation(r) => Some(r),
-                _ => None,
-            })
-        {
-            *prop = rotation.min(15);
-        }
-
-        if let Some(prop) = props.iter_mut().find_map(|p| match p {
-            pumpkin_data::Property::Attached(a) => Some(a),
-            _ => None,
-        }) {
-            *prop = placement.attached;
-        }
-
-        if let Some(prop) = props.iter_mut().find_map(|p| match p {
-            pumpkin_data::Property::Waterlogged(w) => Some(w),
-            _ => None,
-        }) {
-            *prop = placement.waterlogged;
-        }
-
-        block.from_properties(&props).to_state_id(block)
+        use pumpkin_data::Property;
+        [
+            placement.facing.map(Property::Facing),
+            placement
+                .rotation
+                .map(|rotation| Property::Rotation(rotation.min(15))),
+            Some(Property::Attached(placement.attached)),
+            Some(Property::Waterlogged(placement.waterlogged)),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(block.default_state.id, |id, value| {
+            block.with_property(id, value).unwrap_or(id)
+        })
     }
 }
 
@@ -482,7 +458,7 @@ impl BlockBehaviour for SignBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::FluidFlow::WATER.tick_delay,
                 TickPriority::Normal,
             );
         }

@@ -591,15 +591,12 @@ impl ChunkData {
                         format!("minecraft:{}", block.name)
                     };
                     comp.put_string("Name", name);
-                    if let Some(props) = block.properties(id) {
-                        let prop_vec = props.to_props();
-                        if !prop_vec.is_empty() {
-                            let mut props_comp = NbtCompound::new();
-                            for p in prop_vec {
-                                props_comp.put_string(p.key_str(), p.value_str().to_string());
-                            }
-                            comp.put_compound("Properties", props_comp);
+                    if !block.property_slots.is_empty() {
+                        let mut props_comp = NbtCompound::new();
+                        for p in block.property_values(id) {
+                            props_comp.put_string(p.key_str(), p.value_str().to_string());
                         }
+                        comp.put_compound("Properties", props_comp);
                     }
                     NbtTag::Compound(comp)
                 })

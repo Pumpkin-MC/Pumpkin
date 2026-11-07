@@ -68,14 +68,12 @@ impl ItemBehaviour for AxeItem {
                 if other_block == block {
                     let other_new_state_id = if result.target_block.states.len() <= 1 {
                         result.target_block.default_state.id
-                    } else if let Some(other_props) = other_block.properties(other_state_id) {
-                        let props = other_props.to_props();
-                        result
-                            .target_block
-                            .from_properties(&props)
-                            .to_state_id(result.target_block)
                     } else {
-                        result.target_block.default_state.id
+                        other_block
+                            .property_values(other_state_id)
+                            .fold(result.target_block.default_state.id, |id, value| {
+                                result.target_block.with_property(id, value).unwrap_or(id)
+                            })
                     };
                     world.set_block_state(
                         &other_half_pos,

@@ -302,6 +302,14 @@ impl BlockStateId {
         None
     }
 
+    /// # Safety
+    /// `inner < STATE_COUNT`.
+    #[inline]
+    #[must_use]
+    pub(crate) const unsafe fn new_unchecked(inner: u16) -> Self {
+        Self(inner)
+    }
+
     #[inline]
     #[must_use]
     pub const fn new_or_air(inner: u16) -> Self {

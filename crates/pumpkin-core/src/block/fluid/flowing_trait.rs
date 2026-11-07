@@ -1,47 +1,56 @@
 use super::{pathfinder, physics};
 use crate::world::World;
+pub use pumpkin_data::fluid::FlowingFluidProperties;
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
-    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    fluid::{Falling, Fluid, FluidFlow, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
-pub type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 #[allow(async_fn_in_trait)]
 pub trait FlowingFluid: Send + Sync {
-    fn get_level_decrease_per_block(&self, world: &World) -> i32;
-    fn get_flow_speed(&self, world: &World) -> u8;
+    /// Flowing fluid of this family.
+    fn fluid(&self) -> &'static Fluid;
 
-    fn get_source(&self, fluid: &Fluid, falling: bool) -> FlowingFluidProperties {
-        let mut source_props = FlowingFluidProperties::default(fluid);
-        source_props.level = Level::L8;
-        source_props.falling = if falling {
-            Falling::True
-        } else {
-            Falling::False
-        };
-        source_props
+    fn flow(&self, world: &World) -> FluidFlow {
+        self.fluid().flow(world.dimension.fast_lava)
     }
 
-    fn get_flowing(&self, fluid: &Fluid, level: Level, falling: bool) -> FlowingFluidProperties {
-        let mut flowing_props = FlowingFluidProperties::default(fluid);
-        flowing_props.level = level;
-        flowing_props.falling = if falling {
-            Falling::True
-        } else {
-            Falling::False
-        };
-        flowing_props
+    fn get_level_decrease_per_block(&self, world: &World) -> i32 {
+        self.flow(world).drop_off.into()
     }
 
-    fn get_max_flow_distance(&self, world: &World) -> i32;
+    fn get_flow_speed(&self, world: &World) -> u8 {
+        self.flow(world).tick_delay
+    }
+
+    fn get_source(&self, falling: bool) -> FlowingFluidProperties {
+        self.get_flowing(Level::L8, falling)
+    }
+
+    fn get_flowing(&self, level: Level, falling: bool) -> FlowingFluidProperties {
+        FlowingFluidProperties {
+            level,
+            falling: if falling {
+                Falling::True
+            } else {
+                Falling::False
+            },
+        }
+    }
+
+    /// Hole search reach: vanilla finds holes up to `getSlopeFindDistance` + 1 blocks away.
+    fn get_max_flow_distance(&self, world: &World) -> i32 {
+        i32::from(self.flow(world).slope_find_distance) + 1
+    }
+
     fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
     /// Returns true if `state_id` represents the given fluid — either as a direct fluid state
     /// or as a waterlogged block (when the fluid is water-type).
-    fn has_fluid_at(&self, fluid: &Fluid, state_id: BlockStateId) -> bool {
+    fn has_fluid_at(&self, fluid: &'static Fluid, state_id: BlockStateId) -> bool {
         self.get_effective_props(fluid, state_id).is_some()
     }
 
@@ -49,16 +58,16 @@ pub trait FlowingFluid: Send + Sync {
     /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
     fn get_effective_props(
         &self,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         state_id: BlockStateId,
     ) -> Option<FlowingFluidProperties> {
-        if fluid.states.iter().any(|s| s.block_state_id == state_id) {
-            return Some(FlowingFluidProperties::from_state_id(state_id, fluid));
+        if let Some(props) = FlowingFluidProperties::from_state_id(state_id, fluid) {
+            return Some(props);
         }
         if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
             let block = Block::from_state_id(state_id);
             if block.is_waterlogged(state_id) {
-                return Some(self.get_source(fluid, false));
+                return Some(self.get_source(false));
             }
         }
         None
@@ -72,7 +81,12 @@ pub trait FlowingFluid: Send + Sync {
     /// 3. Triggering fluid spread to adjacent positions
     ///
     /// Sources (level 8, non-falling) always spread without state changes.
-    fn on_scheduled_tick_internal(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
+    fn on_scheduled_tick_internal(
+        &self,
+        world: &Arc<World>,
+        fluid: &'static Fluid,
+        block_pos: &BlockPos,
+    ) {
         let current_block_state_id = world.get_block_state_id(block_pos);
         let block = Block::from_state_id(current_block_state_id);
 
@@ -135,7 +149,7 @@ pub trait FlowingFluid: Send + Sync {
     fn try_flow(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: &BlockPos,
         props: &FlowingFluidProperties,
     ) {
@@ -146,8 +160,8 @@ pub trait FlowingFluid: Send + Sync {
 
         // Try to flow down first
         if is_hole {
-            let falling_props = self.get_flowing(fluid, Level::L8, true);
-            self.spread_to(world, fluid, &below_pos, falling_props.to_state_id(fluid));
+            let falling_props = self.get_flowing(Level::L8, true);
+            self.spread_to(world, fluid, &below_pos, falling_props);
 
             // Check if we should also spread to sides
             if props.level == Level::L8 && props.falling == Falling::False {
@@ -166,7 +180,7 @@ pub trait FlowingFluid: Send + Sync {
     fn count_source_neighbors(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: &BlockPos,
     ) -> i32 {
         let mut count = 0;
@@ -201,14 +215,15 @@ pub trait FlowingFluid: Send + Sync {
     fn get_new_liquid(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: &BlockPos,
     ) -> Option<FlowingFluidProperties> {
         let current_state_id = world.get_block_state_id(block_pos);
-        let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
-
         // Sources never change
-        if current_props.level == Level::L8 && current_props.falling != Falling::True {
+        if let Some(current_props) = FlowingFluidProperties::from_state_id(current_state_id, fluid)
+            && current_props.level == Level::L8
+            && current_props.falling != Falling::True
+        {
             return Some(current_props);
         }
 
@@ -255,7 +270,7 @@ pub trait FlowingFluid: Send + Sync {
 
             // If the block below is solid (solid block) or a source of same fluid, form a source here.
             if below_is_same_source || below_state.is_solid_block() {
-                return Some(self.get_source(fluid, false));
+                return Some(self.get_source(false));
             }
             // Otherwise continue to standard falling/flowing logic
         }
@@ -265,18 +280,12 @@ pub trait FlowingFluid: Send + Sync {
         let above_state_id = world.get_block_state_id(&above_pos);
 
         if self.has_fluid_at(fluid, above_state_id) {
-            return Some(self.get_flowing(fluid, Level::L8, true));
+            return Some(self.get_flowing(Level::L8, true));
         }
 
         // Standard flowing calculation
         let drop_off = self.get_level_decrease_per_block(world);
-        let new_level = highest_neighbor - drop_off;
-
-        if new_level <= 0 {
-            None
-        } else {
-            Some(self.get_flowing(fluid, Level::from_index(new_level as u16 - 1), false))
-        }
+        Level::from_amount(highest_neighbor - drop_off).map(|level| self.get_flowing(level, false))
     }
 
     /// Core spread logic with quiescence checks and state updates.
@@ -291,11 +300,11 @@ pub trait FlowingFluid: Send + Sync {
     fn apply_spread(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         pos: &BlockPos,
-        state_id: BlockStateId,
         new_props: FlowingFluidProperties,
     ) {
+        let state_id = new_props.to_state_id(fluid);
         let current_state_id = world.get_block_state_id(pos);
         if let Some(current_props) = self.get_effective_props(fluid, current_state_id) {
             let current_level = i32::from(current_props.level.to_index()) + 1;
@@ -314,7 +323,7 @@ pub trait FlowingFluid: Send + Sync {
                 let should_convert = self.check_infinite_source_formation(world, fluid, pos);
 
                 if should_convert {
-                    let source_props = self.get_source(fluid, false);
+                    let source_props = self.get_source(false);
                     let source_state_id = source_props.to_state_id(fluid);
                     world.set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL);
 
@@ -359,7 +368,7 @@ pub trait FlowingFluid: Send + Sync {
             let should_convert = self.check_infinite_source_formation(world, fluid, pos);
 
             if should_convert {
-                let source_props = self.get_source(fluid, false);
+                let source_props = self.get_source(false);
                 let source_state_id = source_props.to_state_id(fluid);
                 world.set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL);
 
@@ -388,7 +397,7 @@ pub trait FlowingFluid: Send + Sync {
     fn check_infinite_source_formation(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         pos: &BlockPos,
     ) -> bool {
         // Count adjacent horizontal source blocks
@@ -433,9 +442,14 @@ pub trait FlowingFluid: Send + Sync {
     ///
     /// Default implementation delegates to `apply_spread`. Implementations like
     /// lava can override to add fluid-specific logic (e.g., water -> stone conversion).
-    fn spread_to(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos, state_id: BlockStateId) {
-        let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
-        self.apply_spread(world, fluid, pos, state_id, new_props);
+    fn spread_to(
+        &self,
+        world: &Arc<World>,
+        fluid: &'static Fluid,
+        pos: &BlockPos,
+        props: FlowingFluidProperties,
+    ) {
+        self.apply_spread(world, fluid, pos, props);
     }
 
     /// Spreads fluid horizontally to adjacent positions using pathfinding.
@@ -445,7 +459,7 @@ pub trait FlowingFluid: Send + Sync {
     fn flow_to_sides(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: &BlockPos,
         props: &FlowingFluidProperties,
     ) {
@@ -461,12 +475,13 @@ pub trait FlowingFluid: Send + Sync {
             return;
         }
 
-        let (spread_dirs, count) = pathfinder::get_spread(self, world, fluid, block_pos);
-
-        for &(direction, state_id) in spread_dirs.iter().take(count) {
+        for (direction, props) in pathfinder::get_spread(self, world, fluid, block_pos)
+            .into_iter()
+            .flatten()
+        {
             let side_pos = block_pos.offset(direction.to_offset());
 
-            self.spread_to(world, fluid, &side_pos, state_id);
+            self.spread_to(world, fluid, &side_pos, props);
         }
     }
 }
