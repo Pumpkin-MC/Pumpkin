@@ -95,6 +95,13 @@ impl BreedGoal {
                 Uuid::new_v4(),
             )),
         };
+        // Vanilla `getBreedOffspring` returns null without a baby form: no offspring.
+        if baby
+            .as_ref()
+            .is_some_and(|baby| !baby.get_mob().is_some_and(Mob::spawn_as_baby))
+        {
+            return;
+        }
         let experience = mob.get_random().random_range(1..8);
         let Some(experience) = mob.approve_breeding(
             mate.get_entity().entity_id,
@@ -146,7 +153,6 @@ impl BreedGoal {
         mate.set_breeding_cooldown(6000);
 
         if let Some(baby) = baby {
-            baby.get_entity().set_age(-24000);
             world_full.spawn_entity(baby);
         } else if let Some(animal) = animal {
             animal.on_bred_without_offspring(brain);

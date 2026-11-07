@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::behavior::{
         feline,
         fleeing::{self, Flee},
@@ -49,6 +50,7 @@ pub struct CatEntity {
     pub sound_variant: AtomicU8,
     pub collar_color: AtomicU8,
     pub tamable_data: TamableData,
+    pub ageable_data: AgeableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
 }
@@ -62,6 +64,7 @@ impl CatEntity {
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
+            ageable_data: AgeableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
         };
@@ -215,7 +218,17 @@ impl TamableAnimal for CatEntity {
     }
 }
 
+impl AgeableMob for CatEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for CatEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }
