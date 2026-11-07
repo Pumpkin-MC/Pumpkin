@@ -1,7 +1,9 @@
 use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
+use pumpkin_data::poi_type::PoiType;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{
@@ -10,6 +12,7 @@ use pumpkin_protocol::bedrock::client::{
 use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
+use pumpkin_world::poi::{PoiStorage, SectionPos};
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
@@ -28,12 +31,12 @@ pub mod generation_cache;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
+pub mod poi_scan;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
-pub mod villager_poi;
 pub mod wandering_trader_spawner;
 
 use crate::block::RandomTickArgs;
@@ -78,6 +81,7 @@ use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::noise_settings::NoiseSettings;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -155,7 +159,7 @@ use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
     chunk::{io::Dirtiable, palette::bedrock_water_state},
 };
-use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
+use pumpkin_world::{chunk::ChunkData, chunk_system::ChunkPos, world::BlockAccessor};
 use pumpkin_world::{
     level::Level,
     tick::{TickPriority, order},
@@ -189,10 +193,7 @@ use uuid::Uuid;
 use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
-const POI_TYPE_LIGHTNING_ROD: &str = "minecraft:lightning_rod";
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
-pub(crate) const POI_TYPE_MEETING: &str = "minecraft:meeting";
-const MEETING_MAX_TICKETS: i32 = 32;
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -257,8 +258,8 @@ pub struct World {
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
+    poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
-    pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
     pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
@@ -369,6 +370,7 @@ impl World {
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
+        let poi_chunk_receiver = level.chunk_listener.add_global_chunk_listener();
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| std::sync::Mutex::new(dragon_fight::DragonFight::new()));
 
@@ -418,7 +420,7 @@ impl World {
             synced_block_event_queue: std::sync::Mutex::new(Vec::new()),
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
-            villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
+            poi_chunk_receiver: std::sync::Mutex::new(poi_chunk_receiver),
             wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
@@ -536,6 +538,30 @@ impl World {
             &self.entities,
             self,
         )));
+    }
+
+    fn process_poi_chunks(&self) {
+        let mut chunks = Vec::new();
+        if let Ok(receiver) = self.poi_chunk_receiver.try_lock() {
+            for _ in 0..poi_scan::MAX_CHUNKS_PER_TICK {
+                let Ok((_, chunk)) = receiver.try_recv() else {
+                    break;
+                };
+                if let Some(chunk) = chunk.upgrade() {
+                    chunks.push(chunk);
+                }
+            }
+        }
+        if chunks.is_empty() {
+            return;
+        }
+        let mut storage = self
+            .portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for chunk in chunks {
+            poi_scan::scan_chunk(&mut storage, &chunk);
+        }
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
@@ -1492,6 +1518,7 @@ impl World {
         self.flush_block_updates();
         self.flush_synced_block_events();
         self.update_active_chunks();
+        self.process_poi_chunks();
         self.tick_environment();
         let mut raids = {
             let mut guard = self
@@ -2473,6 +2500,41 @@ impl World {
         true
     }
 
+    pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty(bounding_box)
+            && self.no_entity_collision(source, bounding_box)
+            && self.no_border_collision(source, bounding_box)
+    }
+
+    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let average_size = ((bounding_box.max.x - bounding_box.min.x)
+            + (bounding_box.max.y - bounding_box.min.y)
+            + (bounding_box.max.z - bounding_box.min.z))
+            / 3.0;
+        if average_size < 1.0E-7 {
+            return true;
+        }
+
+        let area = bounding_box.expand_all(1.0E-7);
+        !self.get_all_at_box(&area).iter().any(|entity| {
+            let other = entity.get_entity();
+            !entity.is_spectator()
+                && (other.entity_type == &EntityType::SHULKER
+                    || other.entity_type == &EntityType::HAPPY_GHAST
+                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+                && !source.get_entity().is_passenger_of_same_vehicle(other)
+        })
+    }
+
+    pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let border = self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !border.is_inside_close_to_border(source.get_entity(), &bounding_box)
+            || border.collision_shape_contains(&bounding_box)
+    }
+
     /// Vanilla's `BlockView.getDismountHeight()`.
     /// Returns the Y surface height for dismounting at the given block position,
     /// or `f64::NEG_INFINITY` if no valid surface exists.
@@ -2624,13 +2686,29 @@ impl World {
         center
     }
 
+    pub fn sections_to_village(&self, section: SectionPos) -> i32 {
+        self.portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sections_to_village(section)
+    }
+
+    pub fn is_close_to_village(&self, pos: &BlockPos, section_distance: i32) -> bool {
+        section_distance <= PoiStorage::MAX_VILLAGE_DISTANCE
+            && self.sections_to_village(SectionPos::of(pos)) <= section_distance
+    }
+
+    pub fn is_village(&self, pos: &BlockPos) -> bool {
+        self.is_close_to_village(pos, 1)
+    }
+
     fn find_lightning_rod(&self, center: BlockPos) -> Option<BlockPos> {
         let (rod, _) = self
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .find_closest_where(center, LIGHTNING_ROD_SEARCH_RADIUS, |poi_type, rod_pos| {
-                poi_type == POI_TYPE_LIGHTNING_ROD
+                PoiType::from_name(poi_type) == Some(PoiType::LightningRod)
                     && rod_pos.squared_distance(&center)
                         <= LIGHTNING_ROD_SEARCH_RADIUS * LIGHTNING_ROD_SEARCH_RADIUS
                     && rod_pos.0.y
@@ -5338,29 +5416,26 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
-    fn update_block_poi(&self, position: &BlockPos, old_block: &Block, new_block: &Block) {
+    fn update_poi(
+        &self,
+        position: &BlockPos,
+        old_state_id: BlockStateId,
+        new_state_id: BlockStateId,
+    ) {
+        let old = PoiType::from_state_id(old_state_id.as_u16());
+        let new = PoiType::from_state_id(new_state_id.as_u16());
+        if old == new {
+            return;
+        }
         let mut poi = self
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if villager_poi::profession_for_block(old_block).is_some()
-            || old_block == &Block::BELL
-            || pumpkin_data::tag::Taggable::has_tag(
-                old_block,
-                &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
-            )
-        {
+        if old.is_some() {
             poi.remove(position);
         }
-        if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
-            poi.add_with_free_tickets(*position, poi_type, 1);
-        } else if pumpkin_data::tag::Taggable::has_tag(
-            new_block,
-            &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
-        ) {
-            poi.add_with_free_tickets(*position, POI_TYPE_LIGHTNING_ROD, 0);
-        } else if new_block == &Block::BELL {
-            poi.add_with_free_tickets(*position, POI_TYPE_MEETING, MEETING_MAX_TICKETS);
+        if let Some(poi_type) = new {
+            poi.add_poi(*position, poi_type);
         }
     }
 
@@ -5447,14 +5522,7 @@ impl World {
                 );
             }
 
-            self.villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .update_block(*position, new_block);
-
-            if is_new_block {
-                self.update_block_poi(position, old_block, new_block);
-            }
+            self.update_poi(position, replaced_block_state_id, block_state_id);
         }
 
         let old_state = replaced_block_state_id.to_state();
@@ -5728,6 +5796,11 @@ impl World {
     #[must_use]
     pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
         self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
+    }
+
+    #[must_use]
+    pub fn get_pathfinding_cost_from_light_levels(&self, pos: &BlockPos) -> f32 {
+        self.get_light_level_dependent_magic_value(pos) - 0.5
     }
 
     /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
@@ -7580,10 +7653,13 @@ impl WorldPortalExt for WorldPortal {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
     }
 
-    fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for mut nbt in entities {
+    fn spawn_structure_entities(&self, entities: Vec<(NbtCompound, &'static Biome)>) {
+        for (mut nbt, biome) in entities {
             nbt.child_tags.remove("UUID");
             if let Some(entity) = load_static_entity_from_nbt(&nbt, Vector3::default(), &self.0) {
+                if let Some(mob) = entity.get_mob() {
+                    mob.finalize_spawn_in_biome(biome);
+                }
                 self.0.spawn_entity(entity);
             }
         }

@@ -932,6 +932,7 @@ mod tests {
         let result = RecipeResultStruct {
             id: "minecraft:air",
             count: 1,
+            components: &[],
         };
         {
             let mut bytes = Vec::new();

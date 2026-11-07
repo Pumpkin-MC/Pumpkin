@@ -78,8 +78,10 @@ pub mod attributes;
 pub mod boss;
 pub mod breath;
 pub mod bucketable;
+pub mod crackiness;
 pub mod custom_sound;
 pub mod decoration;
+pub mod dismount_helper;
 pub mod effect;
 pub mod experience_orb;
 pub mod falling;
@@ -281,14 +283,6 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         } else {
             self.get_entity().tick(caller, server);
         }
-    }
-
-    fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        None
-    }
-
-    fn get_home_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
-        None
     }
 
     #[must_use]
@@ -902,6 +896,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn is_pushable(&self) -> bool {
         false
+    }
+
+    fn is_ignoring_block_triggers(&self) -> bool {
+        self.get_mob().is_some_and(mob::Mob::ignores_block_triggers)
     }
 
     fn push(&self, entity: &dyn EntityBase) {
@@ -2104,10 +2102,18 @@ impl Entity {
     }
 
     pub fn fudge_position_after_size_change(&self, previous_dimensions: EntityDimensions) -> bool {
-        let world = self.world.load();
-        let Some(this) = world.get_entity_by_id(self.entity_id) else {
+        let Some(this) = self.world.load().get_entity_by_id(self.entity_id) else {
             return false;
         };
+        self.fudge_position_after_size_change_of(this.as_ref(), previous_dimensions)
+    }
+
+    pub fn fudge_position_after_size_change_of(
+        &self,
+        this: &dyn EntityBase,
+        previous_dimensions: EntityDimensions,
+    ) -> bool {
+        let world = self.world.load();
         let new_dimensions = self.get_dimensions(self.pose.load());
         let old_center =
             self.pos
@@ -2124,7 +2130,7 @@ impl Entity {
         let allowed_centers =
             BoundingBox::of_size(old_center, width_delta, height_delta, width_delta);
         if let Some(free_position) = world.find_free_position(
-            this.as_ref(),
+            this,
             &allowed_centers,
             old_center,
             Vector3::new(new_width, new_height, new_width),
@@ -2138,7 +2144,7 @@ impl Entity {
             let allowed_centers_ignoring_y =
                 BoundingBox::of_size(old_center, width_delta, 1.0E-6, width_delta);
             if let Some(free_position) = world.find_free_position(
-                this.as_ref(),
+                this,
                 &allowed_centers_ignoring_y,
                 old_center,
                 Vector3::new(new_width, previous_height, new_width),
@@ -3856,6 +3862,11 @@ impl Entity {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
             self.set_flag(Flag::OnFire, on_fire);
         }
+    }
+
+    #[must_use]
+    pub fn get_y(&self, height_fraction: f64) -> f64 {
+        f64::from(self.entity_dimension.load().height).mul_add(height_fraction, self.pos.load().y)
     }
 
     #[must_use]

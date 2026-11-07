@@ -274,7 +274,7 @@ impl LivingEntity {
         !self.is_baby()
     }
 
-    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32) {
+    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32, pitch: f32) {
         if self.entity.is_silent() {
             return;
         }
@@ -283,7 +283,7 @@ impl LivingEntity {
             category,
             &self.entity.pos.load(),
             volume,
-            self.get_pitch(),
+            pitch,
         );
     }
 
@@ -296,6 +296,10 @@ impl LivingEntity {
                 super::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || self.get_pitch(),
+                super::custom_sound::CustomSound::voice_pitch,
+            ),
         );
     }
 
@@ -1674,7 +1678,7 @@ impl LivingEntity {
             } else if (on_ground || in_water && fluid_height <= swim_height)
                 && self.jumping_cooldown.load(SeqCst) == 0
             {
-                self.jump();
+                self.jump(caller);
 
                 self.jumping_cooldown.store(10, SeqCst);
             }
@@ -1741,6 +1745,10 @@ impl LivingEntity {
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        if dyn_self.get_mob().is_some_and(|mob| !mob.pushes_entities()) {
+            return;
+        }
+
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
         let own_team = dyn_self.get_team();
@@ -1780,7 +1788,13 @@ impl LivingEntity {
         }
 
         for entity in pushable {
-            entity.push(dyn_self);
+            let mob = dyn_self.get_mob();
+            if let Some(mob) = mob {
+                mob.do_push(&entity);
+            }
+            if mob.is_none_or(|mob| mob.can_push_entity(entity.as_ref())) {
+                entity.push(dyn_self);
+            }
         }
     }
 
@@ -2160,8 +2174,16 @@ impl LivingEntity {
         }
     }
 
-    fn jump(&self) {
-        let jump = self.get_jump_velocity(1.0);
+    fn jump(&self, caller: &dyn EntityBase) {
+        let mob = caller.get_mob();
+        self.jump_from_ground(mob.map_or(1.0, crate::entity::mob::Mob::jump_power_multiplier));
+        if let Some(mob) = mob {
+            mob.on_jump_from_ground();
+        }
+    }
+
+    fn jump_from_ground(&self, multiplier: f32) {
+        let jump = self.get_jump_velocity(f64::from(multiplier));
 
         if jump <= 1.0e-5 {
             return;
@@ -2453,6 +2475,9 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.on_die(cause.or(source));
+            }
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
@@ -3047,11 +3072,7 @@ impl LivingEntity {
                 && !water_breathing
                 && !nautilus_breathing
             {
-                let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
-                let mut random = caller.get_random();
-                if oxygen_bonus <= 0.0 || random.random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
-                    entity.set_air_supply(current.wrapping_sub(1));
-                }
+                entity.set_air_supply(caller.mob_decrease_air_supply(current));
                 if self.should_take_drowning_damage() {
                     entity.set_air_supply(0);
                     entity.world.load().send_entity_status(
@@ -4841,7 +4862,6 @@ mod ai_step_tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use crate::entity::Entity;
     use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
     use crate::entity::ai::goal::Goal;
@@ -4850,6 +4870,7 @@ mod ai_step_tests {
     use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
+    use crate::entity::{Entity, EntityBase};
     use crate::world::World;
     use pumpkin_data::{attributes::Attributes, entity::EntityType};
     use pumpkin_util::math::position::BlockPos;
@@ -4955,6 +4976,34 @@ mod ai_step_tests {
             mob,
             immobile: false,
         }
+    }
+
+    #[tokio::test]
+    async fn bat_does_not_push_overlapping_mobs() -> TestResult {
+        use crate::entity::mob::bat::BatEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let other = Arc::new(probe(world.clone(), Arc::new(AtomicUsize::new(0))));
+        other.get_entity().set_pos(Vector3::new(0.1, 64.0, 0.0));
+        world.add_entity_silent(bat.clone());
+        world.add_entity_silent(other.clone());
+
+        bat.mob_entity.living_entity.push_entities(bat.as_ref());
+        let other_velocity = other.get_entity().velocity.load();
+        other.mob.living_entity.push_entities(other.as_ref());
+        let bat_velocity = bat.get_entity().velocity.load();
+        world.level.shutdown().await;
+
+        assert!(!bat.is_pushable());
+        assert_eq!(other_velocity, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(bat_velocity, Vector3::new(0.0, 0.0, 0.0));
+        Ok(())
     }
 
     #[tokio::test]
@@ -5235,6 +5284,34 @@ mod ai_step_tests {
         }
         Ok(())
     }
+
+    #[tokio::test]
+    async fn flying_applies_air_physics_before_bat_vertical_damping() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let bat = crate::entity::mob::bat::BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::BAT,
+        ));
+        bat.set_roosting(false);
+        let entity = bat.get_entity();
+        entity.velocity.store(Vector3::new(0.0, 0.5, 0.0));
+        bat.mob_entity.living_entity.travel_in_air(bat.as_ref());
+        let moved_y = entity.pos.load().y;
+        bat.post_tick();
+        let velocity_y = entity.velocity.load().y;
+        world.level.shutdown().await;
+
+        assert!((moved_y - 64.5).abs() < 1.0e-7);
+        assert!((velocity_y - 0.24696).abs() < 1.0e-7);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn ground_control_speed_reaches_travel_without_losing_its_modifier() -> TestResult {
         let folder = tempfile::tempdir()?;

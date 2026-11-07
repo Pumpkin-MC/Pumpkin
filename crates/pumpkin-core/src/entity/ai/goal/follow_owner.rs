@@ -1,8 +1,10 @@
 use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::pathfinder::node::PathType;
+use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -20,6 +22,14 @@ pub struct FollowOwnerGoal {
 }
 
 impl FollowOwnerGoal {
+    pub(crate) fn teleport_if_needed(mob: &dyn Mob) {
+        if let Some(owner) = Self::find_owner(mob)
+            && !Self::unable_to_move_to_owner(mob, Some(&owner))
+            && Self::should_try_teleport_to_owner(mob, &owner)
+        {
+            Self::try_teleport_to_owner(mob, &owner);
+        }
+    }
     #[must_use]
     pub fn new(speed_modifier: f64, start_distance: f32, stop_distance: f32) -> Box<Self> {
         Box::new(Self {
@@ -75,37 +85,32 @@ impl FollowOwnerGoal {
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
         let world = mob_entity.world.load_full();
 
-        let offsets: [(i32, i32, i32); 10] = {
+        for _ in 0..10 {
             let mut rng = mob.get_random();
-            std::array::from_fn(|_| {
-                (
-                    rng.random_range(-3..=3),
-                    rng.random_range(-1..=1),
-                    rng.random_range(-3..=3),
-                )
-            })
-        };
-
-        for (dx, dy, dz) in offsets {
+            let dx: i32 = rng.random_range(-3..=3);
+            let dz: i32 = rng.random_range(-3..=3);
             if dx.abs() < 2 && dz.abs() < 2 {
                 continue;
             }
-
+            let dy = rng.random_range(-1..=1);
             let target_x = owner_pos.x.floor() as i32 + dx;
             let target_y = owner_pos.y.floor() as i32 + dy;
             let target_z = owner_pos.z.floor() as i32 + dz;
 
-            let below = BlockPos(Vector3::new(target_x, target_y - 1, target_z));
-            let block_below = world.get_block_state(&below);
-            if !block_below.is_solid() {
+            let at = BlockPos(Vector3::new(target_x, target_y, target_z));
+            let mut context = PathfindingContext::new(mob_entity.block_pos.load().0, world.clone());
+            if context.get_land_node_type(at.0) != PathType::Walkable {
                 continue;
             }
-
-            let at = BlockPos(Vector3::new(target_x, target_y, target_z));
-            let above = BlockPos(Vector3::new(target_x, target_y + 1, target_z));
-            let block_at = world.get_block_state(&at);
-            let block_above = world.get_block_state(&above);
-            if !block_at.is_air() || !block_above.is_air() {
+            if !mob.can_fly_to_owner()
+                && world
+                    .get_block(&at.down())
+                    .has_tag(&tag::Block::MINECRAFT_LEAVES)
+            {
+                continue;
+            }
+            let delta = (at.0 - mob_entity.block_pos.load().0).to_f64();
+            if !world.no_collision(mob_entity, mob_entity.bounding_box.load().shift(delta)) {
                 continue;
             }
 
