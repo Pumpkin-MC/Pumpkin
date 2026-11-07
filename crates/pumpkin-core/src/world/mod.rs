@@ -64,6 +64,7 @@ use crate::{
         player::{
             player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
             player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+            player_spawn_location::PlayerSpawnLocationEvent,
         },
     },
     server::Server,
@@ -2990,6 +2991,13 @@ impl World {
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
+        let mut spawn_loc_event = PlayerSpawnLocationEvent::new(player.clone(), position);
+        server
+            .plugin_manager
+            .fire(server, &mut spawn_loc_event)
+            .await;
+        let position = spawn_loc_event.spawn_pos;
+
         // Keep the server-side transform aligned with the StartGame position. In
         // particular, this ensures an early disconnect persists the real spawn.
         player.living_entity.entity.set_pos(position);
@@ -3573,6 +3581,13 @@ impl World {
             );
             (position, info.spawn_yaw, info.spawn_pitch)
         };
+
+        let mut spawn_loc_event = PlayerSpawnLocationEvent::new(player.clone(), position);
+        server
+            .plugin_manager
+            .fire(server, &mut spawn_loc_event)
+            .await;
+        let position = spawn_loc_event.spawn_pos;
 
         // Load chunks around the real spawn position before teleporting the client there.
         player.living_entity.entity.set_pos(position);
