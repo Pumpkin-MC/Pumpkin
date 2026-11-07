@@ -144,6 +144,18 @@ impl SlimeEntity {
         }
     }
 
+    /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
+    /// melee range and in sight. Sight is checked fresh, not through the sensing cache, which
+    /// `NoAI` cubes never clear.
+    pub fn deal_damage(&self, player: &crate::entity::player::Player) {
+        if self.entity.is_in_attack_range(player)
+            && self.get_entity().has_line_of_sight(player.get_entity())
+            && self.entity.try_attack(self, player)
+        {
+            self.on_attack(player);
+        }
+    }
+
     pub fn get_size(&self) -> i32 {
         self.entity
             .living_entity
@@ -351,13 +363,13 @@ impl Mob for SlimeEntity {
         self.speed_modifier.store(None);
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
-            // dealDamage
-            let damaged = self.entity.try_attack(self, &**player);
-            if damaged {
-                self.on_attack(&**player);
-            }
+            self.deal_damage(player);
         }
     }
 
@@ -516,9 +528,7 @@ impl SlimeFloatGoal {
 
 impl Goal for SlimeFloatGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.slime.entity.living_entity.entity;
-        entity.touching_water.load(Ordering::Relaxed)
-            || entity.touching_lava.load(Ordering::Relaxed)
+        self.slime.entity.living_entity.entity.is_in_liquid()
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {

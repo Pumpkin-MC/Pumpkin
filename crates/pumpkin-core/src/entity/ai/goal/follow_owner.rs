@@ -110,7 +110,7 @@ impl FollowOwnerGoal {
                 continue;
             }
             let delta = (at.0 - mob_entity.block_pos.load().0).to_f64();
-            if !world.is_space_empty(mob_entity.bounding_box.load().shift(delta)) {
+            if !world.no_collision(mob_entity, mob_entity.bounding_box.load().shift(delta)) {
                 continue;
             }
 

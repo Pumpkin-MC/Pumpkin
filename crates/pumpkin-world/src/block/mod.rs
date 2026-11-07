@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use pumpkin_data::{Block, BlockState, BlockStateId, Property};
+use pumpkin_nbt::compound::NbtCompound;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -59,6 +60,40 @@ impl BlockStateCodec {
         let block_properties = block.from_properties(&props_iter);
         block_properties.to_state_id(block)
     }
+
+    /// Writes `Name`, plus `Properties` when the state has any.
+    #[must_use]
+    pub fn state_to_nbt(state_id: BlockStateId) -> NbtCompound {
+        let block = Block::from_state_id(state_id);
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("Name", format!("minecraft:{}", block.name));
+        if let Some(properties) = block.properties(state_id) {
+            let properties = properties.to_props();
+            if !properties.is_empty() {
+                let mut properties_nbt = NbtCompound::new();
+                for property in properties {
+                    properties_nbt.put_string(property.key_str(), property.value_str().to_string());
+                }
+                nbt.put_compound("Properties", properties_nbt);
+            }
+        }
+        nbt
+    }
+
+    /// Reads a state written by [`Self::state_to_nbt`]. Unknown blocks give `None`.
+    #[must_use]
+    pub fn state_from_nbt(nbt: &NbtCompound) -> Option<BlockStateId> {
+        let block = Block::from_name(nbt.get_string("Name")?)?;
+        let Some(properties) = nbt.get_compound("Properties") else {
+            return Some(block.default_state.id);
+        };
+        let properties = properties
+            .child_tags
+            .iter()
+            .filter_map(|(key, value)| Property::from_str_pair(key, value.extract_string()?))
+            .collect::<Vec<Property>>();
+        Some(block.from_properties(&properties).to_state_id(block))
+    }
 }
 
 #[cfg(test)]
@@ -66,6 +101,25 @@ mod test {
     use pumpkin_data::BlockStateId;
 
     use crate::chunk::palette::BLOCK_NETWORK_MAX_BITS;
+
+    #[test]
+    fn block_state_nbt_matches_vanilla_layout() {
+        use super::BlockStateCodec;
+        use pumpkin_data::Block;
+
+        let state = Block::GRASS_BLOCK.default_state.id;
+        let nbt = BlockStateCodec::state_to_nbt(state);
+        assert_eq!(nbt.get_string("Name"), Some("minecraft:grass_block"));
+        assert_eq!(
+            nbt.get_compound("Properties")
+                .and_then(|properties| properties.get_string("snowy")),
+            Some("false")
+        );
+        assert_eq!(BlockStateCodec::state_from_nbt(&nbt), Some(state));
+
+        let stone = BlockStateCodec::state_to_nbt(Block::STONE.default_state.id);
+        assert!(stone.get_compound("Properties").is_none());
+    }
 
     #[test]
     fn proper_network_bits_per_entry() {

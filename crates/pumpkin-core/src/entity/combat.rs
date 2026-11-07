@@ -71,19 +71,35 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     let resistance = victim.get_living_entity().map_or(0.0, |living| {
         living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
     });
-    let strength = knockback_after_resistance(strength * 0.5, resistance);
-
+    // Resistance is checked in `apply_knockback`, so full resistance still fires the events
     if strength > 0.0 {
         let yaw = attacker.yaw.load();
-        victim.get_entity().knockback(
-            strength,
+        victim.get_entity().apply_knockback(
+            knockback_after_resistance(strength * 0.5, resistance),
             f64::from((yaw.to_radians()).sin()),
             f64::from(-(yaw.to_radians()).cos()),
+            Some(attacker),
         );
     }
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
+}
+
+/// End of vanilla `Player.causeExtraKnockback`: a hit player gets its knockback only for
+/// itself, and the server keeps the old movement.
+pub fn sync_hit_player_velocity(victim: &dyn EntityBase, old_movement: Vector3<f64>) {
+    let Some(victim_player) = victim.get_player() else {
+        return;
+    };
+    let entity = victim.get_entity();
+    if !entity.sync_velocity.swap(false, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(velocity) = victim_player.fire_velocity_event(entity.velocity.load()) {
+        victim_player.send_own_velocity(velocity);
+    }
+    entity.velocity.store(old_movement);
 }
 
 pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
