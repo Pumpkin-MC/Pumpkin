@@ -144,10 +144,13 @@ impl CLevelChunk<'_> {
         let block_actor_bytes = encode_block_actors(block_actors)?;
 
         if cache_enabled {
-            for subchunk_buf in subchunk_bytes_list {
+            // `Bytes::from` keeps the whole allocation, so drop the growth slack first.
+            for mut subchunk_buf in subchunk_bytes_list {
+                subchunk_buf.shrink_to_fit();
                 let hash = xxh64(&subchunk_buf, 0);
                 blobs.push((hash, Bytes::from(subchunk_buf)));
             }
+            biome_buf.shrink_to_fit();
             let biome_hash = xxh64(&biome_buf, 0);
             blobs.push((biome_hash, Bytes::from(biome_buf)));
 

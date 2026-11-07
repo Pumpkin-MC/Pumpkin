@@ -28,6 +28,11 @@ impl BlobCache {
         self.bytes += blob.len();
         self.blobs.insert(hash, blob);
         self.order.push_back(hash);
+        // Removed hashes stay queued until here, so the queue cannot grow without bound.
+        if self.order.len() > 2 * self.blobs.len() + 64 {
+            let blobs = &self.blobs;
+            self.order.retain(|queued| blobs.contains_key(queued));
+        }
 
         while self.bytes > MAX_BLOB_CACHE_BYTES
             && let Some(oldest) = self.order.pop_front()
@@ -43,9 +48,7 @@ impl BlobCache {
 
     /// The client reported the blob as held (`Found Ids`), so it is not requested again.
     pub fn remove(&mut self, hash: u64) {
-        if self.remove_blob(hash) {
-            self.order.retain(|&queued| queued != hash);
-        }
+        self.remove_blob(hash);
     }
 
     #[must_use]
@@ -63,11 +66,9 @@ impl BlobCache {
         self.bytes
     }
 
-    fn remove_blob(&mut self, hash: u64) -> bool {
-        let Some(blob) = self.blobs.remove(&hash) else {
-            return false;
-        };
-        self.bytes -= blob.len();
-        true
+    fn remove_blob(&mut self, hash: u64) {
+        if let Some(blob) = self.blobs.remove(&hash) {
+            self.bytes -= blob.len();
+        }
     }
 }
