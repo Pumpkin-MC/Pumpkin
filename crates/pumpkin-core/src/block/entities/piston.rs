@@ -78,6 +78,7 @@ impl PistonBlockEntity {
         // Stretch by motion to get the swept volume (one tick of animation).
         let motion = Self::dir_vec(motion_dir, delta);
         let swept = block_aabb.stretch(motion);
+        let slime = Block::from_state_id(self.pushed_block_state.id) == &Block::SLIME_BLOCK;
 
         for entity in world.get_entities_at_box(&swept) {
             let e = entity.get_entity();
@@ -86,8 +87,17 @@ impl PistonBlockEntity {
             }
             // Player movement is client-authoritative; vanilla still nudges them
             // via Entity.move(PISTON), but we skip them here to avoid teleport jank.
+            // The same holds for the slime launch below: vanilla skips `ServerPlayer` there too,
+            // because the client runs this block entity itself from the block event and throws its
+            // own player. Launching players here as well would hit them a second time mid-flight.
             if entity.get_player().is_some() {
                 continue;
+            }
+
+            // Vanilla `moveCollidedEntities`: a moving slime block sets the entity's velocity
+            // along the motion axis to the motion direction (+-1), then pushes it like any block.
+            if slime {
+                Self::launch(e, motion_dir);
             }
 
             let entity_aabb = e.bounding_box.load();
@@ -124,6 +134,17 @@ impl PistonBlockEntity {
             BlockDirection::South => swept.max.z - entity.min.z,
             BlockDirection::North => entity.max.z - swept.min.z,
         }
+    }
+
+    /// Vanilla slime launch: the velocity component along `dir`'s axis becomes `dir`'s step.
+    fn launch(entity: &crate::entity::Entity, dir: BlockDirection) {
+        let off = dir.to_offset();
+        let v = entity.velocity.load();
+        entity.set_velocity(Vector3::new(
+            if off.x == 0 { v.x } else { f64::from(off.x) },
+            if off.y == 0 { v.y } else { f64::from(off.y) },
+            if off.z == 0 { v.z } else { f64::from(off.z) },
+        ));
     }
 
     fn move_entity(entity: &crate::entity::Entity, dir: BlockDirection, distance: f64) {
@@ -281,16 +302,10 @@ impl BlockEntity for PistonBlockEntity {
         nbt.put_bool(SOURCE, self.source);
     }
 
-    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
-        let mut nbt = NbtCompound::new();
-        // TODO: pushed_block_state
-        nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-        nbt.put_bool(EXTENDING, self.extending);
-        nbt.put_bool(SOURCE, self.source);
-        // TODO: duplicated code because of async :c
-        Some(nbt)
-    }
+    // No `chunk_data_nbt`: vanilla never sends block entity data for a moving piston, the client
+    // builds its own from the block event. Sending ours (which lacked `blockState`) made the client
+    // reload its moving block entity as moving air: no collision, so a slime block never threw
+    // the player, who is only launched by the client's own copy.
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
