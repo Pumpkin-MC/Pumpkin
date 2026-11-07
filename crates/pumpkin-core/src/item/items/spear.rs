@@ -204,14 +204,19 @@ impl SpearItem {
         if effects.knockback && target.get_living_entity().is_some() {
             let attacker = player.get_entity();
             if config.knockback {
-                combat::handle_knockback(attacker, target.as_ref(), 0.8);
+                combat::handle_knockback(attacker, target.as_ref(), 0.8, total_damage);
             }
             // Vanilla syncs after the first knockback, so a hit player's own client
             // doesn't get the enchantment knockback.
             combat::sync_hit_player_velocity(target.as_ref(), old_movement);
             let knockback_level = Self::knockback_level(stack);
             if config.knockback && knockback_level > 0 {
-                combat::handle_knockback(attacker, target.as_ref(), f64::from(knockback_level));
+                combat::handle_knockback(
+                    attacker,
+                    target.as_ref(),
+                    f64::from(knockback_level),
+                    total_damage,
+                );
             }
         }
 

@@ -63,6 +63,7 @@ pub mod conversion;
 pub mod creaking;
 pub mod creeper;
 pub mod crossbow_attack_mob;
+pub mod cube_mob;
 pub mod elder_guardian;
 pub mod enderman;
 pub mod endermite;
@@ -90,6 +91,7 @@ pub mod skeleton;
 pub mod slime;
 pub mod spawn;
 pub mod spider;
+pub mod sulfur_cube;
 pub mod sun_burn;
 pub mod vex;
 pub mod vindicator;
@@ -1017,6 +1019,7 @@ impl MobEntity {
                     caller.get_entity(),
                     target,
                     f64::from(knockback),
+                    attack_damage,
                 );
             }
 
@@ -1602,6 +1605,14 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    fn mob_max_up_step(&self) -> Option<f32> {
+        None
+    }
+
+    fn mob_can_freeze(&self) -> bool {
+        true
+    }
+
     fn mob_bedrock_identifier(&self) -> Option<&'static str> {
         None
     }
@@ -1771,6 +1782,12 @@ pub trait Mob: EntityBase + Send + Sync {
             .min(self.mob_max_air_supply())
     }
 
+    fn can_breathe_underwater(&self) -> bool {
+        self.get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
+    }
+
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
     }
@@ -1829,6 +1846,8 @@ pub trait Mob: EntityBase + Send + Sync {
             .living_entity
             .travel_in_water(caller, gravity, falling);
     }
+
+    fn mob_travel_in_fluid(&self, _caller: &dyn EntityBase) {}
 
     fn post_tick(&self) {}
 
@@ -1991,6 +2010,31 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}
+
+    /// Vanilla `hurtServer` overrides that run before the normal damage path; `Some` ends it with that result.
+    fn mob_hurt_server(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> Option<bool> {
+        None
+    }
+
+    /// Vanilla `LivingEntity.knockback` overrides; true when the mob applied its own knockback.
+    fn mob_knockback(
+        &self,
+        _power: f64,
+        _x: f64,
+        _z: f64,
+        _source: Option<&Entity>,
+        _damage: f32,
+        _comes_from_effect: bool,
+    ) -> bool {
+        false
+    }
 
     // getArrow in vanilla, lets skeletons change the arrow before it's shot
     fn get_arrow(&self, arrow: ArrowEntity) -> ArrowEntity {
@@ -2788,6 +2832,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
+        if let Some(hurt) = self.mob_hurt_server(amount, damage_type, position, source, cause) {
+            return hurt;
+        }
         // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
         if !self.pre_damage_with_context(damage_type, source, cause) {
             return false;
