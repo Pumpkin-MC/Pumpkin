@@ -2195,6 +2195,8 @@ impl LivingEntity {
 
         if self.entity.entity_type == &EntityType::BREEZE {
             eye_height
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            f64::from(self.entity.height()) * 0.2
         } else if eye_height < 0.4 {
             0.0
         } else {

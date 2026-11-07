@@ -12,7 +12,7 @@ use crate::entity::{
     mob::Mob,
 };
 
-/// Shared state of vanilla's `AbstractCubeMob`.
+/// Movement and squish state shared by slimes, magma cubes and sulfur cubes.
 pub struct CubeMobData {
     pub jump_delay: AtomicI32,
     pub target_yaw: AtomicCell<f32>,
@@ -39,7 +39,7 @@ impl Default for CubeMobData {
     }
 }
 
-/// A mob that moves like vanilla's `AbstractCubeMob`.
+/// A cube mob that moves by jumping toward a chosen yaw.
 pub trait CubeMob: Mob {
     fn cube_data(&self) -> &CubeMobData;
     fn get_jump_sound(&self) -> Sound;
@@ -88,8 +88,6 @@ pub fn tick_cube_mob(cube: &dyn CubeMob) {
     let was_on_ground = data.was_on_ground.load(Ordering::Relaxed);
 
     if on_ground && !was_on_ground {
-        // TODO: particles
-
         let world = entity.world.load();
         world.play_sound_fine(
             cube.get_squish_sound(),

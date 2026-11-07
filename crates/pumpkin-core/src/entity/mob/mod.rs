@@ -2021,7 +2021,7 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}
 
-    /// Vanilla `hurtServer` overrides that run before the normal damage path; `Some` ends it with that result.
+    /// Runs before the normal damage path; `Some` ends the damage with that result.
     fn mob_hurt_server(
         &self,
         _amount: f32,
@@ -2033,7 +2033,7 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    /// Vanilla `LivingEntity.knockback` overrides; true when the mob applied its own knockback.
+    /// Lets a mob replace the default knockback; true when it applied its own.
     fn mob_knockback(
         &self,
         _power: f64,

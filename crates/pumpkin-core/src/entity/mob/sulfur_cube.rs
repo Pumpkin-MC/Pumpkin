@@ -681,10 +681,6 @@ impl SulfurCubeEntity {
     fn play_eating_sound(&self) {
         self.play_sound(Sound::EntitySmallSulfurCubeEat);
     }
-
-    fn get_fluid_jump_threshold(&self) -> f64 {
-        f64::from(self.get_entity().height()) * 0.2
-    }
 }
 
 impl CubeMob for SulfurCubeEntity {
@@ -827,7 +823,8 @@ impl Mob for SulfurCubeEntity {
         } else {
             entity.lava_height.load()
         };
-        let immersion = fluid_height - self.get_fluid_jump_threshold() + f64::from(vibe);
+        let immersion =
+            fluid_height - self.mob_entity.living_entity.get_swim_height() + f64::from(vibe);
         if immersion > 0.0 {
             let mut velocity = entity.velocity.load();
             velocity.y += immersion.min(1.0) * 0.04;
