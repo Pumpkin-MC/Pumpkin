@@ -522,6 +522,10 @@ impl Mob for EndermanEntity {
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
+        if self.mob_entity.get_target().is_none() {
+            return;
+        }
+        
         let ticks_since_target_change = entity
             .tick_count
             .load(Ordering::Relaxed)
