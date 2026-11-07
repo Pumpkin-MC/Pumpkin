@@ -2387,6 +2387,15 @@ interface bedrock-packets {
     /// Target world layer for the block (e.g. 0 for primary blocks, 1 for waterlogging).
     layer: s32,
   }
+  /// Opens a mount equipment screen (horse, llama) on the client.
+  record c-update-equip {
+    container-id: u8,
+    container-type: u8,
+    size: s32,
+    entity-unique-id: s64,
+    /// Network NBT with a `slots` list describing the equipment slots.
+    data: nbt-tree,
+  }
   /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
   record c-update-trade {
     /// Window identifier of the active trade screen.
@@ -2575,6 +2584,9 @@ interface bedrock-packets {
     s-client-cache-blob-status(s-client-cache-blob-status),
     /// Sent by the client during login to inform the server whether client-side chunk blob caching is supported.
     s-client-cache-status(s-client-cache-status),
+    /// The client's movement prediction state (actor flags, bounding box, movement attributes,
+    /// flying). Only sent after server-authoritative movement corrections, so its body is not read.
+    s-client-movement-prediction-sync,
     /// Sent by the client to request server-side execution of a slash command.
     s-command-request(s-command-request),
     /// Sent by either client or server to close an open container inventory window.
@@ -2768,6 +2780,8 @@ interface bedrock-packets {
     c-update-attributes(c-update-attributes),
     /// Updates a single block state client-side without retransmitting the entire chunk.
     c-update-block(c-update-block),
+    /// Opens a mount equipment screen (horse, llama) on the client.
+    c-update-equip(c-update-equip),
     /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
     c-update-trade(c-update-trade),
     /// Sends custom collision and selection voxel shapes to the client.

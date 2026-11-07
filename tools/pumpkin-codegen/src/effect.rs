@@ -18,6 +18,8 @@ struct Effect {
     translation_key: String,
     /// Attribute modifiers applied to entities affected by this effect.
     attribute_modifiers: Vec<Modifiers>,
+    /// Vanilla `MobEffect.isInstantaneous`.
+    instantaneous: bool,
 }
 
 /// Classification of a mob effect determining its UI presentation and general purpose.
@@ -90,6 +92,7 @@ pub fn build() -> TokenStream {
         let u16_id = effect.id as u16;
         let color = effect.color;
         let translation_key = effect.translation_key;
+        let instantaneous = effect.instantaneous;
         let category = effect.category.to_tokens();
         let slots = effect.attribute_modifiers;
         let slots = slots.into_iter().map(Modifiers::get_tokens);
@@ -103,6 +106,7 @@ pub fn build() -> TokenStream {
                 color: #color,
                 translation_key: #translation_key,
                 attribute_modifiers: &[#(#slots),*],
+                instantaneous: #instantaneous,
             };
         }]);
 
@@ -123,6 +127,7 @@ pub fn build() -> TokenStream {
             pub color: i32,
             pub translation_key: &'static str,
             pub attribute_modifiers: &'static [Modifiers],
+            pub instantaneous: bool,
         }
 
         impl PartialEq for StatusEffect {

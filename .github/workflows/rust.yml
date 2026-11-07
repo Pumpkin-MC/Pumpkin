@@ -226,7 +226,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
@@ -314,7 +314,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
@@ -377,49 +377,6 @@ jobs:
           compression-level: 9
           path: dist/${{ matrix.asset }}
 
-  build_release_musl:
-    name: Build project in release with musl
-    needs: [prepare, clippy_release, test, test_android]
-    if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            asset: pumpkin-X64-Linux-musl
-          - name: Linux ARM64
-            os: ubuntu-26.04-arm
-            target: aarch64-unknown-linux-musl
-            asset: pumpkin-ARM64-Linux-musl
-    env:
-      CARGO_PROFILE_RELEASE_LTO: ${{ inputs.release_lto || 'off' }}
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ inputs.release_codegen_units || '16' }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
-      - run: rustup target add ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-      - name: Install musl-tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-      - name: Build release
-        run: cargo build --verbose --release --target ${{ matrix.target }}
-      - name: Prepare artifact
-        run: |
-          mkdir -p dist
-          cp "target/${{ matrix.target }}/release/pumpkin" "dist/${{ matrix.asset }}"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.asset }}
-          compression-level: 9
-          path: dist/${{ matrix.asset }}
-
   build_android_release:
     name: Build project in release for Android AArch64
     needs: [prepare, clippy_release, test, test_android]
@@ -436,7 +393,7 @@ jobs:
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-ndk
       - name: Build release with cargo ndk
@@ -457,7 +414,7 @@ jobs:
     name: Update canary release
     permissions:
       contents: write
-    needs: [build_release, build_release_musl, build_android_release]
+    needs: [build_release, build_android_release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:

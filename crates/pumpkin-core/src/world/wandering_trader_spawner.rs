@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::poi_type::PoiType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -125,7 +126,7 @@ impl WanderingTraderSpawner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .find_closest_matching(center, SEARCH_RADIUS, |poi_type| {
-                poi_type == crate::world::POI_TYPE_MEETING
+                PoiType::from_name(poi_type) == Some(PoiType::Meeting)
             })?;
         (pos.squared_distance(&center) <= SEARCH_RADIUS * SEARCH_RADIUS).then_some(pos)
     }

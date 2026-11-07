@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity_variant::HorseVariant;
+use pumpkin_data::entity_variant::{HorseVariant, RabbitVariant};
 use rand::RngExt;
 
 use crate::entity::EntityBase;
@@ -43,6 +43,10 @@ pub enum SpawnGroupData {
     Fox {
         variant: FoxVariant,
         size: u32,
+    },
+    Rabbit {
+        variant: RabbitVariant,
+        group_size: u32,
     },
 }
 
@@ -156,8 +160,8 @@ pub fn finalize_spawn(
 }
 
 impl MobEntity {
-    /// Baby state kept only as a negative age and the shared baby flag (hoglins, zoglins and
-    /// zombified piglins, which are not `AgeableMob`s here).
+    /// Baby state kept only as a negative age and the shared baby flag (zombified piglins,
+    /// which never grow up).
     pub fn set_baby_by_age(&self) {
         let entity = &self.living_entity.entity;
         entity

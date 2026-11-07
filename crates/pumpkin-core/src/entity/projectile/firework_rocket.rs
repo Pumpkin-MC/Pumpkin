@@ -70,6 +70,12 @@ impl FireworkRocketEntity {
         }
     }
 
+    pub fn new_with_owner(entity: Entity, owner: &Entity, stack: ItemStack) -> Self {
+        let mut rocket = Self::new_with_stack(entity, stack);
+        rocket.entity.owner = ProjectileOwner::new(Some(owner));
+        rocket
+    }
+
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         Self::new_shot_with_stack(entity, shooter, ItemStack::new(1, &Item::FIREWORK_ROCKET))
     }
@@ -262,7 +268,8 @@ impl EntityBase for FireworkRocketEntity {
                     }
                     if !boost_cancelled {
                         let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
+                        // Boost from the client motion, the server doesn't simulate player flight
+                        let shooter_vel = shooter.known_movement();
 
                         let new_shooter_vel =
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
