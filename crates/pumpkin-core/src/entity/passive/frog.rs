@@ -209,6 +209,10 @@ impl Mob for FrogEntity {
         self.mob_entity.set_target(attack_target);
     }
 
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        self.mob_entity.try_attack(self, target)
+    }
+
     fn get_max_look_yaw_change(&self) -> f32 {
         HEAD_ROT_SPEED
     }
