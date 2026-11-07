@@ -2,6 +2,8 @@ use super::{
     World,
     weather_profile::{ClientEffect, PhaseTiming, WeatherCycle, WeatherProfile},
 };
+use crate::entity::player::Player;
+use crate::net::ClientPlatform;
 use crate::plugin::api::events::world::weather_change::{
     ThunderChangeEvent, WeatherCause, WeatherChangeEvent, WeatherPhaseChangeEvent,
 };
@@ -348,9 +350,15 @@ impl Weather {
         self.rain_level > RAINING_LEVEL
     }
 
+    /// Vanilla `Level.getThunderLevel`: thunder only counts as far as it rains.
+    #[must_use]
+    pub fn effective_thunder_level(&self) -> f32 {
+        self.thunder_level * self.rain_level
+    }
+
     #[must_use]
     pub fn is_thundering(&self) -> bool {
-        self.thunder_level > THUNDERING_LEVEL
+        self.effective_thunder_level() > THUNDERING_LEVEL
     }
 
     fn tick(&mut self, data: &WeatherData) -> WeatherTick {
@@ -461,6 +469,12 @@ impl World {
     #[must_use]
     pub fn is_thundering(&self) -> bool {
         self.can_have_weather() && self.lock_weather().is_thundering()
+    }
+
+    /// The profile timing this world's weather cycle.
+    #[must_use]
+    pub fn weather_profile(&self) -> Arc<WeatherProfile> {
+        self.lock_weather_data().profile.clone()
     }
 
     /// The current rain and thunder levels.
@@ -669,6 +683,30 @@ impl World {
         });
     }
 
+    /// Vanilla `PlayerList.sendLevelInfo`'s weather. The levels are sent when clear too,
+    /// since a client moving between worlds of one dimension keeps its old rain.
+    pub fn send_weather_info(&self, player: &Player) {
+        let weather = *self.lock_weather();
+        let (rain_je, rain_be) = rain_level_packets(weather.rain_level);
+        let (thunder_je, thunder_be) = thunder_level_packets(weather.effective_thunder_level());
+        match player.client.as_ref() {
+            ClientPlatform::Java(_) => {
+                if self.can_have_weather() && weather.is_raining() {
+                    player.try_send_client_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0));
+                }
+                player.try_send_client_packet(&rain_je);
+                player.try_send_client_packet(&thunder_je);
+            }
+            ClientPlatform::Bedrock(client) => {
+                for packet in [rain_be, thunder_be] {
+                    if let Ok(data) = client.serialize_packet(&packet) {
+                        client.try_enqueue_packet(data);
+                    }
+                }
+            }
+        }
+    }
+
     /// Vanilla's wake-up weather reset: sleeping through a night ends the rain.
     pub fn reset_weather_after_sleep(self: &Arc<Self>) {
         if self.level_info.load().game_rules.advance_weather
@@ -755,6 +793,12 @@ mod test {
             (dry_thunder.rain_level, dry_thunder.thunder_level),
             (0.0, 0.0)
         );
+        // Thunder without rain is not a storm.
+        let dry = Weather {
+            thunder_level: 1.0,
+            ..Weather::default()
+        };
+        assert!(!dry.is_thundering());
     }
 
     #[test]

@@ -786,8 +786,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<()> {
         self.get(&world)?.set_weather(
             pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
-            clear_time,
-            rain_time,
+            clear_time.max(0),
+            rain_time.max(0),
             raining,
             thundering,
         );

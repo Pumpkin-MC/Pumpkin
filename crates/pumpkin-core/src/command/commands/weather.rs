@@ -34,11 +34,14 @@ impl CommandExecutor for WeatherExecutor {
         };
 
         let world = context.source.world();
+        // Durations left out are rolled from the world's weather profile, like vanilla's cycle.
+        let profile = world.weather_profile();
+        let mut rng = rand::rng();
         let (message, return_val) = {
             match self.mode {
                 WeatherMode::Clear => {
                     let processed_duration =
-                        duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
+                        duration.unwrap_or_else(|| profile.rain.delay.sample(&mut rng));
 
                     world.set_weather(WeatherCause::Command, processed_duration, 0, false, false);
                     (
@@ -52,7 +55,7 @@ impl CommandExecutor for WeatherExecutor {
                 }
                 WeatherMode::Rain => {
                     let processed_duration =
-                        duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
+                        duration.unwrap_or_else(|| profile.rain.duration.sample(&mut rng));
 
                     world.set_weather(WeatherCause::Command, 0, processed_duration, true, false);
                     (
@@ -66,7 +69,7 @@ impl CommandExecutor for WeatherExecutor {
                 }
                 WeatherMode::Thunder => {
                     let processed_duration =
-                        duration.unwrap_or_else(|| rand::random_range(3600..=15_600));
+                        duration.unwrap_or_else(|| profile.thunder.duration.sample(&mut rng));
 
                     world.set_weather(WeatherCause::Command, 0, processed_duration, true, true);
                     (

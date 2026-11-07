@@ -943,7 +943,9 @@ interface %world {
         get-weather: func() -> weather-state;
 
         /// Sets the weather cycle of this world like `/weather` does: `clear-time` ticks of
-        /// clear sky, then `rain-time` ticks of the given state. Fires no events.
+        /// clear sky, then `rain-time` ticks of the given state. Negative values count as 0.
+        /// A rain or thunder flip fires a cancellable `weather-change-event` or
+        /// `thunder-change-event` with the `plugin` cause; a cancelled flip is put back.
         set-weather: func(clear-time: s32, rain-time: s32, raining: bool, thundering: bool);
 
         /// Sets the ticks of clear sky left from `/weather clear`. Negative values count as 0.

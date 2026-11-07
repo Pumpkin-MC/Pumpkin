@@ -219,6 +219,13 @@ impl ToFromWasmEvent
         })
     }
 
+    // v0.1 events carry no cause, so the original one is kept.
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        let cause = self.cause;
+        *self = Self::from_wasm_event(event, state);
+        self.cause = cause;
+    }
+
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::WeatherChangeEvent(data) => Self {
@@ -246,6 +253,13 @@ impl ToFromWasmEvent
             to_thunder_state: self.to_thunder_state,
             cancelled: self.cancelled,
         })
+    }
+
+    // v0.1 events carry no cause, so the original one is kept.
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        let cause = self.cause;
+        *self = Self::from_wasm_event(event, state);
+        self.cause = cause;
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {

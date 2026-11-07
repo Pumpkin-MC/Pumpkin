@@ -3645,26 +3645,7 @@ impl World {
             ))
             .await;
 
-        // Send initial weather state
-        let (rain_level, thunder_level) = self.weather_levels();
-        if self.is_raining() {
-            client
-                .enqueue_client_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
-                .await;
-
-            client
-                .enqueue_client_packet(&CGameEvent::new(
-                    GameEvent::RainLevelChange,
-                    rain_level.clamp(0.0, 1.0),
-                ))
-                .await;
-            client
-                .enqueue_client_packet(&CGameEvent::new(
-                    GameEvent::ThunderLevelChange,
-                    thunder_level.clamp(0.0, 1.0),
-                ))
-                .await;
-        }
+        self.send_weather_info(player);
 
         let player_bossbars = server
             .bossbars
@@ -3759,6 +3740,8 @@ impl World {
         }
 
         // TODO: World spawn (compass stuff)
+
+        self.send_weather_info(player);
 
         if let ClientPlatform::Java(client) = player.client.as_ref()
             && client.version.load() >= JavaMinecraftVersion::V_1_20_2
@@ -7038,6 +7021,7 @@ impl World {
         if let Ok(mut portal_poi) = self.portal_poi.try_lock() {
             let _ = portal_poi.save_all();
         }
+        self.save_own_weather();
 
         {
             let custom_data = self

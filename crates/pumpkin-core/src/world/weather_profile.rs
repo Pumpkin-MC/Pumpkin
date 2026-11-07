@@ -22,9 +22,10 @@ impl TickRange {
     }
 
     fn validate(self, what: &str) -> Result<(), String> {
-        if self.0 < 0 || self.0 > self.1 {
+        // A zero tick roll is never counted down, so it would roll again forever.
+        if self.0 < 1 || self.0 > self.1 {
             return Err(format!(
-                "{what} must be [min, max] with 0 <= min <= max, got [{}, {}]",
+                "{what} must be [min, max] with 1 <= min <= max, got [{}, {}]",
                 self.0, self.1
             ));
         }
@@ -228,6 +229,7 @@ mod test {
     fn bad_profiles_are_rejected() {
         for json in [
             r#"{"rain":{"delay":[9,1],"duration":[1,2]}}"#,
+            r#"{"thunder":{"delay":[0,5],"duration":[1,2]}}"#,
             r#"{"phases":[{"id":"a","delay":[1,2],"duration":[1,2]},{"id":"a","delay":[1,2],"duration":[1,2]}]}"#,
             r#"{"unknown":1}"#,
             r#"{"phases":[{"id":"a","delay":[1,2],"duration":[1,2],"typo":true}]}"#,
