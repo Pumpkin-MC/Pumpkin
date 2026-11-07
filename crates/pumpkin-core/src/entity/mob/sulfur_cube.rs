@@ -46,7 +46,7 @@ use crate::entity::mob::cube_mob::{
     CubeMobRandomDirectionGoal, tick_cube_mob,
 };
 use crate::entity::mob::spawn::{EntitySpawnReason, SpawnGroupData};
-use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::mob::{Mob, MobEntity, conversion};
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::tnt::TNTEntity;
@@ -1053,6 +1053,20 @@ impl Mob for SulfurCubeEntity {
         true
     }
 
+    fn can_be_picked_from_inside(&self) -> bool {
+        !self.has_body_item()
+    }
+
+    fn is_invulnerable_to_piercing_weapon(&self) -> bool {
+        self.get_entity().invulnerable.load(Ordering::Relaxed) && !self.is_primed()
+    }
+
+    fn spawn_as_baby(&self) -> bool {
+        self.set_size(MIN_SIZE, true);
+        AgeableMob::set_baby(self, true);
+        true
+    }
+
     fn mob_receives_player_touch(&self) -> bool {
         true
     }
@@ -1269,7 +1283,6 @@ impl Mob for SulfurCubeEntity {
         if size <= 1 || living.health.load() > 0.0 {
             return;
         }
-        let world = entity.world.load_full();
         let pos = entity.pos.load();
         let half_size = size / 2;
         let count = if self.is_primed() { 0 } else { SPLIT_COUNT };
@@ -1277,17 +1290,21 @@ impl Mob for SulfurCubeEntity {
         for i in 0..count {
             let xd = ((i % 2) as f32 - 0.5) * xz_offset;
             let zd = ((i / 2) as f32 - 0.5) * xz_offset;
-            let new_pos = Vector3::new(pos.x + f64::from(xd), pos.y + 0.5, pos.z + f64::from(zd));
-            let child = Self::new(Entity::new(world.clone(), new_pos, entity.entity_type));
-            child.set_size(half_size, true);
-            AgeableMob::set_baby(child.as_ref(), true);
-            child
-                .mob_entity
-                .living_entity
-                .entity
-                .yaw
-                .store(self.get_random().random_range(0.0..360.0));
-            world.spawn_entity(child);
+            let yaw = self.get_random().random_range(0.0..360.0);
+            conversion::split_on_death(self, entity.entity_type, |child| {
+                let Some(child) = child.cast_any().downcast_ref::<Self>() else {
+                    return;
+                };
+                child.set_size(half_size, true);
+                let child_entity = child.get_entity();
+                child_entity.set_pos(Vector3::new(
+                    pos.x + f64::from(xd),
+                    pos.y + 0.5,
+                    pos.z + f64::from(zd),
+                ));
+                child_entity.set_rotation(yaw, 0.0);
+                AgeableMob::set_baby(child, true);
+            });
         }
     }
 }

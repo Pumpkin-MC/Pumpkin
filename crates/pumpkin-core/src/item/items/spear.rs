@@ -1,3 +1,4 @@
+use crate::entity::mob::Mob;
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -634,7 +635,10 @@ impl SpearItem {
         let entity = target.get_entity();
         if entity.entity_id == player.entity_id()
             || entity.is_removed()
-            || entity.invulnerable.load(Ordering::Relaxed)
+            || target.get_mob().map_or_else(
+                || entity.invulnerable.load(Ordering::Relaxed),
+                Mob::is_invulnerable_to_piercing_weapon,
+            )
             || target.is_spectator()
         {
             return false;
