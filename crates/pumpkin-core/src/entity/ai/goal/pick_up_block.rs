@@ -80,7 +80,6 @@ impl Goal for PickUpBlockGoal {
             return;
         }
 
-        let carried_state_id = world.get_block_state_id(&target_pos);
         let mut event =
             crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
                 entity.entity_id,
@@ -103,6 +102,7 @@ impl Goal for PickUpBlockGoal {
                 source_entity: Some(source),
             },
         );
-        self.enderman.set_carried_block(Some(carried_state_id));
+        self.enderman
+            .set_carried_block(Some(block.default_state.id));
     }
 }

@@ -230,6 +230,37 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
+        if self.hurts_water_sensitive_entities() {
+            let owner = self.thrown.owner.get(&world);
+            let potion_pos = self.get_entity().pos.load();
+            let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
+            for entity in world.get_all_at_box(&search_box) {
+                if entity.get_living_entity().is_some()
+                    && entity.is_sensitive_to_water()
+                    && entity
+                        .get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&potion_pos)
+                        < 16.0
+                {
+                    entity.damage_with_context(
+                        entity.as_ref(),
+                        1.0,
+                        pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
+                        None,
+                        Some(self),
+                        owner.as_deref(),
+                    );
+                }
+            }
+        }
+
+        // If no effects, just splash (like water bottles)
+        if effects.is_empty() {
+            return;
+        }
+
         let radius = 4.0f64;
         let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
         let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
@@ -277,45 +308,18 @@ impl EntityBase for SplashPotionEntity {
         }
 
         let owner = self.thrown.owner.get(&world);
-        let hurts_water_sensitive_entities = self.hurts_water_sensitive_entities();
-        let water_damage_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
-                let distance_squared = cand
-                    .get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&hit_pos);
-                if hurts_water_sensitive_entities
-                    && cand.is_sensitive_to_water()
-                    && cand
-                        .get_entity()
-                        .bounding_box
-                        .load()
-                        .intersects(&water_damage_box)
-                    && distance_squared < radius * radius
-                {
-                    cand.damage_with_context(
-                        cand.as_ref(),
-                        1.0,
-                        pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
-                        Some(hit_pos),
-                        Some(self),
-                        owner.as_deref(),
-                    );
-                }
-                if !effects.is_empty() {
-                    crate::item::potion::PotionContents::apply_effects_to(
-                        living,
-                        effects.clone(),
-                        scale,
-                        crate::item::potion::PotionApplicationSource::Normal,
-                        Some(crate::entity::living::EffectSource {
-                            direct: self,
-                            owner: owner.as_deref(),
-                        }),
-                    );
-                }
+                crate::item::potion::PotionContents::apply_effects_to(
+                    living,
+                    effects.clone(),
+                    scale,
+                    crate::item::potion::PotionApplicationSource::Normal,
+                    Some(crate::entity::living::EffectSource {
+                        direct: self,
+                        owner: owner.as_deref(),
+                    }),
+                );
             }
         }
     }

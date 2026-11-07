@@ -45,6 +45,7 @@ use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -1050,6 +1051,31 @@ impl MobEntity {
         );
 
         base_box.expand(attack_range, 0.0, attack_range)
+    }
+
+    /// Turns the body toward the target's eyes, at most `y_max` and `x_max` degrees per call.
+    pub fn look_at_entity(&self, target: &dyn EntityBase, y_max: f32, x_max: f32) {
+        let entity = &self.living_entity.entity;
+        let pos = entity.pos.load();
+        let target_entity = target.get_entity();
+        let target_pos = target_entity.pos.load();
+        let xd = target_pos.x - pos.x;
+        let zd = target_pos.z - pos.z;
+        let yd = if target.get_living_entity().is_some() {
+            target_entity.get_eye_y() - entity.get_eye_y()
+        } else {
+            let bounding_box = target_entity.bounding_box.load();
+            f64::midpoint(bounding_box.min.y, bounding_box.max.y) - entity.get_eye_y()
+        };
+        let sd = xd.hypot(zd);
+        let y_rot = (zd.atan2(xd).to_degrees() as f32) - 90.0;
+        let x_rot = -(yd.atan2(sd).to_degrees() as f32);
+        let rotlerp =
+            |from: f32, to: f32, max: f32| from + wrap_degrees(to - from).clamp(-max, max);
+        entity
+            .pitch
+            .store(rotlerp(entity.pitch.load(), x_rot, x_max));
+        entity.yaw.store(rotlerp(entity.yaw.load(), y_rot, y_max));
     }
 
     /// Brightness at the mob's eye (sky and block light) reaches daylight.
