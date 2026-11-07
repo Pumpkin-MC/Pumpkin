@@ -5,6 +5,14 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::bedrock::client::update_attributes::{
+    AttributeData as BeAttribute, CUpdateAttributes as BePacket,
+};
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
+use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
+use pumpkin_protocol::java::client::play::Property as JeProperty;
 use rustc_hash::FxHashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -218,15 +226,6 @@ pub fn apply_attributes(living: &LivingEntity, packed: &[NbtTag]) {
         }
     }
 }
-
-use pumpkin_protocol::bedrock::client::update_attributes::{
-    AttributeData as BeAttribute, CUpdateAttributes as BePacket,
-};
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::codec::var_ulong::VarULong;
-use pumpkin_protocol::java::client::play::AttributeModifier as JeAttrMod;
-use pumpkin_protocol::java::client::play::CUpdateAttributes as JePacket;
-use pumpkin_protocol::java::client::play::Property as JeProperty;
 
 /// Builds the Java packet and, when any attribute has a Bedrock name, the Bedrock packet.
 fn build_attribute_packets(
