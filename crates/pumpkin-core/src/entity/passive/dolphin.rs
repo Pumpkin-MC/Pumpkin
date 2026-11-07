@@ -143,14 +143,6 @@ impl DolphinEntity {
         self.get_entity()
             .set_synced_data(tracked_data::dolphin::MOISTNESS_LEVEL, VarInt(level));
     }
-
-    fn update_dimensions(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(
-            entity.entity_type,
-            AgeableMob::is_baby(self),
-        ));
-    }
 }
 
 impl AgeableMob for DolphinEntity {
@@ -160,10 +152,6 @@ impl AgeableMob for DolphinEntity {
 
     fn default_baby_spawn_chance(&self) -> f32 {
         0.1
-    }
-
-    fn age_boundary_reached(&self) {
-        self.update_dimensions();
     }
 }
 
@@ -355,7 +343,6 @@ impl Mob for DolphinEntity {
             tracked_data::dolphin::MOISTNESS_LEVEL,
             VarInt(self.moistness_level.load(Ordering::Relaxed)),
         );
-        self.update_dimensions();
     }
 
     fn mob_max_air_supply(&self) -> i32 {

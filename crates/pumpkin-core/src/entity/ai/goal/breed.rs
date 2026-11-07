@@ -72,21 +72,40 @@ impl BreedGoal {
         })
     }
 
-    pub(crate) fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
+    /// `brain` is the breeding mob's brain while its own behavior runs this.
+    pub(crate) fn breed(
+        mob: &dyn Mob,
+        mate: &dyn EntityBase,
+        brain: Option<&mut crate::entity::ai::brain::BrainState>,
+    ) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
         let world = entity.world.load();
         let world_full = entity.world.load_full();
         let parent_pos = entity.pos.load();
 
-        let baby = mob.as_animal().map_or_else(
-            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
-            |animal| animal.get_breed_offspring(mate),
-        );
+        let animal = mob.as_animal();
+        let baby = match animal {
+            Some(animal) if !animal.spawns_offspring() => None,
+            Some(animal) => Some(animal.get_breed_offspring(mate)),
+            None => Some(from_type(
+                entity.entity_type,
+                parent_pos,
+                &world,
+                Uuid::new_v4(),
+            )),
+        };
+        // Vanilla `getBreedOffspring` returns null without a baby form: no offspring.
+        if baby
+            .as_ref()
+            .is_some_and(|baby| !baby.get_mob().is_some_and(Mob::spawn_as_baby))
+        {
+            return;
+        }
         let experience = mob.get_random().random_range(1..8);
         let Some(experience) = mob.approve_breeding(
             mate.get_entity().entity_id,
-            baby.get_entity().entity_id,
+            baby.as_ref().map_or(-1, |baby| baby.get_entity().entity_id),
             experience,
         ) else {
             // Cancelled: end love mode with the usual cooldown, a plugin resets it if wanted.
@@ -106,7 +125,7 @@ impl BreedGoal {
             .get_mob()
             .and_then(|mate| mate.get_mob_entity().breeder.load())
             .filter(|uuid| online(uuid) && first != Some(*uuid));
-        if let Some(baby_mob) = baby.get_mob() {
+        if let Some(baby_mob) = baby.as_ref().and_then(|baby| baby.get_mob()) {
             for breeder in first.into_iter().chain(second) {
                 baby_mob.on_bred_by(breeder);
             }
@@ -133,8 +152,11 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        baby.get_entity().set_age(-24000);
-        world_full.spawn_entity(baby);
+        if let Some(baby) = baby {
+            world_full.spawn_entity(baby);
+        } else if let Some(animal) = animal {
+            animal.on_bred_without_offspring(brain);
+        }
 
         world_full.send_entity_status(
             entity,
@@ -247,7 +269,7 @@ impl Goal for BreedGoal {
         self.timer += 1;
 
         if self.timer >= self.get_tick_count(60) && dist_sq < 9.0 {
-            Self::breed(mob, mate.as_ref());
+            Self::breed(mob, mate.as_ref(), None);
         }
     }
 

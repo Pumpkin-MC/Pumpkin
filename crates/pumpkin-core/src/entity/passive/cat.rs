@@ -70,9 +70,9 @@ pub struct CatEntity {
     pub sound_variant: AtomicU8,
     pub collar_color: AtomicU8,
     pub tamable_data: TamableData,
+    pub ageable_data: AgeableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
-    pub ageable_data: AgeableData,
 }
 
 impl CatEntity {
@@ -84,9 +84,9 @@ impl CatEntity {
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
+            ageable_data: AgeableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
-            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(cat);
         let mob_weak: Weak<dyn Mob> = {

@@ -120,7 +120,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,
@@ -889,10 +889,6 @@ impl EntityBase for ArrowEntity {
                 ..
             } => {
                 let target_entity_id = target.get_entity().entity_id;
-                self.pierced_entities
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(target_entity_id);
 
                 // Calculate damage
                 let velocity = entity.velocity.load();
@@ -918,6 +914,11 @@ impl EntityBase for ArrowEntity {
 
                 let owner_entity = self.owner.get(&world);
 
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(target_entity_id);
+
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
@@ -927,6 +928,11 @@ impl EntityBase for ArrowEntity {
                     // Like vanilla, an ownerless arrow is its own cause.
                     Some(owner_entity.as_deref().unwrap_or(self)),
                 );
+
+                if is_enderman && !damage_succeeded {
+                    self.has_hit.store(false, Ordering::Relaxed);
+                    return;
+                }
 
                 if let Some(living) = target.get_living_entity() {
                     if punch > 0 {
@@ -998,13 +1004,13 @@ impl EntityBase for ArrowEntity {
         None
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Only allow picking up grounded arrows
         if !self.in_ground.load(Ordering::Relaxed) {
-            return;
-        }
-
-        if player.living_entity.health.load() <= 0.0 {
             return;
         }
 

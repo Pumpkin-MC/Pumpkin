@@ -25,23 +25,34 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-26.04-arm,
-            windows-latest,
-            windows-11-arm,
-            macos-latest,
-          ]
-        toolchain:
-          - stable
+        include:
+          - os: ubuntu-latest
+            arch: X64
+          - os: ubuntu-latest
+            arch: X64-v3
+            rustflags: -C target-cpu=x86-64-v3
+          - os: ubuntu-26.04-arm
+            arch: ARM64
+          - os: windows-latest
+            arch: X64
+          - os: windows-latest
+            arch: X64-v3
+            rustflags: -C target-cpu=x86-64-v3
+          - os: windows-11-arm
+            arch: ARM64
+          - os: macos-latest
+            arch: ARM64
+    env:
+      RUSTFLAGS: -Dwarnings ${{ matrix.rustflags }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update stable && rustup default stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
 
       - name: Build Release
         shell: bash
@@ -53,13 +64,13 @@ jobs:
           mkdir -p dist
           EXT=""
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ matrix.arch }}-${{ runner.os }}$EXT"
 
       - name: Upload unsigned Windows executable
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: unsigned-${{ runner.arch }}-${{ runner.os }}
+          name: unsigned-${{ matrix.arch }}-${{ runner.os }}
           path: dist/pumpkin-*
           retention-days: 14
 
@@ -67,7 +78,7 @@ jobs:
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: pumpkin-${{ runner.arch }}-${{ runner.os }}
+          name: pumpkin-${{ matrix.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
 
@@ -79,16 +90,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - windows-latest
-          - windows-11-arm
+        include:
+          - os: windows-latest
+            arch: X64
+          - os: windows-latest
+            arch: X64-v3
+          - os: windows-11-arm
+            arch: ARM64
     steps:
       - name: Find unsigned artifact
         id: artifact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: unsigned-${{ runner.arch }}-${{ runner.os }}
+          ARTIFACT_NAME: unsigned-${{ matrix.arch }}-${{ runner.os }}
         run: |
           ARTIFACT_ID=$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
@@ -110,7 +125,7 @@ jobs:
       - name: Export signed executable
         uses: actions/upload-artifact@v7
         with:
-          name: pumpkin-${{ runner.arch }}-${{ runner.os }}
+          name: pumpkin-${{ matrix.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
 
@@ -126,7 +141,7 @@ jobs:
           targets: aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2

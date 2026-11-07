@@ -201,7 +201,9 @@ impl BlockBehaviour for TurtleEggBlock {
                     );
                     let turtle =
                         from_type(&EntityType::TURTLE, spawn_pos, args.world, Uuid::new_v4());
-                    turtle.get_entity().set_age(-24000);
+                    if let Some(mob) = turtle.get_mob() {
+                        mob.spawn_as_baby();
+                    }
                     args.world.spawn_entity(turtle);
                 }
             }
