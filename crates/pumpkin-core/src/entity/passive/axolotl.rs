@@ -307,6 +307,6 @@ impl Mob for AxolotlEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityAxolotlIdleAir)
+        self.animal_interact(player, item_stack)
     }
 }

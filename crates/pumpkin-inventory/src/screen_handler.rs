@@ -172,7 +172,11 @@ pub trait InventoryPlayer: Send + Sync {
     fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
 
     /// Sends a property update packet.
-    fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
+    fn enqueue_property_packet(
+        &self,
+        packet: &CSetContainerProperty,
+        window_type: Option<WindowType>,
+    );
 
     /// Sends a player inventory slot update.
     fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);

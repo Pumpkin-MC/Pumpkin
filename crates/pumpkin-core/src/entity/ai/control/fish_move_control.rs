@@ -1,4 +1,5 @@
 use pumpkin_data::attributes::Attributes;
+use pumpkin_util::math::vector3::Vector3;
 
 use super::{
     Control, MoveControlTrait,
@@ -70,5 +71,13 @@ impl MoveControlTrait for FishMoveControl {
 
     fn has_wanted(&self) -> bool {
         self.inner.has_wanted()
+    }
+
+    fn get_speed_modifier(&self) -> f64 {
+        self.inner.get_speed_modifier()
+    }
+
+    fn get_wanted_position(&self) -> Vector3<f64> {
+        MoveControlTrait::get_wanted_position(&self.inner)
     }
 }

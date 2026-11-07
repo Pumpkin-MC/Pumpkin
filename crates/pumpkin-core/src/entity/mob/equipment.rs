@@ -28,8 +28,10 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::enchantment_provider::EnchantmentProvider;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
@@ -37,6 +39,7 @@ use rand::RngExt;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::player::Player;
 
 // ══════════════════════════════════════════════════════════════════
 // Global constants extracted from vanilla Minecraft 26.2
@@ -878,6 +881,42 @@ pub fn is_equippable_in_slot(
     )
 }
 
+pub fn equip_on_target(mob: &dyn Mob, player: &Player, stack: &mut ItemStack) -> bool {
+    let Some(equippable) = stack
+        .get_data_component::<EquippableImpl>()
+        .filter(|equippable| equippable.equip_on_interact)
+    else {
+        return false;
+    };
+    let slot = equippable.slot;
+    let equip_sound = equippable.equip_sound.clone();
+    let mob_entity = mob.get_mob_entity();
+    let living = &mob_entity.living_entity;
+    if !mob.is_equippable_in_slot(stack, slot)
+        || !mob_entity.is_slot_empty(slot)
+        || !living.entity.is_alive()
+    {
+        return false;
+    }
+
+    let equipped = stack.split_unless_creative(player.gamemode.load(), 1);
+    mob_entity.set_item_slot_and_drop_when_killed(slot, equipped);
+    let entity = &living.entity;
+    if !entity.is_silent() {
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        match mob.get_equip_sound(slot) {
+            Some(sound) => world.play_sound(sound, SoundCategory::Neutral, &pos),
+            None => world.play_sound_event(&equip_sound, SoundCategory::Neutral, &pos),
+        }
+    }
+    entity
+        .world
+        .load()
+        .emit_game_event(GameEvent::Equip.name(), entity.pos.load());
+    true
+}
+
 #[must_use]
 pub fn get_equipment_slot_for_item(stack: &ItemStack) -> EquipmentSlot {
     stack
@@ -1114,6 +1153,96 @@ pub fn limit_for_slot(slot: &EquipmentSlot, stack: &mut ItemStack) -> ItemStack 
         std::mem::replace(stack, ItemStack::EMPTY.clone())
     } else {
         stack.split(1)
+    }
+}
+
+/// One mob equipment slot as a single-slot inventory.
+pub struct EquipmentSlotContainer {
+    mob: std::sync::Weak<dyn EntityBase>,
+    slot: EquipmentSlot,
+}
+
+impl EquipmentSlotContainer {
+    #[must_use]
+    pub const fn new(mob: std::sync::Weak<dyn EntityBase>, slot: EquipmentSlot) -> Self {
+        Self { mob, slot }
+    }
+
+    fn with_mob<R>(&self, default: R, f: impl FnOnce(&dyn Mob) -> R) -> R {
+        self.mob
+            .upgrade()
+            .and_then(|entity| entity.get_mob().map(f))
+            .unwrap_or(default)
+    }
+}
+
+impl pumpkin_inventory::Clearable for EquipmentSlotContainer {
+    fn clear(&self) {
+        pumpkin_inventory::Inventory::set_stack(self, 0, ItemStack::EMPTY.clone());
+    }
+}
+
+impl pumpkin_inventory::Inventory for EquipmentSlotContainer {
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        self.get_stack(0).is_empty()
+    }
+
+    fn get_stack(&self, _slot: usize) -> ItemStack {
+        self.with_mob(ItemStack::EMPTY.clone(), |mob| {
+            mob.get_mob_entity()
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&self.slot)
+        })
+    }
+
+    fn remove_stack(&self, _slot: usize) -> ItemStack {
+        self.with_mob(ItemStack::EMPTY.clone(), |mob| {
+            mob.get_mob_entity()
+                .set_item_slot(&self.slot, ItemStack::EMPTY.clone())
+        })
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        let mut stack = self.get_stack(slot);
+        if stack.is_empty() || amount == 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let removed = stack.split(amount);
+        self.set_stack(slot, stack);
+        removed
+    }
+
+    fn set_stack(&self, _slot: usize, stack: ItemStack) {
+        self.with_mob((), |mob| {
+            let mob_entity = mob.get_mob_entity();
+            let empty = stack.is_empty();
+            mob_entity.set_item_slot(&self.slot, stack);
+            if !empty {
+                mob_entity.set_guaranteed_drop(&self.slot);
+                mob_entity
+                    .persistence_required
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+    }
+
+    fn get_max_count_per_stack(&self) -> u8 {
+        1
+    }
+
+    fn is_valid_slot_for(&self, _slot: usize, stack: &ItemStack) -> bool {
+        self.with_mob(false, |mob| mob.is_equippable_in_slot(stack, &self.slot))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

@@ -162,6 +162,14 @@ impl BedrockClient {
         if input_data.get(InputData::StartSneaking as usize) {
             entity.set_sneaking(true);
             player.update_bedrock_shield_sneaking();
+            let vehicle = entity
+                .vehicle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(vehicle) = vehicle {
+                vehicle.get_entity().remove_passenger(player.entity_id());
+            }
         } else if input_data.get(InputData::StopSneaking as usize) {
             entity.set_sneaking(false);
             player.update_bedrock_shield_sneaking();

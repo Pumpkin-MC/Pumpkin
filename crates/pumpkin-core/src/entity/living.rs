@@ -4,7 +4,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -23,7 +22,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use super::experience_orb::ExperienceOrbEntity;
-use super::{Entity, EntityBase, NBTStorageInit};
+use super::{Entity, EntityBase, GearDamage, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
 use crate::entity::attributes::Modifier;
@@ -40,7 +39,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
+use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeAnimation, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
     EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
@@ -58,7 +57,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    CHurtAnimation, CSetPlayerInventory, CTakeItemEntity, CUpdateMobEffect,
+    CHurtAnimation, CSwingArm, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -279,7 +278,7 @@ impl LivingEntity {
         !self.is_baby()
     }
 
-    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32) {
+    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32, pitch: f32) {
         if self.entity.is_silent() {
             return;
         }
@@ -288,7 +287,7 @@ impl LivingEntity {
             category,
             &self.entity.pos.load(),
             volume,
-            self.get_pitch(),
+            pitch,
         );
     }
 
@@ -296,11 +295,15 @@ impl LivingEntity {
         let custom_sound = caller.get_mob().and_then(|mob| mob.as_custom_sound());
         self.make_sound(
             sound,
-            custom_sound.map_or(
-                SoundCategory::Players,
+            custom_sound.map_or_else(
+                || caller.sound_source(),
                 super::custom_sound::CustomSound::sound_category,
             ),
             custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || self.get_pitch(),
+                super::custom_sound::CustomSound::voice_pitch,
+            ),
         );
     }
 
@@ -511,15 +514,17 @@ impl LivingEntity {
             })
             .collect();
         let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
+        let world = self.entity.world.load();
+        world.send_to_tracking_players(&self.entity, &je_packet);
 
-        let mut sent_editioned = false;
+        let mut armor_changed = false;
         for (slot, stack) in equipment {
             if *slot == EquipmentSlot::MAIN_HAND {
                 self.update_weapon_attributes(stack);
             }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
-                    120
+                    119
                 } else {
                     0
                 };
@@ -533,21 +538,48 @@ impl LivingEntity {
                     selected_slot: 0,
                     container_id: window_id,
                 };
-                self.entity.world.load().send_to_tracking_players_editioned(
-                    &self.entity,
-                    &je_packet,
-                    &be_packet,
-                );
-                sent_editioned = true;
+                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
+            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
+                armor_changed = true;
             }
         }
 
-        if !sent_editioned {
-            self.entity
-                .world
-                .load()
-                .send_to_tracking_players(&self.entity, &je_packet);
+        if armor_changed {
+            let armor_packet = self.bedrock_armor_packet(equipment);
+            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
         }
+    }
+
+    #[must_use]
+    pub fn bedrock_armor_packet(
+        &self,
+        overrides: &[(EquipmentSlot, ItemStack)],
+    ) -> pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+        use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+
+        let equipment_guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot_desc = |target: &EquipmentSlot| -> NetworkItemStackDescriptor {
+            if let Some((_, stack)) = overrides.iter().rfind(|(slot, _)| slot == target) {
+                NetworkItemStackDescriptor::from(stack)
+            } else {
+                let stack = equipment_guard.get(target);
+                NetworkItemStackDescriptor::from(&stack)
+            }
+        };
+
+        let packet = pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            head: slot_desc(&EquipmentSlot::HEAD),
+            chest: slot_desc(&EquipmentSlot::CHEST),
+            legs: slot_desc(&EquipmentSlot::LEGS),
+            feet: slot_desc(&EquipmentSlot::FEET),
+            body: slot_desc(&EquipmentSlot::BODY),
+        };
+        drop(equipment_guard);
+        packet
     }
 
     /// Applies the held item's attack attribute modifiers to this entity's
@@ -1576,10 +1608,7 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
-        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
-            entity_id.into(),
-            pumpkin_protocol::java::client::play::Animation::SwingOffhand,
-        );
+        let je_packet = CSwingArm::new(entity_id.into(), true);
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
@@ -1595,6 +1624,10 @@ impl LivingEntity {
         if let Some(mob) = caller.get_mob() {
             mob.before_mob_ai_step();
         }
+        let client_controlled = caller.get_mob().is_some()
+            && caller
+                .get_controlling_passenger()
+                .is_some_and(|rider| rider.get_player().is_some());
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -1617,6 +1650,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
         } else if let Some(mob) = caller.get_mob()
             && !mob.get_mob_entity().is_no_ai()
+            && !client_controlled
         {
             // Prepare old motion before controllers produce this tick's inputs.
             mob.get_mob_entity().server_ai_step(mob, caller);
@@ -1648,7 +1682,7 @@ impl LivingEntity {
             } else if (on_ground || in_water && fluid_height <= swim_height)
                 && self.jumping_cooldown.load(SeqCst) == 0
             {
-                self.jump();
+                self.jump(caller);
 
                 self.jumping_cooldown.store(10, SeqCst);
             }
@@ -1667,11 +1701,14 @@ impl LivingEntity {
         // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
         let effective_ai = caller
             .get_mob()
-            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai());
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
+            && !client_controlled;
 
         // Strider is the only entity that has canWalkOnFluid = false
 
-        if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
+        if client_controlled {
+            self.entity.velocity.store(Vector3::default());
+        } else if !effective_ai || caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
         } else if (touching_water || self.entity.touching_lava.load(SeqCst))
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
@@ -1701,15 +1738,21 @@ impl LivingEntity {
         if let Some(mob) = caller.get_mob() {
             mob.mob_ai_step();
             crate::entity::mob::pick_up_nearby_items(mob);
-            mob.get_mob_entity()
-                .body_rotation_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .client_tick(mob);
+            if mob.ticks_body_rotation() {
+                mob.get_mob_entity()
+                    .body_rotation_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .client_tick(mob);
+            }
         }
     }
 
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        if dyn_self.get_mob().is_some_and(|mob| !mob.pushes_entities()) {
+            return;
+        }
+
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
         let own_team = dyn_self.get_team();
@@ -1749,7 +1792,13 @@ impl LivingEntity {
         }
 
         for entity in pushable {
-            entity.push(dyn_self);
+            let mob = dyn_self.get_mob();
+            if let Some(mob) = mob {
+                mob.do_push(&entity);
+            }
+            if mob.is_none_or(|mob| mob.can_push_entity(entity.as_ref())) {
+                entity.push(dyn_self);
+            }
         }
     }
 
@@ -2129,8 +2178,16 @@ impl LivingEntity {
         }
     }
 
-    fn jump(&self) {
-        let jump = self.get_jump_velocity(1.0);
+    fn jump(&self, caller: &dyn EntityBase) {
+        let mob = caller.get_mob();
+        self.jump_from_ground(mob.map_or(1.0, crate::entity::mob::Mob::jump_power_multiplier));
+        if let Some(mob) = mob {
+            mob.on_jump_from_ground();
+        }
+    }
+
+    fn jump_from_ground(&self, multiplier: f32) {
+        let jump = self.get_jump_velocity(f64::from(multiplier));
 
         if jump <= 1.0e-5 {
             return;
@@ -2222,12 +2279,25 @@ impl LivingEntity {
         }
     }
 
+    /// Applies fall damage through the mob's override when it has one.
     pub fn handle_fall_damage(
         &self,
         caller: &dyn EntityBase,
         fall_distance: f32,
-        damage_per_distance: f32,
-    ) {
+        damage_modifier: f32,
+    ) -> bool {
+        caller.get_mob().map_or_else(
+            || self.cause_fall_damage(caller, fall_distance, damage_modifier),
+            |mob| mob.cause_fall_damage(caller, fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
         let may_fly = caller.get_player().is_some_and(|player| {
             player
                 .abilities
@@ -2236,7 +2306,7 @@ impl LivingEntity {
                 .allow_flying
         });
         if may_fly || self.is_immune_to_fall_damage() {
-            return;
+            return false;
         }
 
         // Vanilla parity: the fall_damage gamerule only affects players.
@@ -2250,7 +2320,7 @@ impl LivingEntity {
                 .game_rules
                 .fall_damage
         {
-            return;
+            return false;
         }
 
         if fall_distance >= 2.0
@@ -2263,25 +2333,63 @@ impl LivingEntity {
             );
         }
 
-        let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
-        let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
+        self.propagate_fall_to_passengers(fall_distance, damage_modifier);
+        let damage = self.calculate_fall_damage(caller, fall_distance, damage_modifier);
+        if damage <= 0 {
+            return false;
+        }
+        caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
+        self.play_block_fall_sound(caller);
+        self.damage(caller, damage as f32, DamageType::FALL);
+        true
+    }
 
-        let damage = (unsafe_fall_distance * damage_per_distance).floor();
-        if damage > 0.0 {
-            caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
-            self.play_block_fall_sound(caller);
-            self.damage(caller, damage, DamageType::FALL);
+    fn calculate_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> i32 {
+        caller.get_mob().map_or_else(
+            || self.base_fall_damage(fall_distance, damage_modifier),
+            |mob| mob.calculate_fall_damage(fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn base_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        if self.is_immune_to_fall_damage() {
+            return 0;
+        }
+        let fall_power = f64::from(fall_distance) + 1.0E-6
+            - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+        (fall_power
+            * f64::from(damage_modifier)
+            * self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER))
+        .floor() as i32
+    }
+
+    pub fn propagate_fall_to_passengers(&self, fall_distance: f32, damage_modifier: f32) {
+        let passengers = self
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            if let Some(living) = passenger.get_living_entity() {
+                living.handle_fall_damage(passenger.as_ref(), fall_distance, damage_modifier);
+            }
         }
     }
 
     /// Vanilla `getFallDamageSound`.
-    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: f32) -> Sound {
+    fn get_fall_damage_sound(caller: &dyn EntityBase, damage: i32) -> Sound {
         let (small, big) = caller.get_fall_sounds();
-        if damage as i32 > 4 { big } else { small }
+        if damage > 4 { big } else { small }
     }
 
     /// Vanilla `playBlockFallSound`: the fall sound of the block landed on.
-    fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
+    pub fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
         if self.entity.is_silent() {
             return;
         }
@@ -2371,6 +2479,9 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.on_die(cause.or(source));
+            }
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
@@ -2494,7 +2605,11 @@ impl LivingEntity {
 
         let slots_to_drop: Vec<EquipmentSlot> = {
             let mut slots: Vec<_> = self.equipment_slots.values().cloned().collect();
-            slots.push(EquipmentSlot::MAIN_HAND);
+            slots.extend([
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]);
             slots
         };
 
@@ -2826,74 +2941,49 @@ impl LivingEntity {
         false
     }
 
-    #[allow(dead_code)]
-    fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
-        // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
-        let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
-        let mut equipment_updates = Vec::new();
-
-        // TODO: Falling anvil/stalactite should only damage the helmet slot.
-        // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
-
-        let armor_slots: Vec<(usize, ItemStack, EquipmentSlot)> = {
-            let equipment_lock = self
+    pub fn do_hurt_equipment(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: DamageType,
+        damage: f32,
+        slots: &[EquipmentSlot],
+    ) {
+        if damage <= 0.0 {
+            return;
+        }
+        let durability_damage = (damage / 4.0).max(1.0) as i32;
+        for slot in slots {
+            let mut stack = self
                 .entity_equipment
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.equipment_slots
-                .iter()
-                .filter(|(_, slot)| slot.is_armor_slot())
-                .filter_map(|(index, slot)| {
-                    equipment_lock
-                        .equipment
-                        .get(slot)
-                        .cloned()
-                        .map(|stack| (*index, stack, slot.clone()))
-                })
-                .collect()
-        };
-
-        for (slot_index, mut stack, slot) in armor_slots {
-            if stack.is_empty() {
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(slot);
+            let damage_on_hurt = stack
+                .get_data_component::<EquippableImpl>()
+                .is_some_and(|equippable| equippable.damage_on_hurt);
+            if !damage_on_hurt || !stack.is_damageable() || !stack.can_be_hurt_by(damage_type) {
                 continue;
             }
-
-            let takes_damage = stack
-                .get_data_component::<EquippableImpl>()
-                .is_none_or(|equippable| equippable.damage_on_hurt);
-
-            if takes_damage {
-                let item_id = stack.item.id;
-                let slot_result = stack.damage_item(armor_damage);
-                if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
-                    if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
-                        if let Some(player) = caller.get_player() {
-                            player.increment_stat(
-                                pumpkin_data::statistic::StatisticCategory::Broken,
-                                item_id as i32,
-                                1,
-                            );
-                        }
-                        let world = self.entity.world.load();
-                        world.send_entity_status(
-                            &self.entity,
-                            super::equipment_break_status(&slot),
-                            ActorEventID::None,
-                        );
-                    }
-                    equipment_updates.push((slot.clone(), stack.clone()));
-                    if let Some(player) = caller.get_player() {
-                        player.enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                            (slot_index as i32).into(),
-                            &ItemStackSerializer::from(stack),
-                        ));
-                    }
-                }
+            if let Some(player) = caller.get_player() {
+                player.damage_item_in_slot(slot, durability_damage);
+                continue;
             }
-        }
-
-        if !equipment_updates.is_empty() {
-            self.send_equipment_changes(&equipment_updates);
+            let result = stack.damage_item(durability_damage);
+            if result == DamageResult::Untouched {
+                continue;
+            }
+            self.entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .put(slot, stack.clone());
+            self.send_equipment_changes(&[(slot.clone(), stack)]);
+            if result == DamageResult::Broken {
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    super::equipment_break_status(slot),
+                    ActorEventID::None,
+                );
+            }
         }
     }
 
@@ -2986,11 +3076,7 @@ impl LivingEntity {
                 && !water_breathing
                 && !nautilus_breathing
             {
-                let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
-                let mut random = caller.get_random();
-                if oxygen_bonus <= 0.0 || random.random::<f64>() < 1.0 / (oxygen_bonus + 1.0) {
-                    entity.set_air_supply(current.wrapping_sub(1));
-                }
+                entity.set_air_supply(caller.mob_decrease_air_supply(current));
                 if self.should_take_drowning_damage() {
                     entity.set_air_supply(0);
                     entity.world.load().send_entity_status(
@@ -3267,6 +3353,7 @@ impl LivingEntity {
     /// Calculates damage after armor reduction, mirroring vanilla `LivingEntity.getDamageAfterArmorAbsorb`.
     pub fn get_damage_after_armor_absorb(
         &self,
+        caller: &dyn EntityBase,
         damage: f32,
         damage_type: &DamageType,
         attacker: Option<&dyn EntityBase>,
@@ -3275,33 +3362,14 @@ impl LivingEntity {
             return damage;
         }
 
-        let mut armor = 0.0f32;
-        let mut toughness = 0.0f32;
-        {
-            let equipment_lock = self
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for slot in [
-                EquipmentSlot::HEAD,
-                EquipmentSlot::CHEST,
-                EquipmentSlot::LEGS,
-                EquipmentSlot::FEET,
-            ] {
-                if let Some(stack) = equipment_lock.equipment.get(&slot)
-                    && !stack.is_empty()
-                    && let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>()
-                {
-                    for modifier in modifiers.attribute_modifiers.iter() {
-                        if modifier.r#type == &Attributes::ARMOR {
-                            armor += modifier.amount as f32;
-                        } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
-                            toughness += modifier.amount as f32;
-                        }
-                    }
-                }
-            }
-        }
+        self.do_hurt_equipment(
+            caller,
+            *damage_type,
+            damage,
+            caller.hurt_gear_slots(GearDamage::Armor),
+        );
+        let armor = self.get_attribute_value(&Attributes::ARMOR).floor() as f32;
+        let toughness = self.get_attribute_value(&Attributes::ARMOR_TOUGHNESS) as f32;
 
         let breach_level = attacker
             .and_then(|att| {
@@ -3644,33 +3712,49 @@ impl LivingEntity {
             }
         }
 
-        // Vanilla parity: 1. Armor absorb
-        let damage_after_armor =
-            self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_DAMAGES_HELMET)
+            && !self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::HEAD)
+                .is_empty()
+        {
+            self.do_hurt_equipment(
+                caller,
+                damage_type,
+                amount,
+                caller.hurt_gear_slots(GearDamage::Helmet),
+            );
+            amount *= 0.75;
+        }
 
+        // These damage types bypass the hurt cooldown and death protection
+        let bypasses_cooldown_protection =
+            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+
+        let last_damage = self.last_damage_taken.load();
+        let (hurt_amount, full_damage) =
+            if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
+                if amount <= last_damage {
+                    return false;
+                }
+                (amount - last_damage, false)
+            } else {
+                self.hurt_cooldown.store(20, Relaxed);
+                (amount, true)
+            };
+
+        let damage_after_armor =
+            self.get_damage_after_armor_absorb(caller, hurt_amount, &damage_type, cause.or(source));
         let effective_amount = self.get_damage_after_magic_absorb(
             damage_after_armor,
             &damage_type,
             caller,
             cause.or(source),
         );
-
-        // These damage types bypass the hurt cooldown and death protection
-        let bypasses_cooldown_protection =
-            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
-
-        // Apply hurt cooldown logic
-        let last_damage = self.last_damage_taken.load();
-        let (damage_amount, play_sound) =
-            if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                if effective_amount <= last_damage {
-                    return false;
-                }
-                (effective_amount - last_damage, false)
-            } else {
-                self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, self.health.load() > effective_amount)
-            };
+        let damage_amount = effective_amount;
+        let play_sound = full_damage && self.health.load() > effective_amount;
 
         // Finalize state
         self.last_damage_taken.store(amount);
@@ -3982,6 +4066,26 @@ impl EntityBase for LivingEntity {
             }
         }
 
+        if caller.get_player().is_none() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use
+                    && item
+                        .get_data_component::<ConsumableImpl>()
+                        .is_some_and(|consumable| {
+                            consumable.should_emit_particles_and_sounds(remaining_use_ticks)
+                        })
+                {
+                    self.play_consume_sound(caller, &item);
+                }
+            }
+        }
+
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0
             && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 1
@@ -4006,6 +4110,11 @@ impl EntityBase for LivingEntity {
                     );
                 }
 
+                if caller.get_player().is_none()
+                    && item.get_data_component::<ConsumableImpl>().is_some()
+                {
+                    self.play_consume_sound(caller, item);
+                }
                 self.apply_consumable_effects(caller, item);
 
                 // Handle potion consumption
@@ -4228,6 +4337,33 @@ impl LivingEntity {
         let efficiency = self.get_attribute_value(&Attributes::MOVEMENT_EFFICIENCY) as f32;
         let super_factor = self.entity.get_block_speed_factor();
         super_factor + efficiency * (1.0 - super_factor)
+    }
+
+    fn play_consume_sound(&self, caller: &dyn EntityBase, item: &ItemStack) {
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+        if self.entity.is_silent() {
+            return;
+        }
+        let mut rng = rand::rng();
+        let (volume, pitch) = if consumable.animation == ConsumeAnimation::Drink {
+            (0.5, 0.9 + rng.random::<f32>() * 0.1)
+        } else {
+            (
+                if rng.random::<bool>() { 0.5 } else { 1.0 },
+                0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 1.0),
+            )
+        };
+        let world = self.entity.world.load();
+        let pos = self.entity.pos.load();
+        let category = caller.sound_source();
+        match caller.get_mob().and_then(|mob| mob.mob_consume_sound(item)) {
+            Some(sound) => world.play_sound_fine(sound, category, &pos, volume, pitch),
+            None => {
+                world.play_sound_event_fine(&consumable.sound_event, category, &pos, volume, pitch);
+            }
+        }
     }
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
@@ -4563,6 +4699,17 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
 }
 
+pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments
+                .enchantment
+                .iter()
+                .any(|(enchantment, level)| *level > 0 && enchantment.effects.prevent_armor_change)
+        })
+}
+
 pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
     stack
         .get_data_component::<EnchantmentsImpl>()
@@ -4724,7 +4871,6 @@ mod ai_step_tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use crate::entity::Entity;
     use crate::entity::ai::control::move_control::MoveControl;
     use crate::entity::ai::control::{Control, MoveControlTrait};
     use crate::entity::ai::goal::Goal;
@@ -4733,6 +4879,7 @@ mod ai_step_tests {
     use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
     use crate::entity::ai::test_support::world;
     use crate::entity::mob::{Mob, MobEntity};
+    use crate::entity::{Entity, EntityBase};
     use crate::world::World;
     use pumpkin_data::{attributes::Attributes, entity::EntityType};
     use pumpkin_util::math::position::BlockPos;
@@ -4838,6 +4985,34 @@ mod ai_step_tests {
             mob,
             immobile: false,
         }
+    }
+
+    #[tokio::test]
+    async fn bat_does_not_push_overlapping_mobs() -> TestResult {
+        use crate::entity::mob::bat::BatEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let other = Arc::new(probe(world.clone(), Arc::new(AtomicUsize::new(0))));
+        other.get_entity().set_pos(Vector3::new(0.1, 64.0, 0.0));
+        world.add_entity_silent(bat.clone());
+        world.add_entity_silent(other.clone());
+
+        bat.mob_entity.living_entity.push_entities(bat.as_ref());
+        let other_velocity = other.get_entity().velocity.load();
+        other.mob.living_entity.push_entities(other.as_ref());
+        let bat_velocity = bat.get_entity().velocity.load();
+        world.level.shutdown().await;
+
+        assert!(!bat.is_pushable());
+        assert_eq!(other_velocity, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(bat_velocity, Vector3::new(0.0, 0.0, 0.0));
+        Ok(())
     }
 
     #[tokio::test]
@@ -5118,6 +5293,34 @@ mod ai_step_tests {
         }
         Ok(())
     }
+
+    #[tokio::test]
+    async fn flying_applies_air_physics_before_bat_vertical_damping() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let bat = crate::entity::mob::bat::BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::BAT,
+        ));
+        bat.set_roosting(false);
+        let entity = bat.get_entity();
+        entity.velocity.store(Vector3::new(0.0, 0.5, 0.0));
+        bat.mob_entity.living_entity.travel_in_air(bat.as_ref());
+        let moved_y = entity.pos.load().y;
+        bat.post_tick();
+        let velocity_y = entity.velocity.load().y;
+        world.level.shutdown().await;
+
+        assert!((moved_y - 64.5).abs() < 1.0e-7);
+        assert!((velocity_y - 0.24696).abs() < 1.0e-7);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn ground_control_speed_reaches_travel_without_losing_its_modifier() -> TestResult {
         let folder = tempfile::tempdir()?;

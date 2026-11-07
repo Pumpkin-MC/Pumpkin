@@ -150,6 +150,13 @@ impl WardenEntity {
 }
 
 impl Mob for WardenEntity {
+    fn mob_is_pushable(&self) -> bool {
+        let pose = self.mob_entity.living_entity.entity.pose.load();
+        pose != EntityPose::Digging
+            && pose != EntityPose::Emerging
+            && self.mob_entity.living_entity.is_pushable()
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityWardenStep, 10.0, 1.0);
     }
