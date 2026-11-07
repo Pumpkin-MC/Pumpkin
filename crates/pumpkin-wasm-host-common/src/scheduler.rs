@@ -194,6 +194,21 @@ impl TaskScheduler {
         tasks_to_run
     }
 
+    /// Puts a due task back unchanged, for a tick that ran out of time before it could run it.
+    /// It keeps its due tick, so the next tick runs it before tasks that became due later.
+    pub fn defer(&self, task: ScheduledTask) {
+        let mut disabled_plugins = self
+            .disabled_plugins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin) {
+            self.tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(task);
+        }
+    }
+
     /// Queues a repeating task for its next run, unless its plugin has been disabled in the meantime.
     pub fn reschedule(&self, mut task: ScheduledTask, current_tick: u64) {
         let Some(period) = task.period else {

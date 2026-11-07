@@ -3,7 +3,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use pumpkin_core::server::Server;
@@ -16,20 +16,30 @@ use crate::runtime::guest_exports;
 #[cfg(not(feature = "v0_2"))]
 use crate::runtime::v0_2_disabled;
 
-/// How long the tick waits for one scheduled task before it moves on. One tick's worth of time.
+/// How long one tick waits for all its scheduled tasks together. One tick's worth of time.
 const TASK_TICK_BUDGET: Duration = Duration::from_millis(50);
 
 /// Runs the plugin tasks that are due on this tick.
+///
+/// All runs share one [`TASK_TICK_BUDGET`]. Tasks still due once it is used up are deferred to
+/// the next tick rather than started without waiting, so they never overlap the world tick. They
+/// keep their due tick, so they run first next time.
 pub fn tick(scheduler: &TaskScheduler, server: &Arc<Server>) {
     let current_tick = server.tick_count.load(Ordering::Relaxed) as u64;
+    let deadline = Instant::now() + TASK_TICK_BUDGET;
     for task in scheduler.take_due_tasks(current_tick) {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            scheduler.defer(task);
+            continue;
+        }
         if task.running.load(Ordering::Acquire) {
             tracing::debug!(
                 handler_id = task.handler_id,
                 "Skipping Wasm scheduled task run, the previous run is still in flight"
             );
         } else {
-            run_task(server, &task);
+            run_task(server, &task, remaining);
         }
         scheduler.reschedule(task, current_tick);
     }
@@ -50,11 +60,11 @@ impl Drop for RunningGuard {
 /// on world locks while the tick waited in a blocking event for the same plugin instance, which
 /// froze the server. Waiting here keeps a task and the plugin's blocking events apart.
 ///
-/// The wait is bounded by [`TASK_TICK_BUDGET`] so a task stuck in a host call (for example WASI
+/// The wait is bounded by `budget`, what is left of [`TASK_TICK_BUDGET`] on this tick, so a task stuck in a host call (for example WASI
 /// I/O) cannot stall the tick or shutdown. Wasmtime offers no way to interrupt a guest that is
-/// parked in a host future, so a run that overshoots the budget keeps going on its own Tokio task,
+/// parked in a host future, so a run that overshoots its budget keeps going on its own Tokio task,
 /// as before this change, and `running` stays set until it ends.
-fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
+fn run_task(server: &Arc<Server>, task: &ScheduledTask, budget: Duration) {
     let plugin = task.plugin.clone();
     let handler_id = task.handler_id;
     let server_clone = server.clone();
@@ -119,7 +129,7 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
     };
 
     let mut handle = server.spawn_task(fut);
-    let wait = async { tokio::time::timeout(TASK_TICK_BUDGET, &mut handle).await };
+    let wait = async { tokio::time::timeout(budget, &mut handle).await };
     let waited = if tokio::runtime::Handle::try_current().is_ok() {
         tokio::task::block_in_place(|| server.runtime.block_on(wait))
     } else {
@@ -128,7 +138,7 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
     if waited.is_err() {
         tracing::warn!(
             handler_id,
-            budget_ms = TASK_TICK_BUDGET.as_millis(),
+            budget_ms = budget.as_millis(),
             "Wasm scheduled task overran its tick budget, letting it finish in the background"
         );
     }
