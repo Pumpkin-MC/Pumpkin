@@ -13,6 +13,7 @@ use crate::helper::{
     GameTestControllerState, GameTestHelper, SequenceEvent, SequenceEventKind, get_test_function,
 };
 use crate::model::{GameTestRotation, TestType};
+use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
     clear_success_entities, encase_structure, place_structure_with_controller_rotation,
@@ -116,6 +117,18 @@ impl GameTestSession {
             started_at: None,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
         }
+    }
+
+    pub async fn clear_placement(&self) -> GameTestResult<()> {
+        if let Some(placement) = &self.placement {
+            clear_placed_test(
+                self.world.as_ref(),
+                placement,
+                self.test.definition().padding,
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     #[must_use]

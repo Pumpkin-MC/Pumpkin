@@ -88,6 +88,10 @@ impl ServerTickRateManager {
         self.run_game_elements.load(Ordering::Relaxed)
     }
 
+    pub fn runs_game_elements(&self) -> bool {
+        self.runs_normally() || self.is_sprinting()
+    }
+
     pub fn is_sprinting(&self) -> bool {
         self.remaining_sprint_ticks.load(Ordering::Relaxed) > 0
     }

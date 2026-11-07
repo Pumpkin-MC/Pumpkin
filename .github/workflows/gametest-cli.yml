@@ -1,0 +1,55 @@
+name: GameTest report (optional)
+
+on:
+  workflow_run:
+    workflows: [Cargo Build, Test, and Linting]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CI_RUST_TOOLCHAIN_VER: stable
+
+jobs:
+  gametest:
+    name: Run GameTests and generate report
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          submodules: recursive
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Build GameTest server
+        run: cargo build --locked -p pumpkin
+      - name: Run GameTests
+        run: target/debug/pumpkin --tests --universe gametestserver --report gametest-results.xml
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: lts/*
+      - name: Generate HTML report
+        if: always() && hashFiles('gametest-results.xml') != ''
+        run: |
+          npm install --global xunit-viewer@10.6.1
+          xunit-viewer --results gametest-results.xml --output gametest-results.html
+      - name: Upload GameTest report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gametest-results
+          path: |
+            gametest-results.xml
+            gametest-results.html
+          if-no-files-found: warn

@@ -1,4 +1,6 @@
-use super::server_test_manager::{drain_game_test_queue, has_pending_game_tests};
+use super::server_test_manager::{
+    drain_game_test_queue, finish_game_test_tick, has_pending_game_tests,
+};
 
 use crate::{
     plugin::server::{
@@ -94,8 +96,8 @@ impl Ticker {
                     .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
             }
 
-            let should_tick_game_tests = (manager.runs_normally() || sprinting)
-                && (has_pending_game_tests() || !game_test_runner.is_empty());
+            let should_process_game_tests = has_pending_game_tests()
+                || (manager.runs_game_elements() && !game_test_runner.is_empty());
 
             if sprinting {
                 manager.start_sprint_tick_work();
@@ -108,10 +110,13 @@ impl Ticker {
                 server.tick();
             }
 
-            if should_tick_game_tests {
+            if should_process_game_tests {
                 server.runtime.block_on(async {
                     drain_game_test_queue(server, &mut game_test_runner).await;
-                    game_test_runner.tick().await;
+                    if manager.runs_game_elements() {
+                        game_test_runner.tick().await;
+                    }
+                    finish_game_test_tick(&mut game_test_runner);
                 });
             }
 
