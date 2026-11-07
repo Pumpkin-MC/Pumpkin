@@ -267,22 +267,28 @@ impl EndermanEntity {
 
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
-        let target_change_time = if is_some {
-            self.mob_entity
-                .living_entity
-                .entity
-                .tick_count
-                .load(Ordering::Relaxed)
-        } else {
-            0
-        };
-        self.target_change_time
-            .store(target_change_time, Ordering::Relaxed);
         let mut mob_target = self
             .mob_entity
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let target_id = target.as_ref().map(|target| target.get_entity().entity_id);
+        let current_target_id = mob_target
+            .as_ref()
+            .map(|target| target.get_entity().entity_id);
+        if current_target_id != target_id {
+            let target_change_time = if is_some {
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .tick_count
+                    .load(Ordering::Relaxed)
+            } else {
+                0
+            };
+            self.target_change_time
+                .store(target_change_time, Ordering::Relaxed);
+        }
         *mob_target = target;
         drop(mob_target);
 
@@ -525,7 +531,7 @@ impl Mob for EndermanEntity {
         if self.mob_entity.get_target().is_none() {
             return;
         }
-        
+
         let ticks_since_target_change = entity
             .tick_count
             .load(Ordering::Relaxed)
