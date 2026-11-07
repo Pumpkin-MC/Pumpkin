@@ -417,6 +417,20 @@ pub trait PathNavigationTrait: Send + Sync {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path>;
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path>;
+    /// [`Self::create_path`] searching at most `max_path_length` blocks instead of the follow range.
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path>;
     fn recompute_path(&mut self, entity: &LivingEntity);
     fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool;
     fn set_avoid_sun(&mut self, avoid_sun: bool);
@@ -470,6 +484,9 @@ pub struct PathNavigation {
     pub can_pass_doors: bool,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
+    /// Frogs never cut a corner onto a water border node.
+    pub cuts_water_border_corners: bool,
+    path_length_override: Option<f32>,
     path_finder: Option<PathFinder>,
     update_pathfinder_max_visited_nodes: bool,
     pub is_idle: AtomicBool,
@@ -520,6 +537,8 @@ impl PathNavigation {
             can_pass_doors: true,
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
+            cuts_water_border_corners: true,
+            path_length_override: None,
             path_finder: None,
             update_pathfinder_max_visited_nodes: false,
             is_idle: AtomicBool::new(true),
@@ -605,8 +624,24 @@ impl PathNavigation {
     }
 
     fn mob_max_follow_range(&self, entity: &LivingEntity) -> f32 {
+        if let Some(max_path_length) = self.path_length_override {
+            return max_path_length;
+        }
         let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
         follow_range.max(self.required_path_length)
+    }
+
+    pub fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.path_length_override = Some(max_path_length);
+        let path = self.create_path(entity, destination, reach_range);
+        self.path_length_override = None;
+        path
     }
 
     fn prepare_evaluator(&mut self, entity: &LivingEntity) -> (uuid::Uuid, u64) {
@@ -656,6 +691,15 @@ impl PathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
+        self.compute_path_to_targets(entity, &[BlockPos::floored_v(destination)], reach_range)
+    }
+
+    pub fn compute_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
         let world_change = self.prepare_evaluator(entity);
 
         let max_path_length = self.mob_max_follow_range(entity);
@@ -673,9 +717,9 @@ impl PathNavigation {
             );
             self.update_pathfinder_max_visited_nodes = false;
         }
-        let mut path = finder.find_path_single(
+        let mut path = finder.find_path(
             &mut self.evaluator,
-            BlockPos::floored_v(destination),
+            targets,
             max_path_length,
             reach_range,
             self.max_visited_nodes_multiplier,
@@ -726,6 +770,37 @@ impl PathNavigation {
             return Some(path.clone());
         }
         let path = self.compute_path(entity, target.0.to_f64(), reach_range);
+        if let Some(path) = &path {
+            self.target_pos = Some(path.get_target());
+            self.reach_range = reach_range;
+            self.reset_stuck_timeout();
+        }
+        path
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        if targets.is_empty() {
+            return None;
+        }
+        let world = entity.entity.world.load_full();
+        if entity.entity.pos.load().y < f64::from(world.get_bottom_y())
+            || !self.can_update_path(entity)
+        {
+            return None;
+        }
+        if let Some(target) = self.target_pos
+            && let Some(path) = &self.path
+            && !path.is_done()
+            && targets.contains(&target)
+        {
+            return Some(path.clone());
+        }
+        let path = self.compute_path_to_targets(entity, targets, reach_range);
         if let Some(path) = &path {
             self.target_pos = Some(path.get_target());
             self.reach_range = reach_range;
@@ -1065,10 +1140,12 @@ impl PathNavigation {
                 let close_enough =
                     x_distance < reach && z_distance < reach && y_distance < NODE_REACH_Y;
 
-                let corner_cut = path
-                    .get_next_node()
-                    .is_some_and(|n| Self::can_cut_corner(n.path_type))
-                    && Self::should_target_next_node_in_direction(mob_pos, path, || false);
+                let cuts_water_border = self.cuts_water_border_corners;
+                let corner_cut =
+                    path.get_next_node().is_some_and(|n| {
+                        Self::can_cut_corner(n.path_type)
+                            && (cuts_water_border || n.path_type != PathType::WaterBorder)
+                    }) && Self::should_target_next_node_in_direction(mob_pos, path, || false);
 
                 if close_enough || corner_cut {
                     path.advance();
@@ -1243,6 +1320,27 @@ impl PathNavigationTrait for GroundPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -1508,6 +1606,27 @@ impl PathNavigationTrait for FlyingPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
     }
 
     fn recompute_path(&mut self, entity: &LivingEntity) {
@@ -1795,6 +1914,27 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
+    }
+
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
     }
@@ -2035,6 +2175,27 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
+    }
+
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
     }
@@ -2122,6 +2283,15 @@ impl AmphibiousPathNavigation {
                 prefers_shallow_swimming,
             ))),
         }
+    }
+
+    #[must_use]
+    pub fn frog() -> Self {
+        let mut inner = PathNavigation::new(EvaluatorKind::Amphibious(
+            AmphibiousNodeEvaluator::frog(true),
+        ));
+        inner.cuts_water_border_corners = false;
+        Self { inner }
     }
 }
 
@@ -2292,6 +2462,27 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
+    fn create_path_to_targets(
+        &mut self,
+        entity: &LivingEntity,
+        targets: &[BlockPos],
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_to_targets(entity, targets, reach_range)
+    }
+
     fn recompute_path(&mut self, entity: &LivingEntity) {
         self.inner.recompute_path(entity);
     }
@@ -2401,6 +2592,11 @@ impl Navigator {
     #[must_use]
     pub fn amphibious(prefers_shallow_swimming: bool) -> Self {
         Self::new(AmphibiousPathNavigation::new(prefers_shallow_swimming))
+    }
+
+    #[must_use]
+    pub fn frog() -> Self {
+        Self::new(AmphibiousPathNavigation::frog())
     }
 }
 

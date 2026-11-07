@@ -82,7 +82,9 @@ impl BlockBehaviour for SnifferEggBlock {
                 args.world,
                 Uuid::new_v4(),
             );
-            sniffer.get_entity().set_age(-24000);
+            if let Some(mob) = sniffer.get_mob() {
+                mob.spawn_as_baby();
+            }
             args.world.spawn_entity(sniffer);
         }
     }

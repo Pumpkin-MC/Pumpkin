@@ -359,6 +359,10 @@ impl CustomSound for AllayEntity {
 }
 
 impl Mob for AllayEntity {
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
     fn mob_is_flapping(&self) -> bool {
         !self.get_entity().on_ground.load(Ordering::Relaxed)
     }

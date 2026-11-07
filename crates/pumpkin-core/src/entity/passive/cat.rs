@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::behavior::{
         feline,
         fleeing::{self, Flee},
@@ -49,6 +50,7 @@ pub struct CatEntity {
     pub sound_variant: AtomicU8,
     pub collar_color: AtomicU8,
     pub tamable_data: TamableData,
+    pub ageable_data: AgeableData,
     pub is_lying: AtomicBool,
     pub relax_state_one: AtomicBool,
 }
@@ -62,6 +64,7 @@ impl CatEntity {
             sound_variant: AtomicU8::new(0), // Default to classic
             collar_color: AtomicU8::new(14), // Default to red
             tamable_data: TamableData::default(),
+            ageable_data: AgeableData::default(),
             is_lying: AtomicBool::new(false),
             relax_state_one: AtomicBool::new(false),
         };
@@ -174,20 +177,6 @@ impl CatEntity {
             VarInt(sound_variant as u8 as i32),
         );
     }
-
-    pub fn play_eating_sound(&self) {
-        let mob_entity = self.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        let world = entity.world.load();
-        world.play_sound(
-            sound_variant.eat_sound(is_baby),
-            pumpkin_data::sound::SoundCategory::Neutral,
-            &entity.pos.load(),
-        );
-    }
 }
 
 impl CustomSound for CatEntity {
@@ -207,6 +196,16 @@ impl CustomSound for CatEntity {
 }
 
 impl Animal for CatEntity {
+    fn play_eating_sound(&self) {
+        let sound_variant = CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
+            .unwrap_or_default();
+        self.play_entity_sound(
+            sound_variant.eat_sound(self.mob_entity.living_entity.is_baby()),
+            1.0,
+            1.0,
+        );
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         let item = item_stack.get_item();
         item.has_tag(&tag::Item::MINECRAFT_CAT_FOOD) || item == &Item::COD || item == &Item::SALMON
@@ -219,7 +218,17 @@ impl TamableAnimal for CatEntity {
     }
 }
 
+impl AgeableMob for CatEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for CatEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }

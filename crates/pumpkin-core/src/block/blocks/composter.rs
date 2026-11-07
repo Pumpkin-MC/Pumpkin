@@ -5,8 +5,8 @@ use crate::{
         BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
         PathComputationType, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::{Entity, item::ItemEntity},
-    world::World,
+    entity::{Entity, EntityBase, item::ItemEntity},
+    world::{World, game_event::GameEventContext},
 };
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
@@ -40,7 +40,7 @@ impl BlockBehaviour for ComposterBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = ComposterLikeProperties::from_state_id(state_id);
         if props.level == 8 {
-            self.clear_composter(args.world, args.position, state_id, args.block);
+            Self::extract_produce(None, state_id, args.world, args.position);
             return BlockActionResult::Success;
         }
 
@@ -49,33 +49,21 @@ impl BlockBehaviour for ComposterBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = ComposterLikeProperties::from_state_id(state_id);
-        let level = props.level;
+        let level = ComposterLikeProperties::from_state_id(state_id).level;
 
         let item_stack = &mut *args.item_stack;
-        if let Some(compostable) = item_stack.get_data_component::<CompostableImpl>()
-            && level < 8
-        {
+        if item_stack.get_data_component::<CompostableImpl>().is_some() && level < 8 {
             if level < 7 {
-                let chance = compostable.chance;
-                if !args.player.has_infinite_materials() {
-                    item_stack.decrement(1);
-                }
-
-                let increased = level == 0 || rand::rng().random_bool(f64::from(chance));
-                if increased {
-                    self.update_level_composter(
-                        args.world,
-                        args.position,
-                        state_id,
-                        args.block,
-                        level + 1,
-                    );
+                let count = item_stack.item_count;
+                let new_state_id =
+                    Self::insert_item(None, state_id, args.world, item_stack, args.position);
+                if args.player.has_infinite_materials() {
+                    item_stack.set_count(count);
                 }
                 args.world.sync_world_event(
                     WorldEvent::ComposterFill,
                     *args.position,
-                    i32::from(increased),
+                    i32::from(new_state_id != state_id),
                 );
             }
             return BlockActionResult::Success;
@@ -111,30 +99,66 @@ impl BlockBehaviour for ComposterBlock {
 }
 
 impl ComposterBlock {
-    pub fn update_level_composter(
-        &self,
+    pub fn insert_item(
+        source: Option<&dyn EntityBase>,
+        state_id: BlockStateId,
+        world: &Arc<World>,
+        stack: &mut ItemStack,
+        pos: &BlockPos,
+    ) -> BlockStateId {
+        let level = ComposterLikeProperties::from_state_id(state_id).level;
+        let Some(chance) = stack
+            .get_data_component::<CompostableImpl>()
+            .map(|compostable| compostable.chance)
+        else {
+            return state_id;
+        };
+        if level >= 7 {
+            return state_id;
+        }
+
+        let increased = level == 0 || rand::rng().random_bool(f64::from(chance));
+        stack.decrement(1);
+        if !increased {
+            return state_id;
+        }
+
+        let block = Block::from_state_id(state_id);
+        Self::set_level_with_source(source, world, pos, state_id, block, level + 1)
+    }
+
+    fn set_level_with_source(
+        source: Option<&dyn EntityBase>,
         world: &Arc<World>,
         location: &BlockPos,
         state_id: BlockStateId,
         block: &Block,
         level: u8,
-    ) {
+    ) -> BlockStateId {
         let mut props = ComposterLikeProperties::from_state_id(state_id);
         props.level = level;
-        world.set_block_state(location, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
-        world.emit_game_event(GameEvent::BlockChange.name(), location.to_centered_f64());
+        let new_state_id = props.to_state_id(block);
+        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+        world.emit_game_event_with_context(
+            GameEvent::BlockChange.name(),
+            location.to_centered_f64(),
+            &GameEventContext {
+                source_entity: source,
+            },
+        );
         if level == 7 {
             world.schedule_block_tick(block, *location, 20, TickPriority::Normal);
         }
+        new_state_id
     }
 
-    pub fn clear_composter(
-        &self,
+    pub fn extract_produce(
+        source: Option<&dyn EntityBase>,
+        state_id: BlockStateId,
         world: &Arc<World>,
         location: &BlockPos,
-        state_id: BlockStateId,
-        block: &Block,
-    ) {
+    ) -> BlockStateId {
+        let block = Block::from_state_id(state_id);
         let item_position = {
             let mut rng = rand::rng();
             location.to_centered_f64().add_raw(
@@ -150,7 +174,8 @@ impl ComposterBlock {
         );
 
         world.spawn_entity(Arc::new(item_entity));
-        self.update_level_composter(world, location, state_id, block, 0);
+        let empty_state_id =
+            Self::set_level_with_source(source, world, location, state_id, block, 0);
         world.play_sound_fine(
             Sound::BlockComposterEmpty,
             SoundCategory::Blocks,
@@ -158,5 +183,17 @@ impl ComposterBlock {
             1.0,
             1.0,
         );
+        empty_state_id
+    }
+
+    pub fn update_level_composter(
+        &self,
+        world: &Arc<World>,
+        location: &BlockPos,
+        state_id: BlockStateId,
+        block: &Block,
+        level: u8,
+    ) {
+        Self::set_level_with_source(None, world, location, state_id, block, level);
     }
 }

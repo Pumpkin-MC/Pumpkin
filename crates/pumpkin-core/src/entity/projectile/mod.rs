@@ -87,7 +87,7 @@ impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         Self {
             entity,
             owner: owner::ProjectileOwner::new(Some(owner)),
@@ -214,7 +214,13 @@ impl ThrownItemEntity {
         }
 
         // Entity collisions
-        let candidates = world.get_entities_at_box(&search_box);
+        let mut candidates = world.get_entities_at_box(&search_box);
+        candidates.extend(
+            world
+                .get_players_at_box(&search_box)
+                .into_iter()
+                .map(|player| player as Arc<dyn EntityBase>),
+        );
         for cand in candidates {
             if self.should_skip_collision(&world, entity, &cand) {
                 continue;
@@ -269,12 +275,21 @@ impl ThrownItemEntity {
             return true;
         }
 
+        if other.is_spectator() {
+            return true;
+        }
+
         if !self.owner.can_hit(world, other_ent) {
             return true;
         }
 
-        // Projectiles should pass through lingering clouds
-        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
+        // Not pickable in vanilla: projectiles pass through these
+        // TODO: replace with `!can_hit()` once Player, TNT, falling blocks, end crystals, item
+        // frames, shulker bullets and redirectable projectiles override it like vanilla `isPickable`
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD
+            || *other_ent.entity_type == EntityType::EXPERIENCE_ORB
+            || *other_ent.entity_type == EntityType::ITEM
+        {
             return true;
         }
 
