@@ -1,7 +1,7 @@
 use crate::plugin::WasmPlugin;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
-use std::sync::atomic::Ordering as AtomicOrdering;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex, Weak};
 
 pub type TaskId = u32;
@@ -12,6 +12,9 @@ pub struct ScheduledTask {
     pub handler_id: u32,
     pub next_tick: u64,
     pub period: Option<u64>,
+    /// Set while a run of this task is still in flight. The tick waits only a bounded time for a
+    /// run, so a slow one can outlive it; further runs are skipped until it finishes.
+    pub running: Arc<AtomicBool>,
 }
 
 impl PartialEq for ScheduledTask {
@@ -80,6 +83,7 @@ impl TaskScheduler {
             handler_id,
             next_tick: current_tick + delay,
             period: None,
+            running: Arc::new(AtomicBool::new(false)),
         };
         self.tasks
             .lock()
@@ -110,6 +114,7 @@ impl TaskScheduler {
             handler_id,
             next_tick: current_tick + delay,
             period: Some(period),
+            running: Arc::new(AtomicBool::new(false)),
         };
         self.tasks
             .lock()
