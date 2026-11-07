@@ -45,6 +45,7 @@ use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -1034,6 +1035,31 @@ impl MobEntity {
         attack_bounding_box(&self.living_entity.entity, attack_range)
     }
 
+    /// Turns the body toward the target's eyes, at most `y_max` and `x_max` degrees per call.
+    pub fn look_at_entity(&self, target: &dyn EntityBase, y_max: f32, x_max: f32) {
+        let entity = &self.living_entity.entity;
+        let pos = entity.pos.load();
+        let target_entity = target.get_entity();
+        let target_pos = target_entity.pos.load();
+        let xd = target_pos.x - pos.x;
+        let zd = target_pos.z - pos.z;
+        let yd = if target.get_living_entity().is_some() {
+            target_entity.get_eye_y() - entity.get_eye_y()
+        } else {
+            let bounding_box = target_entity.bounding_box.load();
+            f64::midpoint(bounding_box.min.y, bounding_box.max.y) - entity.get_eye_y()
+        };
+        let sd = xd.hypot(zd);
+        let y_rot = (zd.atan2(xd).to_degrees() as f32) - 90.0;
+        let x_rot = -(yd.atan2(sd).to_degrees() as f32);
+        let rotlerp =
+            |from: f32, to: f32, max: f32| from + wrap_degrees(to - from).clamp(-max, max);
+        entity
+            .pitch
+            .store(rotlerp(entity.pitch.load(), x_rot, x_max));
+        entity.yaw.store(rotlerp(entity.yaw.load(), y_rot, y_max));
+    }
+
     /// Brightness at the mob's eye (sky and block light) reaches daylight.
     pub fn is_in_daylight(&self) -> bool {
         let entity = &self.living_entity.entity;
@@ -1381,6 +1407,10 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    fn is_sensitive_to_water(&self) -> bool {
+        false
+    }
+
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
     }
@@ -1945,6 +1975,15 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Called after the base damage attempt, whether or not it applied damage.
+    fn post_damage_with_context(
+        &self,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) {
+    }
+
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
@@ -2260,6 +2299,8 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
+
+    fn mob_remove_nbt(&self, _removed: &[Box<str>]) {}
 
     /// Drops a target the mob is not allowed to attack, such as a creative player.
     fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
@@ -2761,6 +2802,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             source,
             cause,
         );
+        self.post_damage_with_context(damage_type, source, cause);
         if damaged {
             return self.on_damage_with_context(damage_type, source, cause);
         }
@@ -2876,6 +2918,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             neutral.read_anger_nbt(nbt);
         }
         self.mob_read_nbt(nbt);
+    }
+
+    fn remove_custom_nbt(&self, removed: &[Box<str>]) {
+        self.mob_remove_nbt(removed);
     }
 
     fn get_gravity(&self) -> f64 {

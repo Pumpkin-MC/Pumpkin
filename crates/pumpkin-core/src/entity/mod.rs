@@ -1154,6 +1154,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
+    /// Whether this entity takes damage from water.
+    fn is_sensitive_to_water(&self) -> bool {
+        self.get_mob().is_some_and(mob::Mob::is_sensitive_to_water)
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(&self) -> Option<&ItemEntity> {
