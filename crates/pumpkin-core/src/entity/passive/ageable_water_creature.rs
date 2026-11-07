@@ -1,6 +1,6 @@
 use crate::entity::{EntityBase, ageable::AgeableMob};
 
-use super::water_animal;
+use super::{animal, water_animal};
 
 pub trait AgeableWaterCreature: AgeableMob {
     fn water_creature_spawn_obstruction(&self, world: &crate::world::World) -> bool {
@@ -12,6 +12,6 @@ pub trait AgeableWaterCreature: AgeableMob {
     }
 
     fn water_creature_experience_reward(&self) -> u32 {
-        water_animal::experience_reward(self)
+        animal::experience_reward(self)
     }
 }

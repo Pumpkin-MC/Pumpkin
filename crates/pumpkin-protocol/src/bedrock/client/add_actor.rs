@@ -10,6 +10,7 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use super::{
     common::ActorLink,
     set_actor_data::{PropertySyncData, SyncedActorDataList},
+    set_passenger_of_block::PassengerOfBlockData,
 };
 
 /// Sent by the server to spawn non-player entities (mobs, projectiles, vehicles, items) on the client.
@@ -40,8 +41,8 @@ pub struct CAddActor {
     pub synced_properties: PropertySyncData,
     /// Entity attachment links (e.g. passenger or leash connections).
     pub actor_links: Vec<ActorLink>,
-    /// Whether passenger block data is present.
-    pub has_passenger_block_data: bool,
+    /// Optional block that the entity is riding.
+    pub passenger_of_block: Option<PassengerOfBlockData>,
 }
 
 /// Synchronized numeric entity attribute with min, current, and max bounds.

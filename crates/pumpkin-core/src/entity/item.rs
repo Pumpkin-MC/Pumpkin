@@ -4,7 +4,7 @@ use crate::server::Server;
 use crate::world::World;
 use core::f32;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl, DamageResistantImpl};
+use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
@@ -184,17 +184,10 @@ impl ItemEntity {
         &self.entity
     }
 
-    /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
-    fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
-        stack
-            .get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
-    }
-
     /// Vanilla `ItemEntity.fireImmune`, cached since the item only changes on load.
     fn update_fire_immune(entity: &Entity, stack: &ItemStack) {
         entity.fire_immune.store(
-            !Self::can_be_hurt_by(stack, DamageType::IN_FIRE),
+            !stack.can_be_hurt_by(DamageType::IN_FIRE),
             Ordering::Relaxed,
         );
     }
@@ -586,7 +579,12 @@ impl EntityBase for ItemEntity {
     /// Vanilla `ItemEntity.getOwner`: the thrower.
     fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.thrower.load()?;
-        self.entity.world.load().get_entity_by_uuid(uuid)
+        let world = self.entity.world.load();
+        world.get_entity_by_uuid(uuid).or_else(|| {
+            world
+                .get_player_by_uuid(uuid)
+                .map(|player| player as Arc<dyn EntityBase>)
+        })
     }
 
     fn audited_reach(&self) -> Option<AuditedReach> {
@@ -690,13 +688,11 @@ impl EntityBase for ItemEntity {
             return false;
         }
         // E.g. netherite ignores fire, the nether star explosions.
-        let can_be_hurt = Self::can_be_hurt_by(
-            &self
-                .item_stack
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            damage_type,
-        );
+        let can_be_hurt = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .can_be_hurt_by(damage_type);
         if !can_be_hurt {
             return false;
         }
@@ -999,11 +995,11 @@ mod tests {
     #[test]
     fn damage_resistant_items() {
         let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
-        assert!(!ItemEntity::can_be_hurt_by(&sword, DamageType::LAVA));
-        assert!(ItemEntity::can_be_hurt_by(&sword, DamageType::CACTUS));
+        assert!(!sword.can_be_hurt_by(DamageType::LAVA));
+        assert!(sword.can_be_hurt_by(DamageType::CACTUS));
 
         let star = ItemStack::new(1, &Item::NETHER_STAR);
-        assert!(!ItemEntity::can_be_hurt_by(&star, DamageType::EXPLOSION));
-        assert!(ItemEntity::can_be_hurt_by(&star, DamageType::LAVA));
+        assert!(!star.can_be_hurt_by(DamageType::EXPLOSION));
+        assert!(star.can_be_hurt_by(DamageType::LAVA));
     }
 }

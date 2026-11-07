@@ -43,6 +43,7 @@ fn is_wary(mob: &dyn Mob) -> bool {
 /// Wiki: <https://minecraft.wiki/w/Ocelot>
 pub struct OcelotEntity {
     pub mob_entity: MobEntity,
+    pub ageable_data: crate::entity::ageable::AgeableData,
     pub is_trusting: AtomicBool,
 }
 
@@ -51,6 +52,7 @@ impl OcelotEntity {
         let mob_entity = MobEntity::new(entity);
         let ocelot = Self {
             mob_entity,
+            ageable_data: crate::entity::ageable::AgeableData::default(),
             is_trusting: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(ocelot);
@@ -102,7 +104,17 @@ impl Animal for OcelotEntity {
     }
 }
 
+impl crate::entity::ageable::AgeableMob for OcelotEntity {
+    fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for OcelotEntity {
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -163,10 +175,6 @@ impl Mob for OcelotEntity {
             return true;
         }
 
-        self.animal_interact(
-            player,
-            item_stack,
-            pumpkin_data::sound::Sound::EntityOcelotAmbient,
-        )
+        self.animal_interact(player, item_stack)
     }
 }

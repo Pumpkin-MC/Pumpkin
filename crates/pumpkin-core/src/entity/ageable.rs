@@ -30,6 +30,59 @@ impl Default for AgeableData {
     }
 }
 
+#[must_use]
+pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
+    ((ticks_until_adult / 20) as f32 * 0.1) as i32
+}
+
+#[must_use]
+pub fn can_use_golden_dandelion(
+    stack: &pumpkin_data::item_stack::ItemStack,
+    is_baby: bool,
+    cooldown: i32,
+    mob: &(impl Mob + ?Sized),
+) -> bool {
+    use pumpkin_data::{
+        item::Item,
+        tag::{self, Taggable},
+    };
+    stack.item == &Item::GOLDEN_DANDELION
+        && is_baby
+        && cooldown == 0
+        && !mob
+            .get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_CANNOT_BE_AGE_LOCKED)
+}
+
+pub fn set_age_locked(
+    mob: &(impl Mob + ?Sized),
+    is_age_locked: impl Fn() -> bool,
+    player: &crate::entity::player::Player,
+    stack: &mut pumpkin_data::item_stack::ItemStack,
+    set_age_lock_data: impl FnOnce(),
+) {
+    use pumpkin_data::sound::{Sound, SoundCategory};
+    let entity = mob.get_entity();
+    set_age_lock_data();
+    stack.decrement_unless_creative(player.gamemode.load(), 1);
+    let age_locked = is_age_locked();
+    if age_locked {
+        mob.get_mob_entity()
+            .persistence_required
+            .store(true, Relaxed);
+    }
+    entity.world.load().play_sound(
+        if age_locked {
+            Sound::ItemGoldenDandelionUse
+        } else {
+            Sound::ItemGoldenDandelionUnuse
+        },
+        SoundCategory::Players,
+        &entity.block_pos.load().0.to_f64().add_raw(0.5, 0.5, 0.5),
+    );
+}
+
 pub trait AgeableMob: Mob {
     fn get_ageable_data(&self) -> &AgeableData;
 
@@ -59,6 +112,7 @@ pub trait AgeableMob: Mob {
         if (old_age < 0 && new_age >= 0) || (old_age >= 0 && new_age < 0) {
             let is_baby = new_age < 0;
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
+            entity.refresh_dimensions();
             self.age_boundary_reached();
             if let Some(meta) = self.mob_metadata() {
                 entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
@@ -124,44 +178,28 @@ pub trait AgeableMob: Mob {
         player: &std::sync::Arc<crate::entity::player::Player>,
         stack: &mut pumpkin_data::item_stack::ItemStack,
     ) -> bool {
-        use pumpkin_data::{
-            item::Item,
-            sound::{Sound, SoundCategory},
-            tag::{self, Taggable},
-        };
-        let entity = self.get_entity();
-        if stack.item != &Item::GOLDEN_DANDELION
-            || !self.is_baby()
-            || self
-                .get_ageable_data()
+        if !can_use_golden_dandelion(
+            stack,
+            self.is_baby(),
+            self.get_ageable_data()
                 .age_lock_particle_timer
-                .load(Relaxed)
-                != 0
-            || entity
-                .entity_type
-                .has_tag(&tag::EntityType::MINECRAFT_CANNOT_BE_AGE_LOCKED)
-        {
+                .load(Relaxed),
+            self,
+        ) {
             return false;
         }
-        self.set_age_locked(!self.is_age_locked());
-        self.set_age(self.get_baby_start_age());
-        self.get_ageable_data()
-            .age_lock_particle_timer
-            .store(AGE_LOCK_COOLDOWN_TICKS, Relaxed);
-        stack.decrement_unless_creative(player.gamemode.load(), 1);
-        if self.is_age_locked() {
-            self.get_mob_entity()
-                .persistence_required
-                .store(true, Relaxed);
-        }
-        entity.world.load().play_sound(
-            if self.is_age_locked() {
-                Sound::ItemGoldenDandelionUse
-            } else {
-                Sound::ItemGoldenDandelionUnuse
+        set_age_locked(
+            self,
+            || self.is_age_locked(),
+            player,
+            stack,
+            || {
+                self.set_age_locked(!self.is_age_locked());
+                self.set_age(self.get_baby_start_age());
+                self.get_ageable_data()
+                    .age_lock_particle_timer
+                    .store(AGE_LOCK_COOLDOWN_TICKS, Relaxed);
             },
-            SoundCategory::Players,
-            &entity.block_pos.load().0.to_f64().add_raw(0.5, 0.5, 0.5),
         );
         true
     }
@@ -181,12 +219,12 @@ pub trait AgeableMob: Mob {
     fn age_up(&self, seconds: i32, forced: bool) {
         let mut age = self.get_age();
         let old_age = age;
-        age += seconds * 20;
+        age = age.wrapping_add(seconds.wrapping_mul(20));
         if age > 0 {
             age = 0;
         }
 
-        let delta = age - old_age;
+        let delta = age.wrapping_sub(old_age);
         self.set_age(age);
 
         let data = self.get_ageable_data();
@@ -200,14 +238,6 @@ pub trait AgeableMob: Mob {
         if self.get_age() == 0 {
             self.set_age(data.forced_age.load(Relaxed));
         }
-    }
-
-    #[must_use]
-    fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32
-    where
-        Self: Sized,
-    {
-        (ticks_until_adult as f32 / 20.0 * 0.1) as i32
     }
 
     fn write_ageable_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
