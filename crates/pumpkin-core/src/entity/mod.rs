@@ -2403,6 +2403,11 @@ impl Entity {
 
     /// Only living entities step up, and a player-ridden mob steps at least one block.
     fn max_up_step(caller: &dyn EntityBase) -> f32 {
+        if let Some(mob) = caller.get_mob()
+            && let Some(step) = mob.mob_max_up_step()
+        {
+            return step;
+        }
         let Some(living) = caller.get_living_entity() else {
             return 0.0;
         };
@@ -3734,6 +3739,10 @@ impl Entity {
     /// Mirrors vanilla `LivingEntity#canFreeze`: spectators and entities wearing
     /// freeze-immune wearables (e.g. leather armor) cannot freeze.
     fn can_freeze(&self, caller: &dyn EntityBase) -> bool {
+        if caller.get_mob().is_some_and(|mob| !mob.mob_can_freeze()) {
+            return false;
+        }
+
         if caller.is_spectator() || self.is_freeze_immune() {
             return false;
         }

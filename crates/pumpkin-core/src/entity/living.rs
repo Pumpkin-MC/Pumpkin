@@ -1992,6 +1992,7 @@ impl LivingEntity {
             // Only players read the friction, and they are never mobs.
             if let Some(mob) = caller.get_mob() {
                 mob.travel_in_water(caller, gravity, falling);
+                mob.mob_travel_in_fluid(caller);
                 return 1.0;
             }
             return self.travel_in_water(caller, gravity, falling);
@@ -2020,6 +2021,9 @@ impl LivingEntity {
 
         self.entity.velocity.store(velo);
         self.jump_out_of_fluid(old_y);
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_travel_in_fluid(caller);
+        }
         0.5
     }
 
@@ -2191,6 +2195,8 @@ impl LivingEntity {
 
         if self.entity.entity_type == &EntityType::BREEZE {
             eye_height
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            f64::from(self.entity.height()) * 0.2
         } else if eye_height < 0.4 {
             0.0
         } else {
@@ -3091,12 +3097,7 @@ impl LivingEntity {
                 .get_block(&entity.get_eye_pos().to_block_pos())
                 != &Block::BUBBLE_COLUMN
         {
-            if !entity
-                .entity_type
-                .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
-                && !water_breathing
-                && !nautilus_breathing
-            {
+            if !caller.can_breathe_underwater() && !water_breathing && !nautilus_breathing {
                 entity.set_air_supply(caller.mob_decrease_air_supply(current));
                 if self.should_take_drowning_damage() {
                     entity.set_air_supply(0);
@@ -3856,7 +3857,7 @@ impl LivingEntity {
             let knockback_allowed =
                 config.knockback || cause.or(source).and_then(EntityBase::get_player).is_none();
             if knockback_allowed && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
-                self.deal_default_knockback(position, source);
+                self.deal_default_knockback(caller, position, source, cause, amount);
             }
         }
 
@@ -3963,10 +3964,13 @@ impl LivingEntity {
 
     /// Vanilla `LivingEntity.dealDefaultKnockback`.
     // Callers pass the hit point as `position` for projectiles, so the source entity goes first.
-    fn deal_default_knockback(
+    pub(crate) fn deal_default_knockback(
         &self,
+        caller: &dyn EntityBase,
         position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        damage: f32,
     ) {
         let target_pos = self.entity.pos.load();
         let (dx, dz) = source
@@ -3975,6 +3979,18 @@ impl LivingEntity {
             .map_or((0.0, 0.0), |pos| {
                 (pos.x - target_pos.x, pos.z - target_pos.z)
             });
+        if caller.get_mob().is_some_and(|mob| {
+            mob.mob_knockback(
+                0.4,
+                dx,
+                dz,
+                cause.or(source).map(EntityBase::get_entity),
+                damage,
+                false,
+            )
+        }) {
+            return;
+        }
         let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
         self.entity.apply_knockback(
             knockback_after_resistance(0.4, resistance),

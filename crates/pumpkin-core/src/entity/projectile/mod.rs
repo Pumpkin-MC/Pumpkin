@@ -227,6 +227,9 @@ impl ThrownItemEntity {
             }
 
             let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            if skips_hit_from_inside(cand.as_ref(), &ebb, &start_pos) {
+                continue;
+            }
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
                 && t < closest_t
             {
@@ -315,6 +318,16 @@ impl ThrownItemEntity {
 }
 
 /// Ray intersection algorithm for AABBs, returning a t value
+/// Whether a ray starting inside `bb` skips this entity, for mobs that opt out of inside hits.
+fn skips_hit_from_inside(entity: &dyn EntityBase, bb: &BoundingBox, start: &Vector3<f64>) -> bool {
+    (bb.min.x..bb.max.x).contains(&start.x)
+        && (bb.min.y..bb.max.y).contains(&start.y)
+        && (bb.min.z..bb.max.z).contains(&start.z)
+        && entity
+            .get_mob()
+            .is_some_and(|mob| !mob.can_be_picked_from_inside())
+}
+
 fn calculate_ray_intersection(
     start: &Vector3<f64>,
     dir: &Vector3<f64>,
