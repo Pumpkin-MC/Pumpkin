@@ -1168,7 +1168,7 @@ impl PluginManager {
                     // failing partway through, leaving them would block every future load
                     self_ref_clone.unload_children(&plugin_name).await;
                     context.close();
-                    self_ref_clone.pin_loader_owner(&context, &loader_clone).await;
+                    let owner = self_ref_clone.loader_owner(&loader_clone).await;
                     let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
                     context.unregister_commands();
                     context.unregister_permissions();
@@ -1184,6 +1184,7 @@ impl PluginManager {
                     registrations.extend(self_ref_clone.take_registrations(&plugin_name).await);
                     context.unregister_commands();
                     context.unregister_permissions();
+                    self_ref_clone.pin_owner(&context, owner.as_deref());
                     // The instance's code lives in the library, so drop it before unloading
                     drop(instance);
 
@@ -2068,7 +2069,7 @@ impl PluginManager {
 
         self.unload_children(name).await;
         context.close();
-        self.pin_loader_owner(&context, &loader).await;
+        let owner = self.loader_owner(&loader).await;
         let mut registrations = self.take_registrations(name).await;
         context.unregister_commands();
         context.unregister_permissions();
@@ -2087,6 +2088,7 @@ impl PluginManager {
             context.unregister_commands();
             context.unregister_permissions();
         }
+        self.pin_owner(&context, owner.as_deref());
 
         // The loader keeps the library, so the record stays as an inactive copy until restart
         if !loader.can_unload() {
@@ -2124,19 +2126,20 @@ impl PluginManager {
         unloaded.map_err(ManagerError::from)
     }
 
-    /// Commands of a plugin from another plugin's loader run that plugin's code too.
-    async fn pin_loader_owner(&self, context: &Context, loader: &Arc<dyn PluginLoader>) {
-        if !context.has_commands() {
-            return;
-        }
-        let Some(owner) = self
-            .loaders
+    /// The plugin that registered `loader`, if a plugin did.
+    async fn loader_owner(&self, loader: &Arc<dyn PluginLoader>) -> Option<String> {
+        self.loaders
             .read()
             .await
             .iter()
             .find(|registered| Arc::ptr_eq(&registered.loader, loader))
             .and_then(|registered| registered.owner.clone())
-        else {
+    }
+
+    /// Commands of a plugin from another plugin's loader run that plugin's code too.
+    /// Called after `on_unload`, which can still register commands.
+    fn pin_owner(&self, context: &Context, owner: Option<&str>) {
+        let Some(owner) = owner.filter(|_| context.has_commands()) else {
             return;
         };
         let plugins = self
