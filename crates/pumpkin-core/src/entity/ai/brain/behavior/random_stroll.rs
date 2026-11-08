@@ -13,7 +13,18 @@ const SWIM_XY_DISTANCE_TIERS: [(i32, i32); 6] = [(1, 1), (3, 3), (5, 5), (6, 5),
 
 #[must_use]
 pub fn stroll(speed_modifier: f32) -> OneShot {
-    stroll_with_distance(speed_modifier, MAX_XZ_DIST, MAX_Y_DIST)
+    stroll_with_water(speed_modifier, true)
+}
+
+/// [`stroll`] that, unless `may_stroll_from_water`, only starts out of water.
+#[must_use]
+pub fn stroll_with_water(speed_modifier: f32, may_stroll_from_water: bool) -> OneShot {
+    land_stroll(
+        speed_modifier,
+        MAX_XZ_DIST,
+        MAX_Y_DIST,
+        may_stroll_from_water,
+    )
 }
 
 #[must_use]
@@ -22,10 +33,22 @@ pub fn stroll_with_distance(
     horizontal_distance: i32,
     vertical_distance: i32,
 ) -> OneShot {
+    land_stroll(speed_modifier, horizontal_distance, vertical_distance, true)
+}
+
+fn land_stroll(
+    speed_modifier: f32,
+    horizontal_distance: i32,
+    vertical_distance: i32,
+    may_stroll_from_water: bool,
+) -> OneShot {
     OneShot::new(
         "RandomStroll",
         vec![(types::WALK_TARGET.id(), MemoryStatus::ValueAbsent)],
         move |tick| {
+            if !may_stroll_from_water && tick.mob.get_entity().is_in_water() {
+                return false;
+            }
             let target = land_random_pos::get_pos(tick.mob, horizontal_distance, vertical_distance);
             tick.state.set_optional(
                 types::WALK_TARGET,

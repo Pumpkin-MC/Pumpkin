@@ -1,8 +1,11 @@
 use std::sync::Arc;
+use std::sync::Weak;
+use std::sync::atomic::Ordering;
 
 use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::mob::cube_mob::CubeMob;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
@@ -18,6 +21,12 @@ const SCARE_ROTATION: f32 = 5.0;
 enum TemptItems {
     Items(&'static [&'static Item]),
     Tag(&'static Tag),
+    Predicate(fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool),
+}
+
+pub enum TemptNavigation {
+    Path,
+    CubeMob(Weak<dyn CubeMob>),
 }
 
 pub struct TemptGoal {
@@ -32,6 +41,7 @@ pub struct TemptGoal {
     watched_pitch: f32,
     cooldown: i32,
     running: bool,
+    navigation: TemptNavigation,
 }
 
 impl TemptGoal {
@@ -67,6 +77,23 @@ impl TemptGoal {
             watched_pitch: 0.0,
             cooldown: 0,
             running: false,
+            navigation: TemptNavigation::Path,
+        }
+    }
+
+    #[must_use]
+    pub fn for_cube_mob(
+        speed: f64,
+        predicate: fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool,
+        can_scare: bool,
+        stop_distance: f64,
+        cube: Weak<dyn CubeMob>,
+    ) -> Self {
+        Self {
+            goal_control: Controls::LOOK,
+            tempt_items: TemptItems::Predicate(predicate),
+            navigation: TemptNavigation::CubeMob(cube),
+            ..Self::with_stop_distance(speed, &[], can_scare, stop_distance)
         }
     }
 
@@ -75,17 +102,27 @@ impl TemptGoal {
         self.running
     }
 
-    fn is_tempt_item(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
+    #[must_use]
+    pub const fn target_player(&self) -> Option<&Arc<Player>> {
+        self.target_player.as_ref()
+    }
+
+    pub const fn set_can_scare(&mut self, can_scare: bool) {
+        self.can_scare = can_scare;
+    }
+
+    fn is_tempt_item(&self, mob: &dyn Mob, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
         stack.item_count > 0
             && match self.tempt_items {
                 TemptItems::Items(items) => items.iter().any(|i| i.id == stack.item.id),
                 TemptItems::Tag(tag) => stack.item.has_tag(tag),
+                TemptItems::Predicate(predicate) => predicate(mob, stack),
             }
     }
 
-    fn is_holding_tempt_item(&self, player: &Player) -> bool {
-        self.is_tempt_item(&player.inventory().held_item())
-            || self.is_tempt_item(&player.inventory().off_hand_item())
+    fn is_holding_tempt_item(&self, mob: &dyn Mob, player: &Player) -> bool {
+        self.is_tempt_item(mob, &player.inventory().held_item())
+            || self.is_tempt_item(mob, &player.inventory().off_hand_item())
     }
 
     /// Non-combat, line of sight ignored, ranged by `tempt_range` and filtered on the held item.
@@ -104,7 +141,7 @@ impl TemptGoal {
             mob_entity.living_entity.entity.pos.load(),
             range,
             |player| {
-                self.is_holding_tempt_item(player)
+                self.is_holding_tempt_item(mob, player)
                     && conditions.test(&world, Some(mob), player.as_ref())
             },
         )
@@ -115,6 +152,38 @@ impl TemptGoal {
         self.watched_pos = entity.pos.load();
         self.watched_yaw = entity.yaw.load();
         self.watched_pitch = entity.pitch.load();
+    }
+
+    fn stop_navigation(&self, mob: &dyn Mob) {
+        match &self.navigation {
+            TemptNavigation::Path => mob.get_mob_entity().steered().navigator().stop(),
+            TemptNavigation::CubeMob(cube) => {
+                if let Some(cube) = cube.upgrade() {
+                    cube.cube_data().speed_modifier.store(Some(0.0));
+                }
+            }
+        }
+    }
+
+    fn navigate_towards(&self, mob: &dyn Mob, player: &Player) {
+        match &self.navigation {
+            TemptNavigation::Path => {
+                let mob_entity = mob.get_mob_entity();
+                let mob_pos = mob_entity.living_entity.entity.pos.load();
+                let player_pos = player.get_entity().pos.load();
+                let steered = mob_entity.steered();
+                let mut navigator = steered.navigator();
+                navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
+            }
+            TemptNavigation::CubeMob(cube) => {
+                mob.get_mob_entity().look_at_entity(player, 10.0, 10.0);
+                if let Some(cube) = cube.upgrade() {
+                    let data = cube.cube_data();
+                    data.target_yaw.store(cube.get_entity().yaw.load());
+                    data.is_aggressive.store(true, Ordering::Relaxed);
+                }
+            }
+        }
     }
 }
 
@@ -209,18 +278,16 @@ impl Goal for TemptGoal {
             );
 
         let mob_pos = mob_entity.living_entity.entity.pos.load();
-        let steered = mob_entity.steered();
-        let mut navigator = steered.navigator();
         if mob_pos.squared_distance_to_vec(&player_pos) < self.stop_distance * self.stop_distance {
-            navigator.stop();
+            self.stop_navigation(mob);
         } else {
-            navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
+            self.navigate_towards(mob, player);
         }
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target_player = None;
-        mob.get_mob_entity().steered().navigator().stop();
+        self.stop_navigation(mob);
         self.cooldown = to_goal_ticks(100);
         self.running = false;
     }

@@ -200,6 +200,19 @@ impl Worldborder {
         let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
     }
+
+    /// Clamps a position into the border on the horizontal axes.
+    #[must_use]
+    pub fn clamp_to_bound(&self, x: f64, z: f64) -> (f64, f64) {
+        // Unlike `f64::clamp`, an inverted range does not panic.
+        let clamp = |value: f64, min: f64, max: f64| if value < min { min } else { value.min(max) };
+        let half = self.new_diameter / 2.0;
+        let margin = f64::from(1.0E-5f32);
+        (
+            clamp(x, self.center_x - half, self.center_x + half - margin),
+            clamp(z, self.center_z - half, self.center_z + half - margin),
+        )
+    }
 }
 
 #[cfg(test)]

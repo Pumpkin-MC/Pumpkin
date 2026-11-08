@@ -195,6 +195,10 @@ impl Goal for DefendWanderingTraderGoal {
 }
 
 impl Mob for TraderLlamaEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn on_elastic_leash_pull(&self) {
         self.llama.on_elastic_leash_pull();
     }

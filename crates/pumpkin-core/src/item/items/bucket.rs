@@ -209,6 +209,7 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
             bucketable.load_from_bucket_tag(nbt);
         }
         bucketable.set_from_bucket(true);
+        apply_sulfur_cube_content(bucket_stack, mob);
         return;
     }
     if let Some(bucket_data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
@@ -229,6 +230,16 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
     if let Some(custom_name) = bucket_stack.get_data_component::<CustomNameImpl>() {
         mob.get_entity().set_custom_name(custom_name.name.clone());
     }
+    apply_sulfur_cube_content(bucket_stack, mob);
+    if let Some(mob_trait) = mob.get_mob() {
+        mob_trait
+            .get_mob_entity()
+            .persistence_required
+            .store(true, Ordering::Relaxed);
+    }
+}
+
+fn apply_sulfur_cube_content(bucket_stack: &ItemStack, mob: &dyn EntityBase) {
     if let Some(sulfur_content) = bucket_stack.get_data_component::<SulfurCubeContentImpl>()
         && !sulfur_content.item.is_empty()
         && let Some(living) = mob.get_living_entity()
@@ -238,12 +249,6 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .put(&EquipmentSlot::BODY, sulfur_content.item.clone());
-    }
-    if let Some(mob_trait) = mob.get_mob() {
-        mob_trait
-            .get_mob_entity()
-            .persistence_required
-            .store(true, Ordering::Relaxed);
     }
 }
 
