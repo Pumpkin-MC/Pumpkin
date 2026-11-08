@@ -1396,6 +1396,12 @@ pub fn build() -> TokenStream {
         for hash in block.properties.iter().rev() {
             let gen_prop = generated_prop_map.get(hash).unwrap();
             if gen_prop.serialized_name == "waterlogged" {
+                // waterlogged bool: index 0 = true
+                assert!(
+                    matches!(gen_prop.property_type, GeneratedPropertyType::Boolean),
+                    "{}: waterlogged is not a boolean",
+                    block.name
+                );
                 waterlogged_multiplier = Some(multiplier);
             }
             let variant_count = match &gen_prop.property_type {
