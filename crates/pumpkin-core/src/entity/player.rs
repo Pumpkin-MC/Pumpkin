@@ -6526,7 +6526,7 @@ impl Player {
         }
     }
 
-    /// Opens the inventory of the horse this player rides. `false` if it isn't riding one.
+    /// Opens the inventory of the vehicle this player rides. `false` if it isn't riding one.
     pub fn open_vehicle_inventory(self: &Arc<Self>) -> bool {
         let Some(vehicle) = self.get_entity().get_vehicle() else {
             return false;
@@ -6535,7 +6535,7 @@ impl Player {
         if let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) {
             horse.open_custom_inventory_screen(self);
             return true;
-        };
+        }
 
         if let Some(boat) = vehicle
             .cast_any()
@@ -6543,7 +6543,7 @@ impl Player {
         {
             boat.open_inventory(self);
             return true;
-        };
+        }
 
         false
     }
