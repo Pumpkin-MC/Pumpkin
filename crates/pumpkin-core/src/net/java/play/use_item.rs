@@ -116,7 +116,10 @@ impl JavaClient {
         }
         let equipment_slot = held
             .get_data_component::<EquippableImpl>()
-            .filter(|equippable| equippable.swappable)
+            .filter(|equippable| {
+                equippable.swappable
+                    && equippable.can_be_equipped_by(player.get_entity().entity_type)
+            })
             .map(|equippable| equippable.slot.clone());
         if let Some(slot) = equipment_slot {
             // The equipment lock has to be released before touching the hand again:

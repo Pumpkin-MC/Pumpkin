@@ -24,7 +24,7 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, EquipmentSlot, EquipmentType,
-    EquippableImpl, IDSet, Operation,
+    EquippableImpl, Operation,
 };
 use pumpkin_data::enchantment_provider::EnchantmentProvider;
 use pumpkin_data::entity::EntityType;
@@ -868,16 +868,7 @@ pub fn is_equippable_in_slot(
 ) -> bool {
     stack.get_data_component::<EquippableImpl>().map_or_else(
         || *slot == EquipmentSlot::MAIN_HAND,
-        |equippable| {
-            *equippable.slot == *slot
-                && equippable
-                    .allowed_entities
-                    .as_ref()
-                    .is_none_or(|allowed| match allowed {
-                        IDSet::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
-                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == entity_type.id),
-                    })
-        },
+        |equippable| *equippable.slot == *slot && equippable.can_be_equipped_by(entity_type),
     )
 }
 

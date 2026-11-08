@@ -648,6 +648,17 @@ pub struct EquippableImpl {
     pub shearing_sound: IdOr<SoundEvent>,
 }
 impl EquippableImpl {
+    /// Vanilla `Equippable.canBeEquippedBy`.
+    #[must_use]
+    pub fn can_be_equipped_by(&self, entity_type: &EntityType) -> bool {
+        self.allowed_entities
+            .as_ref()
+            .is_none_or(|allowed| match allowed {
+                IDSet::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
+                IDSet::IDs(ids) => ids.iter().any(|id| id.id == entity_type.id),
+            })
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         let slot = EquipmentSlot::get_from_name(compound.get_string("slot")?)?;
