@@ -400,6 +400,10 @@ struct Flags {
     raining: bool,
     thundering: bool,
     phases: Vec<bool>,
+    clear_weather_time: i32,
+    rain_time: i32,
+    thunder_time: i32,
+    phase_times: Vec<i32>,
 }
 
 impl WeatherData {
@@ -408,6 +412,10 @@ impl WeatherData {
             raining: self.raining,
             thundering: self.thundering,
             phases: self.phases.iter().map(|phase| phase.active).collect(),
+            clear_weather_time: self.clear_weather_time,
+            rain_time: self.rain_time,
+            thunder_time: self.thunder_time,
+            phase_times: self.phases.iter().map(|phase| phase.time).collect(),
         }
     }
 
@@ -427,14 +435,28 @@ impl WeatherData {
         flips
     }
 
-    /// Puts a flag back to how it was before a cancelled change.
-    fn restore(&mut self, flag: Flag, before: &Flags) {
+    /// Puts a flag back to how it was before a cancelled change. With `timer`, the
+    /// countdown the change set for it is put back too.
+    fn restore(&mut self, flag: Flag, before: &Flags, timer: bool) {
         match flag {
-            Flag::Rain => self.raining = before.raining,
-            Flag::Thunder => self.thundering = before.thundering,
+            Flag::Rain => {
+                self.raining = before.raining;
+                if timer {
+                    self.rain_time = before.rain_time;
+                }
+            }
+            Flag::Thunder => {
+                self.thundering = before.thundering;
+                if timer {
+                    self.thunder_time = before.thunder_time;
+                }
+            }
             Flag::Phase(i) => {
                 if let (Some(phase), Some(was)) = (self.phases.get_mut(i), before.phases.get(i)) {
                     phase.active = *was;
+                    if let (true, Some(time)) = (timer, before.phase_times.get(i)) {
+                        phase.time = *time;
+                    }
                 }
             }
         }
@@ -504,6 +526,8 @@ impl World {
             return;
         };
 
+        let total = flips.len();
+        let mut restored = 0;
         for (flag, to) in flips {
             let cancelled = match flag {
                 Flag::Rain => {
@@ -527,7 +551,14 @@ impl World {
                 }
             };
             if cancelled && cancellable {
-                self.lock_weather_data().restore(flag, &before);
+                // Natural timers already re-rolled; putting them back would flip again every tick.
+                let timer = cause != WeatherCause::Natural;
+                let mut data = self.lock_weather_data();
+                data.restore(flag, &before, timer);
+                restored += 1;
+                if timer && restored == total {
+                    data.clear_weather_time = before.clear_weather_time;
+                }
             }
         }
     }
@@ -857,13 +888,15 @@ mod test {
         let mut data = blood_moon();
         let before = data.flags();
         data.raining = true;
+        data.rain_time = 99;
         data.phases[0].active = true;
         let flips = data.flips_since(&before);
         assert_eq!(flips.len(), 2);
         for (flag, _) in flips {
-            data.restore(flag, &before);
+            data.restore(flag, &before, true);
         }
         assert!(!data.raining && !data.phases[0].active);
+        assert_eq!(data.rain_time, before.rain_time);
     }
 
     #[test]

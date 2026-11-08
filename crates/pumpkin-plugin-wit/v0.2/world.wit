@@ -951,10 +951,10 @@ interface %world {
         /// Sets the ticks of clear sky left from `/weather clear`. Negative values count as 0.
         set-clear-weather-duration: func(ticks: s32);
 
-        /// Sets the ticks until the rain next starts or stops.
+        /// Sets the ticks until the rain next starts or stops. Negative values count as 0.
         set-rain-duration: func(ticks: s32);
 
-        /// Sets the ticks until the thunder next starts or stops.
+        /// Sets the ticks until the thunder next starts or stops. Negative values count as 0.
         set-thunder-duration: func(ticks: s32);
 
         /// Starts or ends a custom phase of the weather profile. Without `ticks` the phase
