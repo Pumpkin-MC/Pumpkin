@@ -6,7 +6,13 @@ ARG PUMPKIN_TAG=nightly
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates netcat-openbsd && \
     case "${TARGETARCH}" in \
-        "amd64") BIN_ARCH="X64" ;; \
+        "amd64") \
+            if /lib64/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q "x86-64-v3 (supported"; then \
+                BIN_ARCH="X64-v3"; \
+            else \
+                BIN_ARCH="X64"; \
+            fi \
+            ;; \
         "arm64") BIN_ARCH="ARM64" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
