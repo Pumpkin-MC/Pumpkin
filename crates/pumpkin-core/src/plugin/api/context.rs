@@ -2,7 +2,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{
-        Arc, OnceLock,
+        Arc, OnceLock, PoisonError, RwLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -48,7 +48,8 @@ pub struct Context {
     /// Set by a command registration: the tree keeps its code for good.
     commands: AtomicBool,
     /// Set before unload's last sweep, after `on_unload`: commands and permissions are refused.
-    sealed: AtomicBool,
+    /// A lock: sealing waits for a permission registration that is under way.
+    sealed: RwLock<bool>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -78,7 +79,7 @@ impl Context {
             logger,
             closed: AtomicBool::new(false),
             commands: AtomicBool::new(false),
-            sealed: AtomicBool::new(false),
+            sealed: RwLock::new(false),
         }
     }
 
@@ -94,11 +95,11 @@ impl Context {
 
     /// Refuses further commands and permissions, set before unload's last sweep of them.
     pub(crate) fn seal(&self) {
-        self.sealed.store(true, Ordering::SeqCst);
+        *self.sealed.write().unwrap_or_else(PoisonError::into_inner) = true;
     }
 
     fn is_sealed(&self) -> bool {
-        self.sealed.load(Ordering::SeqCst)
+        *self.sealed.read().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Library must stay loaded: the command tree holds its code.
@@ -354,16 +355,12 @@ impl Context {
             ));
         }
 
-        if self.is_sealed() {
+        // Held across the insert, so the last sweep comes after it
+        let sealed = self.sealed.read().unwrap_or_else(PoisonError::into_inner);
+        if *sealed {
             return Err(format!("Plugin {} is unloading", self.metadata.name));
         }
-        self.permission_manager.register_permission(permission)?;
-        // Sealed after the check: the sweep may have missed this node, so it goes again
-        if self.is_sealed() {
-            self.unregister_permissions();
-            return Err(format!("Plugin {} is unloading", self.metadata.name));
-        }
-        Ok(())
+        self.permission_manager.register_permission(permission)
     }
 
     /// Check if a player has a permission
