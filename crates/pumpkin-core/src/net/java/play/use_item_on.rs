@@ -198,6 +198,7 @@ impl JavaClient {
             return Ok(());
         }
 
+        // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
         // fresh block: event and block handlers may change it
         let block = world.get_block(&position);
         let item_result = server
