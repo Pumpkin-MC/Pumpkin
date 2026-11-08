@@ -1526,7 +1526,6 @@ impl PluginManager {
             .collect();
 
         let mut total_wait_time = std::time::Duration::ZERO;
-        let mut first_error = None;
 
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
@@ -1583,17 +1582,14 @@ impl PluginManager {
                                 error!("Plugin initialization task panicked: {}", err);
                             }
                         }
-                        Err(e) => {
-                            error!("{e}");
-                            first_error.get_or_insert(e);
-                        }
+                        Err(e) => error!("Not waiting on plugin {name}: {e}"),
                     },
                     Err(err) => error!("{}", err),
                 }
             }
         }
 
-        first_error.map_or(Ok(total_wait_time), Err)
+        Ok(total_wait_time)
     }
 
     /// Releases plugins a scan loaded but will not start, listing them with `reason`.
@@ -2637,6 +2633,308 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin::api::PluginFuture;
+
+    type Hook =
+        Box<dyn Fn(Arc<Context>) -> PluginFuture<'static, Result<(), String>> + Send + Sync>;
+
+    fn hook<F>(f: impl Fn(Arc<Context>) -> F + Send + Sync + 'static) -> Hook
+    where
+        F: Future<Output = Result<(), String>> + Send + 'static,
+    {
+        Box::new(move |context| Box::pin(f(context)))
+    }
+
+    struct Hooks {
+        on_load: Hook,
+        on_unload: Hook,
+    }
+
+    /// One instance per load: a loader holding it would look like a running call.
+    struct TestPlugin(Arc<Hooks>);
+
+    impl Plugin for TestPlugin {
+        fn on_load(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+            (self.0.on_load)(context)
+        }
+
+        fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+            (self.0.on_unload)(context)
+        }
+    }
+
+    /// Loads `<name>.test` files from memory, counting released libraries.
+    #[derive(Default)]
+    struct TestLoader {
+        plugins: SyncMutex<HashMap<PathBuf, Arc<Hooks>>>,
+        unloaded: AtomicU64,
+    }
+
+    impl TestLoader {
+        fn add(&self, name: &str, on_load: Hook, on_unload: Hook) -> PathBuf {
+            let path = PathBuf::from(format!("{name}.test"));
+            self.plugins
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(path.clone(), Arc::new(Hooks { on_load, on_unload }));
+            path
+        }
+
+        fn unloaded(&self) -> u64 {
+            self.unloaded.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl PluginLoader for TestLoader {
+        fn load<'a>(&'a self, path: &'a Path) -> loader::PluginLoadFuture<'a> {
+            Box::pin(async move {
+                let hooks = self
+                    .plugins
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get(path)
+                    .cloned()
+                    .ok_or(LoaderError::InvalidLoaderData)?;
+                let plugin: Arc<dyn Plugin> = Arc::new(TestPlugin(hooks));
+                let name = path.file_stem().unwrap_or_default().to_string_lossy();
+                let metadata = PluginMetadata {
+                    name: name.into_owned(),
+                    version: "1".to_string(),
+                    authors: Vec::new(),
+                    description: String::new(),
+                    dependencies: Vec::new(),
+                    permissions: Vec::new(),
+                };
+                Ok((plugin, metadata, Box::new(()) as Box<dyn Any + Send + Sync>))
+            })
+        }
+
+        fn can_load(&self, path: &Path) -> bool {
+            self.plugins
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains_key(path)
+        }
+
+        fn unload(&self, _data: Box<dyn Any + Send + Sync>) -> loader::PluginUnloadFuture<'_> {
+            self.unloaded
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async { Ok(()) })
+        }
+
+        fn can_unload(&self) -> bool {
+            true
+        }
+    }
+
+    fn ok() -> Hook {
+        hook(|_| async { Ok(()) })
+    }
+
+    /// A server with its world in `world`, loading plugins through `loader`.
+    async fn test_server(world: &tempfile::TempDir, loader: Arc<TestLoader>) -> Arc<Server> {
+        let basic = pumpkin_config::BasicConfiguration {
+            default_level_name: world.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let vanilla_data = crate::data::VanillaData {
+            banned_ip_list: SyncRwLock::default(),
+            banned_player_list: SyncRwLock::default(),
+            operator_config: SyncRwLock::default(),
+            user_cache: SyncRwLock::default(),
+            whitelist_config: SyncRwLock::default(),
+        };
+        Server::new(
+            basic,
+            pumpkin_config::AdvancedConfiguration::default(),
+            pumpkin_config::TelemetryConfig::default(),
+            vanilla_data,
+            vec![loader],
+        )
+        .await
+        .expect("a fresh world sets up")
+    }
+
+    /// Waits for `condition`, failing the test after the drain timeout and a margin.
+    async fn eventually(condition: impl Fn() -> bool) {
+        let waited = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT * 2, async {
+            while !condition() {
+                tokio::time::sleep(HANDLER_DRAIN_POLL).await;
+            }
+        })
+        .await;
+        assert!(waited.is_ok(), "condition never held");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancelled_unload_still_releases_the_plugin() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let started = Arc::new(Notify::new());
+        let finish = Arc::new(Notify::new());
+        let (on_started, on_finish) = (Arc::clone(&started), Arc::clone(&finish));
+        let path = loader.add(
+            "a",
+            ok(),
+            hook(move |_| {
+                let (started, finish) = (Arc::clone(&on_started), Arc::clone(&on_finish));
+                async move {
+                    started.notify_one();
+                    finish.notified().await;
+                    Ok(())
+                }
+            }),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+
+        // The caller gives up while on_unload runs
+        tokio::select! {
+            _ = manager.unload_plugin("a") => panic!("on_unload is still blocked"),
+            () = started.notified() => {}
+        }
+        finish.notify_one();
+
+        eventually(|| !manager.is_plugin_loaded("a")).await;
+        assert_eq!(loader.unloaded(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failed_owner_does_not_wait_on_a_child_waiting_for_it() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let waiting = Arc::new(Notify::new());
+        let child_waiting = Arc::clone(&waiting);
+        let child = child_loader.add(
+            "c",
+            hook(move |context| {
+                let waiting = Arc::clone(&child_waiting);
+                async move {
+                    waiting.notify_one();
+                    context
+                        .plugin_manager
+                        .wait_for_plugin("p")
+                        .await
+                        .map_err(|e| e.to_string())
+                }
+            }),
+            ok(),
+        );
+        let owner_loader = SyncMutex::new(Some(Arc::clone(&child_loader)));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = owner_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                let (waiting, child) = (Arc::clone(&waiting), child.clone());
+                async move {
+                    let Some(child_loader) = child_loader else {
+                        return Err("loaded twice".to_string());
+                    };
+                    context.register_plugin_loader(child_loader).await;
+                    // Its own task: the child's wait on this on_load is not seen as a cycle
+                    let server = Arc::clone(&context.server);
+                    tokio::spawn(async move {
+                        server.plugin_manager.try_load_plugin(&server, &child).await
+                    });
+                    waiting.notified().await;
+                    Err("owner fails".to_string())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        drop(child_loader);
+
+        let loaded = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT * 2,
+            server.plugin_manager.try_load_plugin(&server, &owner),
+        )
+        .await;
+        assert!(matches!(loaded, Ok(Err(_))), "owner cleanup hung");
+        assert!(!server.plugin_manager.is_plugin_loaded("c"));
+        assert_eq!(loader.unloaded(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn child_of_an_unloading_owner_is_refused() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add("c", ok(), ok());
+        let owner_loader = SyncMutex::new(Some(Arc::clone(&child_loader)));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = owner_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                async move {
+                    if let Some(child_loader) = child_loader {
+                        context.register_plugin_loader(child_loader).await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+
+        // Where unload stands right after it closes the owner, before the children snapshot
+        let context = manager
+            .plugins
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|p| p.metadata.name == "p")
+            .map(|p| Arc::clone(&p.context))
+            .expect("p was just loaded");
+        context.close();
+
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+        assert!(!manager.is_plugin_loaded("c"));
+        assert!(manager.unloaded_files.read().await.contains(&child));
+        assert_eq!(child_loader.unloaded(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sealed_context_refuses_commands_and_permissions() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let path = loader.add("a", ok(), ok());
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+        let context = manager
+            .plugins
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|p| p.metadata.name == "a")
+            .map(|p| Arc::clone(&p.context))
+            .expect("a was just loaded");
+
+        context.seal();
+        context.register_command(
+            crate::command::argument_builder::command("late", ""),
+            "late",
+        );
+        assert!(!context.has_commands());
+        let permission = pumpkin_util::permission::Permission::new(
+            "a:late",
+            "",
+            pumpkin_util::permission::PermissionDefault::Allow,
+        );
+        assert!(context.register_permission(permission).is_err());
+        assert!(!server.permission_manager.registry.has_permission("a:late"));
+    }
 
     #[tokio::test]
     async fn same_named_plugin_of_another_manager_is_not_a_deadlock() {
