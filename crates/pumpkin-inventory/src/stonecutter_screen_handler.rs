@@ -170,6 +170,12 @@ impl ScreenHandler for StonecutterScreenHandler {
         }
     }
 
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
+        self.output_inventory.remove_stack(0);
+        self.drop_inventory(player, self.input_inventory.clone());
+    }
+
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut stack = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();

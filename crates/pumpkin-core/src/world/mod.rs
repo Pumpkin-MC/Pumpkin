@@ -107,7 +107,8 @@ use pumpkin_protocol::java::client::play::{
     PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
-    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
+    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage, CUpdateRecipes,
+    stonecutter_update_recipes_data,
 };
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
@@ -3980,6 +3981,12 @@ impl World {
             let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
             let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
             if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                java_client.send_packet_now(data).await;
+            }
+            if let Ok(recipes) =
+                stonecutter_update_recipes_data(&dynamic_recipes, java_client.version.load())
+                && let Ok(data) = java_client.serialize_packet(&CUpdateRecipes::new(&recipes))
+            {
                 java_client.send_packet_now(data).await;
             }
         }

@@ -2,8 +2,8 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::clientbound::play::RECIPE_BOOK_ADD;
 use pumpkin_data::recipes::{
-    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING, RecipeCategoryTypes,
-    RecipeIngredientTypes, RecipeResultStruct,
+    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+    RECIPES_STONECUTTING, RecipeCategoryTypes, RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -954,6 +954,35 @@ fn write_dynamic_cooking_entry(
     Ok(())
 }
 
+/// Builds the `UPDATE_RECIPES` payload: no item property sets, then the stonecutter recipe list.
+///
+/// Entry order must match `StonecutterScreenHandler::get_available_recipes`, since the client
+/// sends the chosen option as an index into its filtered list.
+pub fn stonecutter_update_recipes_data(
+    dynamic_recipes: &[DynamicRecipe],
+    version: JavaMinecraftVersion,
+) -> Result<Vec<u8>, WritingError> {
+    let mut write = Vec::new();
+    write.write_var_int(&VarInt(0))?;
+    let dynamic: Vec<_> = dynamic_recipes
+        .iter()
+        .filter_map(|r| match r {
+            DynamicRecipe::Stonecutting(r) => Some(r),
+            _ => None,
+        })
+        .collect();
+    write.write_var_int(&VarInt((RECIPES_STONECUTTING.len() + dynamic.len()) as i32))?;
+    for r in RECIPES_STONECUTTING {
+        write_ingredient_holderset(&mut write, &r.ingredient, version)?;
+        write_result_slot_display(&mut write, &r.result, version)?;
+    }
+    for r in dynamic {
+        write_dynamic_ingredient_holderset(&mut write, &r.ingredient, version)?;
+        write_dynamic_result_slot_display(&mut write, &r.result, version)?;
+    }
+    Ok(write)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -977,6 +1006,18 @@ mod tests {
         let packet = CRecipeBookAdd::new(true, &[]);
         for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
             packet.write_packet_data(Vec::new(), &version).unwrap();
+        }
+    }
+
+    #[test]
+    fn stonecutter_recipes_lead_with_empty_item_sets_and_vanilla_count() {
+        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+            let data = stonecutter_update_recipes_data(&[], version).unwrap();
+            let mut expected = vec![0u8];
+            VarInt(RECIPES_STONECUTTING.len() as i32)
+                .encode(&mut expected)
+                .unwrap();
+            assert!(data.starts_with(&expected));
         }
     }
 }
