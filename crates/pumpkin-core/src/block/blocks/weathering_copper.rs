@@ -2,26 +2,25 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
     ChestLikeProperties, ChestType, CopperBulbLikeProperties, CopperGolemPose,
-    CopperGolemStatueLikeProperties, DoubleBlockHalf, EnumVariants, HorizontalFacing,
-    IronChainLikeProperties, LanternLikeProperties, LightningRodLikeProperties,
-    MangroveRootsLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties,
-    OakTrapdoorLikeProperties, WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
+    CopperGolemStatueLikeProperties, DoubleBlockHalf, EnumVariants, IronChainLikeProperties,
+    LanternLikeProperties, LightningRodLikeProperties, MangroveRootsLikeProperties,
+    OakDoorLikeProperties, OakFenceLikeProperties, OakTrapdoorLikeProperties,
+    WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
 };
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::data_component_impl::BlockStateImpl;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::GameMode;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
-use uuid::Uuid;
 
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::doors::DoorBlock;
@@ -37,7 +36,6 @@ use crate::block::{
     UseWithItemArgs,
 };
 use crate::entity::EntityBase;
-use crate::entity::r#type::from_type;
 use crate::world::World;
 
 /// Base chance per random tick to attempt degradation (~5.69%).
@@ -1134,26 +1132,30 @@ impl CopperGolemStatueBlock {
         }
     }
 
-    const fn horizontal_facing_to_yaw(facing: HorizontalFacing) -> f32 {
-        match facing {
-            HorizontalFacing::South => 0.0,
-            HorizontalFacing::West => 90.0,
-            HorizontalFacing::North => 180.0,
-            HorizontalFacing::East => 270.0,
-        }
-    }
-
     fn update_pose(world: &Arc<World>, block: &Block, pos: &BlockPos) {
         let state_id = world.get_block_state_id(pos);
         let mut props = CopperGolemStatueLikeProperties::from_state_id(state_id);
         props.copper_golem_pose = Self::next_pose(props.copper_golem_pose);
-        world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
-        world.play_sound(
+        world.play_block_sound(
             Sound::EntityCopperGolemBecomeStatue,
             SoundCategory::Blocks,
-            &pos.to_f64(),
+            *pos,
         );
+        world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         world.update_neighbour_for_output_signal(pos, block);
+        world.emit_game_event(GameEvent::BlockChange.name(), pos.to_centered_f64());
+    }
+
+    /// The pose stored on a statue item by pick block.
+    fn pose_from_item(stack: &ItemStack) -> Option<CopperGolemPose> {
+        let component = stack.get_data_component::<BlockStateImpl>()?;
+        let (_, value) = component
+            .properties
+            .iter()
+            .find(|(name, _)| name == "copper_golem_pose")?;
+        (0..CopperGolemPose::variant_count())
+            .map(CopperGolemPose::from_index)
+            .find(|pose| pose.to_value() == value.as_ref())
     }
 }
 
@@ -1162,6 +1164,12 @@ impl BlockBehaviour for CopperGolemStatueBlock {
         let mut props = CopperGolemStatueLikeProperties::default(args.block);
         props.facing = args.player.get_entity().get_horizontal_facing().opposite();
         props.waterlogged = args.replacing.water_source();
+        if let Ok(hand) = Hand::from_packet_id(args.use_item_on.hand.0)
+            && let Some(pose) =
+                Self::pose_from_item(&args.player.inventory().get_stack_in_hand(hand))
+        {
+            props.copper_golem_pose = pose;
+        }
         props.to_state_id(args.block)
     }
 
@@ -1190,66 +1198,38 @@ impl BlockBehaviour for CopperGolemStatueBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.item.has_tag(&tag::Item::MINECRAFT_AXES) {
-            if args.block == &Block::COPPER_GOLEM_STATUE {
-                let state_id = args.world.get_block_state_id(args.position);
-                let props = CopperGolemStatueLikeProperties::from_state_id(state_id);
-                let custom_name = args.world.get_block_entity(args.position).and_then(|be| {
-                    be.as_any()
-                        .downcast_ref::<CopperGolemStatueBlockEntity>()
-                        .and_then(|statue| {
-                            statue
-                                .custom_name
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .clone()
-                        })
-                });
-
-                args.world.set_block_state(
-                    args.position,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                );
-
-                let spawn_pos = Vector3::new(
-                    f64::from(args.position.0.x) + 0.5,
-                    f64::from(args.position.0.y),
-                    f64::from(args.position.0.z) + 0.5,
-                );
-                let golem = from_type(
-                    &EntityType::COPPER_GOLEM,
-                    spawn_pos,
-                    args.world,
-                    Uuid::new_v4(),
-                );
-                let entity = golem.get_entity();
-                entity.set_rotation(Self::horizontal_facing_to_yaw(props.facing), 0.0);
-                if let Some(name) = custom_name {
-                    entity.set_custom_name(TextComponent::text(name));
-                }
-                args.world.spawn_entity(golem);
-
-                args.world.play_sound(
-                    Sound::BlockCopperBreak,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world.play_sound(
-                    Sound::ItemAxeScrape,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world
-                    .sync_world_event(WorldEvent::ParticlesScrape, *args.position, 0);
-
-                if args.player.gamemode.load() != GameMode::Creative {
-                    let _ = args.item_stack.damage_item(1);
-                }
-                return BlockActionResult::Success;
+            if args.block != &Block::COPPER_GOLEM_STATUE {
+                return BlockActionResult::Pass;
             }
-            return BlockActionResult::Pass;
+            let Some(block_entity) = args.world.get_block_entity(args.position) else {
+                return BlockActionResult::Pass;
+            };
+            let Some(statue) = block_entity
+                .as_any()
+                .downcast_ref::<CopperGolemStatueBlockEntity>()
+            else {
+                return BlockActionResult::Pass;
+            };
+            let state = args.world.get_block_state(args.position);
+            let golem = statue.remove_statue(args.world, state);
+            if !args.world.spawn_entity(golem.clone()) {
+                return BlockActionResult::Fail;
+            }
+            args.player.damage_item_in_slot(args.equipment_slot, 1);
+            golem.play_spawn_sound();
+            let replacement = if state.is_waterlogged() {
+                &Block::WATER
+            } else {
+                &Block::AIR
+            };
+            args.world.set_block_state(
+                args.position,
+                replacement.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+            return BlockActionResult::Success;
         }
-        if args.item_stack.item.id == Item::HONEYCOMB.id {
+        if args.item_stack.item == &Item::HONEYCOMB && get_weather_state(args.block).is_some() {
             return BlockActionResult::Pass;
         }
         BlockActionResult::PassToDefaultBlockAction
@@ -1258,6 +1238,11 @@ impl BlockBehaviour for CopperGolemStatueBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::update_pose(args.world, args.block, args.position);
         BlockActionResult::Success
+    }
+
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world
+            .update_neighbour_for_output_signal(args.position, args.block);
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {

@@ -21,6 +21,10 @@ pub trait Behavior: Send + Sync {
         true
     }
 
+    fn timed_out(&self, time: i64, end_timestamp: i64) -> bool {
+        time > end_timestamp
+    }
+
     fn start(&mut self, _tick: &mut BrainTick<'_>) {}
 
     fn tick(&mut self, _tick: &mut BrainTick<'_>) {}
@@ -53,8 +57,8 @@ impl<B: Behavior> Timed<B> {
     }
 
     #[must_use]
-    pub const fn has_timed_out(&self, time: i64) -> bool {
-        time > self.end_timestamp
+    pub fn has_timed_out(&self, time: i64) -> bool {
+        self.inner.timed_out(time, self.end_timestamp)
     }
 
     pub const fn start_at(&mut self, time: i64, duration: i32) {
