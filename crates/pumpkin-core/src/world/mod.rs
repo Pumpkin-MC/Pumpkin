@@ -1,4 +1,4 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crate::block::entities::{BlockEntity, block_entity_from_nbt, piston::PistonBlockEntity};
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
@@ -2466,9 +2466,17 @@ impl World {
 
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
-        let pos_iter = BlockPos::iterate(min, max);
+        // A moving piston's shape reaches up to one block past its position, so like vanilla's
+        // `hasLargeCollisionShape` blocks, look one block further, for moving pistons only.
+        let pos_iter = BlockPos::iterate(min.add(-1, -1, -1), max.add(1, 1, 1));
 
         for pos in pos_iter {
+            let in_range = pos.0.x >= min.0.x
+                && pos.0.y >= min.0.y
+                && pos.0.z >= min.0.z
+                && pos.0.x <= max.0.x
+                && pos.0.y <= max.0.y
+                && pos.0.z <= max.0.z;
             let state = self.get_block_state(&pos);
 
             if state.is_air() {
@@ -2476,9 +2484,23 @@ impl World {
             }
 
             let block = Block::from_state_id(state.id);
+            if !in_range && block != &Block::MOVING_PISTON {
+                continue;
+            }
             let mut collided = false;
 
-            if block == &Block::POWDER_SNOW {
+            if block == &Block::MOVING_PISTON {
+                if let Some(piston) = self.get_block_entity(&pos)
+                    && let Some(piston) = piston.as_any().downcast_ref::<PistonBlockEntity>()
+                {
+                    for shape in piston.collision_shapes() {
+                        if shape.intersects(&bounding_box) {
+                            collided = true;
+                            collisions.push(shape);
+                        }
+                    }
+                }
+            } else if block == &Block::POWDER_SNOW {
                 if let Some(shape) =
                     crate::block::blocks::powder_snow::collision_shape_for_entity(entity, &pos)
                 {

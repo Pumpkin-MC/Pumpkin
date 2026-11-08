@@ -2,10 +2,11 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::PistonHeadLikeProperties};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
+use crate::block::blocks::piston::piston::PistonProps;
 use crate::world::{BlockFlags, World};
 
 use super::BlockEntity;
@@ -39,6 +40,44 @@ impl PistonBlockEntity {
         } else {
             1.0 - progress
         }
+    }
+
+    /// Vanilla `PistonMovingBlockEntity.getCollisionShape`: what entities collide with while the
+    /// block moves, in world coordinates. The moved block's shape, shifted by how far it still is
+    /// from its final position; a retracting piston also has its base with the extended shape.
+    pub fn collision_shapes(&self) -> Vec<BoundingBox> {
+        let progress = self.current_progress.load();
+        let pushed = Block::from_state_id(self.pushed_block_state.id);
+        let mut shapes = Vec::new();
+
+        if !self.extending
+            && self.source
+            && (pushed == &Block::PISTON || pushed == &Block::STICKY_PISTON)
+        {
+            let mut base = PistonProps::from_state_id(self.pushed_block_state.id);
+            base.extended = true;
+            let base = BlockState::from_id(base.to_state_id(pushed));
+            shapes.extend(
+                base.get_block_collision_shapes_at(&self.position)
+                    .map(|shape| shape.at_pos(self.position)),
+            );
+        }
+
+        let moving = if self.source {
+            let mut head = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
+            head.facing = self.facing.to_facing();
+            head.short = self.extending != (1.0 - progress < 0.25);
+            BlockState::from_id(head.to_state_id(&Block::PISTON_HEAD))
+        } else {
+            self.pushed_block_state
+        };
+        let offset = Self::dir_vec(self.facing, f64::from(self.amount_extended(progress)));
+        shapes.extend(
+            moving
+                .get_block_collision_shapes_at(&self.position)
+                .map(|shape| shape.at_pos(self.position).shift(offset)),
+        );
+        shapes
     }
 
     fn dir_vec(dir: BlockDirection, scale: f64) -> Vector3<f64> {
@@ -294,5 +333,44 @@ impl BlockEntity for PistonBlockEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{Block, BlockDirection, BlockState};
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+
+    use super::PistonBlockEntity;
+
+    fn moving_slime(extending: bool, progress: f32) -> PistonBlockEntity {
+        PistonBlockEntity {
+            position: BlockPos::new(0, 0, 0),
+            pushed_block_state: BlockState::from_id(Block::SLIME_BLOCK.default_state.id),
+            facing: BlockDirection::Up,
+            current_progress: progress.into(),
+            last_progress: progress.into(),
+            extending,
+            source: false,
+        }
+    }
+
+    #[test]
+    fn moving_block_collides_where_it_is_drawn() {
+        // Pushed up from y=-1 to y=0: halfway, the block spans -0.5..0.5.
+        let shapes = moving_slime(true, 0.5).collision_shapes();
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].min, Vector3::new(0.0, -0.5, 0.0));
+        assert_eq!(shapes[0].max, Vector3::new(1.0, 0.5, 1.0));
+
+        // Pulled down from y=1 to y=0: halfway, it spans 0.5..1.5, past its own cell.
+        let shapes = moving_slime(false, 0.5).collision_shapes();
+        assert_eq!(shapes[0].min, Vector3::new(0.0, 0.5, 0.0));
+        assert_eq!(shapes[0].max, Vector3::new(1.0, 1.5, 1.0));
+
+        // Done: the block sits in its cell.
+        let shapes = moving_slime(true, 1.0).collision_shapes();
+        assert_eq!(shapes[0].min, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(shapes[0].max, Vector3::new(1.0, 1.0, 1.0));
     }
 }
