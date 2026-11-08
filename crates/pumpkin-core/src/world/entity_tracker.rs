@@ -472,6 +472,8 @@ impl TrackedEntity {
         }
     }
 
+    /// Vanilla `ServerEntity.sendPairingData`: sends the spawn packet and the entity's
+    /// current state to a player that starts tracking it.
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
