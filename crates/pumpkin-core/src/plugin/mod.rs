@@ -2440,23 +2440,20 @@ mod tests {
             .insert("a".to_string(), PluginState::Loading);
 
         // other's "a" loading does not make waiting on this manager's "a" a self-wait
-        let result = INITIALIZING_PLUGIN
+        INITIALIZING_PLUGIN
             .scope((other.id, "a".to_string()), async {
-                let waiting = Arc::clone(&manager);
-                let wait = tokio::spawn(async move { waiting.wait_for_all_plugins().await });
-                tokio::task::yield_now().await;
-                let finished = wait.is_finished();
+                // Polled on this task, so the wait sees other's scope
+                let mut wait = std::pin::pin!(manager.wait_for_all_plugins());
+                assert!(futures::poll!(&mut wait).is_pending());
                 manager
                     .plugin_states
                     .write()
                     .await
                     .insert("a".to_string(), PluginState::Loaded);
                 manager.state_notify.notify_waiters();
-                (finished, wait.await)
+                assert!(matches!(wait.await, Ok(())));
             })
             .await;
-        assert!(!result.0);
-        assert!(matches!(result.1, Ok(Ok(()))));
     }
 
     #[tokio::test]
