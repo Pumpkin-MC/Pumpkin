@@ -131,7 +131,9 @@ fn handle_beehive(
                 harvested_items: drops.clone(),
                 cancelled: false,
             };
-        if !world.fire_block_event(location, block, &mut event) {
+        if !world.fire_block_event(location, block, &mut event)
+            || !Arc::ptr_eq(&player.world(), &world)
+        {
             return false;
         }
         drops = event.harvested_items;

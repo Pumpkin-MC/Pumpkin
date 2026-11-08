@@ -60,7 +60,10 @@ impl JavaClient {
                 }
             }}
 
-            // event may change it
+            // event may move the player or change it
+            if !Arc::ptr_eq(&player.world(), &world) {
+                return Ok(());
+            }
             let block = world.get_block(&position);
             if let Some(factory) = server
                 .block_registry
@@ -109,8 +112,9 @@ impl JavaClient {
 
         let mut item = inventory.get_stack_in_hand(hand);
         let before = item.clone();
-        let item_id = item.item.id;
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        if !item.is_empty() {
+            player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
+        }
 
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND

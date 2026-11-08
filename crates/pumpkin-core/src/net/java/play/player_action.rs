@@ -63,7 +63,11 @@ impl JavaClient {
                             return;
                         }
                     }
-                    // interact and damage events may change it
+                    // interact and damage events may move the player or change it
+                    if !Arc::ptr_eq(&player.world(), &world) {
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    }
                     let (block, state) = world.get_block_and_state(&position);
 
                     let gamemode = player.gamemode.load();
