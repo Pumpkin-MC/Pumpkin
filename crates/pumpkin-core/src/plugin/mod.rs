@@ -37,6 +37,8 @@ use crate::{LOGGER_IMPL, server::Server};
 tokio::task_local! {
     /// The plugin whose `on_load` runs on this task
     static INITIALIZING_PLUGIN: PluginKey;
+    /// Manager id and token of each plugin whose `on_unload` runs on this task
+    static UNLOADING_PLUGINS: Vec<(u64, u64)>;
 }
 
 /// A plugin and the manager that owns it, since managers can hold same-named plugins.
@@ -485,6 +487,27 @@ pub struct PluginManager {
     id: u64,
 }
 
+/// Ends an unload's claim on its record, however the unload returns.
+struct UnloadGuard<'a> {
+    manager: &'a PluginManager,
+    token: u64,
+}
+
+impl Drop for UnloadGuard<'_> {
+    fn drop(&mut self) {
+        let mut plugins = self
+            .manager
+            .plugins
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(plugin) = plugins.iter_mut().find(|p| p.token == self.token) {
+            plugin.unloading = false;
+        }
+        drop(plugins);
+        self.manager.state_notify.notify_waiters();
+    }
+}
+
 /// Represents a successfully loaded plugin
 ///
 /// OS specific issues
@@ -496,6 +519,8 @@ struct LoadedPlugin {
     loader: Arc<dyn PluginLoader>,
     loader_data: Option<Box<dyn Any + Send + Sync>>,
     is_active: bool,
+    /// Claimed by an unload that has not finished
+    unloading: bool,
     context: Arc<Context>,
     path: PathBuf,
 }
@@ -1070,6 +1095,7 @@ impl PluginManager {
                     loader: loader.clone(),
                     loader_data: Some(loader_data),
                     is_active: false, // Will be set to true after successful initialization
+                    unloading: false,
                     context: context.clone(),
                     path,
                 });
@@ -2056,6 +2082,7 @@ impl PluginManager {
                 })
                 .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
             plugin.is_active = false;
+            plugin.unloading = true;
             states.remove(name);
             break (
                 plugin.token,
@@ -2066,6 +2093,10 @@ impl PluginManager {
                 plugin.path.clone(),
             );
         };
+        let _unloading = UnloadGuard {
+            manager: self,
+            token,
+        };
 
         self.unload_children(name).await;
         context.close();
@@ -2075,8 +2106,14 @@ impl PluginManager {
         context.unregister_permissions();
 
         if let Some(instance) = &instance {
-            match AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
-                .catch_unwind()
+            let mut unloading = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+            unloading.push((self.id, token));
+            match UNLOADING_PLUGINS
+                .scope(
+                    unloading,
+                    AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
+                        .catch_unwind(),
+                )
                 .await
             {
                 Ok(Ok(())) => {}
@@ -2177,6 +2214,28 @@ impl PluginManager {
                 Ok(()) | Err(ManagerError::PluginNotFound(_)) => {}
                 Err(e) => warn!("Plugin {child} loaded by {owner}: {e}"),
             }
+        }
+
+        // A child another unload claimed can still register in its on_unload, so the owner's
+        // state is only final once it is done. One whose on_unload runs on this task waits on us
+        let on_this_task = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+        loop {
+            // Create the waiter before checking, so a notify in between is not missed
+            let notified = self.state_notify.notified();
+            let busy = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .any(|p| {
+                    p.unloading
+                        && !on_this_task.contains(&(self.id, p.token))
+                        && owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader))
+                });
+            if !busy {
+                return;
+            }
+            notified.await;
         }
     }
 
