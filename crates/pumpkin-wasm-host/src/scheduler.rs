@@ -1,8 +1,6 @@
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    collections::HashSet,
+    sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
 
@@ -16,42 +14,39 @@ use crate::runtime::guest_exports;
 #[cfg(not(feature = "v0_2"))]
 use crate::runtime::v0_2_disabled;
 
-/// How long one tick waits for all its scheduled tasks together. One tick's worth of time.
+/// How long one tick spends starting scheduled tasks: one tick's worth of time. Tasks still due
+/// once it is used up stay queued for the next tick.
 const TASK_TICK_BUDGET: Duration = Duration::from_millis(50);
+
+/// After how long a running task gets a warning in the log. The tick keeps waiting for it.
+const SLOW_TASK_WARNING: Duration = TASK_TICK_BUDGET;
 
 /// Runs the plugin tasks that are due on this tick.
 ///
-/// All runs share one [`TASK_TICK_BUDGET`]. Tasks still due once it is used up are deferred to
-/// the next tick rather than started without waiting, so they never overlap the world tick. They
-/// keep their due tick, so they run first next time.
+/// Tasks are taken from the queue one at a time, right before each runs, so a task cancelled or a
+/// plugin disabled by an earlier task of this tick is not run. Once [`TASK_TICK_BUDGET`] is used
+/// up, no further task is started; the rest stay queued with their due tick, so they run first
+/// next tick. Tasks scheduled during this tick, and repeating tasks that are due again right away,
+/// wait for the next tick, as before.
 pub fn tick(scheduler: &TaskScheduler, server: &Arc<Server>) {
     let current_tick = server.tick_count.load(Ordering::Relaxed) as u64;
     let deadline = Instant::now() + TASK_TICK_BUDGET;
-    for task in scheduler.take_due_tasks(current_tick) {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        // A task whose previous run is still in flight skips this run either way, so check that
-        // first: deferring it would only make the skipped run happen late.
-        if task.running.load(Ordering::Acquire) {
-            tracing::debug!(
-                handler_id = task.handler_id,
-                "Skipping Wasm scheduled task run, the previous run is still in flight"
-            );
-        } else if remaining.is_zero() {
-            scheduler.defer(task);
+    let first_new_id = scheduler.next_task_id();
+    let mut ran = HashSet::new();
+    let mut for_next_tick = Vec::new();
+    while Instant::now() < deadline {
+        let Some(task) = scheduler.pop_due_task(current_tick) else {
+            break;
+        };
+        if task.id >= first_new_id || !ran.insert(task.id) {
+            for_next_tick.push(task);
             continue;
-        } else {
-            run_task(server, &task, remaining);
         }
+        run_task(server, &task);
         scheduler.reschedule(task, current_tick);
     }
-}
-
-/// Clears a task's `running` flag when its run ends, also if the run panics or is dropped.
-struct RunningGuard(Arc<AtomicBool>);
-
-impl Drop for RunningGuard {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
+    for task in for_next_tick {
+        scheduler.defer(task);
     }
 }
 
@@ -61,19 +56,16 @@ impl Drop for RunningGuard {
 /// on world locks while the tick waited in a blocking event for the same plugin instance, which
 /// froze the server. Waiting here keeps a task and the plugin's blocking events apart.
 ///
-/// The wait is bounded by `budget`, what is left of [`TASK_TICK_BUDGET`] on this tick, so a task stuck in a host call (for example WASI
-/// I/O) cannot stall the tick or shutdown. Wasmtime offers no way to interrupt a guest that is
-/// parked in a host future, so a run that overshoots its budget keeps going on its own Tokio task,
-/// as before this change, and `running` stays set until it ends.
-fn run_task(server: &Arc<Server>, task: &ScheduledTask, budget: Duration) {
+/// The wait is not bounded. The guest call runs on the plugin's store driver and cannot be
+/// interrupted while the guest is parked in a host future, so a tick that stopped waiting would
+/// tick the worlds beside the still running task and bring the deadlock back. Like a Bukkit sync
+/// task, a slow task delays the tick; it is logged once it passes [`SLOW_TASK_WARNING`].
+fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
     let plugin = task.plugin.clone();
     let handler_id = task.handler_id;
     let server_clone = server.clone();
-    task.running.store(true, Ordering::Release);
-    let running = RunningGuard(task.running.clone());
 
     let fut = async move {
-        let _running = running;
         let plugin_instance = plugin.plugin_instance.clone();
         let api_version = plugin.api_version;
         if let Err(error) = plugin
@@ -130,17 +122,28 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask, budget: Duration) {
     };
 
     let mut handle = server.spawn_task(fut);
-    let wait = async { tokio::time::timeout(budget, &mut handle).await };
-    let waited = if tokio::runtime::Handle::try_current().is_ok() {
-        tokio::task::block_in_place(|| server.runtime.block_on(wait))
-    } else {
-        server.runtime.block_on(wait)
+    let wait = async {
+        let started = Instant::now();
+        if tokio::time::timeout(SLOW_TASK_WARNING, &mut handle)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                handler_id,
+                "Wasm scheduled task is taking longer than {} ms, the tick waits for it",
+                SLOW_TASK_WARNING.as_millis()
+            );
+            let _ = handle.await;
+            tracing::warn!(
+                handler_id,
+                elapsed_ms = started.elapsed().as_millis(),
+                "Slow Wasm scheduled task finished"
+            );
+        }
     };
-    if waited.is_err() {
-        tracing::warn!(
-            handler_id,
-            budget_ms = budget.as_millis(),
-            "Wasm scheduled task overran its tick budget, letting it finish in the background"
-        );
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::task::block_in_place(|| server.runtime.block_on(wait));
+    } else {
+        server.runtime.block_on(wait);
     }
 }
