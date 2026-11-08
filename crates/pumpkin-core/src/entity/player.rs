@@ -1538,11 +1538,13 @@ impl Player {
             *listener = new_world.level.chunk_listener.add_global_chunk_listener();
         }
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
-        if let Ok(mut sender) = self.chunk_sender.lock() {
-            sender.reset();
-            // A Bedrock spawn of the old world may have marked the player loaded meanwhile
-            self.set_client_loaded(false);
-        }
+        let mut sender = self
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sender.reset();
+        // A Bedrock spawn of the old world may have marked the player loaded meanwhile
+        self.set_client_loaded(false);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -4626,6 +4628,7 @@ impl Player {
                 let pitch = event.pitch;
                 let new_world = event.new_world;
 
+                self.set_client_loaded(false);
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
                 };
