@@ -10,6 +10,21 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct FrogVariantJson {
     asset_id: String,
+    #[serde(default)]
+    spawn_conditions: Vec<SpawnConditionJson>,
+}
+
+#[derive(Deserialize)]
+struct SpawnConditionJson {
+    condition: Option<BiomeConditionJson>,
+    priority: i32,
+}
+
+#[derive(Deserialize)]
+struct BiomeConditionJson {
+    #[serde(rename = "type")]
+    kind: String,
+    biomes: String,
 }
 
 pub fn build() -> TokenStream {
@@ -43,6 +58,8 @@ pub fn build() -> TokenStream {
     let mut asset_id_arms = Vec::new();
     let mut texture_arms = Vec::new();
     let mut all_variants = Vec::new();
+    let mut biome_conditions = Vec::new();
+    let mut fallback = None;
 
     for (name, json) in &variants {
         let variant_ident = format_ident!("{}", name.to_pascal_case());
@@ -63,7 +80,39 @@ pub fn build() -> TokenStream {
             Self::#variant_ident => #asset_id
         });
         all_variants.push(quote! { Self::#variant_ident });
+
+        for spawn_condition in &json.spawn_conditions {
+            match &spawn_condition.condition {
+                Some(condition) => {
+                    assert_eq!(
+                        condition.kind, "minecraft:biome",
+                        "unsupported frog spawn condition"
+                    );
+                    let tag = condition
+                        .biomes
+                        .strip_prefix('#')
+                        .expect("frog spawn condition biomes must be a tag");
+                    let tag_ident =
+                        format_ident!("{}", tag.replace([':', '/'], "_").to_uppercase());
+                    biome_conditions.push((
+                        spawn_condition.priority,
+                        tag_ident,
+                        variant_ident.clone(),
+                    ));
+                }
+                None => fallback = Some(variant_ident.clone()),
+            }
+        }
     }
+    biome_conditions.sort_by_key(|(priority, _, _)| std::cmp::Reverse(*priority));
+    let fallback = fallback.expect("a frog variant without spawn condition");
+    let biome_arms = biome_conditions.iter().map(|(_, tag, variant)| {
+        quote! {
+            if crate::tag::WorldgenBiome::#tag.0.contains(&bare) {
+                return Self::#variant;
+            }
+        }
+    });
 
     quote! {
         /* This file is generated. Do not edit manually. */
@@ -125,6 +174,14 @@ pub fn build() -> TokenStream {
                 match self {
                     #(#texture_arms,)*
                 }
+            }
+
+            #[doc = "Selects the variant a frog spawning in this biome gets, from the variants' spawn conditions."]
+            #[must_use]
+            pub fn select_for_biome(biome_name: &str) -> Self {
+                let bare = biome_name.strip_prefix("minecraft:").unwrap_or(biome_name);
+                #(#biome_arms)*
+                Self::#fallback
             }
 
             #[doc = "Returns all vanilla frog variants."]

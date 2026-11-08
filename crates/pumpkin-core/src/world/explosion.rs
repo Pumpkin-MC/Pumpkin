@@ -432,6 +432,17 @@ impl Explosion {
             {
                 continue;
             }
+            // A living entity's goes through `EntityKnockbackEvent`
+            let knockback = if entity_base.get_living_entity().is_some() {
+                let Some(knockback) =
+                    entity.fire_knockback_events(knockback_power, knockback, None)
+                else {
+                    continue;
+                };
+                knockback
+            } else {
+                knockback
+            };
             entity.add_velocity(knockback);
         }
     }
