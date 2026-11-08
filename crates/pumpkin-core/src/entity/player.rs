@@ -1540,6 +1540,8 @@ impl Player {
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
         if let Ok(mut sender) = self.chunk_sender.lock() {
             sender.reset();
+            // A Bedrock spawn of the old world may have marked the player loaded meanwhile
+            self.set_client_loaded(false);
         }
     }
 
@@ -3652,11 +3654,15 @@ impl Player {
         if sender.ready_chunks_count() <= 4 || self.bedrock_spawned.swap(true, Ordering::Relaxed) {
             return;
         }
-        if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
-            bedrock_client.try_enqueue_packet(data);
-        }
-        drop(sender);
+        let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) else {
+            // Encoder busy -> a later tick tries again
+            self.bedrock_spawned.store(false, Ordering::Relaxed);
+            return;
+        };
+        bedrock_client.try_enqueue_packet(data);
+        // Under the lock, so a world change resetting the sender also undoes this
         self.set_client_loaded(true);
+        drop(sender);
         self.send_health();
         if self.living_entity.health.load() <= 0.0 {
             self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
@@ -4620,7 +4626,6 @@ impl Player {
                 let pitch = event.pitch;
                 let new_world = event.new_world;
 
-                self.set_client_loaded(false);
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
                 };

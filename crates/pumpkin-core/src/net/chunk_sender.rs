@@ -318,6 +318,7 @@ impl ChunkSender {
         self.pending_chunks.remove(&pos);
         self.parked_chunks.remove(&pos);
         self.awaiting_delivery.remove(&pos);
+        self.encode_failures.remove(&pos);
         self.sent_chunks.insert(pos);
     }
 

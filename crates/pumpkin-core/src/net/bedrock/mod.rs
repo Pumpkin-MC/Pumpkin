@@ -467,6 +467,16 @@ impl BedrockClient {
             return outcome;
         };
 
+        let packets = self.wrap_chunk_payloads(encoded_payloads).await;
+
+        // Checked and queued under the sender lock: a world change resets the sender under it
+        // before queueing `CChangeDimension`, so no old-world chunk can land behind that packet
+        let _sender = epoch.map(|_| {
+            player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
         if epoch.is_some_and(|epoch| player.chunk_send_epoch.load(Ordering::Relaxed) != epoch) {
             outcome.failed.extend(
                 valid_positions
@@ -486,48 +496,44 @@ impl BedrockClient {
             }
         }
 
-        self.queue_chunk_payloads(encoded_payloads, &mut outcome)
-            .await;
+        for (pos, packet) in packets {
+            match packet.map(|packet| self.try_enqueue_packet_data(packet.into())) {
+                Some(true) => outcome.sent.push(pos),
+                Some(false) => outcome.failed.push((pos, DeliveryFailure::Deferred)),
+                None => outcome.failed.push((pos, DeliveryFailure::Unencodable)),
+            }
+        }
         outcome
     }
 
-    /// Wraps encoded chunk payloads as game packets and queues them, recording each outcome.
-    async fn queue_chunk_payloads(
+    /// Wraps encoded chunk payloads as game packets, `None` for chunks that failed to encode.
+    async fn wrap_chunk_payloads(
         &self,
         encoded_payloads: Vec<(Vector2<i32>, Option<Vec<u8>>)>,
-        outcome: &mut ChunkSendOutcome,
-    ) {
-        let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
-        {
-            let encoder = self.network_writer.read().await;
-            for (pos, payload) in encoded_payloads {
-                let Some(payload) = payload else {
-                    outcome.failed.push((pos, DeliveryFailure::Unencodable));
-                    continue;
-                };
-                let mut packet_buf = Vec::new();
-                match encoder.write_game_packet(
-                    CLevelChunk::PACKET_ID as u16,
-                    SubClient::Main,
-                    SubClient::Main,
-                    &payload,
-                    &mut packet_buf,
-                ) {
-                    Ok(()) => packets_to_enqueue.push((pos, packet_buf)),
-                    Err(err) => {
-                        error!("Failed to write game packet wrapper: {err}");
-                        outcome.failed.push((pos, DeliveryFailure::Unencodable));
+    ) -> Vec<(Vector2<i32>, Option<Vec<u8>>)> {
+        let encoder = self.network_writer.read().await;
+        encoded_payloads
+            .into_iter()
+            .map(|(pos, payload)| {
+                let packet = payload.and_then(|payload| {
+                    let mut packet_buf = Vec::new();
+                    match encoder.write_game_packet(
+                        CLevelChunk::PACKET_ID as u16,
+                        SubClient::Main,
+                        SubClient::Main,
+                        &payload,
+                        &mut packet_buf,
+                    ) {
+                        Ok(()) => Some(packet_buf),
+                        Err(err) => {
+                            error!("Failed to write game packet wrapper: {err}");
+                            None
+                        }
                     }
-                }
-            }
-        }
-        for (pos, packet_buf) in packets_to_enqueue {
-            if self.enqueue_packet_data(packet_buf.into()).await {
-                outcome.sent.push(pos);
-            } else {
-                outcome.failed.push((pos, DeliveryFailure::Deferred));
-            }
-        }
+                });
+                (pos, packet)
+            })
+            .collect()
     }
 
     pub fn set_player(&self, player: Arc<Player>) {

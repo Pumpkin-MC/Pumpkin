@@ -34,11 +34,18 @@ impl BlobCache {
     }
 
     pub fn insert(&mut self, hash: u64, blob: Bytes) {
-        // Equal hash means equal content, so a repeat only needs to keep its slot.
-        if self.blobs.contains_key(&hash) {
+        let seq = self.take_seq();
+        // Equal hash means equal content. A new chunk may get it requested again, so an
+        // answered copy goes back to waiting for an answer
+        if let Some(entry) = self.blobs.get_mut(&hash) {
+            if entry.answered {
+                entry.answered = false;
+                entry.seq = seq;
+                self.unanswered.push_back((hash, seq));
+                self.compact();
+            }
             return;
         }
-        let seq = self.take_seq();
         self.bytes += blob.len();
         self.blobs.insert(
             hash,
@@ -164,6 +171,22 @@ mod tests {
         assert!(cache.get(1).is_some());
         assert!(cache.get(2).is_none());
         assert_eq!(cache.bytes(), MAX_BLOB_CACHE_BYTES / 2 + 1);
+    }
+
+    #[test]
+    fn answered_blob_sent_again_is_not_evicted_first() {
+        let mut cache = BlobCache::new();
+        cache.insert(1, blob(MAX_BLOB_CACHE_BYTES / 2));
+        cache.insert(2, blob(MAX_BLOB_CACHE_BYTES / 2));
+        cache.mark_answered(2);
+        cache.mark_answered(1);
+        // A new chunk references 2 again before the client answered for it
+        cache.insert(2, blob(MAX_BLOB_CACHE_BYTES / 2));
+
+        cache.insert(3, blob(1));
+
+        assert!(cache.get(1).is_none());
+        assert!(cache.get(2).is_some());
     }
 
     #[test]
