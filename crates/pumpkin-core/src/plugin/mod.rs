@@ -462,6 +462,15 @@ async fn discard_loaded(
     loader.unload(loader_data).await.ok();
 }
 
+/// A plugin a scan loaded but has not started yet.
+type Prepared = (
+    Arc<dyn Plugin>,
+    PluginMetadata,
+    Box<dyn Any + Send + Sync>,
+    Arc<dyn PluginLoader>,
+    PathBuf,
+);
+
 /// One load of a plugin: a later load of the same name is another one.
 #[derive(Debug, Clone)]
 pub struct PluginId {
@@ -1255,6 +1264,8 @@ impl PluginManager {
                         .await;
                     // on_unload can register again, that must not outlive the library
                     registrations.extend(self_ref_clone.take_registrations(&plugin_name).await);
+                    // Last sweep: the plugin's own tasks can't register past it
+                    context.seal();
                     context.unregister_commands();
                     context.unregister_permissions();
                     self_ref_clone.pin_owner(&context, owner.as_deref());
@@ -1356,7 +1367,14 @@ impl PluginManager {
         let loaders = self.get_loaders().await;
 
         for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    self.discard_prepared(prepared_plugins, &e.to_string())
+                        .await;
+                    return Err(e.into());
+                }
+            };
             let path = entry.path();
 
             if path.is_dir() {
@@ -1469,8 +1487,11 @@ impl PluginManager {
             })
             .map(|(name, _)| name.clone())
             .collect();
+        // One that can't be waited on counts as missing, failing only its dependents below
         for name in loading {
-            self.wait_for_initialization(&name).await?;
+            if let Err(e) = self.wait_for_initialization(&name).await {
+                warn!("Not waiting on plugin {name}: {e}");
+            }
         }
         // Active plugins satisfy dependencies, they are already initialized, so they have none left
         // to resolve. Records still loading or kept after an unload are not active
@@ -1490,26 +1511,22 @@ impl PluginManager {
             deps.retain(|dep| known.contains(dep));
         }
 
-        let sorted_names =
-            Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
+        let sorted_names = match Self::topological_sort(&metadata_list) {
+            Ok(sorted) => sorted,
+            Err(e) => {
+                self.discard_prepared(prepared_plugins, &e).await;
+                return Err(ManagerError::DependencyError(e));
+            }
+        };
 
         // Map names back to prepared plugins
-        #[expect(clippy::type_complexity)]
-        let mut plugins_map: HashMap<
-            String,
-            (
-                Arc<dyn Plugin>,
-                PluginMetadata,
-                Box<dyn Any + Send + Sync>,
-                Arc<dyn PluginLoader>,
-                PathBuf,
-            ),
-        > = prepared_plugins
+        let mut plugins_map: HashMap<String, Prepared> = prepared_plugins
             .into_iter()
             .map(|(i, m, d, l, p)| (m.name.clone(), (i, m, d, l, p)))
             .collect();
 
         let mut total_wait_time = std::time::Duration::ZERO;
+        let mut first_error = None;
 
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
@@ -1557,20 +1574,38 @@ impl PluginManager {
                     )
                     .await
                 {
-                    Ok((_, task)) => {
-                        // Its on_load waiting on this caller is refused instead of deadlocking
-                        let _wait = self.enter_init_wait(&name)?;
-                        // We must await each initialization to ensure dependencies are ready
-                        if let Err(err) = task.await {
-                            error!("Plugin initialization task panicked: {}", err);
+                    // Its on_load waiting on this caller is refused instead of deadlocking. It
+                    // keeps initializing, the rest of the pass goes on without it
+                    Ok((_, task)) => match self.enter_init_wait(&name) {
+                        Ok(_wait) => {
+                            // We must await each initialization to ensure dependencies are ready
+                            if let Err(err) = task.await {
+                                error!("Plugin initialization task panicked: {}", err);
+                            }
                         }
-                    }
+                        Err(e) => {
+                            error!("{e}");
+                            first_error.get_or_insert(e);
+                        }
+                    },
                     Err(err) => error!("{}", err),
                 }
             }
         }
 
-        Ok(total_wait_time)
+        first_error.map_or(Ok(total_wait_time), Err)
+    }
+
+    /// Releases plugins a scan loaded but will not start, listing them with `reason`.
+    async fn discard_prepared(&self, prepared: Vec<Prepared>, reason: &str) {
+        for (instance, metadata, loader_data, loader, path) in prepared {
+            self.mark_inactive(
+                &path,
+                Some(&metadata),
+                PluginStatus::Failed(reason.to_string()),
+            );
+            discard_loaded(instance, &*loader, loader_data).await;
+        }
     }
 
     async fn check_permissions_cached(
@@ -2214,9 +2249,11 @@ impl PluginManager {
             }
             // on_unload can register again, that must not outlive the library
             registrations.extend(self.take_registrations(name).await);
-            context.unregister_commands();
-            context.unregister_permissions();
         }
+        // Last sweep: the plugin's own tasks can't register past it
+        context.seal();
+        context.unregister_commands();
+        context.unregister_permissions();
         self.pin_owner(&context, owner.as_deref());
 
         // The loader keeps the library, so the record stays as an inactive copy until restart

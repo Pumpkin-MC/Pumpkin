@@ -47,6 +47,8 @@ pub struct Context {
     closed: AtomicBool,
     /// Set by a command registration: the tree keeps its code for good.
     commands: AtomicBool,
+    /// Set before unload's last sweep, after `on_unload`: commands and permissions are refused.
+    sealed: AtomicBool,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -76,6 +78,7 @@ impl Context {
             logger,
             closed: AtomicBool::new(false),
             commands: AtomicBool::new(false),
+            sealed: AtomicBool::new(false),
         }
     }
 
@@ -87,6 +90,15 @@ impl Context {
     #[must_use]
     pub(crate) fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
+    }
+
+    /// Refuses further commands and permissions, set before unload's last sweep of them.
+    pub(crate) fn seal(&self) {
+        self.sealed.store(true, Ordering::SeqCst);
+    }
+
+    fn is_sealed(&self) -> bool {
+        self.sealed.load(Ordering::SeqCst)
     }
 
     /// Library must stay loaded: the command tree holds its code.
@@ -211,7 +223,6 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
-        self.mark_commands();
         let mut node = node.into();
         node.meta.source = Some(self.metadata.name.clone());
         node.owned
@@ -222,6 +233,11 @@ impl Context {
             })));
 
         self.server.command_dispatcher.rcu(|dispatcher| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_sealed() {
+                return Arc::clone(dispatcher);
+            }
+            self.mark_commands();
             let mut new_dispatcher = (**dispatcher).clone();
             new_dispatcher.register(node.clone());
             Arc::new(new_dispatcher)
@@ -245,7 +261,6 @@ impl Context {
             format!("{}:{permission}", self.metadata.name)
         };
 
-        self.mark_commands();
         let mut node = node.into();
         node.meta.source = Some(self.metadata.name.clone());
         node.owned
@@ -256,6 +271,11 @@ impl Context {
             })));
 
         self.server.command_dispatcher.rcu(|dispatcher| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_sealed() {
+                return Arc::clone(dispatcher);
+            }
+            self.mark_commands();
             let mut new_dispatcher = (**dispatcher).clone();
             new_dispatcher.register_with_aliases(node.clone(), aliases);
             Arc::new(new_dispatcher)
@@ -334,7 +354,16 @@ impl Context {
             ));
         }
 
-        self.permission_manager.register_permission(permission)
+        if self.is_sealed() {
+            return Err(format!("Plugin {} is unloading", self.metadata.name));
+        }
+        self.permission_manager.register_permission(permission)?;
+        // Sealed after the check: the sweep may have missed this node, so it goes again
+        if self.is_sealed() {
+            self.unregister_permissions();
+            return Err(format!("Plugin {} is unloading", self.metadata.name));
+        }
+        Ok(())
     }
 
     /// Check if a player has a permission
