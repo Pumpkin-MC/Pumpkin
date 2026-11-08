@@ -63,6 +63,8 @@ impl JavaClient {
                             return;
                         }
                     }
+                    // interact and damage events may change it
+                    let (block, state) = world.get_block_and_state(&position);
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -89,8 +91,6 @@ impl JavaClient {
                     // TODO: do validation
                     // TODO: Config
                     if gamemode == GameMode::Creative {
-                        // interact and damage events may change it
-                        let (block, state) = world.get_block_and_state(&position);
                         // Block break & play sound
                         let new_state = world.break_block(
                             &position,

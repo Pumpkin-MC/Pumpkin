@@ -60,6 +60,8 @@ impl JavaClient {
                 }
             }}
 
+            // event may change it
+            let block = world.get_block(&position);
             if let Some(factory) = server
                 .block_registry
                 .get_screen_handler_factory(block, player, &position, server, &world)
@@ -68,17 +70,6 @@ impl JavaClient {
             }
             return Ok(());
         }
-
-        let inventory = player.inventory();
-        let held_item = inventory.held_item();
-        let off_hand_item = inventory.off_hand_item();
-        let held_item_empty = held_item.is_empty();
-        let off_hand_item_empty = off_hand_item.is_empty();
-
-        let mut item = inventory.get_stack_in_hand(hand);
-        let before = item.clone();
-        let item_id = item.item.id;
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
@@ -103,6 +94,23 @@ impl JavaClient {
                 return Ok(());
             }
         }}
+
+        // event may move the player or change the block and hand
+        if !Arc::ptr_eq(&player.world(), &world) {
+            return Ok(());
+        }
+        let block = world.get_block(&position);
+
+        let inventory = player.inventory();
+        let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item();
+        let held_item_empty = held_item.is_empty();
+        let off_hand_item_empty = off_hand_item.is_empty();
+
+        let mut item = inventory.get_stack_in_hand(hand);
+        let before = item.clone();
+        let item_id = item.item.id;
+        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
