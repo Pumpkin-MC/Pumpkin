@@ -35,9 +35,15 @@ pub mod permissions;
 use crate::{LOGGER_IMPL, server::Server};
 
 tokio::task_local! {
-    /// Name of the plugin whose `on_load` runs on this task
-    static INITIALIZING_PLUGIN: String;
+    /// The plugin whose `on_load` runs on this task
+    static INITIALIZING_PLUGIN: PluginKey;
 }
+
+/// A plugin and the manager that owns it, since managers can hold same-named plugins.
+type PluginKey = (u64, String);
+
+/// Gives every manager its own id.
+static NEXT_MANAGER_ID: AtomicU64 = AtomicU64::new(0);
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -421,8 +427,8 @@ async fn release_library(
 
 /// An `on_load` waiting on another plugin's initialization, for as long as the wait runs.
 struct InitWait<'a> {
-    waits: &'a SyncMutex<Vec<(String, String)>>,
-    edge: (String, String),
+    waits: &'a SyncMutex<Vec<(PluginKey, PluginKey)>>,
+    edge: (PluginKey, PluginKey),
 }
 
 impl Drop for InitWait<'_> {
@@ -474,7 +480,9 @@ pub struct PluginManager {
     // Permission prompts use rustyline, which is only safe on this thread.
     main_thread_id: ThreadId,
     /// (waiting plugin, awaited plugin) for every `on_load` waiting on an initialization
-    init_waits: SyncMutex<Vec<(String, String)>>,
+    init_waits: SyncMutex<Vec<(PluginKey, PluginKey)>>,
+    /// Tells this manager's plugins from same-named ones of another manager
+    id: u64,
 }
 
 /// Represents a successfully loaded plugin
@@ -549,6 +557,7 @@ impl PluginManager {
             hot_reload_enabled: AtomicBool::new(false),
             main_thread_id: std::thread::current().id(),
             init_waits: SyncMutex::new(Vec::new()),
+            id: NEXT_MANAGER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         }
     }
 
@@ -1082,13 +1091,14 @@ impl PluginManager {
         let self_ref_clone = Arc::clone(self);
         let state_notify = Arc::clone(&self.state_notify);
         let plugin_name = metadata.name.clone();
+        let manager_id = self.id;
         let loader_clone = loader.clone();
 
         let task = server.spawn_task(async move {
             // A panic must still reach the failure path, or the plugin stays Loading forever
             let result = INITIALIZING_PLUGIN
                 .scope(
-                    plugin_name.clone(),
+                    (manager_id, plugin_name.clone()),
                     // Called inside the block: a panic before the future exists is caught too
                     AssertUnwindSafe(async { instance.on_load(context.clone()).await })
                         .catch_unwind(),
@@ -1165,7 +1175,7 @@ impl PluginManager {
                     // Still Loading, so a self-unload from on_unload would wait on itself too
                     let _ = INITIALIZING_PLUGIN
                         .scope(
-                            plugin_name.clone(),
+                            (manager_id, plugin_name.clone()),
                             AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
                                 .catch_unwind(),
                         )
@@ -1370,7 +1380,7 @@ impl PluginManager {
             .collect();
         // A needed dependency that is still loading must finish (or fail) before it counts. The
         // plugin calling this from its own on_load is never waited for, it would wait on itself
-        let caller = INITIALIZING_PLUGIN.try_with(Clone::clone).ok();
+        let caller = self.initializing_caller();
         let needed: HashSet<&String> = metadata_list.iter().flat_map(|(_, deps)| deps).collect();
         let loading: Vec<String> = self
             .plugin_states
@@ -1714,6 +1724,14 @@ impl PluginManager {
         }
     }
 
+    /// The plugin of this manager whose `on_load` runs on this task, if any.
+    fn initializing_caller(&self) -> Option<String> {
+        INITIALIZING_PLUGIN
+            .try_with(|(manager, name)| (*manager == self.id).then(|| name.clone()))
+            .ok()
+            .flatten()
+    }
+
     /// Records that the calling `on_load` waits on `plugin_name`, unless that closes a cycle.
     ///
     /// `None` outside an `on_load`, nothing waits on such a caller.
@@ -1721,12 +1739,13 @@ impl PluginManager {
         let Ok(caller) = INITIALIZING_PLUGIN.try_with(Clone::clone) else {
             return Ok(None);
         };
+        let awaited = (self.id, plugin_name.to_string());
         let mut waits = self
             .init_waits
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         // Follow what `plugin_name` waits on, reaching the caller means it waits on the caller
-        let mut pending = vec![plugin_name.to_string()];
+        let mut pending = vec![awaited.clone()];
         let mut seen = HashSet::new();
         while let Some(name) = pending.pop() {
             if name == caller {
@@ -1738,12 +1757,12 @@ impl PluginManager {
                 waits
                     .iter()
                     .filter(|(waiter, _)| *waiter == name)
-                    .map(|(_, awaited)| awaited.clone()),
+                    .map(|(_, next)| next.clone()),
             );
             seen.insert(name);
             pending.retain(|name| !seen.contains(name));
         }
-        let edge = (caller, plugin_name.to_string());
+        let edge = (caller, awaited);
         waits.push(edge.clone());
         Ok(Some(InitWait {
             waits: &self.init_waits,
@@ -2241,7 +2260,7 @@ impl PluginManager {
                 return Ok(());
             }
             // The caller is still loading, so waiting for everything would wait on itself
-            if let Ok(caller) = INITIALIZING_PLUGIN.try_with(Clone::clone)
+            if let Some(caller) = self.initializing_caller()
                 && loading.contains(&caller)
             {
                 return Err(ManagerError::InitializationDeadlock(caller));
@@ -2408,6 +2427,36 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn same_named_plugin_of_another_manager_is_not_a_deadlock() {
+        let manager = Arc::new(PluginManager::new(Vec::new()));
+        let other = PluginManager::new(Vec::new());
+        manager
+            .plugin_states
+            .write()
+            .await
+            .insert("a".to_string(), PluginState::Loading);
+
+        // other's "a" loading does not make waiting on this manager's "a" a self-wait
+        let result = INITIALIZING_PLUGIN
+            .scope((other.id, "a".to_string()), async {
+                let waiting = Arc::clone(&manager);
+                let wait = tokio::spawn(async move { waiting.wait_for_all_plugins().await });
+                tokio::task::yield_now().await;
+                let finished = wait.is_finished();
+                manager
+                    .plugin_states
+                    .write()
+                    .await
+                    .insert("a".to_string(), PluginState::Loaded);
+                manager.state_notify.notify_waiters();
+                (finished, wait.await)
+            })
+            .await;
+        assert!(!result.0);
+        assert!(matches!(result.1, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
     async fn on_load_wait_cycles_fail_instead_of_hanging() {
         let manager = Arc::new(PluginManager::new(Vec::new()));
         let mut states = manager.plugin_states.write().await;
@@ -2417,15 +2466,20 @@ mod tests {
 
         // An on_load waiting on itself
         let own = INITIALIZING_PLUGIN
-            .scope("a".to_string(), manager.wait_for_initialization("a"))
+            .scope(
+                (manager.id, "a".to_string()),
+                manager.wait_for_initialization("a"),
+            )
             .await;
         assert!(matches!(own, Err(ManagerError::InitializationDeadlock(_))));
 
         // b's on_load waits on a, so a's on_load must not wait on b
         let waiting = Arc::clone(&manager);
-        let b_waits_on_a = tokio::spawn(INITIALIZING_PLUGIN.scope("b".to_string(), async move {
-            waiting.wait_for_initialization("a").await
-        }));
+        let b_waits_on_a = tokio::spawn(
+            INITIALIZING_PLUGIN.scope((manager.id, "b".to_string()), async move {
+                waiting.wait_for_initialization("a").await
+            }),
+        );
         while manager
             .init_waits
             .lock()
@@ -2435,7 +2489,10 @@ mod tests {
             tokio::task::yield_now().await;
         }
         let mutual = INITIALIZING_PLUGIN
-            .scope("a".to_string(), manager.wait_for_initialization("b"))
+            .scope(
+                (manager.id, "a".to_string()),
+                manager.wait_for_initialization("b"),
+            )
             .await;
         assert!(matches!(
             mutual,
