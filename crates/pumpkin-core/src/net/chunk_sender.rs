@@ -242,8 +242,13 @@ impl ChunkSender {
 
     /// Bedrock dispatch that never reached the client -> no longer held, unless an earlier
     /// copy was, and pending again if retryable. A re-enqueue since then holds a newer token
-    /// and is kept.
-    pub fn fail_delivery(&mut self, failed: &[(Vector2<i32>, u64, DeliveryFailure)]) {
+    /// and is kept. Returns the positions that are ready again because the held copy is
+    /// no longer awaiting a dispatch.
+    pub fn fail_delivery(
+        &mut self,
+        failed: &[(Vector2<i32>, u64, DeliveryFailure)],
+    ) -> Vec<Vector2<i32>> {
+        let mut ready = Vec::new();
         for &(pos, token, failure) in failed {
             let Some(awaiting) = self.awaiting_delivery.get_mut(&pos) else {
                 continue;
@@ -261,7 +266,9 @@ impl ChunkSender {
             } else {
                 let held_before = awaiting.held_before;
                 self.awaiting_delivery.remove(&pos);
-                if !held_before {
+                if held_before {
+                    ready.push(pos);
+                } else {
                     self.sent_chunks.remove(&pos);
                 }
             }
@@ -272,21 +279,25 @@ impl ChunkSender {
                     continue;
                 }
                 DeliveryFailure::Deferred => true,
-                DeliveryFailure::Unencodable => {
-                    let attempts = self.encode_failures.entry(pos).or_default();
-                    *attempts += 1;
-                    *attempts < MAX_ENCODE_ATTEMPTS
-                }
+                DeliveryFailure::Unencodable => self.record_encode_failure(pos),
             };
             if retry {
                 self.pending_chunks.insert(pos);
-            } else {
-                self.encode_failures.remove(&pos);
-                warn!(
-                    "Giving up on Bedrock chunk {pos:?} after {MAX_ENCODE_ATTEMPTS} encode attempts"
-                );
             }
         }
+        ready
+    }
+
+    /// Counts a failed encode. `false` once the chunk is given up on.
+    fn record_encode_failure(&mut self, pos: Vector2<i32>) -> bool {
+        let attempts = self.encode_failures.entry(pos).or_default();
+        *attempts += 1;
+        if *attempts < MAX_ENCODE_ATTEMPTS {
+            return true;
+        }
+        self.encode_failures.remove(&pos);
+        warn!("Giving up on chunk {pos:?} after {MAX_ENCODE_ATTEMPTS} encode attempts");
+        false
     }
 
     #[must_use]
@@ -502,6 +513,19 @@ impl ChunkSender {
         output
     }
 
+    /// Chunks `encode_batch` dropped stay pending, retried a bounded number of times.
+    fn settle_unencoded(&mut self, batch: &PreparedBatch, encoded_chunks: &[EncodedChunk]) {
+        for candidate in &batch.chunks {
+            let pos = candidate.position;
+            if self.pending_chunks.contains(&pos)
+                && !encoded_chunks.iter().any(|encoded| encoded.position == pos)
+                && !self.record_encode_failure(pos)
+            {
+                self.pending_chunks.remove(&pos);
+            }
+        }
+    }
+
     // TODO: a chunk's lifecycle is built twice: `commit_batch` (Java, marks sent once queued)
     // and `commit_bedrock_batch` (Bedrock, marks sent first and settles through
     // `mark_delivered` / `fail_delivery`). Both should share one token-based path.
@@ -512,7 +536,12 @@ impl ChunkSender {
         client: &ClientPlatform,
         current_epoch: u32,
     ) -> Vec<Vector2<i32>> {
-        if current_epoch != batch.epoch_snapshot || encoded_chunks.is_empty() {
+        if current_epoch != batch.epoch_snapshot {
+            return Vec::new();
+        }
+
+        self.settle_unencoded(batch, encoded_chunks);
+        if encoded_chunks.is_empty() {
             return Vec::new();
         }
 
@@ -521,7 +550,10 @@ impl ChunkSender {
 
         let batch_client = match client {
             ClientPlatform::Java(java_client) if version >= JavaMinecraftVersion::V_1_20_2 => {
-                java_client.try_send_packet(&CChunkBatchStart);
+                // Without the start packet the client would get an end packet out of nowhere
+                if !java_client.try_send_packet(&CChunkBatchStart) {
+                    return Vec::new();
+                }
                 Some(java_client)
             }
             _ => None,
@@ -543,6 +575,7 @@ impl ChunkSender {
                 }
             };
             if queued {
+                self.encode_failures.remove(&chunk.position);
                 self.sent_chunks.insert(chunk.position);
                 dispatched_positions.push(chunk.position);
             } else {
@@ -832,6 +865,23 @@ mod tests {
     }
 
     #[test]
+    fn java_chunk_that_never_encodes_is_dropped_after_bounded_attempts() {
+        let position = Vector2::new(4, 4);
+        let batch = batch_for(position, 0);
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+
+        for attempt in 1..=MAX_ENCODE_ATTEMPTS {
+            assert!(sender.pending_chunks.contains(&position));
+            sender.settle_unencoded(&batch, &[]);
+            assert_eq!(
+                sender.pending_chunks.contains(&position),
+                attempt < MAX_ENCODE_ATTEMPTS
+            );
+        }
+    }
+
+    #[test]
     fn re_enqueue_or_reset_drops_a_parked_chunk() {
         let position = Vector2::new(2, -7);
         let mut sender = ChunkSender::new();
@@ -893,12 +943,14 @@ mod tests {
 
         sender.enqueue_chunk(position);
         let resend = sender.commit_bedrock_batch(&batch_for(position, 0), 0);
-        sender.fail_delivery(&[(
+        let ready = sender.fail_delivery(&[(
             position,
             resend[0].delivery_token,
             DeliveryFailure::Cancelled,
         )]);
 
+        // Entities that appeared while the resend was in flight need pairing now
+        assert_eq!(ready, [position]);
         assert!(sender.is_chunk_ready(&position));
         assert!(sender.parked_chunks.contains_key(&position));
     }

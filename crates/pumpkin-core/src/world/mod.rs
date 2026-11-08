@@ -4997,6 +4997,7 @@ impl World {
             return;
         };
         let center_chunk = player.get_entity().chunk_pos.load();
+        let epoch = player.chunk_send_epoch.load(Ordering::Relaxed);
         let chunk = self
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
@@ -5009,11 +5010,15 @@ impl World {
             .sent
             .contains(&center_chunk)
         {
-            player
+            let mut sender = player
                 .chunk_sender
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .mark_sent_out_of_band(center_chunk);
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A world change resets the sender under this lock, after bumping the epoch,
+            // so the chunk of the old world is not recorded in the new world's sender
+            if player.chunk_send_epoch.load(Ordering::Relaxed) == epoch {
+                sender.mark_sent_out_of_band(center_chunk);
+            }
         }
     }
 

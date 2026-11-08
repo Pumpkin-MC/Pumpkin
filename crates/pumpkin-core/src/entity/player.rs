@@ -3203,7 +3203,7 @@ impl Player {
                                 .into_iter()
                                 .map(|c| ((c.position, c.delivery_token), c.chunk))
                                 .unzip();
-                            let outcome = bedrock.send_chunks(&chunks).await;
+                            let outcome = bedrock.send_chunks(&chunks, Some(current_epoch)).await;
                             let (deliveries, dropped): (Vec<_>, Vec<_>) = deliveries
                                 .into_iter()
                                 .partition(|(pos, _)| outcome.sent.contains(pos));
@@ -3217,10 +3217,10 @@ impl Player {
                                     .chunk_sender
                                     .lock()
                                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                sender.fail_delivery(&dropped);
-                                let delivered = sender.mark_delivered(&deliveries);
+                                let mut ready = sender.fail_delivery(&dropped);
+                                ready.extend(sender.mark_delivered(&deliveries));
                                 drop(sender);
-                                player.pair_entities_in_chunks(&world, &delivered);
+                                player.pair_entities_in_chunks(&world, &ready);
                                 player.try_bedrock_spawn();
                             }
                         });
@@ -3640,20 +3640,22 @@ impl Player {
         let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref() else {
             return;
         };
-        if self.bedrock_spawned.load(Ordering::Relaxed)
-            || self
-                .chunk_sender
-                .try_lock()
-                .map_or(0, |sender| sender.ready_chunks_count())
-                <= 4
-            // Chunk tasks finish concurrently, so only one may spawn
-            || self.bedrock_spawned.swap(true, Ordering::Relaxed)
-        {
+        if self.bedrock_spawned.load(Ordering::Relaxed) {
+            return;
+        }
+        // Check, claim and enqueue under the sender lock: a world change resets the sender
+        // under it, so a task of the old world can neither claim the new latch nor queue its spawn.
+        // Chunk tasks finish concurrently, so only one may spawn
+        let Ok(sender) = self.chunk_sender.try_lock() else {
+            return;
+        };
+        if sender.ready_chunks_count() <= 4 || self.bedrock_spawned.swap(true, Ordering::Relaxed) {
             return;
         }
         if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
             bedrock_client.try_enqueue_packet(data);
         }
+        drop(sender);
         self.set_client_loaded(true);
         self.send_health();
         if self.living_entity.health.load() <= 0.0 {

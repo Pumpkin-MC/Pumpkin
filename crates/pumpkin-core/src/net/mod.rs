@@ -308,7 +308,7 @@ impl ClientPlatform {
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
-            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
+            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks, None).await,
         }
     }
 

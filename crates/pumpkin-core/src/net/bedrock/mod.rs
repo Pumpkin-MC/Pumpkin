@@ -393,7 +393,9 @@ impl BedrockClient {
     }
 
     /// Queues the chunks and reports which were sent and why the others were not.
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
+    /// With an `epoch`, chunks are dropped if the player's chunk epoch moved on (world change)
+    /// while they were being encoded.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk], epoch: Option<u32>) -> ChunkSendOutcome {
         let mut outcome = ChunkSendOutcome::default();
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
@@ -464,6 +466,15 @@ impl BedrockClient {
             );
             return outcome;
         };
+
+        if epoch.is_some_and(|epoch| player.chunk_send_epoch.load(Ordering::Relaxed) != epoch) {
+            outcome.failed.extend(
+                valid_positions
+                    .into_iter()
+                    .map(|pos| (pos, DeliveryFailure::Deferred)),
+            );
+            return outcome;
+        }
 
         if !new_blobs.is_empty() {
             let mut cache = self
@@ -986,6 +997,7 @@ impl BedrockClient {
                         blob_id: hash,
                         blob_data: blob.clone(),
                     });
+                    cache.mark_answered(hash);
                 } else {
                     warn!("Client requested missing blob {hash:#x} not found in server cache");
                 }
