@@ -81,7 +81,8 @@ impl PaintingEntity {
     pub fn sync_variant(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant_id.load(Ordering::Relaxed) as i32),
+            // Painting variant is a Holder with an inline form: 0 = inline data, registry id is sent +1.
+            VarInt(self.variant_id.load(Ordering::Relaxed) as i32 + 1),
         );
     }
 
@@ -259,7 +260,8 @@ impl EntityBase for PaintingEntity {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant_id.load(Ordering::Relaxed) as i32),
+            // Painting variant is a Holder with an inline form: 0 = inline data, registry id is sent +1.
+            VarInt(self.variant_id.load(Ordering::Relaxed) as i32 + 1),
         )
         .write(&mut metadata, &version)
         .ok()?;
