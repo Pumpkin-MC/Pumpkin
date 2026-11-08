@@ -4819,6 +4819,7 @@ impl Player {
             return None;
         }
         // GameMasterBlock
+        // TODO: Extractor game_master flag, replace this list
         let game_master = matches!(
             block.id,
             BlockId::COMMAND_BLOCK

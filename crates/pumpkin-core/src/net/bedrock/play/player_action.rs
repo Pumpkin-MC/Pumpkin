@@ -49,6 +49,7 @@ impl BedrockClient {
                         &location,
                         BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                     );
+                    // TODO: resync the block when the break is refused
                     if new_state.is_some() {
                         server
                             .block_registry
