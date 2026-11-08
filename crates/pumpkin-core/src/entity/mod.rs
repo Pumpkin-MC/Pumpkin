@@ -566,6 +566,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             && self.can_be_seen_by_anyone()
     }
 
+    fn is_stepping_carefully(&self) -> bool {
+        self.get_entity().is_sneaking()
+    }
+
     fn dampens_vibrations(&self) -> bool {
         false
     }

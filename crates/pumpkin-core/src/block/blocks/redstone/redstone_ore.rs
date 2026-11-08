@@ -74,7 +74,7 @@ impl BlockBehaviour for RedstoneOreBlock {
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
-        if !args.entity.get_entity().is_sneaking() {
+        if !args.entity.is_stepping_carefully() {
             Self::light_up(args.world, args.position, args.block);
         }
     }

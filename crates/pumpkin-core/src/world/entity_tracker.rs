@@ -27,7 +27,9 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{pack_degrees, position::chunk_section_from_pos};
-use rustc_hash::FxHashSet;
+use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use rayon::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use uuid::Uuid;
 
 use crate::entity::player::Player;
@@ -60,16 +62,26 @@ impl MoveSync {
     }
 }
 
+#[derive(Clone, Copy)]
+struct PlayerViewSnapshot<'a> {
+    player: &'a Arc<Player>,
+    entity_id: i32,
+    pos: Vector3<f64>,
+    watched: Cylindrical,
+    view_distance: i32,
+}
+
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
     pub entity_id: i32,
     pub tracking_range: u32,
     pub update_interval: u32,
     pub track_deltas: bool,
-    seen_by: RwLock<FxHashSet<Uuid>>,
+    seen_by: RwLock<FxHashMap<Uuid, Arc<Player>>>,
     /// Bedrock players in `seen_by`.
     bedrock_watchers: AtomicU32,
     pub last_section_pos: AtomicCell<Vector3<i32>>,
+    pos_dirty: AtomicBool,
     tick_count: AtomicU32,
     teleport_delay: AtomicU32,
     was_on_ground: AtomicBool,
@@ -113,6 +125,7 @@ impl TrackedEntity {
             seen_by: RwLock::default(),
             bedrock_watchers: AtomicU32::new(0),
             last_section_pos: AtomicCell::new(last_section_pos),
+            pos_dirty: AtomicBool::new(false),
             tick_count: AtomicU32::new(0),
             teleport_delay: AtomicU32::new(0),
             was_on_ground: AtomicBool::new(on_ground),
@@ -141,7 +154,7 @@ impl TrackedEntity {
         self.seen_by
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(uuid)
+            .contains_key(uuid)
     }
 
     /// Vanilla `ServerEntity.sendChanges`. Non-player entities only.
@@ -409,35 +422,50 @@ impl TrackedEntity {
     }
 
     pub fn update_player(&self, player: &Arc<Player>, _world: &World) {
-        self.update_player_in_range(player, self.get_effective_range());
-    }
-
-    fn update_player_in_range(&self, player: &Arc<Player>, effective_range: u32) {
         if player.get_entity().entity_id == self.entity_id {
             return;
         }
-
-        let player_entity = player.get_entity();
-        let player_pos = player_entity.pos.load();
+        let entity_chunk = self.entity.get_entity().chunk_pos.load();
+        if !player
+            .watched_section
+            .load()
+            .is_within_distance(entity_chunk.x, entity_chunk.y)
+        {
+            self.remove_player(player);
+            return;
+        }
+        let player_pos = player.get_entity().pos.load();
+        let player_vd = get_view_distance(player).get() as i32;
         let entity_pos = self.entity.get_entity().pos.load();
+        self.update_player_in_view(
+            player,
+            player_pos,
+            player_vd,
+            entity_chunk,
+            entity_pos,
+            self.get_effective_range(),
+        );
+    }
+
+    fn update_player_in_view(
+        &self,
+        player: &Arc<Player>,
+        player_pos: Vector3<f64>,
+        player_vd: i32,
+        entity_chunk: Vector2<i32>,
+        entity_pos: Vector3<f64>,
+        effective_range: u32,
+    ) {
         let dx = player_pos.x - entity_pos.x;
         let dz = player_pos.z - entity_pos.z;
         let dist_sq = dx.mul_add(dx, dz * dz);
 
-        let player_vd = get_view_distance(player).get() as i32;
         let visible_range_blocks = f64::from((effective_range as i32).min(player_vd) * 16);
         let range_sq = visible_range_blocks * visible_range_blocks;
-
-        let entity_chunk = self.entity.get_entity().chunk_pos.load();
-        let in_view = player
-            .watched_section
-            .load()
-            .is_within_distance(entity_chunk.x, entity_chunk.y);
 
         // Vanilla `isChunkTracked`: never spawn before the chunk packet.
         let is_visible = dist_sq <= range_sq
             && self.broadcast_to_player(player)
-            && in_view
             && player
                 .chunk_sender
                 .lock()
@@ -445,11 +473,20 @@ impl TrackedEntity {
                 .is_chunk_ready(&entity_chunk);
 
         if is_visible {
+            if self
+                .seen_by
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains_key(&player.gameprofile.id)
+            {
+                return;
+            }
             let inserted = self
                 .seen_by
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(player.gameprofile.id);
+                .insert(player.gameprofile.id, player.clone())
+                .is_none();
             if inserted {
                 if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     self.bedrock_watchers.fetch_add(1, Relaxed);
@@ -462,9 +499,74 @@ impl TrackedEntity {
     }
 
     pub fn update_players(&self, players: &[Arc<Player>], _world: &World) {
-        let effective_range = self.get_effective_range();
+        if players.is_empty() {
+            return;
+        }
+        let entity_chunk = self.entity.get_entity().chunk_pos.load();
+        let mut lazy_state: Option<(Vector3<f64>, u32)> = None;
         for player in players {
-            self.update_player_in_range(player, effective_range);
+            let player_entity = player.get_entity();
+            if player_entity.entity_id == self.entity_id {
+                continue;
+            }
+            if !player
+                .watched_section
+                .load()
+                .is_within_distance(entity_chunk.x, entity_chunk.y)
+            {
+                self.remove_player(player);
+                continue;
+            }
+            let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(|| {
+                (
+                    self.entity.get_entity().pos.load(),
+                    self.get_effective_range(),
+                )
+            });
+            let player_pos = player_entity.pos.load();
+            let player_vd = get_view_distance(player).get() as i32;
+            self.update_player_in_view(
+                player,
+                player_pos,
+                player_vd,
+                entity_chunk,
+                entity_pos,
+                effective_range,
+            );
+        }
+    }
+
+    fn update_players_from_snapshots(&self, snapshots: &[PlayerViewSnapshot<'_>]) {
+        if snapshots.is_empty() {
+            return;
+        }
+        let entity_chunk = self.entity.get_entity().chunk_pos.load();
+        let mut lazy_state: Option<(Vector3<f64>, u32)> = None;
+        for snap in snapshots {
+            if snap.entity_id == self.entity_id {
+                continue;
+            }
+            if !snap
+                .watched
+                .is_within_distance(entity_chunk.x, entity_chunk.y)
+            {
+                self.remove_player(snap.player);
+                continue;
+            }
+            let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(|| {
+                (
+                    self.entity.get_entity().pos.load(),
+                    self.get_effective_range(),
+                )
+            });
+            self.update_player_in_view(
+                snap.player,
+                snap.pos,
+                snap.view_distance,
+                entity_chunk,
+                entity_pos,
+                effective_range,
+            );
         }
     }
 
@@ -775,22 +877,25 @@ impl TrackedEntity {
         }
     }
 
-    pub fn broadcast_removed(&self, world: &World) {
-        if !self.has_viewers() {
+    pub fn broadcast_removed(&self, _world: &World) {
+        let seen_by = {
+            let mut guard = self
+                .seen_by
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        self.bedrock_watchers.store(0, Relaxed);
+        if seen_by.is_empty() {
             return;
         }
         let entity_ids = [self.entity_id.into()];
         let je_packet = CRemoveEntities::new(&entity_ids);
         let be_packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
 
-        let players = world.players.load();
-        let recipients = players
-            .iter()
-            .filter(|p| self.is_seen_by(&p.gameprofile.id));
-
-        let mut java_recipients = Vec::new();
+        let mut java_recipients = Vec::with_capacity(seen_by.len());
         let mut bedrock_recipients = Vec::new();
-        for p in recipients {
+        for p in seen_by.values() {
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
@@ -798,21 +903,24 @@ impl TrackedEntity {
         }
         World::broadcast_java_players(&je_packet, java_recipients.into_iter());
         World::broadcast_bedrock_grouped(&be_packet, bedrock_recipients.into_iter());
-
-        self.seen_by
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        self.bedrock_watchers.store(0, Relaxed);
     }
 
     /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
     pub fn remove_player(&self, player: &Player) {
+        if !self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&player.gameprofile.id)
+        {
+            return;
+        }
         let removed = self
             .seen_by
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&player.gameprofile.id);
+            .remove(&player.gameprofile.id)
+            .is_some();
         if removed {
             if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                 self.bedrock_watchers.fetch_sub(1, Relaxed);
@@ -823,40 +931,50 @@ impl TrackedEntity {
 
     /// Forgets the player as a viewer without a removal packet; the client already dropped it.
     pub fn forget_player(&self, player: &Player) {
+        if !self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&player.gameprofile.id)
+        {
+            return;
+        }
         let removed = self
             .seen_by
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&player.gameprofile.id);
+            .remove(&player.gameprofile.id)
+            .is_some();
         if removed && matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
             self.bedrock_watchers.fetch_sub(1, Relaxed);
         }
     }
 
-    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, world: &World) {
-        if !self.has_viewers() {
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, _world: &World) {
+        let seen_by = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if seen_by.is_empty() {
             return;
         }
-        let players = world.players.load();
-        let recipients = players
-            .iter()
-            .filter(|p| self.is_seen_by(&p.gameprofile.id));
-        World::broadcast_java_players(packet, recipients);
+        World::broadcast_java_players(packet, seen_by.values());
     }
 
     pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
         &self,
         packet: &P,
-        world: &World,
+        _world: &World,
     ) {
         if !self.has_bedrock_watchers() {
             return;
         }
-        let players = world.players.load();
-        let recipients = players.iter().filter_map(|p| {
-            if self.is_seen_by(&p.gameprofile.id)
-                && let ClientPlatform::Bedrock(client) = p.client.as_ref()
-            {
+        let seen_by = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let recipients = seen_by.values().filter_map(|p| {
+            if let ClientPlatform::Bedrock(client) = p.client.as_ref() {
                 return Some(client);
             }
             None
@@ -868,19 +986,19 @@ impl TrackedEntity {
         &self,
         je_packet: &J,
         be_packet: &B,
-        world: &World,
+        _world: &World,
     ) {
-        if !self.has_viewers() {
+        let seen_by = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if seen_by.is_empty() {
             return;
         }
-        let players = world.players.load();
-        let recipients = players
-            .iter()
-            .filter(|p| self.is_seen_by(&p.gameprofile.id));
 
-        let mut java_recipients = Vec::new();
+        let mut java_recipients = Vec::with_capacity(seen_by.len());
         let mut bedrock_recipients = Vec::new();
-        for p in recipients {
+        for p in seen_by.values() {
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
@@ -919,13 +1037,17 @@ impl TrackedEntity {
     pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
         &self,
         packet: &P,
-        world: &World,
+        _world: &World,
         filter: F,
     ) {
-        let players = world.players.load();
-        let recipients = players
-            .iter()
-            .filter(|p| self.is_seen_by(&p.gameprofile.id) && filter(p));
+        let seen_by = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if seen_by.is_empty() {
+            return;
+        }
+        let recipients = seen_by.values().filter(|p| filter(p));
         World::broadcast_java_players(packet, recipients);
     }
 
@@ -937,13 +1059,17 @@ impl TrackedEntity {
         &self,
         je_packet: &J,
         be_packet: &B,
-        world: &World,
+        _world: &World,
         filter: F,
     ) {
-        let players = world.players.load();
-        let recipients = players
-            .iter()
-            .filter(|p| self.is_seen_by(&p.gameprofile.id) && filter(p));
+        let seen_by = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if seen_by.is_empty() {
+            return;
+        }
+        let recipients = seen_by.values().filter(|p| filter(p));
 
         let mut java_recipients = Vec::new();
         let mut bedrock_recipients = Vec::new();
@@ -1063,6 +1189,9 @@ impl EntityTracker {
         world: &World,
         chunks: &[Vector2<i32>],
     ) {
+        if chunks.is_empty() {
+            return;
+        }
         let chunks: FxHashSet<_> = chunks.iter().copied().collect();
         let entity_id = player.get_entity().entity_id;
         for entry in &self.entity_map {
@@ -1087,18 +1216,10 @@ impl EntityTracker {
         }
     }
 
-    pub fn update_player_position(&self, player: &Arc<Player>, world: &World) {
-        let new_pos = chunk_section_from_pos(&player.get_entity().block_pos.load());
-        if let Some(tracked) = self.entity_map.get(&player.get_entity().entity_id) {
-            tracked.last_section_pos.store(new_pos);
-        }
-        for entry in &self.entity_map {
-            if *entry.key() == player.get_entity().entity_id {
-                let players = world.players.load();
-                entry.value().update_players(players.as_ref(), world);
-            } else {
-                entry.value().update_player(player, world);
-            }
+    pub fn update_player_position(&self, player: &Arc<Player>, _world: &World) {
+        let player_id = player.get_entity().entity_id;
+        if let Some(tracked) = self.entity_map.get(&player_id) {
+            tracked.pos_dirty.store(true, Relaxed);
         }
     }
 
@@ -1113,36 +1234,70 @@ impl EntityTracker {
 
     pub fn update_all(&self, world: &World) {
         let players = world.players.load();
-        let mut moved_players = Vec::new();
-
-        for entry in &self.entity_map {
-            let tracked = entry.value();
-            let new_pos = chunk_section_from_pos(&tracked.entity.get_entity().block_pos.load());
-            let old_pos = tracked.last_section_pos.load();
-            if old_pos != new_pos {
-                tracked.update_players(players.as_ref(), world);
-                if let Some(player) = tracked.entity.get_player()
-                    && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
-                {
-                    moved_players.push(player_arc);
+        let all_snapshots: Vec<PlayerViewSnapshot<'_>> = players
+            .iter()
+            .map(|player| {
+                let entity = player.get_entity();
+                PlayerViewSnapshot {
+                    player,
+                    entity_id: entity.entity_id,
+                    pos: entity.pos.load(),
+                    watched: player.watched_section.load(),
+                    view_distance: get_view_distance(player).get() as i32,
                 }
-                tracked.last_section_pos.store(new_pos);
-            }
+            })
+            .collect();
+
+        let tracked_entities: Vec<Arc<TrackedEntity>> = self
+            .entity_map
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        let mut entity_moved = vec![false; tracked_entities.len()];
+        let moved_player_ids: FxHashSet<i32> = tracked_entities
+            .par_iter()
+            .zip(entity_moved.par_iter_mut())
+            .filter_map(|(tracked, moved_slot)| {
+                let new_pos = chunk_section_from_pos(&tracked.entity.get_entity().block_pos.load());
+                let old_pos = tracked.last_section_pos.load();
+                let section_changed = old_pos != new_pos;
+                let sub_section_moved = tracked.pos_dirty.swap(false, Relaxed);
+                if !section_changed && !sub_section_moved {
+                    None
+                } else {
+                    *moved_slot = true;
+                    tracked.update_players_from_snapshots(&all_snapshots);
+                    if section_changed {
+                        tracked.last_section_pos.store(new_pos);
+                    }
+                    tracked.entity.get_player().map(|_| tracked.entity_id)
+                }
+            })
+            .collect();
+
+        if !moved_player_ids.is_empty() {
+            let moved_snapshots: Vec<PlayerViewSnapshot<'_>> = all_snapshots
+                .iter()
+                .copied()
+                .filter(|snap| moved_player_ids.contains(&snap.entity_id))
+                .collect();
+            tracked_entities
+                .par_iter()
+                .zip(entity_moved.par_iter())
+                .for_each(|(tracked, &moved)| {
+                    if !moved {
+                        tracked.update_players_from_snapshots(&moved_snapshots);
+                    }
+                });
         }
 
-        if !moved_players.is_empty() {
-            for entry in &self.entity_map {
-                entry.value().update_players(&moved_players, world);
-            }
-        }
-
-        for entry in &self.entity_map {
-            let tracked = entry.value();
+        tracked_entities.par_iter().for_each(|tracked| {
             if tracked.entity.get_player().is_none() {
                 tracked.send_changes(world);
             } else if tracked.entity.get_entity().synched_data.is_dirty() {
                 tracked.entity.get_entity().send_dirty_entity_data();
             }
-        }
+        });
     }
 }

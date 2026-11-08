@@ -151,7 +151,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{position::chunk_section_from_pos, vector2::Vector2},
+    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -196,6 +196,7 @@ use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
+pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -3345,6 +3346,7 @@ impl World {
             self.broadcast_system_message(&event.join_message, false);
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(&player);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -3849,6 +3851,7 @@ impl World {
             // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(player);
     }
 
     fn send_player_equipment(&self, from: &Player) {
@@ -4363,10 +4366,7 @@ impl World {
         let sleeping_player_count = eligible_players
             .iter()
             .filter(|player| {
-                player
-                    .sleeping_since
-                    .load()
-                    .is_some_and(|since| since >= 100)
+                player.is_sleeping() && player.get_sleep_timer() >= Player::FULL_SLEEP_TICKS
             })
             .count();
         drop(players);
@@ -4526,13 +4526,25 @@ impl World {
     // Gets all entities at a Box
     pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
         let players_guard = self.players.load();
+        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
+        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
+        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
+        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
 
         self.entity_index
             .query(self.entities.load_full(), *aabb)
             .chain(
                 players_guard
                     .iter()
-                    .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+                    .filter(move |player| {
+                        let entity = player.get_entity();
+                        let chunk_pos = entity.chunk_pos.load();
+                        chunk_pos.x >= min_chunk_x
+                            && chunk_pos.x <= max_chunk_x
+                            && chunk_pos.y >= min_chunk_z
+                            && chunk_pos.y <= max_chunk_z
+                            && entity.bounding_box.load().intersects(aabb)
+                    })
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
@@ -4550,9 +4562,22 @@ impl World {
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
         let players_guard = self.players.load();
+        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
+        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
+        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
+        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
+
         players_guard
             .iter()
-            .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+            .filter(move |player| {
+                let entity = player.get_entity();
+                let chunk_pos = entity.chunk_pos.load();
+                chunk_pos.x >= min_chunk_x
+                    && chunk_pos.x <= max_chunk_x
+                    && chunk_pos.y >= min_chunk_z
+                    && chunk_pos.y <= max_chunk_z
+                    && entity.bounding_box.load().intersects(aabb)
+            })
             .inspect(|player| entity_islands::check_reached(player.entity_id()))
             .cloned()
             .collect()
@@ -5756,6 +5781,12 @@ impl World {
     pub fn get_moon_phase(&self) -> MoonPhase {
         self.environment_attributes()
             .get_dimension_value_moon_phase()
+    }
+
+    #[must_use]
+    pub fn get_moon_brightness(&self, pos: &BlockPos) -> f32 {
+        let moon_phase = self.environment_attributes().get_value_moon_phase(pos);
+        MOON_BRIGHTNESS_PER_PHASE[usize::from(moon_phase.index())]
     }
 
     #[must_use]
