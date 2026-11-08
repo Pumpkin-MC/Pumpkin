@@ -299,6 +299,7 @@ impl JavaClient {
         );
     }
 
+    // TODO: skip when the player left `world` (event world transfer)
     fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
         self.try_send_packet(&CBlockUpdate::new(

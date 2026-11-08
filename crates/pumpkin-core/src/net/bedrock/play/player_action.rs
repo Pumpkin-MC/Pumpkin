@@ -303,6 +303,7 @@ impl BedrockClient {
         }
     }
 
+    // TODO: skip when the player left `world` (event world transfer)
     pub fn sync_block_state_to_client(&self, world: &crate::world::World, position: BlockPos) {
         let runtime_id =
             pumpkin_data::BlockState::to_be_network_id(world.get_block_state_id(&position));

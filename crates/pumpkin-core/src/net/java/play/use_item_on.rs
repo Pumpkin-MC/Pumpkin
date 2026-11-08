@@ -112,6 +112,7 @@ impl JavaClient {
 
         let mut item = inventory.get_stack_in_hand(hand);
         let before = item.clone();
+        // TODO: stat event may move the player or change block and hand, recheck after it
         if !item.is_empty() {
             player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
         }
