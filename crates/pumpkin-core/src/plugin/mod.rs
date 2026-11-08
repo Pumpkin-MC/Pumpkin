@@ -371,6 +371,7 @@ impl Registrations {
 /// services, or holds its instance.
 ///
 /// `commands`: its commands stay in the command tree, the library is kept right away.
+/// `children_unloading`: plugins from its loaders still run, the library is kept right away.
 /// A loader without `can_unload` keeps it right away too, without an error.
 ///
 /// Anything still running or held after `HANDLER_DRAIN_TIMEOUT` keeps the library
@@ -383,6 +384,7 @@ async fn release_library(
     loader: &dyn PluginLoader,
     loader_data: Box<dyn Any + Send + Sync>,
     commands: bool,
+    children_unloading: bool,
 ) -> Result<(), LoaderError> {
     // Loader keeps the library: untracked plugin work can still run its code
     if !loader.can_unload() {
@@ -399,6 +401,13 @@ async fn release_library(
         warn!("Plugin {name} registered commands, keeping its library loaded");
         Box::leak(loader_data);
         return Err(LoaderError::CommandsResident);
+    }
+    if children_unloading {
+        drop(registrations);
+        drop(instance);
+        warn!("Plugins loaded by {name} are still unloading, keeping its library loaded");
+        Box::leak(loader_data);
+        return Err(LoaderError::LibraryInUse);
     }
     // Each handler is wrapped once per registration, so any count above ours is a running event.
     // The same goes for the instance, which `send_message` holds across `on_ipc_message`
@@ -1192,7 +1201,8 @@ impl PluginManager {
 
                     // on_load may have registered handlers, commands or permissions before
                     // failing partway through, leaving them would block every future load
-                    self_ref_clone.unload_children(&plugin_name).await;
+                    let children_unloading =
+                        !self_ref_clone.unload_children(&plugin_name).await;
                     context.close();
                     let owner = self_ref_clone.loader_owner(&loader_clone).await;
                     let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
@@ -1235,6 +1245,7 @@ impl PluginManager {
                             &*loader_clone,
                             data,
                             context.has_commands(),
+                            children_unloading,
                         )
                         .await
                         .ok();
@@ -2098,7 +2109,7 @@ impl PluginManager {
             token,
         };
 
-        self.unload_children(name).await;
+        let children_unloading = !self.unload_children(name).await;
         context.close();
         let owner = self.loader_owner(&loader).await;
         let mut registrations = self.take_registrations(name).await;
@@ -2142,7 +2153,16 @@ impl PluginManager {
         let unloaded = match loader_data {
             Some(data) => {
                 let commands = context.has_commands();
-                release_library(name, registrations, instance, &*loader, data, commands).await
+                release_library(
+                    name,
+                    registrations,
+                    instance,
+                    &*loader,
+                    data,
+                    commands,
+                    children_unloading,
+                )
+                .await
             }
             None => Ok(()),
         };
@@ -2189,7 +2209,9 @@ impl PluginManager {
     }
 
     /// Unloads what `owner`'s loaders loaded: it can't run without them.
-    async fn unload_children(&self, owner: &str) {
+    ///
+    /// `false`: a child is still unloading, so `owner`'s library must stay loaded.
+    async fn unload_children(&self, owner: &str) -> bool {
         let owned: Vec<Arc<dyn PluginLoader>> = self
             .loaders
             .read()
@@ -2199,7 +2221,7 @@ impl PluginManager {
             .map(|registered| Arc::clone(&registered.loader))
             .collect();
         if owned.is_empty() {
-            return;
+            return true;
         }
         let children: Vec<String> = self
             .plugins
@@ -2217,26 +2239,36 @@ impl PluginManager {
         }
 
         // A child another unload claimed can still register in its on_unload, so the owner's
-        // state is only final once it is done. One whose on_unload runs on this task waits on us
+        // state is only final once it is done. Its on_unload may itself wait on this unload,
+        // directly or through a spawned task, so the wait is bounded
         let on_this_task = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
-        loop {
-            // Create the waiter before checking, so a notify in between is not missed
-            let notified = self.state_notify.notified();
-            let busy = self
-                .plugins
+        let busy = |p: &LoadedPlugin| {
+            p.unloading && owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader))
+        };
+        let plugins = || {
+            self.plugins
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .iter()
-                .any(|p| {
-                    p.unloading
-                        && !on_this_task.contains(&(self.id, p.token))
-                        && owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader))
-                });
-            if !busy {
-                return;
-            }
-            notified.await;
+        };
+        // Its on_unload is up the call stack, waiting can only time out
+        if plugins()
+            .iter()
+            .any(|p| busy(p) && on_this_task.contains(&(self.id, p.token)))
+        {
+            return false;
         }
+        tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
+            loop {
+                // Create the waiter before checking, so a notify in between is not missed
+                let notified = self.state_notify.notified();
+                if !plugins().iter().any(busy) {
+                    return;
+                }
+                notified.await;
+            }
+        })
+        .await
+        .is_ok()
     }
 
     /// Takes a plugin's handlers, services and loaders off and returns them.
