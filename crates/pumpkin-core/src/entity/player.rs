@@ -3320,8 +3320,9 @@ impl Player {
                             | pumpkin_world::world::BlockFlags::NOTIFY_ALL
                     };
                     if let Some(server) = server_clone
-                        && p.destroy_block(&server, &world, &pos, flags).is_some()
+                        && let Some(broken_state_id) = p.destroy_block(&server, &world, &pos, flags)
                     {
+                        let (block, state) = BlockState::from_id_with_block(broken_state_id);
                         server
                             .block_registry
                             .broken(&world, block, &p, &pos, &server, state);
@@ -3331,7 +3332,7 @@ impl Player {
                         }
                         let item_id = p.inventory().held_item().item.id;
                         p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                        p.increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1);
+                        p.increment_stat(StatisticCategory::Mined, block.id.as_u16() as i32, 1);
                     } else if let ClientPlatform::Bedrock(client) = p.client.as_ref() {
                         client.sync_block_state_to_client(&world, pos);
                     }
