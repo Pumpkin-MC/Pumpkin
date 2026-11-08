@@ -248,7 +248,9 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
+use pumpkin_data::{
+    Block, BlockId, BlockState, BlockStateId, Enchantment, screen::WindowType, tag, translation,
+};
 use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -297,6 +299,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block;
 use crate::block::blocks::straw_bed::StrawBedBlock;
@@ -3316,12 +3319,12 @@ impl Player {
                         pumpkin_world::world::BlockFlags::SKIP_DROPS
                             | pumpkin_world::world::BlockFlags::NOTIFY_ALL
                     };
-                    if world.break_block(&pos, Some(&p), flags).is_some() {
-                        if let Some(server) = server_clone {
-                            server
-                                .block_registry
-                                .broken(&world, block, &p, &pos, &server, state);
-                        }
+                    if let Some(server) = server_clone
+                        && p.destroy_block(&server, &world, &pos, flags).is_some()
+                    {
+                        server
+                            .block_registry
+                            .broken(&world, block, &p, &pos, &server, state);
                         p.apply_tool_damage_for_block_break(state);
                         if can_harvest {
                             p.add_exhaustion(MINE_BLOCK_EXHAUSTION);
@@ -4778,6 +4781,60 @@ impl Player {
     #[must_use]
     pub fn may_build(&self) -> bool {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
+    }
+
+    /// Vanilla `Player.blockActionRestricted`.
+    #[must_use]
+    pub fn block_action_restricted(&self, block: &Block) -> bool {
+        match self.gamemode.load() {
+            GameMode::Spectator => true,
+            GameMode::Adventure if !self.may_build() => {
+                let held = self.inventory().held_item();
+                held.is_empty()
+                    || !held
+                        .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                        .is_some_and(|c| c.matches_block(block))
+            }
+            _ => false,
+        }
+    }
+
+    /// Vanilla `ServerPlayerGameMode.destroyBlock` checks, then breaks the block.
+    pub fn destroy_block(
+        self: &Arc<Self>,
+        server: &Server,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        flags: BlockFlags,
+    ) -> Option<BlockStateId> {
+        let block = world.get_block(pos);
+        let held = self.inventory().held_item();
+        // Item.canDestroyBlock
+        if !server.item_registry.can_mine(held.item, self)
+            || (self.gamemode.load() == GameMode::Creative
+                && held
+                    .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+        {
+            return None;
+        }
+        // GameMasterBlock
+        let game_master = matches!(
+            block.id,
+            BlockId::COMMAND_BLOCK
+                | BlockId::CHAIN_COMMAND_BLOCK
+                | BlockId::REPEATING_COMMAND_BLOCK
+                | BlockId::STRUCTURE_BLOCK
+                | BlockId::JIGSAW
+                | BlockId::TEST_BLOCK
+                | BlockId::TEST_INSTANCE_BLOCK
+        );
+        if (game_master && !self.can_use_game_master_blocks())
+            || self.block_action_restricted(block)
+        {
+            return None;
+        }
+        world.break_block(pos, Some(self), flags)
     }
 
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {

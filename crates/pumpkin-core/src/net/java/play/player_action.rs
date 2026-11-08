@@ -66,20 +66,8 @@ impl JavaClient {
                     // interact and damage events may change it
                     let (block, state) = world.get_block_and_state(&position);
 
-                    let inventory = player.inventory();
-                    let held = inventory.held_item();
                     let gamemode = player.gamemode.load();
-                    let cannot_mine = !server.item_registry.can_mine(held.item, player)
-                        || gamemode == GameMode::Spectator
-                        || (gamemode == GameMode::Creative
-                            && held
-                                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
-                                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
-                        || (gamemode == GameMode::Adventure
-                            && !held
-                                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
-                                .is_some_and(|c| c.matches_block(block)));
-                    if cannot_mine {
+                    if player.block_action_restricted(block) {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
@@ -92,9 +80,10 @@ impl JavaClient {
                     // TODO: Config
                     if gamemode == GameMode::Creative {
                         // Block break & play sound
-                        let new_state = world.break_block(
+                        let new_state = player.destroy_block(
+                            server,
+                            &world,
                             &position,
-                            Some(player),
                             BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
@@ -125,7 +114,7 @@ impl JavaClient {
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
-                            let new_state = world.break_block(&position, Some(player), flags);
+                            let new_state = player.destroy_block(server, &world, &position, flags);
                             if new_state.is_some() {
                                 server.block_registry.broken(
                                     &world,
@@ -227,9 +216,10 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block);
 
-                    let new_state = world.break_block(
+                    let new_state = player.destroy_block(
+                        server,
+                        &world,
                         &location,
-                        Some(player),
                         if block_drop {
                             BlockFlags::NOTIFY_ALL
                         } else {
