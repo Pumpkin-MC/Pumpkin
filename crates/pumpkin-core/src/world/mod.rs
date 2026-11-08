@@ -3435,6 +3435,7 @@ impl World {
             self.broadcast_system_message(&event.join_message, false);
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(&player);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -3998,6 +3999,7 @@ impl World {
             // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(player);
     }
 
     fn send_player_equipment(&self, from: &Player) {

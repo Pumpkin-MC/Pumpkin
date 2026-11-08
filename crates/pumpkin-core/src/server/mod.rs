@@ -161,6 +161,8 @@ pub struct Server {
     pub stop_token: CancellationToken,
     /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
     admission_closed: std::sync::RwLock<bool>,
+    /// Stores the latest available Pumpkin release if the startup update checker found a newer version.
+    pub available_update: std::sync::OnceLock<crate::update_checker::GitHubRelease>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -356,6 +358,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
             management_hub,
+            available_update: std::sync::OnceLock::new(),
         };
         let server = Arc::new(server);
 
@@ -1120,6 +1123,16 @@ impl Server {
     /// Starts the background telemetry task if enabled in configuration.
     pub fn start_telemetry(self: &Arc<Self>) {
         crate::telemetry::start_telemetry(self.clone());
+    }
+
+    /// Starts the background update checker task if enabled in configuration.
+    pub fn start_update_checker(self: &Arc<Self>) {
+        crate::update_checker::start_update_checker(self);
+    }
+
+    /// Notifies a joining player in chat if they are an operator and a Pumpkin update is available.
+    pub fn notify_update_if_op(&self, player: &Player) {
+        crate::update_checker::notify_update_if_op(self, player);
     }
 
     /// Generates a new container id.
