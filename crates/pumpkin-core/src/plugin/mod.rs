@@ -454,18 +454,23 @@ impl Drop for InitWait<'_> {
 /// Releases a plugin that was loaded but will not run.
 async fn discard_loaded(
     instance: Arc<dyn Plugin>,
-    loader: &dyn PluginLoader,
+    loader: &Arc<dyn PluginLoader>,
     loader_data: Box<dyn Any + Send + Sync>,
 ) {
     // The instance's code lives in the library, so it goes first
     drop(instance);
-    // Loader keeps the library, as `release_library` does
+    // Loader keeps the library, as `release_library` does. Its work may run the loader's
+    // code too, so the loader stays held and its owner's unload keeps that library
     if !loader.can_unload() {
         Box::leak(loader_data);
+        std::mem::forget(Arc::clone(loader));
         return;
     }
     loader.unload(loader_data).await.ok();
 }
+
+/// A started load and its initialization task.
+type LoadStart = (PluginId, tokio::task::JoinHandle<Result<(), String>>);
 
 /// A plugin a scan loaded but has not started yet.
 type Prepared = (
@@ -889,22 +894,27 @@ impl PluginManager {
     }
 
     /// Retry loading files that couldn't be loaded previously
-    // Boxed: a load turned away from a retired loader retries through it
-    fn retry_unloaded_files<'a>(self: &'a Arc<Self>, server: &'a Arc<Server>) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            let files_to_retry: Vec<PathBuf> =
-                { self.unloaded_files.read().await.iter().cloned().collect() };
-            let mut retry_tasks = Vec::new();
+    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) {
+        let files_to_retry: Vec<PathBuf> =
+            { self.unloaded_files.read().await.iter().cloned().collect() };
+        let mut retry_tasks = Vec::new();
 
-            for path in files_to_retry {
-                if let Ok((_, task)) = self.start_loading_plugin(server, &path).await {
-                    retry_tasks.push(task);
+        for path in files_to_retry {
+            if let Ok((id, task)) = self.start_loading_plugin(server, &path).await {
+                // Called from an on_load: a retried plugin waiting on that caller runs on
+                // without this wait instead of deadlocking
+                match self.enter_init_wait(&id.name) {
+                    Ok(wait) => retry_tasks.push(async move {
+                        let _wait = wait;
+                        task.await
+                    }),
+                    Err(e) => warn!("Not waiting on plugin {}: {e}", id.name),
                 }
             }
+        }
 
-            // Wait for all retry tasks to complete
-            join_all(retry_tasks).await;
-        })
+        // Wait for all retry tasks to complete
+        join_all(retry_tasks).await;
     }
 
     /// Lets every loader run its per-tick work.
@@ -1114,7 +1124,7 @@ impl PluginManager {
         if let Some(invalid) = invalid {
             let reason = format!("name {} {invalid}", metadata.name);
             self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason.clone()));
-            discard_loaded(instance, &*loader, loader_data).await;
+            discard_loaded(instance, &loader, loader_data).await;
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                 format!("Plugin \"{}\": {reason}", metadata.name),
             )));
@@ -1187,17 +1197,20 @@ impl PluginManager {
 
         if let Err((loader_data, owner_gone)) = reserved {
             // Nothing owns the runtime the loader built -> release it again
-            discard_loaded(instance, &*loader, loader_data).await;
+            discard_loaded(instance, &loader, loader_data).await;
             let reason = if owner_gone {
                 // Tried again once a loader for it is added. One added before the insert
-                // may have retried already, so it is retried here then
+                // may have retried already, so it loads again here then, for this caller
                 self.unloaded_files
                     .write()
                     .await
                     .insert(plugin_path.clone());
                 let usable = self.usable_loaders().await;
                 if usable.iter().any(|loader| loader.can_load(&plugin_path)) {
-                    self.retry_unloaded_files(&server).await;
+                    return self
+                        .start_loading_boxed(&server, &plugin_path)
+                        .await
+                        .map(|(id, task)| (id.token, task));
                 }
                 "lost its loader to an unload"
             } else {
@@ -1491,7 +1504,7 @@ impl PluginManager {
                                     metadata.name
                                 );
                                 self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled);
-                                discard_loaded(instance, &**loader, loader_data).await;
+                                discard_loaded(instance, loader, loader_data).await;
                                 loader_found = true;
                                 break;
                             }
@@ -1506,7 +1519,7 @@ impl PluginManager {
                                     metadata.name, path
                                 );
                                 self.mark_inactive(&path, Some(&metadata), PluginStatus::Unsigned);
-                                discard_loaded(instance, &**loader, loader_data).await;
+                                discard_loaded(instance, loader, loader_data).await;
                                 loader_found = true;
                                 break;
                             }
@@ -1610,7 +1623,7 @@ impl PluginManager {
                     let reason = format!("dependency {dep} is not active");
                     warn!("Skipping plugin \"{}\": {reason}", metadata.name);
                     self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason));
-                    discard_loaded(instance, &*loader, loader_data).await;
+                    discard_loaded(instance, &loader, loader_data).await;
                     continue;
                 }
 
@@ -1627,7 +1640,7 @@ impl PluginManager {
                         metadata.name
                     );
                     self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied);
-                    discard_loaded(instance, &*loader, loader_data).await;
+                    discard_loaded(instance, &loader, loader_data).await;
                     continue;
                 }
 
@@ -1669,7 +1682,7 @@ impl PluginManager {
                 Some(&metadata),
                 PluginStatus::Failed(reason.to_string()),
             );
-            discard_loaded(instance, &*loader, loader_data).await;
+            discard_loaded(instance, &loader, loader_data).await;
         }
     }
 
@@ -1748,12 +1761,21 @@ impl PluginManager {
         (allowed, wait_time)
     }
 
+    // Boxed: a load turned away from a retired loader loads again through it
+    fn start_loading_boxed<'a>(
+        self: &'a Arc<Self>,
+        server: &'a Arc<Server>,
+        path: &'a Path,
+    ) -> BoxFuture<'a, Result<LoadStart, ManagerError>> {
+        Box::pin(self.start_loading_plugin(server, path))
+    }
+
     /// Start loading a plugin asynchronously
     async fn start_loading_plugin(
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<(PluginId, tokio::task::JoinHandle<Result<(), String>>), ManagerError> {
+    ) -> Result<LoadStart, ManagerError> {
         if !server.advanced_config.plugins.enabled {
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                 "Plugin system is disabled in configuration".to_string(),
@@ -1781,7 +1803,7 @@ impl PluginManager {
 
                 if plugin_override.is_some_and(|o| !o.enabled) {
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Disabled);
-                    discard_loaded(instance, &**loader, loader_data).await;
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!("Plugin \"{}\" is disabled in configuration", metadata.name),
                     )));
@@ -1793,7 +1815,7 @@ impl PluginManager {
 
                 if !allow_unsigned && !loader.is_signed(path) {
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Unsigned);
-                    discard_loaded(instance, &**loader, loader_data).await;
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!(
                             "Plugin \"{}\" is unsigned or invalid and allow_unsigned is disabled",
@@ -1816,7 +1838,7 @@ impl PluginManager {
                 if let Some(dep) = missing {
                     let reason = format!("dependency {dep} is not active");
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Failed(reason.clone()));
-                    discard_loaded(instance, &**loader, loader_data).await;
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::DependencyError(format!(
                         "Plugin \"{}\": {reason}",
                         metadata.name
@@ -1836,7 +1858,7 @@ impl PluginManager {
                         metadata.name
                     );
                     self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied);
-                    discard_loaded(instance, &**loader, loader_data).await;
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         "Permission denied".to_string(),
                     )));
@@ -2415,7 +2437,8 @@ impl PluginManager {
             .collect();
         let mut deferred = false;
         for (child, token) in children {
-            match self.unload_plugin(&child).await {
+            // By token: a replacement of the same name is not this child
+            match self.unload_boxed(&child, Some(token)).await {
                 Ok(()) | Err(ManagerError::PluginNotFound(_)) => {}
                 // Its on_load waits on the caller: unloaded once that is done, off this task so
                 // the wait is not a cycle. Its code still runs, so the library stays
@@ -3007,7 +3030,9 @@ mod tests {
                 child.clone(),
             )
             .await;
-        assert!(reserved.is_err());
+        // The caller gets the load through the other loader
+        let (_, task) = reserved.expect("loaded again through the other loader");
+        assert!(matches!(task.await, Ok(Ok(()))));
         assert_eq!(child_loader.unloaded(), 1);
         assert!(manager.is_plugin_loaded("c"));
         assert!(!manager.unloaded_files.read().await.contains(&child));
@@ -3118,6 +3143,10 @@ mod tests {
         let unload = tokio::spawn(async move { unloading.plugin_manager.unload_plugin("p").await });
         // Lets p's unload reach the child before its cleanup goes on
         tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !unload.is_finished(),
+            "p's unload did not wait for the child"
+        );
 
         finish.notify_one();
         let unload = unload.await;
@@ -3167,8 +3196,10 @@ mod tests {
                     })
                     .await;
                     // The child's unload waits on this on_load, so it is a cycle here
+                    let started = std::time::Instant::now();
                     let unload = manager.unload_plugin("p").await;
-                    *result.lock().unwrap_or_else(PoisonError::into_inner) = Some(unload);
+                    *result.lock().unwrap_or_else(PoisonError::into_inner) =
+                        Some((unload, started.elapsed()));
                     Ok(())
                 }
             }),
@@ -3179,11 +3210,13 @@ mod tests {
         assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
         assert!(manager.try_load_plugin(&server, &caller).await.is_ok());
 
-        let unload = unloaded
+        let (unload, took) = unloaded
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take()
             .expect("x unloaded p");
+        // Kept for the deferred child right away, not after the drain timed out
+        assert!(took < HANDLER_DRAIN_TIMEOUT, "took {took:?}");
         assert!(unload.is_err_and(|e| e.is_library_in_use()));
         assert_eq!(
             loader.unloaded(),
@@ -3192,6 +3225,37 @@ mod tests {
         );
         eventually(|| !manager.is_plugin_loaded("c")).await;
         eventually(|| child_loader.unloaded() == 1).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn retried_child_waiting_on_its_owner_does_not_hang() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add(
+            "c",
+            hook(|context| async move {
+                context
+                    .plugin_manager
+                    .wait_for_initialization("p")
+                    .await
+                    .map_err(|e| e.to_string())
+            }),
+            ok(),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        // No loader for it yet, so it waits for one
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        // p's on_load adds the loader, which retries c, and c waits on p
+        let loaded = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT,
+            manager.try_load_plugin(&server, &owner),
+        )
+        .await;
+        assert!(matches!(loaded, Ok(Ok(_))), "{loaded:?}");
     }
 
     #[tokio::test]
