@@ -34,6 +34,7 @@ use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
+use crate::world::weather::own_weather_folder;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
@@ -579,7 +580,7 @@ impl Server {
             WeatherCycle::Shared => self.weather_data.clone(),
             WeatherCycle::Own | WeatherCycle::Fixed { .. } => {
                 let saved = (weather.cycle == WeatherCycle::Own)
-                    .then(|| read_weather(&level.level_folder.root_folder));
+                    .then(|| read_weather(&own_weather_folder(&level, &dimension)));
                 let mut data = saved
                     .as_ref()
                     .map_or_else(WeatherData::default, WeatherData::from_file);

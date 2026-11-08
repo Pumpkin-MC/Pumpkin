@@ -27,7 +27,7 @@ use rustc_hash::FxHashSet;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     thread,
 };
@@ -138,6 +138,16 @@ pub struct LevelFolder {
     pub poi_folder: PathBuf,
 }
 
+/// The 26.3 layout's folder of a dimension: `<root>/dimensions/<namespace>/<name>`.
+#[must_use]
+pub fn canonical_dimension_folder(root_folder: &Path, dimension: &Dimension) -> PathBuf {
+    let (namespace, name) = dimension
+        .minecraft_name
+        .split_once(':')
+        .unwrap_or(("minecraft", dimension.minecraft_name));
+    root_folder.join("dimensions").join(namespace).join(name)
+}
+
 impl Level {
     #[must_use]
     #[expect(clippy::too_many_lines)]
@@ -147,15 +157,9 @@ impl Level {
         seed: i64,
         dimension: Dimension,
     ) -> Arc<Self> {
-        let (namespace, name) = match dimension.minecraft_name.split_once(':') {
-            Some((ns, n)) => (ns, n),
-            None => ("minecraft", dimension.minecraft_name),
-        };
+        let canonical_dim_folder = canonical_dimension_folder(&root_folder, &dimension);
 
-        // 26.2 canonical layout: root_folder/dimensions/<namespace>/<name>
-        let canonical_dim_folder = root_folder.join("dimensions").join(namespace).join(name);
-
-        // Check if canonical 26.2 folder exists, or fall back to pre-26.2 legacy folders
+        // Use the 26.3 folder if it exists, or fall back to the old root/`DIM-1`/`DIM1` folders
         let dim_folder = if canonical_dim_folder.exists() {
             canonical_dim_folder
         } else if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name

@@ -12,10 +12,12 @@ use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CGameEvent, GameEvent};
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::level::{Level, canonical_dimension_folder};
 use pumpkin_world::world_info::{
     LevelData,
     data_files::{SavedWeatherPhase, read_weather, write_weather},
 };
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracing::error;
 
@@ -436,31 +438,53 @@ impl WeatherData {
     }
 
     /// Puts a flag back to how it was before a cancelled change. With `timer`, the
-    /// countdown the change set for it is put back too.
-    fn restore(&mut self, flag: Flag, before: &Flags, timer: bool) {
+    /// countdown the change set for it is put back too. Anything a handler changed since
+    /// `after` is kept.
+    fn restore(&mut self, flag: Flag, before: &Flags, after: &Flags, timer: bool) {
+        fn put_back<T: PartialEq + Copy>(value: &mut T, before: T, after: T) {
+            if *value == after {
+                *value = before;
+            }
+        }
         match flag {
             Flag::Rain => {
-                self.raining = before.raining;
+                put_back(&mut self.raining, before.raining, after.raining);
                 if timer {
-                    self.rain_time = before.rain_time;
+                    put_back(&mut self.rain_time, before.rain_time, after.rain_time);
                 }
             }
             Flag::Thunder => {
-                self.thundering = before.thundering;
+                put_back(&mut self.thundering, before.thundering, after.thundering);
                 if timer {
-                    self.thunder_time = before.thunder_time;
+                    put_back(
+                        &mut self.thunder_time,
+                        before.thunder_time,
+                        after.thunder_time,
+                    );
                 }
             }
             Flag::Phase(i) => {
-                if let (Some(phase), Some(was)) = (self.phases.get_mut(i), before.phases.get(i)) {
-                    phase.active = *was;
-                    if let (true, Some(time)) = (timer, before.phase_times.get(i)) {
-                        phase.time = *time;
-                    }
+                let Some(phase) = self.phases.get_mut(i) else {
+                    return;
+                };
+                if let (Some(&was), Some(&now)) = (before.phases.get(i), after.phases.get(i)) {
+                    put_back(&mut phase.active, was, now);
+                }
+                if let (true, Some(&was), Some(&now)) =
+                    (timer, before.phase_times.get(i), after.phase_times.get(i))
+                {
+                    put_back(&mut phase.time, was, now);
                 }
             }
         }
     }
+}
+
+/// Where an own cycle is saved. Worlds of one name share a root folder, and the root's
+/// `weather.dat` is the shared cycle, so each dimension's folder holds its own.
+#[must_use]
+pub fn own_weather_folder(level: &Level, dimension: &Dimension) -> PathBuf {
+    canonical_dimension_folder(&level.level_folder.root_folder, dimension)
 }
 
 impl World {
@@ -514,13 +538,19 @@ impl World {
         cause: WeatherCause,
         edit: impl FnOnce(&mut WeatherData),
     ) {
-        let (before, flips, profile, cancellable) = {
+        let (before, after, flips, profile, cancellable) = {
             let mut data = self.lock_weather_data();
             let cancellable = cause != WeatherCause::Natural || data.clear_weather_time <= 0;
             let before = data.flags();
             edit(&mut data);
             let flips = data.flips_since(&before);
-            (before, flips, data.profile.clone(), cancellable)
+            (
+                before,
+                data.flags(),
+                flips,
+                data.profile.clone(),
+                cancellable,
+            )
         };
         let Some(server) = self.server.upgrade().filter(|_| !flips.is_empty()) else {
             return;
@@ -554,9 +584,10 @@ impl World {
                 // Natural timers already re-rolled; putting them back would flip again every tick.
                 let timer = cause != WeatherCause::Natural;
                 let mut data = self.lock_weather_data();
-                data.restore(flag, &before, timer);
+                data.restore(flag, &before, &after, timer);
                 restored += 1;
-                if timer && restored == total {
+                if timer && restored == total && data.clear_weather_time == after.clear_weather_time
+                {
                     data.clear_weather_time = before.clear_weather_time;
                 }
             }
@@ -753,10 +784,10 @@ impl World {
         if self.weather_cycle != WeatherCycle::Own {
             return;
         }
-        let folder = &self.level.level_folder.root_folder;
-        let mut file = read_weather(folder);
+        let folder = own_weather_folder(&self.level, &self.dimension);
+        let mut file = read_weather(&folder);
         self.lock_weather_data().store_in_file(&mut file);
-        if let Err(e) = write_weather(folder, &file) {
+        if let Err(e) = write_weather(&folder, &file) {
             error!(
                 "Failed to save the weather of {}: {e}",
                 self.get_world_name()
@@ -891,12 +922,27 @@ mod test {
         data.rain_time = 99;
         data.phases[0].active = true;
         let flips = data.flips_since(&before);
+        let after = data.flags();
         assert_eq!(flips.len(), 2);
         for (flag, _) in flips {
-            data.restore(flag, &before, true);
+            data.restore(flag, &before, &after, true);
         }
         assert!(!data.raining && !data.phases[0].active);
         assert_eq!(data.rain_time, before.rain_time);
+    }
+
+    #[test]
+    fn restore_keeps_handler_edits() {
+        let mut data = WeatherData::default();
+        let before = data.flags();
+        data.raining = true;
+        data.rain_time = 99;
+        let after = data.flags();
+        // A handler sets the duration while the event runs.
+        data.rain_time = 500;
+        data.restore(Flag::Rain, &before, &after, true);
+        assert!(!data.raining);
+        assert_eq!(data.rain_time, 500);
     }
 
     #[test]
