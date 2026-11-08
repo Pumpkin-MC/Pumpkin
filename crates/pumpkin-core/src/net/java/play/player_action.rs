@@ -89,6 +89,8 @@ impl JavaClient {
                     // TODO: do validation
                     // TODO: Config
                     if gamemode == GameMode::Creative {
+                        // interact and damage events may change it
+                        let (block, state) = world.get_block_and_state(&position);
                         // Block break & play sound
                         let new_state = world.break_block(
                             &position,
@@ -115,7 +117,8 @@ impl JavaClient {
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&position);
+                            // fresh block: attack may change it
+                            let (block, broken_state) = world.get_block_and_state(&position);
                             let can_harvest = player.can_harvest(broken_state, block);
                             let flags = if can_harvest {
                                 BlockFlags::NOTIFY_ALL

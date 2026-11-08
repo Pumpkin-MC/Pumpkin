@@ -68,7 +68,8 @@ impl BedrockClient {
                     let speed = crate::block::calc_block_breaking(player, state, block);
                     if speed >= 1.0 {
                         player.stop_mining();
-                        let broken_state = world.get_block_state(&location);
+                        // attack may change it
+                        let (block, broken_state) = world.get_block_and_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block);
                         let flags = if can_harvest {
                             BlockFlags::NOTIFY_ALL

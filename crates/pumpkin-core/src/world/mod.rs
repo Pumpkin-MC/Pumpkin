@@ -6416,6 +6416,17 @@ impl World {
         (Block::from_state_id(id), id)
     }
 
+    /// Fires `event`, false if it was cancelled or a handler replaced `block` at `position`.
+    pub fn fire_block_event<E>(&self, position: &BlockPos, block: &Block, event: &mut E) -> bool
+    where
+        E: crate::plugin::api::events::Payload + crate::plugin::api::events::Cancellable + 'static,
+    {
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, event);
+        }
+        !event.cancelled() && self.get_block(position) == block
+    }
+
     /// Updates neighboring blocks of a block with a specified source block
     pub fn update_neighbors_at(
         self: &Arc<Self>,

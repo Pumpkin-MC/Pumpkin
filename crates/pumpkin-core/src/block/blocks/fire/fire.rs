@@ -148,18 +148,15 @@ impl FireBlock {
         }
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
-            if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
-                    world: world.clone(),
-                    igniting_block: &Block::FIRE,
-                    block,
-                    block_pos: *pos,
-                    cancelled: false,
-                };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return;
-                }
+            let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
+                world: world.clone(),
+                igniting_block: &Block::FIRE,
+                block,
+                block_pos: *pos,
+                cancelled: false,
+            };
+            if !world.fire_block_event(pos, block, &mut event) {
+                return;
             }
             let old_block = block;
             if rand::rng().random_range(0..(age + 10) as i32) < 5

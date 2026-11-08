@@ -126,6 +126,8 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
+                // advancement reads the result
+                let (block, state_id) = world.get_block_and_state_id(&position);
                 let state =
                     pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                         block.id,
@@ -133,7 +135,7 @@ impl JavaClient {
                     .then(|| {
                         let props =
                             pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                                world.get_block_state(&position).id,
+                                state_id,
                             );
                         ("lit".to_string(), props.r#lit.to_string())
                     });
@@ -184,6 +186,8 @@ impl JavaClient {
             return Ok(());
         }
 
+        // fresh block: event and block handlers may change it
+        let block = world.get_block(&position);
         let item_result = server
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
@@ -208,12 +212,14 @@ impl JavaClient {
         let after = item.clone();
 
         if item_result.consumes_action() || !item.are_equal(&before) {
+            // fresh block: advancement reads the result
+            let (block, state_id) = world.get_block_and_state_id(&position);
             let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                 block.id,
             )
             .then(|| {
                 let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                    world.get_block_state(&position).id,
+                    state_id,
                 );
                 ("lit".to_string(), props.r#lit.to_string())
             });

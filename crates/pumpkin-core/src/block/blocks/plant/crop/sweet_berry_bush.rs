@@ -48,7 +48,6 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 let count: u8 = rand::rng().random_range((index - 1)..=(index));
                 let mut drops = vec![ItemStack::new(count, &Item::SWEET_BERRIES)];
                 if let Some(player_arc) = args.world.get_player_by_uuid(args.player.gameprofile.id)
-                    && let Some(server) = args.world.server.upgrade()
                 {
                     let mut event = crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
                         player: player_arc,
@@ -56,8 +55,11 @@ impl BlockBehaviour for SweetBerryBushBlock {
                         harvested_items: drops.clone(),
                         cancelled: false,
                     };
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                    if event.cancelled {
+                    if !args.world.fire_block_event(
+                        args.position,
+                        &Block::SWEET_BERRY_BUSH,
+                        &mut event,
+                    ) {
                         return BlockActionResult::Pass;
                     }
                     drops = event.harvested_items;

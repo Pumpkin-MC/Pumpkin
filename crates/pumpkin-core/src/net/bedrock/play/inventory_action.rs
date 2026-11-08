@@ -253,6 +253,8 @@ impl BedrockClient {
                             item_id as i32,
                             1,
                         );
+                        // block handlers may change it
+                        let block = world.get_block(&data.block_position);
                         let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,

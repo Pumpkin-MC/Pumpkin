@@ -121,9 +121,7 @@ fn handle_beehive(
     }
 
     let mut drops = vec![ItemStack::new(3, &Item::HONEYCOMB)];
-    if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
-        && let Some(server) = player.world().server.upgrade()
-    {
+    if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) {
         let mut event =
             crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
                 player: player_arc,
@@ -131,8 +129,7 @@ fn handle_beehive(
                 harvested_items: drops.clone(),
                 cancelled: false,
             };
-        server.plugin_manager.fire_blocking(&server, &mut event);
-        if event.cancelled {
+        if !player.world().fire_block_event(location, block, &mut event) {
             return false;
         }
         drops = event.harvested_items;
