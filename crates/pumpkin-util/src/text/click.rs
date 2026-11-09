@@ -5,9 +5,20 @@ use serde::{Deserialize, Serialize};
 /// A JSON payload kept verbatim for `show_dialog` and custom click actions.
 ///
 /// The value is boxed to keep [`super::style::Style`] small.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ClickPayload(pub Box<serde_json::Value>);
+
+impl<'de> Deserialize<'de> for ClickPayload {
+    /// NBT has no null payload, so a null cannot round-trip.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        if value.is_null() {
+            return Err(serde::de::Error::custom("click payload cannot be null"));
+        }
+        Ok(Self(Box::new(value)))
+    }
+}
 
 impl ClickPayload {
     /// The payload as NBT, as the network writes it.

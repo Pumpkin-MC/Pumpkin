@@ -2288,6 +2288,12 @@ mod test {
     }
 
     #[test]
+    fn null_dialog_payloads_are_rejected() {
+        let json = r#"{"text":"x","click_event":{"action":"show_dialog","dialog":null}}"#;
+        assert!(serde_json::from_str::<TextComponent>(json).is_err());
+    }
+
+    #[test]
     fn styled_components_parse_from_nbt() {
         let mut styled = pumpkin_nbt::compound::NbtCompound::new();
         styled.put_string("text", "hi".to_string());
