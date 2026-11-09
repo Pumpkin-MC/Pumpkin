@@ -729,7 +729,14 @@ impl DatapackManager {
 
     #[must_use]
     pub fn get_all_synced_registries(&self) -> Vec<pumpkin_data::registry::Registry> {
-        self.dynamic_registry_manager.get_synced_registries()
+        let mut registries = self.dynamic_registry_manager.get_synced_registries();
+        if let Some(test_instances) = registries
+            .iter_mut()
+            .find(|registry| registry.registry_id == "minecraft:test_instance")
+        {
+            test_instances.registry_entries = self.get_test_instance_registry_entries();
+        }
+        registries
     }
 
     #[must_use]
