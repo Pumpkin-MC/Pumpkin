@@ -6,7 +6,7 @@ use std::{
 use pumpkin_core::{
     block::entities::{
         hanging_sign::HangingSignBlockEntity,
-        sign::{DyeColor, SignBlockEntity, SignEntityRef},
+        sign::{DyeColor, SIGN_EDIT_RANGE_BUFFER, SignBlockEntity, SignEntityRef},
     },
     entity::EntityBase,
     server::Server,
@@ -246,6 +246,48 @@ async fn run_out_of_range_case(
     Ok(())
 }
 
+async fn run_range_buffer_case(
+    server: &Arc<Server>,
+    world: &pumpkin_core::world::World,
+    bot: &mut HeadlessBot,
+    player: &pumpkin_core::entity::player::Player,
+    base: BlockPos,
+) -> Result<(), String> {
+    // Vanilla's `playerIsTooFarAwayToEdit` allows four more blocks than the
+    // normal interaction range, so an update inside that buffer is still valid.
+    let pos = base.offset(Vector3::new(0, 0, 4));
+    place_sign(server, world, pos).await;
+    let target = Vector3::new(
+        f64::from(pos.0.x) + 6.5,
+        f64::from(pos.0.y),
+        f64::from(pos.0.z) + 0.5,
+    );
+    move_to_and_wait(server, bot, player, target).await?;
+    if player.can_interact_with_block_at(&pos, 0.0) {
+        return Err("range buffer case started inside the base interaction range".to_string());
+    }
+    if !player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER) {
+        return Err("range buffer case started outside the edit buffer".to_string());
+    }
+    set_editor(world, pos, Some(player.gameprofile.id));
+    send_update(bot, pos, "BUFFER").await?;
+    tick(server, 20).await;
+    if stored_text(world, pos) != "BUFFER" {
+        return Err(format!(
+            "SIGN_UPDATE inside the edit buffer was rejected (player at {:?})",
+            player.get_entity().pos.load()
+        ));
+    }
+    let home = Vector3::new(
+        f64::from(base.0.x) + 0.5,
+        f64::from(base.0.y),
+        f64::from(base.0.z) + 0.5,
+    );
+    move_to_and_wait(server, bot, player, home).await?;
+
+    Ok(())
+}
+
 async fn run_authorization_cases(
     server: &Arc<Server>,
     world: &pumpkin_core::world::World,
@@ -273,6 +315,7 @@ async fn run_authorization_cases(
     }
 
     run_out_of_range_case(server, world, bot, player, base).await?;
+    run_range_buffer_case(server, world, bot, player, base).await?;
 
     // A waxed sign must not accept an update even from its registered editor.
     let waxed = base.offset(Vector3::new(2, 0, 1));
