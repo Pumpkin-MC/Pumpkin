@@ -6,6 +6,7 @@ services:
     build: .
     ports:
       - "25565:25565"
+      - "19132:19132"
       - "19132:19132/udp"
     volumes:
       # Pumpkin runs as UID/GID 2613. On Linux hosts, make sure the data

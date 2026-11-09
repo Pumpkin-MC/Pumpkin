@@ -37,7 +37,7 @@ WORKDIR /pumpkin
 USER pumpkin:pumpkin
 
 ENV RUST_BACKTRACE=1
-EXPOSE 25565 19132/udp
+EXPOSE 25565 19132 19132/udp
 
 ENTRYPOINT [ "pumpkin" ]
 
