@@ -197,6 +197,12 @@ async fn run_out_of_range_case(
     // The registered editor must still be within edit range.
     let out_of_range = base.offset(Vector3::new(4, 0, 0));
     place_sign(server, world, out_of_range).await;
+    let chunk = out_of_range.chunk_position();
+    world
+        .forced_chunks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(chunk);
     let before = stored_text(world, out_of_range);
     if !before.is_empty() {
         return Err(format!("sign was not empty after placement: {before:?}"));
@@ -230,6 +236,12 @@ async fn run_out_of_range_case(
     if !stored_text(world, out_of_range).is_empty() {
         return Err("returning to range re-authorized a cleared sign editor".to_string());
     }
+
+    world
+        .forced_chunks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&chunk);
 
     Ok(())
 }
