@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
@@ -69,7 +69,7 @@ impl SlimeEntity {
             let target_selector = &mob_arc.entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(CubeMobFloatGoal::new(weak.clone())));
-            goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(Arc::downgrade(&mob_arc))));
             goal_selector.add_goal(3, Box::new(CubeMobRandomDirectionGoal::new(weak.clone())));
             goal_selector.add_goal(5, Box::new(CubeMobKeepOnJumpingGoal::new(weak)));
 
@@ -375,12 +375,13 @@ impl Mob for SlimeEntity {
 }
 
 pub struct SlimeAttackGoal {
-    slime: Arc<SlimeEntity>,
+    slime: Weak<SlimeEntity>,
     grow_tired_timer: i32,
 }
 
 impl SlimeAttackGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
         Self {
             slime,
             grow_tired_timer: 0,
@@ -389,29 +390,32 @@ impl SlimeAttackGoal {
 }
 
 impl Goal for SlimeAttackGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_some()
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        mob.get_mob_entity().get_target().is_some()
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
         self.grow_tired_timer = 300;
     }
 
-    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_some() && self.grow_tired_timer > 0
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        mob.get_mob_entity().get_target().is_some() && self.grow_tired_timer > 0
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(slime) = self.slime.upgrade() else {
+            return;
+        };
         self.grow_tired_timer -= 1;
-        if let Some(target) = self.slime.entity.get_target() {
+        if let Some(target) = slime.entity.get_target() {
             let pos = target.get_entity().pos.load();
-            let my_pos = self.slime.entity.living_entity.entity.pos.load();
+            let my_pos = slime.entity.living_entity.entity.pos.load();
             let dx = pos.x - my_pos.x;
             let dz = pos.z - my_pos.z;
             let yaw = dx.atan2(dz).to_degrees() as f32;
-            self.slime.cube_data().target_yaw.store(yaw);
+            slime.cube_data().target_yaw.store(yaw);
         }
-        self.slime
+        slime
             .cube_data()
             .is_aggressive
             .store(true, Ordering::Relaxed);

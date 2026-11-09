@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ const PARTNER_RANGE: f64 = 8.0;
 pub struct BreedGoal {
     speed: f64,
     partners: Option<TargetMatch>,
-    mate: Option<Arc<dyn EntityBase>>,
+    mate: Option<Weak<dyn EntityBase>>,
     timer: i32,
 }
 
@@ -178,16 +178,17 @@ impl Goal for BreedGoal {
         let world = mob.get_entity().world.load();
         let mut links: Vec<i32> = self
             .mate
-            .iter()
+            .as_ref()
+            .and_then(Weak::upgrade)
             .map(|mate| mate.get_entity().entity_id)
+            .into_iter()
             .collect();
         if running {
             // Both parents' breeders get trust, stats and the advancement.
-            let mate_breeder = self
-                .mate
-                .as_ref()
-                .and_then(|mate| mate.get_mob())
-                .and_then(|mate| mate.get_mob_entity().breeder.load());
+            let mate_breeder = self.mate.as_ref().and_then(Weak::upgrade).and_then(|mate| {
+                mate.get_mob()
+                    .and_then(|m| m.get_mob_entity().breeder.load())
+            });
             for breeder in [mob_entity.breeder.load(), mate_breeder]
                 .into_iter()
                 .flatten()
@@ -216,12 +217,12 @@ impl Goal for BreedGoal {
             return false;
         }
 
-        self.mate = self.find_mate(mob);
+        self.mate = self.find_mate(mob).as_ref().map(Arc::downgrade);
         self.mate.is_some()
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(mate) = &self.mate else {
+        let Some(mate) = self.mate.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -242,7 +243,7 @@ impl Goal for BreedGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(mate) = &self.mate else {
+        let Some(mate) = self.mate.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -254,7 +255,7 @@ impl Goal for BreedGoal {
                 .look_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look_control.look_at_entity(mob, mate);
+            look_control.look_at_entity(mob, &mate);
         };
 
         let my_pos = mob.get_entity().pos.load();

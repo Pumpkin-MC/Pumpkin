@@ -155,10 +155,7 @@ impl Goal for LlamaFollowCaravanGoal {
         };
         let entity = mob.get_entity();
         let leashed_to_knot = entity
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_leash_holder()
             .is_some_and(|holder| holder.get_entity().entity_type == &EntityType::LEASH_KNOT);
         if leashed_to_knot {
             return;
