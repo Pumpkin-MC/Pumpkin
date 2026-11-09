@@ -675,10 +675,10 @@ impl EquippableImpl {
         let can_be_sheared = compound.get_bool("can_be_sheared").unwrap_or(false);
         let equip_sound = get_idor(compound, "equip_sound", Sound::ItemArmorEquipGeneric);
         let shearing_sound = get_idor(compound, "shearing_sound_sound", Sound::ItemShearsSnip);
-        let allowed_entities = if let Some(nbt) = compound.get("allowed_entities") {
-            IDSet::<EntityType>::read(nbt)
-        } else {
-            None
+        // A present but malformed restriction rejects the component instead of lifting it.
+        let allowed_entities = match compound.get("allowed_entities") {
+            Some(nbt) => Some(IDSet::<EntityType>::read(nbt)?),
+            None => None,
         };
         Some(Self {
             slot,

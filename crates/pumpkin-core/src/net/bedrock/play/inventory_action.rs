@@ -364,7 +364,12 @@ impl BedrockClient {
                                     self.correct_rejected_food_use(player);
                                 }
                             }
-                            if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+                            if let Some(equippable) = held
+                                .get_data_component::<EquippableImpl>()
+                                .filter(|equippable| {
+                                    equippable.can_be_equipped_by(player.get_entity().entity_type)
+                                })
+                            {
                                 let should_change = {
                                     let inventory = player.inventory();
                                     let equipment_guard = inventory
