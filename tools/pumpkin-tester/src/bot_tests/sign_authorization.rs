@@ -198,7 +198,7 @@ async fn run_out_of_range_case(
     let out_of_range = base.offset(Vector3::new(4, 0, 0));
     place_sign(server, world, out_of_range).await;
     let chunk = out_of_range.chunk_position();
-    world
+    let inserted = world
         .forced_chunks
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -237,11 +237,13 @@ async fn run_out_of_range_case(
         return Err("returning to range re-authorized a cleared sign editor".to_string());
     }
 
-    world
-        .forced_chunks
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&chunk);
+    if inserted {
+        world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&chunk);
+    }
 
     Ok(())
 }
