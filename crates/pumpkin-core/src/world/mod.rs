@@ -107,8 +107,7 @@ use pumpkin_protocol::java::client::play::{
     PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
-    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage, CUpdateRecipes,
-    stonecutter_update_recipes_data,
+    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
 };
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
@@ -3985,10 +3984,7 @@ impl World {
                 }
             }
             // The stonecutter list is not part of the recipe book, so it is always sent.
-            if let Ok(recipes) =
-                stonecutter_update_recipes_data(&dynamic_recipes, java_client.version.load())
-                && let Ok(data) = java_client.serialize_packet(&CUpdateRecipes::new(&recipes))
-            {
+            if let Some(data) = java_client.stonecutter_recipes_packet(&dynamic_recipes) {
                 java_client.send_packet_now(data).await;
             }
         }

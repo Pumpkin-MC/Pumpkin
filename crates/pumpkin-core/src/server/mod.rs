@@ -592,6 +592,9 @@ impl Server {
                 if let Ok(data) = java_client.serialize_packet(&add_packet) {
                     java_client.try_enqueue_packet(data);
                 }
+                if let Some(data) = java_client.stonecutter_recipes_packet(&dynamic_recipes) {
+                    java_client.try_enqueue_packet(data);
+                }
             }
         }
     }
