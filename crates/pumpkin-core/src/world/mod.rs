@@ -3971,18 +3971,20 @@ impl World {
             .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
-            && server.advanced_config.recipe.send_recipes
             && java_client.version.load() >= JavaMinecraftVersion::V_1_21_2
         {
-            let settings_packet = CRecipeBookSettings::default_closed();
-            if let Ok(data) = java_client.serialize_packet(&settings_packet) {
-                java_client.send_packet_now(data).await;
-            }
             let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
-            let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
-            if let Ok(data) = java_client.serialize_packet(&add_packet) {
-                java_client.send_packet_now(data).await;
+            if server.advanced_config.recipe.send_recipes {
+                let settings_packet = CRecipeBookSettings::default_closed();
+                if let Ok(data) = java_client.serialize_packet(&settings_packet) {
+                    java_client.send_packet_now(data).await;
+                }
+                let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
+                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.send_packet_now(data).await;
+                }
             }
+            // The stonecutter list is not part of the recipe book, so it is always sent.
             if let Ok(recipes) =
                 stonecutter_update_recipes_data(&dynamic_recipes, java_client.version.load())
                 && let Ok(data) = java_client.serialize_packet(&CUpdateRecipes::new(&recipes))

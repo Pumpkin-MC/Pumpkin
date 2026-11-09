@@ -967,7 +967,17 @@ pub fn stonecutter_update_recipes_data(
     let dynamic: Vec<_> = dynamic_recipes
         .iter()
         .filter_map(|r| match r {
-            DynamicRecipe::Stonecutting(r) => Some(r),
+            // A tag the server cannot resolve never matches on the server, so listing it would
+            // shift the option indices the client sends back.
+            DynamicRecipe::Stonecutting(r)
+                if !matches!(
+                    &r.ingredient,
+                    crate::codec::recipe::OwnedRecipeIngredient::Tagged(tag)
+                        if resolve_item_tag(tag, version).is_none()
+                ) =>
+            {
+                Some(r)
+            }
             _ => None,
         })
         .collect();
@@ -1018,6 +1028,30 @@ mod tests {
                 .encode(&mut expected)
                 .unwrap();
             assert!(data.starts_with(&expected));
+        }
+    }
+
+    #[test]
+    fn stonecutter_recipes_skip_tags_the_server_cannot_resolve() {
+        use crate::codec::recipe::{
+            OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,
+        };
+
+        let unknown_tag = DynamicRecipe::Stonecutting(OwnedStonecutterRecipe {
+            recipe_id: "test:unknown_tag".to_string(),
+            group: None,
+            ingredient: OwnedRecipeIngredient::Tagged("test:does_not_exist".to_string()),
+            result: OwnedRecipeResult {
+                item_id: "minecraft:stone".to_string(),
+                count: 1,
+            },
+        });
+        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+            assert_eq!(
+                stonecutter_update_recipes_data(std::slice::from_ref(&unknown_tag), version)
+                    .unwrap(),
+                stonecutter_update_recipes_data(&[], version).unwrap(),
+            );
         }
     }
 }
