@@ -157,6 +157,10 @@ impl DatapackManager {
         let mut loaded_packs_vec = Vec::new();
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
+        let embedded_functions = function_loader::load_embedded_test_functions(&mut all_functions);
+        if embedded_functions > 0 {
+            info!("Loaded {embedded_functions} embedded test function(s)");
+        }
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_test_instances: TestInstanceRegistry = HashMap::new();
         let mut all_context_int_providers: ContextProviderRegistry = HashMap::new();
@@ -182,6 +186,14 @@ impl DatapackManager {
         }
         let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
             HashMap::new();
+        let embedded_environments = test_loader::load_embedded_test_environments(
+            all_dynamic_registries
+                .entry("minecraft:test_environment".to_string())
+                .or_default(),
+        );
+        if embedded_environments > 0 {
+            info!("Loaded {embedded_environments} embedded test environment(s)");
+        }
         let mut all_trade_registry = TradeRegistry::new();
         let mut all_advancements: HashMap<
             String,

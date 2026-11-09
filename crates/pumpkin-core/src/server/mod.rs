@@ -61,6 +61,7 @@ pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod server_test_manager;
+mod test_environment;
 pub mod structure_editor;
 pub mod tick_rate_manager;
 pub mod ticker;
@@ -846,6 +847,9 @@ impl Server {
 
     pub async fn shutdown(&self) {
         self.management_hub.broadcast_server_stopping();
+
+        server_test_manager::stop_game_tests(self);
+        self.game_test_driver.shutdown().await;
 
         self.tasks.close();
         debug!("Awaiting tasks for server");

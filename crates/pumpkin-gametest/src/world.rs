@@ -1,14 +1,33 @@
+use std::any::Any;
+
 use async_trait::async_trait;
 use pumpkin_data::BlockStateId;
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
+use serde_json::Value;
 
 use crate::error::{GameTestError, GameTestResult};
 use crate::model::GameTestRotation;
 
 #[async_trait]
 pub trait GameTestWorld: Send + Sync {
+    fn environment_world_key(&self) -> usize {
+        std::ptr::from_ref(self).cast::<()>() as usize
+    }
+
+    fn activate_test_environment(&self, environment: &Value) -> GameTestResult<Box<dyn Any + Send>> {
+        if environment.as_str() == Some("minecraft:default") {
+            Ok(Box::new(()))
+        } else {
+            Err(GameTestError::World(
+                "Test environments are not supported by this GameTestWorld".to_string(),
+            ))
+        }
+    }
+
+    fn teardown_test_environment(&self, _saved: Box<dyn Any + Send>) {}
+
     async fn block_state_id(&self, position: &BlockPos) -> BlockStateId;
 
     async fn set_block_state(

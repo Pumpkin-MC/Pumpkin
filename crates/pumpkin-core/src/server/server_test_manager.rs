@@ -58,6 +58,11 @@ pub(crate) struct GameTestDriver {
 }
 
 impl GameTestDriver {
+    pub(crate) async fn shutdown(&self) {
+        let mut runner = self.runner.lock().await;
+        cancel_runner(&mut runner).await;
+    }
+
     pub(crate) fn set_ticker_running(&self, running: bool) {
         self.ticker_running.store(running, Ordering::Release);
     }
@@ -725,6 +730,26 @@ fn release_forced_game_test_chunk(world: &Arc<World>, chunk: Vector2<i32>) {
 
 #[async_trait]
 impl GameTestWorld for ServerGameTestWorld {
+    fn environment_world_key(&self) -> usize {
+        Arc::as_ptr(&self.world) as usize
+    }
+
+    fn activate_test_environment(
+        &self,
+        environment: &serde_json::Value,
+    ) -> GameTestResult<Box<dyn std::any::Any + Send>> {
+        let server = self.world.server.upgrade().ok_or_else(|| {
+            GameTestError::World("World is not attached to a running server".to_string())
+        })?;
+        super::test_environment::activate(&server, &self.world, environment)
+    }
+
+    fn teardown_test_environment(&self, saved: Box<dyn std::any::Any + Send>) {
+        if let Some(server) = self.world.server.upgrade() {
+            super::test_environment::teardown(&server, &self.world, saved);
+        }
+    }
+
     async fn block_state_id(&self, position: &BlockPos) -> BlockStateId {
         self.world.get_block_state_id_async(position).await
     }
