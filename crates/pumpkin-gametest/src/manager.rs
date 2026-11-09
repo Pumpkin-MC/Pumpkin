@@ -7,12 +7,18 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::{GameTestError, GameTestSession, GameTestState};
 
+pub const VERIFY_TEST_BATCH_SIZE: usize = 100;
+const MAX_TESTS_PER_BATCH: usize = 50;
+
 /// Receives fully constructed `GameTest` report messages.
 ///
 /// The `GameTest` runtime owns when and what to report. Integrations only decide
 /// where those messages are delivered.
 pub trait GameTestReporter: Send + Sync {
     fn send_message(&self, message: TextComponent);
+
+    /// Receives one final result for each test in the batch.
+    fn on_outcome(&self, _outcome: &GameTestOutcome) {}
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -181,6 +187,7 @@ impl GameTestBatchReport {
         let attempts = usize::try_from(counted_attempts).unwrap_or(usize::MAX);
         let successes = usize::try_from(counted_successes).unwrap_or(usize::MAX);
         let required = outcome.required;
+        self.reporter.on_outcome(&outcome);
         self.outcomes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -251,6 +258,7 @@ pub struct GameTestManager {
     successes: u32,
     last_error: Option<GameTestError>,
     rerun_scheduled: bool,
+    rerun_order: Option<usize>,
     done: bool,
 }
 
@@ -271,6 +279,7 @@ impl GameTestManager {
             successes: 0,
             last_error: None,
             rerun_scheduled: false,
+            rerun_order: None,
             done: false,
         }
     }
@@ -438,6 +447,7 @@ impl GameTestManager {
 
         self.run = self.run.copy_reset();
         self.rerun_scheduled = false;
+        self.rerun_order = None;
     }
 
     fn cancel(&mut self) {
@@ -508,14 +518,15 @@ impl GameTestManager {
     }
 }
 
-const MAX_TESTS_PER_BATCH: usize = 50;
-
 /// Ticks ready `GameTest` runs and owns their retry lifecycle.
 #[derive(Default)]
 pub struct GameTestRunner {
     active: Vec<GameTestManager>,
     pending: VecDeque<GameTestManager>,
     environment: Option<(Arc<dyn crate::world::GameTestWorld>, Box<dyn std::any::Any + Send>)>,
+    completed: Vec<GameTestSession>,
+    collect_completed: bool,
+    next_rerun_order: usize,
 }
 
 impl GameTestRunner {
@@ -525,6 +536,9 @@ impl GameTestRunner {
             active: Vec::new(),
             pending: VecDeque::new(),
             environment: None,
+            completed: Vec::new(),
+            collect_completed: false,
+            next_rerun_order: 0,
         }
     }
 
@@ -538,6 +552,9 @@ impl GameTestRunner {
         }
         self.active.clear();
         self.pending.clear();
+        self.completed.clear();
+        self.collect_completed = false;
+        self.next_rerun_order = 0;
     }
 
     pub async fn cancel_and_clear(&mut self) -> Vec<GameTestError> {
@@ -548,11 +565,29 @@ impl GameTestRunner {
             }
             managed.cancel();
         }
+        for completed in &self.completed {
+            if let Err(error) = completed.clear_placement().await {
+                errors.push(error);
+            }
+        }
         for managed in &mut self.pending {
             managed.cancel();
         }
         self.clear();
         errors
+    }
+
+    pub const fn collect_completed(&mut self) {
+        self.collect_completed = true;
+    }
+
+    pub fn take_completed(&mut self) -> Vec<GameTestSession> {
+        std::mem::take(&mut self.completed)
+    }
+
+    pub fn stop_collecting_completed(&mut self) {
+        self.completed.clear();
+        self.collect_completed = false;
     }
 
     #[must_use]
@@ -577,12 +612,10 @@ impl GameTestRunner {
                 match world.activate_test_environment(&environment) {
                     Ok(saved) => {
                         self.environment = Some((world, saved));
-                        while self.active.len() < MAX_TESTS_PER_BATCH
-                            && self.pending.front().is_some_and(|next| {
-                                next.run.environment() == &environment
-                                    && next.run.environment_world_key() == world_key
-                            })
-                        {
+                        while self.active.len() < MAX_TESTS_PER_BATCH && self.pending.front().is_some_and(|next| {
+                            next.run.environment() == &environment
+                                && next.run.environment_world_key() == world_key
+                        }) {
                             if let Some(next) = self.pending.pop_front() {
                                 self.active.push(next);
                             }
@@ -590,11 +623,7 @@ impl GameTestRunner {
                     }
                     Err(error) => {
                         if let Some(mut failed) = self.pending.pop_front() {
-                            failed.report.fail_to_start(
-                                failed.run.test.id(),
-                                &error,
-                                failed.run.test.is_required(),
-                            );
+                            failed.report.fail_to_start(failed.run.test.id(), &error, failed.run.test.is_required());
                             failed.done = true;
                         }
                     }
@@ -603,8 +632,7 @@ impl GameTestRunner {
         }
         // Vanilla queues copyReset reruns and does not start them until the current
         // set of batches has completed. Treat all currently active executions as one
-        // wave: finish the wave first, then install the scheduled copies so they begin
-        // on the following server tick.
+        // wave, then start copies in the order their original runs finished.
         for managed in &mut self.active {
             if managed.done || managed.rerun_scheduled {
                 continue;
@@ -613,14 +641,32 @@ impl GameTestRunner {
             managed.run.tick().await;
             if managed.run.state.is_finished() {
                 managed.handle_completion();
+                if managed.rerun_scheduled {
+                    managed.rerun_order = Some(self.next_rerun_order);
+                    self.next_rerun_order += 1;
+                }
             }
         }
 
-        self.active.retain(|managed| !managed.done);
+        if self.collect_completed {
+            let mut active = Vec::with_capacity(self.active.len());
+            for managed in self.active.drain(..) {
+                if managed.done {
+                    self.completed.push(managed.run);
+                } else {
+                    active.push(managed);
+                }
+            }
+            self.active = active;
+        } else {
+            self.active.retain(|managed| !managed.done);
+        }
         if self.active.iter().all(|managed| managed.rerun_scheduled) {
+            self.active.sort_by_key(|managed| managed.rerun_order);
             for managed in &mut self.active {
                 managed.install_scheduled_rerun();
             }
+            self.next_rerun_order = 0;
         }
         if self.active.is_empty() {
             if let Some((world, saved)) = self.environment.take() {

@@ -13,10 +13,11 @@ use crate::helper::{
     GameTestControllerState, GameTestHelper, SequenceEvent, SequenceEventKind, get_test_function,
 };
 use crate::model::{GameTestRotation, TestType};
+use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
-    clear_placed_test, clear_success_entities, encase_structure,
-    place_structure_with_controller_rotation, remove_barriers,
+    clear_success_entities, encase_structure, place_structure_with_controller_rotation,
+    remove_barriers,
 };
 use crate::world::GameTestWorld;
 

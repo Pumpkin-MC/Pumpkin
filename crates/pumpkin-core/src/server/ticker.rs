@@ -91,8 +91,7 @@ impl Ticker {
                     .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
             }
 
-            let should_tick_game_tests =
-                (manager.runs_normally() || sprinting) && server.game_test_driver.has_work(server);
+            let should_tick_game_tests = server.game_test_driver.has_work(server);
 
             if sprinting {
                 manager.start_sprint_tick_work();
