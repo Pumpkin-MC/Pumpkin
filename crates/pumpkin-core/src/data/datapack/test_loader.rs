@@ -86,11 +86,18 @@ fn load_test_instances_recursive(
             let stem_path = stem_path.replace('\\', "/");
             let test_instance_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(instance) = serde_json::from_str::<TestInstance>(&content)
-                && instance.is_valid()
-            {
-                registry.insert(test_instance_id, instance);
+            match fs::read_to_string(&path) {
+                Ok(content) => match serde_json::from_str::<TestInstance>(&content) {
+                    Ok(instance) if instance.is_valid() => {
+                        registry.insert(test_instance_id, instance);
+                    }
+                    Ok(_) => warn!("Test instance '{}' failed validation", path.display()),
+                    Err(error) => warn!(
+                        "Failed to parse test instance '{}': {error}",
+                        path.display()
+                    ),
+                },
+                Err(error) => warn!("Failed to read test instance '{}': {error}", path.display()),
             }
         }
     }

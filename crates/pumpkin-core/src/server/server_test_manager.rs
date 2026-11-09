@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -14,7 +14,8 @@ use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
+use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
@@ -26,9 +27,26 @@ use crate::{
     world::World,
 };
 
+const MAX_CONCURRENT_STRUCTURE_LOADS: usize = 4;
+
+#[derive(Default)]
+struct GameTestQueueState {
+    queued: VecDeque<GameTestQueueEntry>,
+    preparing: VecDeque<PreparingGameTest>,
+    generation: u64,
+}
+
+struct PreparingGameTest {
+    test_id: String,
+    required: bool,
+    report: Arc<GameTestBatchReport>,
+    result: oneshot::Receiver<GameTestResult<GameTestManager>>,
+    task: JoinHandle<()>,
+}
+
 #[derive(Default)]
 pub(crate) struct GameTestServerState {
-    queue: StdMutex<Vec<GameTestQueueEntry>>,
+    queue: StdMutex<GameTestQueueState>,
     stop: AtomicBool,
     pending: AtomicUsize,
 }
@@ -253,20 +271,25 @@ pub fn enqueue_game_test(request: GameTestQueueEntry) {
         .queue
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    queue.push(request);
-    server
-        .game_test_state
-        .pending
-        .store(queue.len(), Ordering::Release);
+    queue.queued.push_back(request);
+    server.game_test_state.pending.store(
+        queue.queued.len() + queue.preparing.len(),
+        Ordering::Release,
+    );
 }
 
 pub fn stop_game_tests(server: &Server) {
+    // Keep the queue mutex held while publishing the stop request. drain_game_test_queue
+    // takes the same mutex before consuming the stop flag, so a stop+new-run command
+    // cannot race between the runner-clear and queue-drain phases.
     let mut queue = server
         .game_test_state
         .queue
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let queued = std::mem::take(&mut *queue);
+    let queued = std::mem::take(&mut queue.queued);
+    let preparing = std::mem::take(&mut queue.preparing);
+    queue.generation = queue.generation.wrapping_add(1);
     server.game_test_state.pending.store(0, Ordering::Release);
     server.game_test_state.stop.store(true, Ordering::Release);
     drop(queue);
@@ -276,21 +299,65 @@ pub fn stop_game_tests(server: &Server) {
             .report
             .cancel_before_start(&request.test_id, request.required);
     }
+    for request in preparing {
+        request.task.abort();
+        request
+            .report
+            .cancel_before_start(&request.test_id, request.required);
+    }
 }
 
 pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRunner) {
-    // Hold the same queue mutex used by stop_game_tests while consuming the stop
-    // flag and draining requests. This closes the async race where a new /test run
-    // could otherwise be drained before the old runner was cleared.
-    let (stopped, queued) = {
+    // Keep completed preparations in request order without waiting for disk I/O on the tick.
+    let (stopped, generation, completed) = {
         let mut queue = server
             .game_test_state
             .queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let stopped = server.game_test_state.stop.swap(false, Ordering::AcqRel);
-        server.game_test_state.pending.store(0, Ordering::Release);
-        (stopped, std::mem::take(&mut *queue))
+        let generation = queue.generation;
+        let mut completed = Vec::new();
+        while let Some(request) = queue.preparing.front_mut() {
+            let result = match request.result.try_recv() {
+                Ok(result) => result,
+                Err(oneshot::error::TryRecvError::Empty) => break,
+                Err(oneshot::error::TryRecvError::Closed) => Err(GameTestError::World(format!(
+                    "GameTest preparation task stopped for '{}'",
+                    request.test_id
+                ))),
+            };
+            if let Some(request) = queue.preparing.pop_front() {
+                completed.push((request, result));
+            }
+        }
+
+        while queue.preparing.len() < MAX_CONCURRENT_STRUCTURE_LOADS {
+            let Some(request) = queue.queued.pop_front() else {
+                break;
+            };
+            let (sender, result) = oneshot::channel();
+            let test_id = request.test_id.clone();
+            let required = request.required;
+            let report = request.report.clone();
+            let prepare_server = server.clone();
+            let task = server.spawn_task(async move {
+                let prepared = prepare_test_run(&prepare_server, request).await;
+                let _ = sender.send(prepared);
+            });
+            queue.preparing.push_back(PreparingGameTest {
+                test_id,
+                required,
+                report,
+                result,
+                task,
+            });
+        }
+        server.game_test_state.pending.store(
+            queue.queued.len() + queue.preparing.len(),
+            Ordering::Release,
+        );
+        (stopped, generation, completed)
     };
 
     if stopped {
@@ -299,16 +366,38 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
         }
     }
 
-    for request in queued {
+    for (request, result) in completed {
         let test_id = request.test_id.clone();
         let report = request.report.clone();
         let required = request.required;
-        match prepare_test_run(server, request).await {
+        match result {
             Ok(run) => {
-                info!(target: "pumpkin::gametest", test = %test_id, "Starting queued GameTest");
-                runner.enqueue(run);
+                let queue = server
+                    .game_test_state
+                    .queue
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if queue.generation == generation {
+                    runner.enqueue(run);
+                    drop(queue);
+                    info!(target: "pumpkin::gametest", test = %test_id, "Starting queued GameTest");
+                } else {
+                    drop(queue);
+                    report.cancel_before_start(&test_id, required);
+                }
             }
             Err(error) => {
+                let queue = server
+                    .game_test_state
+                    .queue
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if queue.generation != generation {
+                    drop(queue);
+                    report.cancel_before_start(&test_id, required);
+                    continue;
+                }
+                drop(queue);
                 warn!(
                     target: "pumpkin::gametest",
                     test = %test_id,
