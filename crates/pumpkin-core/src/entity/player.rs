@@ -2854,6 +2854,15 @@ impl Player {
                 return;
             }
         }
+        if let Some(block_entity) = self.world().get_block_entity(&location)
+            && let Some(sign) =
+                crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        {
+            *sign
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.gameprofile.id);
+        }
         self.try_enqueue_packet_editioned(
             &COpenSignEditor::new(location, is_front_text),
             &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(location, is_front_text),
