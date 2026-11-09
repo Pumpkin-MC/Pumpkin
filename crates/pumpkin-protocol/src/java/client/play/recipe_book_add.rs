@@ -25,6 +25,23 @@ const SLOT_DISPLAY_ITEM: u32 = 4;
 const SLOT_DISPLAY_ITEM_STACK: u32 = 5;
 const SLOT_DISPLAY_COMPOSITE: u32 = 10;
 
+/// Slot display type ids of clients up to 1.21.11, indexed by the ids above. The newer types
+/// (potion, component, dyed) were added later and shifted the rest.
+const SLOT_DISPLAY_LEGACY_IDS: [u32; 11] = [0, 1, 0, 0, 2, 3, 4, 0, 5, 6, 7];
+
+fn write_slot_display_id(
+    write: &mut impl Write,
+    id: u32,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    let id = if version <= JavaMinecraftVersion::V_1_21_11 {
+        SLOT_DISPLAY_LEGACY_IDS[id as usize]
+    } else {
+        id
+    };
+    write.write_var_int(&VarInt(id as i32))
+}
+
 const ENTRY_FLAG_NOTIFICATION: u8 = 0x01;
 const ENTRY_FLAG_HIGHLIGHT: u8 = 0x02;
 
@@ -64,9 +81,9 @@ impl<'a> CRecipeBookAdd<'a> {
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ITEM, version)?;
     write.write_var_int(&VarInt(item.id as i32))?;
     Ok(())
 }
@@ -84,23 +101,23 @@ fn write_item_stack_slot_display(
     if stack.is_empty() {
         return write_empty_slot_display(write, version);
     }
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM_STACK as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ITEM_STACK, version)?;
     ItemStackTemplateSerializer::from(stack).write_with_version(write, &version)
 }
 
 fn write_empty_slot_display(
     write: &mut impl Write,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_EMPTY as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_EMPTY, version)?;
     Ok(())
 }
 
 fn write_any_fuel_slot_display(
     write: &mut impl Write,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ANY_FUEL as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ANY_FUEL, version)?;
     Ok(())
 }
 
@@ -152,7 +169,7 @@ fn write_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                    write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -175,7 +192,7 @@ fn write_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -734,7 +751,7 @@ fn write_dynamic_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                    write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -758,7 +775,7 @@ fn write_dynamic_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -1008,6 +1025,24 @@ mod tests {
             let mut bytes = Vec::new();
             write_result_slot_display(&mut bytes, &result, version).unwrap();
             assert_eq!(bytes, [SLOT_DISPLAY_EMPTY as u8]);
+        }
+    }
+
+    #[test]
+    fn slot_display_types_follow_the_client_version() {
+        let result = RecipeResultStruct {
+            id: "minecraft:stone",
+            count: 2,
+            components: &[],
+        };
+        // item_stack is 3 for 1.21.2 and 5 for 26.3
+        for (version, id) in [
+            (JavaMinecraftVersion::V_1_21_2, 3),
+            (JavaMinecraftVersion::V_26_3, 5),
+        ] {
+            let mut bytes = Vec::new();
+            write_result_slot_display(&mut bytes, &result, version).unwrap();
+            assert_eq!(bytes[0], id);
         }
     }
 
