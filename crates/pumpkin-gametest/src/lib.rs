@@ -384,6 +384,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stopping_test_clears_placement_and_records_one_cancellation() -> GameTestResult<()> {
+        let world = Arc::new(InMemoryTestWorld::default());
+        let template = Arc::new(GameTestStructureTemplate::new(
+            [1, 1, 1],
+            vec![GameTestStructureBlock {
+                position: [0, 0, 0],
+                state: Block::STONE.default_state.id,
+                nbt: None,
+                test_mode: None,
+            }],
+        )?);
+        let definition = GameTestDefinition {
+            instance_type: TestType::BlockBased,
+            environment: serde_json::Value::String("minecraft:default".to_string()),
+            function: None,
+            structure: "test:stop".to_string(),
+            max_ticks: 20,
+            setup_ticks: 0,
+            required: true,
+            rotation: GameTestRotation::None,
+            manual_only: false,
+            max_attempts: 1,
+            required_successes: 1,
+            sky_access: false,
+            padding: 0,
+        };
+        let test = BlockBasedTest::new("test:stop", definition);
+        let session = GameTestSession::new(test, world.clone(), template, 0, 0);
+        let reporter: Arc<dyn GameTestReporter> = Arc::new(SilentReporter);
+        let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 1));
+        let mut runner = GameTestRunner::new();
+        runner.enqueue(GameTestManager::new(
+            session,
+            GameTestRetryOptions::no_retries(),
+            report.clone(),
+            reporter,
+        ));
+
+        runner.tick().await;
+        assert_eq!(runner.active_len(), 1);
+        assert!(!report.is_done());
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 66, 1)).await,
+            Block::STONE.default_state.id
+        );
+        assert!(
+            world
+                .blocks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .any(|state| *state == Block::BARRIER.default_state.id)
+        );
+
+        assert!(runner.cancel_and_clear().await.is_empty());
+        assert!(runner.cancel_and_clear().await.is_empty());
+        assert!(runner.is_empty());
+        assert!(report.is_done());
+        assert_eq!(report.remaining_tests(), 0);
+        assert_eq!(report.total_runs(), 1);
+        let outcomes = report.outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].id, "test:stop");
+        assert_eq!(outcomes[0].status, GameTestOutcomeStatus::Cancelled);
+        assert_eq!(outcomes[0].attempts, 0);
+        assert!(
+            world
+                .blocks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .all(|state| *state == Block::AIR.default_state.id)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn places_rotated_structure_entity_with_transformed_nbt() -> GameTestResult<()> {
         let mut entity_nbt = NbtCompound::new();
         entity_nbt.put_string("id", "minecraft:armor_stand".to_string());
