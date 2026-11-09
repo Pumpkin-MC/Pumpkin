@@ -13,12 +13,10 @@ mod world_interaction;
 use std::{net::SocketAddr, sync::Arc};
 
 use pumpkin_core::server::Server;
-use pumpkin_gametest::GameTestRunner;
 
 pub async fn run_bot_tests(
     server: &Arc<Server>,
     addr: SocketAddr,
-    runner: &mut GameTestRunner,
     summary_lines: &mut Vec<String>,
 ) -> Result<(), String> {
     status_ping::run_bot_status_ping_test(addr, summary_lines).await?;
@@ -26,13 +24,8 @@ pub async fn run_bot_tests(
     let (mut bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
 
-    commands_and_gamemode::run_commands_and_gamemode_tests(
-        server,
-        &mut bot1,
-        runner,
-        summary_lines,
-    )
-    .await?;
+    commands_and_gamemode::run_commands_and_gamemode_tests(server, &mut bot1, summary_lines)
+        .await?;
 
     loot_tables::run_loot_table_tests(server, &mut bot1, summary_lines).await?;
 

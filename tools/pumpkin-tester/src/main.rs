@@ -14,7 +14,7 @@ async fn run_all_suites(server: &Arc<Server>, addr: SocketAddr) -> Result<Vec<St
     let mut summary_lines = Vec::new();
     let mut runner = GameTestRunner::new();
 
-    bot_tests::run_bot_tests(server, addr, &mut runner, &mut summary_lines).await?;
+    bot_tests::run_bot_tests(server, addr, &mut summary_lines).await?;
     gametests::run_gametests(server, &mut runner, &mut summary_lines).await?;
 
     Ok(summary_lines)
