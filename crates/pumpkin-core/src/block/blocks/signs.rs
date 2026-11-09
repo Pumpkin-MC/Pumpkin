@@ -766,6 +766,10 @@ fn show_inline_dialog(player: &Arc<Player>, dialog: &ClickPayload) {
         debug!("Skipping sign show_dialog with a non-inline dialog");
         return;
     };
+    if compound.is_empty() {
+        debug!("Skipping sign show_dialog with an empty dialog");
+        return;
+    }
     let packet = CPlayShowDialog::new(IdOr::Value(DialogNBT::from_nbt(&compound)));
     player.try_send_client_packet(&packet);
 }
