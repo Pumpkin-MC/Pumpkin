@@ -534,6 +534,9 @@ const fn bedrock_mount_slot(
     }
 }
 
+/// Screens closed in a row before another one is opened, see `close_open_screen_handler`.
+const MAX_SCREEN_CLOSES: usize = 4;
+
 fn screen_handler_addr(handler: &Arc<std::sync::Mutex<dyn ScreenHandler>>) -> usize {
     Arc::as_ptr(handler).cast::<()>().addr()
 }
@@ -6331,17 +6334,21 @@ impl Player {
     /// Vanilla `ServerPlayer.openMenu`: a screen other than the player's own is closed before
     /// another one replaces it, so its `on_closed` returns the items inside.
     fn close_open_screen_handler(&self) {
-        let current: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
         let own: Arc<std::sync::Mutex<dyn ScreenHandler>> = self.player_screen_handler.clone();
-        // A screen opened from the `InventoryCloseEvent` of the screen being closed must not close
-        // that screen again; any other screen is closed as usual.
-        if !Arc::ptr_eq(&current, &own)
-            && screen_handler_addr(&current) != self.closing_screen.load(Ordering::Relaxed)
-        {
+        // A close event can open another screen, which is closed as well. Bounded so a plugin
+        // that reopens a screen on every close cannot loop forever.
+        for _ in 0..MAX_SCREEN_CLOSES {
+            let current: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            // The screen whose `InventoryCloseEvent` is running must not be closed again.
+            if Arc::ptr_eq(&current, &own)
+                || screen_handler_addr(&current) == self.closing_screen.load(Ordering::Relaxed)
+            {
+                return;
+            }
             self.close_handled_screen();
         }
     }
@@ -6556,7 +6563,7 @@ impl Player {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = screen_handler;
             self.open_container_pos.store(block_pos);
-            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+            Some(sync_id)
         } else {
             if self.is_spectator() {
                 self.send_system_message_raw(
