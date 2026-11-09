@@ -946,62 +946,58 @@ impl DatapackManager {
     /// `structure` directory and the legacy `structures` directory are checked.
     pub async fn load_structure(&self, resource_location: &str) -> Result<NbtCompound, String> {
         let (namespace, path) = parse_structure_resource_location(resource_location)?;
-
-        let nbt_path = {
+        let pack_roots = {
             let loaded_packs = self
                 .loaded_packs
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            loaded_packs
+                .iter()
+                .rev()
+                .map(|pack| pack.root_path.clone())
+                .collect::<Vec<_>>()
+        };
+        let namespace = namespace.to_string();
+        let path = path.to_string();
+        let resource_location = resource_location.to_string();
 
-            let mut nbt_path = None;
-
+        tokio::task::spawn_blocking(move || {
             // Runtime datapacks override embedded resources.
-            'packs: for pack in loaded_packs.iter().rev() {
+            for root in pack_roots {
                 for structure_dir in ["structure", "structures"] {
-                    let candidate = pack
-                        .root_path
+                    let candidate = root
                         .join("data")
-                        .join(namespace)
+                        .join(&namespace)
                         .join(structure_dir)
                         .join(format!("{path}.nbt"));
 
                     if candidate.is_file() {
-                        nbt_path = Some(candidate);
-                        break 'packs;
+                        let display_path = candidate.display();
+                        let file = fs::File::open(&candidate).map_err(|error| {
+                            format!("Failed to open structure '{display_path}': {error}")
+                        })?;
+
+                        return read_gzip_compound_tag(file).map_err(|error| {
+                            format!("Failed to parse structure '{display_path}': {error}")
+                        });
                     }
                 }
             }
 
-            nbt_path
-        };
+            // Fall back to compile-time embedded structures.
+            let structure_id = format!("{namespace}:{path}");
+            if let Some(template) =
+                pumpkin_world::generation::structure::template::get_template(&structure_id)
+            {
+                return Ok(template.save());
+            }
 
-        if let Some(nbt_path) = nbt_path {
-            let display_path = nbt_path.display().to_string();
-
-            return tokio::task::spawn_blocking(move || {
-                let file = fs::File::open(&nbt_path).map_err(|error| {
-                    format!("Failed to open structure '{display_path}': {error}")
-                })?;
-
-                read_gzip_compound_tag(file)
-                    .map_err(|error| format!("Failed to parse structure '{display_path}': {error}"))
-            })
-            .await
-            .map_err(|error| format!("Structure loader task failed: {error}"))?;
-        }
-
-        // Fall back to compile-time embedded structures.
-        let structure_id = format!("{namespace}:{path}");
-
-        if let Some(template) =
-            pumpkin_world::generation::structure::template::get_template(&structure_id)
-        {
-            return Ok(template.save());
-        }
-
-        Err(format!(
-            "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
-        ))
+            Err(format!(
+                "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
+            ))
+        })
+        .await
+        .map_err(|error| format!("Structure loader task failed: {error}"))?
     }
 
     pub fn get_function_names(&self) -> Vec<String> {
