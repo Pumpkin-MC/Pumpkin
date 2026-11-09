@@ -128,7 +128,7 @@ pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryE
 
     RegistryEntryData {
         entry_id,
-        data: Some(Nbt::from(nbt).write().to_vec().into_boxed_slice()),
+        data: Some(Nbt::from(nbt).write_unnamed().to_vec().into_boxed_slice()),
     }
 }
 
