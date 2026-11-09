@@ -454,15 +454,37 @@ impl GameTestWorld for ServerGameTestWorld {
         nbt.put_int("y", position.0.y);
         nbt.put_int("z", position.0.z);
 
-        let entity = block_entity_from_nbt(&nbt).ok_or_else(|| {
-            let id = nbt.get_string("id").unwrap_or("<missing id>");
-            GameTestError::World(format!(
-                "Unable to create block entity '{id}' at {position}"
-            ))
-        })?;
+        // StructureTemplate.placeInWorld keeps the placed block when its block entity cannot load.
+        let Some(entity) = block_entity_from_nbt(&nbt) else {
+            return Ok(());
+        };
 
         self.world.remove_block_entity(position);
         self.world.add_block_entity(entity);
+        Ok(())
+    }
+
+    async fn spawn_structure_entity(&self, nbt: &NbtCompound) -> GameTestResult<()> {
+        let Some(root) = crate::entity::r#type::load_entity_from_nbt(
+            nbt,
+            pumpkin_util::math::vector3::Vector3::default(),
+            &self.world,
+        ) else {
+            return Ok(());
+        };
+        self.ensure_chunk_loaded(&BlockPos::floored_v(root.get_entity().pos.load()))
+            .await;
+        root.get_entity()
+            .body_yaw
+            .store(root.get_entity().yaw.load());
+        if self.world.spawn_entity(root.clone()) {
+            for entity in crate::entity::r#type::self_and_passengers(&root)
+                .into_iter()
+                .skip(1)
+            {
+                self.world.spawn_entity(entity);
+            }
+        }
         Ok(())
     }
 
@@ -1022,6 +1044,34 @@ mod tests {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .is_empty()
         );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unknown_structure_block_entity_does_not_fail_placement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = create_world(&folder);
+        let chunk = Vector2::new(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(0, 0));
+        let position = BlockPos::new(0, 64, 0);
+        let block_state = pumpkin_data::Block::CHEST.default_state.id;
+        world.level.set_block_state(&position, block_state);
+
+        let adapter = ServerGameTestWorld {
+            world: world.clone(),
+            forced_chunks: StdMutex::new(HashSet::new()),
+        };
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:unknown_block_entity".to_string());
+        adapter.set_block_entity_nbt(&position, &nbt).await?;
+        assert_eq!(world.level.get_block_state(&position), block_state);
+
+        drop(adapter);
         world.level.shutdown().await;
         Ok(())
     }

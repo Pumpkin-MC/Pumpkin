@@ -48,6 +48,7 @@ mod tests {
         test_blocks_triggered: Mutex<HashMap<BlockPos, bool>>,
         test_block_messages: Mutex<HashMap<BlockPos, String>>,
         instance_state: Mutex<InstanceState>,
+        spawned_entities: Mutex<Vec<NbtCompound>>,
     }
 
     #[async_trait]
@@ -96,6 +97,14 @@ mod tests {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(*position, message.to_owned());
             }
+            Ok(())
+        }
+
+        async fn spawn_structure_entity(&self, nbt: &NbtCompound) -> GameTestResult<()> {
+            self.spawned_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(nbt.clone());
             Ok(())
         }
 
@@ -363,5 +372,82 @@ mod tests {
         assert!(report.is_done());
         assert!(report.all_required_passed());
         assert_eq!(report.failed_required(), 0);
+    }
+
+    #[tokio::test]
+    async fn places_rotated_structure_entity_with_transformed_nbt() -> GameTestResult<()> {
+        let mut entity_nbt = NbtCompound::new();
+        entity_nbt.put_string("id", "minecraft:armor_stand".to_string());
+        entity_nbt.put_string("UUID", "old-uuid".to_string());
+        entity_nbt.put("block_pos", NbtTag::IntArray(vec![0, 1, 1]));
+        entity_nbt.put(
+            "Rotation",
+            NbtTag::List(vec![NbtTag::Float(45.0), NbtTag::Float(10.0)]),
+        );
+
+        let mut entity = NbtCompound::new();
+        entity.put(
+            "pos",
+            NbtTag::List(vec![
+                NbtTag::Double(0.25),
+                NbtTag::Double(1.0),
+                NbtTag::Double(1.5),
+            ]),
+        );
+        entity.put(
+            "blockPos",
+            NbtTag::List(vec![NbtTag::Int(0), NbtTag::Int(1), NbtTag::Int(1)]),
+        );
+        entity.put_compound("nbt", entity_nbt);
+
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", CURRENT_MC_DATA_VERSION);
+        root.put(
+            "size",
+            NbtTag::List(vec![NbtTag::Int(3), NbtTag::Int(2), NbtTag::Int(4)]),
+        );
+        root.put("palette", NbtTag::List(Vec::new()));
+        root.put("blocks", NbtTag::List(Vec::new()));
+        root.put("entities", NbtTag::List(vec![NbtTag::Compound(entity)]));
+
+        let template = GameTestStructureTemplate::from_nbt(&root)?;
+        let world = InMemoryTestWorld::default();
+        place_structure_with_controller_rotation(
+            &world,
+            &template,
+            "test:entity",
+            GameTestRotation::Clockwise90,
+            GameTestRotation::None,
+            GameTestPosition::new(10, Some(70), 20),
+            0,
+        )
+        .await?;
+        let entities = world
+            .spawned_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(entities.len(), 1);
+        let placed = &entities[0];
+        assert_eq!(placed.get_string("id"), Some("minecraft:armor_stand"));
+        assert!(placed.get("UUID").is_none());
+        assert_eq!(
+            placed.get("block_pos"),
+            Some(&NbtTag::IntArray(vec![12, 72, 21]))
+        );
+        assert_eq!(
+            placed.get_list("Pos"),
+            Some(
+                &[
+                    NbtTag::Double(12.5),
+                    NbtTag::Double(72.0),
+                    NbtTag::Double(21.25)
+                ][..]
+            )
+        );
+        assert_eq!(
+            placed.get_list("Rotation"),
+            Some(&[NbtTag::Float(135.0), NbtTag::Float(10.0)][..])
+        );
+        Ok(())
     }
 }

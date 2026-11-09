@@ -1,5 +1,6 @@
 use pumpkin_data::{Block, BlockStateId};
-use pumpkin_nbt::NbtCompound;
+use pumpkin_nbt::{NbtCompound, tag::NbtTag};
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{CURRENT_MC_DATA_VERSION, CURRENT_MC_VERSION};
 
 use crate::error::{GameTestError, GameTestResult};
@@ -44,9 +45,17 @@ pub struct GameTestStructureBlock {
 }
 
 #[derive(Clone, Debug)]
+pub struct GameTestStructureEntity {
+    pub position: Vector3<f64>,
+    pub block_position: [i32; 3],
+    pub nbt: NbtCompound,
+}
+
+#[derive(Clone, Debug)]
 pub struct GameTestStructureTemplate {
     size: [i32; 3],
     blocks: Vec<GameTestStructureBlock>,
+    entities: Vec<GameTestStructureEntity>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -78,7 +87,11 @@ impl GameTestStructureTemplate {
             }
         }
 
-        Ok(Self { size, blocks })
+        Ok(Self {
+            size,
+            blocks,
+            entities: Vec::new(),
+        })
     }
 
     pub fn empty(size: [i32; 3]) -> GameTestResult<Self> {
@@ -173,6 +186,7 @@ impl GameTestStructureTemplate {
         Ok(Self {
             size,
             blocks: parsed_blocks,
+            entities: read_entities(structure),
         })
     }
 
@@ -187,9 +201,60 @@ impl GameTestStructureTemplate {
     }
 
     #[must_use]
+    pub(crate) fn entities(&self) -> &[GameTestStructureEntity] {
+        &self.entities
+    }
+
+    #[must_use]
     pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
+}
+
+fn read_entities(structure: &NbtCompound) -> Vec<GameTestStructureEntity> {
+    let mut entities = Vec::new();
+    for entry in structure.get_list("entities").unwrap_or_default() {
+        let Some(entry) = entry.extract_compound() else {
+            continue;
+        };
+        let Some(nbt) = entry.get_compound("nbt") else {
+            continue;
+        };
+        let position = entry.get_list("pos").unwrap_or_default();
+        let block_position = entry.get_list("blockPos").unwrap_or_default();
+        entities.push(GameTestStructureEntity {
+            position: Vector3::new(
+                position
+                    .first()
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+                position
+                    .get(1)
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+                position
+                    .get(2)
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+            ),
+            block_position: [
+                block_position
+                    .first()
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+                block_position
+                    .get(1)
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+                block_position
+                    .get(2)
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+            ],
+            nbt: nbt.clone(),
+        });
+    }
+    entities
 }
 
 fn read_vec3(compound: &NbtCompound, name: &str) -> GameTestResult<[i32; 3]> {
