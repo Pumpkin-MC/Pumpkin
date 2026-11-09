@@ -42,6 +42,7 @@ impl SSetStructureBlock<'_> {
     pub const FLAG_IGNORE_ENTITIES: u8 = 0x01;
     pub const FLAG_SHOW_AIR: u8 = 0x02;
     pub const FLAG_SHOW_BOUNDING_BOX: u8 = 0x04;
+    pub const FLAG_STRICT: u8 = 0x08;
 
     #[must_use]
     pub const fn ignore_entities(&self) -> bool {
@@ -57,6 +58,11 @@ impl SSetStructureBlock<'_> {
     pub const fn show_bounding_box(&self) -> bool {
         (self.flags & Self::FLAG_SHOW_BOUNDING_BOX) != 0
     }
+
+    #[must_use]
+    pub const fn strict(&self) -> bool {
+        (self.flags & Self::FLAG_STRICT) != 0
+    }
 }
 
 impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
@@ -66,15 +72,15 @@ impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
             action: bytebuf.get_var_int()?,
             mode: bytebuf.get_var_int()?,
             name: bytebuf.get_str_borrowed()?,
-            offset_x: bytebuf.get_i8()?,
-            offset_y: bytebuf.get_i8()?,
-            offset_z: bytebuf.get_i8()?,
-            size_x: bytebuf.get_u8()?,
-            size_y: bytebuf.get_u8()?,
-            size_z: bytebuf.get_u8()?,
+            offset_x: bytebuf.get_i8()?.clamp(-48, 48),
+            offset_y: bytebuf.get_i8()?.clamp(-48, 48),
+            offset_z: bytebuf.get_i8()?.clamp(-48, 48),
+            size_x: bytebuf.get_i8()?.clamp(0, 48) as u8,
+            size_y: bytebuf.get_i8()?.clamp(0, 48) as u8,
+            size_z: bytebuf.get_i8()?.clamp(0, 48) as u8,
             mirror: bytebuf.get_var_int()?,
             rotation: bytebuf.get_var_int()?,
-            metadata: bytebuf.get_str_borrowed()?,
+            metadata: bytebuf.get_str_bounded_borrowed(128)?,
             integrity: bytebuf.get_f32()?,
             seed: bytebuf.get_var_long()?,
             flags: bytebuf.get_u8()?,
@@ -96,15 +102,51 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
         write.write_i8(self.offset_x)?;
         write.write_i8(self.offset_y)?;
         write.write_i8(self.offset_z)?;
-        write.write_u8(self.size_x)?;
-        write.write_u8(self.size_y)?;
-        write.write_u8(self.size_z)?;
+        write.write_i8(self.size_x as i8)?;
+        write.write_i8(self.size_y as i8)?;
+        write.write_i8(self.size_z as i8)?;
         write.write_var_int(&self.mirror)?;
         write.write_var_int(&self.rotation)?;
         write.write_string(self.metadata)?;
         write.write_f32_be(self.integrity)?;
         write.write_var_long(&self.seed)?;
         write.write_u8(self.flags)?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ClientPacket;
+
+    #[test]
+    fn signed_size_and_strict_flag_follow_26_3() -> Result<(), Box<dyn std::error::Error>> {
+        let version = JavaMinecraftVersion::V_26_3;
+        let packet = SSetStructureBlock {
+            location: BlockPos::new(1, 2, 3),
+            action: VarInt(SSetStructureBlock::ACTION_UPDATE_DATA),
+            mode: VarInt(SSetStructureBlock::MODE_SAVE),
+            name: "minecraft:test",
+            offset_x: -100,
+            offset_y: 0,
+            offset_z: 0,
+            size_x: u8::MAX,
+            size_y: 1,
+            size_z: 2,
+            mirror: VarInt(0),
+            rotation: VarInt(0),
+            metadata: "",
+            integrity: 1.0,
+            seed: VarLong(0),
+            flags: SSetStructureBlock::FLAG_STRICT,
+        };
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version)?;
+        let decoded = SSetStructureBlock::read(&mut bytes.as_slice(), &version)?;
+        assert_eq!(decoded.offset_x, -48);
+        assert_eq!(decoded.size_x, 0);
+        assert!(decoded.strict());
         Ok(())
     }
 }

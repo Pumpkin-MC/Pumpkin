@@ -1,12 +1,16 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use pumpkin_data::translation::java;
 use pumpkin_gametest::{GameTestReporter, GameTestRetryOptions};
-use pumpkin_protocol::java::client::play::SuggestionProviders;
+use pumpkin_protocol::java::client::play::{CGameTestRelativePos, SuggestionProviders};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::{
+    TextComponent, click::ClickEvent, color::NamedColor, hover::HoverEvent,
+};
 use tracing::info;
 
 use crate::command::CommandSender;
@@ -15,6 +19,7 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -22,7 +27,11 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+use crate::block::entities::test_instance_block::TestInstanceBlockBlockEntity;
+use crate::entity::EntityBase;
 use crate::server::GameTestRunRequest;
+use crate::server::server_test_manager::test_instance_placement;
+use crate::world::POI_TYPE_TEST_INSTANCE;
 
 const DESCRIPTION: &str = "Runs a GameTest test instance.";
 const PERMISSION: &str = "minecraft:command.test";
@@ -32,16 +41,28 @@ const ARG_NUMBER_OF_TIMES: &str = "numberOfTimes";
 const ARG_UNTIL_FAILED: &str = "untilFailed";
 const ARG_ROTATION_STEPS: &str = "rotationSteps";
 const ARG_TESTS_PER_ROW: &str = "testsPerRow";
+const ARG_VAR: &str = "var";
 
 const TEST_POS_Z_OFFSET_FROM_PLAYER: i32 = 3;
 const TEST_GRID_SPACING: i32 = 64;
 const DEFAULT_TESTS_PER_ROW: i32 = 8;
+const TEST_NEARBY_SEARCH_RADIUS: i32 = 15;
+const TEST_FULL_SEARCH_RADIUS: i32 = 250;
+const TEST_POS_PICK_DISTANCE: f64 = 10.0;
 
 const TEST_INSTANCE_REGISTRY: Identifier = Identifier::parse_static("minecraft:test_instance");
 
 const TEST_NOT_FOUND_ERROR: CommandErrorType<2> = CommandErrorType::new(
     java::ARGUMENT_RESOURCE_SELECTOR_NOT_FOUND,
     java::ARGUMENT_RESOURCE_SELECTOR_NOT_FOUND,
+);
+const NO_TEST_CONTAINING_POS: CommandErrorType<3> = CommandErrorType::new(
+    java::COMMANDS_TEST_ERROR_NO_TEST_CONTAINING_POS,
+    java::COMMANDS_TEST_ERROR_NO_TEST_CONTAINING_POS,
+);
+const TEST_INSTANCE_NOT_FOUND: CommandErrorType<0> = CommandErrorType::new(
+    java::COMMANDS_TEST_ERROR_TEST_INSTANCE_NOT_FOUND,
+    java::COMMANDS_TEST_ERROR_TEST_INSTANCE_NOT_FOUND,
 );
 
 struct CommandTestReporter {
@@ -228,6 +249,120 @@ impl CommandExecutor for StopExecutor {
     }
 }
 
+struct PosExecutor;
+
+impl CommandExecutor for PosExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.player_or_err()?;
+        let var_name = if context.arguments.contains_key(ARG_VAR) {
+            StringArgumentType::get(context, ARG_VAR)?
+        } else {
+            "pos"
+        };
+        let world = context.world();
+        let start = player.get_eye_pos();
+        let direction = player.get_looking_vector();
+        let end = pumpkin_util::math::vector3::Vector3::new(
+            start.x + direction.x * TEST_POS_PICK_DISTANCE,
+            start.y + direction.y * TEST_POS_PICK_DISTANCE,
+            start.z + direction.z * TEST_POS_PICK_DISTANCE,
+        );
+        let target = world
+            .ray_trace_block(start, end, false)
+            .map_or_else(|| BlockPos::floored_v(end), |(position, _, _)| position);
+
+        let mut containing = None;
+        for radius in [TEST_NEARBY_SEARCH_RADIUS, TEST_FULL_SEARCH_RADIUS] {
+            let candidates = world
+                .portal_poi
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_in_square(target, radius, Some(POI_TYPE_TEST_INSTANCE));
+            containing = candidates.into_iter().find_map(|position| {
+                let placement = test_instance_placement(context.server(), world, position).ok()?;
+                let origin = placement.origin();
+                let size = placement.size();
+                let inside = target.0.x >= origin.0.x
+                    && target.0.x < origin.0.x + size[0]
+                    && target.0.y >= origin.0.y
+                    && target.0.y < origin.0.y + size[1]
+                    && target.0.z >= origin.0.z
+                    && target.0.z < origin.0.z + size[2];
+                inside.then_some((position, *origin))
+            });
+            if containing.is_some() {
+                break;
+            }
+        }
+
+        let Some((controller_pos, origin)) = containing else {
+            return Err(NO_TEST_CONTAINING_POS.create_without_context(
+                TextComponent::text(target.0.x.to_string()),
+                TextComponent::text(target.0.y.to_string()),
+                TextComponent::text(target.0.z.to_string()),
+            ));
+        };
+        let entity = world
+            .get_block_entity(&controller_pos)
+            .ok_or_else(|| TEST_INSTANCE_NOT_FOUND.create_without_context())?;
+        let controller = entity
+            .as_any()
+            .downcast_ref::<TestInstanceBlockBlockEntity>()
+            .ok_or_else(|| TEST_INSTANCE_NOT_FOUND.create_without_context())?;
+        let test_name = controller
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(|data| data.get_string("test"))
+            .map_or_else(
+                || TextComponent::translate_cross(
+                    "test_instance_block.invalid_test",
+                    "test_instance_block.invalid_test",
+                    [],
+                ),
+                |name| TextComponent::text(name.to_string()),
+            );
+        let relative = BlockPos::new(
+            target.0.x - origin.0.x,
+            target.0.y - origin.0.y,
+            target.0.z - origin.0.z,
+        );
+        let coords = TextComponent::translate_cross(
+            java::COMMANDS_TEST_COORDINATES,
+            java::COMMANDS_TEST_COORDINATES,
+            [
+                TextComponent::text(relative.0.x.to_string()),
+                TextComponent::text(relative.0.y.to_string()),
+                TextComponent::text(relative.0.z.to_string()),
+            ],
+        )
+        .bold()
+        .color_named(NamedColor::Green)
+        .hover_event(HoverEvent::show_text(TextComponent::translate_cross(
+            java::COMMANDS_TEST_COORDINATES_COPY,
+            java::COMMANDS_TEST_COORDINATES_COPY,
+            [],
+        )))
+        .click_event(ClickEvent::CopyToClipboard {
+            value: Cow::Owned(format!(
+                "final BlockPos {var_name} = new BlockPos({}, {}, {});",
+                relative.0.x, relative.0.y, relative.0.z
+            )),
+        });
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                java::COMMANDS_TEST_RELATIVE_POSITION,
+                java::COMMANDS_TEST_RELATIVE_POSITION,
+                [test_name, coords],
+            ),
+            false,
+        );
+        player.try_send_client_packet(&CGameTestRelativePos::new(target, relative));
+        Ok(1)
+    }
+}
+
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
@@ -258,6 +393,11 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         command("test", DESCRIPTION)
             .requires(PERMISSION)
             .then(literal("run").then(tests))
+            .then(
+                literal("pos").executes(PosExecutor).then(
+                    argument(ARG_VAR, StringArgumentType::SingleWord).executes(PosExecutor),
+                ),
+            )
             .then(literal("stop").executes(StopExecutor)),
     );
 }

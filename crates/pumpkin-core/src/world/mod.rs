@@ -200,6 +200,7 @@ use uuid::Uuid;
 use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
+pub(crate) const POI_TYPE_TEST_INSTANCE: &str = "minecraft:test_instance";
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
 pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
@@ -264,7 +265,7 @@ pub struct World {
     synced_block_event_queue: std::sync::Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
-    /// Persisted vanilla POI storage for portal and villager lookups.
+    /// Persisted vanilla POI storage for portals, test controllers, and other block POIs.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
     poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
@@ -379,7 +380,7 @@ impl World {
         // TODO
         let generation_settings = NoiseSettings::from_dimension(&dimension);
 
-        // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
+        // POI regions are loaded from disk when queried.
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let poi_chunk_receiver = level.chunk_listener.add_global_chunk_listener();
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
@@ -499,6 +500,7 @@ impl World {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut newly_active = Vec::new();
         let mut migrations = Vec::new();
+        let mut loaded_for_poi = FxHashSet::default();
         let mut current_players = FxHashSet::default();
 
         let spectators_generate_chunks =
@@ -536,6 +538,7 @@ impl World {
         );
 
         for pos in newly_active {
+            loaded_for_poi.insert(pos);
             if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
                 migrations.push(pos);
             }
@@ -543,6 +546,7 @@ impl World {
         for change in self.level.loaded_chunk_changes() {
             match change {
                 pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                    loaded_for_poi.insert(pos);
                     if active_chunks.contains(&pos)
                         && self.level.is_chunk_loaded(&pos)
                         && tracker.loaded_active_chunks.insert(pos)
@@ -569,6 +573,9 @@ impl World {
         let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
         drop(active_chunks);
         drop(tracker);
+        for pos in loaded_for_poi {
+            self.index_test_instance_pois(pos);
+        }
         for pos in migrations {
             self.migrate_pending_block_entities(pos);
         }
@@ -721,14 +728,14 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        // Save portal POI to disk
+        // Save block POIs to disk.
         let save_result = self
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .save_all();
         if let Err(e) = save_result {
-            error!("Failed to save portal POI: {e}");
+            error!("Failed to save POI: {e}");
         }
 
         self.level.shutdown().await;
@@ -6962,6 +6969,37 @@ impl World {
             self.level.read_chunk_sync(&chunk_pos, |chunk| {
                 chunk.mark_dirty(true);
             });
+        }
+    }
+
+    fn index_test_instance_pois(&self, chunk_pos: Vector2<i32>) {
+        let positions = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .filter_map(|(pos, nbt)| {
+                        (nbt.get_string("id")
+                            == Some(
+                                crate::block::entities::test_instance_block::TestInstanceBlockBlockEntity::ID,
+                            ))
+                        .then_some(*pos)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if positions.is_empty() {
+            return;
+        }
+        let mut poi = self
+            .portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for pos in positions {
+            poi.add_poi(pos, PoiType::TestInstance);
         }
     }
 

@@ -201,7 +201,7 @@ impl GameTestStructureTemplate {
     }
 
     #[must_use]
-    pub(crate) fn entities(&self) -> &[GameTestStructureEntity] {
+    pub fn entities(&self) -> &[GameTestStructureEntity] {
         &self.entities
     }
 

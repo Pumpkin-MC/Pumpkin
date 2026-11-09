@@ -61,6 +61,7 @@ pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod server_test_manager;
+pub mod structure_editor;
 pub mod tick_rate_manager;
 pub mod ticker;
 

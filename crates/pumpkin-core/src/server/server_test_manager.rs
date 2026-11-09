@@ -7,7 +7,7 @@ use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_gametest::{
     BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
     GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
-    TestType,
+    TestStructureInstance, TestType,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
@@ -410,6 +410,70 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     }
 }
 
+pub fn test_instance_placement(
+    server: &Arc<Server>,
+    world: &Arc<World>,
+    position: BlockPos,
+) -> GameTestResult<TestStructureInstance> {
+    let entity = world.get_block_entity(&position).ok_or_else(|| {
+        GameTestError::World(format!("Missing test instance block entity at {position}"))
+    })?;
+    let entity = Arc::downcast::<TestInstanceBlockBlockEntity>(entity).map_err(|_| {
+        GameTestError::World(format!(
+            "Block entity at {position} is not a test instance block"
+        ))
+    })?;
+    let data = entity
+        .data
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let data = data
+        .as_ref()
+        .ok_or_else(|| GameTestError::World(format!("Test instance at {position} has no data")))?;
+    let size: [i32; 3] = data
+        .get_int_array("size")
+        .and_then(|size| size.try_into().ok())
+        .ok_or_else(|| GameTestError::World(format!("Test instance at {position} has no size")))?;
+    if size.iter().any(|&axis| !(0..=256).contains(&axis)) {
+        return Err(GameTestError::World(format!(
+            "Test instance at {position} has invalid size"
+        )));
+    }
+    let definition = data
+        .get_string("test")
+        .and_then(|test| server.datapack_manager.get_test_instance(test));
+    let padding = definition.as_ref().map_or(0, |test| test.padding);
+    let base_rotation = definition
+        .as_ref()
+        .map_or(GameTestRotation::None, |test| test.rotation);
+    let controller_rotation = match data.get_string("rotation") {
+        Some("clockwise_90") => GameTestRotation::Clockwise90,
+        Some("180") => GameTestRotation::Clockwise180,
+        Some("counterclockwise_90") => GameTestRotation::Counterclockwise90,
+        _ => GameTestRotation::None,
+    };
+    let rotation = base_rotation.then(controller_rotation);
+    let rotated_size =
+        rotation
+            .as_block_rotation()
+            .transform_size(pumpkin_util::math::vector3::Vector3::new(
+                size[0], size[1], size[2],
+            ));
+    let origin = BlockPos::new(
+        position.0.x + padding,
+        position.0.y + padding + 1,
+        position.0.z + padding + 1,
+    );
+    let placement = TestStructureInstance::new(
+        position,
+        origin,
+        size,
+        [rotated_size.x, rotated_size.y, rotated_size.z],
+        rotation,
+    );
+    Ok(placement)
+}
+
 pub async fn prepare_test_run(
     server: &Arc<Server>,
     request: GameTestQueueEntry,
@@ -494,13 +558,20 @@ pub async fn prepare_test_run_with_reporter(
     ))
 }
 
-struct ServerGameTestWorld {
+pub(crate) struct ServerGameTestWorld {
     world: Arc<World>,
     /// Chunks leased by this test across copy-reset retries.
     forced_chunks: StdMutex<HashSet<(i32, i32)>>,
 }
 
 impl ServerGameTestWorld {
+    pub(crate) fn new(world: Arc<World>) -> Self {
+        Self {
+            world,
+            forced_chunks: StdMutex::new(HashSet::new()),
+        }
+    }
+
     fn test_block_entity(&self, position: &BlockPos) -> GameTestResult<Arc<TestBlockBlockEntity>> {
         let entity = self.world.get_block_entity(position).ok_or_else(|| {
             GameTestError::World(format!("Missing test block entity at {position}"))
