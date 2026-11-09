@@ -568,7 +568,11 @@ mod argument_type_id_tests {
         let parser = ArgumentType::ResourceSelector {
             identifier: Identifier::parse_static("minecraft:test_instance"),
         };
-        assert!(parser.write_to_buffer(&mut bytes, &JavaMinecraftVersion::V_26_3).is_ok());
+        assert!(
+            parser
+                .write_to_buffer(&mut bytes, &JavaMinecraftVersion::V_26_3)
+                .is_ok()
+        );
         let mut expected = vec![48, 23];
         expected.extend_from_slice(b"minecraft:test_instance");
         assert_eq!(bytes, expected);

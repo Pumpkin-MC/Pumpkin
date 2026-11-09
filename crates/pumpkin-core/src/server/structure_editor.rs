@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::{Block, BlockState, BlockStateId};
-use pumpkin_gametest::{GameTestResult, GameTestRotation, GameTestStructureTemplate, GameTestWorld};
+use pumpkin_gametest::{
+    GameTestResult, GameTestRotation, GameTestStructureTemplate, GameTestWorld,
+};
 use pumpkin_nbt::{NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -16,8 +18,16 @@ use crate::server::server_test_manager::ServerGameTestWorld;
 use crate::world::World;
 
 fn transform_block(pos: Vector3<i32>, mirror: Mirror, rotation: Rotation) -> Vector3<i32> {
-    let x = if mirror == Mirror::FrontBack { -pos.x } else { pos.x };
-    let z = if mirror == Mirror::LeftRight { -pos.z } else { pos.z };
+    let x = if mirror == Mirror::FrontBack {
+        -pos.x
+    } else {
+        pos.x
+    };
+    let z = if mirror == Mirror::LeftRight {
+        -pos.z
+    } else {
+        pos.z
+    };
     match rotation {
         Rotation::None => Vector3::new(x, pos.y, z),
         Rotation::Clockwise90 => Vector3::new(-z, pos.y, x),
@@ -27,8 +37,16 @@ fn transform_block(pos: Vector3<i32>, mirror: Mirror, rotation: Rotation) -> Vec
 }
 
 fn transform_entity(pos: Vector3<f64>, mirror: Mirror, rotation: Rotation) -> Vector3<f64> {
-    let x = if mirror == Mirror::FrontBack { 1.0 - pos.x } else { pos.x };
-    let z = if mirror == Mirror::LeftRight { 1.0 - pos.z } else { pos.z };
+    let x = if mirror == Mirror::FrontBack {
+        1.0 - pos.x
+    } else {
+        pos.x
+    };
+    let z = if mirror == Mirror::LeftRight {
+        1.0 - pos.z
+    } else {
+        pos.z
+    };
     match rotation {
         Rotation::None => Vector3::new(x, pos.y, z),
         Rotation::Clockwise90 => Vector3::new(1.0 - z, pos.y, x),
@@ -86,7 +104,10 @@ pub async fn place_editor_structure(
             origin.0.z + relative.z,
         );
         let (block_type, _) = BlockState::from_id_with_block(block.state);
-        let mirrored = world.block_registry.mirror(block_type, block.state, mirror).id;
+        let mirrored = world
+            .block_registry
+            .mirror(block_type, block.state, mirror)
+            .id;
         let state = adapter.rotate_block_state(mirrored, rotation).await?;
         adapter.set_block_state(&position, state, flags).await?;
         if let Some(nbt) = &block.nbt {
@@ -137,10 +158,7 @@ pub async fn place_editor_structure(
                 .first()
                 .and_then(NbtTag::extract_float)
                 .unwrap_or(0.0);
-            let pitch = angles
-                .get(1)
-                .and_then(NbtTag::extract_float)
-                .unwrap_or(0.0);
+            let pitch = angles.get(1).and_then(NbtTag::extract_float).unwrap_or(0.0);
             let angle = pumpkin_util::math::wrap_degrees(yaw);
             let mirrored = match mirror {
                 Mirror::None => angle,

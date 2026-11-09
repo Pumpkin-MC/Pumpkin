@@ -66,9 +66,7 @@ fn build_resource(
         entries.sort_by_key(|e| e.file_name());
 
         for entry in entries {
-            packs.push(EmbeddedPack {
-                path: entry.path(),
-            });
+            packs.push(EmbeddedPack { path: entry.path() });
         }
     }
 

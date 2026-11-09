@@ -219,8 +219,7 @@ impl JavaClient {
                     .load_structure(&name)
                     .await
                     .and_then(|nbt| {
-                        GameTestStructureTemplate::from_nbt(&nbt)
-                            .map_err(|error| error.to_string())
+                        GameTestStructureTemplate::from_nbt(&nbt).map_err(|error| error.to_string())
                     });
                 if !world
                     .get_block_entity(&location)
@@ -230,9 +229,8 @@ impl JavaClient {
                 }
                 let key = match template {
                     Ok(template) if mode_name == "LOAD" && template.size() != saved_size => {
-                        if let Some(structure) = entity
-                            .as_any()
-                            .downcast_ref::<StructureBlockBlockEntity>()
+                        if let Some(structure) =
+                            entity.as_any().downcast_ref::<StructureBlockBlockEntity>()
                         {
                             let [x, y, z] = template.size();
                             *structure

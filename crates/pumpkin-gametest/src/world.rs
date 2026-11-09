@@ -16,7 +16,10 @@ pub trait GameTestWorld: Send + Sync {
         std::ptr::from_ref(self).cast::<()>() as usize
     }
 
-    fn activate_test_environment(&self, environment: &Value) -> GameTestResult<Box<dyn Any + Send>> {
+    fn activate_test_environment(
+        &self,
+        environment: &Value,
+    ) -> GameTestResult<Box<dyn Any + Send>> {
         if environment.as_str() == Some("minecraft:default") {
             Ok(Box::new(()))
         } else {

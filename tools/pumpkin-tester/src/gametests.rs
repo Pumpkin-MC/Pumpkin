@@ -11,7 +11,11 @@ use pumpkin_core::{
     },
     world::{BlockFlags, World},
 };
-use pumpkin_data::{Block, dimension::Dimension, game_rules::{GameRule, GameRuleValue}};
+use pumpkin_data::{
+    Block,
+    dimension::Dimension,
+    game_rules::{GameRule, GameRuleValue},
+};
 use pumpkin_gametest::{GameTestReporter, GameTestRunner};
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -147,13 +151,27 @@ pub async fn run_gametests(
     let passed = report.all_required_passed();
     if finished && passed {
         check_test_environment(
-            server, runner, &world, report_sink.clone(),
-            "pumpkin:inline_environment", 6000, false, 7,
-        ).await?;
+            server,
+            runner,
+            &world,
+            report_sink.clone(),
+            "pumpkin:inline_environment",
+            6000,
+            false,
+            7,
+        )
+        .await?;
         check_test_environment(
-            server, runner, &world, report_sink.clone(),
-            "pumpkin:referenced_environment", 18000, true, 11,
-        ).await?;
+            server,
+            runner,
+            &world,
+            report_sink.clone(),
+            "pumpkin:referenced_environment",
+            18000,
+            true,
+            11,
+        )
+        .await?;
     }
     let messages = reporter.snapshot();
     for msg in &messages {
@@ -191,10 +209,17 @@ async fn check_test_environment(
 ) -> Result<(), String> {
     let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 1));
     let entry = GameTestQueueEntry::new(
-        id, world.clone(), TEST_BASE_X, TEST_BASE_Z, 0,
-        GameTestRetryOptions::no_retries(), report.clone(),
-    ).with_y(TEST_BASE_Y);
-    let run = prepare_test_run_with_reporter(server, entry, reporter).await
+        id,
+        world.clone(),
+        TEST_BASE_X,
+        TEST_BASE_Z,
+        0,
+        GameTestRetryOptions::no_retries(),
+        report.clone(),
+    )
+    .with_y(TEST_BASE_Y);
+    let run = prepare_test_run_with_reporter(server, entry, reporter)
+        .await
         .map_err(|error| format!("Failed to prepare GameTest '{id}': {error}"))?;
     runner.enqueue(run);
 
@@ -210,7 +235,11 @@ async fn check_test_environment(
         world.get_game_rule(&GameRule::RandomTickSpeed),
     ) {
         (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
-        _ => return Err(format!("Test environment '{id}' used invalid game rule types")),
+        _ => {
+            return Err(format!(
+                "Test environment '{id}' used invalid game rule types"
+            ));
+        }
     };
     let active_settings_match = world.get_time_of_day() == expected_time
         && world.is_raining()
@@ -219,14 +248,18 @@ async fn check_test_environment(
         && active_speed == expected_speed;
 
     for _ in 0..20 {
-        if runner.is_empty() { break; }
+        if runner.is_empty() {
+            break;
+        }
         server.tick();
         if world.get_time_of_day() != expected_time
             || !world.is_raining()
             || world.is_thundering() != expected_thunder
         {
             runner.cancel_and_clear().await;
-            return Err(format!("Test environment '{id}' changed while its test was running"));
+            return Err(format!(
+                "Test environment '{id}' changed while its test was running"
+            ));
         }
         runner.tick().await;
     }
@@ -235,7 +268,11 @@ async fn check_test_environment(
         world.get_game_rule(&GameRule::RandomTickSpeed),
     ) {
         (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
-        _ => return Err(format!("Test environment '{id}' used invalid game rule types")),
+        _ => {
+            return Err(format!(
+                "Test environment '{id}' used invalid game rule types"
+            ));
+        }
     };
     if !runner.is_empty() {
         runner.cancel_and_clear().await;
@@ -245,7 +282,9 @@ async fn check_test_environment(
         return Err(format!("Test environment GameTest '{id}' failed"));
     }
     if !active_settings_match {
-        return Err(format!("Test environment '{id}' did not apply world settings"));
+        return Err(format!(
+            "Test environment '{id}' did not apply world settings"
+        ));
     }
     if world.get_time_of_day() != previous_time
         || world.is_raining() != previous_rain
@@ -253,7 +292,9 @@ async fn check_test_environment(
         || advance_time.to_string() != previous_advance
         || speed.to_string() != previous_speed
     {
-        return Err(format!("Test environment '{id}' did not restore world settings"));
+        return Err(format!(
+            "Test environment '{id}' did not restore world settings"
+        ));
     }
     Ok(())
 }

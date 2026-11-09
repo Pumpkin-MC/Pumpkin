@@ -159,14 +159,12 @@ async fn run_tests(server: &Arc<Server>, options: &GameTestOptions) -> Result<()
         .get_test_instance_names()
         .into_iter()
         .filter(|name| {
-            options
-                .tests
-                .as_deref()
-                .is_none_or(|selector| selector.is_empty() || resource_selector_matches(selector, name))
-                && server
-                    .datapack_manager
-                    .get_test_instance(name)
-                    .is_some_and(|test| !test.manual_only)
+            options.tests.as_deref().is_none_or(|selector| {
+                selector.is_empty() || resource_selector_matches(selector, name)
+            }) && server
+                .datapack_manager
+                .get_test_instance(name)
+                .is_some_and(|test| !test.manual_only)
         })
         .collect();
     if names.is_empty() {
