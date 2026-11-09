@@ -172,7 +172,13 @@ impl ScreenHandler for StonecutterScreenHandler {
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
-        self.output_inventory.remove_stack(0);
+        // With the input consumed the output is what is left of a shift-click that did not fit,
+        // so it goes to the player. With an input left it is only a preview.
+        if self.input_inventory.get_stack(0).is_empty() {
+            self.drop_inventory(player, self.output_inventory.clone());
+        } else {
+            self.output_inventory.remove_stack(0);
+        }
         self.drop_inventory(player, self.input_inventory.clone());
     }
 

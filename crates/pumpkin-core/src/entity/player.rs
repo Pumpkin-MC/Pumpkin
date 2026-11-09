@@ -698,6 +698,7 @@ pub struct Player {
     pub held_chunk_tickets: Mutex<Option<HeldChunkTickets>>,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
+    closing_screen: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
@@ -1041,6 +1042,7 @@ impl Player {
             last_food_saturation: AtomicBool::new(true),
             subscribed_debug_sample: AtomicBool::new(false),
             has_played_before: AtomicBool::new(false),
+            closing_screen: AtomicBool::new(false),
             root_vehicle_uuid: AtomicCell::new(None),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -6322,15 +6324,17 @@ impl Player {
     /// Vanilla `ServerPlayer.openMenu`: a screen other than the player's own is closed before
     /// another one replaces it, so its `on_closed` returns the items inside.
     fn close_open_screen_handler(&self) {
-        if !self
+        // An `InventoryCloseEvent` handler that opens a screen would close this one again.
+        if self.closing_screen.load(Ordering::Relaxed) {
+            return;
+        }
+        let current: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
+            .clone();
+        let own: Arc<std::sync::Mutex<dyn ScreenHandler>> = self.player_screen_handler.clone();
+        if !Arc::ptr_eq(&current, &own) {
             self.close_handled_screen();
         }
     }
@@ -6371,6 +6375,7 @@ impl Player {
     }
 
     pub fn on_handled_screen_closed(&self) {
+        self.closing_screen.store(true, Ordering::Relaxed);
         let current_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
@@ -6416,6 +6421,7 @@ impl Player {
             self.player_screen_handler.clone();
         self.open_container_pos.store(None);
         self.bedrock_mount_screen.store(None);
+        self.closing_screen.store(false, Ordering::Relaxed);
     }
 
     pub fn on_screen_handler_opened<T: ScreenHandler + ?Sized>(

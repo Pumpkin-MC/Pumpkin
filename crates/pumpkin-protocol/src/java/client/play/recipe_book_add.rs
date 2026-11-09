@@ -1067,6 +1067,66 @@ mod tests {
     }
 
     #[test]
+    fn stonecutter_recipes_list_dynamic_entries_after_vanilla_ones_in_order() {
+        use crate::codec::recipe::{
+            OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,
+        };
+
+        let recipe = |ingredient: &str, result: &str, count: u8| {
+            DynamicRecipe::Stonecutting(OwnedStonecutterRecipe {
+                recipe_id: format!("test:{result}"),
+                group: None,
+                ingredient: OwnedRecipeIngredient::Simple(ingredient.to_string()),
+                result: OwnedRecipeResult {
+                    item_id: result.to_string(),
+                    count,
+                },
+            })
+        };
+        let recipes = [
+            recipe("minecraft:stone", "minecraft:dirt", 2),
+            recipe("dirt", "minecraft:stone", 3),
+        ];
+        let var = |value: i32| {
+            let mut bytes = Vec::new();
+            VarInt(value).encode(&mut bytes).unwrap();
+            bytes
+        };
+        // ingredient: a single item id (set size + 1 = 2), result: item stack display with
+        // item id, count and no component changes
+        let entry = |ingredient: &Item, result: &Item, count: i32| {
+            [
+                var(2),
+                var(ingredient.id as i32),
+                var(5),
+                var(result.id as i32),
+                var(count),
+                var(0),
+                var(0),
+            ]
+            .concat()
+        };
+        let expected = [
+            entry(&Item::STONE, &Item::DIRT, 2),
+            entry(&Item::DIRT, &Item::STONE, 3),
+        ]
+        .concat();
+
+        let version = JavaMinecraftVersion::V_26_3;
+        let data = stonecutter_update_recipes_data(&recipes, version).unwrap();
+        let vanilla = stonecutter_update_recipes_data(&[], version).unwrap();
+        let mut count_prefix = vec![0u8];
+        count_prefix.extend(var(RECIPES_STONECUTTING.len() as i32 + 2));
+        assert!(data.starts_with(&count_prefix));
+        assert!(data.ends_with(&expected));
+        assert_eq!(
+            data.len() - expected.len(),
+            vanilla.len(),
+            "the vanilla entries are written unchanged before the dynamic ones"
+        );
+    }
+
+    #[test]
     fn stonecutter_recipes_skip_tags_the_server_cannot_resolve() {
         use crate::codec::recipe::{
             OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,
