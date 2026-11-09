@@ -167,9 +167,9 @@ impl ScreenHandler for StonecutterScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if slot_index == 0 {
-            self.update_output();
-        }
+        // Vanilla recomputes the result whenever the input container changes, which any click can do
+        // (taking the result, a double click gathering the input).
+        self.update_output();
     }
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
