@@ -118,6 +118,25 @@ impl GameTestBatchReport {
         );
     }
 
+    /// Records a queued test that was cancelled before it started.
+    pub fn cancel_before_start(&self, id: &str, required: bool) {
+        let error = GameTestError::World("GameTest cancelled".to_string());
+        self.reporter
+            .send_message(TextComponent::text(error.to_string()).color_named(NamedColor::Red));
+        self.finish_test(
+            GameTestOutcome {
+                id: id.to_string(),
+                required,
+                status: GameTestOutcomeStatus::Cancelled,
+                attempts: 0,
+                successes: 0,
+                error: Some(error),
+            },
+            1,
+            0,
+        );
+    }
+
     #[must_use]
     pub fn remaining_tests(&self) -> usize {
         self.remaining_tests.load(Ordering::Acquire)
@@ -420,6 +439,29 @@ impl GameTestManager {
         self.rerun_scheduled = false;
     }
 
+    fn cancel(&mut self) {
+        if self.done {
+            return;
+        }
+        self.sink.send_message(
+            TextComponent::text(format!("{} cancelled", self.run.test.id()))
+                .color_named(NamedColor::Yellow),
+        );
+        self.report.finish_test(
+            GameTestOutcome {
+                id: self.run.test.id().to_string(),
+                required: self.run.test.is_required(),
+                status: GameTestOutcomeStatus::Cancelled,
+                attempts: self.attempts,
+                successes: self.successes,
+                error: Some(GameTestError::World("GameTest cancelled".to_string())),
+            },
+            self.attempts.saturating_add(1),
+            self.successes,
+        );
+        self.done = true;
+    }
+
     fn report_failure(&self, error_message: Option<&str>) {
         let optional = if self.run.test.is_required() {
             ""
@@ -483,6 +525,18 @@ impl GameTestRunner {
 
     pub fn clear(&mut self) {
         self.active.clear();
+    }
+
+    pub async fn cancel_and_clear(&mut self) -> Vec<GameTestError> {
+        let mut errors = Vec::new();
+        for managed in &mut self.active {
+            if let Err(error) = managed.run.clear_placement().await {
+                errors.push(error);
+            }
+            managed.cancel();
+        }
+        self.clear();
+        errors
     }
 
     #[must_use]

@@ -261,35 +261,43 @@ pub fn enqueue_game_test(request: GameTestQueueEntry) {
 }
 
 pub fn stop_game_tests(server: &Server) {
-    // Keep the queue mutex held while publishing the stop request. drain_game_test_queue
-    // takes the same mutex before consuming the stop flag, so a stop+new-run command
-    // cannot race between the runner-clear and queue-drain phases.
     let mut queue = server
         .game_test_state
         .queue
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    queue.clear();
+    let queued = std::mem::take(&mut *queue);
     server.game_test_state.pending.store(0, Ordering::Release);
     server.game_test_state.stop.store(true, Ordering::Release);
+    drop(queue);
+
+    for request in queued {
+        request
+            .report
+            .cancel_before_start(&request.test_id, request.required);
+    }
 }
 
 pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRunner) {
     // Hold the same queue mutex used by stop_game_tests while consuming the stop
     // flag and draining requests. This closes the async race where a new /test run
     // could otherwise be drained before the old runner was cleared.
-    let queued = {
+    let (stopped, queued) = {
         let mut queue = server
             .game_test_state
             .queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if server.game_test_state.stop.swap(false, Ordering::AcqRel) {
-            runner.clear();
-        }
+        let stopped = server.game_test_state.stop.swap(false, Ordering::AcqRel);
         server.game_test_state.pending.store(0, Ordering::Release);
-        std::mem::take(&mut *queue)
+        (stopped, std::mem::take(&mut *queue))
     };
+
+    if stopped {
+        for error in runner.cancel_and_clear().await {
+            warn!(target: "pumpkin::gametest", %error, "Unable to clear cancelled GameTest structure");
+        }
+    }
 
     for request in queued {
         let test_id = request.test_id.clone();

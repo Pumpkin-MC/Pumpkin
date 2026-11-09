@@ -425,6 +425,38 @@ pub async fn clear_structure_area(
     clear_box(world, origin, size).await
 }
 
+/// Clears a placed test structure, its controller, and its barrier shell.
+pub async fn clear_placed_test(
+    world: &dyn GameTestWorld,
+    placement: &TestStructureInstance,
+    padding: i32,
+) -> GameTestResult<()> {
+    let origin = placement.origin();
+    let size = placement.size();
+    let min = BlockPos::new(
+        origin.0.x - padding,
+        origin.0.y - padding,
+        origin.0.z - padding,
+    );
+    let max = BlockPos::new(
+        origin.0.x + size[0] + padding,
+        origin.0.y + size[1] + padding,
+        origin.0.z + size[2] + padding,
+    );
+    world.clear_non_player_entities(&min, &max).await?;
+    clear_test_area(world, origin, size, padding).await?;
+    world.clear_scheduled_block_ticks(&min, &max).await?;
+    world.clear_block_events(&min, &max).await?;
+    remove_barriers(world, placement, false).await?;
+    world
+        .set_block_state(
+            placement.test_instance_pos(),
+            Block::AIR.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await
+}
+
 async fn clear_test_area(
     world: &dyn GameTestWorld,
     origin: &BlockPos,
