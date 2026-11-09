@@ -6319,6 +6319,22 @@ impl Player {
             .store(current_id % 100 + 1, Ordering::Relaxed);
     }
 
+    /// Vanilla `ServerPlayer.openMenu`: a screen other than the player's own is closed before
+    /// another one replaces it, so its `on_closed` returns the items inside.
+    fn close_open_screen_handler(&self) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen();
+        }
+    }
+
     pub fn close_handled_screen(&self) {
         let (sync_id, bedrock_window_type) = {
             let current_handler_guard = self
@@ -6451,17 +6467,7 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
-        }
+        self.close_open_screen_handler();
 
         let server = self.world().server.upgrade();
         if let Some(server) = server
@@ -6477,6 +6483,9 @@ impl Player {
             }
         }
 
+        // A plugin handler of the event above can let another screen (a stonecutter, a chest, ...)
+        // open in the meantime, and it must not be replaced without being closed.
+        self.close_open_screen_handler();
         self.increment_screen_handler_sync_id();
 
         if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
@@ -6573,17 +6582,7 @@ impl Player {
         bedrock_slots: NbtCompound,
         create_handler: impl FnOnce(u8, &Arc<PlayerInventory>) -> SharedScreenHandler,
     ) -> bool {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
-        }
+        self.close_open_screen_handler();
 
         let world = self.world();
         if let Some(server) = world.server.upgrade()
@@ -6636,17 +6635,7 @@ impl Player {
         screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>>,
         title: &TextComponent,
     ) {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
-        }
+        self.close_open_screen_handler();
 
         let screen_handler_temp = screen_handler
             .lock()
