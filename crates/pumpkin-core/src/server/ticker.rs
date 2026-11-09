@@ -1,12 +1,9 @@
-use super::server_test_manager::{drain_game_test_queue, has_pending_game_tests};
-
 use crate::{
     plugin::server::{
         server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
     },
     server::Server,
 };
-use pumpkin_gametest::GameTestRunner;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -50,7 +47,7 @@ impl Ticker {
         // Single monotonic base, the schedule is plain nanosecond arithmetic.
         let base = Instant::now();
         let mut schedule = TickSchedule::new();
-        let mut game_test_runner = GameTestRunner::new();
+        server.game_test_driver.set_ticker_running(true);
 
         let park_thread = std::thread::current();
         let stop = server.stop_token.clone();
@@ -94,8 +91,8 @@ impl Ticker {
                     .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
             }
 
-            let should_tick_game_tests = (manager.runs_normally() || sprinting)
-                && (has_pending_game_tests(server) || !game_test_runner.is_empty());
+            let should_tick_game_tests =
+                (manager.runs_normally() || sprinting) && server.game_test_driver.has_work(server);
 
             if sprinting {
                 manager.start_sprint_tick_work();
@@ -109,10 +106,9 @@ impl Ticker {
             }
 
             if should_tick_game_tests {
-                server.runtime.block_on(async {
-                    drain_game_test_queue(server, &mut game_test_runner).await;
-                    game_test_runner.tick().await;
-                });
+                server
+                    .runtime
+                    .block_on(server.game_test_driver.tick(server));
             }
 
             let tick_duration_nanos = elapsed_nanos(base) - tick_start_nanos;
@@ -138,6 +134,7 @@ impl Ticker {
             }
         }
 
+        server.game_test_driver.set_ticker_running(false);
         debug!("Ticker stopped");
     }
 }

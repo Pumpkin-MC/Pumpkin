@@ -14,6 +14,7 @@ use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
+use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::{
@@ -32,13 +33,40 @@ pub(crate) struct GameTestServerState {
     pending: AtomicUsize,
 }
 
+#[derive(Default)]
+pub(crate) struct GameTestDriver {
+    runner: Mutex<GameTestRunner>,
+    ticker_running: AtomicBool,
+}
+
+impl GameTestDriver {
+    pub(crate) fn set_ticker_running(&self, running: bool) {
+        self.ticker_running.store(running, Ordering::Release);
+    }
+
+    pub(crate) fn has_work(&self, server: &Server) -> bool {
+        has_pending_game_tests(server)
+            || self
+                .runner
+                .try_lock()
+                .map_or(true, |runner| !runner.is_empty())
+    }
+
+    pub(crate) async fn tick(&self, server: &Arc<Server>) {
+        let mut runner = self.runner.lock().await;
+        drain_game_test_queue(server, &mut runner).await;
+        runner.tick().await;
+    }
+}
+
 #[must_use]
 pub fn has_pending_game_tests(server: &Server) -> bool {
     server.game_test_state.stop.load(Ordering::Acquire)
         || server.game_test_state.pending.load(Ordering::Acquire) > 0
 }
 
-pub struct GameTestQueueEntry {
+/// A request to run one registered `GameTest` in a server batch.
+pub struct GameTestRunRequest {
     test_id: String,
     world: Arc<World>,
     test_x: i32,
@@ -46,7 +74,110 @@ pub struct GameTestQueueEntry {
     test_z: i32,
     rotation_steps: i32,
     retry_options: GameTestRetryOptions,
+}
+
+impl GameTestRunRequest {
+    #[must_use]
+    pub fn new(
+        test_id: impl Into<String>,
+        world: Arc<World>,
+        test_x: i32,
+        test_z: i32,
+        rotation_steps: i32,
+        retry_options: GameTestRetryOptions,
+    ) -> Self {
+        Self {
+            test_id: test_id.into(),
+            world,
+            test_x,
+            test_y: None,
+            test_z,
+            rotation_steps,
+            retry_options,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_y(mut self, test_y: i32) -> Self {
+        self.test_y = Some(test_y);
+        self
+    }
+}
+
+pub struct GameTestQueueEntry {
+    test_id: String,
+    required: bool,
+    world: Arc<World>,
+    test_x: i32,
+    test_y: Option<i32>,
+    test_z: i32,
+    rotation_steps: i32,
+    retry_options: GameTestRetryOptions,
     report: Arc<GameTestBatchReport>,
+}
+
+impl Server {
+    /// Queues `GameTests` and returns a report with aggregate and individual results.
+    pub fn queue_game_test_batch(
+        self: &Arc<Self>,
+        requests: Vec<GameTestRunRequest>,
+        reporter: Arc<dyn GameTestReporter>,
+    ) -> Arc<GameTestBatchReport> {
+        let report = Arc::new(GameTestBatchReport::new(reporter, requests.len()));
+        for request in requests {
+            if !request
+                .world
+                .server
+                .upgrade()
+                .is_some_and(|owner| Arc::ptr_eq(self, &owner))
+            {
+                let error = GameTestError::World(
+                    "GameTest world is not attached to this server".to_string(),
+                );
+                report.fail_to_start(&request.test_id, &error, true);
+                continue;
+            }
+
+            let entry = GameTestQueueEntry::new(
+                request.test_id,
+                request.world,
+                request.test_x,
+                request.test_z,
+                request.rotation_steps,
+                request.retry_options,
+                report.clone(),
+            );
+            let entry = if let Some(test_y) = request.test_y {
+                entry.with_y(test_y)
+            } else {
+                entry
+            };
+            enqueue_game_test(entry);
+        }
+        report
+    }
+
+    /// Cancels queued `GameTests`; the next `GameTest` step clears active tests.
+    pub fn stop_game_tests(&self) {
+        stop_game_tests(self);
+    }
+
+    /// Advances `GameTests` after a manual server tick when the ticker is not running.
+    pub async fn step_game_tests(self: &Arc<Self>) -> GameTestResult<()> {
+        let mut runner = self.game_test_driver.runner.lock().await;
+        if self.game_test_driver.ticker_running.load(Ordering::Acquire) {
+            return Err(GameTestError::World(
+                "The server ticker owns GameTest ticking".to_string(),
+            ));
+        }
+        if (self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting())
+            && (has_pending_game_tests(self) || !runner.is_empty())
+        {
+            drain_game_test_queue(self, &mut runner).await;
+            runner.tick().await;
+        }
+        Ok(())
+    }
 }
 
 impl GameTestQueueEntry {
@@ -60,8 +191,20 @@ impl GameTestQueueEntry {
         retry_options: GameTestRetryOptions,
         report: Arc<GameTestBatchReport>,
     ) -> Self {
+        let test_id = test_id.into();
+        let required = world
+            .server
+            .upgrade()
+            .and_then(|server| server.datapack_manager.get_test_instance(&test_id))
+            .or_else(|| {
+                pumpkin_gametest::registered_test_definitions()
+                    .into_iter()
+                    .find_map(|(id, definition)| (id == test_id).then_some(definition))
+            })
+            .is_none_or(|definition| definition.required);
         Self {
-            test_id: test_id.into(),
+            test_id,
+            required,
             world,
             test_x,
             test_y: None,
@@ -99,9 +242,10 @@ impl GameTestReporter for GameTestWorldReporter {
 
 pub fn enqueue_game_test(request: GameTestQueueEntry) {
     let Some(server) = request.world.server.upgrade() else {
-        request.report.fail_to_start(&GameTestError::World(
-            "World is not attached to a running server".to_string(),
-        ));
+        let error = GameTestError::World("World is not attached to a running server".to_string());
+        request
+            .report
+            .fail_to_start(&request.test_id, &error, request.required);
         return;
     };
     let mut queue = server
@@ -150,6 +294,7 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     for request in queued {
         let test_id = request.test_id.clone();
         let report = request.report.clone();
+        let required = request.required;
         match prepare_test_run(server, request).await {
             Ok(run) => {
                 info!(target: "pumpkin::gametest", test = %test_id, "Starting queued GameTest");
@@ -162,7 +307,7 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
                     error = %error,
                     "Unable to start queued GameTest"
                 );
-                report.fail_to_start(&error);
+                report.fail_to_start(&test_id, &error, required);
             }
         }
     }

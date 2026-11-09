@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use pumpkin_data::translation::java;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -54,9 +54,29 @@ impl GameTestRetryOptions {
     }
 }
 
+/// Final status of one `GameTest` in a batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GameTestOutcomeStatus {
+    Passed,
+    Failed,
+    Cancelled,
+}
+
+/// Final result of one `GameTest`, with counts for executions that actually started.
+#[derive(Clone, Debug)]
+pub struct GameTestOutcome {
+    pub id: String,
+    pub required: bool,
+    pub status: GameTestOutcomeStatus,
+    pub attempts: u32,
+    pub successes: u32,
+    pub error: Option<GameTestError>,
+}
+
 /// Shared accounting and reporting for a group of `GameTests`.
 pub struct GameTestBatchReport {
     reporter: Arc<dyn GameTestReporter>,
+    outcomes: Mutex<Vec<GameTestOutcome>>,
     remaining_tests: AtomicUsize,
     total_runs: AtomicUsize,
     failed_required: AtomicUsize,
@@ -68,6 +88,7 @@ impl GameTestBatchReport {
     pub fn new(reporter: Arc<dyn GameTestReporter>, test_count: usize) -> Self {
         Self {
             reporter,
+            outcomes: Mutex::new(Vec::with_capacity(test_count)),
             remaining_tests: AtomicUsize::new(test_count),
             total_runs: AtomicUsize::new(0),
             failed_required: AtomicUsize::new(0),
@@ -80,10 +101,21 @@ impl GameTestBatchReport {
         &self.reporter
     }
 
-    pub fn fail_to_start(&self, error: &GameTestError) {
+    pub fn fail_to_start(&self, id: &str, error: &GameTestError, required: bool) {
         self.reporter
             .send_message(TextComponent::text(error.to_string()).color_named(NamedColor::Red));
-        self.finish_test(true, 1, 0);
+        self.finish_test(
+            GameTestOutcome {
+                id: id.to_string(),
+                required,
+                status: GameTestOutcomeStatus::Failed,
+                attempts: 0,
+                successes: 0,
+                error: Some(error.clone()),
+            },
+            1,
+            0,
+        );
     }
 
     #[must_use]
@@ -111,14 +143,28 @@ impl GameTestBatchReport {
         self.remaining_tests() == 0
     }
 
+    /// Returns a snapshot of the tests that have finished so far.
+    #[must_use]
+    pub fn outcomes(&self) -> Vec<GameTestOutcome> {
+        self.outcomes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     #[must_use]
     pub fn all_required_passed(&self) -> bool {
         self.is_done() && self.failed_required() == 0
     }
 
-    fn finish_test(&self, required: bool, attempts: u32, successes: u32) {
-        let attempts = usize::try_from(attempts).unwrap_or(usize::MAX);
-        let successes = usize::try_from(successes).unwrap_or(usize::MAX);
+    fn finish_test(&self, outcome: GameTestOutcome, counted_attempts: u32, counted_successes: u32) {
+        let attempts = usize::try_from(counted_attempts).unwrap_or(usize::MAX);
+        let successes = usize::try_from(counted_successes).unwrap_or(usize::MAX);
+        let required = outcome.required;
+        self.outcomes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(outcome);
         self.total_runs.fetch_add(attempts, Ordering::AcqRel);
         let failures = attempts.saturating_sub(successes);
         if failures != 0 {
@@ -183,6 +229,7 @@ pub struct GameTestManager {
     sink: Arc<dyn GameTestReporter>,
     attempts: u32,
     successes: u32,
+    last_error: Option<GameTestError>,
     rerun_scheduled: bool,
     done: bool,
 }
@@ -202,6 +249,7 @@ impl GameTestManager {
             sink,
             attempts: 0,
             successes: 0,
+            last_error: None,
             rerun_scheduled: false,
             done: false,
         }
@@ -214,6 +262,9 @@ impl GameTestManager {
             GameTestState::Failed { tick, error } => (false, *tick, Some(error)),
             _ => return,
         };
+        if let Some(error) = error {
+            self.last_error = Some(error.clone());
+        }
 
         self.attempts = self.attempts.saturating_add(1);
         if passed {
@@ -316,6 +367,7 @@ impl GameTestManager {
                     last_error,
                 };
                 let exhausted_message = exhausted.to_string();
+                self.last_error = Some(exhausted);
                 self.report_failure(Some(&exhausted_message));
                 false
             }
@@ -335,8 +387,24 @@ impl GameTestManager {
             self.successes
         };
 
+        let status = if effective_successes == self.attempts {
+            GameTestOutcomeStatus::Passed
+        } else {
+            GameTestOutcomeStatus::Failed
+        };
         self.report.finish_test(
-            self.run.test.is_required(),
+            GameTestOutcome {
+                id: self.run.test.id().to_string(),
+                required: self.run.test.is_required(),
+                status,
+                attempts: self.attempts,
+                successes: self.successes,
+                error: if status == GameTestOutcomeStatus::Failed {
+                    self.last_error.clone()
+                } else {
+                    None
+                },
+            },
             self.attempts,
             effective_successes,
         );
