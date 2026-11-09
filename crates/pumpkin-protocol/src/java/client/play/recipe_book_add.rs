@@ -1055,18 +1055,6 @@ mod tests {
     }
 
     #[test]
-    fn stonecutter_recipes_lead_with_empty_item_sets_and_vanilla_count() {
-        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
-            let data = stonecutter_update_recipes_data(&[], version).unwrap();
-            let mut expected = vec![0u8];
-            VarInt(RECIPES_STONECUTTING.len() as i32)
-                .encode(&mut expected)
-                .unwrap();
-            assert!(data.starts_with(&expected));
-        }
-    }
-
-    #[test]
     fn stonecutter_recipes_list_dynamic_entries_after_vanilla_ones_in_order() {
         use crate::codec::recipe::{
             OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,

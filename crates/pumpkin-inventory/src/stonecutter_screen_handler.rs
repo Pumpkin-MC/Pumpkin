@@ -6,9 +6,7 @@ use crate::crafting::recipe_provider::RecipeProvider;
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
 use crate::player::player_inventory::PlayerInventory;
-use crate::screen_handler::{
-    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, offer_or_drop_stack,
-};
+use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{NormalSlot, Slot};
 
 use pumpkin_data::item::Item;
@@ -212,7 +210,7 @@ impl ScreenHandler for StonecutterScreenHandler {
                     slot.on_take_item(player, &taken_stack);
                     // Vanilla drops what did not fit, so a paid result is not left in the slot.
                     if !slot_stack.is_empty() {
-                        offer_or_drop_stack(player, slot_stack.clone());
+                        player.drop_item(slot_stack.clone(), false);
                         slot.set_stack(ItemStack::EMPTY.clone());
                     }
                     self.update_output();

@@ -3972,8 +3972,8 @@ impl World {
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && java_client.version.load() >= JavaMinecraftVersion::V_1_21_2
         {
-            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
             if server.advanced_config.recipe.send_recipes {
+                let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
                 let settings_packet = CRecipeBookSettings::default_closed();
                 if let Ok(data) = java_client.serialize_packet(&settings_packet) {
                     java_client.send_packet_now(data).await;

@@ -6412,6 +6412,17 @@ impl Player {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
+        // An `InventoryCloseEvent` handler may have opened another screen, which stays open.
+        if !Arc::ptr_eq(
+            &*self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            &current_screen_handler,
+        ) {
+            return;
+        }
+
         let player_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> =
             self.player_screen_handler.clone();
 
