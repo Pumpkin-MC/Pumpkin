@@ -704,5 +704,8 @@ impl Mob for WitherEntity {
         if let Some(invul) = nbt.get_int("Invul") {
             self.set_invulnerable_ticks(invul);
         }
+        self.mob_entity
+            .persistence_required
+            .store(true, Ordering::Relaxed);
     }
 }
