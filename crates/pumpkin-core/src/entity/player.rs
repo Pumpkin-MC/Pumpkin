@@ -6598,6 +6598,8 @@ impl Player {
             }
         }
 
+        // Same as `open_handled_screen`: a screen opened by the event handler must be closed too.
+        self.close_open_screen_handler();
         self.increment_screen_handler_sync_id();
         let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
         let screen_handler = create_handler(sync_id, &self.inventory);

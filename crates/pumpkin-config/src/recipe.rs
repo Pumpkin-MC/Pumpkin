@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct RecipeConfig {
-    /// Whether recipes are sent to clients, enabling the recipe book.
+    /// Whether the recipe book packets are sent when a player joins. The stonecutter recipes are
+    /// always sent, because the stonecutter does not work without them.
     pub send_recipes: bool,
 }
 
