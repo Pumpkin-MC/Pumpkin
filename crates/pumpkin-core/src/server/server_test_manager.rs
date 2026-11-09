@@ -6,10 +6,9 @@ use async_trait::async_trait;
 use pumpkin_data::translation::java;
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_gametest::{
-    BlockBasedTest, GameTestError, GameTestManager, GameTestReporter,
-    GameTestResult, GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate,
-    GameTestWorld, TestStructureInstance, TestType, clear_placed_test,
-    place_existing_structure, remove_barriers,
+    BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
+    GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
+    TestStructureInstance, TestType, clear_placed_test, place_existing_structure, remove_barriers,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
@@ -523,7 +522,10 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
             }
         });
         let completed_verification = verification_result.and_then(|result| {
-            queue.preparing_verification.take().map(|preparing| (preparing, result))
+            queue
+                .preparing_verification
+                .take()
+                .map(|preparing| (preparing, result))
         });
         let verification_batch = if completed_verification.is_none()
             && queue.preparing_verification.is_none()
@@ -576,7 +578,14 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
             });
         }
         queue.update_pending_count(&server.game_test_state);
-        (stopped, generation, completed, clears, verification_batch, completed_verification)
+        (
+            stopped,
+            generation,
+            completed,
+            clears,
+            verification_batch,
+            completed_verification,
+        )
     };
 
     if stopped {

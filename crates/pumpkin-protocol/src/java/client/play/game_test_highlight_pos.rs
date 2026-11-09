@@ -99,10 +99,7 @@ mod tests {
         let packet = CGameTestRelativePos::new(BlockPos::new(1, 2, 3), BlockPos::new(4, 5, 6));
         let mut bytes = Vec::new();
         packet.write_packet_data(&mut bytes, &version)?;
-        assert_eq!(
-            bytes,
-            [0, 0, 0, 64, 0, 0, 48, 2, 0, 0, 1, 0, 0, 0, 96, 5]
-        );
+        assert_eq!(bytes, [0, 0, 0, 64, 0, 0, 48, 2, 0, 0, 1, 0, 0, 0, 96, 5]);
         let decoded = CGameTestRelativePos::read(&mut bytes.as_slice(), &version)?;
         assert_eq!(decoded.absolute_pos, packet.absolute_pos);
         assert_eq!(decoded.relative_pos, packet.relative_pos);

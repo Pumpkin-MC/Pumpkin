@@ -523,7 +523,10 @@ impl GameTestManager {
 pub struct GameTestRunner {
     active: Vec<GameTestManager>,
     pending: VecDeque<GameTestManager>,
-    environment: Option<(Arc<dyn crate::world::GameTestWorld>, Box<dyn std::any::Any + Send>)>,
+    environment: Option<(
+        Arc<dyn crate::world::GameTestWorld>,
+        Box<dyn std::any::Any + Send>,
+    )>,
     completed: Vec<GameTestSession>,
     collect_completed: bool,
     next_rerun_order: usize,
@@ -612,10 +615,12 @@ impl GameTestRunner {
                 match world.activate_test_environment(&environment) {
                     Ok(saved) => {
                         self.environment = Some((world, saved));
-                        while self.active.len() < MAX_TESTS_PER_BATCH && self.pending.front().is_some_and(|next| {
-                            next.run.environment() == &environment
-                                && next.run.environment_world_key() == world_key
-                        }) {
+                        while self.active.len() < MAX_TESTS_PER_BATCH
+                            && self.pending.front().is_some_and(|next| {
+                                next.run.environment() == &environment
+                                    && next.run.environment_world_key() == world_key
+                            })
+                        {
                             if let Some(next) = self.pending.pop_front() {
                                 self.active.push(next);
                             }
@@ -623,7 +628,11 @@ impl GameTestRunner {
                     }
                     Err(error) => {
                         if let Some(mut failed) = self.pending.pop_front() {
-                            failed.report.fail_to_start(failed.run.test.id(), &error, failed.run.test.is_required());
+                            failed.report.fail_to_start(
+                                failed.run.test.id(),
+                                &error,
+                                failed.run.test.is_required(),
+                            );
                             failed.done = true;
                         }
                     }

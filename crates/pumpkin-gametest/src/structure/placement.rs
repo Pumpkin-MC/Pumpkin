@@ -233,7 +233,9 @@ pub async fn place_existing_structure(
         origin.0.z + size[2] + padding,
     );
     clear_test_area(world, origin, size, padding).await?;
-    world.clear_non_player_entities(&test_min, &test_max).await?;
+    world
+        .clear_non_player_entities(&test_min, &test_max)
+        .await?;
 
     // StructureTemplate.placeInWorld rotates both relative positions and block
     // states before loading block-entity NBT at the transformed absolute position.
@@ -373,11 +375,7 @@ pub async fn remove_barriers(
     process_structure_boundary(placement, sky_access, |position| async move {
         if world.block_state_id(&position).await == Block::BARRIER.default_state.id {
             world
-                .set_block_state(
-                    &position,
-                    Block::AIR.default_state.id,
-                    clear_flags(),
-                )
+                .set_block_state(&position, Block::AIR.default_state.id, clear_flags())
                 .await?;
         }
         Ok(())

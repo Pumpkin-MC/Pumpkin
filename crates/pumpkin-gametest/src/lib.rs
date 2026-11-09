@@ -24,10 +24,9 @@ pub use runner::{GameTestSession, GameTestState, TestRunner};
 pub use selector::resource_selector_matches;
 pub use structure::{
     GameTestPosition, GameTestStructureBlock, GameTestStructureEntity, GameTestStructureTemplate,
-    TestBlockMode,
-    TestStructureInstance, clear_placed_test, clear_structure_area, encase_structure,
-    place_existing_structure, place_structure, place_structure_with_controller_rotation,
-    remove_barriers,
+    TestBlockMode, TestStructureInstance, clear_placed_test, clear_structure_area,
+    encase_structure, place_existing_structure, place_structure,
+    place_structure_with_controller_rotation, remove_barriers,
 };
 pub use world::GameTestWorld;
 

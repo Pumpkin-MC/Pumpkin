@@ -102,12 +102,14 @@ impl JavaClient {
                 .test
                 .and_then(|id| server.datapack_manager.get_test_instance(id));
             let status = test.as_ref().map_or_else(
-                || TextComponent::translate_cross(
-                    pumpkin_data::translation::java::TEST_INSTANCE_DESCRIPTION_NO_TEST,
-                    pumpkin_data::translation::java::TEST_INSTANCE_DESCRIPTION_NO_TEST,
-                    [],
-                )
-                .color_named(NamedColor::Red),
+                || {
+                    TextComponent::translate_cross(
+                        pumpkin_data::translation::java::TEST_INSTANCE_DESCRIPTION_NO_TEST,
+                        pumpkin_data::translation::java::TEST_INSTANCE_DESCRIPTION_NO_TEST,
+                        [],
+                    )
+                    .color_named(NamedColor::Red)
+                },
                 test_instance_description,
             );
             let query = matches!(packet.action, TestInstanceBlockAction::Query);

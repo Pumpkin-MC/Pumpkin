@@ -53,7 +53,10 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
     .await
     .map_err(|err| format!("Failed to initialize test Server: {err}"))?;
     let mut level_info = (**server.level_info.load()).clone();
-    level_info.data_packs.enabled.push("file/pumpkin-unit-test".to_string());
+    level_info
+        .data_packs
+        .enabled
+        .push("file/pumpkin-unit-test".to_string());
     server.level_info.store(Arc::new(level_info));
     server.reload_datapacks(&server);
     Ok(server)
@@ -64,7 +67,11 @@ fn copy_datapack(source: &std::path::Path, target: &std::path::Path) -> Result<(
     for entry in std::fs::read_dir(source).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let destination = target.join(entry.file_name());
-        if entry.file_type().map_err(|error| error.to_string())?.is_dir() {
+        if entry
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_dir()
+        {
             copy_datapack(&entry.path(), &destination)?;
         } else {
             std::fs::copy(entry.path(), destination).map_err(|error| error.to_string())?;

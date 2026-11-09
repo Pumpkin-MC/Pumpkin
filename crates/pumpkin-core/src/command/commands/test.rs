@@ -13,12 +13,13 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
-use pumpkin_util::text::{
-    TextComponent, click::ClickEvent, color::NamedColor, hover::HoverEvent,
-};
+use pumpkin_util::text::{TextComponent, click::ClickEvent, color::NamedColor, hover::HoverEvent};
 use pumpkin_world::world::BlockFlags;
 use tracing::info;
 
+use crate::block::entities::test_instance_block::{
+    TestInstanceBlockBlockEntity, TestInstanceRotation,
+};
 use crate::command::CommandSender;
 use crate::command::CommandSource;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
@@ -34,16 +35,13 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::block::entities::test_instance_block::{
-    TestInstanceBlockBlockEntity, TestInstanceRotation,
-};
 use crate::entity::EntityBase;
-use crate::server::{GameTestOutcome, GameTestOutcomeStatus, GameTestRunRequest, Server};
-use crate::server::server_test_manager::{
-    GameTestQueueEntry, enqueue_game_test_clear, enqueue_game_test_verification, stop_game_tests,
-    reset_test_instance, test_instance_placement,
-};
 use crate::server::server_test_manager::ServerGameTestWorld;
+use crate::server::server_test_manager::{
+    GameTestQueueEntry, enqueue_game_test_clear, enqueue_game_test_verification,
+    reset_test_instance, stop_game_tests, test_instance_placement,
+};
+use crate::server::{GameTestOutcome, GameTestOutcomeStatus, GameTestRunRequest, Server};
 use crate::world::POI_TYPE_TEST_INSTANCE;
 use crate::world::World;
 
@@ -237,44 +235,44 @@ fn selected_placed_positions(
     let center = BlockPos::floored_v(context.source.position);
     let world = context.world();
     Ok(match mode {
-            RunPlacedMode::Closest => nearby_test_positions(world, center, TEST_NEARBY_SEARCH_RADIUS)
+        RunPlacedMode::Closest => nearby_test_positions(world, center, TEST_NEARBY_SEARCH_RADIUS)
+            .into_iter()
+            .min_by_key(|position| {
+                (i64::from(position.0.x) - i64::from(center.0.x)).abs()
+                    + (i64::from(position.0.y) - i64::from(center.0.y)).abs()
+                    + (i64::from(position.0.z) - i64::from(center.0.z)).abs()
+            })
+            .into_iter()
+            .collect(),
+        RunPlacedMode::These => nearby_test_positions(world, center, TEST_FULL_SEARCH_RADIUS),
+        RunPlacedMode::That => {
+            let player = context.source.player_or_err()?;
+            let start = player.get_eye_pos();
+            let direction = player.get_looking_vector();
+            nearby_test_positions(world, center, TEST_FULL_SEARCH_RADIUS)
                 .into_iter()
+                .filter(|&position| {
+                    test_instance_placement(context.server(), world, position)
+                        .ok()
+                        .and_then(|placement| {
+                            ray_hits_test_bounds(
+                                start,
+                                direction,
+                                *placement.origin(),
+                                placement.size(),
+                            )
+                        })
+                        .is_some()
+                })
                 .min_by_key(|position| {
-                    (i64::from(position.0.x) - i64::from(center.0.x)).abs()
-                        + (i64::from(position.0.y) - i64::from(center.0.y)).abs()
-                        + (i64::from(position.0.z) - i64::from(center.0.z)).abs()
+                    let dx = i64::from(position.0.x) - i64::from(center.0.x);
+                    let dy = i64::from(position.0.y) - i64::from(center.0.y);
+                    let dz = i64::from(position.0.z) - i64::from(center.0.z);
+                    dx * dx + dy * dy + dz * dz
                 })
                 .into_iter()
-                .collect(),
-            RunPlacedMode::These => nearby_test_positions(world, center, TEST_FULL_SEARCH_RADIUS),
-            RunPlacedMode::That => {
-                let player = context.source.player_or_err()?;
-                let start = player.get_eye_pos();
-                let direction = player.get_looking_vector();
-                nearby_test_positions(world, center, TEST_FULL_SEARCH_RADIUS)
-                    .into_iter()
-                    .filter(|&position| {
-                        test_instance_placement(context.server(), world, position)
-                            .ok()
-                            .and_then(|placement| {
-                                ray_hits_test_bounds(
-                                    start,
-                                    direction,
-                                    *placement.origin(),
-                                    placement.size(),
-                                )
-                            })
-                            .is_some()
-                    })
-                    .min_by_key(|position| {
-                        let dx = i64::from(position.0.x) - i64::from(center.0.x);
-                        let dy = i64::from(position.0.y) - i64::from(center.0.y);
-                        let dz = i64::from(position.0.z) - i64::from(center.0.z);
-                        dx * dx + dy * dy + dz * dz
-                    })
-                    .into_iter()
-                    .collect()
-            }
+                .collect()
+        }
     })
 }
 
@@ -290,7 +288,9 @@ impl CommandExecutor for RunPlacedExecutor {
             let Some(entity) = world.get_block_entity(&position) else {
                 continue;
             };
-            let Some(controller) = entity.as_any().downcast_ref::<TestInstanceBlockBlockEntity>()
+            let Some(controller) = entity
+                .as_any()
+                .downcast_ref::<TestInstanceBlockBlockEntity>()
             else {
                 continue;
             };
@@ -301,7 +301,8 @@ impl CommandExecutor for RunPlacedExecutor {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let data = data.as_ref();
                 (
-                    data.and_then(|data| data.get_string("test")).map(str::to_owned),
+                    data.and_then(|data| data.get_string("test"))
+                        .map(str::to_owned),
                     data.and_then(|data| data.get_string("rotation"))
                         .and_then(TestInstanceRotation::from_serialized_name)
                         .unwrap_or_default(),
@@ -310,7 +311,12 @@ impl CommandExecutor for RunPlacedExecutor {
             let Some(test_id) = test_id else {
                 continue;
             };
-            if context.server().datapack_manager.get_test_instance(&test_id).is_none() {
+            if context
+                .server()
+                .datapack_manager
+                .get_test_instance(&test_id)
+                .is_none()
+            {
                 context.source.send_error(pumpkin_macros::translate_cross!(
                     java::COMMANDS_TEST_ERROR_NON_EXISTANT_TEST,
                     java::COMMANDS_TEST_ERROR_NON_EXISTANT_TEST,
@@ -390,7 +396,13 @@ impl CommandExecutor for ResetExecutor {
                                     .map(str::to_owned)
                             })
                     })
-                    .is_some_and(|id| context.server().datapack_manager.get_test_instance(&id).is_some())
+                    .is_some_and(|id| {
+                        context
+                            .server()
+                            .datapack_manager
+                            .get_test_instance(&id)
+                            .is_some()
+                    })
             })
             .collect();
         if positions.is_empty() {
@@ -448,7 +460,10 @@ impl CommandExecutor for LocateExecutor {
                 let Some(entity) = world.get_block_entity(&position) else {
                     continue;
                 };
-                let Some(controller) = entity.as_any().downcast_ref::<TestInstanceBlockBlockEntity>() else {
+                let Some(controller) = entity
+                    .as_any()
+                    .downcast_ref::<TestInstanceBlockBlockEntity>()
+                else {
                     continue;
                 };
                 let data = controller
@@ -551,9 +566,8 @@ impl CommandExecutor for CreateExecutor {
             .iter()
             .any(|size| !(1..=MAX_CREATE_SIZE).contains(size))
         {
-            return Err(CREATE_TOO_LARGE.create_without_context(TextComponent::text(
-                MAX_CREATE_SIZE.to_string(),
-            )));
+            return Err(CREATE_TOO_LARGE
+                .create_without_context(TextComponent::text(MAX_CREATE_SIZE.to_string())));
         }
 
         let world = context.world().clone();
@@ -645,9 +659,7 @@ impl CommandExecutor for RunExecutor {
         } else {
             1
         };
-        let selected = (0..amount)
-            .flat_map(|_| selected.iter().cloned())
-            .collect();
+        let selected = (0..amount).flat_map(|_| selected.iter().cloned()).collect();
         run_selected_tests(context, selected)
     }
 }
@@ -667,88 +679,88 @@ impl CommandExecutor for RunFailedExecutor {
 }
 
 fn run_selected_tests(context: &CommandContext, selected: Vec<String>) -> CommandExecutorResult {
-        // Vanilla TestCommand::run stops the current tests before starting a new run.
-        // Clear this server's active tests before the replacement requests are drained.
-        context.server().stop_game_tests();
+    // Vanilla TestCommand::run stops the current tests before starting a new run.
+    // Clear this server's active tests before the replacement requests are drained.
+    context.server().stop_game_tests();
 
-        if selected.is_empty() {
-            context.source.send_feedback(
-                pumpkin_macros::translate_cross!(
-                    java::COMMANDS_TEST_NO_TESTS,
-                    java::COMMANDS_TEST_NO_TESTS,
-                ),
-                false,
-            );
-            return Ok(0);
-        }
-        context.server().forget_failed_game_tests();
+    if selected.is_empty() {
+        context.source.send_feedback(
+            pumpkin_macros::translate_cross!(
+                java::COMMANDS_TEST_NO_TESTS,
+                java::COMMANDS_TEST_NO_TESTS,
+            ),
+            false,
+        );
+        return Ok(0);
+    }
+    context.server().forget_failed_game_tests();
 
-        let (number_of_times, until_failed) = retry_options(context)?;
+    let (number_of_times, until_failed) = retry_options(context)?;
 
-        let rotation_steps = if context.arguments.contains_key(ARG_ROTATION_STEPS) {
-            IntegerArgumentType::get(context, ARG_ROTATION_STEPS)?
-        } else {
-            0
-        };
+    let rotation_steps = if context.arguments.contains_key(ARG_ROTATION_STEPS) {
+        IntegerArgumentType::get(context, ARG_ROTATION_STEPS)?
+    } else {
+        0
+    };
 
-        let tests_per_row = if context.arguments.contains_key(ARG_TESTS_PER_ROW) {
-            IntegerArgumentType::get(context, ARG_TESTS_PER_ROW)?
-        } else {
-            DEFAULT_TESTS_PER_ROW
-        }
-        .max(1);
+    let tests_per_row = if context.arguments.contains_key(ARG_TESTS_PER_ROW) {
+        IntegerArgumentType::get(context, ARG_TESTS_PER_ROW)?
+    } else {
+        DEFAULT_TESTS_PER_ROW
+    }
+    .max(1);
 
-        let world = context.world().clone();
-        let base_x = context.source.position.x.floor() as i32;
-        let base_z = context.source.position.z.floor() as i32 + TEST_POS_Z_OFFSET_FROM_PLAYER;
+    let world = context.world().clone();
+    let base_x = context.source.position.x.floor() as i32;
+    let base_z = context.source.position.z.floor() as i32 + TEST_POS_Z_OFFSET_FROM_PLAYER;
 
-        context
-            .source
-            .send_message(pumpkin_macros::translate_cross!(
-                java::COMMANDS_TEST_RUN_RUNNING,
-                java::COMMANDS_TEST_RUN_RUNNING,
-                TextComponent::text(selected.len().to_string()),
-            ));
+    context
+        .source
+        .send_message(pumpkin_macros::translate_cross!(
+            java::COMMANDS_TEST_RUN_RUNNING,
+            java::COMMANDS_TEST_RUN_RUNNING,
+            TextComponent::text(selected.len().to_string()),
+        ));
 
-        let reporter: Arc<dyn GameTestReporter> = Arc::new(CommandTestReporter {
-            sender: context.source.output.clone(),
-            server: Arc::downgrade(context.server()),
-        });
+    let reporter: Arc<dyn GameTestReporter> = Arc::new(CommandTestReporter {
+        sender: context.source.output.clone(),
+        server: Arc::downgrade(context.server()),
+    });
 
-        let retry_options = GameTestRetryOptions::new(number_of_times, until_failed);
-        let mut requests = Vec::with_capacity(selected.len());
+    let retry_options = GameTestRetryOptions::new(number_of_times, until_failed);
+    let mut requests = Vec::with_capacity(selected.len());
 
-        for (index, test_id) in selected.into_iter().enumerate() {
-            let index = index as i32;
-            let column = index % tests_per_row;
-            let row = index / tests_per_row;
-            let test_x = base_x + column * TEST_GRID_SPACING;
-            let test_z = base_z + row * TEST_GRID_SPACING;
+    for (index, test_id) in selected.into_iter().enumerate() {
+        let index = index as i32;
+        let column = index % tests_per_row;
+        let row = index / tests_per_row;
+        let test_x = base_x + column * TEST_GRID_SPACING;
+        let test_z = base_z + row * TEST_GRID_SPACING;
 
-            requests.push(GameTestRunRequest::new(
-                test_id.clone(),
-                world.clone(),
-                test_x,
-                test_z,
-                rotation_steps,
-                retry_options,
-            ));
+        requests.push(GameTestRunRequest::new(
+            test_id.clone(),
+            world.clone(),
+            test_x,
+            test_z,
+            rotation_steps,
+            retry_options,
+        ));
 
-            info!(
-                target: "pumpkin::gametest",
-                test = %test_id,
-                test_x,
-                test_z,
-                number_of_times,
-                until_failed,
-                rotation_steps,
-                "Queued GameTest request"
-            );
-        }
+        info!(
+            target: "pumpkin::gametest",
+            test = %test_id,
+            test_x,
+            test_z,
+            number_of_times,
+            until_failed,
+            rotation_steps,
+            "Queued GameTest request"
+        );
+    }
 
-        let _report = context.server().queue_game_test_batch(requests, reporter);
+    let _report = context.server().queue_game_test_batch(requests, reporter);
 
-        Ok(1)
+    Ok(1)
 }
 
 struct VerifyExecutor;
@@ -871,11 +883,13 @@ impl CommandExecutor for PosExecutor {
             .as_ref()
             .and_then(|data| data.get_string("test"))
             .map_or_else(
-                || TextComponent::translate_cross(
-                    "test_instance_block.invalid_test",
-                    "test_instance_block.invalid_test",
-                    [],
-                ),
+                || {
+                    TextComponent::translate_cross(
+                        "test_instance_block.invalid_test",
+                        "test_instance_block.invalid_test",
+                        [],
+                    )
+                },
                 |name| TextComponent::text(name.to_string()),
             );
         let relative = BlockPos::new(
@@ -1100,30 +1114,36 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 ),
         );
 
-    let runclosest = literal("runclosest").executes(RunPlacedExecutor(RunPlacedMode::Closest)).then(
-        argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
-            .executes(RunPlacedExecutor(RunPlacedMode::Closest))
-            .then(
-                argument(ARG_UNTIL_FAILED, BoolArgumentType)
-                    .executes(RunPlacedExecutor(RunPlacedMode::Closest)),
-            ),
-    );
-    let runthese = literal("runthese").executes(RunPlacedExecutor(RunPlacedMode::These)).then(
-        argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
-            .executes(RunPlacedExecutor(RunPlacedMode::These))
-            .then(
-                argument(ARG_UNTIL_FAILED, BoolArgumentType)
-                    .executes(RunPlacedExecutor(RunPlacedMode::These)),
-            ),
-    );
-    let runthat = literal("runthat").executes(RunPlacedExecutor(RunPlacedMode::That)).then(
-        argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
-            .executes(RunPlacedExecutor(RunPlacedMode::That))
-            .then(
-                argument(ARG_UNTIL_FAILED, BoolArgumentType)
-                    .executes(RunPlacedExecutor(RunPlacedMode::That)),
-            ),
-    );
+    let runclosest = literal("runclosest")
+        .executes(RunPlacedExecutor(RunPlacedMode::Closest))
+        .then(
+            argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
+                .executes(RunPlacedExecutor(RunPlacedMode::Closest))
+                .then(
+                    argument(ARG_UNTIL_FAILED, BoolArgumentType)
+                        .executes(RunPlacedExecutor(RunPlacedMode::Closest)),
+                ),
+        );
+    let runthese = literal("runthese")
+        .executes(RunPlacedExecutor(RunPlacedMode::These))
+        .then(
+            argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
+                .executes(RunPlacedExecutor(RunPlacedMode::These))
+                .then(
+                    argument(ARG_UNTIL_FAILED, BoolArgumentType)
+                        .executes(RunPlacedExecutor(RunPlacedMode::These)),
+                ),
+        );
+    let runthat = literal("runthat")
+        .executes(RunPlacedExecutor(RunPlacedMode::That))
+        .then(
+            argument(ARG_NUMBER_OF_TIMES, IntegerArgumentType::with_min(0))
+                .executes(RunPlacedExecutor(RunPlacedMode::That))
+                .then(
+                    argument(ARG_UNTIL_FAILED, BoolArgumentType)
+                        .executes(RunPlacedExecutor(RunPlacedMode::That)),
+                ),
+        );
 
     dispatcher.register(
         command("test", DESCRIPTION)
@@ -1156,9 +1176,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     ),
             )
             .then(
-                literal("pos").executes(PosExecutor).then(
-                    argument(ARG_VAR, StringArgumentType::SingleWord).executes(PosExecutor),
-                ),
+                literal("pos")
+                    .executes(PosExecutor)
+                    .then(argument(ARG_VAR, StringArgumentType::SingleWord).executes(PosExecutor)),
             )
             .then(
                 literal("create").then(
