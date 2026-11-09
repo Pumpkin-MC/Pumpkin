@@ -6333,7 +6333,10 @@ impl Player {
 
     /// Vanilla `ServerPlayer.openMenu`: a screen other than the player's own is closed before
     /// another one replaces it, so its `on_closed` returns the items inside.
-    fn close_open_screen_handler(&self) {
+    ///
+    /// Returns false when a screen is still open after the bounded closes, in which case the
+    /// caller must not open another one over it.
+    fn close_open_screen_handler(&self) -> bool {
         let own: Arc<std::sync::Mutex<dyn ScreenHandler>> = self.player_screen_handler.clone();
         // A close event can open another screen, which is closed as well. Bounded so a plugin
         // that reopens a screen on every close cannot loop forever.
@@ -6347,10 +6350,11 @@ impl Player {
             if Arc::ptr_eq(&current, &own)
                 || screen_handler_addr(&current) == self.closing_screen.load(Ordering::Relaxed)
             {
-                return;
+                return true;
             }
             self.close_handled_screen();
         }
+        false
     }
 
     pub fn close_handled_screen(&self) {
@@ -6508,7 +6512,9 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-        self.close_open_screen_handler();
+        if !self.close_open_screen_handler() {
+            return None;
+        }
 
         let server = self.world().server.upgrade();
         if let Some(server) = server
@@ -6533,7 +6539,9 @@ impl Player {
         ) {
             // The event above or a plugin factory can open another screen (a stonecutter, a chest,
             // ...) in the meantime, and it must not be replaced without being closed.
-            self.close_open_screen_handler();
+            if !self.close_open_screen_handler() {
+                return None;
+            }
             let screen_handler_temp = screen_handler
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -6623,7 +6631,9 @@ impl Player {
         bedrock_slots: NbtCompound,
         create_handler: impl FnOnce(u8, &Arc<PlayerInventory>) -> SharedScreenHandler,
     ) -> bool {
-        self.close_open_screen_handler();
+        if !self.close_open_screen_handler() {
+            return false;
+        }
 
         let world = self.world();
         if let Some(server) = world.server.upgrade()
@@ -6640,7 +6650,9 @@ impl Player {
         }
 
         // Same as `open_handled_screen`: a screen opened by the event handler must be closed too.
-        self.close_open_screen_handler();
+        if !self.close_open_screen_handler() {
+            return false;
+        }
         self.increment_screen_handler_sync_id();
         let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
         let screen_handler = create_handler(sync_id, &self.inventory);
@@ -6678,7 +6690,9 @@ impl Player {
         screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>>,
         title: &TextComponent,
     ) {
-        self.close_open_screen_handler();
+        if !self.close_open_screen_handler() {
+            return;
+        }
 
         let screen_handler_temp = screen_handler
             .lock()
