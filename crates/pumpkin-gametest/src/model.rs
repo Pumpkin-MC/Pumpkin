@@ -113,6 +113,7 @@ impl GameTestDefinition {
         };
 
         function_valid
+            && !self.structure.is_empty()
             && self.max_ticks > 0
             && self.setup_ticks >= 0
             && self.max_attempts > 0
