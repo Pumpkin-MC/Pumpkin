@@ -406,7 +406,7 @@ pub enum NumberFormat {
     /// Show nothing.
     Blank,
     /// The styling to be used when formatting the score number.
-    Styled(Style),
+    Styled(Box<Style>),
     /// The text to be used as a placeholder.
     Fixed(TextComponent),
 }
