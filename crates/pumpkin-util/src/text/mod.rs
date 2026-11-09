@@ -666,7 +666,7 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("show_dialog".to_string()),
                     );
-                    click_map.insert("dialog".to_string(), dialog.0.clone());
+                    click_map.insert("dialog".to_string(), dialog.0.as_ref().clone());
                 }
                 ClickEvent::Custom { id, payload } => {
                     click_map.insert(
@@ -675,7 +675,7 @@ impl TextComponentBase {
                     );
                     click_map.insert("id".to_string(), serde_json::Value::String(id.to_string()));
                     if let Some(payload) = payload {
-                        click_map.insert("payload".to_string(), payload.0.clone());
+                        click_map.insert("payload".to_string(), payload.0.as_ref().clone());
                     }
                 }
                 ClickEvent::SuggestCommand { command } => {
@@ -2260,7 +2260,9 @@ mod test {
     #[test]
     fn sign_click_actions_round_trip_through_json_and_nbt() {
         let show = TextComponent::text("dialog").click_event(ClickEvent::ShowDialog {
-            dialog: ClickPayload(serde_json::json!({"type":"minecraft:notice","title":"x"})),
+            dialog: ClickPayload(Box::new(
+                serde_json::json!({"type":"minecraft:notice","title":"x"}),
+            )),
         });
         let json = serde_json::to_string(&show).unwrap();
         let from_json: TextComponent = serde_json::from_str(&json).unwrap();
@@ -2273,7 +2275,7 @@ mod test {
 
         let custom = TextComponent::text("custom").click_event(ClickEvent::Custom {
             id: Cow::Borrowed("example:action"),
-            payload: Some(ClickPayload(serde_json::json!({"value": 1}))),
+            payload: Some(ClickPayload(Box::new(serde_json::json!({"value": 1})))),
         });
         let json = serde_json::to_string(&custom).unwrap();
         let from_json: TextComponent = serde_json::from_str(&json).unwrap();

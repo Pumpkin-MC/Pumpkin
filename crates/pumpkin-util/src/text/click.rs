@@ -4,9 +4,11 @@ use std::hash::{Hash, Hasher};
 use serde::{Deserialize, Serialize};
 
 /// A JSON payload kept verbatim for `show_dialog` and custom click actions.
+///
+/// The value is boxed to keep [`super::style::Style`] small.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct ClickPayload(pub serde_json::Value);
+pub struct ClickPayload(pub Box<serde_json::Value>);
 
 impl Hash for ClickPayload {
     fn hash<H: Hasher>(&self, state: &mut H) {
