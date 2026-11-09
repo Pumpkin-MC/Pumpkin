@@ -6,7 +6,9 @@ use crate::crafting::recipe_provider::RecipeProvider;
 use crate::inventory::Inventory;
 use crate::inventory::SimpleInventory;
 use crate::player::player_inventory::PlayerInventory;
-use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
+use crate::screen_handler::{
+    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, offer_or_drop_stack,
+};
 use crate::slot::{NormalSlot, Slot};
 
 use pumpkin_data::item::Item;
@@ -172,13 +174,7 @@ impl ScreenHandler for StonecutterScreenHandler {
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
-        // With the input consumed the output is what is left of a shift-click that did not fit,
-        // so it goes to the player. With an input left it is only a preview.
-        if self.input_inventory.get_stack(0).is_empty() {
-            self.drop_inventory(player, self.output_inventory.clone());
-        } else {
-            self.output_inventory.remove_stack(0);
-        }
+        self.output_inventory.remove_stack(0);
         self.drop_inventory(player, self.input_inventory.clone());
     }
 
@@ -214,6 +210,12 @@ impl ScreenHandler for StonecutterScreenHandler {
                     let mut taken_stack = stack.clone();
                     taken_stack.set_count(stack.item_count - slot_stack.item_count);
                     slot.on_take_item(player, &taken_stack);
+                    // Vanilla drops what did not fit, so a paid result is not left in the slot.
+                    if !slot_stack.is_empty() {
+                        offer_or_drop_stack(player, slot_stack.clone());
+                        slot.set_stack(ItemStack::EMPTY.clone());
+                    }
+                    self.update_output();
                 }
             }
         }

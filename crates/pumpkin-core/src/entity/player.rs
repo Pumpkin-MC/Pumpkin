@@ -6375,7 +6375,15 @@ impl Player {
     }
 
     pub fn on_handled_screen_closed(&self) {
+        // Reset on every exit, including a panic in a plugin handler.
+        struct ClosingGuard<'a>(&'a AtomicBool);
+        impl Drop for ClosingGuard<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::Relaxed);
+            }
+        }
         self.closing_screen.store(true, Ordering::Relaxed);
+        let _closing = ClosingGuard(&self.closing_screen);
         let current_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
@@ -6421,7 +6429,6 @@ impl Player {
             self.player_screen_handler.clone();
         self.open_container_pos.store(None);
         self.bedrock_mount_screen.store(None);
-        self.closing_screen.store(false, Ordering::Relaxed);
     }
 
     pub fn on_screen_handler_opened<T: ScreenHandler + ?Sized>(
