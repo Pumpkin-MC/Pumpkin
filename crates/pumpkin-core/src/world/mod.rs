@@ -1355,6 +1355,32 @@ impl World {
         }
     }
 
+    /// Spawns `minecraft:block` particles textured like the given block state.
+    pub fn spawn_block_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        state_id: u16,
+    ) {
+        let mut data = Vec::new();
+        if VarInt(i32::from(state_id)).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            (pumpkin_data::particle::Particle::Block.to_id() as i32).into(),
+            &data,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
