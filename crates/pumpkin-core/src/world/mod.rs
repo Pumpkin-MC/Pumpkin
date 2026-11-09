@@ -4454,22 +4454,16 @@ impl World {
 
         // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
         player.set_client_loaded(false);
-        {
-            let _respawn_guard = player
-                .respawn_lock
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !keep_inventory {
-                player.set_experience(0, 0.0, 0);
-                player.inventory.clear();
-            }
+        if !keep_inventory {
+            player.set_experience(0, 0.0, 0);
+            player.inventory.clear();
+        }
 
-            // Publish the respawn position before restoring health and allowing pickups.
-            player.get_entity().set_pos(position);
-            player.get_entity().set_rotation(yaw, pitch);
-            player.get_entity().last_pos.store(position);
-            player.living_entity.reset_state();
-        };
+        player.get_entity().set_pos(position);
+        player.get_entity().set_rotation(yaw, pitch);
+        player.get_entity().last_pos.store(position);
+        // Restore health last so pickups only resume at the respawn position.
+        player.living_entity.reset_state();
 
         player.send_permission_lvl_update();
 

@@ -24,10 +24,6 @@ pub(super) fn pickup_body(player: &Player) -> (BoundingBox, bool) {
 /// Vanilla `Player.aiStep` pickup: touches every entity in the area, then one random orb.
 /// Runs after the player moved and before entities tick, like `doTick` after the level tick.
 pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
-    let _respawn_guard = player
-        .respawn_lock
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if player.living_entity.health.load() <= 0.0
         || player.is_spectator()
         || player.world().uuid != world.uuid

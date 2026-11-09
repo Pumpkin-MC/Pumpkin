@@ -607,8 +607,6 @@ pub struct Player {
     pub camera_target_id: AtomicCell<Option<i32>>,
     /// The player's spawnpoint
     pub respawn_point: std::sync::Mutex<Option<RespawnPoint>>,
-    /// Serializes respawn state changes with entity collision callbacks.
-    pub(crate) respawn_lock: Mutex<()>,
     /// The player's last death location (vanilla `ServerPlayer.lastDeathLocation`).
     pub last_death_location: std::sync::Mutex<Option<(ResourceLocation, BlockPos)>>,
     /// The player's sleep status
@@ -992,7 +990,6 @@ impl Player {
             is_movement_locked: AtomicBool::new(false),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: std::sync::Mutex::new(None),
-            respawn_lock: Mutex::new(()),
             last_death_location: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             sleeping_bed_pos: AtomicCell::new(None),
