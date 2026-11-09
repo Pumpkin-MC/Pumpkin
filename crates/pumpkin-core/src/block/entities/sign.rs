@@ -625,15 +625,29 @@ impl<'a> SignEntityRef<'a> {
     /// ticker, so `SignBlockEntity#playerIsTooFarAwayToEdit` is checked here instead.
     #[must_use]
     pub fn may_update_text(&self, world: &World, player: &Player) -> bool {
+        if self.is_waxed() {
+            return false;
+        }
+
+        let mut editor = self
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *editor != Some(player.gameprofile.id) {
+            return false;
+        }
+
         let pos = self.block_pos();
-        !self.is_waxed()
-            && *self
-                .currently_editing_player()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                == Some(player.gameprofile.id)
-            && world.level.is_chunk_loaded(&pos.chunk_position())
-            && player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER)
+        if !world.level.is_chunk_loaded(&pos.chunk_position()) {
+            return false;
+        }
+        if !player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER) {
+            // Vanilla clears this from `SignBlockEntity#tick`; without a sign ticker,
+            // clear it when the registered editor is out of range.
+            *editor = None;
+            return false;
+        }
+        true
     }
 }
 

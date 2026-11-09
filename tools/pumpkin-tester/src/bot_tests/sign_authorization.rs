@@ -187,6 +187,53 @@ async fn click_and_wait(
     Ok(())
 }
 
+async fn run_out_of_range_case(
+    server: &Arc<Server>,
+    world: &pumpkin_core::world::World,
+    bot: &mut HeadlessBot,
+    player: &pumpkin_core::entity::player::Player,
+    base: BlockPos,
+) -> Result<(), String> {
+    // The registered editor must still be within edit range.
+    let out_of_range = base.offset(Vector3::new(4, 0, 0));
+    place_sign(server, world, out_of_range).await;
+    let before = stored_text(world, out_of_range);
+    if !before.is_empty() {
+        return Err(format!("sign was not empty after placement: {before:?}"));
+    }
+    let pos = player.get_entity().pos.load();
+    let far = Vector3::new(pos.x + 100.0, pos.y, pos.z);
+    move_to_and_wait(server, bot, player, far).await?;
+    set_editor(world, out_of_range, Some(player.gameprofile.id));
+    send_update(bot, out_of_range, "OUT_OF_RANGE").await?;
+    tick(server, 20).await;
+    if !stored_text(world, out_of_range).is_empty() {
+        return Err(format!(
+            "SIGN_UPDATE changed a sign from out of edit range (player at {:?}, stored {:?})",
+            player.get_entity().pos.load(),
+            stored_text(world, out_of_range)
+        ));
+    }
+    if sign_editor(world, out_of_range).is_some() {
+        return Err("out-of-range sign editor was not cleared".to_string());
+    }
+    let home = Vector3::new(
+        f64::from(base.0.x) + 0.5,
+        f64::from(base.0.y),
+        f64::from(base.0.z) + 0.5,
+    );
+    move_to_and_wait(server, bot, player, home).await?;
+
+    // Returning to range must not reauthorize the cleared editor.
+    send_update(bot, out_of_range, "RETURNED").await?;
+    tick(server, 20).await;
+    if !stored_text(world, out_of_range).is_empty() {
+        return Err("returning to range re-authorized a cleared sign editor".to_string());
+    }
+
+    Ok(())
+}
+
 async fn run_authorization_cases(
     server: &Arc<Server>,
     world: &pumpkin_core::world::World,
@@ -213,32 +260,7 @@ async fn run_authorization_cases(
         return Err("SIGN_UPDATE changed a sign registered to another player".to_string());
     }
 
-    // The registered editor must still be within edit range.
-    let out_of_range = base.offset(Vector3::new(4, 0, 0));
-    place_sign(server, world, out_of_range).await;
-    let before = stored_text(world, out_of_range);
-    if !before.is_empty() {
-        return Err(format!("sign was not empty after placement: {before:?}"));
-    }
-    let pos = player.get_entity().pos.load();
-    let far = Vector3::new(pos.x + 100.0, pos.y, pos.z);
-    move_to_and_wait(server, bot, player, far).await?;
-    set_editor(world, out_of_range, Some(player.gameprofile.id));
-    send_update(bot, out_of_range, "OUT_OF_RANGE").await?;
-    tick(server, 20).await;
-    if !stored_text(world, out_of_range).is_empty() {
-        return Err(format!(
-            "SIGN_UPDATE changed a sign from out of edit range (player at {:?}, stored {:?})",
-            player.get_entity().pos.load(),
-            stored_text(world, out_of_range)
-        ));
-    }
-    let home = Vector3::new(
-        f64::from(base.0.x) + 0.5,
-        f64::from(base.0.y),
-        f64::from(base.0.z) + 0.5,
-    );
-    move_to_and_wait(server, bot, player, home).await?;
+    run_out_of_range_case(server, world, bot, player, base).await?;
 
     // A waxed sign must not accept an update even from its registered editor.
     let waxed = base.offset(Vector3::new(2, 0, 1));
