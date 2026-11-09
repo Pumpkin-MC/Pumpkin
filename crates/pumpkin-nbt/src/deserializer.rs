@@ -543,6 +543,14 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
         &mut self.reader
     }
 
+    fn skip_i32(&mut self) -> Result<()> {
+        self.get_var_u32().map(|_| ())
+    }
+
+    fn skip_i64(&mut self) -> Result<()> {
+        self.get_var_u64().map(|_| ())
+    }
+
     fn skip_string(&mut self) -> Result<()> {
         let len = self.get_string_len()? as i64;
         self.skip_bytes(len)
@@ -599,6 +607,70 @@ mod tests {
     use crate::serializer::{NbtWriteHelper, NbtWriteHelperBedrock};
 
     use super::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
+
+    /// Skips complete Bedrock payloads without consuming the following field.
+    #[test]
+    fn bedrock_skips_preserve_field_boundaries() {
+        use crate::tag::NbtTag;
+        use crate::{COMPOUND_ID, END_ID, INT_ARRAY_ID, INT_ID, LIST_ID, LONG_ARRAY_ID, LONG_ID};
+
+        // Fixed wire fixtures include short and maximum-length ZigZag varints.
+        for (tag, payload) in [
+            (INT_ID, vec![0x02]),
+            (INT_ID, vec![0xfe, 0xff, 0xff, 0xff, 0x0f]),
+            (INT_ID, vec![0xff, 0xff, 0xff, 0xff, 0x0f]),
+            (LONG_ID, vec![0x01]),
+            (
+                LONG_ID,
+                vec![0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01],
+            ),
+            (
+                LONG_ID,
+                vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01],
+            ),
+            (INT_ARRAY_ID, vec![0x04, 0x02, 0x04]),
+            (LONG_ARRAY_ID, vec![0x04, 0x02, 0x04]),
+            (
+                LIST_ID,
+                vec![INT_ID, 0x04, 0x02, 0xfe, 0xff, 0xff, 0xff, 0x0f],
+            ),
+            (COMPOUND_ID, vec![INT_ID, 0x01, b'x', 0x02, END_ID]),
+        ] {
+            let len = payload.len();
+            let mut bytes = payload;
+            bytes.push(42);
+            let mut reader = NbtReadHelperBedrock::new(Cursor::new(bytes.as_slice()));
+            NbtTag::deserialize_data(&mut reader, tag).unwrap();
+            assert_eq!(reader.reader().position(), len as u64);
+
+            let mut reader = NbtReadHelperBedrock::new(Cursor::new(bytes.as_slice()));
+            NbtTag::skip_data(&mut reader, tag).unwrap();
+            assert_eq!(reader.reader().position(), len as u64, "tag {tag}");
+            assert_eq!(reader.get_u8().unwrap(), 42);
+        }
+    }
+
+    /// Rejects incomplete and unterminated varints when skipping Bedrock numbers.
+    #[test]
+    fn bedrock_skips_reject_malformed_varints() {
+        use crate::{Error, INT_ID, LONG_ID, tag::NbtTag};
+
+        for tag in [INT_ID, LONG_ID] {
+            let mut reader = NbtReadHelperBedrock::new(Cursor::new(&[0x80][..]));
+            assert!(matches!(NbtTag::skip_data(&mut reader, tag),
+                Err(Error::Incomplete(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof));
+        }
+        let mut int = NbtReadHelperBedrock::new(Cursor::new(&[0x80; 5][..]));
+        assert!(matches!(
+            NbtTag::skip_data(&mut int, INT_ID),
+            Err(Error::VarIntTooLarge)
+        ));
+        let mut long = NbtReadHelperBedrock::new(Cursor::new(&[0x80; 10][..]));
+        assert!(matches!(
+            NbtTag::skip_data(&mut long, LONG_ID),
+            Err(Error::VarLongTooLarge)
+        ));
+    }
 
     #[test]
     fn java_numeric_arrays_decode_big_endian_values() {
