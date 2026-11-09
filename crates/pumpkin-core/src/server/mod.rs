@@ -41,7 +41,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
