@@ -9,7 +9,6 @@ use crate::serializer::NbtWriteHelper;
 use crate::tag::NbtTag;
 use crate::{END_ID, Error, Nbt};
 use std::collections::hash_map::IntoIter;
-use std::io::ErrorKind;
 
 #[macro_export]
 /// Creates an [`NbtTag::Compound`](crate::tag::NbtTag::Compound) from key-value pairs.
@@ -50,6 +49,8 @@ impl NbtCompound {
     }
 
     /// Advances a reader past a compound's payload without allocating its tags.
+    ///
+    /// Returns [`Error::Incomplete`] if EOF is reached before the end tag.
     pub fn skip_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<(), Error> {
         Self::skip_content_depth(reader, 0)
     }
@@ -64,11 +65,7 @@ impl NbtCompound {
         }
 
         loop {
-            let tag_id = match reader.get_u8() {
-                Ok(id) => id,
-                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e),
-            };
+            let tag_id = reader.get_u8()?;
 
             if tag_id == END_ID {
                 break;
@@ -84,6 +81,8 @@ impl NbtCompound {
     }
 
     /// Deserializes a compound payload, starting after the compound's name.
+    ///
+    /// Returns [`Error::Incomplete`] if EOF is reached before the end tag.
     pub fn deserialize_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         Self::deserialize_content_depth(reader, 0)
     }
@@ -100,11 +99,7 @@ impl NbtCompound {
         let mut compound = Self::new();
 
         loop {
-            let tag_id = match reader.get_u8() {
-                Ok(id) => id,
-                Err(Error::Incomplete(e)) if e.kind() == ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e),
-            };
+            let tag_id = reader.get_u8()?;
 
             if tag_id == END_ID {
                 break;
@@ -458,6 +453,78 @@ impl Display for NbtTag {
 mod tests {
     use super::NbtCompound;
     use uuid::Uuid;
+
+    /// Requires an explicit end tag at each compound level in both NBT formats.
+    #[test]
+    fn compound_boundaries_require_end_tags() {
+        use crate::deserializer::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
+        use crate::{BYTE_ID, COMPOUND_ID, END_ID, Error};
+        use std::io::{Cursor, ErrorKind};
+
+        // Empty, one-byte field, and nested empty compound payloads.
+        for (java, bedrock) in [
+            (vec![END_ID], vec![END_ID]),
+            (
+                vec![BYTE_ID, 0, 1, b'x', 7, END_ID],
+                vec![BYTE_ID, 1, b'x', 7, END_ID],
+            ),
+            (
+                vec![COMPOUND_ID, 0, 1, b'a', END_ID, END_ID],
+                vec![COMPOUND_ID, 1, b'a', END_ID, END_ID],
+            ),
+        ] {
+            for (is_java, payload) in [(true, java), (false, bedrock)] {
+                for skip in [false, true] {
+                    let mut complete = payload.clone();
+                    complete.push(42);
+                    let mut cursor = Cursor::new(complete.as_slice());
+                    let result = if is_java {
+                        let mut reader = NbtReadHelperJava::new(&mut cursor);
+                        if skip {
+                            NbtCompound::skip_content(&mut reader)
+                        } else {
+                            NbtCompound::deserialize_content(&mut reader).map(|_| ())
+                        }
+                    } else {
+                        let mut reader = NbtReadHelperBedrock::new(&mut cursor);
+                        if skip {
+                            NbtCompound::skip_content(&mut reader)
+                        } else {
+                            NbtCompound::deserialize_content(&mut reader).map(|_| ())
+                        }
+                    };
+                    result.unwrap();
+                    assert_eq!(cursor.position(), payload.len() as u64);
+                    assert_eq!(NbtReadHelperJava::new(&mut cursor).get_u8().unwrap(), 42);
+
+                    // Every prefix is incomplete, including a missing inner or outer End.
+                    for end in 0..payload.len() {
+                        let mut cursor = Cursor::new(&payload[..end]);
+                        let result = if is_java {
+                            let mut reader = NbtReadHelperJava::new(&mut cursor);
+                            if skip {
+                                NbtCompound::skip_content(&mut reader)
+                            } else {
+                                NbtCompound::deserialize_content(&mut reader).map(|_| ())
+                            }
+                        } else {
+                            let mut reader = NbtReadHelperBedrock::new(&mut cursor);
+                            if skip {
+                                NbtCompound::skip_content(&mut reader)
+                            } else {
+                                NbtCompound::deserialize_content(&mut reader).map(|_| ())
+                            }
+                        };
+                        assert!(
+                            matches!(result, Err(Error::Incomplete(error))
+                            if error.kind() == ErrorKind::UnexpectedEof),
+                            "java={is_java}, skip={skip}, prefix={end}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn uuid_int_array_round_trip() {
