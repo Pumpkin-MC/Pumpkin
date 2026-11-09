@@ -2945,6 +2945,32 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Fires `PlayerSpawnLocationEvent` on join and keeps `position` if a plugin returns
+    /// coordinates the world cannot hold.
+    async fn fire_spawn_location_event(
+        &self,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+        position: Vector3<f64>,
+    ) -> Vector3<f64> {
+        let mut event = PlayerSpawnLocationEvent::new(player.clone(), position);
+        server.plugin_manager.fire(server, &mut event).await;
+        let chosen = event.spawn_pos;
+        if chosen.x.is_finite()
+            && chosen.y.is_finite()
+            && chosen.z.is_finite()
+            && Self::is_valid(BlockPos::floored_v(chosen))
+        {
+            chosen
+        } else {
+            warn!(
+                "Ignoring invalid spawn position {chosen:?} from a plugin for {}",
+                player.gameprofile.name
+            );
+            position
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -2991,12 +3017,9 @@ impl World {
             (position, level_info.spawn_yaw, level_info.spawn_pitch)
         };
 
-        let mut spawn_loc_event = PlayerSpawnLocationEvent::new(player.clone(), position);
-        server
-            .plugin_manager
-            .fire(server, &mut spawn_loc_event)
+        let position = self
+            .fire_spawn_location_event(server, &player, position)
             .await;
-        let position = spawn_loc_event.spawn_pos;
 
         // Keep the server-side transform aligned with the StartGame position. In
         // particular, this ensures an early disconnect persists the real spawn.
@@ -3583,12 +3606,9 @@ impl World {
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
-        let mut spawn_loc_event = PlayerSpawnLocationEvent::new(player.clone(), position);
-        server
-            .plugin_manager
-            .fire(server, &mut spawn_loc_event)
+        let position = self
+            .fire_spawn_location_event(server, player, position)
             .await;
-        let position = spawn_loc_event.spawn_pos;
 
         // Load chunks around the real spawn position before teleporting the client there.
         player.living_entity.entity.set_pos(position);
