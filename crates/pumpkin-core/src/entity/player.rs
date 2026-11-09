@@ -6517,9 +6517,6 @@ impl Player {
             }
         }
 
-        // A plugin handler of the event above can let another screen (a stonecutter, a chest, ...)
-        // open in the meantime, and it must not be replaced without being closed.
-        self.close_open_screen_handler();
         self.increment_screen_handler_sync_id();
 
         if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
@@ -6527,6 +6524,9 @@ impl Player {
             &self.inventory,
             self,
         ) {
+            // The event above or a plugin factory can open another screen (a stonecutter, a chest,
+            // ...) in the meantime, and it must not be replaced without being closed.
+            self.close_open_screen_handler();
             let screen_handler_temp = screen_handler
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
