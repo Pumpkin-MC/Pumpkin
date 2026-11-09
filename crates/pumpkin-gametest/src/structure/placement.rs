@@ -165,6 +165,8 @@ pub async fn place_structure_with_controller_rotation(
         source_size[2],
     ));
     let size = [rotated_size.x, rotated_size.y, rotated_size.z];
+    let placement =
+        TestStructureInstance::new(test_instance_pos, origin, source_size, size, rotation);
 
     // Vanilla TestInstanceBlockEntity::placeStructure clears non-player entities
     // from getTestBounds() before placing a fresh attempt. This is particularly
@@ -246,6 +248,8 @@ pub async fn place_structure_with_controller_rotation(
         }
     }
 
+    place_entities(world, template, &placement).await?;
+
     // GameTestInfo::placeStructure clears both scheduled block ticks and queued
     // block events in the test box after replacement. This prevents deferred work
     // from attempt N from executing against attempt N+1.
@@ -254,13 +258,61 @@ pub async fn place_structure_with_controller_rotation(
         .await?;
     world.clear_block_events(&test_min, &test_max).await?;
 
-    Ok(TestStructureInstance::new(
-        test_instance_pos,
-        origin,
-        source_size,
-        size,
-        rotation,
-    ))
+    Ok(placement)
+}
+
+async fn place_entities(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    placement: &TestStructureInstance,
+) -> GameTestResult<()> {
+    for entity in template.entities() {
+        let position = placement.transform_vec(entity.position);
+        let block_position = placement.transform(&BlockPos::new(
+            entity.block_position[0],
+            entity.block_position[1],
+            entity.block_position[2],
+        ));
+        let mut nbt = entity.nbt.clone();
+        nbt.put(
+            "Pos",
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
+        );
+        nbt.child_tags.remove("UUID");
+        if nbt.get("block_pos").is_some() {
+            nbt.put(
+                "block_pos",
+                NbtTag::IntArray(vec![
+                    block_position.0.x,
+                    block_position.0.y,
+                    block_position.0.z,
+                ]),
+            );
+        }
+        let rotation_nbt = nbt.get_list("Rotation").unwrap_or_default();
+        let yaw = rotation_nbt
+            .first()
+            .and_then(NbtTag::extract_float)
+            .unwrap_or(0.0);
+        let pitch = rotation_nbt
+            .get(1)
+            .and_then(NbtTag::extract_float)
+            .unwrap_or(0.0);
+        let yaw_offset = match placement.rotation() {
+            GameTestRotation::None => 0.0,
+            GameTestRotation::Clockwise90 => 90.0,
+            GameTestRotation::Clockwise180 => 180.0,
+            GameTestRotation::Counterclockwise90 => 270.0,
+        };
+        let yaw = pumpkin_util::math::wrap_degrees(yaw) + yaw_offset;
+        nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
+        world.spawn_structure_entity(&nbt).await?;
+    }
+    Ok(())
 }
 
 /// Encloses the structure with the same one-block barrier shell used by Vanilla.

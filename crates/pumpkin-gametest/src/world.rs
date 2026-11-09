@@ -30,6 +30,12 @@ pub trait GameTestWorld: Send + Sync {
         nbt: &NbtCompound,
     ) -> GameTestResult<()>;
 
+    async fn spawn_structure_entity(&self, _nbt: &NbtCompound) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "structure entity spawning is not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
     async fn block_entity_nbt(&self, _position: &BlockPos) -> GameTestResult<Option<NbtCompound>> {
         Ok(None)
     }
