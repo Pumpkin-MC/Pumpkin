@@ -17,11 +17,13 @@ pumpkin-core.workspace = true
 pumpkin-wasm-host.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-gametest.workspace = true
 pumpkin-util.workspace = true
 pumpkin-world.workspace = true
 
 rayon.workspace = true
 clap.workspace = true
+zip.workspace = true
 rustls.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing.workspace = true
