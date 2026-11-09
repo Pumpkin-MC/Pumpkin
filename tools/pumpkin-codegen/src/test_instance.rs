@@ -3,24 +3,57 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 
 const DEFAULT_NAMESPACE: &str = "minecraft";
 
 struct EmbeddedPack {
-    id: String,
     path: PathBuf,
 }
 
 pub fn build() -> TokenStream {
-    let base_packs = [("vanilla", Path::new("../../assets/datapack"))];
+    build_resource(
+        "test_instance",
+        "json",
+        true,
+        "get_test_instance_json",
+        "all_test_instance_names",
+    )
+}
+
+pub fn build_environment() -> TokenStream {
+    build_resource(
+        "test_environment",
+        "json",
+        true,
+        "get_test_environment_json",
+        "all_test_environment_names",
+    )
+}
+
+pub fn build_function() -> TokenStream {
+    build_resource(
+        "function",
+        "mcfunction",
+        false,
+        "get_test_function_source",
+        "all_test_function_names",
+    )
+}
+
+fn build_resource(
+    directory: &str,
+    extension: &str,
+    include_vanilla: bool,
+    getter: &str,
+    names_getter: &str,
+) -> TokenStream {
     let container_dir = Path::new("../../assets/tests/datapacks");
 
     let mut packs = Vec::new();
-    for (id, path) in base_packs {
+    if include_vanilla {
         packs.push(EmbeddedPack {
-            id: id.to_string(),
-            path: path.to_path_buf(),
+            path: PathBuf::from("../../assets/datapack"),
         });
     }
 
@@ -33,15 +66,13 @@ pub fn build() -> TokenStream {
         entries.sort_by_key(|e| e.file_name());
 
         for entry in entries {
-            let id = entry.file_name().to_string_lossy().to_string();
             packs.push(EmbeddedPack {
-                id,
                 path: entry.path(),
             });
         }
     }
 
-    let mut test_instances: BTreeMap<String, (bool, String, String)> = BTreeMap::new();
+    let mut resources: BTreeMap<String, (bool, String, String)> = BTreeMap::new();
 
     for pack in &packs {
         let data_dir = pack.path.join("data");
@@ -58,15 +89,15 @@ pub fn build() -> TokenStream {
         namespaces.sort_by(|a, b| a.0.cmp(&b.0));
 
         for (namespace, ns_dir) in namespaces {
-            let ti_dir = ns_dir.join("test_instance");
-            if ti_dir.is_dir() {
-                scan_json_dir(&ti_dir, "", &namespace, &mut test_instances);
+            let resource_dir = ns_dir.join(directory);
+            if resource_dir.is_dir() {
+                scan_resource_dir(&resource_dir, "", &namespace, extension, &mut resources);
             }
         }
     }
 
     let mut arms = Vec::new();
-    for (resource_id, (is_default, bare_id, rel_path)) in &test_instances {
+    for (resource_id, (is_default, bare_id, rel_path)) in &resources {
         if *is_default {
             arms.push(quote! {
                 #resource_id | #bare_id => Some(include_str!(#rel_path)),
@@ -78,7 +109,9 @@ pub fn build() -> TokenStream {
         }
     }
 
-    let names: Vec<&str> = test_instances.keys().map(String::as_str).collect();
+    let names: Vec<&str> = resources.keys().map(String::as_str).collect();
+    let getter = format_ident!("{getter}");
+    let names_getter = format_ident!("{names_getter}");
 
     quote! {
         #[allow(clippy::too_many_lines)]
@@ -86,7 +119,7 @@ pub fn build() -> TokenStream {
         #[allow(clippy::missing_const_for_fn)]
         #[allow(clippy::match_single_binding)]
         #[must_use]
-        pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
+        pub fn #getter(path: &str) -> Option<&'static str> {
             match path {
                 #( #arms )*
                 _ => None,
@@ -95,7 +128,7 @@ pub fn build() -> TokenStream {
 
         #[must_use]
         #[allow(clippy::too_many_lines, clippy::large_stack_arrays)]
-        pub const fn all_test_instance_names() -> &'static [&'static str] {
+        pub const fn #names_getter() -> &'static [&'static str] {
             &[
                 #( #names ),*
             ]
@@ -103,14 +136,15 @@ pub fn build() -> TokenStream {
     }
 }
 
-fn scan_json_dir(
+fn scan_resource_dir(
     dir: &Path,
     prefix: &str,
     namespace: &str,
-    test_instances: &mut BTreeMap<String, (bool, String, String)>,
+    extension: &str,
+    resources: &mut BTreeMap<String, (bool, String, String)>,
 ) {
     let mut entries = fs::read_dir(dir)
-        .expect("read json dir")
+        .expect("read resource dir")
         .filter_map(Result::ok)
         .collect::<Vec<_>>();
     entries.sort_by_key(|e| e.file_name());
@@ -125,11 +159,11 @@ fn scan_json_dir(
             } else {
                 format!("{prefix}/{name}")
             };
-            scan_json_dir(&path, &new_prefix, namespace, test_instances);
+            scan_resource_dir(&path, &new_prefix, namespace, extension, resources);
             continue;
         }
 
-        let Some(stem) = name.strip_suffix(".json") else {
+        let Some(stem) = name.strip_suffix(&format!(".{extension}")) else {
             continue;
         };
 
@@ -150,6 +184,6 @@ fn scan_json_dir(
             rel_to_repo.to_string_lossy().replace('\\', "/")
         );
 
-        test_instances.insert(resource_id, (is_default, bare_id, rel_path));
+        resources.insert(resource_id, (is_default, bare_id, rel_path));
     }
 }

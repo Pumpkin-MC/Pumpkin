@@ -11,7 +11,7 @@ use pumpkin_core::{
     },
     world::{BlockFlags, World},
 };
-use pumpkin_data::{Block, dimension::Dimension};
+use pumpkin_data::{Block, dimension::Dimension, game_rules::{GameRule, GameRuleValue}};
 use pumpkin_gametest::{GameTestReporter, GameTestRunner};
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -145,12 +145,22 @@ pub async fn run_gametests(
 
     let finished = runner.is_empty();
     let passed = report.all_required_passed();
+    if finished && passed {
+        check_test_environment(
+            server, runner, &world, report_sink.clone(),
+            "pumpkin:inline_environment", 6000, false, 7,
+        ).await?;
+        check_test_environment(
+            server, runner, &world, report_sink.clone(),
+            "pumpkin:referenced_environment", 18000, true, 11,
+        ).await?;
+    }
     let messages = reporter.snapshot();
     for msg in &messages {
         summary_lines.push(format!("  {msg}"));
     }
 
-    runner.clear();
+    runner.cancel_and_clear().await;
 
     if !finished {
         return Err(format!(
@@ -166,6 +176,85 @@ pub async fn run_gametests(
         ));
     }
 
+    Ok(())
+}
+
+async fn check_test_environment(
+    server: &Arc<Server>,
+    runner: &mut GameTestRunner,
+    world: &Arc<World>,
+    reporter: Arc<dyn GameTestReporter>,
+    id: &str,
+    expected_time: i64,
+    expected_thunder: bool,
+    expected_speed: i64,
+) -> Result<(), String> {
+    let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 1));
+    let entry = GameTestQueueEntry::new(
+        id, world.clone(), TEST_BASE_X, TEST_BASE_Z, 0,
+        GameTestRetryOptions::no_retries(), report.clone(),
+    ).with_y(TEST_BASE_Y);
+    let run = prepare_test_run_with_reporter(server, entry, reporter).await
+        .map_err(|error| format!("Failed to prepare GameTest '{id}': {error}"))?;
+    runner.enqueue(run);
+
+    server.tick();
+    let previous_time = world.get_time_of_day();
+    let previous_rain = world.is_raining();
+    let previous_thunder = world.is_thundering();
+    let previous_advance = world.get_game_rule(&GameRule::AdvanceTime).to_string();
+    let previous_speed = world.get_game_rule(&GameRule::RandomTickSpeed).to_string();
+    runner.tick().await;
+    let (active_advance, active_speed) = match (
+        world.get_game_rule(&GameRule::AdvanceTime),
+        world.get_game_rule(&GameRule::RandomTickSpeed),
+    ) {
+        (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
+        _ => return Err(format!("Test environment '{id}' used invalid game rule types")),
+    };
+    let active_settings_match = world.get_time_of_day() == expected_time
+        && world.is_raining()
+        && world.is_thundering() == expected_thunder
+        && !active_advance
+        && active_speed == expected_speed;
+
+    for _ in 0..20 {
+        if runner.is_empty() { break; }
+        server.tick();
+        if world.get_time_of_day() != expected_time
+            || !world.is_raining()
+            || world.is_thundering() != expected_thunder
+        {
+            runner.cancel_and_clear().await;
+            return Err(format!("Test environment '{id}' changed while its test was running"));
+        }
+        runner.tick().await;
+    }
+    let (advance_time, speed) = match (
+        world.get_game_rule(&GameRule::AdvanceTime),
+        world.get_game_rule(&GameRule::RandomTickSpeed),
+    ) {
+        (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
+        _ => return Err(format!("Test environment '{id}' used invalid game rule types")),
+    };
+    if !runner.is_empty() {
+        runner.cancel_and_clear().await;
+        return Err(format!("Test environment GameTest '{id}' did not finish"));
+    }
+    if !report.all_required_passed() {
+        return Err(format!("Test environment GameTest '{id}' failed"));
+    }
+    if !active_settings_match {
+        return Err(format!("Test environment '{id}' did not apply world settings"));
+    }
+    if world.get_time_of_day() != previous_time
+        || world.is_raining() != previous_rain
+        || world.is_thundering() != previous_thunder
+        || advance_time.to_string() != previous_advance
+        || speed.to_string() != previous_speed
+    {
+        return Err(format!("Test environment '{id}' did not restore world settings"));
+    }
     Ok(())
 }
 

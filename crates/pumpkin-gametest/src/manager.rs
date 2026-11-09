@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -507,24 +508,36 @@ impl GameTestManager {
     }
 }
 
+const MAX_TESTS_PER_BATCH: usize = 50;
+
 /// Ticks ready `GameTest` runs and owns their retry lifecycle.
 #[derive(Default)]
 pub struct GameTestRunner {
     active: Vec<GameTestManager>,
+    pending: VecDeque<GameTestManager>,
+    environment: Option<(Arc<dyn crate::world::GameTestWorld>, Box<dyn std::any::Any + Send>)>,
 }
 
 impl GameTestRunner {
     #[must_use]
     pub const fn new() -> Self {
-        Self { active: Vec::new() }
+        Self {
+            active: Vec::new(),
+            pending: VecDeque::new(),
+            environment: None,
+        }
     }
 
     pub fn enqueue(&mut self, run: GameTestManager) {
-        self.active.push(run);
+        self.pending.push_back(run);
     }
 
     pub fn clear(&mut self) {
+        if let Some((world, saved)) = self.environment.take() {
+            world.teardown_test_environment(saved);
+        }
         self.active.clear();
+        self.pending.clear();
     }
 
     pub async fn cancel_and_clear(&mut self) -> Vec<GameTestError> {
@@ -535,21 +548,59 @@ impl GameTestRunner {
             }
             managed.cancel();
         }
+        for managed in &mut self.pending {
+            managed.cancel();
+        }
         self.clear();
         errors
     }
 
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.active.is_empty()
+    pub fn is_empty(&self) -> bool {
+        self.active.is_empty() && self.pending.is_empty()
     }
 
     #[must_use]
-    pub const fn active_len(&self) -> usize {
-        self.active.len()
+    pub fn active_len(&self) -> usize {
+        self.active.len() + self.pending.len()
     }
 
     pub async fn tick(&mut self) {
+        if self.active.is_empty() {
+            if let Some((world, saved)) = self.environment.take() {
+                world.teardown_test_environment(saved);
+            }
+            if let Some(first) = self.pending.front() {
+                let environment = first.run.environment().clone();
+                let world_key = first.run.environment_world_key();
+                let world = first.run.environment_world();
+                match world.activate_test_environment(&environment) {
+                    Ok(saved) => {
+                        self.environment = Some((world, saved));
+                        while self.active.len() < MAX_TESTS_PER_BATCH
+                            && self.pending.front().is_some_and(|next| {
+                                next.run.environment() == &environment
+                                    && next.run.environment_world_key() == world_key
+                            })
+                        {
+                            if let Some(next) = self.pending.pop_front() {
+                                self.active.push(next);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(mut failed) = self.pending.pop_front() {
+                            failed.report.fail_to_start(
+                                failed.run.test.id(),
+                                &error,
+                                failed.run.test.is_required(),
+                            );
+                            failed.done = true;
+                        }
+                    }
+                }
+            }
+        }
         // Vanilla queues copyReset reruns and does not start them until the current
         // set of batches has completed. Treat all currently active executions as one
         // wave: finish the wave first, then install the scheduled copies so they begin
@@ -569,6 +620,11 @@ impl GameTestRunner {
         if self.active.iter().all(|managed| managed.rerun_scheduled) {
             for managed in &mut self.active {
                 managed.install_scheduled_rerun();
+            }
+        }
+        if self.active.is_empty() {
+            if let Some((world, saved)) = self.environment.take() {
+                world.teardown_test_environment(saved);
             }
         }
     }

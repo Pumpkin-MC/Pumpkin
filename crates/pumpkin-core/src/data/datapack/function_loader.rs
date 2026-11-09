@@ -2,6 +2,25 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+pub fn load_embedded_test_functions(functions: &mut HashMap<String, Vec<String>>) -> usize {
+    let before = functions.len();
+    for &id in pumpkin_data::test_function::all_test_function_names() {
+        if let Some(content) = pumpkin_data::test_function::get_test_function_source(id) {
+            functions.insert(id.to_owned(), parse_function_content(content));
+        }
+    }
+    functions.len() - before
+}
+
+fn parse_function_content(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
+        .collect()
+}
+
 pub fn load_functions_from_dir<S: std::hash::BuildHasher>(
     namespace: &str,
     function_dir: &Path,
@@ -39,13 +58,7 @@ fn load_functions_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let function_id = format!("{namespace}:{stem_path}");
             if let Ok(content) = fs::read_to_string(&path) {
-                let lines: Vec<String> = content
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                    .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
-                    .collect();
-                functions.insert(function_id, lines);
+                functions.insert(function_id, parse_function_content(&content));
             }
         }
     }
@@ -108,12 +121,7 @@ mod tests {
     #[test]
     fn parse_mcfunction_content() {
         let content = "# This is a comment\nsay Hello world\n/give @p diamond 1\n\n# Another comment\ngive @p stick 5\n";
-        let lines: Vec<String> = content
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
-            .collect();
+        let lines = super::parse_function_content(content);
 
         assert_eq!(
             lines,

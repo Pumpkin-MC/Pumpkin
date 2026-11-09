@@ -43,6 +43,18 @@ pub struct GameTestSession {
 }
 
 impl GameTestSession {
+    pub(crate) fn environment(&self) -> &serde_json::Value {
+        &self.test.definition().environment
+    }
+
+    pub(crate) fn environment_world_key(&self) -> usize {
+        self.world.environment_world_key()
+    }
+
+    pub(crate) fn environment_world(&self) -> Arc<dyn GameTestWorld> {
+        self.world.clone()
+    }
+
     #[must_use]
     pub fn new(
         test: BlockBasedTest,
