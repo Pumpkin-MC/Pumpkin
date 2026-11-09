@@ -19,6 +19,8 @@ services:
       # - pumpkin-data:/pumpkin
       # Use the following mount if you want to make your config immutable.
       # - ./pumpkin.toml:/pumpkin/pumpkin.toml:ro
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
