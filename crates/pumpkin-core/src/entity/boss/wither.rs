@@ -76,6 +76,7 @@ pub struct WitherEntity {
 impl WitherEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        mob_entity.persistence_required.store(true, Ordering::Relaxed);
         let wither = Self {
             mob_entity,
             invulnerable_ticks: AtomicI32::new(0),
