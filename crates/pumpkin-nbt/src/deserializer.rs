@@ -123,6 +123,22 @@ pub struct NbtStreamReader<R>(
     pub R,
 );
 
+impl<R: Read> NbtStreamReader<R> {
+    /// Reads exactly `len` bytes without preallocating an untrusted length.
+    fn read_payload(&mut self, len: usize) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.0
+            .by_ref()
+            .take(len as u64)
+            .read_to_end(&mut buf)
+            .map_err(Error::Incomplete)?;
+        if buf.len() != len {
+            return Err(unexpected_eof());
+        }
+        Ok(buf)
+    }
+}
+
 impl<'a, R: Read + Seek> NbtDataSource<'a> for NbtStreamReader<R> {
     fn read_u8(&mut self) -> Result<u8> {
         let mut buf = [0u8; 1];
@@ -142,15 +158,13 @@ impl<'a, R: Read + Seek> NbtDataSource<'a> for NbtStreamReader<R> {
     }
 
     fn read_string(&mut self, len: usize) -> Result<Cow<'a, str>> {
-        let mut buf = vec![0u8; len];
-        self.0.read_exact(&mut buf).map_err(Error::Incomplete)?;
+        let buf = self.read_payload(len)?;
         let string = crate::cesu8::from_java_cesu8(&buf)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 
     fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
-        let mut buf = vec![0u8; len];
-        self.0.read_exact(&mut buf).map_err(Error::Incomplete)?;
+        let buf = self.read_payload(len)?;
         let i8_buf: Vec<i8> = buf.into_iter().map(|b| b as i8).collect();
         Ok(Cow::Owned(i8_buf))
     }
@@ -599,6 +613,81 @@ mod tests {
     use crate::serializer::{NbtWriteHelper, NbtWriteHelperBedrock};
 
     use super::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
+
+    struct ShortReader<'a> {
+        cursor: Cursor<&'a [u8]>,
+        largest_read: usize,
+        interrupted: bool,
+    }
+
+    impl<'a> ShortReader<'a> {
+        fn new(bytes: &'a [u8]) -> Self {
+            Self {
+                cursor: Cursor::new(bytes),
+                largest_read: 0,
+                interrupted: false,
+            }
+        }
+    }
+
+    impl std::io::Read for ShortReader<'_> {
+        /// Records buffer sizes while exercising short reads and an interruption.
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.largest_read = self.largest_read.max(buf.len());
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(std::io::ErrorKind::Interrupted.into());
+            }
+            let len = buf.len().min(1);
+            std::io::Read::read(&mut self.cursor, &mut buf[..len])
+        }
+    }
+
+    impl std::io::Seek for ShortReader<'_> {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            std::io::Seek::seek(&mut self.cursor, pos)
+        }
+    }
+
+    /// Rejects truncated payloads without preparing a declared-length buffer.
+    #[test]
+    fn stream_payloads_do_not_preallocate_declared_length() {
+        use super::{NbtDataSource, NbtStreamReader};
+
+        let declared_len = 1024 * 1024;
+        for string in [true, false] {
+            let mut reader = NbtStreamReader(ShortReader::new(b"ab"));
+            let result = if string {
+                reader.read_string(declared_len).map(|_| ())
+            } else {
+                reader.read_byte_array(declared_len).map(|_| ())
+            };
+            assert!(matches!(result, Err(crate::Error::Incomplete(error))
+                if error.kind() == std::io::ErrorKind::UnexpectedEof));
+            assert_eq!(reader.0.cursor.position(), 2);
+            assert!(reader.0.largest_read < declared_len);
+        }
+    }
+
+    /// Preserves encoding and field boundaries across short and interrupted reads.
+    #[test]
+    fn stream_payloads_preserve_encoding_and_boundaries() {
+        use super::{NbtDataSource, NbtStreamReader};
+
+        let mut string = NbtStreamReader(ShortReader::new(b"a\xc0\x80\xc3\xa9\x2a"));
+        assert_eq!(string.read_string(0).unwrap(), "");
+        assert_eq!(string.0.cursor.position(), 0);
+        assert_eq!(string.read_string(5).unwrap(), "a\0\u{e9}");
+        assert_eq!(string.read_u8().unwrap(), 42);
+
+        let mut bytes = NbtStreamReader(ShortReader::new(&[0, 127, 128, 255, 42]));
+        assert!(bytes.read_byte_array(0).unwrap().is_empty());
+        assert_eq!(
+            bytes.read_byte_array(4).unwrap().as_ref(),
+            &[0, 127, -128, -1]
+        );
+        assert_eq!(bytes.read_u8().unwrap(), 42);
+    }
 
     #[test]
     fn java_numeric_arrays_decode_big_endian_values() {
