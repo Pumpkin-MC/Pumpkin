@@ -12,7 +12,9 @@ use tracing::warn;
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 
 /// Loads embedded test environments into the dynamic registry before on-disk packs.
-pub fn load_embedded_test_environments(registry: &mut HashMap<String, RegistryEntryData>) -> usize {
+pub fn load_embedded_test_environments<S: std::hash::BuildHasher>(
+    registry: &mut HashMap<String, RegistryEntryData, S>,
+) -> usize {
     let before = registry.len();
     for &id in pumpkin_data::test_environment::all_test_environment_names() {
         let Some(content) = pumpkin_data::test_environment::get_test_environment_json(id) else {

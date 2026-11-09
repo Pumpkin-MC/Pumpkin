@@ -44,7 +44,7 @@ pub struct GameTestSession {
 }
 
 impl GameTestSession {
-    pub(crate) fn environment(&self) -> &serde_json::Value {
+    pub(crate) const fn environment(&self) -> &serde_json::Value {
         &self.test.definition().environment
     }
 

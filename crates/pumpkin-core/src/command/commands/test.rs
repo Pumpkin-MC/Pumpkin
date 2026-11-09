@@ -511,7 +511,7 @@ impl CommandExecutor for LocateExecutor {
                 let distance = if dimension == &context.world().dimension.minecraft_name {
                     let dx = f64::from(position.0.x) - f64::from(center.0.x);
                     let dz = f64::from(position.0.z) - f64::from(center.0.z);
-                    ((dx * dx + dz * dz).sqrt().floor() as i32).to_string()
+                    (dx.hypot(dz).floor() as i32).to_string()
                 } else {
                     "N/A".to_string()
                 };
@@ -819,6 +819,10 @@ impl CommandExecutor for StopExecutor {
 struct PosExecutor;
 
 impl CommandExecutor for PosExecutor {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "position lookup and feedback share the selected test"
+    )]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let player = context.source.player_or_err()?;
         let var_name = if context.arguments.contains_key(ARG_VAR) {
@@ -1043,6 +1047,10 @@ impl CommandExecutor for ClearExecutor {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the vanilla test command has many argument branches"
+)]
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,

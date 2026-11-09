@@ -677,10 +677,10 @@ impl GameTestRunner {
             }
             self.next_rerun_order = 0;
         }
-        if self.active.is_empty() {
-            if let Some((world, saved)) = self.environment.take() {
-                world.teardown_test_environment(saved);
-            }
+        if self.active.is_empty()
+            && let Some((world, saved)) = self.environment.take()
+        {
+            world.teardown_test_environment(saved);
         }
     }
 }

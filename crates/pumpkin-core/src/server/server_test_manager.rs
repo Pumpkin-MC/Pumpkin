@@ -944,14 +944,13 @@ pub async fn reset_test_instance(
         }
     }
     .await;
-    {
-        let mut data = entity
-            .data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let data = data.get_or_insert_with(NbtCompound::new);
-        data.put_string("status", "cleared".to_string());
-    }
+    let mut data = entity
+        .data
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    data.get_or_insert_with(NbtCompound::new)
+        .put_string("status", "cleared".to_string());
+    drop(data);
     let block_entity: Arc<dyn BlockEntity> = entity;
     world.update_block_entity(&block_entity);
     placed
