@@ -6,7 +6,7 @@ use std::{
 use pumpkin_core::{
     block::entities::{
         hanging_sign::HangingSignBlockEntity,
-        sign::{DyeColor, SIGN_EDIT_RANGE_BUFFER, SignBlockEntity, SignEntityRef},
+        sign::{DyeColor, SignBlockEntity, SignEntityRef},
     },
     entity::EntityBase,
     server::Server,
@@ -268,7 +268,7 @@ async fn run_range_buffer_case(
     if player.can_interact_with_block_at(&pos, 0.0) {
         return Err("range buffer case started inside the base interaction range".to_string());
     }
-    if !player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER) {
+    if !player.can_interact_with_block_at(&pos, 4.0) {
         return Err("range buffer case started outside the edit buffer".to_string());
     }
     set_editor(world, pos, Some(player.gameprofile.id));
@@ -279,6 +279,20 @@ async fn run_range_buffer_case(
             "SIGN_UPDATE inside the edit buffer was rejected (player at {:?})",
             player.get_entity().pos.load()
         ));
+    }
+
+    // Past the four-block buffer must still be rejected.
+    let beyond = 1.0 + player.block_interaction_range() + 4.0 + 1.0;
+    let target = Vector3::new(
+        f64::from(pos.0.x) + beyond,
+        f64::from(pos.0.y),
+        f64::from(pos.0.z) + 0.5,
+    );
+    move_to_and_wait(server, bot, player, target).await?;
+    send_update(bot, pos, "BEYOND").await?;
+    tick(server, 20).await;
+    if stored_text(world, pos) != "BUFFER" {
+        return Err("SIGN_UPDATE past the edit buffer was accepted".to_string());
     }
     let home = Vector3::new(
         f64::from(base.0.x) + 0.5,
