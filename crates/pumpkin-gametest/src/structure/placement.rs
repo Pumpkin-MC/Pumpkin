@@ -10,6 +10,15 @@ use crate::world::GameTestWorld;
 
 const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
 
+fn clear_flags() -> BlockFlags {
+    BlockFlags::NOTIFY_LISTENERS
+        | BlockFlags::SKIP_DROPS
+        | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK
+        | BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT
+        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+        | BlockFlags::UPDATE_KNOWN_SHAPE
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GameTestPosition {
     x: i32,
@@ -168,26 +177,6 @@ pub async fn place_structure_with_controller_rotation(
     let placement =
         TestStructureInstance::new(test_instance_pos, origin, source_size, size, rotation);
 
-    // Vanilla TestInstanceBlockEntity::placeStructure clears non-player entities
-    // from getTestBounds() before placing a fresh attempt. This is particularly
-    // important for retries: mobs spawned by the previous attempt must not survive
-    // into the next one and keep ticking against the replacement structure.
-    let test_min = BlockPos::new(
-        origin.0.x - padding,
-        origin.0.y - padding,
-        origin.0.z - padding,
-    );
-    let test_max = BlockPos::new(
-        origin.0.x + size[0] + padding,
-        origin.0.y + size[1] + padding,
-        origin.0.z + size[2] + padding,
-    );
-    world
-        .clear_non_player_entities(&test_min, &test_max)
-        .await?;
-
-    clear_test_area(world, &origin, size, padding).await?;
-
     world
         .set_block_state(
             &test_instance_pos,
@@ -215,6 +204,36 @@ pub async fn place_structure_with_controller_rotation(
     world
         .set_block_entity_nbt(&test_instance_pos, &test_instance_nbt)
         .await?;
+
+    place_existing_structure(world, template, &placement, padding, false).await?;
+
+    Ok(placement)
+}
+
+/// Places a template around an existing test controller without changing its saved data.
+pub async fn place_existing_structure(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    placement: &TestStructureInstance,
+    padding: i32,
+    ignore_entities: bool,
+) -> GameTestResult<()> {
+    let origin = placement.origin();
+    let size = placement.size();
+    let source_size = placement.source_size();
+    let rotation = placement.rotation();
+    let test_min = BlockPos::new(
+        origin.0.x - padding,
+        origin.0.y - padding,
+        origin.0.z - padding,
+    );
+    let test_max = BlockPos::new(
+        origin.0.x + size[0] + padding,
+        origin.0.y + size[1] + padding,
+        origin.0.z + size[2] + padding,
+    );
+    clear_test_area(world, origin, size, padding).await?;
+    world.clear_non_player_entities(&test_min, &test_max).await?;
 
     // StructureTemplate.placeInWorld rotates both relative positions and block
     // states before loading block-entity NBT at the transformed absolute position.
@@ -248,7 +267,9 @@ pub async fn place_structure_with_controller_rotation(
         }
     }
 
-    place_entities(world, template, &placement).await?;
+    if !ignore_entities {
+        place_entities(world, template, placement).await?;
+    }
 
     // GameTestInfo::placeStructure clears both scheduled block ticks and queued
     // block events in the test box after replacement. This prevents deferred work
@@ -258,7 +279,7 @@ pub async fn place_structure_with_controller_rotation(
         .await?;
     world.clear_block_events(&test_min, &test_max).await?;
 
-    Ok(placement)
+    Ok(())
 }
 
 async fn place_entities(
@@ -355,7 +376,7 @@ pub async fn remove_barriers(
                 .set_block_state(
                     &position,
                     Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
+                    clear_flags(),
                 )
                 .await?;
         }
@@ -452,7 +473,7 @@ pub async fn clear_placed_test(
         .set_block_state(
             placement.test_instance_pos(),
             Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_ALL,
+            clear_flags(),
         )
         .await
 }
@@ -482,17 +503,12 @@ async fn clear_box(
     origin: &BlockPos,
     size: [i32; 3],
 ) -> GameTestResult<()> {
-    let clear_flags = BlockFlags::NOTIFY_LISTENERS
-        | BlockFlags::SKIP_DROPS
-        | BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT
-        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
-
     for x in 0..size[0] {
         for y in 0..size[1] {
             for z in 0..size[2] {
                 let position = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z + z);
                 world
-                    .set_block_state(&position, Block::AIR.default_state.id, clear_flags)
+                    .set_block_state(&position, Block::AIR.default_state.id, clear_flags())
                     .await?;
             }
         }

@@ -17,7 +17,7 @@ pub use helper::{
 };
 pub use manager::{
     GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
-    GameTestRetryOptions, GameTestRunner,
+    GameTestRetryOptions, GameTestRunner, VERIFY_TEST_BATCH_SIZE,
 };
 pub use model::{GameTestDefinition, GameTestRotation, TestType};
 pub use runner::{GameTestSession, GameTestState, TestRunner};
@@ -25,8 +25,9 @@ pub use selector::resource_selector_matches;
 pub use structure::{
     GameTestPosition, GameTestStructureBlock, GameTestStructureEntity, GameTestStructureTemplate,
     TestBlockMode,
-    TestStructureInstance, clear_structure_area, encase_structure, place_structure,
-    place_structure_with_controller_rotation, remove_barriers,
+    TestStructureInstance, clear_placed_test, clear_structure_area, encase_structure,
+    place_existing_structure, place_structure, place_structure_with_controller_rotation,
+    remove_barriers,
 };
 pub use world::GameTestWorld;
 
@@ -207,6 +208,15 @@ mod tests {
 
     impl GameTestReporter for SilentReporter {
         fn send_message(&self, _message: TextComponent) {}
+    }
+
+    #[test]
+    fn cancelled_optional_request_does_not_fail_required_summary() {
+        let report = GameTestBatchReport::new(Arc::new(SilentReporter), 1);
+        report.cancel_before_start("test", false);
+        assert!(report.is_done());
+        assert_eq!(report.failed_required(), 0);
+        assert_eq!(report.failed_optional(), 1);
     }
 
     #[test]
@@ -538,5 +548,69 @@ mod tests {
             Some(&[NbtTag::Float(135.0), NbtTag::Float(10.0)][..])
         );
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn reruns_follow_completion_order_after_the_current_wave() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let world: Arc<dyn GameTestWorld> = Arc::new(InMemoryTestWorld::default());
+        #[expect(clippy::expect_used, reason = "unit test fixture")]
+        let template =
+            Arc::new(GameTestStructureTemplate::empty([1, 1, 1]).expect("1x1x1 empty template"));
+        let reporter: Arc<dyn GameTestReporter> = Arc::new(SilentReporter);
+        let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 2));
+        let mut runner = GameTestRunner::new();
+
+        for (index, (name, setup_ticks)) in [("slow", 2), ("fast", 0)].into_iter().enumerate() {
+            let definition = GameTestDefinition {
+                instance_type: TestType::Function,
+                environment: serde_json::Value::String("minecraft:default".to_string()),
+                function: Some(format!("test:{name}")),
+                structure: "minecraft:empty".to_string(),
+                max_ticks: 10,
+                setup_ticks,
+                required: true,
+                rotation: GameTestRotation::None,
+                manual_only: false,
+                max_attempts: 1,
+                required_successes: 1,
+                sky_access: false,
+                padding: 0,
+            };
+            let calls = calls.clone();
+            let function: Arc<dyn GameTestFunction> = Arc::new(move |helper: GameTestHelper| {
+                let calls = calls.clone();
+                async move {
+                    calls
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(name);
+                    helper.succeed();
+                    Ok(())
+                }
+            });
+            let test =
+                BlockBasedTest::new(format!("test:{name}"), definition).with_function(function);
+            let session =
+                GameTestSession::new(test, world.clone(), template.clone(), index as i32 * 8, 0);
+            runner.enqueue(GameTestManager::new(
+                session,
+                GameTestRetryOptions::new(2, false),
+                report.clone(),
+                reporter.clone(),
+            ));
+        }
+
+        for _ in 0..30 {
+            runner.tick().await;
+            if runner.is_empty() {
+                break;
+            }
+        }
+        assert!(report.is_done());
+        let calls = calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(calls.as_slice(), ["fast", "slow", "fast", "slow"]);
     }
 }
