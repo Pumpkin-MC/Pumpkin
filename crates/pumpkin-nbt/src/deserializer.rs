@@ -584,7 +584,11 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
 
     fn get_string(&mut self) -> Result<Cow<'a, str>> {
         let len = self.get_string_len()? as usize;
-        self.reader.read_string(len)
+        let bytes = self.reader.read_byte_array(len)?;
+        let bytes = bytes.iter().map(|&byte| byte as u8).collect();
+        String::from_utf8(bytes)
+            .map(Cow::Owned)
+            .map_err(|_| Error::Utf8DecodingError)
     }
 
     fn get_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
@@ -599,6 +603,44 @@ mod tests {
     use crate::serializer::{NbtWriteHelper, NbtWriteHelperBedrock};
 
     use super::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
+
+    #[test]
+    fn bedrock_strings_preserve_utf8_and_null_bytes() {
+        // VarUInt byte length, UTF-8 payload, then a separate byte.
+        let bytes = b"\x08a\0\xf0\x9f\x98\x80\xc3\xa9\x2a";
+        let expected = "a\0\u{1f600}\u{e9}";
+        let mut borrowed = NbtReadHelperBedrock::new(Cursor::new(bytes.as_slice()));
+        assert_eq!(borrowed.get_string().unwrap(), expected);
+        assert_eq!(borrowed.get_u8().unwrap(), 42);
+
+        let mut owned = NbtReadHelperBedrock::new(Cursor::new(bytes.to_vec()));
+        assert_eq!(owned.get_string().unwrap(), expected);
+        assert_eq!(owned.get_u8().unwrap(), 42);
+
+        let mut stream = NbtReadHelperBedrock::new(super::NbtStreamReader(Cursor::new(bytes)));
+        assert_eq!(stream.get_string().unwrap(), expected);
+        assert_eq!(stream.get_u8().unwrap(), 42);
+
+        let mut encoded = Vec::new();
+        NbtWriteHelperBedrock::new(&mut encoded)
+            .write_string(expected)
+            .unwrap();
+        assert_eq!(encoded, bytes[..bytes.len() - 1]);
+    }
+
+    #[test]
+    fn bedrock_strings_reject_modified_utf8() {
+        for bytes in [
+            b"\x02\xc0\x80".as_slice(),
+            b"\x06\xed\xa0\xbd\xed\xb8\x80".as_slice(),
+        ] {
+            let mut reader = NbtReadHelperBedrock::new(Cursor::new(bytes));
+            assert!(matches!(
+                reader.get_string(),
+                Err(crate::Error::Utf8DecodingError)
+            ));
+        }
+    }
 
     #[test]
     fn java_numeric_arrays_decode_big_endian_values() {
