@@ -1,10 +1,9 @@
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::EntityDimensions;
@@ -16,9 +15,15 @@ use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
-    ai::control::{Control, MoveControlTrait, move_control::MoveControl},
     ai::goal::Goal,
-    mob::{Mob, MobEntity, spawn::EntitySpawnReason},
+    mob::{
+        Mob, MobEntity,
+        cube_mob::{
+            CubeMob, CubeMobData, CubeMobFloatGoal, CubeMobKeepOnJumpingGoal, CubeMobMoveControl,
+            CubeMobRandomDirectionGoal,
+        },
+        spawn::EntitySpawnReason,
+    },
 };
 use crate::world::World;
 use pumpkin_util::random::RandomImpl;
@@ -34,14 +39,7 @@ const SLIME_HUNTS: &[Hunt] = &[
 
 pub struct SlimeEntity {
     entity: Arc<MobEntity>,
-    jump_delay: AtomicI32,
-    target_yaw: AtomicCell<f32>,
-    is_aggressive: AtomicBool,
-    was_on_ground: AtomicBool,
-    pub squish: AtomicCell<f32>,
-    pub target_squish: AtomicCell<f32>,
-    pub o_squish: AtomicCell<f32>,
-    speed_modifier: AtomicCell<Option<f64>>,
+    cube: CubeMobData,
     has_split: AtomicBool,
 }
 
@@ -50,17 +48,14 @@ impl SlimeEntity {
         let mob_entity = MobEntity::new(entity);
         let slime = Self {
             entity: Arc::new(mob_entity),
-            jump_delay: AtomicI32::new(0),
-            target_yaw: AtomicCell::new(0.0),
-            is_aggressive: AtomicBool::new(false),
-            was_on_ground: AtomicBool::new(false),
-            squish: AtomicCell::new(0.0),
-            target_squish: AtomicCell::new(0.0),
-            o_squish: AtomicCell::new(0.0),
-            speed_modifier: AtomicCell::new(None),
+            cube: CubeMobData::default(),
             has_split: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(slime);
+        let weak = {
+            let cube: Arc<dyn CubeMob> = mob_arc.clone();
+            Arc::downgrade(&cube)
+        };
 
         {
             let mut move_control = mob_arc
@@ -68,15 +63,15 @@ impl SlimeEntity {
                 .move_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *move_control = Box::new(SlimeMoveControl::new(Arc::downgrade(&mob_arc)));
+            *move_control = Box::new(CubeMobMoveControl::new(weak.clone()));
 
             let goal_selector = &mob_arc.entity.goals_selector;
             let target_selector = &mob_arc.entity.target_selector;
 
-            goal_selector.add_goal(1, Box::new(SlimeFloatGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(1, Box::new(CubeMobFloatGoal::new(weak.clone())));
             goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(3, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(5, Box::new(SlimeKeepOnJumpingGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(3, Box::new(CubeMobRandomDirectionGoal::new(weak.clone())));
+            goal_selector.add_goal(5, Box::new(CubeMobKeepOnJumpingGoal::new(weak)));
 
             hunting::apply(target_selector, &mob_arc.entity, SLIME_HUNTS);
         };
@@ -144,16 +139,24 @@ impl SlimeEntity {
         }
     }
 
+    /// Vanilla `AbstractCubeMob.dealDamage`: touching isn't enough, the player must be in
+    /// melee range and in sight. Sight is checked fresh, not through the sensing cache, which
+    /// `NoAI` cubes never clear.
+    pub fn deal_damage(&self, player: &crate::entity::player::Player) {
+        if self.entity.is_in_attack_range(player)
+            && self.get_entity().has_line_of_sight(player.get_entity())
+            && self.entity.try_attack(self, player)
+        {
+            self.on_attack(player);
+        }
+    }
+
     pub fn get_size(&self) -> i32 {
-        self.entity
-            .living_entity
-            .entity
-            .data
-            .load(Ordering::Relaxed)
+        CubeMob::get_size(self)
     }
 
     pub fn is_tiny(&self) -> bool {
-        self.get_size() <= 1
+        CubeMob::is_tiny(self)
     }
 
     pub fn check_slime_spawn_rules(
@@ -215,13 +218,11 @@ impl SlimeEntity {
     //         _ => 0.0,
     //     }
     // }
+}
 
-    fn get_jump_delay() -> i32 {
-        rand::random_range(10..30)
-    }
-
-    fn do_play_jump_sound(&self) -> bool {
-        self.get_size() > 0
+impl CubeMob for SlimeEntity {
+    fn cube_data(&self) -> &CubeMobData {
+        &self.cube
     }
 
     fn get_jump_sound(&self) -> Sound {
@@ -238,15 +239,6 @@ impl SlimeEntity {
         } else {
             Sound::EntitySlimeSquish
         }
-    }
-
-    fn get_sound_volume(&self) -> f32 {
-        0.4 * self.get_size() as f32
-    }
-
-    fn get_sound_pitch(&self) -> f32 {
-        let pitch_adjuster = if self.is_tiny() { 1.4 } else { 0.8 };
-        (rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0 * pitch_adjuster
     }
 }
 
@@ -280,12 +272,15 @@ impl Mob for SlimeEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("Size", self.get_size() - 1);
-        nbt.put_bool("wasOnGround", self.was_on_ground.load(Ordering::Relaxed));
+        nbt.put_bool(
+            "wasOnGround",
+            self.cube.was_on_ground.load(Ordering::Relaxed),
+        );
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.set_size(nbt.get_int("Size").unwrap_or(0) + 1, false);
-        self.was_on_ground.store(
+        self.cube.was_on_ground.store(
             nbt.get_bool("wasOnGround").unwrap_or(false),
             Ordering::Relaxed,
         );
@@ -315,49 +310,16 @@ impl Mob for SlimeEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.o_squish.store(self.squish.load());
-        self.squish
-            .store(self.squish.load() + (self.target_squish.load() - self.squish.load()) * 0.5);
+        crate::entity::mob::cube_mob::tick_cube_mob(self);
+    }
 
-        let on_ground = self
-            .entity
-            .living_entity
-            .entity
-            .on_ground
-            .load(Ordering::Relaxed);
-        let was_on_ground = self.was_on_ground.load(Ordering::Relaxed);
-
-        if on_ground && !was_on_ground {
-            // TODO: particles
-
-            let world = self.entity.living_entity.entity.world.load();
-            world.play_sound_fine(
-                self.get_squish_sound(),
-                SoundCategory::Hostile,
-                &self.entity.living_entity.entity.pos.load(),
-                self.get_sound_volume(),
-                ((rand::random_range(0.0..1.0) - rand::random_range(0.0..1.0)) * 0.2 + 1.0) / 0.8,
-            );
-
-            self.target_squish.store(-0.5);
-        } else if !on_ground && was_on_ground {
-            self.target_squish.store(1.0);
-        }
-
-        self.was_on_ground.store(on_ground, Ordering::Relaxed);
-        self.target_squish.store(self.target_squish.load() * 0.6);
-
-        self.is_aggressive.store(false, Ordering::Relaxed);
-        self.speed_modifier.store(None);
+    fn mob_receives_player_touch(&self) -> bool {
+        true
     }
 
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
         if !self.is_tiny() {
-            // dealDamage
-            let damaged = self.entity.try_attack(self, &**player);
-            if damaged {
-                self.on_attack(&**player);
-            }
+            self.deal_damage(player);
         }
     }
 
@@ -412,136 +374,6 @@ impl Mob for SlimeEntity {
     }
 }
 
-pub struct SlimeMoveControl {
-    slime: Weak<SlimeEntity>,
-}
-
-impl SlimeMoveControl {
-    #[must_use]
-    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
-        Self { slime }
-    }
-}
-
-impl Control for SlimeMoveControl {}
-
-impl MoveControlTrait for SlimeMoveControl {
-    fn set_wanted_position(&mut self, _x: f64, _y: f64, _z: f64, speed_modifier: f64) {
-        if let Some(slime) = self.slime.upgrade() {
-            slime.speed_modifier.store(Some(speed_modifier));
-        }
-    }
-
-    fn strafe(&mut self, _forward: f32, _right: f32) {
-        if let Some(slime) = self.slime.upgrade() {
-            slime.speed_modifier.store(None);
-        }
-    }
-
-    fn has_wanted(&self) -> bool {
-        self.slime
-            .upgrade()
-            .is_some_and(|slime| slime.speed_modifier.load().is_some())
-    }
-
-    fn tick(&mut self, mob: &dyn Mob) {
-        let Some(slime) = self.slime.upgrade() else {
-            return;
-        };
-        let mob_entity = mob.get_mob_entity();
-        let living_entity = &mob_entity.living_entity;
-        let entity = &living_entity.entity;
-
-        let current_yaw = entity.yaw.load();
-        let new_yaw =
-            MoveControl::rotlerp(current_yaw, slime.target_yaw.load(), MoveControl::MAX_TURN);
-        entity.yaw.store(new_yaw);
-        entity.head_yaw.store(new_yaw);
-        entity.body_yaw.store(new_yaw);
-
-        let Some(speed_modifier) = slime.speed_modifier.take() else {
-            let input = living_entity.movement_input.load();
-            living_entity
-                .movement_input
-                .store(Vector3::new(input.x, input.y, 0.0));
-            return;
-        };
-        mob_entity.set_speed(
-            (speed_modifier * living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED))
-                as f32,
-        );
-        if entity.on_ground.load(Ordering::Relaxed) {
-            let delay = slime.jump_delay.fetch_sub(1, Ordering::Relaxed);
-            if delay <= 0 {
-                let mut next_delay = SlimeEntity::get_jump_delay();
-                if slime.is_aggressive.load(Ordering::Relaxed) {
-                    next_delay /= 3;
-                }
-                slime.jump_delay.store(next_delay, Ordering::Relaxed);
-                mob_entity
-                    .jump_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .jump();
-                if slime.do_play_jump_sound() {
-                    let world = entity.world.load();
-                    world.play_sound_fine(
-                        slime.get_jump_sound(),
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                        slime.get_sound_volume(),
-                        slime.get_sound_pitch(),
-                    );
-                }
-            } else {
-                mob_entity.set_speed(0.0);
-                let input = living_entity.movement_input.load();
-                living_entity
-                    .movement_input
-                    .store(Vector3::new(0.0, input.y, 0.0));
-            }
-        }
-    }
-}
-
-pub struct SlimeFloatGoal {
-    slime: Arc<SlimeEntity>,
-}
-
-impl SlimeFloatGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
-        Self { slime }
-    }
-}
-
-impl Goal for SlimeFloatGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.slime.entity.living_entity.entity;
-        entity.touching_water.load(Ordering::Relaxed)
-            || entity.touching_lava.load(Ordering::Relaxed)
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        if rand::random_range(0.0..1.0) < 0.8 {
-            self.slime
-                .entity
-                .jump_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .jump();
-        }
-        self.slime.speed_modifier.store(Some(1.2));
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
-    }
-
-    fn controls(&self) -> crate::entity::ai::goal::Controls {
-        crate::entity::ai::goal::Controls::JUMP | crate::entity::ai::goal::Controls::MOVE
-    }
-}
-
 pub struct SlimeAttackGoal {
     slime: Arc<SlimeEntity>,
     grow_tired_timer: i32,
@@ -577,9 +409,12 @@ impl Goal for SlimeAttackGoal {
             let dx = pos.x - my_pos.x;
             let dz = pos.z - my_pos.z;
             let yaw = dx.atan2(dz).to_degrees() as f32;
-            self.slime.target_yaw.store(yaw);
+            self.slime.cube_data().target_yaw.store(yaw);
         }
-        self.slime.is_aggressive.store(true, Ordering::Relaxed);
+        self.slime
+            .cube_data()
+            .is_aggressive
+            .store(true, Ordering::Relaxed);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -588,88 +423,6 @@ impl Goal for SlimeAttackGoal {
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
         crate::entity::ai::goal::Controls::LOOK
-    }
-}
-
-pub struct SlimeRandomDirectionGoal {
-    slime: Arc<SlimeEntity>,
-    chosen_degrees: f32,
-    next_randomize_time: i32,
-}
-
-impl SlimeRandomDirectionGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
-        Self {
-            slime,
-            chosen_degrees: 0.0,
-            next_randomize_time: 0,
-        }
-    }
-}
-
-impl Goal for SlimeRandomDirectionGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_none()
-            && (self
-                .slime
-                .entity
-                .living_entity
-                .entity
-                .on_ground
-                .load(Ordering::Relaxed)
-                || self
-                    .slime
-                    .entity
-                    .living_entity
-                    .entity
-                    .touching_water
-                    .load(Ordering::Relaxed)
-                || self
-                    .slime
-                    .entity
-                    .living_entity
-                    .entity
-                    .touching_lava
-                    .load(Ordering::Relaxed))
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        self.next_randomize_time -= 1;
-        if self.next_randomize_time <= 0 {
-            self.next_randomize_time = rand::random_range(40..100);
-            self.chosen_degrees = rand::random_range(0.0..360.0);
-        }
-        self.slime.target_yaw.store(self.chosen_degrees);
-        self.slime.is_aggressive.store(false, Ordering::Relaxed);
-    }
-
-    fn controls(&self) -> crate::entity::ai::goal::Controls {
-        crate::entity::ai::goal::Controls::LOOK
-    }
-}
-
-pub struct SlimeKeepOnJumpingGoal {
-    slime: Arc<SlimeEntity>,
-}
-
-impl SlimeKeepOnJumpingGoal {
-    #[must_use]
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
-        Self { slime }
-    }
-}
-
-impl Goal for SlimeKeepOnJumpingGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        !self.slime.entity.living_entity.entity.has_vehicle()
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        self.slime.speed_modifier.store(Some(1.0));
-    }
-
-    fn controls(&self) -> crate::entity::ai::goal::Controls {
-        crate::entity::ai::goal::Controls::JUMP | crate::entity::ai::goal::Controls::MOVE
     }
 }
 
@@ -690,7 +443,7 @@ mod tests {
         ));
         let living = &slime.entity.living_entity;
         living.entity.on_ground.store(true, Ordering::Relaxed);
-        slime.jump_delay.store(10, Ordering::Relaxed);
+        slime.cube.jump_delay.store(10, Ordering::Relaxed);
         slime.entity.set_speed(0.5);
         let (speed, delay, pending) = {
             let mut control = slime
@@ -702,7 +455,7 @@ mod tests {
             control.tick(&*slime);
             (
                 living.get_speed(),
-                slime.jump_delay.load(Ordering::Relaxed),
+                slime.cube.jump_delay.load(Ordering::Relaxed),
                 control.has_wanted(),
             )
         };

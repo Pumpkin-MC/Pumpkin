@@ -56,6 +56,29 @@ pub fn convert_to(
     Some(converted)
 }
 
+/// Spawns one split-off child of a dying mob, run while the parent is removed.
+/// Removal already detached its riders and leash, so only the common data is copied.
+pub fn split_on_death(
+    from: &dyn Mob,
+    entity_type: &'static EntityType,
+    after_conversion: impl FnOnce(&dyn Mob),
+) {
+    let from_entity = from.get_entity();
+    let world = from_entity.world.load_full();
+    let converted = from_type(
+        entity_type,
+        from_entity.pos.load(),
+        &world,
+        uuid::Uuid::new_v4(),
+    );
+    let Some(to) = converted.get_mob() else {
+        return;
+    };
+    convert_common(from, to, ConversionParams::single(false, false));
+    after_conversion(to);
+    world.spawn_entity(converted);
+}
+
 fn convert_single(from: &dyn Mob, to: &dyn Mob, params: ConversionParams) {
     let from_mob = from.get_mob_entity();
     let to_mob = to.get_mob_entity();

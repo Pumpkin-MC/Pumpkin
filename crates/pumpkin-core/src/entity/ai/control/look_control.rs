@@ -105,6 +105,9 @@ impl LookControl {
 }
 
 impl LookControlTrait for LookControl {
+    fn wanted_position(&self) -> Option<Vector3<f64>> {
+        Some(self.position)
+    }
     fn tick(&mut self, mob: &dyn Mob) {
         Self::tick(self, mob);
     }

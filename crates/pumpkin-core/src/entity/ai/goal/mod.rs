@@ -9,6 +9,8 @@ pub mod bow_attack;
 pub mod break_door;
 pub mod breath_air;
 pub mod breed;
+pub mod cat_lie_on_block;
+pub mod cat_sit_on_block;
 pub mod chase_player;
 pub mod climb_on_top_of_powder_snow;
 pub mod creeper_ignite;
@@ -318,6 +320,16 @@ impl<P> ParentHandle<P> {
     /// assert_eq!(parent.child.value(), 7);
     /// ```
     pub const unsafe fn new(parent: &P) -> Self {
+        Self {
+            ptr: ptr::from_ref(parent),
+        }
+    }
+
+    #[must_use]
+    pub const fn from_static(parent: &'static P) -> Self
+    where
+        P: Sync,
+    {
         Self {
             ptr: ptr::from_ref(parent),
         }

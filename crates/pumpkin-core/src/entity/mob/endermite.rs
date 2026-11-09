@@ -69,6 +69,10 @@ impl Mob for EndermiteEntity {
         self.play_entity_sound(Sound::EntityEndermiteStep, 0.15, 1.0);
     }
 
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(Sound::EntityEndermiteAmbient)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
