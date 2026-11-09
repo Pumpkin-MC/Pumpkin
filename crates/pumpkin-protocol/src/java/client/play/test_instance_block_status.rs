@@ -4,45 +4,70 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::TEST_INSTANCE_BLOCK_STATUS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
 #[java_packet(TEST_INSTANCE_BLOCK_STATUS)]
-pub struct CTestInstanceBlockStatus<'a> {
-    pub pos: BlockPos,
-    pub status: VarInt,
-    pub message: Option<&'a str>,
+pub struct CTestInstanceBlockStatus {
+    pub status: TextComponent,
+    pub size: Option<[i32; 3]>,
 }
 
-impl<'a> CTestInstanceBlockStatus<'a> {
+impl CTestInstanceBlockStatus {
     #[must_use]
-    pub const fn new(pos: BlockPos, status: VarInt, message: Option<&'a str>) -> Self {
-        Self {
-            pos,
-            status,
-            message,
-        }
+    pub const fn new(status: TextComponent, size: Option<[i32; 3]>) -> Self {
+        Self { status, size }
     }
 }
 
-impl ClientPacket for CTestInstanceBlockStatus<'_> {
+impl ClientPacket for CTestInstanceBlockStatus {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
-        write.write_var_int(&self.status)?;
-        write.write_option(&self.message, |p, v| p.write_string(v))?;
+        write.write_component(&self.status, version)?;
+        write.write_bool(self.size.is_some())?;
+        if let Some([x, y, z]) = self.size {
+            write.write_var_int(&VarInt(x))?;
+            write.write_var_int(&VarInt(y))?;
+            write.write_var_int(&VarInt(z))?;
+        }
         Ok(())
     }
 }
 
-impl<'a> ServerPacket<'a> for CTestInstanceBlockStatus<'a> {
+impl<'a> ServerPacket<'a> for CTestInstanceBlockStatus {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
-            status: bytebuf.get_var_int()?,
-            message: bytebuf.get_option(NetworkReadSliceExt::get_str_borrowed)?,
-        })
+        let status = bytebuf.get_component(version)?;
+        let size = if bytebuf.get_bool()? {
+            Some([
+                bytebuf.get_var_int()?.0,
+                bytebuf.get_var_int()?.0,
+                bytebuf.get_var_int()?.0,
+            ])
+        } else {
+            None
+        };
+        Ok(Self { status, size })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_packet_uses_component_then_optional_varint_size()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let packet = CTestInstanceBlockStatus::new(TextComponent::text("ready"), Some([1, 2, 3]));
+        let version = JavaMinecraftVersion::V_26_3;
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version)?;
+        assert!(bytes.ends_with(&[1, 1, 2, 3]));
+
+        let decoded = CTestInstanceBlockStatus::read(&mut bytes.as_slice(), &version)?;
+        assert_eq!(decoded.status, packet.status);
+        assert_eq!(decoded.size, packet.size);
+        Ok(())
     }
 }
