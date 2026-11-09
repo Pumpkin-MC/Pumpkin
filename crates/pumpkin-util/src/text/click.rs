@@ -1,6 +1,26 @@
 use std::borrow::Cow;
+use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
+
+/// A JSON payload kept verbatim for `show_dialog` and custom click actions.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct ClickPayload(pub serde_json::Value);
+
+impl Hash for ClickPayload {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_string().hash(state);
+    }
+}
+
+impl ClickPayload {
+    /// The payload as NBT, as the network writes it.
+    #[must_use]
+    pub fn to_nbt(&self) -> pumpkin_nbt::tag::NbtTag {
+        super::hover::json_to_nbt(&self.0)
+    }
+}
 
 /// Action to take on click of the text.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, Hash)]
@@ -12,6 +32,13 @@ pub enum ClickEvent {
     OpenFile { path: Cow<'static, str> },
     /// Works in signs but only on the root text component.
     RunCommand { command: Cow<'static, str> },
+    /// Shows a dialog.
+    ShowDialog { dialog: ClickPayload },
+    /// Runs a custom click action.
+    Custom {
+        id: Cow<'static, str>,
+        payload: Option<ClickPayload>,
+    },
     /// Replaces the contents of the chat box with the text, not necessarily a
     /// command.
     SuggestCommand { command: Cow<'static, str> },

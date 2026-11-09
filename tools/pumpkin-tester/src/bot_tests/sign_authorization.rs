@@ -398,6 +398,14 @@ async fn run_click_command_cases(
         return Err("editing an allow_op_features sign injected a click command".to_string());
     }
 
+    // show_dialog must also take the disabled-click branch.
+    let show_dialog = r#"{"text":"dialog","click_event":{"action":"show_dialog","dialog":{"type":"minecraft:notice","title":"x"}}}"#;
+    set_click_component(world, crafted_pos, show_dialog, false);
+    click_and_wait(server, bot, crafted_pos, 904).await?;
+    if sign_editor(world, crafted_pos).is_some() {
+        return Err("a disabled show_dialog click opened the editor".to_string());
+    }
+
     Ok(())
 }
 
@@ -423,7 +431,7 @@ async fn run_applicator_cases(
 
     let inventory = player.inventory();
     inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::RED_DYE));
-    click_and_wait(server, bot, click_apply_pos, 904).await?;
+    click_and_wait(server, bot, click_apply_pos, 905).await?;
     if sign_color(world, click_apply_pos) != Some(DyeColor::Red) {
         return Err("dye did not apply to a sign with a click command".to_string());
     }
@@ -439,25 +447,25 @@ async fn run_applicator_cases(
     tick(server, 20).await;
 
     inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::RED_DYE));
-    click_and_wait(server, bot, pos, 905).await?;
+    click_and_wait(server, bot, pos, 906).await?;
     if sign_color(world, pos) != Some(DyeColor::Red) {
         return Err("dye did not apply to a sign".to_string());
     }
 
     inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::GLOW_INK_SAC));
-    click_and_wait(server, bot, pos, 906).await?;
+    click_and_wait(server, bot, pos, 907).await?;
     if !sign_is_glowing(world, pos) {
         return Err("glow ink sac did not apply to a sign".to_string());
     }
 
     inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::INK_SAC));
-    click_and_wait(server, bot, pos, 907).await?;
+    click_and_wait(server, bot, pos, 908).await?;
     if sign_is_glowing(world, pos) {
         return Err("ink sac did not remove glowing text".to_string());
     }
 
     inventory.set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::HONEYCOMB));
-    click_and_wait(server, bot, pos, 908).await?;
+    click_and_wait(server, bot, pos, 909).await?;
     if !sign_is_waxed(world, pos) {
         return Err("honeycomb did not wax a sign".to_string());
     }
