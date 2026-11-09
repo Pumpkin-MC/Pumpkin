@@ -62,6 +62,17 @@ impl<'a> EnvironmentAttributes<'a> {
                     0.0
                 }
             }
+            EnvironmentAttribute::GameplayCatWakingUpGiftChance => {
+                if self.world.dimension.has_skylight && !self.world.dimension.has_fixed_time {
+                    sample_step_float_track(
+                        DayTimeline::CAT_WAKING_UP_GIFT_CHANCE_KEYFRAMES,
+                        DayTimeline::PERIOD_TICKS,
+                        self.world.get_time_of_day(),
+                    )
+                } else {
+                    0.0
+                }
+            }
             EnvironmentAttribute::VisualSunAngle => {
                 super::calculate_celestial_angle(self.world.get_time_of_day()) * 360.0
             }

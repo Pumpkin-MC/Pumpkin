@@ -78,6 +78,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:wither_pattern_spawns",
     "pumpkin:item_entities_merge",
     "pumpkin:zombie_pathfinds_to_villager",
+    "pumpkin:sniffers_breed_into_an_egg",
     // redstone_wire_and_power (14)
     "pumpkin:redstone_wire_attenuation_1_to_4",
     "pumpkin:redstone_wire_attenuation_5_to_8",
@@ -516,6 +517,14 @@ pub fn ensure_builtin_game_tests_registered() {
             3,
             1,
             entities_and_ai::test_zombie_pathfinds_to_villager,
+        );
+
+        register_function_test(
+            "pumpkin:sniffers_breed_into_an_egg",
+            "pumpkin:empty_5x4x5",
+            300,
+            0,
+            entities_and_ai::test_sniffers_breed_into_an_egg,
         );
 
         // redstone_wire_and_power (14)

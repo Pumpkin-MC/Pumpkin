@@ -423,6 +423,14 @@ pub trait PathNavigationTrait: Send + Sync {
         targets: &[BlockPos],
         reach_range: i32,
     ) -> Option<Path>;
+    /// [`Self::create_path`] searching at most `max_path_length` blocks instead of the follow range.
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path>;
     fn recompute_path(&mut self, entity: &LivingEntity);
     fn should_recompute_path(&self, entity: &LivingEntity, position: BlockPos) -> bool;
     fn set_avoid_sun(&mut self, avoid_sun: bool);
@@ -469,6 +477,7 @@ pub struct PathNavigation {
     pub is_stuck: bool,
     pub required_path_length: f32,
     pub path_type_overrides: FxHashMap<PathType, f32>,
+    pub(crate) allow_water_when_burning_or_immersed: bool,
     has_pending_path: bool,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
@@ -476,6 +485,9 @@ pub struct PathNavigation {
     pub can_pass_doors: bool,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
+    /// Frogs never cut a corner onto a water border node.
+    pub cuts_water_border_corners: bool,
+    path_length_override: Option<f32>,
     path_finder: Option<PathFinder>,
     update_pathfinder_max_visited_nodes: bool,
     pub is_idle: AtomicBool,
@@ -519,6 +531,7 @@ impl PathNavigation {
             is_stuck: false,
             required_path_length: 16.0,
             path_type_overrides: FxHashMap::default(),
+            allow_water_when_burning_or_immersed: false,
             has_pending_path: false,
             can_float: false,
             can_walk_over_fences: false,
@@ -526,6 +539,8 @@ impl PathNavigation {
             can_pass_doors: true,
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
+            cuts_water_border_corners: true,
+            path_length_override: None,
             path_finder: None,
             update_pathfinder_max_visited_nodes: false,
             is_idle: AtomicBool::new(true),
@@ -611,8 +626,24 @@ impl PathNavigation {
     }
 
     fn mob_max_follow_range(&self, entity: &LivingEntity) -> f32 {
+        if let Some(max_path_length) = self.path_length_override {
+            return max_path_length;
+        }
         let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
         follow_range.max(self.required_path_length)
+    }
+
+    pub fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.path_length_override = Some(max_path_length);
+        let path = self.create_path(entity, destination, reach_range);
+        self.path_length_override = None;
+        path
     }
 
     fn prepare_evaluator(&mut self, entity: &LivingEntity) -> (uuid::Uuid, u64) {
@@ -635,8 +666,7 @@ impl PathNavigation {
             mob_data.set_pathfinding_malus(path_type, malus);
         }
 
-        // Sniffer.onPathfindingStart permits water only while escaping fire or already immersed.
-        if entity.entity.entity_type == &pumpkin_data::entity::EntityType::SNIFFER
+        if self.allow_water_when_burning_or_immersed
             && (entity.entity.fire_ticks.load(Ordering::Relaxed) > 0 || entity.is_in_water())
         {
             mob_data.set_pathfinding_malus(PathType::Water, 0.0);
@@ -1118,10 +1148,12 @@ impl PathNavigation {
                 let close_enough =
                     x_distance < reach && z_distance < reach && y_distance < NODE_REACH_Y;
 
-                let corner_cut = path
-                    .get_next_node()
-                    .is_some_and(|n| Self::can_cut_corner(n.path_type))
-                    && Self::should_target_next_node_in_direction(mob_pos, path, || false);
+                let cuts_water_border = self.cuts_water_border_corners;
+                let corner_cut =
+                    path.get_next_node().is_some_and(|n| {
+                        Self::can_cut_corner(n.path_type)
+                            && (cuts_water_border || n.path_type != PathType::WaterBorder)
+                    }) && Self::should_target_next_node_in_direction(mob_pos, path, || false);
 
                 if close_enough || corner_cut {
                     path.advance();
@@ -1296,6 +1328,17 @@ impl PathNavigationTrait for GroundPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
     }
 
     fn create_path_to_targets(
@@ -1571,6 +1614,17 @@ impl PathNavigationTrait for FlyingPathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         self.inner.create_path(entity, destination, reach_range)
+    }
+
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
     }
 
     fn create_path_to_targets(
@@ -1868,6 +1922,17 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
     fn create_path_to_targets(
         &mut self,
         entity: &LivingEntity,
@@ -2118,6 +2183,17 @@ impl PathNavigationTrait for WallClimberNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
     fn create_path_to_targets(
         &mut self,
         entity: &LivingEntity,
@@ -2215,6 +2291,15 @@ impl AmphibiousPathNavigation {
                 prefers_shallow_swimming,
             ))),
         }
+    }
+
+    #[must_use]
+    pub fn frog() -> Self {
+        let mut inner = PathNavigation::new(EvaluatorKind::Amphibious(
+            AmphibiousNodeEvaluator::frog(true),
+        ));
+        inner.cuts_water_border_corners = false;
+        Self { inner }
     }
 }
 
@@ -2385,6 +2470,17 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
         self.inner.create_path(entity, destination, reach_range)
     }
 
+    fn create_path_with_max_length(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+        max_path_length: f32,
+    ) -> Option<Path> {
+        self.inner
+            .create_path_with_max_length(entity, destination, reach_range, max_path_length)
+    }
+
     fn create_path_to_targets(
         &mut self,
         entity: &LivingEntity,
@@ -2505,6 +2601,11 @@ impl Navigator {
     pub fn amphibious(prefers_shallow_swimming: bool) -> Self {
         Self::new(AmphibiousPathNavigation::new(prefers_shallow_swimming))
     }
+
+    #[must_use]
+    pub fn frog() -> Self {
+        Self::new(AmphibiousPathNavigation::frog())
+    }
 }
 
 impl Deref for Navigator {
@@ -2548,12 +2649,19 @@ mod tests {
     async fn sniffer_water_cost_changes_only_during_fire_or_immersion() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
-        for entity_type in [&EntityType::SNIFFER, &EntityType::COW] {
+        for (entity_type, water_escape, expected_costs) in [
+            (&EntityType::SNIFFER, true, [-1.0, 0.0, 0.0, -1.0]),
+            (&EntityType::COW, false, [-1.0; 4]),
+        ] {
             let living = living(world.clone(), entity_type);
             let mut navigation = GroundPathNavigation::new();
             navigation.set_can_float(true);
             navigation.set_pathfinding_malus(PathType::Water, -1.0);
-            for (fire, water) in [(0, false), (20, false), (0, true), (0, false)] {
+            navigation.inner.allow_water_when_burning_or_immersed = water_escape;
+            for ((fire, water), expected) in [(0, false), (20, false), (0, true), (0, false)]
+                .into_iter()
+                .zip(expected_costs)
+            {
                 living.entity.fire_ticks.store(fire, Ordering::Relaxed);
                 living.entity.touching_water.store(water, Ordering::Relaxed);
                 navigation.inner.prepare_evaluator(&living);
@@ -2565,12 +2673,8 @@ mod tests {
                     .mob_data
                     .as_ref()
                     .ok_or("missing path data")?;
-                let water_permitted = entity_type == &EntityType::SNIFFER && (fire > 0 || water);
                 assert!(
-                    (data.get_pathfinding_malus(PathType::Water)
-                        - if water_permitted { 0.0 } else { -1.0 })
-                    .abs()
-                        < f32::EPSILON
+                    (data.get_pathfinding_malus(PathType::Water) - expected).abs() < f32::EPSILON
                 );
                 navigation.inner.evaluator.done();
                 assert!(navigation.get_pathfinding_malus(PathType::Water) < 0.0);

@@ -7,6 +7,7 @@ use super::super::{BrainState, BrainTick};
 use super::timed::Behavior;
 use super::utils;
 use crate::entity::EntityBase;
+use crate::entity::ai::goal::breed::BreedGoal;
 
 const BREED_RANGE: f64 = 3.0;
 const DURATION: i32 = 110;
@@ -135,9 +136,7 @@ impl Behavior for AnimalMakeLove {
             .load()
             .squared_distance_to_vec(&partner.get_entity().pos.load());
         if distance < BREED_RANGE * BREED_RANGE && tick.time >= self.spawn_child_at_time {
-            if let Some(animal) = tick.mob.as_animal() {
-                animal.spawn_child_from_breeding(partner.as_ref());
-            }
+            BreedGoal::breed(tick.mob, partner.as_ref(), Some(tick.state));
             tick.state.erase(types::BREED_TARGET.id());
             if let Some(partner_mob) = partner.get_mob() {
                 partner_mob

@@ -67,8 +67,17 @@ impl BlockBehaviour for SnifferEggBlock {
             args.world
                 .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
         } else {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+            if args
+                .world
+                .break_block(
+                    args.position,
+                    None,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+                )
+                .is_none()
+            {
+                return;
+            }
 
             args.world.play_sound(
                 Sound::BlockSnifferEggHatch,

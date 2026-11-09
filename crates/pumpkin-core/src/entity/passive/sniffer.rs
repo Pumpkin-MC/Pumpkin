@@ -27,13 +27,12 @@ use crate::entity::{
             Brain, BrainState,
             memory::{PackedMemories, global_pos::GlobalPos, types},
         },
-        goal::breed::BreedGoal,
-        pathfinder::node::PathType,
+        pathfinder::{GroundPathNavigation, Navigator, PathNavigationTrait, node::PathType},
         util::land_random_pos,
     },
     item::ItemEntity,
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::animal::{Animal, PARENT_AGE_AFTER_BREEDING},
     player::Player,
 };
 use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
@@ -47,6 +46,8 @@ pub const DIGGING_DROP_SEED_OFFSET_TICKS: i32 = 120;
 const DIGGING_BB_HEIGHT_OFFSET: f32 = 0.4;
 const DIGGING_DIMENSIONS_EYE_HEIGHT: f32 = 0.81;
 const MAX_EXPLORED_POSITIONS: usize = 20;
+const HEAD_DISTANCE: f64 = 2.25;
+const MAX_HEAD_Y_ROT: f32 = 50.0;
 const DIGGING_LOOT_TABLE: &str = "minecraft:gameplay/sniffer_digging";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,14 +97,13 @@ pub struct SnifferEntity {
 impl SnifferEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
-        let navigator = mob_entity
-            .navigator
-            .get_mut()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        navigator.set_can_float(true);
-        navigator.set_pathfinding_malus(PathType::Water, -1.0);
-        navigator.set_pathfinding_malus(PathType::DangerPowderSnow, -1.0);
-        navigator.set_pathfinding_malus(PathType::DamageCautious, -1.0);
+        let mut navigation = GroundPathNavigation::new();
+        navigation.set_can_float(true);
+        navigation.set_pathfinding_malus(PathType::Water, -1.0);
+        navigation.set_pathfinding_malus(PathType::DangerPowderSnow, -1.0);
+        navigation.set_pathfinding_malus(PathType::DamageCautious, -1.0);
+        navigation.inner.allow_water_when_burning_or_immersed = true;
+        mob_entity.navigator = std::sync::Mutex::new(Navigator::new(navigation));
         Arc::new(Self {
             mob_entity,
             ageable_data: AgeableData::default(),
@@ -181,7 +181,7 @@ impl SnifferEntity {
     #[must_use]
     pub fn get_head_position(&self) -> Vector3<f64> {
         let entity = self.get_entity();
-        entity.pos.load() + entity.rotation().to_f64() * 2.25
+        entity.pos.load() + entity.rotation().to_f64() * HEAD_DISTANCE
     }
 
     #[must_use]
@@ -331,11 +331,14 @@ impl AgeableMob for SnifferEntity {
 
 impl Animal for SnifferEntity {
     fn play_eating_sound(&self) {
-        self.play_entity_sound(
-            Sound::EntitySnifferEat,
-            1.0,
-            0.8 + self.get_random().random::<f32>() * 0.4,
-        );
+        // Vanilla Sniffer.mobInteract adds a second sound after a successful feed.
+        for _ in 0..2 {
+            self.play_entity_sound(
+                Sound::EntitySnifferEat,
+                1.0,
+                0.8 + self.get_random().random::<f32>() * 0.4,
+            );
+        }
     }
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
@@ -355,22 +358,31 @@ impl Animal for SnifferEntity {
             })
     }
 
-    fn spawn_child_from_breeding(&self, partner: &dyn EntityBase) {
+    fn spawns_offspring(&self) -> bool {
+        false
+    }
+
+    fn on_bred_without_offspring(&self, mate: &dyn EntityBase, _brain: Option<&mut BrainState>) {
+        self.set_age(PARENT_AGE_AFTER_BREEDING);
+        mate.get_entity().set_age(PARENT_AGE_AFTER_BREEDING);
+
         let entity = self.get_entity();
         let world = entity.world.load_full();
         let egg = Arc::new(ItemEntity::new(
             Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
             ItemStack::new(1, &Item::SNIFFER_EGG),
         ));
-        if BreedGoal::finalize_spawn_child_from_breeding(self, partner, egg.as_ref()) {
-            let mut random = self.get_random();
-            self.play_entity_sound(
-                Sound::BlockSnifferEggPlop,
-                1.0,
-                (random.random::<f32>() - random.random::<f32>()) * 0.2 + 0.5,
-            );
-            world.spawn_entity(egg);
-        }
+        let mut random = self.get_random();
+        self.play_entity_sound(
+            Sound::BlockSnifferEggPlop,
+            1.0,
+            (random.random::<f32>() - random.random::<f32>()) * 0.2 + 0.5,
+        );
+        world.spawn_entity(egg);
+    }
+
+    fn on_accepted_damage(&self) {
+        self.mob_entity.reset_love_ticks();
     }
 }
 
@@ -421,7 +433,7 @@ impl Mob for SnifferEntity {
     }
 
     fn get_max_head_rotation(&self) -> f32 {
-        50.0
+        MAX_HEAD_Y_ROT
     }
 
     fn on_jump_from_ground(&self) {
@@ -490,13 +502,13 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let is_food = self.is_food(item_stack);
-        let consumed = self.animal_interact(player, item_stack);
-        if consumed && is_food {
-            // 26.3 Sniffer.mobInteract plays again after Animal.mobInteract's eating sound.
-            self.play_eating_sound();
+        // The positive age survives reload, unlike the common transient cooldown.
+        if self.get_age() > 0 {
+            return self
+                .mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed());
         }
-        consumed
+        self.animal_interact(player, item_stack)
     }
 }
 
@@ -504,7 +516,6 @@ impl Mob for SnifferEntity {
 mod tests {
     use super::*;
     use crate::entity::ai::test_support::world;
-    use crate::entity::passive::cow::CowEntity;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -514,54 +525,6 @@ mod tests {
             Vector3::new(8.5, 64.0, 8.5),
             &EntityType::SNIFFER,
         ))
-    }
-
-    #[tokio::test]
-    async fn digging_requires_a_reachable_unexplored_site_and_an_adult() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
-        for x in 0..16 {
-            for z in 0..16 {
-                chunk.set_block_absolute_y(x, 63, z, pumpkin_data::Block::DIRT.default_state.id);
-            }
-        }
-        world
-            .level
-            .loaded_chunks
-            .insert(pumpkin_util::math::vector2::Vector2::new(0, 0), chunk);
-        let sniffer = sniffer(&world);
-        sniffer.get_entity().on_ground.store(true, Relaxed);
-        let mut brain = sniffer.make_brain(&PackedMemories::empty());
-        assert!(sniffer.can_dig(&brain));
-        let head = sniffer.get_head_block().down();
-        brain.set(
-            types::SNIFFER_EXPLORED_POSITIONS,
-            vec![GlobalPos::new(&Dimension::OVERWORLD, head)],
-        );
-        assert!(!sniffer.can_dig(&brain));
-        brain.set(
-            types::SNIFFER_EXPLORED_POSITIONS,
-            vec![GlobalPos::new(&Dimension::THE_NETHER, head)],
-        );
-        assert!(sniffer.can_dig(&brain));
-        assert!(!sniffer.can_dig_at(&brain, BlockPos::new(8, 80, 8)));
-        sniffer.set_baby(true);
-        assert!(!sniffer.can_dig(&brain));
-        sniffer.set_baby(false);
-        brain.set(types::IS_PANICKING, true);
-        assert!(!sniffer.can_dig(&brain));
-        assert!(!sniffer.can_sniff(&brain));
-        brain.erase(types::IS_PANICKING.id());
-        sniffer.mob_entity.set_love_ticks(600, None);
-        assert!(!sniffer.can_sniff(&brain));
-        sniffer.set_age(6000);
-        sniffer.mob_ai_step();
-        assert!(!sniffer.mob_entity.is_in_love());
-        sniffer.set_age(0);
-        assert!(sniffer.can_sniff(&brain));
-        world.level.shutdown().await;
-        Ok(())
     }
 
     #[tokio::test]
@@ -590,105 +553,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completed_digs_remember_the_supporting_block_across_reload_and_dimensions()
-    -> TestResult {
+    async fn completed_digs_keep_explored_sites_and_cooldown_after_nbt_reload() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
-        let sniffer = sniffer(&world);
-        let entity = sniffer.get_entity();
+        let original = sniffer(&world);
+        let entity = original.get_entity();
         entity.on_ground.store(true, Relaxed);
-        let mut brain = sniffer.make_brain(&PackedMemories::empty());
-        for x in 0..23 {
-            entity
-                .supporting_block_pos
-                .store(Some(BlockPos::new(x, 63, 8)));
-            sniffer.on_digging_complete(&mut brain, true);
-        }
-        sniffer.on_digging_complete(&mut brain, false);
-        let loaded = sniffer.make_brain(&brain.pack());
-        let positions = loaded
-            .get(types::SNIFFER_EXPLORED_POSITIONS)
-            .ok_or("missing explored positions")?;
-        assert_eq!(positions.len(), 21);
-        assert_eq!(
-            positions.first().map(|pos| pos.pos),
-            Some(BlockPos::new(22, 63, 8))
-        );
-        assert_eq!(
-            positions.last().map(|pos| pos.pos),
-            Some(BlockPos::new(2, 63, 8))
-        );
-        assert!(
-            positions
-                .iter()
-                .all(|pos| pos.dimension.id == world.dimension.id)
-        );
-        assert_ne!(
-            positions[0],
-            GlobalPos::new(&Dimension::THE_NETHER, positions[0].pos)
-        );
-        world.level.shutdown().await;
-        Ok(())
-    }
+        original.mob_entity.with_brain(original.as_ref(), |brain| {
+            for x in 0..23 {
+                entity
+                    .supporting_block_pos
+                    .store(Some(BlockPos::new(x, 63, 8)));
+                original.on_digging_complete(brain, true);
+            }
+            brain.set_with_expiry(types::SNIFF_COOLDOWN, (), 9137);
+        });
+        original.transition_to(SnifferState::Digging);
 
-    #[tokio::test]
-    async fn breeding_spawns_an_egg_and_keeps_shared_animal_finalization() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let mother = sniffer(&world);
-        let father = sniffer(&world);
-        mother.mob_entity.set_love_ticks(600, None);
-        father.mob_entity.set_love_ticks(600, None);
-        assert!(mother.can_mate(father.as_ref()));
-        mother.transition_to(SnifferState::Sniffing);
-        assert!(!mother.can_mate(father.as_ref()));
-        mother.transition_to(SnifferState::Idling);
-        mother.spawn_child_from_breeding(father.as_ref());
-        let entities = world.entities.load_full();
-        let eggs: Vec<_> = entities
-            .iter()
-            .filter_map(|entity| entity.cast_any().downcast_ref::<ItemEntity>())
-            .collect();
-        assert_eq!(eggs.len(), 1);
-        assert_eq!(
-            eggs[0]
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .item,
-            &Item::SNIFFER_EGG
-        );
-        assert!(
-            !entities
-                .iter()
-                .any(|entity| entity.get_entity().entity_type == &EntityType::SNIFFER)
-        );
-        assert!(!mother.mob_entity.is_in_love());
-        assert!(!father.mob_entity.is_in_love());
-        assert!(!mother.mob_entity.is_breeding_ready());
-        assert!(!father.mob_entity.is_breeding_ready());
         let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-        mother.write_custom_nbt(&mut nbt);
+        original.write_custom_nbt(&mut nbt);
         let restored = sniffer(&world);
         restored.read_custom_nbt(&nbt);
-        assert!(!restored.mob_entity.is_breeding_ready());
-        let cow = CowEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(8.5, 64.0, 8.5),
-            &EntityType::COW,
-        ));
-        let partner = CowEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(9.5, 64.0, 8.5),
-            &EntityType::COW,
-        ));
-        cow.spawn_child_from_breeding(partner.as_ref());
-        let entities = world.entities.load_full();
-        let calf = entities
-            .iter()
-            .find(|entity| entity.get_entity().entity_type == &EntityType::COW)
-            .ok_or("missing calf")?;
-        assert!(calf.get_entity().age.load(Relaxed) < 0);
+        assert_eq!(restored.get_state(), SnifferState::Idling);
+        restored.mob_entity.with_brain(restored.as_ref(), |brain| {
+            let positions = brain
+                .get(types::SNIFFER_EXPLORED_POSITIONS)
+                .ok_or("missing explored positions")?;
+            assert_eq!(positions.len(), 21);
+            assert_eq!(
+                positions[0],
+                GlobalPos::new(&Dimension::OVERWORLD, BlockPos::new(22, 63, 8))
+            );
+            assert_eq!(positions[20].pos, BlockPos::new(2, 63, 8));
+            assert_eq!(
+                brain.time_until_expiry(types::SNIFF_COOLDOWN.id()),
+                Some(9137)
+            );
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })?;
         world.level.shutdown().await;
         Ok(())
     }

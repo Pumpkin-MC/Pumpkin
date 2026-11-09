@@ -6,19 +6,19 @@ feat(entity): implement sniffer brain and digging behavior
 
 > This description was drafted by an AI agent (Codex, GPT-6).
 
-Moves sniffers from generic goals to the 26.3 Brain activities. Adds the sniff/search/dig/rise/happy cycle, reachable dig-site selection, gift-table seed drops, saved explored sites and sniff cooldown, egg breeding, digging dimensions, and state/event synchronization. Uses the existing Brain, navigation, loot and plugin events. Shared breeding finalization keeps normal offspring and persists the parents' cooldown through `Age`. Hatchlings use the sniffer's own baby age. Animal love mode clears at the accepted-damage stage, before death events, and sniffers retain the inherited age cleanup.
+Moves sniffers to the 26.3 Brain activities for sniffing, searching, digging, rising and happy behavior. Adds reachable dig sites, gift-table seed drops, saved explored sites and cooldown, and state metadata and dimensions. Sniffers use the existing no-child breeding hook to lay an egg. Their parents keep a cooldown across reload, and accepted damage clears their love mode. Ordinary breeders keep their existing spawn and cooldown behavior. Hatching notifies clients and requires successful egg removal.
 
-Implements the sniffer mob behavior tracked in #4216. Searching sounds, digging particles/audio, animations and quad-leash offsets are computed by the Java client from metadata and event 63.
+Implements the sniffer mob behavior tracked in #4216. The Java client handles searching sounds, digging particles and audio, animations and quad-leash offsets. The server sends state metadata and event 63, drops seeds and emits digging vibrations.
 
-Known boundaries: Pumpkin's synchronous navigation and block reads operate on loaded chunks. Sniffers use global tick reach for retained Brain/partner/breeder references; no narrow island audit or performance claim is included. Egg incubation delays remain a separate scheduler dependency in #4010.
+Pumpkin searches loaded chunks. A ticking sniffer uses global reach for its retained Brain and breeder references, so the world runs its non-player entity ticks serially. Vanilla-length egg incubation depends on the scheduler work in #4010.
 
 ## Tеsting ·
 
-- Compared against official 26.3 server and client jars decompiled with Vineflower, tracing superclass ticks, Brain lifecycle, breeding, saved memory, navigation and metadata consumers.
-- All affected packages: 718 tests passed with all features (696 core tests), including dig completion/interruption, entity-clock loot placement, reachable/explored-site filtering, saved positions/cooldown, egg breeding and normal cow offspring.
-- `cargo fmt --check`, `cargo machete` and `typos` passed. Affected-package Clippy with all targets/features and `--no-deps` passed with the existing unknown `clippy::assert_is_empty` warning. Strict dependency-wide Clippy hits the existing `must_use_candidate` lint in `pumpkin-world/src/cylindrical_chunk_iterator.rs:67`.
-- A scratch debug server and local 26.3 bot observed the natural sniff/search/dig/rise/happy cycle, event 63, the seed drop about six seconds into digging, saved Brain memories, egg breeding with exactly two parents, a hatchling at `Age: -47998`, accepted damage clearing love mode, and live temptation/damage interruption. The final server run exited normally.
-- Real-client presentation, plugin cancellation with a live plugin, unloaded chunk boundaries and comparative performance have not been verified.
+- Compared with official Java 26.3 server and client code for the Brain lifecycle, navigation, breeding and hatching, and the state and sound consumers.
+- All 729 affected-package tests passed. Formatting, dependency, typo and affected-package Clippy checks passed. Clippy reports the existing unknown `clippy::assert_is_empty` lint.
+- The egg breeding GameTest adapts Sean's scenario in `6094fd752`. It passed three consecutive runs on the default debug server, checking for exactly one egg and two parents.
+- A 26.3 bot received two eating sounds from one successful feed. The server showed accepted damage clearing love, egg removal spawning a baby with `Age: -47935`, and frog breeding still setting pregnancy. The server stopped cleanly.
+- Earlier 26.3 bot playtests covered natural digging, event 63, seed loot, save/reload, breeding, hatching and interruption. Real-client presentation, live plugin cancellation, unloaded chunk boundaries and the cost of serial entity ticking still need verification.
 
 Play test with a real 26.3 Java client before opening:
 
@@ -30,3 +30,5 @@ Play test with a real 26.3 Java client before opening:
 6. Attach a sniffer to a compatible four-point leash holder and check the four client-rendered leads. Capture the full digging sequence with audio, the egg birth, and the interruption. Include the baby and digging hitboxes with F3+B if possible.
 
 Capture: <attach screenshot or recording here>
+
+Please follow our [Coding Guidelines](https://github.com/Pumpkin-MC/Pumpkin/blob/master/CONTRIBUTING.md#coding-guidelines) and read [When a PR May Be Closed](https://github.com/Pumpkin-MC/Pumpkin/blob/master/CONTRIBUTING.md#when-a-pr-may-be-closed)

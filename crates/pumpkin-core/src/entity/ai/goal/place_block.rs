@@ -1,10 +1,15 @@
 use std::sync::Arc;
 
 use super::{Goal, to_goal_ticks};
+use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
-use pumpkin_data::Block;
+use crate::entity::predicate::EntityPredicate;
+use crate::world::World;
+use crate::world::game_event::GameEventContext;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -40,10 +45,6 @@ impl Goal for PlaceBlockGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(block_state_id) = self.enderman.get_carried_block() else {
-            return;
-        };
-
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
 
@@ -56,32 +57,77 @@ impl Goal for PlaceBlockGoal {
             )
         };
 
-        let world = entity.world.load();
+        let world = entity.world.load_full();
         let target_pos = BlockPos::new(bx, by, bz);
-
-        let state_id = world.get_block_state_id(&target_pos);
-        if !is_air(state_id) {
-            return;
-        }
-
-        let below_pos = BlockPos::new(bx, by - 1, bz);
+        let target_state_id = world.get_block_state_id(&target_pos);
+        let below_pos = target_pos.down();
         let (below_block, below_state) = world.get_block_and_state(&below_pos);
-        if !below_state.is_solid() || !below_state.is_full_cube() || below_block == &Block::BEDROCK
-        {
+        let Some(carried) = self.enderman.get_carried_block() else {
+            return;
+        };
+        let carried = world.update_from_neighbor_shapes(carried, &target_pos);
+        if !self.can_place_block(
+            &world,
+            &target_pos,
+            carried,
+            target_state_id,
+            below_block,
+            below_state,
+        ) {
             return;
         }
 
-        // Never place into an occupied block.
-        let world_clone = entity.world.load_full();
-        if !world_clone
-            .get_entities_at_box(&BoundingBox::from_block(&target_pos))
-            .is_empty()
-        {
-            return;
-        }
-
-        // TODO: also check the carried block can survive there.
-        world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
+        world.set_block_state(&target_pos, carried, BlockFlags::NOTIFY_ALL);
+        let source: &dyn EntityBase = self.enderman.as_ref();
+        world.emit_game_event_with_context(
+            GameEvent::BlockPlace.name(),
+            target_pos.to_f64(),
+            &GameEventContext {
+                source_entity: Some(source),
+            },
+        );
         self.enderman.set_carried_block(None);
+    }
+}
+
+impl PlaceBlockGoal {
+    fn can_place_block(
+        &self,
+        world: &World,
+        pos: &BlockPos,
+        carried: BlockStateId,
+        target_state_id: BlockStateId,
+        below_block: &Block,
+        below_state: &BlockState,
+    ) -> bool {
+        if !is_air(target_state_id)
+            || !below_state.is_solid()
+            || !below_state.is_full_cube()
+            || below_block == &Block::BEDROCK
+        {
+            return false;
+        }
+        let (block, state) = BlockState::from_id_with_block(carried);
+        if !world.block_registry.can_place_at(
+            None,
+            Some(world),
+            world,
+            None,
+            block,
+            state,
+            pos,
+            None,
+            None,
+        ) {
+            return false;
+        }
+        let enderman_id = self.enderman.mob_entity.living_entity.entity.entity_id;
+        !world
+            .get_all_at_box(&BoundingBox::from_block(pos))
+            .iter()
+            .any(|other| {
+                other.get_entity().entity_id != enderman_id
+                    && EntityPredicate::ExceptSpectator.test(other.get_entity())
+            })
     }
 }

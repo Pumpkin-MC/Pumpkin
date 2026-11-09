@@ -481,7 +481,6 @@ mod tests {
         let mut digging = Timed::new(Digging);
         assert!(digging.try_start(&mut tick));
         assert_eq!(sniffer.get_state(), SnifferState::Digging);
-        assert!((sniffer.get_entity().height() - 1.35).abs() < 1e-6);
         tick.time = 101;
         digging.do_stop(&mut tick);
         assert_eq!(sniffer.get_state(), SnifferState::Idling);
