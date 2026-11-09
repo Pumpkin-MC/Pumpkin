@@ -252,15 +252,29 @@ fn recipe_matches(
             if count != 2 {
                 return None;
             }
-            'item_stack: for i in 0..inventory.size() {
+
+            let mut input_count = 0;
+            let mut material_count = 0;
+
+            for i in 0..inventory.size() {
                 let slot = inventory.get_stack(i);
                 if slot.is_empty() {
-                    continue 'item_stack;
+                    continue;
                 }
-                if !material.match_item(slot.item) && !input.match_item(slot.item) {
+
+                if input.match_item(slot.item) {
+                    input_count += 1;
+                } else if material.match_item(slot.item) {
+                    material_count += 1;
+                } else {
                     return None;
                 }
             }
+
+            if input_count != 1 || material_count != 1 {
+                return None;
+            }
+
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
