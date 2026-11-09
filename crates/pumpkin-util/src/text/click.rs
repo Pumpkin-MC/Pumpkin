@@ -1,20 +1,13 @@
 use std::borrow::Cow;
-use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
 /// A JSON payload kept verbatim for `show_dialog` and custom click actions.
 ///
 /// The value is boxed to keep [`super::style::Style`] small.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ClickPayload(pub Box<serde_json::Value>);
-
-impl Hash for ClickPayload {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.to_string().hash(state);
-    }
-}
 
 impl ClickPayload {
     /// The payload as NBT, as the network writes it.
