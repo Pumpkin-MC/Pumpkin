@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::translation::java;
-use pumpkin_gametest::{GameTestBatchReport, GameTestReporter, GameTestRetryOptions};
+use pumpkin_gametest::{GameTestReporter, GameTestRetryOptions};
 use pumpkin_protocol::java::client::play::SuggestionProviders;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
@@ -22,7 +22,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::server::server_test_manager::{GameTestQueueEntry, enqueue_game_test, stop_game_tests};
+use crate::server::GameTestRunRequest;
 
 const DESCRIPTION: &str = "Runs a GameTest test instance.";
 const PERMISSION: &str = "minecraft:command.test";
@@ -136,7 +136,7 @@ impl CommandExecutor for RunExecutor {
 
         // Vanilla TestCommand::run stops the current tests before starting a new run.
         // Clear this server's active tests before the replacement requests are drained.
-        stop_game_tests(context.server());
+        context.server().stop_game_tests();
 
         let number_was_supplied = context.arguments.contains_key(ARG_NUMBER_OF_TIMES);
         let number_of_times = if number_was_supplied {
@@ -178,14 +178,12 @@ impl CommandExecutor for RunExecutor {
                 TextComponent::text(selected.len().to_string()),
             ));
 
-        let report = Arc::new(GameTestBatchReport::new(
-            Arc::new(CommandTestReporter {
-                sender: context.source.output.clone(),
-            }),
-            selected.len(),
-        ));
+        let reporter: Arc<dyn GameTestReporter> = Arc::new(CommandTestReporter {
+            sender: context.source.output.clone(),
+        });
 
         let retry_options = GameTestRetryOptions::new(number_of_times, until_failed);
+        let mut requests = Vec::with_capacity(selected.len());
 
         for (index, test_id) in selected.into_iter().enumerate() {
             let index = index as i32;
@@ -194,14 +192,13 @@ impl CommandExecutor for RunExecutor {
             let test_x = base_x + column * TEST_GRID_SPACING;
             let test_z = base_z + row * TEST_GRID_SPACING;
 
-            enqueue_game_test(GameTestQueueEntry::new(
+            requests.push(GameTestRunRequest::new(
                 test_id.clone(),
                 world.clone(),
                 test_x,
                 test_z,
                 rotation_steps,
                 retry_options,
-                report.clone(),
             ));
 
             info!(
@@ -216,6 +213,8 @@ impl CommandExecutor for RunExecutor {
             );
         }
 
+        let _report = context.server().queue_game_test_batch(requests, reporter);
+
         Ok(1)
     }
 }
@@ -224,7 +223,7 @@ struct StopExecutor;
 
 impl CommandExecutor for StopExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        stop_game_tests(context.server());
+        context.server().stop_game_tests();
         Ok(1)
     }
 }

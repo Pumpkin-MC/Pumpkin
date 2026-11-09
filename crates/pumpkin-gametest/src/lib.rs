@@ -15,7 +15,8 @@ pub use helper::{
     registered_test_definitions,
 };
 pub use manager::{
-    GameTestBatchReport, GameTestManager, GameTestReporter, GameTestRetryOptions, GameTestRunner,
+    GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
+    GameTestRetryOptions, GameTestRunner,
 };
 pub use model::{GameTestDefinition, GameTestRotation, TestType};
 pub use runner::{GameTestSession, GameTestState, TestRunner};
@@ -372,6 +373,14 @@ mod tests {
         assert!(report.is_done());
         assert!(report.all_required_passed());
         assert_eq!(report.failed_required(), 0);
+        assert_eq!(report.total_runs(), 3);
+        let outcomes = report.outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].id, "test:flaky");
+        assert_eq!(outcomes[0].status, GameTestOutcomeStatus::Passed);
+        assert_eq!(outcomes[0].attempts, 3);
+        assert_eq!(outcomes[0].successes, 2);
+        assert!(outcomes[0].error.is_none());
     }
 
     #[tokio::test]

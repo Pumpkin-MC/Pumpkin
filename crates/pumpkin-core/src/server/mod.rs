@@ -64,7 +64,9 @@ pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 
+pub use pumpkin_gametest::{GameTestOutcome, GameTestOutcomeStatus, GameTestReporter};
 pub use recipe::RecipeManager;
+pub use server_test_manager::{GameTestBatchReport, GameTestRetryOptions, GameTestRunRequest};
 
 use crate::data::advancement_data::AdvancementManager;
 
@@ -107,6 +109,7 @@ pub struct Server {
     pub recipe_manager: Arc<recipe::RecipeManager>,
     pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
     game_test_state: server_test_manager::GameTestServerState,
+    game_test_driver: server_test_manager::GameTestDriver,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -321,6 +324,7 @@ impl Server {
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
             game_test_state: server_test_manager::GameTestServerState::default(),
+            game_test_driver: server_test_manager::GameTestDriver::default(),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
