@@ -201,6 +201,8 @@ use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
+/// Join resends of the stonecutter list while the recipes keep changing.
+const MAX_STONECUTTER_SENDS: usize = 3;
 pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
@@ -3985,7 +3987,8 @@ impl World {
             }
             // The stonecutter list is not part of the recipe book, so it is always sent. A reload
             // during the sends broadcasts its own list, which an older snapshot must not replace.
-            loop {
+            // Capped so recipes that keep changing cannot hold the join; a later reload covers them.
+            for _ in 0..MAX_STONECUTTER_SENDS {
                 let generation = server.recipe_manager.generation();
                 let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
                 if let Some(data) = java_client.stonecutter_recipes_packet(&dynamic_recipes) {
