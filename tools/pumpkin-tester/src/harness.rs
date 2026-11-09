@@ -12,6 +12,7 @@ use pumpkin_util::{PermissionLvl, math::vector2::Vector2};
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+/// Builds the configs for the tester's in-process server, with both dimensions disabled.
 pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, AdvancedConfiguration) {
     let basic_config = BasicConfiguration {
         default_level_name: temp_dir.path().to_string_lossy().into_owned(),

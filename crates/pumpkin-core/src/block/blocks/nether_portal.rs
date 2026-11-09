@@ -68,6 +68,7 @@ impl BlockBehaviour for NetherPortalBlock {
         Block::AIR.default_state.id
     }
 
+    /// Spawns a zombified piglin near the portal on vanilla's random tick chance.
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let level_info = args.world.level_info.load();
         let difficulty = level_info.difficulty;

@@ -55,6 +55,9 @@ impl ServerPlayerData {
         self.extract_data_and_save_player(player)
     }
 
+    /// Builds the NBT snapshot saved for a player.
+    ///
+    /// A player who has not been placed yet keeps no `Pos`, so the next join retries world spawn.
     fn snapshot(player: &Player) -> NbtCompound {
         let has_position = player.has_played_before.load(Ordering::Acquire);
         let mut nbt = NbtCompound::new();

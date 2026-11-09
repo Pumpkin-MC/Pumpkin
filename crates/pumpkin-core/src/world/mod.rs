@@ -2944,6 +2944,7 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Runs the join sequence that places a connected Bedrock player into this world.
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -3437,6 +3438,7 @@ impl World {
         server.notify_update_if_op(&player);
     }
 
+    /// Runs the join sequence that places a connected Java player into this world.
     #[expect(clippy::too_many_lines)]
     pub async fn spawn_java_player(
         &self,
@@ -4179,6 +4181,7 @@ impl World {
         }
     }
 
+    /// Resends a Java player to the Bedrock clients tracking it, after a world transfer.
     async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
         if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
             return;

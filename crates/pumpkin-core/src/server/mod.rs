@@ -497,6 +497,7 @@ impl Server {
         }
     }
 
+    /// Returns the world for `dimension`, falling back to the first loaded world.
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         let worlds = self.worlds.load();
         worlds

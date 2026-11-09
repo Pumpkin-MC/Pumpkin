@@ -11,6 +11,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
+/// Writes a save that leaves the bot in the Nether, to test the disabled-dimension login fallback.
 async fn save_nether_logout(server: &Server, name: &str) -> Result<(), String> {
     let uuid = offline_uuid(name).map_err(|err| err.to_string())?;
     let mut data = NbtCompound::new();
@@ -29,6 +30,7 @@ async fn save_nether_logout(server: &Server, name: &str) -> Result<(), String> {
         .map_err(|err| err.to_string())
 }
 
+/// Logs the test bots in and checks disabled-dimension login placement and basic movement.
 pub async fn run_login_and_movement_tests(
     server: &Arc<Server>,
     addr: SocketAddr,
