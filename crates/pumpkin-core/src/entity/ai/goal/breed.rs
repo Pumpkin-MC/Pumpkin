@@ -9,13 +9,13 @@ use rand::RngExt;
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
-use crate::entity::passive::animal::PARENT_AGE_AFTER_BREEDING;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
 use super::{Controls, Goal, GoalReach};
 
 const PARTNER_RANGE: f64 = 8.0;
+const BREEDING_COOLDOWN: i32 = 6000;
 
 pub struct BreedGoal {
     speed: f64,
@@ -111,12 +111,11 @@ impl BreedGoal {
         ) else {
             // Cancelled: end love mode with the usual cooldown, a plugin resets it if wanted.
             mob_entity.reset_love_ticks();
-            mob_entity.breeding_cooldown.store(
-                PARENT_AGE_AFTER_BREEDING,
-                std::sync::atomic::Ordering::Relaxed,
-            );
+            mob_entity
+                .breeding_cooldown
+                .store(BREEDING_COOLDOWN, std::sync::atomic::Ordering::Relaxed);
             mate.reset_love();
-            mate.set_breeding_cooldown(PARENT_AGE_AFTER_BREEDING);
+            mate.set_breeding_cooldown(BREEDING_COOLDOWN);
             return;
         };
 
@@ -147,13 +146,12 @@ impl BreedGoal {
         }
 
         mob_entity.reset_love_ticks();
-        mob_entity.breeding_cooldown.store(
-            PARENT_AGE_AFTER_BREEDING,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        mob_entity
+            .breeding_cooldown
+            .store(BREEDING_COOLDOWN, std::sync::atomic::Ordering::Relaxed);
 
         mate.reset_love();
-        mate.set_breeding_cooldown(PARENT_AGE_AFTER_BREEDING);
+        mate.set_breeding_cooldown(BREEDING_COOLDOWN);
 
         let animal_without_offspring = baby.map_or(animal, |baby| {
             world_full.spawn_entity(baby);
@@ -172,7 +170,7 @@ impl BreedGoal {
             ExperienceOrbEntity::spawn(&world_full, parent_pos, experience);
         }
         if let Some(animal) = animal_without_offspring {
-            animal.on_bred_without_offspring(mate, brain);
+            animal.on_bred_without_offspring(brain);
         }
     }
 }

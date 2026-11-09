@@ -184,7 +184,7 @@ impl Animal for FrogEntity {
         false
     }
 
-    fn on_bred_without_offspring(&self, _mate: &dyn EntityBase, brain: Option<&mut BrainState>) {
+    fn on_bred_without_offspring(&self, brain: Option<&mut BrainState>) {
         match brain {
             Some(brain) => brain.set(types::IS_PREGNANT, ()),
             None => self

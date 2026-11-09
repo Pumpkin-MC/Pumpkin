@@ -16,8 +16,6 @@ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-pub(crate) const PARENT_AGE_AFTER_BREEDING: i32 = 6000;
-
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
 
@@ -38,17 +36,10 @@ pub trait Animal: Mob {
 
     /// Runs instead of spawning a baby when [`Self::spawns_offspring`] is `false`.
     /// `brain` is set when the animal's own brain behavior bred it.
-    fn on_bred_without_offspring(
-        &self,
-        _mate: &dyn EntityBase,
-        _brain: Option<&mut crate::entity::ai::brain::BrainState>,
-    ) {
+    fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
     }
 
-    /// Runs after damage is accepted, before it is applied to health or absorption.
-    fn on_accepted_damage(&self) {}
-
-    /// Extra partner checks on top of the type and love checks in `BreedGoal`.
+    /// Extra partner checks on top of the breeding behavior's type and love checks.
     fn can_mate(&self, _partner: &dyn EntityBase) -> bool {
         true
     }

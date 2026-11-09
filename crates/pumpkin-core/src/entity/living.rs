@@ -3055,6 +3055,12 @@ impl LivingEntity {
             .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
+    pub(crate) fn recent_damage_attacker_id(&self) -> Option<i32> {
+        let id = self.last_damage_attacker.load(Relaxed);
+        let age = self.entity.world.load().get_world_age() - self.last_damage_stamp.load(Relaxed);
+        (id != 0 && age <= LAST_DAMAGE_SOURCE_DURATION).then_some(id)
+    }
+
     /// Forgotten after 40 ticks.
     pub fn get_last_damage_type(&self) -> Option<DamageType> {
         self.get_last_damage_source()
@@ -3069,7 +3075,7 @@ impl LivingEntity {
             .last_damage_type
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self.entity.world.load().get_world_age() - stamp > 40 {
+        if self.entity.world.load().get_world_age() - stamp > LAST_DAMAGE_SOURCE_DURATION {
             *last = None;
         }
         last.map(|damage_type| (damage_type, self.last_damage_attacker.load(Relaxed)))
@@ -3863,7 +3869,7 @@ impl LivingEntity {
 
         // Vanilla parity: actuallyHurt
         if let Some(animal) = caller.get_mob().and_then(|mob| mob.as_animal()) {
-            animal.on_accepted_damage();
+            animal.get_mob_entity().reset_love_ticks();
         }
         let original_damage = damage_amount;
         let current_abs = self.absorption.load();
@@ -4394,6 +4400,7 @@ impl EntityBase for LivingEntity {
     }
 }
 
+const LAST_DAMAGE_SOURCE_DURATION: i64 = 40;
 const LAST_HURT_BY_PLAYER_MEMORY_TIME: i32 = 100;
 
 pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";

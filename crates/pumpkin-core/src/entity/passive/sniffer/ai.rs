@@ -460,6 +460,16 @@ mod tests {
     -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        for x in 4..=12 {
+            for z in 4..=12 {
+                chunk.set_block_absolute_y(x, 63, z, pumpkin_data::Block::DIRT.default_state.id);
+            }
+        }
+        world
+            .level
+            .loaded_chunks
+            .insert(pumpkin_util::math::vector2::Vector2::new(0, 0), chunk);
         let sniffer = SnifferEntity::new(Entity::new(
             world.clone(),
             Vector3::new(8.5, 64.0, 8.5),
@@ -490,6 +500,10 @@ mod tests {
         tick.state.set(types::SNIFFER_DIGGING, true);
         tick.time = 200;
         assert!(digging.try_start(&mut tick));
+        tick.time = 201;
+        digging.tick_or_stop(&mut tick);
+        assert_eq!(sniffer.get_state(), SnifferState::Digging);
+        assert!(!tick.state.has_memory_value(types::SNIFF_COOLDOWN.id()));
         tick.time = 381;
         digging.tick_or_stop(&mut tick);
         assert!(tick.state.has_memory_value(types::SNIFF_COOLDOWN.id()));

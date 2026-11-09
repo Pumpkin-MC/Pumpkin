@@ -726,6 +726,18 @@ impl MobEntity {
             .unwrap_or(false)
     }
 
+    /// Reads the installed brain without initializing it or processing pending memory changes.
+    pub(crate) fn read_brain<R>(
+        &self,
+        read: impl FnOnce(&crate::entity::ai::brain::BrainState) -> R,
+    ) -> Option<R> {
+        self.brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|brain| read(brain))
+    }
+
     pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
         let result = {
             let mut slot = self

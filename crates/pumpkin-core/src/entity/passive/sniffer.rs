@@ -6,6 +6,7 @@ use std::sync::{
 };
 
 use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
@@ -25,17 +26,24 @@ use crate::entity::{
     ai::{
         brain::{
             Brain, BrainState,
-            memory::{PackedMemories, global_pos::GlobalPos, types},
+            memory::{NearestVisibleLivingEntities, PackedMemories, global_pos::GlobalPos, types},
         },
-        pathfinder::{GroundPathNavigation, Navigator, PathNavigationTrait, node::PathType},
+        pathfinder::{
+            GroundPathNavigation, Navigator, PathNavigationTrait, node::PathType,
+            node_evaluator::MobData, path::Path,
+        },
         util::land_random_pos,
     },
     item::ItemEntity,
+    living::LivingEntity,
     mob::{Mob, MobEntity},
-    passive::animal::{Animal, PARENT_AGE_AFTER_BREEDING},
+    passive::animal::Animal,
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
+use crate::plugin::api::events::{
+    entity::{entity_drop_item::EntityDropItemEvent, entity_spawn::EntitySpawnEvent},
+    world::generic_game::GenericGameEvent,
+};
 use crate::world::{
     game_event::GameEventContext,
     loot::{LootContextParameters, generate_loot_from_handle},
@@ -102,7 +110,7 @@ impl SnifferEntity {
         navigation.set_pathfinding_malus(PathType::Water, -1.0);
         navigation.set_pathfinding_malus(PathType::DangerPowderSnow, -1.0);
         navigation.set_pathfinding_malus(PathType::DamageCautious, -1.0);
-        navigation.inner.allow_water_when_burning_or_immersed = true;
+        navigation.inner.on_pathfinding_start = Some(Self::on_pathfinding_start);
         mob_entity.navigator = std::sync::Mutex::new(Navigator::new(navigation));
         Arc::new(Self {
             mob_entity,
@@ -112,9 +120,42 @@ impl SnifferEntity {
         })
     }
 
+    pub(in crate::entity) fn on_pathfinding_start(entity: &LivingEntity, data: &mut MobData) {
+        if entity.entity.fire_ticks.load(Relaxed) > 0 || entity.is_in_water() {
+            data.set_pathfinding_malus(PathType::Water, 0.0);
+        }
+    }
+
     #[must_use]
     pub fn get_state(&self) -> SnifferState {
         SnifferState::from_id(self.state.load(Relaxed))
+    }
+
+    fn retained_path_entities(brain: &BrainState) -> impl Iterator<Item = &dyn EntityBase> {
+        let visible = brain
+            .get(types::NEAREST_VISIBLE_LIVING_ENTITIES)
+            .into_iter()
+            .flat_map(NearestVisibleLivingEntities::nearby)
+            .filter(|entity| {
+                let entity_type = entity.get_entity().entity_type;
+                entity_type == &EntityType::SNIFFER || entity_type == &EntityType::PLAYER
+            });
+        let look = brain
+            .get(types::LOOK_TARGET)
+            .and_then(|look| look.tracked_entity());
+        let walk = brain
+            .get(types::WALK_TARGET)
+            .and_then(|walk| walk.target().tracked_entity());
+        visible
+            .chain(brain.get(types::BREED_TARGET))
+            .chain(look)
+            .chain(walk)
+            .map(Arc::as_ref)
+            .chain(
+                brain
+                    .get(types::TEMPTING_PLAYER)
+                    .map(|player| player.as_ref() as &dyn EntityBase),
+            )
     }
 
     fn refresh_state_dimensions(&self) {
@@ -275,7 +316,6 @@ impl SnifferEntity {
             .take(MAX_EXPLORED_POSITIONS)
             .copied()
             .collect();
-        // Vanilla retains twenty old entries before prepending the new supporting block.
         explored.insert(0, GlobalPos::new(dimension, pos));
         brain.set(types::SNIFFER_EXPLORED_POSITIONS, explored);
     }
@@ -294,7 +334,8 @@ impl SnifferEntity {
                 ..Default::default()
             };
             let head = self.get_head_block().0.to_f64();
-            for stack in generate_loot_from_handle(&table, self.get_random().random(), &params) {
+            for mut stack in generate_loot_from_handle(&table, self.get_random().random(), &params)
+            {
                 let mut event = EntityDropItemEvent::new(
                     entity.entity_id,
                     format!("minecraft:{}", stack.item.registry_key),
@@ -303,7 +344,13 @@ impl SnifferEntity {
                 if let Some(server) = world.server.upgrade() {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }
-                if !event.cancelled {
+                if event.cancelled {
+                    continue;
+                }
+                if event.count != stack.item_count {
+                    stack.set_count(event.count.min(stack.get_max_stack_size()));
+                }
+                if !stack.is_empty() {
                     world.spawn_entity(Arc::new(ItemEntity::new(
                         Entity::new(world.clone(), head, &EntityType::ITEM),
                         stack,
@@ -331,7 +378,6 @@ impl AgeableMob for SnifferEntity {
 
 impl Animal for SnifferEntity {
     fn play_eating_sound(&self) {
-        // Vanilla Sniffer.mobInteract adds a second sound after a successful feed.
         for _ in 0..2 {
             self.play_entity_sound(
                 Sound::EntitySnifferEat,
@@ -349,23 +395,14 @@ impl Animal for SnifferEntity {
         partner
             .cast_any()
             .downcast_ref::<Self>()
-            .is_some_and(|partner| {
-                self.get_entity().entity_id != partner.get_entity().entity_id
-                    && self.get_state().can_mate()
-                    && partner.get_state().can_mate()
-                    && self.mob_entity.is_in_love()
-                    && partner.mob_entity.is_in_love()
-            })
+            .is_some_and(|partner| self.get_state().can_mate() && partner.get_state().can_mate())
     }
 
     fn spawns_offspring(&self) -> bool {
         false
     }
 
-    fn on_bred_without_offspring(&self, mate: &dyn EntityBase, _brain: Option<&mut BrainState>) {
-        self.set_age(PARENT_AGE_AFTER_BREEDING);
-        mate.get_entity().set_age(PARENT_AGE_AFTER_BREEDING);
-
+    fn on_bred_without_offspring(&self, _brain: Option<&mut BrainState>) {
         let entity = self.get_entity();
         let world = entity.world.load_full();
         let egg = Arc::new(ItemEntity::new(
@@ -379,10 +416,6 @@ impl Animal for SnifferEntity {
             (random.random::<f32>() - random.random::<f32>()) * 0.2 + 0.5,
         );
         world.spawn_entity(egg);
-    }
-
-    fn on_accepted_damage(&self) {
-        self.mob_entity.reset_love_ticks();
     }
 }
 
@@ -412,20 +445,102 @@ impl Mob for SnifferEntity {
                 pumpkin_data::environment_attribute::Activity::Idle,
             ]);
         });
-        if self.get_age() != 0 {
-            self.mob_entity.reset_love_ticks();
-        }
     }
 
-    fn mob_ai_step(&self) {
-        if self.get_age() != 0 {
-            self.mob_entity.reset_love_ticks();
+    fn tick_links(&self) -> Vec<i32> {
+        let mut links: Vec<_> = self
+            .mob_entity
+            .living_entity
+            .recent_damage_attacker_id()
+            .into_iter()
+            .collect();
+        let mate_breeder = self
+            .mob_entity
+            .read_brain(|brain| {
+                links.extend(
+                    Self::retained_path_entities(brain).map(|entity| entity.get_entity().entity_id),
+                );
+                links.extend(
+                    brain
+                        .get(types::HURT_BY_ENTITY)
+                        .map(|attacker| attacker.get_entity().entity_id),
+                );
+                brain
+                    .get(types::BREED_TARGET)
+                    .and_then(|mate| mate.get_mob())
+                    .and_then(|mate| mate.get_mob_entity().breeder.load())
+            })
+            .flatten();
+
+        let world = self.get_entity().world.load();
+        let breeder = self.mob_entity.breeder.load().filter(|_| self.is_in_love());
+        for breeder in [breeder, mate_breeder].into_iter().flatten() {
+            if let Some(player) = world.get_player_by_uuid(breeder) {
+                links.push(player.entity_id());
+            }
         }
+        links
+    }
+
+    fn player_tick_range(&self) -> f64 {
+        self.mob_entity
+            .living_entity
+            .get_attribute_value(&Attributes::TEMPT_RANGE)
     }
 
     fn has_global_tick_reach(&self) -> bool {
-        // Breeding retains another brain and can credit an arbitrarily distant breeder.
-        true
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let Some(server) = world.server.upgrade() else {
+            return false;
+        };
+        let plugins = &server.plugin_manager;
+        if plugins.has_handlers::<GenericGameEvent>()
+            || plugins.has_handlers::<EntityDropItemEvent>()
+            || plugins.has_handlers::<EntitySpawnEvent>()
+        {
+            return true;
+        }
+
+        // Ground navigation reads the target's block column before bounding the path search.
+        let range = server.advanced_config.world.entity_islands.unaudited_reach
+            + self
+                .mob_entity
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE)
+                .max(0.0);
+        if self.player_tick_range() > range {
+            return true;
+        }
+        let origin = entity.block_pos.load().0;
+        let outside = |pos: BlockPos| {
+            f64::from(origin.x.abs_diff(pos.0.x).max(origin.z.abs_diff(pos.0.z))) > range
+        };
+        if self
+            .mob_entity
+            .read_brain(|brain| {
+                brain
+                    .get(types::WALK_TARGET)
+                    .is_some_and(|walk| outside(walk.target().current_block_position()))
+                    || Self::retained_path_entities(brain)
+                        .any(|target| outside(target.get_entity().block_pos.load()))
+            })
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
+        let steered = self.mob_entity.steered();
+        // A controlling rider can drive a second navigator while its own still ticks.
+        if !std::ptr::eq(steered.mob_entity(), &raw const self.mob_entity) {
+            return true;
+        }
+        let navigator = steered.navigator();
+        navigator.recompute_target().is_some_and(outside)
+            || navigator
+                .get_path()
+                .and_then(Path::get_next_node_pos)
+                .is_some_and(outside)
     }
 
     fn mob_support_quad_leash(&self) -> bool {
@@ -488,6 +603,10 @@ impl Mob for SnifferEntity {
         }
     }
 
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        self.animal_interact(player, item_stack)
+    }
+
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         entity.set_synced_data(pumpkin_data::tracked_data::sniffer::BABY_ID, self.is_baby());
@@ -499,16 +618,6 @@ impl Mob for SnifferEntity {
             pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
             VarInt(self.drop_seed_at_tick.load(Relaxed)),
         );
-    }
-
-    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        // The positive age survives reload, unlike the common transient cooldown.
-        if self.get_age() > 0 {
-            return self
-                .mob_entity
-                .mob_interact(player, item_stack, self.can_be_leashed());
-        }
-        self.animal_interact(player, item_stack)
     }
 }
 
@@ -525,6 +634,33 @@ mod tests {
             Vector3::new(8.5, 64.0, 8.5),
             &EntityType::SNIFFER,
         ))
+    }
+
+    #[tokio::test]
+    async fn retained_mate_and_walk_target_link_distant_sniffers() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let sniffer = sniffer(&world);
+        let mate = SnifferEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(256.5, 64.0, 8.5),
+            &EntityType::SNIFFER,
+        ));
+        let mate_id = mate.get_entity().entity_id;
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            brain.set(types::BREED_TARGET, mate.clone());
+        });
+        assert_eq!(sniffer.tick_links(), [mate_id]);
+
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            use crate::entity::ai::brain::behavior::utils::set_walk_and_look_target_memories_to_entity;
+
+            brain.erase(types::BREED_TARGET.id());
+            set_walk_and_look_target_memories_to_entity(brain, mate, 1.0, 2);
+        });
+        assert!(sniffer.tick_links().contains(&mate_id));
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]
