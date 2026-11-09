@@ -55,10 +55,14 @@ fn transform_entity(pos: Vector3<f64>, mirror: Mirror, rotation: Rotation) -> Ve
     }
 }
 
-/// Places a saved structure with the same template parser and world adapter used by GameTests.
+/// Places a saved structure with the same template parser and world adapter used by `GameTests`.
 #[expect(
     clippy::too_many_arguments,
     reason = "structure block settings come from one editor packet"
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "structure placement applies every editor setting"
 )]
 pub async fn place_editor_structure(
     world: Arc<World>,

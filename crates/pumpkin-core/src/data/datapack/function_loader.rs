@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-pub fn load_embedded_test_functions(functions: &mut HashMap<String, Vec<String>>) -> usize {
+pub fn load_embedded_test_functions<S: std::hash::BuildHasher>(
+    functions: &mut HashMap<String, Vec<String>, S>,
+) -> usize {
     let before = functions.len();
     for &id in pumpkin_data::test_function::all_test_function_names() {
         if let Some(content) = pumpkin_data::test_function::get_test_function_source(id) {

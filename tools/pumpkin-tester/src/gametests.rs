@@ -56,6 +56,10 @@ impl GameTestReporter for CaptureReporter {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the integration suite runs one shared GameTest arena"
+)]
 pub async fn run_gametests(
     server: &Arc<Server>,
     runner: &mut GameTestRunner,
@@ -197,6 +201,10 @@ pub async fn run_gametests(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the environment fixture has independent expected values"
+)]
 async fn check_test_environment(
     server: &Arc<Server>,
     runner: &mut GameTestRunner,
@@ -230,16 +238,13 @@ async fn check_test_environment(
     let previous_advance = world.get_game_rule(&GameRule::AdvanceTime).to_string();
     let previous_speed = world.get_game_rule(&GameRule::RandomTickSpeed).to_string();
     runner.tick().await;
-    let (active_advance, active_speed) = match (
+    let (GameRuleValue::Bool(active_advance), GameRuleValue::Int(active_speed)) = (
         world.get_game_rule(&GameRule::AdvanceTime),
         world.get_game_rule(&GameRule::RandomTickSpeed),
-    ) {
-        (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
-        _ => {
-            return Err(format!(
-                "Test environment '{id}' used invalid game rule types"
-            ));
-        }
+    ) else {
+        return Err(format!(
+            "Test environment '{id}' used invalid game rule types"
+        ));
     };
     let active_settings_match = world.get_time_of_day() == expected_time
         && world.is_raining()
@@ -263,16 +268,13 @@ async fn check_test_environment(
         }
         runner.tick().await;
     }
-    let (advance_time, speed) = match (
+    let (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) = (
         world.get_game_rule(&GameRule::AdvanceTime),
         world.get_game_rule(&GameRule::RandomTickSpeed),
-    ) {
-        (GameRuleValue::Bool(advance_time), GameRuleValue::Int(speed)) => (advance_time, speed),
-        _ => {
-            return Err(format!(
-                "Test environment '{id}' used invalid game rule types"
-            ));
-        }
+    ) else {
+        return Err(format!(
+            "Test environment '{id}' used invalid game rule types"
+        ));
     };
     if !runner.is_empty() {
         runner.cancel_and_clear().await;
