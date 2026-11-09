@@ -55,10 +55,7 @@ impl BlockEntity for HangingSignBlockEntity {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
-        // Vanilla writes this key only when it is enabled.
-        if self.allow_op_features.load(Ordering::Relaxed) {
-            nbt.put_bool("allow_op_features", true);
-        }
+        crate::block::entities::sign::write_allow_op_features(nbt, &self.allow_op_features);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -66,9 +63,7 @@ impl BlockEntity for HangingSignBlockEntity {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
-        if self.allow_op_features.load(Ordering::Relaxed) {
-            nbt.put_bool("allow_op_features", true);
-        }
+        crate::block::entities::sign::write_allow_op_features(&mut nbt, &self.allow_op_features);
         Some(nbt)
     }
 
