@@ -3983,7 +3983,9 @@ impl World {
                     java_client.send_packet_now(data).await;
                 }
             }
-            // The stonecutter list is not part of the recipe book, so it is always sent.
+            // The stonecutter list is not part of the recipe book, so it is always sent. It is built
+            // from the recipes as they are now, so a reload during the sends above is not overwritten.
+            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
             if let Some(data) = java_client.stonecutter_recipes_packet(&dynamic_recipes) {
                 java_client.send_packet_now(data).await;
             }
