@@ -87,7 +87,7 @@ impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         Self {
             entity,
             owner: owner::ProjectileOwner::new(Some(owner)),
@@ -227,6 +227,9 @@ impl ThrownItemEntity {
             }
 
             let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            if skips_hit_from_inside(cand.as_ref(), &ebb, &start_pos) {
+                continue;
+            }
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
                 && t < closest_t
             {
@@ -283,8 +286,13 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Projectiles should pass through lingering clouds
-        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
+        // Not pickable in vanilla: projectiles pass through these
+        // TODO: replace with `!can_hit()` once Player, TNT, falling blocks, end crystals, item
+        // frames, shulker bullets and redirectable projectiles override it like vanilla `isPickable`
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD
+            || *other_ent.entity_type == EntityType::EXPERIENCE_ORB
+            || *other_ent.entity_type == EntityType::ITEM
+        {
             return true;
         }
 
@@ -310,6 +318,16 @@ impl ThrownItemEntity {
 }
 
 /// Ray intersection algorithm for AABBs, returning a t value
+/// Whether a ray starting inside `bb` skips this entity, for mobs that opt out of inside hits.
+fn skips_hit_from_inside(entity: &dyn EntityBase, bb: &BoundingBox, start: &Vector3<f64>) -> bool {
+    (bb.min.x..bb.max.x).contains(&start.x)
+        && (bb.min.y..bb.max.y).contains(&start.y)
+        && (bb.min.z..bb.max.z).contains(&start.z)
+        && entity
+            .get_mob()
+            .is_some_and(|mob| !mob.can_be_picked_from_inside())
+}
+
 fn calculate_ray_intersection(
     start: &Vector3<f64>,
     dir: &Vector3<f64>,

@@ -42,7 +42,7 @@ impl FishingBobberEntity {
     pub fn new_with_rod(entity: Entity, owner: &Player, time_reduction: i32) -> Self {
         let mut owner_pos = owner.living_entity.entity.pos.load();
         owner_pos.y += owner.living_entity.entity.get_eye_height() - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
 
         let wait_ticks = (rand::rng().random_range(100..=600) - time_reduction).max(0);
 

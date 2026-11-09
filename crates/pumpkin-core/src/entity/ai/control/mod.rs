@@ -41,6 +41,9 @@ pub trait MoveControlTrait: Control {
 }
 
 pub trait LookControlTrait: Control {
+    fn wanted_position(&self) -> Option<Vector3<f64>> {
+        None
+    }
     fn tick(&mut self, mob: &dyn Mob);
 
     fn look_at_with_range(

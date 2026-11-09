@@ -5,10 +5,9 @@ use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
-use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
+use crate::entity::mob::enderman::EndermanEntity;
 use crate::entity::mob::neutral::NeutralMob;
 use crate::entity::player::Player;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 
@@ -21,6 +20,7 @@ pub struct TeleportTowardsPlayerGoal {
     target_player: Option<Arc<dyn EntityBase>>,
     committed_target: Option<Arc<dyn EntityBase>>,
     target_predicate: TargetPredicate,
+    continue_predicate: TargetPredicate,
     warmup: i32,
     unseen_ticks: i32,
 }
@@ -39,14 +39,28 @@ impl TeleportTowardsPlayerGoal {
             target_player: None,
             committed_target: None,
             target_predicate,
+            continue_predicate: TargetPredicate::create_attackable().ignore_visibility(),
             warmup: 0,
             unseen_ticks: 0,
         }
     }
 
-    /// Vanilla `isAngerInducing`: stared at, or held against by the grudge.
+    /// Stared at or held against by the grudge, and not riding this enderman.
     fn is_anger_inducing(&self, player: &Player, world: &World) -> bool {
-        self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world)
+        (self.enderman.is_player_staring(player) || self.enderman.is_angry_at(player, world))
+            && !self.has_indirect_passenger(player)
+    }
+
+    fn has_indirect_passenger(&self, target: &dyn EntityBase) -> bool {
+        let enderman_id = self.enderman.mob_entity.living_entity.entity.entity_id;
+        let mut vehicle = target.get_entity().get_vehicle();
+        while let Some(current) = vehicle {
+            if current.get_entity().entity_id == enderman_id {
+                return true;
+            }
+            vehicle = current.get_entity().get_vehicle();
+        }
+        false
     }
 
     fn find_staring_player(&self) -> Option<Arc<Player>> {
@@ -75,54 +89,31 @@ impl Goal for TeleportTowardsPlayerGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if let Some(target) = &self.target_player
-            && let Some(player) = target.get_player()
-        {
-            let world = self.enderman.mob_entity.living_entity.entity.world.load();
+        let world = self.enderman.mob_entity.living_entity.entity.world.load();
+        if let Some(pending) = &self.target_player {
+            let Some(player) = pending.get_player() else {
+                return false;
+            };
             if !self.is_anger_inducing(player, &world) {
                 return false;
             }
-            let player_pos = player.get_entity().pos.load();
-            let mut look_control = mob
-                .get_mob_entity()
-                .look_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look_control.look_at_with_range(
-                player_pos.x,
-                player_pos.y + PLAYER_EYE_HEIGHT,
-                player_pos.z,
-                10.0,
-                10.0,
-            );
-            true
-        } else if self.target_player.is_some() {
-            false
-        } else if let Some(target) = &self.committed_target {
-            if !target.get_entity().is_alive() {
-                return false;
-            }
-            let mob_entity = mob.get_mob_entity();
-            let dist_sq = mob_entity
-                .living_entity
-                .entity
-                .pos
-                .load()
-                .squared_distance_to_vec(&target.get_entity().pos.load());
-            let follow_range = mob_entity
-                .living_entity
-                .get_attribute_value(&Attributes::FOLLOW_RANGE);
-            if dist_sq > follow_range * follow_range {
-                return false;
-            }
-            let needs_reset = mob_entity.get_target().is_none();
-            if needs_reset {
-                mob.set_mob_target(Some(target.clone()), TargetReason::ClosestPlayer);
-            }
-            true
-        } else {
-            self.track_target_goal.should_continue(mob)
+            mob.get_mob_entity()
+                .look_at_entity(pending.as_ref(), 10.0, 10.0);
+            return true;
         }
+        if let Some(target) = &self.committed_target {
+            if self.has_indirect_passenger(target.as_ref()) {
+                return false;
+            }
+            let enderman: &dyn EntityBase = self.enderman.as_ref();
+            if self
+                .continue_predicate
+                .test(&world, Some(enderman), target.as_ref())
+            {
+                return true;
+            }
+        }
+        self.track_target_goal.should_continue(mob)
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
@@ -132,12 +123,8 @@ impl Goal for TeleportTowardsPlayerGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let external_target = mob.get_mob_entity().get_target().clone();
-        if external_target.is_none()
-            && self.target_player.is_none()
-            && self.committed_target.is_none()
-        {
-            return;
+        if mob.get_mob_entity().get_target().is_none() {
+            self.committed_target = None;
         }
 
         if self.target_player.is_some() {
@@ -151,15 +138,17 @@ impl Goal for TeleportTowardsPlayerGoal {
             return;
         }
 
-        let target = self.committed_target.clone().or(external_target);
-        let Some(target) = target else {
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let Some(target) = self.committed_target.clone() else {
             return;
         };
-
-        let entity = &mob.get_mob_entity().living_entity.entity;
-        let pos = entity.pos.load();
-        let target_pos = target.get_entity().pos.load();
-        let dist_sq = pos.squared_distance_to_vec(&target_pos);
+        if entity.has_vehicle() {
+            return;
+        }
+        let dist_sq = entity
+            .pos
+            .load()
+            .squared_distance_to_vec(&target.get_entity().pos.load());
 
         if let Some(player) = target.get_player()
             && self.enderman.is_player_staring(player)
@@ -169,9 +158,9 @@ impl Goal for TeleportTowardsPlayerGoal {
             }
             self.unseen_ticks = 0;
         } else if dist_sq > TELEPORT_FAR_DISTANCE_SQ {
+            let waited = self.unseen_ticks;
             self.unseen_ticks += 1;
-            if self.unseen_ticks >= to_goal_ticks(30) {
-                self.enderman.teleport_towards(target.as_ref());
+            if waited >= to_goal_ticks(30) && self.enderman.teleport_towards(target.as_ref()) {
                 self.unseen_ticks = 0;
             }
         }

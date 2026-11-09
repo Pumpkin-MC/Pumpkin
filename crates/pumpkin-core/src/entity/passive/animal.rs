@@ -1,9 +1,17 @@
 use std::sync::Arc;
 
+use pumpkin_data::dye_color::DyeColor;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
+use pumpkin_data::tag;
+use pumpkin_inventory::Inventory;
+use pumpkin_inventory::crafting::crafting_inventory::CraftingInventory;
+use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
 use crate::entity::{EntityBase, mob::Mob, player::Player, r#type::from_type};
+use crate::world::World;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -19,6 +27,16 @@ pub trait Animal: Mob {
             &entity.world.load(),
             uuid::Uuid::new_v4(),
         )
+    }
+
+    /// `false` for animals whose breeding spawns no baby right away, like frogs laying spawn.
+    fn spawns_offspring(&self) -> bool {
+        true
+    }
+
+    /// Runs instead of spawning a baby when [`Self::spawns_offspring`] is `false`.
+    /// `brain` is set when the animal's own brain behavior bred it.
+    fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
     }
 
     /// Extra partner checks on top of the type and love checks in `BreedGoal`.
@@ -125,6 +143,49 @@ pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
         }
     }
     None
+}
+
+fn find_color_mix_in_recipes(
+    world: &World,
+    color1: DyeColor,
+    color2: DyeColor,
+) -> Option<DyeColor> {
+    let dye_items = |color: DyeColor| {
+        tag::Item::C_DYES
+            .1
+            .iter()
+            .filter_map(|id| Item::from_id(*id))
+            .filter(move |item| get_dye_color_from_item(item) == Some(color.id()))
+    };
+    let server = world.server.upgrade();
+    let provider = server
+        .as_ref()
+        .map(|server| server.recipe_manager.as_ref() as &dyn RecipeProvider);
+    for dye1 in dye_items(color1) {
+        for dye2 in dye_items(color2) {
+            let input = CraftingInventory::new(2, 1);
+            input.set_stack(0, ItemStack::new(1, dye1));
+            input.set_stack(1, ItemStack::new(1, dye2));
+            if let Some(result) = match_crafting_recipe(&input, provider)
+                && let Some(item) = Item::from_registry_key(&result.item_id)
+                && let Some(color) = get_dye_color_from_item(item)
+            {
+                return Some(DyeColor::from(color));
+            }
+        }
+    }
+    None
+}
+
+#[must_use]
+pub fn get_mixed_color(world: &World, color1: DyeColor, color2: DyeColor) -> DyeColor {
+    find_color_mix_in_recipes(world, color1, color2).unwrap_or_else(|| {
+        if rand::rng().random::<bool>() {
+            color1
+        } else {
+            color2
+        }
+    })
 }
 
 /// Base experience of animals and water creatures, rolled on every death.

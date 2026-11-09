@@ -20,6 +20,7 @@ const INTERVAL: i32 = 240;
 #[must_use]
 pub const fn golem_random_stroll_in_village(speed: f64) -> WanderAroundGoal {
     WanderAroundGoal::with_interval(speed, INTERVAL)
+        .with_check_no_action_time(false)
         .with_position(get_position, VILLAGER_SCAN_RADIUS)
 }
 

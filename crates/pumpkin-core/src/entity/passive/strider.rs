@@ -88,6 +88,8 @@ impl AgeableMob for StriderEntity {
         &self.ageable_data
     }
 
+    // TODO: vanilla `Strider.finalizeSpawn` jockeys: 1/30 a zombified piglin rider (if monsters
+    // spawn), else 1/10 a baby strider rider; both drop the group's baby chance to 0.
     fn default_baby_spawn_chance(&self) -> f32 {
         crate::entity::ageable::STRIDER_BABY_SPAWN_CHANCE
     }
