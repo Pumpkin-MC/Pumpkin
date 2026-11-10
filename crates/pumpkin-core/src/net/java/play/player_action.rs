@@ -1,6 +1,27 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+/// Vanilla `ServerPlayerGameMode.handleBlockBreakAction` accepts a finished dig once the
+/// break progress reaches 0.7, so a client finish that arrives a little early still counts.
+const FINISHED_DIGGING_PROGRESS_THRESHOLD: f32 = 0.7;
+
+/// Checks shared by both dig actions: Pumpkin's item behaviour hook and the vanilla
+/// spectator, creative tool and adventure `can_break` restrictions.
+fn cannot_mine_block(player: &Player, server: &Server, block: &Block, gamemode: GameMode) -> bool {
+    let inventory = player.inventory();
+    let held = inventory.held_item();
+    !server.item_registry.can_mine(held.item, player)
+        || gamemode == GameMode::Spectator
+        || (gamemode == GameMode::Creative
+            && held
+                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+        || (gamemode == GameMode::Adventure
+            && !held
+                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                .is_some_and(|c| c.matches_block(block)))
+}
+
 impl JavaClient {
     #[expect(clippy::too_many_lines)]
     pub fn handle_player_action(
@@ -64,19 +85,8 @@ impl JavaClient {
                         }
                     }
 
-                    let inventory = player.inventory();
-                    let held = inventory.held_item();
                     let gamemode = player.gamemode.load();
-                    let cannot_mine = !server.item_registry.can_mine(held.item, player)
-                        || gamemode == GameMode::Spectator
-                        || (gamemode == GameMode::Creative
-                            && held
-                                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
-                                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
-                        || (gamemode == GameMode::Adventure
-                            && !held
-                                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
-                                .is_some_and(|c| c.matches_block(block)));
+                    let cannot_mine = cannot_mine_block(player, server, block, gamemode);
                     if cannot_mine {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
@@ -202,7 +212,6 @@ impl JavaClient {
                     self.update_sequence(player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
-                    // TODO: do validation
                     let location = player_action.position;
                     if !player.can_interact_with_block_at(&location, 1.0) {
                         warn!(
@@ -213,16 +222,46 @@ impl JavaClient {
                         return;
                     }
 
-                    // Block break & play sound
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
+                    let Some(state) = world.get_block_state_if_loaded(&location) else {
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    };
+                    let block = Block::from_state_id(state.id);
+                    let gamemode = player.gamemode.load();
+                    // Vanilla `getDestroyProgress`, which returns 0 for unbreakable blocks.
+                    let speed = block::calc_block_breaking(player, state, block);
+                    // Vanilla STOP_DESTROY_BLOCK only applies to the current destroy target.
+                    let is_mining_target = player.mining.load(Ordering::Relaxed)
+                        && *player
+                            .mining_pos
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            == location;
+                    let progress = speed
+                        * (player.tick_counter.load(Ordering::Relaxed)
+                            - player.start_mining_time.load(Ordering::Relaxed)
+                            + 1) as f32;
 
-                    player.mining.store(false, Ordering::Relaxed);
-                    world.set_block_breaking(entity, location, BlockBreakingProgress::Stop);
+                    let valid_finish = !state.is_air()
+                        && speed > 0.0
+                        && !cannot_mine_block(player, server, block, gamemode)
+                        && (gamemode == GameMode::Creative
+                            || (is_mining_target
+                                && progress >= FINISHED_DIGGING_PROGRESS_THRESHOLD));
+                    if !valid_finish {
+                        player.stop_mining();
+                        self.sync_block_state_to_client(&world, location);
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    }
 
-                    let (block, state) = world.get_block_and_state(&location);
-                    let block_drop = player.gamemode.load() != GameMode::Creative
-                        && player.can_harvest(state, block);
+                    // Block break & play sound
+                    player.stop_mining();
+
+                    let block_drop =
+                        gamemode != GameMode::Creative && player.can_harvest(state, block);
 
                     let new_state = world.break_block(
                         &location,
