@@ -4,6 +4,7 @@ use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -114,9 +115,7 @@ impl FollowOwnerGoal {
                 continue;
             }
 
-            // TODO: fire `EntityTeleportEvent` for mob teleports like this one:
-            // `Entity::teleport` skips it and `TeleportCause` has no mob variant.
-            mob_entity.teleport(
+            if !mob.teleport_with_cause(
                 Vector3::new(
                     target_x as f64 + 0.5,
                     f64::from(target_y),
@@ -124,8 +123,11 @@ impl FollowOwnerGoal {
                 ),
                 None,
                 None,
-                &world,
-            );
+                world,
+                TeleportCause::Unknown,
+            ) {
+                return;
+            }
 
             let mut navigator = mob
                 .get_mob_entity()

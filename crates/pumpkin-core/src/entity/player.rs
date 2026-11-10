@@ -4639,6 +4639,8 @@ impl Player {
                 else {
                     return;
                 };
+                // An axis a plugin cleared stays relative for the client.
+                let (event_yaw, event_pitch) = (yaw, pitch);
                 let yaw = yaw.unwrap_or_else(|| self.living_entity.entity.yaw.load());
                 let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
 
@@ -4743,7 +4745,7 @@ impl Player {
 
                 // TODO: a world change fires both `PlayerChangeWorldEvent` and
                 // `PlayerTeleportEvent`, so plugins see two events for one teleport.
-                player.send_teleport(position, Some(yaw), Some(pitch));
+                player.send_teleport(position, event_yaw, event_pitch);
 
                 let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
                     player: player.clone(),
@@ -4842,17 +4844,20 @@ impl Player {
 
     /// Teleports to `position`. A `None` rotation axis is sent as relative, so
     /// the client keeps looking where it currently looks.
+    /// Returns false if a plugin cancelled it.
     pub fn request_teleport_to(
         &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         cause: TeleportCause,
-    ) {
-        if let Some((position, yaw, pitch)) = self.fire_teleport_event(position, yaw, pitch, cause)
-        {
-            self.send_teleport(position, yaw, pitch);
-        }
+    ) -> bool {
+        let Some((position, yaw, pitch)) = self.fire_teleport_event(position, yaw, pitch, cause)
+        else {
+            return false;
+        };
+        self.send_teleport(position, yaw, pitch);
+        true
     }
 
     /// Moves the player and sends the position packet, without firing an event.
@@ -7782,10 +7787,12 @@ impl EntityBase for Player {
         pitch: Option<f32>,
         world: Arc<World>,
         cause: TeleportCause,
-    ) {
+    ) -> bool {
         if Arc::ptr_eq(&world, &self.world()) {
             // Same world
-            self.request_teleport_to(position, yaw, pitch, cause);
+            if !self.request_teleport_to(position, yaw, pitch, cause) {
+                return false;
+            }
             let entity = self.get_entity();
             // A plugin may have cancelled or moved the teleport.
             let position = entity.pos.load();
@@ -7803,6 +7810,7 @@ impl EntityBase for Player {
                     entity.on_ground.load(Ordering::SeqCst),
                 ),
             );
+            true
         } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
             self.spawn_task(async move {
                 let entity = player_arc.get_entity();
@@ -7812,6 +7820,9 @@ impl EntityBase for Player {
                     .teleport_world_with_cause(world, position, Some(yaw), Some(pitch), cause)
                     .await;
             });
+            true
+        } else {
+            false
         }
     }
 
