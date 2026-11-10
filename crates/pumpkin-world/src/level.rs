@@ -148,6 +148,16 @@ pub fn canonical_dimension_folder(root_folder: &Path, dimension: &Dimension) -> 
     root_folder.join("dimensions").join(namespace).join(name)
 }
 
+/// Whether the 26.3 `region` folder exists. A failed check counts as existing, so the
+/// world is never read from an old folder because of a transient error.
+fn canonical_region_exists(canonical_dim_folder: &Path) -> bool {
+    let region = canonical_dim_folder.join("region");
+    region.try_exists().unwrap_or_else(|err| {
+        error!("Failed checking {}: {err}", region.display());
+        true
+    })
+}
+
 impl Level {
     #[must_use]
     #[expect(clippy::too_many_lines)]
@@ -161,7 +171,7 @@ impl Level {
 
         // Use the 26.3 folder if it exists, or fall back to the old root/`DIM-1`/`DIM1` folders
         // Keyed on `region`, since per-dimension data can create the folder on its own.
-        let dim_folder = if canonical_dim_folder.join("region").exists() {
+        let dim_folder = if canonical_region_exists(&canonical_dim_folder) {
             canonical_dim_folder
         } else if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
             && root_folder.join("region").exists()

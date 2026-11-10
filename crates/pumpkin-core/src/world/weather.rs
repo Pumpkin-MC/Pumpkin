@@ -67,6 +67,7 @@ struct Writes {
     clear: u64,
     rain: u64,
     thunder: u64,
+    phases: u64,
 }
 
 impl Writes {
@@ -109,12 +110,7 @@ impl WeatherData {
     }
 
     /// Sets the ticks left until the clear sky ends, the rain flips or the thunder flips.
-    pub fn set_durations(
-        &mut self,
-        clear: Option<i32>,
-        rain: Option<i32>,
-        thunder: Option<i32>,
-    ) {
+    pub fn set_durations(&mut self, clear: Option<i32>, rain: Option<i32>, thunder: Option<i32>) {
         let stamp = self.writes.next();
         if let Some(clear) = clear {
             self.clear_weather_time = clear.max(0);
@@ -463,6 +459,32 @@ impl WeatherData {
         }
     }
 
+    /// Marks what a change wrote. Only a flip counts as a write of the whole cycle, so a
+    /// tick that just counted down does not stop a cancelled change from being put back.
+    fn stamp_changes(&mut self, before: &Flags, mark: u64, flipped: bool) {
+        if flipped {
+            self.writes.all = mark;
+            return;
+        }
+        if self.clear_weather_time != before.clear_weather_time {
+            self.writes.clear = mark;
+        }
+        if self.rain_time != before.rain_time {
+            self.writes.rain = mark;
+        }
+        if self.thunder_time != before.thunder_time {
+            self.writes.thunder = mark;
+        }
+        if self
+            .phases
+            .iter()
+            .map(|phase| phase.time)
+            .ne(before.phase_times.iter().copied())
+        {
+            self.writes.phases = mark;
+        }
+    }
+
     fn flips_since(&self, before: &Flags) -> Vec<(Flag, bool)> {
         let mut flips = Vec::new();
         if self.raining != before.raining {
@@ -515,7 +537,9 @@ impl WeatherData {
                 }
                 if let (Some(phase), Some(&was)) = (self.phases.get_mut(i), before.phases.get(i)) {
                     phase.active = was;
-                    if let (true, Some(&time)) = (timer, before.phase_times.get(i)) {
+                    if let (true, false, Some(&time)) =
+                        (timer, kept(writes.phases), before.phase_times.get(i))
+                    {
                         phase.time = time;
                     }
                 }
@@ -536,7 +560,7 @@ impl WeatherData {
         if !kept(writes.thunder) {
             self.thunder_time = before.thunder_time;
         }
-        if !kept(0) && Arc::ptr_eq(&self.profile, profile) {
+        if !kept(writes.phases) && Arc::ptr_eq(&self.profile, profile) {
             for (phase, &time) in self.phases.iter_mut().zip(&before.phase_times) {
                 phase.time = time;
             }
@@ -609,7 +633,7 @@ impl World {
             edit(&mut data);
             let flips = data.flips_since(&before);
             let mark = data.writes.next();
-            data.writes.all = mark;
+            data.stamp_changes(&before, mark, !flips.is_empty());
             (before, mark, flips, data.profile.clone(), cancellable)
         };
         let Some(server) = self.server.upgrade().filter(|_| !flips.is_empty()) else {
