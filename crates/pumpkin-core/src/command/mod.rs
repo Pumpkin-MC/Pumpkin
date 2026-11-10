@@ -87,7 +87,7 @@ pub mod suggestion {
     }
 }
 
-/// Whether console and RCON command output is broadcast to online operators.
+/// Whether console command output is broadcast to online operators.
 ///
 /// Set from [`CommandsConfig::broadcast_console_to_ops`] during server startup.
 /// Defaults to `true` for vanilla compatibility.
@@ -107,11 +107,6 @@ pub fn set_broadcast_console_to_ops(value: bool) {
 /// command dispatcher.
 #[derive(Clone)]
 pub enum CommandSender {
-    /// A remote console connection via the RCON protocol.
-    ///
-    /// Stores an buffer to capture command output
-    /// so it can be sent back over the network to the RCON client.
-    Rcon(Arc<std::sync::Mutex<Vec<String>>>),
     /// The local server terminal/console.
     ///
     /// This sender typically has absolute permissions (bypass) and
@@ -139,7 +134,6 @@ impl fmt::Display for CommandSender {
             "{}",
             match self {
                 Self::Console => "Server",
-                Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
                 Self::CommandBlock(..) => "@",
                 Self::Dummy => "",
@@ -154,10 +148,6 @@ impl CommandSender {
             #[allow(clippy::print_stdout)]
             Self::Console => println!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text),
-            Self::Rcon(s) => s
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
                 let mut last_output = block_entity
                     .last_output
@@ -204,7 +194,7 @@ impl CommandSender {
     #[must_use]
     pub fn permission_lvl(&self) -> PermissionLvl {
         match self {
-            Self::Console | Self::Rcon(_) => PermissionLvl::Four,
+            Self::Console => PermissionLvl::Four,
             Self::Player(p) => p.permission_lvl.load(),
             Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two,
         }
@@ -213,7 +203,7 @@ impl CommandSender {
     #[must_use]
     pub fn has_permission_lvl(&self, lvl: PermissionLvl) -> bool {
         match self {
-            Self::Console | Self::Rcon(_) => true,
+            Self::Console => true,
             Self::Player(p) => p.permission_lvl.load().ge(&lvl),
             Self::CommandBlock(..) | Self::Dummy => PermissionLvl::Two >= lvl,
         }
@@ -222,7 +212,7 @@ impl CommandSender {
     /// Check if the sender has a specific permission
     pub fn has_permission(&self, server: &Server, node: &str) -> bool {
         match self {
-            Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
+            Self::Console => true, // Console always has all permissions
             Self::Player(p) => p.has_permission(server, node),
             Self::CommandBlock(..) | Self::Dummy => {
                 let Some(p) = server.permission_manager.get_permission(node) else {
@@ -240,7 +230,7 @@ impl CommandSender {
     #[must_use]
     pub fn position(&self) -> Option<Vector3<f64>> {
         match self {
-            Self::Console | Self::Rcon(..) | Self::Dummy => None,
+            Self::Console | Self::Dummy => None,
             Self::Player(p) => Some(p.living_entity.entity.pos.load()),
             Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64()),
         }
@@ -249,7 +239,7 @@ impl CommandSender {
     #[must_use]
     pub fn rotation(&self) -> Option<(f32, f32)> {
         match self {
-            Self::Console | Self::Rcon(..) | Self::Dummy => None,
+            Self::Console | Self::Dummy => None,
             Self::Player(player) => Some(player.rotation()),
             Self::CommandBlock(command_block, world) => {
                 let pos = command_block.get_position();
@@ -277,7 +267,7 @@ impl CommandSender {
         match self {
             // These senders are not bound to a world. Use `world_or_first` to
             // fall back to the first world instead.
-            Self::Console | Self::Rcon(..) | Self::Dummy => None,
+            Self::Console | Self::Dummy => None,
             Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
@@ -286,7 +276,7 @@ impl CommandSender {
     /// Returns the world this sender acts in, falling back to the server's
     /// first world for senders that are not bound to one.
     ///
-    /// Console, RCON and dummy senders have no world of their own, so like
+    /// Console and dummy senders have no world of their own, so like
     /// vanilla they operate on the first (overworld) world. Returns [`None`]
     /// only when the server has no worlds loaded at all.
     #[must_use]
@@ -298,7 +288,7 @@ impl CommandSender {
     #[must_use]
     pub fn get_locale(&self) -> Locale {
         match self {
-            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => Locale::EnUs, // Default locale for console and RCON
+            Self::CommandBlock(..) | Self::Console | Self::Dummy => Locale::EnUs, // Default locale for console
             Self::Player(player) => {
                 Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
             }
@@ -319,7 +309,7 @@ impl CommandSender {
                     .game_rules
                     .send_command_feedback
             }
-            Self::Console | Self::Rcon(_) => true,
+            Self::Console => true,
             Self::Dummy => false,
         }
     }
@@ -329,9 +319,7 @@ impl CommandSender {
         match self {
             Self::CommandBlock(_, world) => world.level_info.load().game_rules.command_block_output,
             Self::Player(..) => true,
-            Self::Console | Self::Rcon(_) => {
-                BROADCAST_CONSOLE_TO_OPS.load(std::sync::atomic::Ordering::Relaxed)
-            }
+            Self::Console => BROADCAST_CONSOLE_TO_OPS.load(std::sync::atomic::Ordering::Relaxed),
             Self::Dummy => false,
         }
     }
@@ -340,26 +328,13 @@ impl CommandSender {
     pub const fn should_track_output(&self) -> bool {
         match self {
             Self::Dummy => false,
-            Self::Player(..) | Self::Console | Self::Rcon(_) | Self::CommandBlock(..) => true,
+            Self::Player(..) | Self::Console | Self::CommandBlock(..) => true,
         }
     }
 
     #[must_use]
     pub fn into_source(self, server: &Arc<Server>) -> CommandSource {
         match self {
-            Self::Rcon(rcon) => {
-                let (world, spawn_point) = Self::get_world_and_spawn_point(server);
-                CommandSource::new(
-                    Self::Rcon(rcon),
-                    world,
-                    None,
-                    spawn_point,
-                    Vector2::new(0.0, 0.0),
-                    "Rcon".to_owned(),
-                    TextComponent::text("Rcon"),
-                    server.clone(),
-                )
-            }
             Self::Console => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
                 CommandSource::new(

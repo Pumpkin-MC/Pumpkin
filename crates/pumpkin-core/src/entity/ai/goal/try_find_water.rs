@@ -1,14 +1,15 @@
 use std::sync::atomic::Ordering;
 
-use pumpkin_data::fluid::Fluid;
-use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tag::{self, Tag, Taggable};
 use pumpkin_util::math::position::BlockPos;
 
 use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 use crate::world::World;
 
-pub struct TryFindWaterGoal;
+pub struct TryFindWaterGoal {
+    fluid_tag: &'static Tag,
+}
 
 impl Default for TryFindWaterGoal {
     fn default() -> Self {
@@ -19,16 +20,16 @@ impl Default for TryFindWaterGoal {
 impl TryFindWaterGoal {
     #[must_use]
     pub const fn new() -> Self {
-        Self
+        Self::with_fluid_tag(&tag::Fluid::MINECRAFT_WATER)
+    }
+
+    #[must_use]
+    pub const fn with_fluid_tag(fluid_tag: &'static Tag) -> Self {
+        Self { fluid_tag }
     }
 
     pub fn is_water(world: &World, pos: &BlockPos) -> bool {
-        let (_, state_id) = world.get_block_and_state_id(pos);
-        if state_id.to_state().is_waterlogged() {
-            return true;
-        }
-        Fluid::from_state_id(state_id)
-            .is_some_and(|fluid| fluid.has_tag(&tag::Fluid::MINECRAFT_WATER))
+        world.get_fluid(pos).has_tag(&tag::Fluid::MINECRAFT_WATER)
     }
 
     #[must_use]
@@ -58,7 +59,7 @@ impl Goal for TryFindWaterGoal {
 
         let world = entity.world.load();
         let block_pos = entity.block_pos.load();
-        !Self::is_water(&world, &block_pos)
+        !world.get_fluid(&block_pos).has_tag(self.fluid_tag)
     }
 
     fn start(&mut self, mob: &dyn Mob) {
@@ -69,11 +70,11 @@ impl Goal for TryFindWaterGoal {
         let (min_pos, max_pos) = Self::find_water_range(mob_pos);
         let mut water_pos: Option<BlockPos> = None;
 
-        'outer: for x in min_pos.0.x..=max_pos.0.x {
+        'outer: for z in min_pos.0.z..=max_pos.0.z {
             for y in min_pos.0.y..=max_pos.0.y {
-                for z in min_pos.0.z..=max_pos.0.z {
+                for x in min_pos.0.x..=max_pos.0.x {
                     let pos = BlockPos::new(x, y, z);
-                    if Self::is_water(&world, &pos) {
+                    if world.get_fluid(&pos).has_tag(self.fluid_tag) {
                         water_pos = Some(pos);
                         break 'outer;
                     }
@@ -83,9 +84,8 @@ impl Goal for TryFindWaterGoal {
 
         if let Some(pos) = water_pos {
             mob.get_mob_entity()
-                .move_control
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .steered()
+                .move_control()
                 .set_wanted_position(
                     f64::from(pos.0.x),
                     f64::from(pos.0.y),

@@ -72,7 +72,8 @@ enum MinecartKind {
 }
 
 impl MinecartEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
         let kind = match entity.entity_type.id {
             id if id == EntityType::MINECART.id => MinecartKind::Rideable(RideableMinecart),
             id if id == EntityType::CHEST_MINECART.id => MinecartKind::Chest(ChestMinecart::new()),
@@ -110,7 +111,19 @@ impl MinecartEntity {
     }
 }
 
+const LOWERED_PASSENGER_ATTACHMENT: Vector3<f64> = Vector3::new(0.0, 0.0, 0.0);
+
 impl EntityBase for MinecartEntity {
+    fn passenger_attachment_point(
+        &self,
+        passenger: &dyn EntityBase,
+        _index: usize,
+    ) -> Option<Vector3<f64>> {
+        let passenger_type = passenger.get_entity().entity_type;
+        (passenger_type == &EntityType::VILLAGER || passenger_type == &EntityType::WANDERING_TRADER)
+            .then_some(LOWERED_PASSENGER_ATTACHMENT)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),
@@ -391,7 +404,7 @@ impl EntityBase for MinecartEntity {
                 | RailShape::AscendingSouth => pos.y,
                 _ => f64::from(block_pos.0.y) + RAIL_HEIGHT_OFFSET,
             };
-            self.vehicle.entity.pos.store(target_position);
+            self.vehicle.entity.set_pos(target_position);
 
             let horizontal_in_direction = Vector3::new(exit1.x, 0.0, exit1.z);
             let mut horizontal_out_direction = Vector3::new(exit0.x, 0.0, exit0.z);
@@ -438,14 +451,6 @@ impl EntityBase for MinecartEntity {
                     velocity.x.mul_add(velocity.x, velocity.z * velocity.z),
                 );
                 return;
-            }
-
-            let new_pos = self.vehicle.entity.pos.load();
-
-            if let Ok(passengers) = self.vehicle.entity.passengers.try_lock() {
-                for passenger in passengers.iter() {
-                    passenger.get_entity().set_pos(new_pos);
-                }
             }
 
             #[allow(clippy::useless_let_if_seq)]
@@ -640,21 +645,9 @@ impl EntityBase for MinecartEntity {
                     }
                 }
             } else {
-                if !self_entity.has_passengers() && self.is_pushable() {
-                    let mut vel = self_entity.velocity.load();
-                    vel.x -= xa;
-                    vel.z -= za;
-                    self_entity.velocity.store(vel);
-                    self_entity.send_velocity();
-                }
-
-                if !other_entity.has_passengers() && entity.is_pushable() {
-                    let mut vel = other_entity.velocity.load();
-                    vel.x += xa / 4.0;
-                    vel.z += za / 4.0;
-                    other_entity.velocity.store(vel);
-                    other_entity.send_velocity();
-                }
+                // Vanilla `AbstractMinecart.push`
+                self_entity.push_by(Vector3::new(-xa, 0.0, -za));
+                other_entity.push_by(Vector3::new(xa / 4.0, 0.0, za / 4.0));
             }
         }
     }
@@ -742,7 +735,11 @@ impl EntityBase for MinecartEntity {
                 if let Some(container) = self.container()
                     && container.claim_drops()
                 {
-                    container.unpack_loot();
+                    container.unpack_loot(&crate::world::loot::LootContextParameters {
+                        world: Some(&world),
+                        position: Some(self.vehicle.entity.pos.load()),
+                        ..Default::default()
+                    });
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
@@ -758,57 +755,18 @@ impl EntityBase for MinecartEntity {
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         match &self.kind {
             MinecartKind::Chest(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Furnace(minecart) => {
                 minecart.interact(&self.vehicle.entity, player, item_stack)
             }
             MinecartKind::Hopper(minecart) => {
-                let custom_name = self.vehicle.entity.custom_name.load().as_ref().clone();
-                minecart.interact(custom_name, player);
+                minecart.interact(&self.vehicle.entity, player);
                 true
             }
             MinecartKind::Rideable(_) => RideableMinecart::interact(&self.vehicle.entity, player),
             MinecartKind::Tnt(_) | MinecartKind::Other => false,
-        }
-    }
-
-    fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.vehicle.entity.has_passenger(player.entity_id()) {
-            return;
-        }
-
-        if player.is_spectator() {
-            return;
-        }
-
-        let player_pos = player.get_entity().pos.load();
-        let minecart_pos = self.vehicle.entity.pos.load();
-
-        let mut diff_x = minecart_pos.x - player_pos.x;
-        let mut diff_z = minecart_pos.z - player_pos.z;
-
-        let dist_sq = diff_x * diff_x + diff_z * diff_z;
-        if dist_sq > 0.0001 {
-            let dist = dist_sq.sqrt();
-            diff_x /= dist;
-            diff_z /= dist;
-
-            let push_force = 0.1;
-            let mut vel = self.vehicle.entity.velocity.load();
-            vel.x += diff_x * push_force;
-            vel.z += diff_z * push_force;
-
-            let horizontal_speed = vel.x.hypot(vel.z);
-            if horizontal_speed > 0.4 {
-                vel.x = (vel.x / horizontal_speed) * 0.4;
-                vel.z = (vel.z / horizontal_speed) * 0.4;
-            }
-
-            self.vehicle.entity.velocity.store(vel);
-            self.vehicle.entity.send_velocity();
         }
     }
 

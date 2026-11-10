@@ -1,21 +1,23 @@
-use super::{Controls, Goal};
+use super::{Controls, Goal, GoalReach};
 
+use crate::entity::EntityBase;
+use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{EntityBase, player::Player};
+use pumpkin_data::data_component_impl::MobVisibilityImpl;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::{Arc, Weak};
 
 pub struct LookAtEntityGoal {
     goal_control: Controls,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     range: f32,
     look_time: i32,
     chance: f32,
     look_forward: bool,
-    target_type: &'static EntityType,
+    target_match: TargetMatch,
     target_predicate: TargetPredicate,
 }
 
@@ -28,7 +30,24 @@ impl LookAtEntityGoal {
         chance: f32,
         look_forward: bool,
     ) -> Self {
-        let target_predicate = Self::create_target_predicate(mob_weak, target_type, range);
+        Self::matching(
+            mob_weak,
+            TargetMatch::Type(target_type),
+            range,
+            chance,
+            look_forward,
+        )
+    }
+
+    #[must_use]
+    pub fn matching(
+        mob_weak: Weak<dyn Mob>,
+        target_match: TargetMatch,
+        range: f32,
+        chance: f32,
+        look_forward: bool,
+    ) -> Self {
+        let target_predicate = Self::create_target_predicate(mob_weak, target_match, range);
         Self {
             goal_control: Controls::LOOK,
             target: None,
@@ -36,7 +55,7 @@ impl LookAtEntityGoal {
             look_time: 0,
             chance,
             look_forward,
-            target_type,
+            target_match,
             target_predicate,
         }
     }
@@ -52,12 +71,12 @@ impl LookAtEntityGoal {
 
     fn create_target_predicate(
         mob_weak: Weak<dyn Mob>,
-        target_type: &'static EntityType,
+        target_match: TargetMatch,
         range: f32,
     ) -> TargetPredicate {
         let mut target_predicate = TargetPredicate::create_non_attackable();
-        target_predicate.base_max_distance = range as f64; // TODO
-        if target_type == &EntityType::PLAYER {
+        target_predicate.base_max_distance = f64::from(range);
+        if target_match.is_player() {
             target_predicate.set_predicate(move |living_entity, _world| {
                 mob_weak.upgrade().is_some_and(|mob_arc| {
                     let predicate = EntityPredicate::Rides(mob_arc.get_entity());
@@ -70,6 +89,28 @@ impl LookAtEntityGoal {
 }
 
 impl Goal for LookAtEntityGoal {
+    fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
+        let range = f64::from(self.range);
+        let looks_at_players = self.target_match.is_player();
+        Some(GoalReach {
+            entities: if looks_at_players { 0.0 } else { range },
+            // The player search is unbounded, only the visibility-scaled range limits it.
+            players: if looks_at_players {
+                range * f64::from(MobVisibilityImpl::MAX_VISIBILITY)
+            } else {
+                0.0
+            },
+            links: self
+                .target
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .map(|target| target.get_entity().entity_id)
+                .into_iter()
+                .collect(),
+            ..GoalReach::default()
+        })
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         if mob.get_random().random::<f32>() >= self.chance {
             return false;
@@ -87,32 +128,27 @@ impl Goal for LookAtEntityGoal {
             }
         }
 
-        let world = mob_entity.living_entity.entity.world.load();
-        let mob_pos = mob_entity.living_entity.entity.pos.load();
+        let entity = &mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        // Players anywhere, other mobs within 3 blocks of height; the conditions carry the range.
+        let area = SearchArea::from_eyes(entity, self.range.into(), 3.0).players_anywhere();
 
         // The conditions filter the candidates instead of being applied to the nearest one.
         let predicate = &self.target_predicate;
-        self.target = if *self.target_type == EntityType::PLAYER {
-            world
-                .get_nearest_player(mob_pos, self.range.into(), |player| {
-                    predicate.test(&world, Some(mob), player.as_ref())
-                })
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
-        } else {
-            world.get_nearest_entity(
-                mob_pos,
-                self.range.into(),
-                Some(&[self.target_type]),
-                |entity| predicate.test(&world, Some(mob), entity.as_ref()),
-            )
-        };
+        self.target = self
+            .target_match
+            .find_nearest(&world, &area, |candidate| {
+                predicate.test(&world, Some(mob), candidate)
+            })
+            .as_ref()
+            .map(Arc::downgrade);
 
         self.target.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
-        if let Some(target) = &self.target {
+        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade) {
             if !target.get_entity().is_alive() {
                 return false;
             }
@@ -136,7 +172,7 @@ impl Goal for LookAtEntityGoal {
 
     fn tick(&mut self, mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
-        if let Some(target) = &self.target
+        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade)
             && target.get_entity().is_alive()
         {
             let target_entity = target.get_entity();

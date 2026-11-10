@@ -129,9 +129,9 @@ impl ChiseledBookshelfBlock {
         // TODO: Increment used stats for chiseled bookshelf on the player
 
         let sound = if item.get_item() == &Item::ENCHANTED_BOOK {
-            Sound::BlockChiseledBookshelfPickupEnchanted
+            Sound::BlockChiseledBookshelfInsertEnchanted
         } else {
-            Sound::BlockChiseledBookshelfPickup
+            Sound::BlockChiseledBookshelfInsert
         };
 
         entity.set_book(

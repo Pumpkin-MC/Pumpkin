@@ -18,7 +18,7 @@ pub struct RangedAttackGoal {
     attack_radius_sqr: f64,
     see_time: i32,
     attack_time: i32,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
 }
 
 impl RangedAttackGoal {
@@ -62,11 +62,11 @@ impl RangedAttackGoal {
 
 impl Goal for RangedAttackGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let target = mob.get_mob_entity().get_target().clone();
+        let target = mob.get_mob_entity().get_target();
         if let Some(target) = target
             && target.get_entity().is_alive()
         {
-            self.target = Some(target);
+            self.target = Some(Arc::downgrade(&target));
             true
         } else {
             false
@@ -74,12 +74,11 @@ impl Goal for RangedAttackGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if let Some(target) = &self.target {
+        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade) {
             if !target.get_entity().is_alive() {
                 return false;
             }
-            let current_target = mob.get_mob_entity().get_target().clone();
-            current_target.is_some()
+            mob.get_mob_entity().get_target().is_some()
         } else {
             false
         }
@@ -89,11 +88,7 @@ impl Goal for RangedAttackGoal {
         self.target = None;
         self.see_time = 0;
         self.attack_time = -1;
-        mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -105,7 +100,7 @@ impl Goal for RangedAttackGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(target) = self.target.clone() else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -125,11 +120,8 @@ impl Goal for RangedAttackGoal {
         }
 
         {
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             if target_dist_sq <= self.attack_radius_sqr && self.see_time >= 5 {
                 navigator.stop();
             } else {

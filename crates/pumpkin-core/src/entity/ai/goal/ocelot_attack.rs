@@ -2,11 +2,11 @@ use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 pub struct OcelotAttackGoal {
     goal_control: Controls,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     attack_time: i32,
 }
 
@@ -38,12 +38,12 @@ impl Goal for OcelotAttackGoal {
             return false;
         }
 
-        self.target = Some(target);
+        self.target = Some(Arc::downgrade(&target));
         true
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -66,11 +66,8 @@ impl Goal for OcelotAttackGoal {
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
         navigator.stop();
     }
 
@@ -79,7 +76,7 @@ impl Goal for OcelotAttackGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -88,7 +85,7 @@ impl Goal for OcelotAttackGoal {
             .look_control
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .look_at_entity_with_range(target, 30.0, 30.0);
+            .look_at_entity_with_range(&target, 30.0, 30.0);
 
         let bb_width = mob.get_entity().entity_dimension.load().width;
         let melee_radius_sq = (bb_width * 2.0) * (bb_width * 2.0);
@@ -104,18 +101,20 @@ impl Goal for OcelotAttackGoal {
             0.8
         };
 
-        let mut navigator = mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob_entity.steered();
+        let mut navigator = steered.navigator();
         navigator.set_progress(NavigatorGoal::new(mob_pos, target_pos, speed_modifier));
 
         self.attack_time = (self.attack_time - 1).max(0);
         if dist_sq <= f64::from(melee_radius_sq) && self.attack_time <= 0 {
             self.attack_time = 20;
             mob.get_mob_entity().living_entity.swing_hand();
-            mob.get_mob_entity()
+            let damaged = mob
+                .get_mob_entity()
                 .try_attack(mob.get_entity(), target.as_ref());
+            if damaged {
+                mob.on_attack(target.as_ref());
+            }
         }
     }
 

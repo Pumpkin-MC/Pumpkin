@@ -466,6 +466,7 @@ fn register_entity_event(
         entity_target_living_entity::EntityTargetLivingEntityEvent,
         entity_teleport::EntityTeleportEvent,
         entity_toggle_glide::EntityToggleGlideEvent,
+        entity_toggle_sit::EntityToggleSitEvent,
         entity_toggle_swim::EntityToggleSwimEvent,
         entity_transform::EntityTransformEvent,
         entity_unleash::EntityUnleashEvent,
@@ -611,6 +612,9 @@ fn register_entity_event(
         }
         EventType::EntityTargetLivingEntityEvent => {
             register_typed_event::<EntityTargetLivingEntityEvent>(ctx, handler, priority, blocking);
+        }
+        EventType::EntityToggleSitEvent => {
+            register_typed_event::<EntityToggleSitEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityToggleSwimEvent => {
             register_typed_event::<EntityToggleSwimEvent>(ctx, handler, priority, blocking);
@@ -1414,7 +1418,7 @@ impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
     #[allow(clippy::too_many_lines)]
-    async fn register_event(
+    fn register_event(
         &mut self,
         context: Resource<WitContext>,
         handler_id: u32,
@@ -1521,6 +1525,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::EntityPotionEffectEvent
             | EventType::EntitySpellCastEvent
             | EventType::EntityTargetLivingEntityEvent
+            | EventType::EntityToggleSitEvent
             | EventType::EntityToggleSwimEvent
             | EventType::ExplosionPrimeEvent
             | EventType::FireworkExplodeEvent
@@ -1666,7 +1671,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_command(
+    fn register_command(
         &mut self,
         context: Resource<WitContext>,
         command: Resource<Command>,
@@ -1687,7 +1692,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(())
     }
 
-    async fn register_permission(
+    fn register_permission(
         &mut self,
         context: Resource<WitContext>,
         permission: Permission,
@@ -1720,21 +1725,15 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(context_res.register_permission(util_permission))
     }
 
-    async fn get_data_folder(
-        &mut self,
-        _context: Resource<WitContext>,
-    ) -> wasmtime::Result<String> {
+    fn get_data_folder(&mut self, _context: Resource<WitContext>) -> wasmtime::Result<String> {
         Ok("data".to_string())
     }
 
-    async fn get_server(
-        &mut self,
-        context: Resource<WitContext>,
-    ) -> wasmtime::Result<Resource<Server>> {
+    fn get_server(&mut self, context: Resource<WitContext>) -> wasmtime::Result<Resource<Server>> {
         self.add(self.get(&context)?.server.clone())
     }
 
-    async fn get_marketplace_metadata(
+    fn get_marketplace_metadata(
         &mut self,
         _context: Resource<WitContext>,
     ) -> wasmtime::Result<Option<MarketplaceMetadata>> {
@@ -1755,7 +1754,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             }))
     }
 
-    async fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

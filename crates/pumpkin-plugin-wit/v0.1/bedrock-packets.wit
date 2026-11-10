@@ -2,12 +2,19 @@ package pumpkin:plugin@0.1.0;
 
 interface bedrock-packets {
   use uuid.{ uuid };
+  use common.{ nbt-tree };
+  /// Transmits actor-specific animations, sounds, and state changes (such as hurt, taming, or eating).
   record s-actor-event {
+    /// Runtime entity ID of the actor experiencing the event.
     target-runtime-id: s64,
+    /// Identifier of the specific actor event.
     event-id: actor-event-id,
+    /// Event-specific integer payload data (e.g. particle color or sound data).
     data: s32,
+    /// Optional position where the event should be centered.
     fire-at-position: option<tuple<f64, f64, f64>>,
   }
+  /// Specific entity event action or visual effect.
   enum actor-event-id {
     none,
     jump,
@@ -71,13 +78,19 @@ interface bedrock-packets {
     kinetic-damage-dealt,
     hurt-without-receiving-damage,
   }
+  /// Animation action performed on an actor.
   enum animate-action {
     no-action,
+    /// Arm swinging animation.
     swing-arm,
+    /// Waking up from bed animation.
     wake-up,
+    /// Critical hit particle burst.
     critical-hit,
+    /// Magic critical hit sparkle burst.
     magic-critical-hit,
   }
+  /// Cause or trigger for an arm swing action.
   enum actor-swing-source {
     none,
     build,
@@ -89,63 +102,110 @@ interface bedrock-packets {
     drop-item,
     event,
   }
+  /// Plays animations (arm swing, critical strike particles, waking up) on an actor.
   record s-animate {
+    /// Type of animation to display.
     action: animate-action,
+    /// Runtime entity ID of the target actor.
     target-actor-runtime-id: s64,
+    /// Floating point payload (used for rowing animation angles).
     data: f32,
+    /// Source context that triggered an arm swing.
     swing-source: option<actor-swing-source>,
   }
+  /// Sent by the client when picking a targeted block (middle-click / pick block action).
   record s-block-pick-request {
+    /// World position coordinates of the targeted block.
     position: tuple<s32, s32, s32>,
+    /// Whether block entity data / NBT should be copied into the picked item stack.
     with-data: bool,
+    /// Maximum hotbar slots available for placing the picked item.
     max-slots: u8,
   }
+  /// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
   record s-client-cache-blob-status {
+    /// Hashes of chunk blobs not found in the client cache, which the server must send.
     miss-hashes: list<s64>,
+    /// Hashes of chunk blobs successfully retrieved from the client cache.
     hit-hashes: list<s64>,
   }
+  /// Sent by the client during login to inform the server whether client-side chunk blob caching is supported.
   record s-client-cache-status {
+    /// True if the client supports caching sub-chunk blobs by hash.
     is-cache-supported: bool,
   }
+  /// Sent by the client to request server-side execution of a slash command.
   record s-command-request {
+    /// Raw command line string (with leading slash).
     command: string,
+    /// Origin context information identifying the command sender.
     origin: command-origin-data,
+    /// Whether the command originates from an internal engine subsystem.
     is-internal: bool,
+    /// Protocol command syntax version string.
     version: string,
   }
+  /// Metadata describing the origin and sender of an executed command.
   record command-origin-data {
+    /// Origin type string (e.g. `player`, `command_block`, `server`).
     r-type: string,
+    /// UUID uniquely identifying the sender instance.
     uuid: uuid,
+    /// Request identifier string for correlating command outputs.
     request-id: string,
+    /// Entity unique ID of the player executing the command, if applicable.
     player-id: s64,
   }
+  /// Sent by either client or server to close an open container inventory window.
   record s-container-close {
+    /// Window ID of the container being closed.
     container-id: u8,
+    /// Bedrock container type identifier.
     container-type: u8,
+    /// True if the close was initiated by the server rather than the player.
     server-initiated-close: bool,
   }
+  /// Transmits player emote animations to the server and broadcasts them to nearby players.
   record s-emote {
+    /// Runtime entity ID of the emoting player.
     actor-runtime-id: s64,
+    /// UUID identifier string of the emote piece being performed.
     emote-id: string,
+    /// Duration of the emote animation in ticks.
     emote-length-ticks: s32,
+    /// Xbox Live User ID of the player.
     xuid: string,
+    /// Platform ID string of the player.
     platform-id: string,
+    /// Bitflags modifying emote playback behavior (e.g. mute chat).
     %flags: u8,
   }
+  /// Sent by the client to provide the server with a list of all emotes unlocked and equipped by the player.
   record s-emote-list {
+    /// Runtime entity ID of the player sending their emote inventory.
     runtime-id: s64,
+    /// List of emote piece UUIDs unlocked by the player.
     emote-piece-ids: list<uuid>,
   }
+  /// Sent by the client when interacting with an entity (mounting, NPC dialogue, opening inventory).
   record s-interact {
+    /// Type of interaction performed.
     action: action,
+    /// Runtime entity ID of the target entity.
     target-runtime-id: s64,
+    /// Interaction hit position vector, present for mouse/touch interactions.
     position: option<tuple<f64, f64, f64>>,
   }
+  /// Action type performed in an entity interaction.
   enum action {
     invalid,
+    /// Stop riding a vehicle entity.
     stop-riding,
+    /// Continuous interaction position update.
     interact-update,
+    /// Open NPC dialog interface.
     npc-open,
+    /// Open entity inventory (e.g. horse or llama).
     open-inventory,
   }
   variant inventory-action-source {
@@ -206,12 +266,19 @@ interface bedrock-packets {
     item-in-hand: network-item-descriptor,
     head-position: tuple<f64, f64, f64>,
   }
+  /// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
   record s-inventory-transaction {
+    /// Legacy transaction request ID used for rollback tracking.
     legacy-request-id: s32,
+    /// Legacy slot modification entries.
     legacy-set-item-slots: list<legacy-set-item-slot>,
+    /// Whether action elements are present in the transaction.
     has-value: bool,
+    /// List of slot modification actions composing this transaction.
     actions: list<inventory-action>,
+    /// Transaction category type (`Normal`, `Mismatch`, `ItemUse`, `ItemUseOnEntity`, `ItemRelease`).
     transaction-type: s32,
+    /// Specialized transaction payload corresponding to the transaction type.
     transaction-data: transaction-data,
   }
   record item-stack-request-slot-info {
@@ -314,26 +381,41 @@ interface bedrock-packets {
     craft-non-implemented,
     craft-results-deprecated(item-stack-request-action-craft-results-deprecated),
   }
+  /// An individual inventory request containing slot manipulation actions.
   record item-stack-request {
+    /// Client-assigned sequence ID identifying this request for response correlation.
     request-id: s32,
+    /// Ordered actions that modify inventory slots (take, place, swap, craft, etc.).
     actions: list<item-stack-request-action>,
+    /// Filter strings for text filtering when renaming items.
     filter-strings: list<string>,
+    /// Reason code for profanity or server filtering checks.
     filter-cause: s32,
   }
+  /// A batch of item stack requests sent by the client to manipulate inventory slots.
   record s-item-stack-request {
+    /// List of item stack requests to execute sequentially.
     requests: list<item-stack-request>,
   }
+  /// Sent by the client to update the server on client-side loading screen transitions.
   record s-loading-screen {
     loading-screen-packet-type: loading-screen-packet-type,
     loading-screen-id: option<s32>,
   }
+  /// Type of loading screen transition event.
   enum loading-screen-packet-type {
+    /// Client has started displaying a loading screen.
     start-loading-screen,
+    /// Client has dismissed the loading screen and resumed rendering.
     end-loading-screen,
   }
+  /// Sent by the client to initiate the login handshake, containing authentication tokens and device information.
   record s-login {
+    /// Protocol version spoken by the connecting client.
     protocol-version: s32,
+    /// Chain of JSON Web Tokens containing identity and Xbox Live authentication claims.
     jwt: list<u8>,
+    /// Raw client data JWT carrying skin parameters, device details, and locale settings.
     raw-token: list<u8>,
   }
   record skin-animation {
@@ -404,37 +486,60 @@ interface bedrock-packets {
     persona-pieces: list<persona-piece>,
     piece-tint-colours: list<persona-piece-tint-colour>,
   }
+  /// Sent by the client to update the item held or equipped in a mob or player slot.
   record s-mob-equipment {
+    /// Runtime entity ID of the mob or player changing equipment.
     entity-runtime-id: s64,
+    /// Item descriptor being equipped.
     item: network-item-stack-descriptor,
+    /// Slot index in the container.
     slot: u8,
+    /// Currently selected hotbar slot.
     selected-slot: u8,
+    /// Container identifier (e.g. inventory or armor).
     container-id: u8,
   }
+  /// Sent by the client in response to a server-sent modal form dialog.
   record s-modal-form-response {
+    /// Form ID corresponding to the request sent by the server.
     form-id: s32,
+    /// JSON encoded form response data (inputs, selected buttons), or None if cancelled.
     json-response: option<string>,
+    /// Optional cancellation reason code if the form was dismissed without submission.
     form-cancel-reason: option<u8>,
   }
+  /// Sent by the client to report malformed or unexpected packets received from the server.
   record s-packet-violation-warning {
+    /// Violation category (e.g. unknown packet or malformed payload).
     violation-type: s32,
+    /// Severity level of the violation (warning vs fatal).
     violation-severity: s32,
+    /// Packet ID that triggered the violation.
     violation-packet-id: s32,
+    /// Diagnostic description of the violation context.
     violation-context: string,
   }
+  /// Sent by the client when performing player actions such as mining, sprinting, sneaking, or dimensions changes.
   record s-player-action {
+    /// Runtime entity ID of the executing player.
     player-runtime-id: s64,
+    /// Specific action type triggered.
     action: player-action-type,
+    /// Coordinates of the target block involved in the action, or zero if none.
     block-position: tuple<s32, s32, s32>,
+    /// Result block position (e.g. adjacent position where a block would be placed).
     result-pos: tuple<s32, s32, s32>,
+    /// Face of the block targeted by the action.
     face: s32,
   }
+  /// Category of action performed by a player.
   enum player-action-type {
     unknown,
     start-destroy-block,
     abort-destroy-block,
     stop-destroy-block,
     get-updated-block,
+    /// Seems to be not used, or atleast not send by client
     drop-item,
     start-sleeping,
     stop-sleeping,
@@ -472,27 +577,49 @@ interface bedrock-packets {
     internal-update,
     count,
   }
+  /// Sent by the client every tick to transmit player movement, view orientation, and input state under server authoritative movement.
   record s-player-auth-input {
+    /// Pitch rotation angle in degrees.
     pitch: f32,
+    /// Yaw rotation angle in degrees.
     yaw: f32,
+    /// Absolute player position in world space.
     position: tuple<f64, f64, f64>,
+    /// Movement vector created from directional input controls (WASD / analog stick).
     move-vec: tuple<f64, f64>,
+    /// Horizontal head yaw rotation angle in degrees.
     head-yaw: f32,
+    /// Bitset of active input flags for the current tick.
     input-data: list<s64>,
+    /// Input device mode used by the client (mouse, touch, gamepad).
     input-mode: s32,
+    /// Client play mode (screen, VR, etc.).
     play-mode: s32,
+    /// Touch or crosshair interaction model.
     interaction-model: s32,
+    /// Pitch angle when an interaction occurred.
     interact-pitch: f32,
+    /// Yaw angle when an interaction occurred.
     interact-yaw: f32,
+    /// Client world simulation tick number.
     tick: s64,
+    /// Positional delta since the previous input tick.
     delta: tuple<f64, f64, f64>,
+    /// Optional block destruction or interaction actions executed during this tick.
     block-actions: option<list<player-block-action>>,
+    /// Optional item use action performed during this tick.
     item-interaction: option<player-inventory-action>,
+    /// Optional item stack request embedded into the movement tick.
     item-stack-request: option<item-stack-request>,
+    /// Predicted vehicle rotation if riding an entity.
     vehicle-rotation: option<tuple<f64, f64>>,
+    /// Unique entity ID of the ridden vehicle.
     vehicle-unique-id: option<s64>,
+    /// Analog movement stick input values.
     analog-move: tuple<f64, f64>,
+    /// Camera orientation vector for camera-relative movement.
     camera-orientation: tuple<f64, f64, f64>,
+    /// Unclamped raw movement input vector.
     raw-move: tuple<f64, f64>,
   }
   record player-inventory-action {
@@ -514,27 +641,42 @@ interface bedrock-packets {
     client-prediction: u8,
     client-cooldown-state: u8,
   }
+  /// A block action (e.g. start/stop breaking) executed within a player input tick.
   record player-block-action {
+    /// Action category performed on the block.
     action: player-action-type,
+    /// Targeted block coordinates.
     block-pos: tuple<s32, s32, s32>,
+    /// Face of the block targeted.
     face: s32,
   }
+  /// Primary physical input peripheral used by the client.
   enum input-mode {
+    /// Standard desktop mouse and keyboard.
     mouse,
+    /// Mobile touchscreen controls.
     touch,
+    /// Console gamepad or controller.
     game-pad,
+    /// Motion controller (VR / AR).
     motion-controller,
   }
+  /// Client rendering / gameplay mode.
   enum play-mode {
+    /// Standard full-screen desktop or mobile play.
     normal,
     teaser,
     screen,
     exit-level,
     num-modes,
   }
+  /// Client control interaction model style.
   enum interaction-model {
+    /// Touch drag and tap interaction.
     touch,
+    /// Centered crosshair interaction.
     crosshair,
+    /// Classic D-pad and tap controls.
     classic,
   }
   enum input-data {
@@ -605,206 +747,380 @@ interface bedrock-packets {
     sneak-current-raw,
     internal-update,
   }
+  /// Sent by the Bedrock client when the player changes their active hotbar slot.
   record s-player-hotbar {
+    /// Zero-based slot index selected in the hotbar.
     selected-slot: s32,
+    /// Container identifier (usually player inventory).
     container-id: u8,
+    /// Whether the server should select this slot immediately.
     should-select-slot: bool,
   }
+  /// Typed value payload for an ability toggle request.
   variant ability-value {
+    /// Boolean flag value (e.g. enabling or disabling flight).
     %bool(bool),
+    /// Floating point value (e.g. fly speed modification).
     float(f32),
   }
+  /// Sent by the client to request permission to modify a player ability (such as flying).
   record s-request-ability {
+    /// Identifier of the requested ability.
     ability: s32,
+    /// Requested ability state or value.
     value: ability-value,
   }
+  /// Sent by the client to request a specific chunk render distance from the server.
   record s-request-chunk-radius {
+    /// Requested chunk render radius in chunks.
     chunk-radius: s32,
+    /// Upper limit of chunk render radius requested by the client settings.
     max-chunk-radius: u8,
   }
+  /// Sent by the client to query network settings (such as compression algorithms and thresholds) from the server.
   record s-request-network-settings {
+    /// Network protocol version supported by the connecting client.
+    /// If unsupported by the server, the connection will be rejected.
     client-network-version: s32,
   }
+  /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
   record s-resource-pack-client-response {
+    /// Pack response status (e.g. refused, send packs, have all packs, or completed).
     response: u8,
+    /// Number of packs requested for download.
     download-size: s32,
+    /// Array of pack identifiers (`UUID_Version`) the client needs to download.
     pack-ids: list<string>,
   }
+  /// Bidirectional packet managing player respawning and client spawn readiness.
   record s-respawn {
+    /// World coordinates where the player is to respawn.
     position: tuple<f64, f64, f64>,
+    /// Stage of the respawn lifecycle.
     state: respawn-state,
+    /// Runtime entity ID of the respawning player.
     player-runtime-id: s64,
   }
+  /// Lifecycle stage for player respawning.
   enum respawn-state {
+    /// Server is searching for a valid spawn position point.
     searching-for-spawn,
+    /// Server indicates client is ready to spawn at target coordinates.
     ready-to-spawn,
+    /// Client confirms it has loaded the surrounding world and is ready to spawn.
     client-ready-to-spawn,
   }
+  /// Sent by the client after receiving PlayStatus(PlayerSpawn) to signal that world initialization is complete.
   record s-set-local-player-as-initialized {
+    /// Runtime entity ID assigned to the player in `StartGame`.
     player-id: s64,
   }
+  /// Sent by the client to sync inventory UI layout options and selected crafting tabs.
   record s-set-player-inventory-options {
+    /// Selected left inventory category tab.
     left-inventory-tab: s32,
+    /// Selected right inventory category tab.
     right-inventory-tab: s32,
+    /// Whether recipe filtering (craftable only) is toggled on.
     filtering: bool,
+    /// Layout style of the inventory grid.
     layout-inv: s32,
+    /// Layout style of the crafting section.
     layout-craft: s32,
   }
+  /// Transmits in-game chat messages, system alerts, popups, and raw JSON text between client and server.
   record s-text {
+    /// Whether translation is requested for localization strings in the message.
     needs-translation: bool,
+    /// Formatting category and presentation target of the text.
     r-type: text-packet-type,
+    /// Sender username (included in chat, whisper, and announcement packets).
     source-name: string,
+    /// Primary text content or translation key.
     message: string,
+    /// Localization substitution arguments for translation or popup texts.
     parameters: list<string>,
+    /// Sender Xbox Live User ID (XUID).
     xuid: string,
+    /// Platform-specific chat identifier (e.g. Nintendo Switch chat isolation).
     platform-chat-id: string,
+    /// Optional profanity-filtered message for clients with filtering enabled.
     filtered-message: option<string>,
   }
+  /// Formatting type and destination UI layer for Bedrock text packets.
   enum text-packet-type {
+    /// Unformatted raw text message.
     raw,
+    /// Standard player chat message.
     chat,
+    /// Translatable localization key with arguments.
     translation,
+    /// Brief popup message displayed above the action bar.
     popup,
+    /// Jukebox disc track notification popup.
     jukebox-popup,
+    /// Small tip text displayed above the hotbar.
     tip,
+    /// Server system notification message.
     system,
+    /// Private whisper message directed to a specific player.
     whisper,
+    /// Global server announcement message.
     announcement,
+    /// Formatted JSON whisper message.
     json-whisper,
+    /// Formatted raw JSON message.
     json,
+    /// Formatted JSON announcement.
     json-announcement,
   }
+  /// Sent by the server to spawn non-player entities (mobs, projectiles, vehicles, items) on the client.
   record c-add-actor {
+    /// Unique entity ID across sessions.
     target-actor-id: s64,
+    /// Runtime entity ID for the current session.
     target-runtime-id: s64,
+    /// Entity type identifier (e.g. `minecraft:zombie` or `minecraft:arrow`).
     actor-type: string,
+    /// World spawn coordinates.
     position: tuple<f64, f64, f64>,
+    /// Initial movement velocity vector.
     velocity: tuple<f64, f64, f64>,
+    /// Pitch (x) and yaw (y) rotation angles.
     rotation: tuple<f64, f64>,
+    /// Horizontal head yaw rotation angle.
     y-head-rotation: f32,
+    /// Body yaw rotation angle.
     y-body-rotation: f32,
+    /// Entity attributes (health, movement speed, follow range).
     attributes-list: list<synced-attribute>,
+    /// Metadata dictionary (flags, name tags, scale).
     actor-data: string,
+    /// Dynamic Molang property synchronization data.
     synced-properties: property-sync-data,
+    /// Entity attachment links (e.g. passenger or leash connections).
     actor-links: list<actor-link>,
   }
+  /// Synchronized numeric entity attribute with min, current, and max bounds.
   record synced-attribute {
+    /// Identifier string for the attribute (e.g. `minecraft:health`).
     attribute-name: string,
+    /// Minimum allowed attribute value.
     min-value: f32,
+    /// Current active attribute value.
     current-value: f32,
+    /// Maximum allowed attribute value.
     max-value: f32,
   }
+  /// Sent by the server to spawn a dropped item entity in the world.
   record c-add-item-actor {
+    /// Persistent unique entity ID of the dropped item entity.
     target-actor-id: s64,
+    /// Runtime entity ID for the current session.
     target-runtime-id: s64,
+    /// Item stack representation of the dropped item.
     item: item-stack-wrapper,
+    /// World spawn coordinates.
     position: tuple<f64, f64, f64>,
+    /// Movement velocity vector.
     velocity: tuple<f64, f64, f64>,
+    /// Metadata dictionary for the item entity.
     entity-data: string,
+    /// Whether the item originated from fishing.
     is-from-fishing: bool,
   }
+  /// Sent by the server to spawn another player client-side into the world.
   record c-add-player {
+    /// UUID of the player being spawned.
     uuid: uuid,
+    /// Player display username.
     player-name: string,
+    /// Session-unique runtime entity ID for the player.
     target-runtime-id: s64,
+    /// Platform-specific chat identifier string.
     platform-chat-id: string,
+    /// Spawn coordinates in world space.
     position: tuple<f64, f64, f64>,
+    /// Initial movement velocity.
     velocity: tuple<f64, f64, f64>,
+    /// Pitch (x) and yaw (y) rotation angles.
     rotation: tuple<f64, f64>,
+    /// Horizontal head yaw rotation angle.
     y-head-rotation: f32,
+    /// Item stack currently held in the main hand.
     carried-item: network-item-stack-descriptor,
+    /// Game mode of the player.
     player-game-type: game-type,
+    /// Entity metadata flags and properties.
     entity-data: string,
+    /// Dynamic Molang property synchronization.
     synced-properties: property-sync-data,
+    /// Permissions and ability layers for this player.
     abilities-data: serialized-abilities-data,
+    /// Vehicle and attachment links.
     actor-links: list<actor-link>,
+    /// Unique device ID of the client device.
     device-id: string,
+    /// Operating system platform of the player.
     build-platform: build-platform,
   }
+  /// Advertises available console and chat commands, arguments, overloads, and auto-completion structures.
   record c-available-commands {
+    /// Global table of all unique string arguments and options referenced by command enums.
     enum-values: list<string>,
+    /// Subcommand names supporting chained execution (e.g. `/execute`).
     chained-subcommand-values: list<string>,
+    /// Suffix strings appended to command parameters.
     post-fixes: list<string>,
+    /// Fixed enumeration definitions mapping enum names to indices in `enum_values`.
     enum-data: list<enum-data>,
+    /// Chained subcommand definitions and argument relationships.
     chained-subcommand-data: list<chained-subcommand-data>,
+    /// Command specifications and overloads registered for the player.
     commands: list<command-data>,
+    /// Dynamic enumerations that can be updated at runtime without resending all commands.
     soft-enums: list<soft-enum-data>,
+    /// Value constraints and restrictions applied to specific enum options.
     constraints: list<constrained-value-data>,
   }
+  /// A fixed command enum and its allowed option indices.
   record enum-data {
+    /// Name of the enumeration.
     name: string,
+    /// Indices of valid values pointing into `enum_values`.
     values: list<s32>,
   }
+  /// Represents a subcommand that can chain commands, e.g. `/execute`.
   record chained-subcommand-data {
+    /// Name of the chained subcommand.
     name: string,
+    /// Value and type relationships for this subcommand.
     subcommand-values: list<chained-subcommand-relationship>,
   }
+  /// Relationship between a chained subcommand value and argument flags.
   record chained-subcommand-relationship {
+    /// Index into the `ChainedSubcommandValues` flat list.
     index: s32,
+    /// Argument type flags (basic types only, no `ARG_FLAG`_* modifiers).
     value: s32,
   }
+  /// Metadata, permissions, aliases, and argument overloads for a single registered command.
   record command-data {
+    /// Canonical command name (without leading slash).
     name: string,
+    /// Human-readable description displayed in command help.
     description: string,
+    /// Command behavior flags.
     %flags: s32,
+    /// Minimum permission level required to execute the command.
     permission-level: command-permission-level,
+    /// Index into enum table defining aliases for this command (-1 if none).
     alias-enum: s32,
+    /// Indices of chained subcommands referenced by this command.
     command-data-chained-subcommand-indexes: list<s32>,
+    /// Overload variants specifying acceptable argument sequences.
     overloads: list<overload-data>,
   }
+  /// An overload variant describing a sequence of expected arguments.
   record overload-data {
+    /// Whether this overload is part of a chained command invocation.
     is-chaining: bool,
+    /// Parameter specifications comprising this overload.
     parameter-data: list<param-data>,
   }
+  /// An individual parameter definition within a command overload.
   record param-data {
+    /// Parameter name shown in command hints.
     name: string,
+    /// Encodes type flags (`ARG_FLAG_VALID` | `ARG_FLAG_ENUM` | index, or raw type).
     parse-symbol: s32,
+    /// Whether this parameter is optional.
     is-optional: bool,
+    /// Parameter option byte bitflags.
     options: u8,
   }
+  /// A dynamic command enumeration whose choices can update without resending all commands.
   record soft-enum-data {
+    /// Name of the dynamic enumeration.
     enum-name: string,
+    /// Available options within the enumeration.
     enum-options: list<string>,
   }
+  /// Restricts specific enum values based on constraints.
   record constrained-value-data {
+    /// Symbol of the enum value being constrained.
     enum-value-symbol: s32,
+    /// Symbol of the enum containing the value.
     enum-symbol: s32,
+    /// Indices of constraints applied.
     constraint-indices: list<u8>,
   }
+  /// Synchronizes the complete block-actor data for a block position.
   record c-block-actor-data {
+    /// World coordinates of the block entity being updated.
     block-position: tuple<s32, s32, s32>,
-    actor-data-tags: string,
+    /// Network NBT compound containing all properties and state of the block entity.
+    actor-data-tags: nbt-tree,
   }
+  /// Updates a client-side block animation, such as a chest lid opening or closing.
   record c-block-event {
+    /// World coordinates of the block undergoing the event.
     block-position: tuple<s32, s32, s32>,
+    /// Type identifier of the block action being executed.
     event-type: s32,
+    /// Type-specific integer parameter (e.g. 1 to open a chest lid, 0 to close it).
     event-value: s32,
   }
+  /// Sent by the server to make a specific 'boss event' occur in the world.
+  /// 
+  /// Packet ID: `74`
   record c-boss-event {
+    /// The unique ID of the boss entity that the boss event sent involves.
     boss-entity-id: s64,
+    /// The type of the event (one of `BOSS_EVENT_*`).
     event-type: u8,
+    /// The title shown above the boss bar.
     title: string,
+    /// Filtered version of `title` with profanity removed.
     filtered-title: string,
+    /// The percentage of health shown in the boss bar (0.0 - 1.0).
     health-percentage: f32,
+    /// The colour of the boss bar (one of `BOSS_EVENT_COLOUR_*`).
     color: u8,
+    /// The overlay of the boss bar (one of `BOSS_EVENT_OVERLAY_*`).
     overlay: u8,
   }
+  /// Transitions the player to a different dimension with a loading screen.
   record c-change-dimension {
+    /// Target dimension identifier (0: Overworld, 1: Nether, 2: The End).
+    /// 
+    /// Must differ from the player's current dimension to prevent an infinite loading screen.
     dimension-id: s32,
+    /// Coordinates where the player spawns in the destination dimension.
     position: tuple<f64, f64, f64>,
+    /// Whether this dimension change was triggered by player respawn after death.
     respawn: bool,
+    /// Optional identifier for the loading screen session.
     loading-screen-id: option<s32>,
   }
+  /// Sent by the server in response to [`SRequestChunkRadius`](crate::bedrock::server::request_chunk_radius::SRequestChunkRadius) to confirm the approved chunk render distance.
   record c-chunk-radius-updated {
+    /// Approved chunk radius (in chunks) that the server will send to the client.
     chunk-radius: s32,
   }
+  /// Payload data for a requested chunk blob that was missing from the client cache.
   record missing-blob-data {
+    /// 64-bit hash identifier of the blob.
     blob-id: s64,
+    /// Raw serialized byte payload of the chunk blob.
     blob-data: list<u8>,
   }
+  /// Sent by the server in response to [`SClientCacheBlobStatus`](crate::bedrock::server::client_cache_blob_status::SClientCacheBlobStatus) with requested chunk blobs.
   record c-client-cache-miss-response {
+    /// Array of blob byte payloads corresponding to missed blob hashes.
     missing-blobs: list<missing-blob-data>,
   }
+  /// Operating system or client platform identifier reported by the client.
   enum build-platform {
     unknown,
     google,
@@ -822,6 +1138,7 @@ interface bedrock-packets {
     windows-phone,
     linux,
   }
+  /// Game mode identifier used in Bedrock protocol packets.
   enum game-type {
     unknown,
     survival,
@@ -830,18 +1147,25 @@ interface bedrock-packets {
     default,
     spectator,
   }
+  /// Serialized abilities data containing permissions and ability bitmasks for a player.
   record serialized-abilities-data {
+    /// Unique entity ID of the target player.
     target-player-raw-id: s64,
+    /// Permission level shown in the player list.
     player-permissions: player-permission-level,
+    /// Level determining what command categories the player can invoke.
     command-permissions: command-permission-level,
+    /// Ability layers specifying capabilities (flight, invulnerability, etc.).
     layers: list<serialized-abilities-data-serialized-layer>,
   }
+  /// Player permission level representing their world access rights.
   enum player-permission-level {
     visitor,
     member,
     operator,
     custom,
   }
+  /// Command permission level determining allowed command execution scope.
   enum command-permission-level {
     any,
     game-directors,
@@ -850,35 +1174,62 @@ interface bedrock-packets {
     owner,
     internal,
   }
+  /// A single ability layer defining movement speeds and allowed action bitflags.
   record serialized-abilities-data-serialized-layer {
+    /// Layer type index (such as base, spectator, or creative).
     serialized-layer: s32,
+    /// Bitmask of abilities configured for this layer.
     abilities-set: s32,
+    /// Current boolean values for the configured abilities bitmask.
     ability-value: s32,
+    /// Flying speed multiplier.
     fly-speed: f32,
+    /// Vertical flying speed multiplier.
     vertical-fly-speed: f32,
+    /// Walking speed multiplier.
     walk-speed: f32,
   }
+  /// Describes an attachment link between two entities, such as a player riding a vehicle.
   record actor-link {
+    /// Unique entity ID of the vehicle / entity being ridden.
     ridden-unique-id: s64,
+    /// Unique entity ID of the passenger / rider.
     rider-unique-id: s64,
+    /// Type of link (e.g. 0 for passenger, 1 for vehicle).
     link-type: u8,
+    /// Whether the link takes effect immediately without smooth transition.
     immediate: bool,
+    /// Whether the link was initiated by the passenger entity.
     rider-initiated: bool,
+    /// Rotational velocity applied to the vehicle.
     vehicle-angular-velocity: f32,
   }
+  /// Sent by the server to open an inventory container screen (chest, furnace, anvil) on the client.
   record c-container-open {
+    /// Window ID assigned to the opened container session.
     container-id: u8,
+    /// Container inventory type (chest, hopper, dispenser, etc.).
     container-type: u8,
+    /// Block coordinates of the container block entity in world space.
     position: tuple<s32, s32, s32>,
+    /// Entity ID if the container belongs to an entity (e.g. horse or donkey chest).
     target-entity-id: s64,
   }
+  /// Sent by the server to correct the client's predicted movement under server authoritative movement.
   record c-correct-player-move-prediction {
+    /// Prediction mode type (e.g. player movement vs vehicle movement).
     prediction-type: u8,
+    /// Corrected world position coordinates.
     pos: tuple<f64, f64, f64>,
+    /// Positional delta velocity vector.
     pos-delta: tuple<f64, f64, f64>,
+    /// Pitch and yaw rotation angles.
     rotation: tuple<f64, f64>,
+    /// Angular velocity of the vehicle if riding one.
     vehicle-angular-velocity: option<f32>,
+    /// Whether the player was resting on solid ground.
     on-ground: bool,
+    /// Tick number on which the prediction error occurred.
     tick: s64,
   }
   record recipe-item-descriptor-item {
@@ -924,12 +1275,18 @@ interface bedrock-packets {
     shapeless(bedrock-shapeless-recipe),
     shaped(bedrock-shaped-recipe),
   }
+  /// Sent by the server to send all crafting and smelting recipes available in the world.
   record c-crafting-data {
+    /// List of shaped and shapeless crafting recipes.
     recipes: list<bedrock-recipe>,
+    /// Whether previous recipe entries should be cleared on the client.
     clean-recipes: bool,
   }
+  /// Sent by the server to populate the creative inventory menu with item categories, groups, and items.
   record c-creative-content {
+    /// Creative tab groups with category icons and display names.
     groups: list<creative-group-info-payload>,
+    /// Individual creative item stack entries.
     entries: list<creative-item-entry-payload>,
   }
   enum creative-category {
@@ -951,172 +1308,309 @@ interface bedrock-packets {
     item: network-item-descriptor,
     group-index: s32,
   }
+  /// Sent by the server to cleanly disconnect a client with an optional error code and kick message.
   record c-disconnect {
+    /// Disconnect reason code determining the message shown on the client disconnect screen.
     reason: s32,
+    /// Whether to skip showing the disconnect message dialog and return directly to the main menu.
     skip-message: bool,
+    /// Disconnect explanation message displayed to the user.
     message: string,
+    /// Profanity-filtered variant of the disconnect message.
     filtered-message: string,
   }
+  /// Sent by the server to update gamerules on the client (e.g. `showcoordinates` or `dodaylightcycle`).
   record c-gamerules-changed {
+    /// List of game rules being updated.
     rule-data: list<game-rule>,
   }
+  /// An individual gamerule entry with its identifier, edit permission, and typed value.
   record game-rule {
+    /// Name of the gamerule in lowercase (e.g. `showcoordinates`).
     rule-name: string,
+    /// Whether players with operator permissions can edit this gamerule in-game.
     rule-can-be-modified: bool,
+    /// Value associated with the gamerule.
     rule-value: rule-value,
   }
   enum rule-value {
     null,
   }
+  /// Sent by the server to synchronize the entire contents of an inventory or container window.
   record c-inventory-content {
+    /// Window ID of the container being populated.
     container-id: s32,
+    /// Array of item stacks filling every slot of the container.
     slots: list<network-item-stack-descriptor>,
+    /// Full container name descriptor with dynamic session ID.
     full-container-name: full-container-name,
+    /// Storage item descriptor (e.g. shulker box item if inspecting inside a shulker).
     storage-item: network-item-stack-descriptor,
   }
+  /// Sent by the server to update a single item slot within an open inventory container.
   record c-inventory-slot {
+    /// Window ID of the container being updated.
     container-id: s32,
+    /// Slot index within the container.
     slot: s32,
+    /// Optional full container descriptor.
     full-container-name: option<full-container-name>,
+    /// Optional storage item descriptor.
     storage-item: option<network-item-stack-descriptor>,
+    /// New item stack descriptor placed into the slot.
     item: network-item-stack-descriptor,
   }
+  /// Sent by the server to register custom and vanilla item identifiers with their component definitions.
   record c-item-registry {
+    /// List of registered item definitions and their component NBT data.
     items: list<item-data>,
   }
+  /// Registration data for a single item type in the network item registry.
   record item-data {
+    /// String identifier for the item (e.g. `minecraft:diamond_sword`).
     item-name: string,
+    /// Numerical runtime ID of the item.
     item-id: s32,
+    /// Whether the item uses data-driven components.
     is-component-based: bool,
+    /// Format version of the item schema.
     item-version: s32,
+    /// Pre-serialized Bedrock NBT compound representing the item components.
     component-data: list<u8>,
   }
+  /// Slot update information resulting from an approved item stack request.
   record item-stack-response-slot-info {
+    /// Slot index requested by the client.
     requested-slot: u8,
+    /// Destination slot index allocated by the server.
     slot: u8,
+    /// Item count in the slot.
     amount: u8,
+    /// Unique network stack ID assigned to the slot's item stack.
     item-stack-net-id: s32,
+    /// Custom display name assigned to the item.
     custom-name: string,
+    /// Filtered custom display name.
     filtered-custom-name: string,
+    /// Durability correction delta.
     durability-correction: s32,
   }
   record item-stack-response-container-info {
     full-container-name: full-container-name,
     slots: list<item-stack-response-slot-info>,
   }
+  /// Status result and slot updates for an individual item stack request.
   record item-stack-response-info {
+    /// Status code of the response (`0` = Success, `1` = Error).
     %result: u8,
+    /// Request ID matching the client's `ItemStackRequest`.
     client-request-id: s32,
+    /// Container slot updates applied as a consequence of the request.
     containers: list<item-stack-response-container-info>,
   }
+  /// Sent by the server to approve or reject item stack requests and sync modified slots.
   record c-item-stack-response {
+    /// List of response statuses corresponding to client requests.
     responses: list<item-stack-response-info>,
   }
+  /// Broadcasts visual or auditory level-wide events, such as particles or block breaking.
   record c-level-event {
+    /// Identifier corresponding to the specific level event action.
     event-id: s32,
+    /// World coordinates where the event originates or particle effect is centered.
     position: tuple<f64, f64, f64>,
+    /// Type-specific auxiliary parameter associated with the event (e.g. block runtime ID).
     data: s32,
   }
+  /// Identifiers for common level-wide events and particle effects.
   enum level-event {
+    /// Emits block break particles at the target position.
     particles-destroy-block,
+    /// Initiates a block cracking animation.
     block-start-break,
+    /// Cancels or completes a block cracking animation.
     block-stop-break,
+    /// Advances the crack stage of a block cracking animation.
     block-update-break,
   }
+  /// Plays a sound effect at a designated world position or associated with an actor.
   record c-level-sound-event {
+    /// Canonical identifier string for the sound event.
     sound-event: string,
+    /// World coordinates where the sound source is located.
     position: tuple<f64, f64, f64>,
+    /// Auxiliary integer parameter used by specific sound effects.
     data: s32,
+    /// Identifier of the entity generating the sound (e.g. `minecraft:skeleton`).
     actor-identifier: string,
+    /// Whether the sound pitch/variant should reflect a juvenile mob variant.
     is-baby: bool,
+    /// Whether the sound plays globally at full volume without spatial falloff.
     is-global: bool,
+    /// Unique identifier of the entity emitting the sound.
     actor-unique-id: s64,
+    /// Optional explicit override position where the event should trigger.
     fire-at-position: option<tuple<f64, f64, f64>>,
   }
+  /// Sent by the server to add, modify, or remove potion/status effects on an entity.
   record c-mob-effect {
+    /// Runtime entity ID of the target actor.
     target-runtime-id: s64,
+    /// Effect action event (Add, Modify, or Remove).
     event-id: u8,
+    /// Status effect type identifier.
     effect-id: s32,
+    /// Amplifier/potency level of the effect (e.g. 0 for Speed I, 1 for Speed II).
     effect-amplifier: s32,
+    /// Whether swirl particles should be displayed around the entity.
     show-particles: bool,
+    /// Duration of the effect in ticks.
     effect-duration-ticks: s32,
+    /// Simulation tick number for server authoritative syncing.
     tick: s64,
+    /// Whether the effect is ambient (e.g. from a beacon).
     ambient: bool,
   }
+  /// Sent by the server to show the item equipped or held by a mob or other player.
   record c-mob-equipment {
+    /// Runtime entity ID of the equipped actor.
     target-runtime-id: s64,
+    /// Item descriptor for the equipped item stack.
     item: network-item-stack-descriptor,
+    /// Slot index within the container.
     slot: u8,
+    /// Currently selected hotbar slot.
     selected-slot: u8,
+    /// Container identifier (e.g. inventory or armor).
     container-id: u8,
   }
+  /// Requests the client to open a server-defined UI form (modal dialog, list menu, or custom form).
   record c-modal-form-request {
+    /// Unique identifier assigned by the server to distinguish responses when the form is submitted.
     form-id: s32,
+    /// JSON-encoded definition describing the layout, controls, and contents of the form window.
     form-ui-json: string,
   }
+  /// Sent by the server to update an entity's absolute position and rotation angles.
   record c-move-actor-absolute {
+    /// Runtime entity ID of the moving actor.
     actor-runtime-id: s64,
+    /// Bitflags indicating on-ground status, teleportation, or forced movement.
     header: u8,
+    /// Absolute world position coordinates.
     position: tuple<f64, f64, f64>,
+    /// Pitch angle encoded as an 8-bit rotation value (`angle * 256 / 360`).
     rotation-x: u8,
+    /// Yaw angle encoded as an 8-bit rotation value.
     rotation-y: u8,
+    /// Head yaw angle encoded as an 8-bit rotation value.
     rotation-y-head: u8,
   }
+  /// Bandwidth-optimized delta movement packet for updating an entity's position and rotation.
   record c-move-actor-delta {
+    /// Runtime entity ID of the moving actor.
     entity-runtime-id: s64,
+    /// Bitmask specifying which coordinates, angles, and flags are present in the payload.
     %flags: s32,
+    /// Delta or absolute X coordinate.
     x: f32,
+    /// Delta or absolute Y coordinate.
     y: f32,
+    /// Delta or absolute Z coordinate.
     z: f32,
+    /// Pitch angle encoded as an 8-bit rotation value.
     pitch: u8,
+    /// Yaw angle encoded as an 8-bit rotation value.
     yaw: u8,
+    /// Head yaw angle encoded as an 8-bit rotation value.
     head-yaw: u8,
+    /// Server world simulation tick number.
     tick: s64,
   }
+  /// Sent by the server to update a player's movement, teleport, or view angle.
   record c-move-player {
+    /// Runtime entity ID of the player being moved.
     player-runtime-id: s64,
+    /// Absolute position coordinates in world space.
     position: tuple<f64, f64, f64>,
+    /// Pitch angle in degrees.
     pitch: f32,
+    /// Yaw angle in degrees.
     yaw: f32,
+    /// Horizontal head yaw rotation angle in degrees.
     head-yaw: f32,
+    /// Movement mode (normal, reset, teleport, or rotation).
     mode: u8,
+    /// Whether the player is resting on the ground.
     on-ground: bool,
+    /// Runtime entity ID of the vehicle the player is riding, or zero.
     riding-runtime-id: s64,
+    /// Cause of the teleportation (present when mode is `MODE_TELEPORT`).
     teleport-cause: s32,
+    /// Entity type that triggered the teleportation.
     teleport-source-entity-type: s32,
+    /// World simulation tick number.
     tick: s64,
   }
+  /// Sent by the server to update the center anchor position and radius around which chunks remain loaded on the client.
   record c-network-chunk-publisher-update {
+    /// Center block position of the loaded area.
     pos-for-view: tuple<s32, s32, s32>,
+    /// Radius around the view position (measured in blocks, typically chunk radius * 16).
     new-radius: s32,
+    /// List of chunk coordinates saved in the client's cache.
     server-build-chunk-list: list<tuple<f64, f64>>,
   }
+  /// Sent by the server in response to [`SRequestNetworkSettings`](crate::bedrock::server::request_network_settings::SRequestNetworkSettings) to configure packet compression and client throttling.
   record c-network-settings {
+    /// Byte size threshold above which packet payloads are compressed. If zero, packets are uncompressed.
     compression-threshold: s32,
+    /// The compression algorithm to use (`0` = Deflate/ZLib, `1` = Snappy, `0xffff` = None).
     compression-algorithm: s32,
+    /// Whether the client should throttle player ticking when player count exceeds threshold.
     client-throttle-enabled: bool,
+    /// Player count limit before the client activates throttling.
     client-throttle-threshold: u8,
+    /// Fraction of players ticked per frame when throttling is engaged.
     client-throttle-scalar: f32,
   }
+  /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
   enum c-play-status {
+    /// Authentication and login succeeded; client proceeds to resource pack handshake.
     login-success,
+    /// Client protocol version is older than required by the server.
     outdated-client,
+    /// Server protocol version is older than the client version.
     outdated-server,
+    /// Server is ready for the player to spawn into the world.
     player-spawn,
+    /// Client tenant ID is invalid.
     invalid-tenant,
+    /// Educational edition client attempting to join a vanilla server.
     edition-mismatch-edu-to-vanilla,
+    /// Vanilla client attempting to join an educational server.
     edition-mismatch-vanilla-to-edu,
+    /// Server is full for local split-screen sub-clients.
     server-full-sub-client,
+    /// Editor mode client attempting to join a vanilla world.
     editor-mismatch-editor-to-vanilla,
+    /// Vanilla client attempting to join an editor world.
     editor-mismatch-vanilla-to-editor,
   }
+  /// Sent by the server to update the active selected hotbar slot of the player.
   record c-player-hotbar {
+    /// Zero-based slot index selected in the hotbar.
     selected-slot: s32,
+    /// Container identifier (usually player inventory).
     container-id: u8,
+    /// Whether the client should immediately focus the slot.
     should-select-slot: bool,
   }
+  /// Sent by the server to add or remove players from the in-game pause screen player list.
   record c-player-list {
+    /// Action type (`ACTION_ADD` = 0 to add, `ACTION_REMOVE` = 1 to remove).
     action: u8,
+    /// Player entries being added or removed.
     entries: list<player-list-entry>,
   }
   record player-list-entry {
@@ -1164,51 +1658,90 @@ interface bedrock-packets {
     piece-type: string,
     colors: list<s32>,
   }
+  /// Sent by the server to despawn an entity from the client's world.
   record c-remove-actor {
+    /// Unique entity ID of the entity to remove.
     target-actor-id: s64,
   }
+  /// Removes a scoreboard objective, hiding it from the player's screen.
   record c-remove-objective {
+    /// Identifier of the active objective to remove.
     objective-name: string,
   }
+  /// Identifies a specific pack instance and sub-pack layer in the active resource pack stack.
   record pack-instance-id {
+    /// UUID string of the resource pack.
     pack-id: string,
+    /// Semantic version string.
     version: string,
+    /// Sub-pack configuration name.
     sub-pack-name: string,
   }
+  /// Sent by the server to define the order in which resource and behavior packs are applied by the client.
   record c-resource-pack-stack-packet {
+    /// If true, textures from the resource packs are strictly required to join.
     texture-pack-required: bool,
+    /// Ordered list of packs to apply in bottom-to-top priority.
     texture-pack-list: list<pack-instance-id>,
+    /// Base vanilla version of the game.
     base-game-version: string,
+    /// Experimental gameplay feature toggles enabled for this world.
     experiments: experiments,
+    /// Whether to load editor mode packs.
     include-editor-packs: bool,
   }
+  /// Information describing a resource pack available on the server.
   record pack-info-data {
+    /// UUID and version string identifying the pack.
     pack-id-version: pack-id-version,
+    /// Size of the pack in bytes.
     pack-size: s64,
+    /// Encryption key for marketplace or encrypted content.
     content-key: string,
+    /// Specific subpack folder name, if applicable.
     subpack-name: string,
+    /// Content identity identifier.
     content-identity: string,
+    /// True if the pack contains JavaScript or game test scripts.
     has-scripts: bool,
+    /// True if the pack includes custom add-on behaviors.
     is-addon-pack: bool,
+    /// True if the pack includes PBR textures for ray tracing (RTX).
     is-ray-tracing-capable: bool,
+    /// Optional CDN URL where the client can download the pack.
     cdn-url: string,
   }
+  /// Sent by the server to list all resource and behavior packs required or available to download.
   record c-resource-packs-info {
+    /// If true, the client must accept and download all packs to join.
     resource-pack-required: bool,
+    /// Whether any packs in the list are add-on packs.
     has-addon-packs: bool,
+    /// Whether any packs contain client-side scripting.
     has-scripts: bool,
+    /// Whether vibrant visual shader enhancements should be disabled.
     force-disable-vibrant-visuals: bool,
+    /// World template UUID and version, if joining a world template.
     world-template-id-and-version: pack-id-version,
+    /// Array of resource packs available on the server.
     resource-packs: list<pack-info-data>,
   }
+  /// A resource pack UUID paired with its semantic version string.
   record pack-id-version {
+    /// Unique identifier for the pack.
     pack-uuid: uuid,
+    /// Semantic version string (e.g. `1.0.0`).
     pack-version: string,
   }
+  /// Sent by the server to update metadata and Molang properties of an entity (e.g. name tags, fire, scale).
   record c-set-actor-data {
+    /// The unique runtime ID of the entity being updated
     target-runtime-id: s64,
+    /// A map of entity metadata properties (e.g., flags, name tags, scale)
     actor-data: string,
+    /// Dynamic properties synced between client and server
     synced-properties: property-sync-data,
+    /// The server tick at which this update occurred
     tick: s64,
   }
   variant metadata-value {
@@ -1226,109 +1759,196 @@ interface bedrock-packets {
     int-entries-list: list<tuple<s32, s32>>,
     float-entries-list: list<tuple<s32, f32>>,
   }
+  /// Sent by the server to create, modify, or remove an attachment link between two entities (e.g. riding).
   record c-set-actor-link {
+    /// Attachment link descriptor defining the vehicle and passenger entities.
     link: actor-link,
   }
+  /// Sent by the server to set the movement velocity of an entity (e.g. knockback or explosion velocity).
   record c-set-actor-motion {
+    /// Runtime entity ID of the target actor.
     target-runtime-id: s64,
+    /// 3D velocity vector applied to the entity.
     motion: tuple<f64, f64, f64>,
+    /// Simulation tick number for server authoritative syncing.
     tick: s64,
   }
+  /// Synchronizes world difficulty level to the client.
   record c-set-difficulty {
+    /// World difficulty value (0: Peaceful, 1: Easy, 2: Normal, 3: Hard).
     difficulty: s32,
   }
+  /// Configures and displays a scoreboard objective in a specific UI slot.
   record c-set-display-objective {
+    /// Slot location where the objective is presented (`sidebar`, `list`, or `belowname`).
     display-slot-name: string,
+    /// Internal unique identifier for the scoreboard objective.
     objective-name: string,
+    /// Visible title text displayed atop the scoreboard.
     objective-display-name: string,
+    /// Objective criteria string (e.g. `dummy`).
     criteria-name: string,
+    /// Ordering direction for scores (0: ascending, 1: descending).
     sort-order: s32,
   }
+  /// Updates player health (legacy packet; attribute updates are typically preferred).
   record c-set-health {
+    /// New health value assigned to the player.
     health: s32,
   }
+  /// Updates the player's active game mode (e.g. Survival, Creative, Spectator).
   record c-set-player-game-type {
+    /// Target game mode to apply.
     player-game-type: game-type,
   }
+  /// Updates or removes scoreboard entries displayed to the client.
   record c-set-score {
+    /// Action type determining whether scores are modified (0) or removed (1).
     action: s32,
+    /// Score entries affected by this update.
     entries: list<score-entry>,
   }
+  /// A single score line or entry on a scoreboard.
   record score-entry {
+    /// Unique scoreboard identifier for this entry.
     scoreboard-id: s64,
+    /// Associated objective identifier.
     objective-name: string,
+    /// Score value displayed alongside the entry.
     score: s32,
+    /// Target type (1: player, 2: entity, 3: fake player).
     entry-type: s32,
+    /// Unique entity identifier when entry type is player or entity.
     entity-unique-id: s64,
+    /// Custom label when entry type is a fake player.
     custom-name: string,
   }
+  /// Updates the player or world spawn coordinates, affecting respawning and compass orientation.
   record c-set-spawn-position {
+    /// Determines whether this update configures a player-specific or world spawn location.
     spawn-position-type: spawn-position-type,
+    /// Spawn coordinates being set.
     block-position: tuple<s32, s32, s32>,
+    /// Dimension identifier associated with this spawn position.
     dimension-type: s32,
+    /// World spawn coordinates.
     spawn-block-pos: tuple<s32, s32, s32>,
   }
+  /// Scope of the spawn position update.
   enum spawn-position-type {
+    /// Sets an individual player respawn point (e.g. bed or respawn anchor).
     player-respawn,
+    /// Sets the global world spawn point, also updating compass direction.
     world-respawn,
   }
+  /// Sent by the server to synchronize the day-night cycle time (in ticks) with the client.
   record c-set-time {
+    /// In-game time of day in ticks.
     time: s32,
   }
+  /// Displays or controls on-screen titles, subtitles, or action bar notices.
   record c-set-title {
+    /// Operation type to perform (show text, adjust timing, clear, or reset).
     title-type: title-type,
+    /// Content string or raw JSON component displayed on screen.
     title-text: string,
+    /// Duration in ticks for the title to fade in.
     fade-in-time: s32,
+    /// Duration in ticks for the title to remain fully visible.
     stay-time: s32,
+    /// Duration in ticks for the title to fade out.
     fade-out-time: s32,
+    /// Xbox Live user identifier of the recipient, if applicable.
     xuid: string,
+    /// Platform-specific online identifier.
     platform-online-id: string,
+    /// Sanitized version of the title message with profanity removed.
     filtered-title-message: string,
   }
+  /// Action or display target of a title packet.
   enum title-type {
+    /// Clears any currently displayed title.
     clear,
+    /// Resets title animations and display durations to default values.
     reset,
+    /// Displays primary title text.
     title,
+    /// Displays secondary subtitle text beneath the title.
     subtitle,
+    /// Displays text above the player's hotbar (action bar).
     actionbar,
+    /// Configures fade-in, stay, and fade-out durations without displaying new text.
     times,
+    /// Displays localized or formatted JSON text as primary title.
     title-text-object,
+    /// Displays localized or formatted JSON text as subtitle.
     subtitle-text-object,
+    /// Displays localized or formatted JSON text on the action bar.
     actionbar-text-object,
   }
+  /// Displays or dismisses the end-game rolling credits screen.
   record c-show-credits {
+    /// Runtime entity identifier of the player viewing the credits.
     player-runtime-id: s64,
+    /// State transition flag (0: start showing credits, 1: stop showing credits).
     credits-state: s32,
   }
+  /// Sent by the server to initialize the client's world, spawn coordinates, gamerules, and entity runtime ID.
   record c-start-game {
+    /// Persistent unique ID of the player entity across sessions.
     entity-id: s64,
+    /// Runtime entity ID uniquely identifying the player during the current session.
     runtime-entity-id: s64,
+    /// Initial game mode assigned to the player.
     player-gamemode: game-type,
+    /// World coordinates where the player spawns.
     position: tuple<f64, f64, f64>,
+    /// Initial pitch rotation angle.
     pitch: f32,
+    /// Initial yaw rotation angle.
     yaw: f32,
+    /// World and dimension settings (generator, seed, difficulty, gamerules).
     level-settings: level-settings,
+    /// Unique level identifier string.
     level-id: string,
+    /// Display name of the world shown in menus.
     level-name: string,
+    /// Template ID for marketplace worlds.
     premium-world-template-id: string,
+    /// True if the world is running in trial mode.
     is-trial: bool,
+    /// Number of movement ticks kept in rewind history for server authoritative movement.
     rewind-history-size: s32,
+    /// True if block breaking progress is checked and controlled by the server.
     server-authoritative-block-breaking: bool,
+    /// Current in-game world time in ticks.
     current-level-time: s64,
+    /// Player's enchanting seed for deterministic enchanting tables.
     enchantment-seed: s32,
-    block-properties-size: s32,
+    /// Custom block property definitions registered on the server.
+    block-properties: list<block-property>,
+    /// Correlation ID string used for telemetry and matchmaking.
     multiplayer-correlation-id: string,
+    /// Whether the modern item stack network manager is enabled.
     enable-itemstack-net-manager: bool,
+    /// Version string of the server software.
     server-version: string,
     compound-id: u8,
     compound-len: s32,
     compound-end: u8,
+    /// CRC64 checksum of the block state registry.
     block-registry-checksum: s64,
+    /// UUID of the world template if created from a template.
     world-template-id: uuid,
+    /// Whether client-side chunk generation is enabled.
     enable-clientside-generation: bool,
+    /// Whether block runtime IDs are cryptographic hashes instead of sequential IDs.
     blocknetwork-ids-are-hashed: bool,
+    /// Whether entity and environment sounds are validated by the server.
     server-auth-sounds: bool,
+    /// Server connection information.
     server-join-information: option<server-join-information>,
+    /// Telemetry and session tracking identifiers.
     telemetry: server-telemetry-data,
   }
   record server-join-information {
@@ -1430,24 +2050,38 @@ interface bedrock-packets {
     friends-of-friends,
     public,
   }
-  record gg {
+  /// An entry for a custom block registered on the server.
+  /// 
+  /// The runtime ID of these custom block entries is based on their alphabetic index
+  /// within the registered block palette.
+  record block-property {
+    /// Name or identifier of the custom block (e.g. `namespace:block`).
     name: string,
-    id: u8,
-    len: s32,
-    end: u8,
+    /// NBT compound containing properties defining the unique block state.
+    properties: nbt-tree,
   }
+  /// Sent by the server when an entity or player picks up a dropped item, playing the pickup animation.
   record c-take-item-actor {
+    /// Runtime entity ID of the item entity being collected.
     item-runtime-id: s64,
+    /// Runtime entity ID of the collector entity that picked up the item.
     actor-runtime-id: s64,
   }
+  /// Instructs the client to disconnect and reconnect to another server address and port.
   record c-transfer {
+    /// Destination server hostname or IP address.
     server-address: string,
+    /// Destination server UDP port.
     server-port: s32,
+    /// Whether the client should reload its local world context upon transferring.
     reload-world: bool,
   }
+  /// Updates player movement and interaction abilities such as flight and build permissions.
   record c-update-abilities {
+    /// Serialized ability layers and permission parameters.
     data: serialized-abilities-data,
   }
+  /// Bit flags and identifiers for individual player abilities and privileges.
   enum ability {
     build,
     mine,
@@ -1471,80 +2105,149 @@ interface bedrock-packets {
     vertical-fly-speed,
     ability-count,
   }
+  /// Sent by the server to update an entity's attribute values (e.g. health, absorption, movement speed, hunger).
   record c-update-attributes {
+    /// Runtime entity ID of the target actor.
     target-runtime-id: s64,
+    /// List of attributes with their current bounds, values, and modifiers.
     attribute-list: list<attribute-data>,
+    /// Simulation tick number for sync verification.
     tick: s64,
   }
+  /// Detailed specification of an entity attribute and its active modifiers.
   record attribute-data {
+    /// Minimum value the attribute can reach.
     min-value: f32,
+    /// Maximum value the attribute can reach.
     max-value: f32,
+    /// Current calculated attribute value.
     current-value: f32,
+    /// Base minimum default value.
     default-min-value: f32,
+    /// Base maximum default value.
     default-max-value: f32,
+    /// Base default value without modifiers.
     default-value: f32,
+    /// Identifier string for the attribute (e.g. `minecraft:health`).
     name: string,
+    /// Active modifiers altering this attribute.
     modifiers: list<attribute-modifier>,
   }
+  /// An attribute modifier that adjusts an attribute by addition or multiplication.
   record attribute-modifier {
+    /// Unique identifier for the modifier.
     id: string,
+    /// Human-readable modifier name.
     name: string,
+    /// Numeric modifier amount.
     amount: f32,
+    /// Mathematical operation (addition, multiply base, multiply total).
     operation: s32,
+    /// Modifier operand type index.
     operand: s32,
+    /// Whether the modifier persists across save/load sessions.
     is-serializable: bool,
   }
+  /// Updates a single block state client-side without retransmitting the entire chunk.
   record c-update-block {
+    /// World coordinates where the block state is being updated.
     block-position: tuple<s32, s32, s32>,
+    /// Runtime identifier corresponding to the new block state.
     block-runtime-id: s32,
+    /// Bitflags governing client-side update behaviors such as neighbor updates.
     %flags: s32,
+    /// Target world layer for the block (e.g. 0 for primary blocks, 1 for waterlogging).
     layer: s32,
   }
+  /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
   record c-update-trade {
+    /// Window identifier of the active trade screen.
     container-id: u8,
+    /// Window type identifier (typically 15 for villager trading).
     r-type: u8,
+    /// Count of trading options available.
     size: s32,
+    /// Experience or progression tier of the trading merchant.
     trader-tier: s32,
+    /// Unique identifier of the merchant entity.
     entity-unique-id: s64,
+    /// Unique entity identifier of the last player to interact with this merchant.
     last-trading-player: s64,
+    /// Visible title displayed at the top of the trading interface.
     display-name: string,
+    /// Whether to display the modern villager trading UI.
     use-new-trade-screen: bool,
+    /// Whether offer pricing incorporates demand and supply economics.
     using-economy-trade: bool,
-    data: string,
+    /// Network NBT compound containing full recipe and trade offer definitions.
+    data: nbt-tree,
   }
+  /// Describes a network item stack transmitted over the wire in Bedrock packets.
+  /// 
+  /// Contains the item runtime ID, count, aux/metadata value, block runtime state,
+  /// and variable user data including NBT, can-place, and can-destroy block filters.
   record network-item-descriptor {
+    /// Runtime item identifier.
     id: s32,
+    /// Stack item count.
     stack-size: s32,
+    /// Auxiliary metadata or damage value.
     aux-value: s32,
+    /// Block runtime ID associated with the item (for block items).
     block-runtime-id: s32,
-    nbt-data: string,
+    /// NBT component data (display name, enchantments, etc.).
+    nbt-data: nbt-tree,
+    /// Block identifiers this item can be placed against in Adventure mode.
     place-on-blocks: list<string>,
+    /// Block identifiers this tool can destroy in Adventure mode.
     destroy-blocks: list<string>,
+    /// Shield blocking tick counter used for shield cooldown sync.
     shield-blocking-tick: s64,
   }
+  /// Wrapped network item stack including its network ID for slot tracking.
   record item-stack-wrapper {
+    /// Item runtime ID.
     id: s32,
+    /// Stack count.
     stack-size: s32,
+    /// Auxiliary metadata or damage value.
     aux-value: s32,
+    /// Runtime block state identifier.
     block-runtime-id: s32,
-    nbt-data: string,
+    /// Item NBT data.
+    nbt-data: nbt-tree,
+    /// Allowed block placement filter.
     place-on-blocks: list<string>,
+    /// Allowed block destruction filter.
     destroy-blocks: list<string>,
+    /// Shield blocking tick counter.
     shield-blocking-tick: s64,
+    /// Server-assigned unique network stack ID, if present.
     net-id: option<s32>,
   }
+  /// Compact network item stack descriptor with unparsed raw extra data bytes.
   record network-item-stack-descriptor {
+    /// Item runtime ID.
     id: s32,
+    /// Stack count.
     stack-size: s32,
+    /// Auxiliary metadata or damage value.
     aux-value: s32,
+    /// Runtime block state identifier.
     block-runtime-id: s32,
+    /// Serialized user data buffer (NBT, filters).
     extra-data: list<u8>,
+    /// Unique network stack ID.
     net-id: option<s32>,
   }
+  /// Container identifier paired with an optional dynamic session ID for complex inventories.
   record full-container-name {
+    /// Specific container slot category.
     container-name: container-name,
+    /// Dynamic ID assigned to temporary containers (e.g. trading or crafting).
     dynamic-id: option<s32>,
   }
+  /// Identifies the container or inventory screen segment referenced by an item stack request.
   enum container-name {
     anvil-input,
     anvil-material,
@@ -1614,103 +2317,198 @@ interface bedrock-packets {
     recipe-blocks,
     recipe-furnace-items,
   }
+  /// Compact representation of an item stack in network transactions with raw extra data bytes.
   record network-item-stack {
+    /// Runtime item ID.
     id: s32,
+    /// Stack count.
     count: s32,
+    /// Auxiliary metadata or damage value.
     aux-value: s32,
+    /// Runtime block state identifier.
     block-runtime-id: s32,
+    /// Raw unparsed extra user data buffer.
     extra-data: list<u8>,
   }
   variant serverbound-packet {
+    /// Transmits actor-specific animations, sounds, and state changes (such as hurt, taming, or eating).
     s-actor-event(s-actor-event),
+    /// Plays animations (arm swing, critical strike particles, waking up) on an actor.
     s-animate(s-animate),
+    /// Sent by the client when picking a targeted block (middle-click / pick block action).
     s-block-pick-request(s-block-pick-request),
+    /// Sent by the client to report cache hits and misses for chunk blobs requested by the server.
     s-client-cache-blob-status(s-client-cache-blob-status),
+    /// Sent by the client during login to inform the server whether client-side chunk blob caching is supported.
     s-client-cache-status(s-client-cache-status),
+    /// Sent by the client to request server-side execution of a slash command.
     s-command-request(s-command-request),
+    /// Sent by either client or server to close an open container inventory window.
     s-container-close(s-container-close),
+    /// Transmits player emote animations to the server and broadcasts them to nearby players.
     s-emote(s-emote),
+    /// Sent by the client to provide the server with a list of all emotes unlocked and equipped by the player.
     s-emote-list(s-emote-list),
+    /// Sent by the client when interacting with an entity (mounting, NPC dialogue, opening inventory).
     s-interact(s-interact),
+    /// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
     s-inventory-transaction(s-inventory-transaction),
+    /// A batch of item stack requests sent by the client to manipulate inventory slots.
     s-item-stack-request(s-item-stack-request),
+    /// Sent by the client to update the server on client-side loading screen transitions.
     s-loading-screen(s-loading-screen),
+    /// Sent by the client to initiate the login handshake, containing authentication tokens and device information.
     s-login(s-login),
+    /// Sent by the client to update the item held or equipped in a mob or player slot.
     s-mob-equipment(s-mob-equipment),
+    /// Sent by the client in response to a server-sent modal form dialog.
     s-modal-form-response(s-modal-form-response),
+    /// Sent by the client to report malformed or unexpected packets received from the server.
     s-packet-violation-warning(s-packet-violation-warning),
+    /// Sent by the client when performing player actions such as mining, sprinting, sneaking, or dimensions changes.
     s-player-action(s-player-action),
+    /// Sent by the client every tick to transmit player movement, view orientation, and input state under server authoritative movement.
     s-player-auth-input(s-player-auth-input),
+    /// Sent by the Bedrock client when the player changes their active hotbar slot.
     s-player-hotbar(s-player-hotbar),
+    /// Sent by the client to request permission to modify a player ability (such as flying).
     s-request-ability(s-request-ability),
+    /// Sent by the client to request a specific chunk render distance from the server.
     s-request-chunk-radius(s-request-chunk-radius),
+    /// Sent by the client to query network settings (such as compression algorithms and thresholds) from the server.
     s-request-network-settings(s-request-network-settings),
+    /// Sent by the client during resource pack negotiation to acknowledge packs or request downloads.
     s-resource-pack-client-response(s-resource-pack-client-response),
+    /// Bidirectional packet managing player respawning and client spawn readiness.
     s-respawn(s-respawn),
+    /// Sent by the client after receiving PlayStatus(PlayerSpawn) to signal that world initialization is complete.
     s-set-local-player-as-initialized(s-set-local-player-as-initialized),
+    /// Sent by the client to sync inventory UI layout options and selected crafting tabs.
     s-set-player-inventory-options(s-set-player-inventory-options),
+    /// Transmits in-game chat messages, system alerts, popups, and raw JSON text between client and server.
     s-text(s-text),
     unknown,
   }
   variant clientbound-packet {
+    /// Sent by the server to spawn non-player entities (mobs, projectiles, vehicles, items) on the client.
     c-add-actor(c-add-actor),
+    /// Sent by the server to spawn a dropped item entity in the world.
     c-add-item-actor(c-add-item-actor),
+    /// Sent by the server to spawn another player client-side into the world.
     c-add-player(c-add-player),
+    /// Advertises available console and chat commands, arguments, overloads, and auto-completion structures.
     c-available-commands(c-available-commands),
+    /// Sent by the server to synchronize all available biome definitions and properties with the client.
     c-biome-definition-list,
+    /// Synchronizes the complete block-actor data for a block position.
     c-block-actor-data(c-block-actor-data),
+    /// Updates a client-side block animation, such as a chest lid opening or closing.
     c-block-event(c-block-event),
+    /// Sent by the server to make a specific 'boss event' occur in the world.
+    /// 
+    /// Packet ID: `74`
     c-boss-event(c-boss-event),
+    /// Transitions the player to a different dimension with a loading screen.
     c-change-dimension(c-change-dimension),
+    /// Sent by the server in response to [`SRequestChunkRadius`](crate::bedrock::server::request_chunk_radius::SRequestChunkRadius) to confirm the approved chunk render distance.
     c-chunk-radius-updated(c-chunk-radius-updated),
+    /// Sent by the server in response to [`SClientCacheBlobStatus`](crate::bedrock::server::client_cache_blob_status::SClientCacheBlobStatus) with requested chunk blobs.
     c-client-cache-miss-response(c-client-cache-miss-response),
+    /// Sent by the server to open an inventory container screen (chest, furnace, anvil) on the client.
     c-container-open(c-container-open),
+    /// Sent by the server to correct the client's predicted movement under server authoritative movement.
     c-correct-player-move-prediction(c-correct-player-move-prediction),
+    /// Sent by the server to send all crafting and smelting recipes available in the world.
     c-crafting-data(c-crafting-data),
+    /// Sent by the server to populate the creative inventory menu with item categories, groups, and items.
     c-creative-content(c-creative-content),
+    /// Sent by the server to cleanly disconnect a client with an optional error code and kick message.
     c-disconnect(c-disconnect),
+    /// Sent by the server to update gamerules on the client (e.g. `showcoordinates` or `dodaylightcycle`).
     c-gamerules-changed(c-gamerules-changed),
+    /// Sent by the server to synchronize the entire contents of an inventory or container window.
     c-inventory-content(c-inventory-content),
+    /// Sent by the server to update a single item slot within an open inventory container.
     c-inventory-slot(c-inventory-slot),
+    /// Sent by the server to register custom and vanilla item identifiers with their component definitions.
     c-item-registry(c-item-registry),
+    /// Sent by the server to approve or reject item stack requests and sync modified slots.
     c-item-stack-response(c-item-stack-response),
+    /// Transmits server-defined jigsaw structure generation rules, processors, and template pools.
     c-jigsaw-structure-data,
+    /// Broadcasts visual or auditory level-wide events, such as particles or block breaking.
     c-level-event(c-level-event),
+    /// Plays a sound effect at a designated world position or associated with an actor.
     c-level-sound-event(c-level-sound-event),
+    /// Sent by the server to add, modify, or remove potion/status effects on an entity.
     c-mob-effect(c-mob-effect),
+    /// Sent by the server to show the item equipped or held by a mob or other player.
     c-mob-equipment(c-mob-equipment),
+    /// Requests the client to open a server-defined UI form (modal dialog, list menu, or custom form).
     c-modal-form-request(c-modal-form-request),
+    /// Sent by the server to update an entity's absolute position and rotation angles.
     c-move-actor-absolute(c-move-actor-absolute),
+    /// Bandwidth-optimized delta movement packet for updating an entity's position and rotation.
     c-move-actor-delta(c-move-actor-delta),
+    /// Sent by the server to update a player's movement, teleport, or view angle.
     c-move-player(c-move-player),
+    /// Sent by the server to update the center anchor position and radius around which chunks remain loaded on the client.
     c-network-chunk-publisher-update(c-network-chunk-publisher-update),
+    /// Sent by the server in response to [`SRequestNetworkSettings`](crate::bedrock::server::request_network_settings::SRequestNetworkSettings) to configure packet compression and client throttling.
     c-network-settings(c-network-settings),
+    /// Sent by the server to inform the client of login results, version compatibility, or player spawn readiness.
     c-play-status(c-play-status),
+    /// Sent by the server to update the active selected hotbar slot of the player.
     c-player-hotbar(c-player-hotbar),
+    /// Sent by the server to add or remove players from the in-game pause screen player list.
     c-player-list(c-player-list),
+    /// Sent by the server to despawn an entity from the client's world.
     c-remove-actor(c-remove-actor),
+    /// Removes a scoreboard objective, hiding it from the player's screen.
     c-remove-objective(c-remove-objective),
+    /// Sent by the server to define the order in which resource and behavior packs are applied by the client.
     c-resource-pack-stack-packet(c-resource-pack-stack-packet),
+    /// Sent by the server to list all resource and behavior packs required or available to download.
     c-resource-packs-info(c-resource-packs-info),
+    /// Sent by the server to update metadata and Molang properties of an entity (e.g. name tags, fire, scale).
     c-set-actor-data(c-set-actor-data),
+    /// Sent by the server to create, modify, or remove an attachment link between two entities (e.g. riding).
     c-set-actor-link(c-set-actor-link),
+    /// Sent by the server to set the movement velocity of an entity (e.g. knockback or explosion velocity).
     c-set-actor-motion(c-set-actor-motion),
+    /// Synchronizes world difficulty level to the client.
     c-set-difficulty(c-set-difficulty),
+    /// Configures and displays a scoreboard objective in a specific UI slot.
     c-set-display-objective(c-set-display-objective),
+    /// Updates player health (legacy packet; attribute updates are typically preferred).
     c-set-health(c-set-health),
+    /// Updates the player's active game mode (e.g. Survival, Creative, Spectator).
     c-set-player-game-type(c-set-player-game-type),
+    /// Updates or removes scoreboard entries displayed to the client.
     c-set-score(c-set-score),
+    /// Updates the player or world spawn coordinates, affecting respawning and compass orientation.
     c-set-spawn-position(c-set-spawn-position),
+    /// Sent by the server to synchronize the day-night cycle time (in ticks) with the client.
     c-set-time(c-set-time),
+    /// Displays or controls on-screen titles, subtitles, or action bar notices.
     c-set-title(c-set-title),
+    /// Displays or dismisses the end-game rolling credits screen.
     c-show-credits(c-show-credits),
+    /// Sent by the server to initialize the client's world, spawn coordinates, gamerules, and entity runtime ID.
     c-start-game(c-start-game),
+    /// Sent by the server when an entity or player picks up a dropped item, playing the pickup animation.
     c-take-item-actor(c-take-item-actor),
+    /// Instructs the client to disconnect and reconnect to another server address and port.
     c-transfer(c-transfer),
+    /// Updates player movement and interaction abilities such as flight and build permissions.
     c-update-abilities(c-update-abilities),
+    /// Sent by the server to update an entity's attribute values (e.g. health, absorption, movement speed, hunger).
     c-update-attributes(c-update-attributes),
+    /// Updates a single block state client-side without retransmitting the entire chunk.
     c-update-block(c-update-block),
+    /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
     c-update-trade(c-update-trade),
+    /// Sends custom collision and selection voxel shapes to the client.
     c-voxel-shapes,
     unknown,
   }

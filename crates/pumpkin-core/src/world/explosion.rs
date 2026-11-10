@@ -432,6 +432,17 @@ impl Explosion {
             {
                 continue;
             }
+            // A living entity's goes through `EntityKnockbackEvent`
+            let knockback = if entity_base.get_living_entity().is_some() {
+                let Some(knockback) =
+                    entity.fire_knockback_events(knockback_power, knockback, None)
+                else {
+                    continue;
+                };
+                knockback
+            } else {
+                knockback
+            };
             entity.add_velocity(knockback);
         }
     }
@@ -470,11 +481,13 @@ impl Explosion {
                     let vec3d = Vector3::new(n + offset_x, o, p + offset_z);
 
                     if world
-                        .raycast(vec3d, *explosion_pos, |pos, world_ref| {
-                            let state = world_ref.get_block_state(pos);
-                            !state.is_air() && !state.collision_shapes.is_empty()
-                        })
-                        .is_none()
+                        .clip(&pumpkin_world::clip::ClipContext::new(
+                            vec3d,
+                            *explosion_pos,
+                            pumpkin_world::clip::ClipBlock::Collider,
+                            pumpkin_world::clip::ClipFluid::None,
+                        ))
+                        .is_miss
                     {
                         visible_points += 1;
                     }

@@ -8,16 +8,23 @@ use crate::{
     serial::PacketRead,
 };
 
+/// Sent by the client when performing player actions such as mining, sprinting, sneaking, or dimensions changes.
 #[derive(Debug, PacketRead)]
 #[packet(36)]
 pub struct SPlayerAction {
+    /// Runtime entity ID of the executing player.
     pub player_runtime_id: VarULong,
+    /// Specific action type triggered.
     pub action: PlayerActionType,
+    /// Coordinates of the target block involved in the action, or zero if none.
     pub block_position: BlockPos,
+    /// Result block position (e.g. adjacent position where a block would be placed).
     pub result_pos: BlockPos,
+    /// Face of the block targeted by the action.
     pub face: VarInt,
 }
 
+/// Category of action performed by a player.
 #[derive(Clone, Copy, Debug, PacketRead)]
 #[repr(i32)]
 #[serial(varint)]

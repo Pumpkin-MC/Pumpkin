@@ -8,9 +8,11 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
 /// No anger pending.
@@ -73,6 +75,12 @@ fn is_valid_player_target(target: &dyn EntityBase) -> bool {
     target.get_player().is_some_and(Player::is_valid_mob_target)
 }
 
+fn is_alive_target(target: &dyn EntityBase) -> bool {
+    target
+        .get_living_entity()
+        .is_some_and(LivingEntity::is_alive)
+}
+
 /// a timed grudge plus the entity it is held against.
 ///
 /// Not compiler-enforced: every implementor must also override `Mob::as_neutral`.
@@ -80,9 +88,18 @@ fn is_valid_player_target(target: &dyn EntityBase) -> bool {
 pub trait NeutralMob: Mob {
     fn get_neutral_data(&self) -> &NeutralData;
 
+    fn updates_anger_in_ai_step(&self) -> bool {
+        false
+    }
+
     /// Rolled fresh every time the anger restarts.
     fn anger_duration(&self) -> RangeInclusive<i32> {
         DEFAULT_ANGER_DURATION
+    }
+
+    /// A fresh grudge against `target` for `ticks`. `None` refuses it, e.g. a cancelled plugin event.
+    fn approve_grudge(&self, _target: &dyn EntityBase, ticks: i32) -> Option<i32> {
+        Some(ticks)
     }
 
     /// Whether an already angry mob keeps refreshing its timer while the target stays.
@@ -144,13 +161,11 @@ pub trait NeutralMob: Mob {
     }
 
     fn stop_being_angry(&self) {
-        // keeps the revenge goal from re-triggering.
         self.get_mob_entity()
             .living_entity
-            .last_attacker_id
-            .store(0, Relaxed);
+            .set_last_hurt_by_mob(None);
         self.set_persistent_anger_target(None);
-        self.set_mob_target(None);
+        self.set_mob_target(None, TargetReason::ForgotTarget);
         self.set_anger_end_time(NO_ANGER_END_TIME);
     }
 
@@ -202,10 +217,10 @@ pub trait NeutralMob: Mob {
             return;
         };
         if let Some(target) = find_by_uuid(world, uuid)
-            && target.get_entity().is_alive()
+            && is_alive_target(target.as_ref())
             && self.can_attack(target.as_ref())
         {
-            self.set_mob_target(Some(target));
+            self.set_mob_target(Some(target), TargetReason::Angry);
         }
     }
 
@@ -224,7 +239,7 @@ pub trait NeutralMob: Mob {
 
         // Grudge holder killed by someone else
         if let Some(previous) = &target
-            && !previous.get_entity().is_alive()
+            && !is_alive_target(previous.as_ref())
             && previous.get_mob().is_some()
             && anger_target.is_some_and(|angry_at| angry_at == previous.get_entity().entity_uuid)
         {
@@ -232,15 +247,23 @@ pub trait NeutralMob: Mob {
             return;
         }
 
+        // Only the check above looks at a dead target.
+        let target = target.filter(|target| is_alive_target(target.as_ref()));
         let stays_angry = self.stays_angry_with_target();
 
         if let Some(target) = &target {
             let is_new =
                 anger_target.is_none_or(|angry_at| angry_at != target.get_entity().entity_uuid);
             if is_new {
+                let ticks = rand::random_range(self.anger_duration());
+                let Some(ticks) = self.approve_grudge(target.as_ref(), ticks) else {
+                    // Refused: drop the target too, else the grudge is offered again every tick.
+                    self.set_mob_target(None, TargetReason::ForgotTarget);
+                    return;
+                };
                 self.set_persistent_anger_target(Some(target.get_entity().entity_uuid));
-            }
-            if is_new || stays_angry {
+                self.set_anger_end_time(now + i64::from(ticks));
+            } else if stays_angry {
                 self.start_persistent_anger_timer_at(now);
             }
         }

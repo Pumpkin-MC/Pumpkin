@@ -153,6 +153,7 @@ pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
     pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
+    pub hand: HandSlot,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
@@ -164,16 +165,24 @@ pub struct ReleaseItemTransactionData {
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
+    pub hand: HandSlot,
 }
 
 #[derive(Debug)]
+/// Sent by the client when performing complex inventory interactions, item usages, and entity attacks.
 #[packet(30)]
 pub struct SInventoryTransaction {
+    /// Legacy transaction request ID used for rollback tracking.
     pub legacy_request_id: VarInt,
+    /// Legacy slot modification entries.
     pub legacy_set_item_slots: Vec<LegacySetItemSlot>,
+    /// Whether action elements are present in the transaction.
     pub has_value: bool,
+    /// List of slot modification actions composing this transaction.
     pub actions: Vec<InventoryAction>,
+    /// Transaction category type (`Normal`, `Mismatch`, `ItemUse`, `ItemUseOnEntity`, `ItemRelease`).
     pub transaction_type: VarUInt,
+    /// Specialized transaction payload corresponding to the transaction type.
     pub transaction_data: TransactionData,
 }
 

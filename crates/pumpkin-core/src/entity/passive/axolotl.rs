@@ -101,13 +101,9 @@ impl AxolotlEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            goal_selector.add_goal(0, Box::new(TryFindWaterGoal));
+            goal_selector.add_goal(0, Box::new(TryFindWaterGoal::new()));
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -123,11 +119,7 @@ impl AxolotlEntity {
         };
 
         {
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
@@ -259,9 +251,7 @@ impl Mob for AxolotlEntity {
         &self.mob_entity
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        self.ageable_ai_step();
-
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let play_dead_ticks = self.play_dead_ticks.load(Ordering::Relaxed);
         if play_dead_ticks > 0 {
             let remaining = play_dead_ticks - 1;
@@ -317,6 +307,6 @@ impl Mob for AxolotlEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityAxolotlIdleAir)
+        self.animal_interact(player, item_stack)
     }
 }

@@ -90,7 +90,7 @@ pub enum RawBlockStateOrName {
 pub struct RawBlockState {
     #[serde(rename = "Name", alias = "id")]
     pub name: String,
-    #[serde(rename = "Properties", default)]
+    #[serde(rename = "Properties", alias = "properties", default)]
     pub properties: BTreeMap<String, String>,
 }
 
@@ -113,7 +113,7 @@ pub enum RawOutputState {
     State {
         #[serde(rename = "Name", alias = "id")]
         name: String,
-        #[serde(rename = "Properties", default)]
+        #[serde(rename = "Properties", alias = "properties", default)]
         properties: BTreeMap<String, String>,
     },
 }
@@ -223,6 +223,69 @@ fn block_ident(name: &str) -> syn::Ident {
     format_ident!("{}", clean.to_uppercase().replace([':', '-', '.'], "_"))
 }
 
+pub(crate) fn prop_tokens(key: &str, value: &str) -> TokenStream {
+    let key_ident = format_ident!("{}", key.to_pascal_case());
+    if value == "true" || value == "false" {
+        let b = value == "true";
+        return quote!(crate::block_properties::Property::#key_ident(#b));
+    }
+    if let Ok(n) = value.parse::<u8>() {
+        return quote!(crate::block_properties::Property::#key_ident(#n));
+    }
+    let val_ident = format_ident!("{}", value.to_pascal_case());
+    let (prop_variant, enum_ty) = match (key, value) {
+        ("attachment", _) => ("Attachment", "BellAttachment"),
+        ("east", "up" | "side" | "none") => ("EastRedstone", "EastRedstone"),
+        ("east", "low" | "tall") => ("EastWall", "EastWall"),
+        ("north", "up" | "side" | "none") => ("NorthRedstone", "NorthRedstone"),
+        ("north", "low" | "tall") => ("NorthWall", "NorthWall"),
+        ("south", "up" | "side" | "none") => ("SouthRedstone", "SouthRedstone"),
+        ("south", "low" | "tall") => ("SouthWall", "SouthWall"),
+        ("west", "up" | "side" | "none") => ("WestRedstone", "WestRedstone"),
+        ("west", "low" | "tall") => ("WestWall", "WestWall"),
+        ("face", _) => ("Face", "AttachFace"),
+        ("half", "upper" | "lower") => ("DoubleBlockHalf", "DoubleBlockHalf"),
+        ("half", _) => ("Half", "Half"),
+        ("hinge", _) => ("Hinge", "DoorHinge"),
+        ("instrument", _) => ("Instrument", "NoteblockInstrument"),
+        ("leaves", _) => ("Leaves", "BambooLeaves"),
+        ("mode", "compare" | "subtract") => ("ModeComparator", "ModeComparator"),
+        ("mode", "save" | "load" | "corner" | "data") => {
+            ("StructureblockMode", "StructureblockMode")
+        }
+        ("mode", _) => ("TestBlockMode", "TestBlockMode"),
+        ("part", _) => ("Part", "BedPart"),
+        ("shape", "straight" | "inner_left" | "inner_right" | "outer_left" | "outer_right") => {
+            ("StairsShape", "StairsShape")
+        }
+        ("shape", _) => ("RailShape", "RailShape"),
+        ("side_chain", _) => ("SideChain", "SideChainPart"),
+        ("thickness", _) => ("Thickness", "SpeleothemThickness"),
+        ("type", "single" | "left" | "right") => ("ChestType", "ChestType"),
+        ("type", "normal" | "sticky") => ("PistonType", "PistonType"),
+        ("type", _) => ("SlabType", "SlabType"),
+        _ => {
+            return quote!(crate::block_properties::Property::#key_ident(
+                crate::block_properties::#key_ident::#val_ident
+            ));
+        }
+    };
+    let var_ident = format_ident!("{prop_variant}");
+    let ty_ident = format_ident!("{enum_ty}");
+    quote!(crate::block_properties::Property::#var_ident(
+        crate::block_properties::#ty_ident::#val_ident
+    ))
+}
+
+fn tag_ident(tag: &str) -> syn::Ident {
+    let clean = tag.strip_prefix('#').unwrap_or(tag);
+    let clean = clean.strip_prefix("minecraft:").unwrap_or(clean);
+    format_ident!(
+        "MINECRAFT_{}",
+        clean.replace([':', '/', '.', '-'], "_").to_uppercase()
+    )
+}
+
 fn rule_test_to_tokens(rule_test: &RawRuleTest) -> TokenStream {
     match rule_test {
         RawRuleTest::AlwaysTrue => quote!(StaticRuleTest::AlwaysTrue),
@@ -236,7 +299,7 @@ fn rule_test_to_tokens(rule_test: &RawRuleTest) -> TokenStream {
                 let props: Vec<TokenStream> = state
                     .properties
                     .iter()
-                    .map(|(k, v)| quote!((#k, #v)))
+                    .map(|(k, v)| prop_tokens(k, v))
                     .collect();
                 quote!(StaticRuleTest::BlockStateMatch {
                     block_id: crate::Block::#ident.id,
@@ -266,7 +329,7 @@ fn rule_test_to_tokens(rule_test: &RawRuleTest) -> TokenStream {
                 let props: Vec<TokenStream> = state
                     .properties
                     .iter()
-                    .map(|(k, v)| quote!((#k, #v)))
+                    .map(|(k, v)| prop_tokens(k, v))
                     .collect();
                 quote!(StaticRuleTest::RandomBlockStateMatch {
                     block_id: crate::Block::#ident.id,
@@ -284,9 +347,8 @@ fn rule_test_to_tokens(rule_test: &RawRuleTest) -> TokenStream {
             }
         }
         RawRuleTest::TagMatch { tag } => {
-            let tag_name = tag.strip_prefix('#').unwrap_or(tag);
-            let tag_name = tag_name.strip_prefix("minecraft:").unwrap_or(tag_name);
-            quote!(StaticRuleTest::TagMatch(#tag_name))
+            let ident = tag_ident(tag);
+            quote!(StaticRuleTest::TagMatch(&crate::tag::Block::#ident))
         }
     }
 }
@@ -337,7 +399,7 @@ fn output_state_to_tokens(state: &RawOutputState) -> TokenStream {
     let props = state.properties();
     if let Some(props_map) = props {
         let props_tokens: Vec<TokenStream> =
-            props_map.iter().map(|(k, v)| quote!((#k, #v))).collect();
+            props_map.iter().map(|(k, v)| prop_tokens(k, v)).collect();
         quote!(StaticOutputState {
             default_state: crate::Block::#ident.default_state,
             properties: &[#(#props_tokens),*],
@@ -398,9 +460,8 @@ fn processor_to_tokens(proc: &RawProcessor) -> TokenStream {
             let rottable_tokens = match rottable_blocks {
                 None => quote!(None),
                 Some(RawRottableBlocks::Tag(tag)) => {
-                    let clean = tag.strip_prefix('#').unwrap_or(tag);
-                    let clean = clean.strip_prefix("minecraft:").unwrap_or(clean);
-                    quote!(Some(StaticRottableBlocks::Tag(#clean)))
+                    let ident = tag_ident(tag);
+                    quote!(Some(StaticRottableBlocks::Tag(&crate::tag::Block::#ident)))
                 }
                 Some(RawRottableBlocks::Single(block)) => {
                     let ident = block_ident(block);
@@ -447,7 +508,7 @@ fn processor_to_tokens(proc: &RawProcessor) -> TokenStream {
                             let props: Vec<TokenStream> = state
                                 .properties
                                 .iter()
-                                .map(|(k, v)| quote!((#k, #v)))
+                                .map(|(k, v)| prop_tokens(k, v))
                                 .collect();
                             quote!(StaticIgnoredBlock {
                                 block_id: crate::Block::#ident.id,
@@ -474,9 +535,8 @@ fn processor_to_tokens(proc: &RawProcessor) -> TokenStream {
             })
         }
         RawProcessor::ProtectedBlocks { value } => {
-            let clean = value.strip_prefix('#').unwrap_or(value);
-            let clean = clean.strip_prefix("minecraft:").unwrap_or(clean);
-            quote!(StaticProcessor::ProtectedBlocks(#clean))
+            let ident = tag_ident(value);
+            quote!(StaticProcessor::ProtectedBlocks(&crate::tag::Block::#ident))
         }
         RawProcessor::BlackstoneReplace => quote!(StaticProcessor::BlackstoneReplace),
         RawProcessor::JigsawReplacement => quote!(StaticProcessor::JigsawReplacement),
@@ -588,7 +648,7 @@ pub fn build() -> TokenStream {
             BlockMatch(crate::BlockId),
             BlockStateMatch {
                 block_id: crate::BlockId,
-                properties: &'static [(&'static str, &'static str)],
+                properties: &'static [crate::block_properties::Property],
             },
             RandomBlockMatch {
                 block: crate::BlockId,
@@ -596,21 +656,21 @@ pub fn build() -> TokenStream {
             },
             RandomBlockStateMatch {
                 block_id: crate::BlockId,
-                properties: &'static [(&'static str, &'static str)],
+                properties: &'static [crate::block_properties::Property],
                 probability: f32,
             },
-            TagMatch(&'static str),
+            TagMatch(&'static crate::tag::Tag),
         }
 
         #[derive(Clone, Debug, PartialEq)]
         pub struct StaticIgnoredBlock {
             pub block_id: crate::BlockId,
-            pub properties: Option<&'static [(&'static str, &'static str)]>,
+            pub properties: Option<&'static [crate::block_properties::Property]>,
         }
 
         #[derive(Clone, Debug, PartialEq)]
         pub enum StaticRottableBlocks {
-            Tag(&'static str),
+            Tag(&'static crate::tag::Tag),
             Block(crate::BlockId),
             List(&'static [crate::BlockId]),
         }
@@ -625,7 +685,7 @@ pub fn build() -> TokenStream {
         #[derive(Clone, Debug, PartialEq)]
         pub struct StaticOutputState {
             pub default_state: &'static crate::BlockState,
-            pub properties: &'static [(&'static str, &'static str)],
+            pub properties: &'static [crate::block_properties::Property],
         }
 
         #[derive(Clone, Debug, PartialEq)]
@@ -652,7 +712,7 @@ pub fn build() -> TokenStream {
                 heightmap: StaticHeightmapType,
                 offset: i32,
             },
-            ProtectedBlocks(&'static str),
+            ProtectedBlocks(&'static crate::tag::Tag),
             BlackstoneReplace,
             JigsawReplacement,
             LavaSubmergedBlock,

@@ -3,75 +3,178 @@
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
+use pumpkin_wasm_host_common::state::FromResource;
+
 use crate::bindings::PluginPre;
 use pumpkin_core::plugin::PluginMetadata;
 use pumpkin_wasm_host_common::{
     concurrent_store::LegacySyncReentry, plugin::PluginInitError, state::PluginHostState,
 };
-use wasmtime::component::{HasSelf, InstancePre, Linker};
+use wasmtime::component::{Accessor, HasSelf, InstancePre, Linker, Resource};
 use wasmtime::{Engine, Store};
 
 mod bindings;
 
 pub mod advancement;
-// wasmtime's `bindgen!` requires every Host trait method to be `async fn`, even the ones whose
-// implementation here happens not to need to `.await` anything - so `unused_async_trait_impl`
-// can't be avoided without breaking the generated trait signatures.
-#[allow(clippy::unused_async_trait_impl)]
 pub mod block_entity;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod boss_bar;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod commands;
 pub mod common;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod context;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod datapack;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod display;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod enchantment;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod entity;
 pub mod events;
 pub mod forms;
+pub mod gametest;
 pub mod generated_packets;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod gui;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod i18n;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod inventory;
 pub mod ipc;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod item_stack;
 pub mod java_dialogs;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod living_entity;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod logging;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod mob;
 pub mod permission;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod player;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod recipe;
 pub mod scheduler;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod scoreboard;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod server;
 pub mod status_effect;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod text;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod uuid;
-#[allow(clippy::unused_async_trait_impl)]
 pub mod world;
 
 pub use crate::bindings::{Plugin, pumpkin};
+
+fn active_plugin(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+) -> wasmtime::Result<std::sync::Arc<pumpkin_wasm_host_common::plugin::WasmPlugin>> {
+    accessor.with(|mut host| {
+        host.get()
+            .plugin
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
+    })
+}
+
+/// Runs synchronous server work on Tokio's blocking pool without holding a store borrow
+///
+/// Callbacks from `operation` inherit the active guest call's chain and root admission
+/// The reentry depth is checked before the operation is spawned
+pub(crate) async fn run_blocking<R: Send + 'static>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    operation: impl FnOnce() -> R + Send + 'static,
+) -> wasmtime::Result<R> {
+    active_plugin(accessor)?
+        .store
+        .spawn_blocking_in_active_context(operation)
+        .await
+}
+
+/// Awaits host work with the active guest call's chain and root admission
+///
+/// Use this when the operation can call back into plugins so callbacks stay in the same chain
+/// The reentry depth is checked before the future is polled
+pub(crate) async fn in_active_context<R>(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    future: impl std::future::Future<Output = R>,
+) -> wasmtime::Result<R> {
+    active_plugin(accessor)?
+        .store
+        .in_active_context(future)
+        .await
+}
+
+/// Resource-table access from an [`Accessor`] without holding the store borrow across an
+/// `.await`.
+pub(crate) trait AccessorExt {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone;
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal>;
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>>;
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>>;
+}
+
+impl AccessorExt for Accessor<PluginHostState, HasSelf<PluginHostState>> {
+    fn get_res<T: FromResource>(&self, res: &Resource<T>) -> wasmtime::Result<T::Internal>
+    where
+        T::Internal: Clone,
+    {
+        self.with(|mut host| host.get().get(res).cloned())
+    }
+
+    fn take_res<T: FromResource>(&self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
+        self.with(|mut host| host.get().take(res))
+    }
+
+    fn add_res<T: FromResource>(&self, item: T::Internal) -> wasmtime::Result<Resource<T>> {
+        self.with(|mut host| host.get().add(item))
+    }
+
+    fn server(&self) -> wasmtime::Result<std::sync::Arc<pumpkin_core::server::Server>> {
+        self.with(|mut host| host.get().require_server().cloned())
+    }
+}
+
+/// Server access for synchronous host imports, which work on the host state directly instead of
+/// through an [`Accessor`].
+pub(crate) trait RequireServer {
+    /// Borrows the server, failing if the host state has none set.
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>>;
+}
+
+impl RequireServer for PluginHostState {
+    fn require_server(&self) -> wasmtime::Result<&std::sync::Arc<pumpkin_core::server::Server>> {
+        self.server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))
+    }
+}
+
+/// Locking for a standard [`Mutex`](std::sync::Mutex) that ignores poisoning.
+///
+/// Returns the guard even after a panic has poisoned the mutex
+/// The protected data is left as the panicking thread left it, with no validation or repair
+pub(crate) trait LockIgnorePoison<T: ?Sized> {
+    /// Locks the mutex, taking the guard out of the poison error if it was poisoned.
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T: ?Sized> LockIgnorePoison<T> for std::sync::Mutex<T> {
+    fn lock_ignore_poison(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Locking for a standard [`RwLock`](std::sync::RwLock) that ignores poisoning, see
+/// [`LockIgnorePoison`].
+pub(crate) trait RwLockIgnorePoison<T: ?Sized> {
+    /// Takes a read lock, taking the guard out of the poison error if it was poisoned.
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T>;
+
+    /// Takes a write lock, taking the guard out of the poison error if it was poisoned.
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T>;
+}
+
+impl<T: ?Sized> RwLockIgnorePoison<T> for std::sync::RwLock<T> {
+    fn read_ignore_poison(&self) -> std::sync::RwLockReadGuard<'_, T> {
+        self.read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_ignore_poison(&self) -> std::sync::RwLockWriteGuard<'_, T> {
+        self.write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
 
 mod resource_with {
     use super::pumpkin::plugin;
@@ -446,4 +549,50 @@ pub async fn init_plugin(
         .clone_from(&metadata.permissions);
 
     Ok((plugin, store, metadata))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::generated_packets::{clientbound_java_any_to_wit, serialize_java_packet};
+    use crate::pumpkin::plugin::java_packets::{CSetBlockDestroyStage, ClientboundPacket};
+    use pumpkin_protocol::VarInt;
+    use pumpkin_protocol::java::client::play::CSetBlockDestroyStage as ProtocolCSetBlockDestroyStage;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn serializes_destroy_stage() {
+        for destroy_stage in -1..=9 {
+            let packet = ClientboundPacket::CSetBlockDestroyStage(CSetBlockDestroyStage {
+                entity_id: 1,
+                location: (0, 64, 0),
+                destroy_stage,
+            });
+
+            let bytes = serialize_java_packet(&packet, JavaMinecraftVersion::V_26_3);
+            assert_eq!(
+                bytes.as_ref().and_then(|bytes| bytes.last()),
+                Some(&(destroy_stage as u8))
+            );
+        }
+    }
+
+    #[test]
+    fn converts_negative_destroy_stage_to_wit() {
+        let packet = ProtocolCSetBlockDestroyStage {
+            entity_id: VarInt(1),
+            location: BlockPos::new(0, 64, 0),
+            destroy_stage: -1,
+        };
+
+        assert!(matches!(
+            clientbound_java_any_to_wit(&packet),
+            Some(ClientboundPacket::CSetBlockDestroyStage(
+                CSetBlockDestroyStage {
+                    destroy_stage: -1,
+                    ..
+                }
+            ))
+        ));
+    }
 }

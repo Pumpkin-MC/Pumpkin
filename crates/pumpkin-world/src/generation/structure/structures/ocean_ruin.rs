@@ -192,7 +192,7 @@ fn add_cluster_ruins(
             break;
         }
         let idx = random.next_bounded_i32(all_positions.len() as i32) as usize;
-        let pos = all_positions.swap_remove(idx);
+        let pos = all_positions.remove(idx);
         let next_rotation = Rotation::from_index(random.next_bounded_i32(4) as u8);
         let next_corner = StructureTemplate::transform_block_pos(
             Vector3::new(5, 0, 6),
@@ -519,6 +519,19 @@ impl StructurePieceBase for OceanRuinPiece {
                             chest_nbt.put_long("LootTableSeed", rng.next_i64());
                             chunk.add_block_entity(chest_nbt);
                         } else if metadata == "drowned" {
+                            let mut entity_nbt = NbtCompound::new();
+                            entity_nbt.put_string("id", "minecraft:drowned".to_string());
+                            entity_nbt.put_list(
+                                "Pos",
+                                vec![
+                                    (f64::from(world_pos.x) + 0.5).into(),
+                                    f64::from(world_pos.y).into(),
+                                    (f64::from(world_pos.z) + 0.5).into(),
+                                ],
+                            );
+                            entity_nbt.put_bool("PersistenceRequired", true);
+                            chunk.add_structure_entity(entity_nbt);
+
                             let replacement = if world_pos.y > chunk.get_sea_level() {
                                 Block::AIR.default_state
                             } else {
@@ -612,12 +625,13 @@ impl StructurePieceBase for OceanRuinPiece {
 
             if chunk.get_block_state(&world_pos).to_block_id() == Block::WATER.id {
                 let mut modified_entry = palette_entry.clone();
-                if let Some((_, waterlogged)) = modified_entry
-                    .properties
-                    .iter_mut()
-                    .find(|(name, _)| name == "waterlogged")
+                if let Some(waterlogged) =
+                    modified_entry.properties.iter_mut().find_map(|p| match p {
+                        pumpkin_data::Property::Waterlogged(w) => Some(w),
+                        _ => None,
+                    })
                 {
-                    *waterlogged = "true".to_string();
+                    *waterlogged = true;
                     if let Some(waterlogged_state) =
                         BlockStateResolver::resolve(&modified_entry, self.rotation, Mirror::None)
                     {

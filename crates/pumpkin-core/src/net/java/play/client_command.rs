@@ -16,12 +16,16 @@ impl JavaClient {
                 let Some(server) = player.world().server.upgrade() else {
                     return;
                 };
+                let hardcore = server.basic_config.hardcore;
                 server.spawn_task(async move {
                     player_c
                         .world()
                         .clone()
                         .respawn_player(&player_c, false)
                         .await;
+                    if hardcore {
+                        player_c.set_gamemode(GameMode::Spectator);
+                    }
 
                     {
                         let screen_handler = player_c

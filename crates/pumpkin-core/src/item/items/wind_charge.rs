@@ -1,9 +1,11 @@
+use rand::{RngExt, rng};
 use std::sync::Arc;
 
 use crate::entity::player::Player;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::statistic::StatisticCategory;
 
 use crate::entity::Entity;
 use crate::entity::EntityBase;
@@ -20,44 +22,58 @@ impl ItemMetadata for WindChargeItem {
 }
 
 const POWER: f32 = 1.5;
+const THROW_SOUND_VOLUME: f32 = 0.5;
 
 impl ItemBehaviour for WindChargeItem {
-    fn normal_use(&self, _block: &Item, player: &Player) {
-        let world = player.world();
-        let position = player.position();
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, pumpkin_util::Hand::Right);
+    }
 
-        world.play_sound(
+    fn normal_use_with_hand(
+        &self,
+        _item: &Item,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: pumpkin_util::Hand,
+    ) {
+        let mut stack = match hand {
+            pumpkin_util::Hand::Right => player.inventory.held_item(),
+            pumpkin_util::Hand::Left => player.inventory.off_hand_item(),
+        };
+        if stack.is_empty() || stack.item.id != Item::WIND_CHARGE.id {
+            return;
+        }
+
+        let world = player.world();
+        let position = player.eye_position();
+
+        world.play_sound_fine(
             Sound::EntityWindChargeThrow,
             pumpkin_data::sound::SoundCategory::Neutral,
-            &position,
+            &player.position(),
+            THROW_SOUND_VOLUME,
+            0.4 / (rng().random::<f32>() * 0.4 + 0.8),
         );
 
         let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
         let wind_charge = ThrownItemEntity::new(entity, player.get_entity(), WIND_CHARGE_GRAVITY);
-        let (yaw, pitch) = player.rotation();
+        wind_charge.entity.pos.store(position);
         wind_charge.set_velocity_from(pitch, yaw, 0.0, POWER, 1.0);
 
         world.spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)));
 
-        let mut main_hand = player.inventory.held_item();
-        let consumed = if !main_hand.is_empty() && main_hand.item.id == Item::WIND_CHARGE.id {
-            main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory.set_held_item(main_hand);
-            true
-        } else {
-            false
-        };
-
-        if !consumed {
-            let mut off_hand = player.inventory.off_hand_item();
-            if !off_hand.is_empty() && off_hand.item.id == Item::WIND_CHARGE.id {
-                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                player
-                    .inventory
-                    .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
-            }
+        let item_id = stack.item.id;
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        match hand {
+            pumpkin_util::Hand::Right => player.inventory.set_held_item(stack),
+            pumpkin_util::Hand::Left => player
+                .inventory
+                .set_stack_in_hand(pumpkin_util::Hand::Left, stack),
         }
+        player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

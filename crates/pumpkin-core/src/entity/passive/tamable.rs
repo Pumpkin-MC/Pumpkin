@@ -1,11 +1,21 @@
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::data_component_impl::FoodImpl;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::Mob;
 use crate::entity::passive::animal::Animal;
+use crate::entity::player::Player;
+use crate::plugin::api::events::entity::entity_toggle_sit::EntityToggleSitEvent;
+
+/// Gate for goals vanilla runs only on wild animals.
+pub fn is_untamed(mob: &dyn Mob) -> bool {
+    !mob.is_tamed()
+}
 
 pub const SITTING_FLAG: u8 = 1;
 pub const TAME_FLAG: u8 = 4;
@@ -13,7 +23,10 @@ pub const TELEPORT_WHEN_DISTANCE_IS_SQ: f64 = 144.0;
 
 pub struct TamableData {
     pub is_tame: AtomicBool,
+    /// The owner's command, saved as `Sitting`.
     pub ordered_to_sit: AtomicBool,
+    /// The synced pose, driven by the sit goals.
+    pub in_sitting_pose: AtomicBool,
     pub owner: AtomicCell<Option<Uuid>>,
 }
 
@@ -22,6 +35,7 @@ impl Default for TamableData {
         Self {
             is_tame: AtomicBool::new(false),
             ordered_to_sit: AtomicBool::new(false),
+            in_sitting_pose: AtomicBool::new(false),
             owner: AtomicCell::new(None),
         }
     }
@@ -50,17 +64,20 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_in_sitting_pose(&self) -> bool {
-        self.get_tamable_data().ordered_to_sit.load(Relaxed)
+        self.get_tamable_data().in_sitting_pose.load(Relaxed)
     }
 
     fn set_in_sitting_pose(&self, sitting: bool) {
         let mob_entity = self.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
         self.get_tamable_data()
-            .ordered_to_sit
+            .in_sitting_pose
             .store(sitting, Relaxed);
         let mut flags = if sitting { SITTING_FLAG } else { 0 };
         if self.is_tame() {
@@ -70,6 +87,9 @@ pub trait TamableAnimal: Animal {
             pumpkin_data::tracked_data::tamable_animal::DATA_FLAGS_ID,
             flags as i8,
         );
+        if let Some(meta) = self.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+        }
     }
 
     fn is_ordered_to_sit(&self) -> bool {
@@ -77,7 +97,26 @@ pub trait TamableAnimal: Animal {
     }
 
     fn set_ordered_to_sit(&self, ordered_to_sit: bool) {
-        self.set_in_sitting_pose(ordered_to_sit);
+        self.get_tamable_data()
+            .ordered_to_sit
+            .store(ordered_to_sit, Relaxed);
+    }
+
+    /// Owner's sit or stand order, through `EntityToggleSitEvent`. `false`: a plugin cancelled.
+    fn order_to_sit(&self, sitting: bool) -> bool {
+        if self.is_ordered_to_sit() == sitting {
+            return true;
+        }
+        let entity = &self.get_mob_entity().living_entity.entity;
+        if let Some(server) = entity.world.load().server.upgrade() {
+            let mut event = EntityToggleSitEvent::new(entity.entity_id, sitting);
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+        self.set_ordered_to_sit(sitting);
+        true
     }
 
     fn get_owner(&self) -> Option<Uuid> {
@@ -115,6 +154,31 @@ pub trait TamableAnimal: Animal {
     fn tame(&self, player_id: Uuid) {
         self.set_tame(true);
         self.set_owner(Some(player_id));
+        let mob_entity = self.get_mob_entity();
+        let entity = &mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        if let Some(player) = world.get_player_by_uuid(player_id) {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::TameAnimal {
+                    entity_type: format!("minecraft:{}", entity.entity_type.resource_name),
+                },
+            );
+        }
+    }
+
+    fn feed(
+        &self,
+        player: &Player,
+        item_stack: &mut ItemStack,
+        healing_factor: f32,
+        default_heal: f32,
+    ) {
+        let heal = item_stack
+            .get_data_component::<FoodImpl>()
+            .map_or(default_heal, |food| healing_factor * food.nutrition as f32);
+        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        self.get_mob_entity().living_entity.heal(heal);
+        self.play_eating_sound();
     }
 
     fn spawn_taming_particles(&self, success: bool) {
@@ -157,5 +221,6 @@ pub trait TamableAnimal: Animal {
             .or_else(|| nbt.get_byte("Sitting").map(|b| b != 0))
             .unwrap_or(false);
         self.set_ordered_to_sit(sitting);
+        self.set_in_sitting_pose(sitting);
     }
 }

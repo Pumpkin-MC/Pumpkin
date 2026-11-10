@@ -112,7 +112,7 @@ impl HostEnchantmentManager for PluginHostState {
         Ok(ids)
     }
 
-    async fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
+    fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }

@@ -75,6 +75,125 @@ impl BlockEntity for SkullBlockEntity {
         Some(nbt)
     }
 
+    fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        if let Ok(sound) = self.note_block_sound.lock()
+            && let Some(sound) = sound.as_ref()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::NoteBlockSoundImpl {
+                sound: sound.clone(),
+            });
+        }
+        if let Ok(prof) = self.profile.lock()
+            && let Some(prof) = prof.as_ref()
+            && let Some(profile) = pumpkin_data::data_component_impl::ProfileImpl::read_data(
+                &pumpkin_nbt::tag::NbtTag::Compound(prof.clone()),
+            )
+        {
+            stack.set_data_component(profile);
+        }
+        if let Ok(name) = self.custom_name.lock()
+            && let Some(name) = name.as_ref()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl {
+                name: pumpkin_util::text::TextComponent::text(name.clone()),
+            });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
+        if let Some(sound) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::NoteBlockSoundImpl>()
+        {
+            *self
+                .note_block_sound
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(sound.sound.clone());
+        }
+        if let Some(profile) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::ProfileImpl>()
+        {
+            use pumpkin_data::data_component_impl::DataComponentImpl;
+            if let pumpkin_nbt::tag::NbtTag::Compound(prof) = profile.write_data() {
+                *self
+                    .profile
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(prof);
+            }
+        }
+        if let Some(custom_name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            *self
+                .custom_name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(custom_name.name.clone().get_text());
+        }
+    }
+
+    fn bedrock_block_actor_data(
+        &self,
+        state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        use pumpkin_data::{
+            Block, BlockState,
+            block_properties::{SkeletonSkullLikeProperties, SkeletonWallSkullLikeProperties},
+        };
+
+        let (block, _) = BlockState::from_id_with_block(state_id);
+        let skull_type: i8 = if block == &Block::WITHER_SKELETON_SKULL
+            || block == &Block::WITHER_SKELETON_WALL_SKULL
+        {
+            1
+        } else if block == &Block::ZOMBIE_HEAD || block == &Block::ZOMBIE_WALL_HEAD {
+            2
+        } else if block == &Block::PLAYER_HEAD || block == &Block::PLAYER_WALL_HEAD {
+            3
+        } else if block == &Block::CREEPER_HEAD || block == &Block::CREEPER_WALL_HEAD {
+            4
+        } else if block == &Block::DRAGON_HEAD || block == &Block::DRAGON_WALL_HEAD {
+            5
+        } else if block == &Block::PIGLIN_HEAD || block == &Block::PIGLIN_WALL_HEAD {
+            6
+        } else {
+            0
+        };
+
+        let is_wall = block == &Block::SKELETON_WALL_SKULL
+            || block == &Block::WITHER_SKELETON_WALL_SKULL
+            || block == &Block::ZOMBIE_WALL_HEAD
+            || block == &Block::PLAYER_WALL_HEAD
+            || block == &Block::CREEPER_WALL_HEAD
+            || block == &Block::DRAGON_WALL_HEAD
+            || block == &Block::PIGLIN_WALL_HEAD;
+
+        let (rotation, powered) = if is_wall {
+            let props = SkeletonWallSkullLikeProperties::from_state_id(state_id);
+            (0.0, props.powered)
+        } else if block == &Block::SKELETON_SKULL
+            || block == &Block::WITHER_SKELETON_SKULL
+            || block == &Block::ZOMBIE_HEAD
+            || block == &Block::PLAYER_HEAD
+            || block == &Block::CREEPER_HEAD
+            || block == &Block::DRAGON_HEAD
+            || block == &Block::PIGLIN_HEAD
+        {
+            let props = SkeletonSkullLikeProperties::from_state_id(state_id);
+            (f32::from(props.rotation) * 22.5, props.powered)
+        } else {
+            (0.0, false)
+        };
+
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Skull", self.position)
+                .put_byte("SkullType", skull_type)
+                .put_float("Rotation", rotation)
+                .put_bool("DoingAnimation", powered)
+                .put_int("MouthTickCount", 0)
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

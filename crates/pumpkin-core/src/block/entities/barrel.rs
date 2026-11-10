@@ -101,6 +101,17 @@ impl BlockEntity for BarrelBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(crate::block::entities::bedrock::build_container_actor(
+            "Barrel",
+            self.position,
+            None,
+        ))
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

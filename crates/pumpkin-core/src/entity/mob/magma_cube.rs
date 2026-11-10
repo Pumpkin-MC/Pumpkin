@@ -61,8 +61,24 @@ impl CustomSound for MagmaCubeEntity {
 }
 
 impl Mob for MagmaCubeEntity {
+    fn xp_reward(&self) -> u32 {
+        self.slime.xp_reward()
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         self.slime.get_mob_entity()
+    }
+
+    fn mob_passenger_attachment_point(
+        &self,
+        passenger: &dyn crate::entity::EntityBase,
+        index: usize,
+    ) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
+        self.slime.mob_passenger_attachment_point(passenger, index)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        self.slime.mob_metadata()
     }
 
     fn mob_tick(&self, caller: &dyn EntityBase) {
@@ -73,9 +89,11 @@ impl Mob for MagmaCubeEntity {
         self.slime.post_tick();
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<crate::entity::player::Player>) {
-        self.slime
-            .get_mob_entity()
-            .try_attack(&*self.slime, &**player);
+        self.slime.deal_damage(player);
     }
 }

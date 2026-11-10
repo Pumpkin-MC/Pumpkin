@@ -664,6 +664,24 @@ macro_rules! impl_block_entity_for_cooking {
                 Some(nbt)
             }
 
+            fn bedrock_block_actor_data(&self, _state_id: pumpkin_data::BlockStateId) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                let bedrock_id = match $recipe_kind {
+                    pumpkin_data::recipes::CookingRecipeKind::Smelting => "Furnace",
+                    pumpkin_data::recipes::CookingRecipeKind::Blasting => "BlastFurnace",
+                    pumpkin_data::recipes::CookingRecipeKind::Smoking => "Smoker",
+                    _ => "Furnace",
+                };
+                Some($crate::block::entities::furnace_like_block_entity::build_furnace_actor(
+                    bedrock_id,
+                    self.position,
+                    self.get_cooking_time_spent(),
+                    self.get_lit_time_remaining(),
+                    self.get_lit_total_time(),
+                    0,
+                    None,
+                ))
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
@@ -687,4 +705,43 @@ macro_rules! impl_block_entity_for_cooking {
             }
         }
     };
+}
+
+/// Builds the Bedrock block-actor NBT for cooking appliances (Furnace, Smoker, `BlastFurnace`).
+#[must_use]
+pub fn build_furnace_actor(
+    id: &'static str,
+    position: pumpkin_util::math::position::BlockPos,
+    cook_time: u16,
+    lit_remaining: u16,
+    lit_total: u16,
+    stored_xp: i32,
+    custom_name: Option<&str>,
+) -> pumpkin_nbt::compound::NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new(id, position)
+        .custom_name(custom_name)
+        .put_short("BurnTime", lit_remaining as i16)
+        .put_short("BurnDuration", lit_total as i16)
+        .put_short("CookTime", cook_time as i16)
+        .put_short("StoredXPInt", stored_xp.clamp(0, i16::MAX as i32) as i16)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn furnace_actor_builder() {
+        let pos = BlockPos::new(10, 60, 20);
+        let nbt = build_furnace_actor("Smoker", pos, 150, 40, 200, 5, Some("Custom Smoker"));
+        assert_eq!(nbt.get_string("id"), Some("Smoker"));
+        assert_eq!(nbt.get_string("CustomName"), Some("Custom Smoker"));
+        assert_eq!(nbt.get_short("CookTime"), Some(150));
+        assert_eq!(nbt.get_short("BurnTime"), Some(40));
+        assert_eq!(nbt.get_short("BurnDuration"), Some(200));
+        assert_eq!(nbt.get_short("StoredXPInt"), Some(5));
+        assert_eq!(nbt.get_bool("isMovable"), Some(true));
+    }
 }

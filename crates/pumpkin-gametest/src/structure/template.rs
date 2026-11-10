@@ -1,5 +1,6 @@
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::NbtCompound;
+use pumpkin_world::{CURRENT_MC_DATA_VERSION, CURRENT_MC_VERSION};
 
 use crate::error::{GameTestError, GameTestResult};
 
@@ -55,7 +56,66 @@ struct PaletteEntry {
 }
 
 impl GameTestStructureTemplate {
+    pub fn new(size: [i32; 3], blocks: Vec<GameTestStructureBlock>) -> GameTestResult<Self> {
+        if size.iter().any(|axis| *axis <= 0) {
+            return Err(invalid_structure(format!(
+                "Structure has invalid size {size:?}"
+            )));
+        }
+
+        for (index, block) in blocks.iter().enumerate() {
+            let position = block.position;
+            if position[0] < 0
+                || position[1] < 0
+                || position[2] < 0
+                || position[0] >= size[0]
+                || position[1] >= size[1]
+                || position[2] >= size[2]
+            {
+                return Err(invalid_structure(format!(
+                    "Structure block {index} position {position:?} is outside size {size:?}"
+                )));
+            }
+        }
+
+        Ok(Self { size, blocks })
+    }
+
+    pub fn empty(size: [i32; 3]) -> GameTestResult<Self> {
+        Self::new(size, Vec::new())
+    }
+
+    /// Parses synthetic empty structure identifiers of the form `[namespace:]empty_<W>x<H>x<D>`
+    /// or `[namespace:]empty` (`1x1x1`).
+    #[must_use]
+    pub fn parse_empty_id(resource_location: &str) -> Option<Self> {
+        let path = resource_location
+            .split_once(':')
+            .map_or(resource_location, |(_, path)| path);
+        if path == "empty" {
+            return Self::empty([1, 1, 1]).ok();
+        }
+        let dims = path.strip_prefix("empty_")?;
+        let mut parts = dims.split('x');
+        let width = parts.next()?.parse::<i32>().ok()?;
+        let height = parts.next()?.parse::<i32>().ok()?;
+        let depth = parts.next()?.parse::<i32>().ok()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Self::empty([width, height, depth]).ok()
+    }
+
     pub fn from_nbt(structure: &NbtCompound) -> GameTestResult<Self> {
+        let data_version = structure
+            .get_int("DataVersion")
+            .ok_or_else(|| invalid_structure("Structure is missing integer 'DataVersion'"))?;
+        if data_version != CURRENT_MC_DATA_VERSION {
+            return Err(invalid_structure(format!(
+                "Unsupported structure DataVersion {data_version}; expected {CURRENT_MC_DATA_VERSION} for Minecraft {CURRENT_MC_VERSION}"
+            )));
+        }
+
         let size = read_vec3(structure, "size")?;
         if size.iter().any(|axis| *axis <= 0) {
             return Err(invalid_structure(format!(
@@ -165,23 +225,30 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
         let entry = entry
             .extract_compound()
             .ok_or_else(|| invalid_structure(format!("Palette entry {index} is not a compound")))?;
+        // 26.3 renamed palette keys from "Name"/"Properties" to "id"/"properties".
         let name = entry
-            .get_string("Name")
-            .ok_or_else(|| invalid_structure(format!("Palette entry {index} is missing 'Name'")))?;
+            .get_string("id")
+            .ok_or_else(|| invalid_structure(format!("Palette entry {index} is missing 'id'")))?;
         let block = Block::from_name(name).ok_or_else(|| {
             invalid_structure(format!("Unknown block '{name}' in structure palette"))
         })?;
 
         let mut test_mode = None;
-        let state = if let Some(properties) = entry.get_compound("Properties") {
-            let mut property_pairs = Vec::with_capacity(properties.child_tags.len());
+        let state = if let Some(properties) = entry.get_compound("properties") {
+            let mut parsed_properties = Vec::with_capacity(properties.child_tags.len());
             for (property_name, property_value) in &properties.child_tags {
                 let property_value = property_value.extract_string().ok_or_else(|| {
                     invalid_structure(format!(
                         "Block '{name}' property '{property_name}' in palette entry {index} is not a string"
                     ))
                 })?;
-                if block == &Block::TEST_BLOCK && property_name.as_ref() == "mode" {
+                let property_key =
+                    pumpkin_data::PropertyKey::from_str(property_name.as_ref()).ok_or_else(|| {
+                        invalid_structure(format!(
+                            "Unknown block property '{property_name}' for '{name}' in palette entry {index}"
+                        ))
+                    })?;
+                if block == &Block::TEST_BLOCK && property_key == pumpkin_data::PropertyKey::Mode {
                     test_mode = Some(TestBlockMode::from_serialized_name(property_value).ok_or_else(
                         || {
                             invalid_structure(format!(
@@ -190,11 +257,17 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
                         },
                     )?);
                 }
-                property_pairs.push((property_name.as_ref(), property_value));
+                let prop = pumpkin_data::Property::from_key_value_str(property_key, property_value)
+                    .ok_or_else(|| {
+                        invalid_structure(format!(
+                            "No Pumpkin block state matches palette entry {index} for '{name}'"
+                        ))
+                    })?;
+                parsed_properties.push(prop);
             }
 
             block
-                .state_from_properties(&property_pairs)
+                .state_from_properties(&parsed_properties)
                 .ok_or_else(|| {
                     invalid_structure(format!(
                         "No Pumpkin block state matches palette entry {index} for '{name}'"
@@ -220,4 +293,55 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
 
 fn invalid_structure(message: impl Into<String>) -> GameTestError {
     GameTestError::InvalidStructure(message.into())
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::io::Cursor;
+
+    use pumpkin_nbt::nbt_compress::read_gzip_compound_tag;
+    use pumpkin_world::generation::structure::template::get_template;
+
+    use super::*;
+
+    #[test]
+    fn validates_structure_data_version() {
+        let bytes = include_bytes!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/structure/summon_cat.nbt"
+        );
+        let mut structure = read_gzip_compound_tag(Cursor::new(bytes))
+            .expect("test structure should contain valid NBT");
+        assert!(GameTestStructureTemplate::from_nbt(&structure).is_ok());
+
+        let creeper_bytes = include_bytes!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/structure/creeper_should_run_from_cat.nbt"
+        );
+        let creeper_structure = read_gzip_compound_tag(Cursor::new(creeper_bytes))
+            .expect("creeper structure should contain valid NBT");
+        assert!(GameTestStructureTemplate::from_nbt(&creeper_structure).is_ok());
+
+        structure.put_int("DataVersion", CURRENT_MC_DATA_VERSION - 1);
+        assert!(matches!(
+            GameTestStructureTemplate::from_nbt(&structure),
+            Err(GameTestError::InvalidStructure(message)) if message.contains("Unsupported structure DataVersion")
+        ));
+
+        structure.child_tags.remove("DataVersion");
+        assert!(matches!(
+            GameTestStructureTemplate::from_nbt(&structure),
+            Err(GameTestError::InvalidStructure(message)) if message.contains("DataVersion")
+        ));
+    }
+
+    #[test]
+    fn embedded_structure_uses_current_data_version() {
+        let template = get_template("pumpkin:summon_cat").expect("embedded structure should exist");
+        let structure = template.save();
+        assert_eq!(
+            structure.get_int("DataVersion"),
+            Some(CURRENT_MC_DATA_VERSION)
+        );
+        assert!(GameTestStructureTemplate::from_nbt(&structure).is_ok());
+    }
 }

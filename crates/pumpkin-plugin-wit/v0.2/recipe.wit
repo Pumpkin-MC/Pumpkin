@@ -76,13 +76,13 @@ interface recipe {
     /// Common interface for registering recipes.
     resource recipe-manager {
         /// Registers a shaped crafting recipe.
-        register-shaped: func(id: string, recipe: shaped-recipe);
+        register-shaped: async func(id: string, recipe: shaped-recipe);
         
         /// Registers a shapeless crafting recipe.
-        register-shapeless: func(id: string, recipe: shapeless-recipe);
+        register-shapeless: async func(id: string, recipe: shapeless-recipe);
 
         /// Registers a cooking recipe.
-        register-cooking: func(id: string, station-type: cooking-type, recipe: cooking-recipe);
+        register-cooking: async func(id: string, station-type: cooking-type, recipe: cooking-recipe);
     }
 }
 

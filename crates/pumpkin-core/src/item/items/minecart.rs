@@ -11,6 +11,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
@@ -87,6 +88,7 @@ impl ItemBehaviour for MinecartItem {
         );
         let minecart_entity = Arc::new(MinecartEntity::new(entity));
         world.spawn_entity(minecart_entity);
+        world.emit_game_event(GameEvent::EntityPlace.name(), pos);
         item.decrement_unless_creative(player.gamemode.load(), 1);
         BlockActionResult::Success
     }

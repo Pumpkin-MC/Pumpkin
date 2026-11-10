@@ -546,6 +546,18 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(build_brewing_stand_actor(
+            self.position,
+            self.brew_time.load(Ordering::Relaxed),
+            self.fuel.load(Ordering::Relaxed),
+            None,
+        ))
+    }
+
     fn is_comparator_dirty(&self) -> bool {
         self.comparator_dirty.load(Ordering::Relaxed)
     }
@@ -693,5 +705,37 @@ impl PropertyDelegate for BrewingStandBlockEntity {
 
     fn get_properties_size(&self) -> i32 {
         2
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for brewing stands.
+#[must_use]
+pub fn build_brewing_stand_actor(
+    position: BlockPos,
+    cook_time: i32,
+    fuel: i32,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("BrewingStand", position)
+        .custom_name(custom_name)
+        .put_short("CookTime", cook_time as i16)
+        .put_short("FuelAmount", fuel as i16)
+        .put_short("FuelTotal", 20)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn brewing_stand_actor_builder() {
+        let pos = BlockPos::new(9, 64, 9);
+        let nbt = build_brewing_stand_actor(pos, 200, 15, Some("Brew"));
+        assert_eq!(nbt.get_string("id"), Some("BrewingStand"));
+        assert_eq!(nbt.get_short("CookTime"), Some(200));
+        assert_eq!(nbt.get_short("FuelAmount"), Some(15));
+        assert_eq!(nbt.get_short("FuelTotal"), Some(20));
+        assert_eq!(nbt.get_string("CustomName"), Some("Brew"));
     }
 }

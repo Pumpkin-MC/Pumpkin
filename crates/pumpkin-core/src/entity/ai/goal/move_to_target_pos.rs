@@ -122,11 +122,8 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 
     pub fn move_mob_to_block(&self, mob: &dyn Mob) {
         let target = self.get_target_pos();
-        let mut navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let steered = mob.get_mob_entity().steered();
+        let mut navigator = steered.navigator();
 
         navigator.set_progress(NavigatorGoal {
             current_progress: mob.get_entity().pos.load(),
@@ -147,6 +144,13 @@ pub trait MoveToTargetPos: Send + Sync {
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
     }
+
+    fn next_start_tick(&self, mob: &dyn Mob) -> i32
+    where
+        Self: Sized,
+    {
+        MoveToTargetPosGoal::<Self>::get_interval(mob)
+    }
 }
 
 impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
@@ -155,7 +159,10 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
             self.cooldown -= 1;
             return false;
         }
-        self.cooldown = Self::get_interval(mob);
+        self.cooldown = self.move_to_target_pos.get().map_or_else(
+            || Self::get_interval(mob),
+            |move_to_target_pos| move_to_target_pos.next_start_tick(mob),
+        );
         self.find_target_pos(mob)
     }
 
@@ -200,11 +207,8 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
             self.reached = false;
             self.trying_time += 1;
             if self.should_reset_path() {
-                let mut navigator = mob
-                    .get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let steered = mob.get_mob_entity().steered();
+                let mut navigator = steered.navigator();
 
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob.get_entity().pos.load(),

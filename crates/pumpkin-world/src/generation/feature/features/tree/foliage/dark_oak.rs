@@ -1,10 +1,10 @@
-use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
 use super::{FoliagePlacer, LeaveValidator};
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::TreeNode;
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -20,7 +20,7 @@ impl DarkOakFoliagePlacer {
         _foliage_height: i32,
         radius: i32,
         offset: i32,
-        foliage_provider: &BlockState,
+        foliage_provider: &BlockStateProvider,
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         let pos = node.center.up_height(offset);

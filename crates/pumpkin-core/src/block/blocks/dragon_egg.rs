@@ -1,13 +1,14 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, NormalUseArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
+    AttackArgs, BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
+    PathComputationType, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockState;
+use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use rand::{RngExt, rng};
 use std::sync::Arc;
 
@@ -15,17 +16,32 @@ use std::sync::Arc;
 pub struct DragonEggBlock;
 
 impl DragonEggBlock {
+    // DragonEggBlock.getDelayAfterPlace
+    const DELAY_AFTER_PLACE: u8 = 5;
+    const TELEPORT_RADIUS_XZ: i32 = 16;
+    const TELEPORT_RADIUS_Y: i32 = 8;
+
     fn teleport(world: &Arc<World>, pos: &BlockPos) {
         for _ in 0..1000 {
-            let x = pos.0.x + rng().random_range(-16..16);
-            let y = pos.0.y + rng().random_range(-8..8);
-            let z = pos.0.z + rng().random_range(-16..16);
-            let test_pos = BlockPos::new(x, y, z);
+            let test_pos = pos.add(
+                rng().random_range(0..Self::TELEPORT_RADIUS_XZ)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_XZ),
+                rng().random_range(0..Self::TELEPORT_RADIUS_Y)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_Y),
+                rng().random_range(0..Self::TELEPORT_RADIUS_XZ)
+                    - rng().random_range(0..Self::TELEPORT_RADIUS_XZ),
+            );
 
             let state = world.get_block_state(&test_pos);
-            let below_state = world.get_block_state(&test_pos.down());
 
-            if state.is_air() && !below_state.is_air() {
+            if state.is_air() && world.is_in_build_limit(test_pos) {
+                let packed_diff = pos.pack_difference_in_position(
+                    &test_pos,
+                    Self::TELEPORT_RADIUS_XZ,
+                    Self::TELEPORT_RADIUS_Y,
+                    Self::TELEPORT_RADIUS_XZ,
+                );
+                world.sync_world_event(WorldEvent::ParticlesDragonEggTeleport, *pos, packed_diff);
                 let current_state = world.get_block_state(pos);
                 world.set_block_state(
                     &test_pos,
@@ -45,8 +61,14 @@ impl DragonEggBlock {
 
 impl BlockBehaviour for DragonEggBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
-        args.world
-            .schedule_block_tick(args.block, *args.position, 5, TickPriority::Normal);
+        FallingBlock::placed_with_delay(&args, Self::DELAY_AFTER_PLACE);
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        FallingBlock::get_state_for_neighbor_update_with_delay(&args, Self::DELAY_AFTER_PLACE)
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
@@ -54,8 +76,7 @@ impl BlockBehaviour for DragonEggBlock {
         BlockActionResult::Success
     }
 
-    // Dragon egg is typically teleported when attacked
-    fn broken(&self, args: BrokenArgs<'_>) {
+    fn attack(&self, args: AttackArgs<'_>) {
         Self::teleport(args.world, args.position);
     }
 

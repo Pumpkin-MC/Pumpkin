@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -35,7 +36,7 @@ impl FireballEntity {
     pub fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: 0.0,
@@ -72,7 +73,7 @@ impl FireballEntity {
     ) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: 0.0,
@@ -150,7 +151,7 @@ impl FireballEntity {
     }
 
     pub fn should_render_at_sqr_distance(&self, distance_sqr: f64) -> bool {
-        if self.get_entity().age.load(Ordering::Relaxed) < 2
+        if self.get_entity().tick_count.load(Ordering::Relaxed) < 2
             && distance_sqr < f64::from(MIN_CAMERA_DISTANCE_SQUARED)
         {
             false
@@ -168,8 +169,8 @@ impl FireballEntity {
 }
 
 impl EntityBase for FireballEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {

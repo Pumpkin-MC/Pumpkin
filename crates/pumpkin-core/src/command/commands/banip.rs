@@ -7,6 +7,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -141,10 +142,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         argument("target", StringArgumentType::SingleWord)
             .executes(BanIpExecutor { has_reason: false })
             .then(
-                argument("reason", StringArgumentType::GreedyPhrase)
+                argument("reason", MessageArgumentType)
                     .executes(BanIpExecutor { has_reason: true }),
             ),
     );
 
-    dispatcher.register_with_aliases(cmd, &["banip"]);
+    dispatcher.register(cmd);
 }

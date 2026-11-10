@@ -123,6 +123,17 @@ macro_rules! impl_block_entity_for_chest {
                 Some(nbt)
             }
 
+            fn bedrock_block_actor_data(
+                &self,
+                state_id: pumpkin_data::BlockStateId,
+            ) -> Option<pumpkin_nbt::compound::NbtCompound> {
+                $crate::block::entities::chest_like_block_entity::build_chest_actor(
+                    self.position,
+                    state_id,
+                    None,
+                )
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
@@ -140,6 +151,31 @@ macro_rules! impl_block_entity_for_chest {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .is_some()
+            }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                if let Some(loot) = stack
+                    .get_data_component::<pumpkin_data::data_component_impl::ContainerLootImpl>()
+                {
+                    *self
+                        .loot_table
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some(loot.loot_table.clone());
+                }
+                if let Some(container) =
+                    stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+                {
+                    let mut items = self
+                        .items
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    for (slot, item) in &container.items {
+                        if let Some(target) = items.get_mut(*slot as usize) {
+                            *target = item.clone();
+                        }
+                    }
+                }
             }
         }
     };
@@ -254,7 +290,7 @@ macro_rules! impl_viewer_count_listener_for_chest {
                 world: &Arc<$crate::world::World>,
                 _position: &pumpkin_util::math::position::BlockPos,
             ) {
-                self.play_sound(world, pumpkin_data::sound::Sound::BlockChestOpen);
+                self.play_sound(world, true);
             }
 
             fn on_container_close(
@@ -262,7 +298,7 @@ macro_rules! impl_viewer_count_listener_for_chest {
                 world: &Arc<$crate::world::World>,
                 _position: &pumpkin_util::math::position::BlockPos,
             ) {
-                self.play_sound(world, pumpkin_data::sound::Sound::BlockChestClose);
+                self.play_sound(world, false);
             }
 
             fn on_viewer_count_update(
@@ -322,16 +358,12 @@ macro_rules! impl_chest_helper_methods {
                 }
             }
 
-            fn play_sound(
-                &self,
-                world: &Arc<$crate::world::World>,
-                sound: pumpkin_data::sound::Sound,
-            ) {
+            fn play_sound(&self, world: &Arc<$crate::world::World>, open: bool) {
                 let mut rng = pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
                     pumpkin_util::random::get_seed(),
                 );
 
-                let state = world.get_block_state(&self.position);
+                let (block, state) = world.get_block_and_state(&self.position);
                 let properties =
                     pumpkin_data::block_properties::ChestLikeProperties::from_state_id(state.id);
                 let position = match properties.r#type {
@@ -345,7 +377,7 @@ macro_rules! impl_chest_helper_methods {
                     }
                     pumpkin_data::block_properties::ChestType::Right => {
                         let direction = pumpkin_data::HorizontalFacingExt::to_block_direction(
-                            &properties.facing,
+                            &properties.facing.rotate_counter_clockwise(),
                         )
                         .to_offset();
                         pumpkin_util::math::vector3::Vector3::new(
@@ -356,6 +388,17 @@ macro_rules! impl_chest_helper_methods {
                     }
                 };
 
+                let sound = if block
+                    .id
+                    .has_tag(pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+                {
+                    $crate::block::blocks::chests::CopperChestBlock::get_hinge_sound(block, open)
+                } else if open {
+                    pumpkin_data::sound::Sound::BlockChestOpen
+                } else {
+                    pumpkin_data::sound::Sound::BlockChestClose
+                };
+
                 world.play_sound_fine(
                     sound,
                     pumpkin_data::sound::SoundCategory::Blocks,
@@ -363,13 +406,67 @@ macro_rules! impl_chest_helper_methods {
                     0.5,
                     pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
                 );
-                let bedrock_sound = match sound {
-                    pumpkin_data::sound::Sound::BlockChestOpen => "chest.open",
-                    pumpkin_data::sound::Sound::BlockChestClose => "chest.closed",
-                    _ => return,
-                };
+                let bedrock_sound = if open { "chest.open" } else { "chest.closed" };
                 world.play_bedrock_level_sound(bedrock_sound, &position, 0);
             }
         }
     };
+}
+
+/// Builds the Bedrock block-actor NBT for chests and trapped chests with double-chest pairing.
+#[must_use]
+pub fn build_chest_actor(
+    position: pumpkin_util::math::position::BlockPos,
+    state_id: pumpkin_data::BlockStateId,
+    custom_name: Option<&str>,
+) -> Option<pumpkin_nbt::compound::NbtCompound> {
+    use pumpkin_data::{
+        BlockState,
+        block_properties::{ChestLikeProperties, ChestType},
+        tag::Taggable,
+    };
+
+    let (block, _) = BlockState::from_id_with_block(state_id);
+    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
+        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+    {
+        return None;
+    }
+
+    let mut builder =
+        super::bedrock::BedrockBlockActorBuilder::new("Chest", position).custom_name(custom_name);
+
+    let properties = ChestLikeProperties::from_state_id(state_id);
+    if properties.r#type != ChestType::Single {
+        let direction = if properties.r#type == ChestType::Left {
+            properties.facing.rotate_clockwise()
+        } else {
+            properties.facing.rotate_counter_clockwise()
+        };
+        let pair = position.offset(direction.to_offset());
+        builder = builder
+            .put_int("pairx", pair.0.x)
+            .put_int("pairz", pair.0.z);
+        if properties.r#type == ChestType::Right {
+            builder = builder.put_bool("pairlead", true);
+        }
+    }
+
+    Some(builder.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn chest_actor_builder() {
+        let pos = BlockPos::new(7, 64, 7);
+        let single = build_chest_actor(pos, Block::CHEST.default_state.id, None).expect("chest");
+        assert_eq!(single.get_string("id"), Some("Chest"));
+        assert_eq!(single.get_bool("isMovable"), Some(true));
+        assert!(single.get_int("pairx").is_none());
+    }
 }

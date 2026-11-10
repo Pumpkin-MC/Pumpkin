@@ -36,10 +36,10 @@ impl OreFeature {
         let g = self.size as f32 / 8.0f32;
         let i = f32::midpoint(self.size as f32 / 16.0f32 * 2.0, 1.0).ceil() as i32;
 
-        let d = pos.0.x as f64 + f.sin() as f64 * g as f64;
-        let e = pos.0.x as f64 - f.sin() as f64 * g as f64;
-        let h = pos.0.z as f64 + f.cos() as f64 * g as f64; // Use f.cos() for Math.cos(f)
-        let j = pos.0.z as f64 - f.cos() as f64 * g as f64;
+        let d = pos.0.x as f64 + (f as f64).sin() * g as f64;
+        let e = pos.0.x as f64 - (f as f64).sin() * g as f64;
+        let h = pos.0.z as f64 + (f as f64).cos() * g as f64;
+        let j = pos.0.z as f64 - (f as f64).cos() * g as f64;
 
         let l = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
         let m = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
@@ -52,7 +52,7 @@ impl OreFeature {
 
         for xprobe in n..=(n + q) {
             for zprobe in p..=(p + q) {
-                if o <= chunk.ocean_floor_height_exclusive(xprobe, zprobe) {
+                if o <= chunk.ocean_floor_wg_height_exclusive(xprobe, zprobe) {
                     return self.generate_vein_part(chunk, random, d, e, h, j, l, m, n, o, p, q, r);
                 }
             }
@@ -90,12 +90,15 @@ impl OreFeature {
             let e = lerp(f as f64, start_y, end_y);
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
-            let l = f32::midpoint(((f32::consts::PI * f).sin() + 1.0) * h as f32, 1.0);
+            let l = f64::midpoint(
+                (pumpkin_util::math::sin(f32::consts::PI * f) + 1.0) as f64 * h,
+                1.0,
+            );
 
             ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
             ds[k as usize * 4 + 2] = g;
-            ds[k as usize * 4 + 3] = l as f64;
+            ds[k as usize * 4 + 3] = l;
         }
 
         for k in 0..(j - 1) {
@@ -176,9 +179,6 @@ impl OreFeature {
 
                         // let ad = t_val;
                         // let ae = v_val;
-                        // let af = aa_val;
-                        // TODO: using a section would be faster
-
                         let pos_vec = Vector3::new(t_val, v_val, aa_val);
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 

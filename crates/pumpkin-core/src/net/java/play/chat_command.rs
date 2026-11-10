@@ -12,7 +12,9 @@ impl JavaClient {
         if player.check_chat_spam(server, crate::entity::player::SpamType::Command) {
             return;
         }
-        let command_str = command.command.strip_prefix('/').unwrap_or(command.command);
+        // Keep a leading slash: a client typing `//wand` (WorldEdit style) sends `/wand`, and the
+        // dispatcher decides itself whether that slash belongs to the command name or is a prefix.
+        let command_str = command.command;
         send_cancellable! {{
             server;
             PlayerCommandSendEvent {

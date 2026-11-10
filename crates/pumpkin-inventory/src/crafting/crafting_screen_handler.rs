@@ -14,6 +14,8 @@
 //! - Transmute recipes (upgrading items)
 //! - Special recipes (like decorated pots)
 
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
 use std::any::Any;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,6 +30,7 @@ use crate::screen_handler::{
 use crate::slot::{NormalSlot, Slot};
 
 use crate::inventory::Inventory;
+use pumpkin_data::data_component_impl::{PotDecorationsImpl, ProvidesPotteryPatternImpl};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
 use pumpkin_data::screen::WindowType;
@@ -51,6 +54,42 @@ pub struct ResultSlot {
 pub struct RecipeResult {
     pub item_id: String,
     pub count: u8,
+    pub pot_decorations: Option<[u16; 4]>,
+    pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
+}
+
+impl RecipeResult {
+    #[must_use]
+    pub fn to_item_stack(&self) -> ItemStack {
+        let key = self
+            .item_id
+            .strip_prefix("minecraft:")
+            .unwrap_or(&self.item_id);
+        let item = pumpkin_data::item::Item::from_registry_key(key)
+            .unwrap_or(&pumpkin_data::item::Item::AIR);
+        let mut stack = ItemStack::new(self.count, item);
+        for (component, value) in self.components {
+            stack.patch.push((*component, Some(value.clone_dyn())));
+        }
+        if let Some(sherds) = self.pot_decorations {
+            let sherd_names = sherds
+                .into_iter()
+                .map(|id| {
+                    let reg_key =
+                        pumpkin_data::item::Item::from_id(id).map_or("brick", |it| it.registry_key);
+                    if reg_key.starts_with("minecraft:") {
+                        std::borrow::Cow::Borrowed(reg_key)
+                    } else {
+                        std::borrow::Cow::Owned(format!("minecraft:{reg_key}"))
+                    }
+                })
+                .collect();
+            stack.set_data_component(PotDecorationsImpl {
+                sherds: sherd_names,
+            });
+        }
+        stack
+    }
 }
 
 /// Checks if a recipe pattern is symmetrical horizontally.
@@ -171,6 +210,8 @@ fn recipe_matches(
             matched.then_some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingShapeless {
@@ -198,6 +239,8 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingTransmute {
@@ -221,25 +264,34 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
+                pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingDecoratedPot { .. }) => {
             if count != 4 || inventory.get_width() != 3 || inventory.get_height() != 3 {
                 return None;
             }
-            for position in (1..=7).step_by(2) {
+            let mut sherds = [0u16; 4];
+            for (idx, position) in (1..=7).step_by(2).enumerate() {
                 let slot = inventory.get_stack(position);
                 if slot.is_empty()
-                    || !slot
+                    || (!slot
                         .item
                         .has_tag(&tag::Item::MINECRAFT_DECORATED_POT_INGREDIENTS)
+                        && slot
+                            .get_data_component::<ProvidesPotteryPatternImpl>()
+                            .is_none())
                 {
                     return None;
                 }
+                sherds[idx] = slot.item.id;
             }
             Some(RecipeResult {
                 item_id: "minecraft:decorated_pot".to_string(),
                 count: 1,
+                pot_decorations: Some(sherds),
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
@@ -291,6 +343,8 @@ fn recipe_matches(
             matched.then_some(RecipeResult {
                 item_id: result.item_id.clone(),
                 count: result.count,
+                pot_decorations: None,
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shapeless {
@@ -318,6 +372,8 @@ fn recipe_matches(
             Some(RecipeResult {
                 item_id: result.item_id.clone(),
                 count: result.count,
+                pot_decorations: None,
+                components: &[],
             })
         }
         _ => None,
@@ -407,17 +463,10 @@ impl ResultSlot {
     }
 
     fn refill_output(&self) -> ItemStack {
-        let result = if let Some(matched) = self.match_recipe() {
-            let key = matched
-                .item_id
-                .strip_prefix("minecraft:")
-                .unwrap_or(&matched.item_id);
-            let item = pumpkin_data::item::Item::from_registry_key(key)
-                .unwrap_or(&pumpkin_data::item::Item::AIR);
-            ItemStack::new(matched.count, item)
-        } else {
-            ItemStack::EMPTY.clone()
-        };
+        let result = self.match_recipe().map_or_else(
+            || ItemStack::EMPTY.clone(),
+            |matched| matched.to_item_stack(),
+        );
         *self
             .result
             .lock()
@@ -445,6 +494,7 @@ impl Slot for ResultSlot {
             stack.item.id as i32,
             stack.item_count as i32,
         );
+        player.on_recipe_crafted(stack);
         for i in 0..self.inventory.size() {
             self.inventory.remove_stack_specific(i, 1);
         }

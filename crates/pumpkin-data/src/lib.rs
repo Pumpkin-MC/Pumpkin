@@ -249,7 +249,6 @@ pub mod damage;
 pub mod fluid;
 
 #[cfg(feature = "block")]
-#[expect(clippy::unreachable)]
 #[rustfmt::skip]
 #[path = "generated/block.rs"]
 pub mod block_properties;
@@ -279,6 +278,11 @@ pub mod noise_router;
 #[rustfmt::skip]
 #[path = "generated/flower_pot_transformations.rs"]
 pub mod flower_pot_transformations;
+
+#[cfg(feature = "suspicious_effects")]
+#[rustfmt::skip]
+#[path = "generated/suspicious_effects.rs"]
+pub mod suspicious_effects;
 
 #[cfg(feature = "effect")]
 #[rustfmt::skip]
@@ -312,8 +316,8 @@ pub mod structure_metadata;
 
 #[cfg(feature = "structures")]
 #[rustfmt::skip]
-#[path = "generated/template_bytes.rs"]
-pub mod template_bytes;
+#[path = "generated/structure_template.rs"]
+pub mod structure_template;
 
 #[cfg(feature = "test_instance")]
 #[rustfmt::skip]
@@ -324,6 +328,11 @@ pub mod test_instance;
 #[rustfmt::skip]
 #[path = "generated/painting_variant.rs"]
 pub mod painting_variant;
+
+#[cfg(feature = "poi_type")]
+#[rustfmt::skip]
+#[path = "generated/poi_type.rs"]
+pub mod poi_type;
 
 #[cfg(feature = "context_provider")]
 #[rustfmt::skip]
@@ -349,6 +358,11 @@ pub mod cat_variant;
 #[rustfmt::skip]
 #[path = "generated/frog_variant.rs"]
 pub mod frog_variant;
+
+#[cfg(feature = "sulfur_cube_archetype")]
+#[rustfmt::skip]
+#[path = "generated/sulfur_cube_archetype.rs"]
+pub mod sulfur_cube_archetype;
 
 #[cfg(feature = "cow_variant")]
 #[rustfmt::skip]
@@ -448,6 +462,8 @@ mod blocks;
 #[cfg(feature = "block")]
 pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
+pub use block_properties::{Property, PropertyKey};
+#[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform_rail_shape};
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
@@ -497,10 +513,36 @@ pub mod map_decoration;
 #[path = "generated/dye_color.rs"]
 pub mod dye_color;
 
+#[cfg(feature = "entity_variant")]
+#[rustfmt::skip]
+#[path = "generated/entity_variant.rs"]
+pub mod entity_variant;
+
 #[cfg(feature = "block_transformer")]
 #[rustfmt::skip]
 #[path = "generated/block_transformer.rs"]
 pub mod block_transformer;
+
+#[cfg(all(test, feature = "block_transformer"))]
+mod block_transformer_tests {
+    use crate::Block;
+    use crate::BlockDirection;
+    use crate::block_transformer::HOE;
+
+    #[test]
+    fn hoe_tills_dirt_with_air_above() {
+        let get_block = |_: i8, dy: i8, _: i8| if dy == 1 { &Block::AIR } else { &Block::DIRT };
+        let result = HOE
+            .transform(
+                &Block::DIRT,
+                Block::DIRT.default_state.id,
+                BlockDirection::Up,
+                &get_block,
+            )
+            .unwrap();
+        assert_eq!(result.target_block.id, Block::FARMLAND.id);
+    }
+}
 
 #[cfg(feature = "trial_spawner")]
 #[rustfmt::skip]

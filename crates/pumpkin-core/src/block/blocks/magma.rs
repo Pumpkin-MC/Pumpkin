@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use pumpkin_data::{
     Enchantment, damage::DamageType, data_component_impl::EquipmentSlot, effect::StatusEffect,
 };
@@ -21,12 +19,12 @@ impl BlockBehaviour for MagmaBlock {
             let ent = args.entity.get_entity();
 
             // Don't damage if sneaking
-            if ent.is_sneaking() {
+            if args.entity.is_stepping_carefully() {
                 return;
             }
 
             // Fire immune entities don't take damage
-            if ent.entity_type.fire_immune || ent.fire_immune.load(Ordering::Relaxed) {
+            if ent.is_fire_immune() {
                 return;
             }
 

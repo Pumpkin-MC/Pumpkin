@@ -208,7 +208,7 @@ impl Coordinate for Node {
 pub struct Target {
     pub node: Node,
     pub best_heuristic: f32,
-    pub best_node: Option<Node>,
+    pub best_node: Option<BlockPos>,
     pub reached: bool,
 }
 
@@ -231,12 +231,12 @@ impl Target {
     pub fn update_best(&mut self, heuristic: f32, node: &Node) {
         if heuristic < self.best_heuristic {
             self.best_heuristic = heuristic;
-            self.best_node = Some(*node);
+            self.best_node = Some(node.pos);
         }
     }
 
     #[must_use]
-    pub const fn get_best_node(&self) -> Option<Node> {
+    pub const fn get_best_node(&self) -> Option<BlockPos> {
         self.best_node
     }
 

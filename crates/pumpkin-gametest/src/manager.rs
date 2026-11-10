@@ -30,6 +30,11 @@ impl GameTestRetryOptions {
     }
 
     #[must_use]
+    pub const fn no_retries() -> Self {
+        Self::new(1, true)
+    }
+
+    #[must_use]
     const fn has_retries(self) -> bool {
         self.number_of_tries != 1
     }
@@ -70,10 +75,45 @@ impl GameTestBatchReport {
         }
     }
 
+    #[must_use]
+    pub const fn reporter(&self) -> &Arc<dyn GameTestReporter> {
+        &self.reporter
+    }
+
     pub fn fail_to_start(&self, error: &GameTestError) {
         self.reporter
             .send_message(TextComponent::text(error.to_string()).color_named(NamedColor::Red));
         self.finish_test(true, 1, 0);
+    }
+
+    #[must_use]
+    pub fn remaining_tests(&self) -> usize {
+        self.remaining_tests.load(Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn total_runs(&self) -> usize {
+        self.total_runs.load(Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn failed_required(&self) -> usize {
+        self.failed_required.load(Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn failed_optional(&self) -> usize {
+        self.failed_optional.load(Ordering::Acquire)
+    }
+
+    #[must_use]
+    pub fn is_done(&self) -> bool {
+        self.remaining_tests() == 0
+    }
+
+    #[must_use]
+    pub fn all_required_passed(&self) -> bool {
+        self.is_done() && self.failed_required() == 0
     }
 
     fn finish_test(&self, required: bool, attempts: u32, successes: u32) {
@@ -286,8 +326,20 @@ impl GameTestManager {
             return;
         }
 
-        self.report
-            .finish_test(self.run.test.is_required(), self.attempts, self.successes);
+        let effective_successes = if is_flaky
+            && !self.retry_options.has_retries()
+            && self.successes >= self.run.test.required_successes()
+        {
+            self.attempts
+        } else {
+            self.successes
+        };
+
+        self.report.finish_test(
+            self.run.test.is_required(),
+            self.attempts,
+            effective_successes,
+        );
         self.done = true;
     }
 
@@ -363,6 +415,16 @@ impl GameTestRunner {
 
     pub fn clear(&mut self) {
         self.active.clear();
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.active.is_empty()
+    }
+
+    #[must_use]
+    pub const fn active_len(&self) -> usize {
+        self.active.len()
     }
 
     pub async fn tick(&mut self) {

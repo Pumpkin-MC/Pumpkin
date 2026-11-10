@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 use crate::entity::ai::util::default_random_pos;
@@ -15,7 +15,7 @@ pub struct MoveTowardsTargetGoal {
     goal_control: Controls,
     speed: f64,
     within: f32,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     wanted_pos: Option<Vector3<f64>>,
 }
 
@@ -68,12 +68,12 @@ impl Goal for MoveTowardsTargetGoal {
         };
 
         self.wanted_pos = Some(pos);
-        self.target = Some(target);
+        self.target = Some(Arc::downgrade(&target));
         true
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -96,11 +96,8 @@ impl Goal for MoveTowardsTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(wanted_pos) = self.wanted_pos {
             let mob_pos = mob.get_entity().pos.load();
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let steered = mob.get_mob_entity().steered();
+            let mut navigator = steered.navigator();
             navigator.set_progress(NavigatorGoal::new(mob_pos, wanted_pos, self.speed));
         }
     }

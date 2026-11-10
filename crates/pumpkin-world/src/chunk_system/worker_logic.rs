@@ -11,6 +11,7 @@ use pumpkin_data::chunk::ChunkStatus;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
 pub enum RecvChunk {
@@ -177,14 +178,27 @@ pub async fn io_read_work(
     debug!("io read thread stop");
 }
 
+/// How often the writer checks for region files with chunks waiting to be written.
+const REGION_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+
 pub async fn io_write_work(
     mut recv: tokio::sync::mpsc::Receiver<Vec<(ChunkPos, Chunk)>>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
+    let mut last_flush = Instant::now();
     loop {
         // Don't check cancel_token here (keep saving chunks)
-        let Some(data) = recv.recv().await else { break };
+        let received = tokio::time::timeout(REGION_FLUSH_INTERVAL, recv.recv()).await;
+        if last_flush.elapsed() >= REGION_FLUSH_INTERVAL {
+            level.flush_due_regions().await;
+            last_flush = Instant::now();
+        }
+        let data = match received {
+            Ok(Some(data)) => data,
+            Ok(None) => break,
+            Err(_) => continue,
+        };
         // debug!("io write thread receive chunks size {}", data.len());
         let positions = data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
         let level_for_upgrade = level.clone();

@@ -12,6 +12,64 @@ struct CatVariantJson {
     asset_id: String,
     #[serde(default)]
     baby_asset_id: Option<String>,
+    #[serde(default)]
+    spawn_conditions: Vec<SpawnSelectorJson>,
+}
+
+#[derive(Deserialize)]
+struct SpawnSelectorJson {
+    priority: i32,
+    #[serde(default)]
+    condition: Option<SpawnConditionJson>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum SpawnConditionJson {
+    #[serde(rename = "minecraft:structure")]
+    Structure { structures: String },
+    #[serde(rename = "minecraft:moon_brightness")]
+    MoonBrightness { range: DoubleRangeJson },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DoubleRangeJson {
+    Exact(f64),
+    Bounds {
+        #[serde(default)]
+        min: Option<f64>,
+        #[serde(default)]
+        max: Option<f64>,
+    },
+}
+
+fn option_tokens(value: Option<f64>) -> TokenStream {
+    match value {
+        Some(v) => quote! { Some(#v) },
+        None => quote! { None },
+    }
+}
+
+fn condition_tokens(condition: &SpawnConditionJson) -> TokenStream {
+    match condition {
+        SpawnConditionJson::Structure { structures } => {
+            let tag = structures.strip_prefix('#').unwrap_or_else(|| {
+                panic!("cat_variant structure condition must be a tag: {structures}")
+            });
+            let tag_ident = format_ident!("{}", tag.replace([':', '/'], "_").to_uppercase());
+            quote! { CatSpawnCondition::Structure(&crate::tag::WorldgenStructure::#tag_ident) }
+        }
+        SpawnConditionJson::MoonBrightness { range } => {
+            let (min, max) = match *range {
+                DoubleRangeJson::Exact(v) => (Some(v), Some(v)),
+                DoubleRangeJson::Bounds { min, max } => (min, max),
+            };
+            let min = option_tokens(min);
+            let max = option_tokens(max);
+            quote! { CatSpawnCondition::MoonBrightness { min: #min, max: #max } }
+        }
+    }
 }
 
 pub fn build() -> TokenStream {
@@ -44,6 +102,7 @@ pub fn build() -> TokenStream {
     let mut asset_id_arms = Vec::new();
     let mut texture_arms = Vec::new();
     let mut all_variants = Vec::new();
+    let mut spawn_selector_arms = Vec::new();
 
     for (name, json) in &variants {
         let variant_ident = format_ident!("{}", name.to_pascal_case());
@@ -64,10 +123,36 @@ pub fn build() -> TokenStream {
             Self::#variant_ident => #asset_id
         });
         all_variants.push(quote! { Self::#variant_ident });
+        let selectors = json.spawn_conditions.iter().map(|selector| {
+            let priority = selector.priority;
+            let condition = selector.condition.as_ref().map_or_else(
+                || quote! { None },
+                |c| {
+                    let c = condition_tokens(c);
+                    quote! { Some(#c) }
+                },
+            );
+            quote! { CatSpawnSelector { priority: #priority, condition: #condition } }
+        });
+        spawn_selector_arms.push(quote! {
+            Self::#variant_ident => &[#(#selectors,)*]
+        });
     }
 
     quote! {
         /* This file is generated. Do not edit manually. */
+
+        #[derive(Clone, Copy, PartialEq, Debug)]
+        pub enum CatSpawnCondition {
+            Structure(&'static crate::tag::Tag),
+            MoonBrightness { min: Option<f64>, max: Option<f64> },
+        }
+
+        #[derive(Clone, Copy, PartialEq, Debug)]
+        pub struct CatSpawnSelector {
+            pub priority: i32,
+            pub condition: Option<CatSpawnCondition>,
+        }
 
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
         #[repr(u8)]
@@ -121,6 +206,14 @@ pub fn build() -> TokenStream {
                 &[
                     #(#all_variants,)*
                 ]
+            }
+
+            #[doc = "Returns the spawn selectors of the cat variant, from its `spawn_conditions`."]
+            #[must_use]
+            pub const fn spawn_selectors(&self) -> &'static [CatSpawnSelector] {
+                match self {
+                    #(#spawn_selector_arms,)*
+                }
             }
         }
     }

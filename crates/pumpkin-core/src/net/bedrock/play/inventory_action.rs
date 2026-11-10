@@ -41,11 +41,12 @@ impl BedrockClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for legacy_slot in &packet.legacy_set_item_slots {
-                let mapped_window_id = match legacy_slot.container_id {
-                    28 | 29 => 0,    // HotBar or Inventory
-                    6 | 120 => 120,  // Armor
-                    34 | 119 => 119, // Offhand
-                    other => other as i32,
+                // Legacy slots may name the container instead of its id
+                let mapped_window_id = match i32::from(legacy_slot.container_id) {
+                    28 | 29 => WINDOW_ID_INVENTORY, // HotBar or Inventory
+                    6 | WINDOW_ID_ARMOUR => WINDOW_ID_ARMOUR,
+                    34 | WINDOW_ID_OFF_HAND => WINDOW_ID_OFF_HAND,
+                    other => other,
                 };
                 for &slot_id in &legacy_slot.slots {
                     if let Some(screen_slot) =
@@ -110,24 +111,7 @@ impl BedrockClient {
                         .are_equal(&item_stack);
 
                     if !is_armor_equipped {
-                        if (5..9).contains(&screen_slot) {
-                            player.enqueue_equipment_change(
-                                &match screen_slot {
-                                    5 => EquipmentSlot::HEAD,
-                                    6 => EquipmentSlot::CHEST,
-                                    7 => EquipmentSlot::LEGS,
-                                    8 => EquipmentSlot::FEET,
-                                    _ => unreachable!(),
-                                },
-                                &item_stack,
-                            );
-                        } else if (36..45).contains(&screen_slot) {
-                            let hotbar_slot = screen_slot - 36;
-                            if player.inventory().get_selected_slot() == hotbar_slot as u8 {
-                                let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
-                                player.living_entity.send_equipment_changes(equipment);
-                            }
-                        }
+                        player.sync_screen_slot_equipment(screen_slot, &item_stack);
                     }
 
                     player_screen_handler
@@ -299,7 +283,7 @@ impl BedrockClient {
                             player.world().send_entity_status(
                                 player.get_entity(),
                                 crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                None,
+                                ActorEventID::None,
                             );
                         }
                         player.inventory().set_held_item(stack);
@@ -363,8 +347,7 @@ impl BedrockClient {
                                             item.are_items_and_components_equal(&held)
                                         });
                             if !already_using
-                                && (held.get_data_component::<ConsumableImpl>().is_some()
-                                    || held.get_data_component::<BlocksAttacksImpl>().is_some())
+                                && held.get_data_component::<ConsumableImpl>().is_some()
                             {
                                 if held
                                     .get_data_component::<FoodImpl>()
@@ -450,6 +433,9 @@ impl BedrockClient {
                 let Some(target) = world.get_entity_by_id(target_runtime_id) else {
                     return;
                 };
+                if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+                    return;
+                }
                 let Some(server) = world.server.upgrade() else {
                     return;
                 };
@@ -471,12 +457,19 @@ impl BedrockClient {
                         let mut stack = player.inventory().held_item();
                         let item_id = stack.item.id;
                         let before = stack.clone();
-                        if !event.target.interact(player, &mut stack) {
+                        let native_interaction = event.target.interact_with_hand(
+                            player,
+                            &mut stack,
+                            pumpkin_util::Hand::Right,
+                        );
+                        if !native_interaction
+                            .unwrap_or_else(|| event.target.interact(player, &mut stack))
+                        {
                             server
                                 .item_registry
                                 .use_on_entity(&mut stack, player, event.target);
                         }
-                        if !stack.are_equal(&before) {
+                        if native_interaction.is_none() && !stack.are_equal(&before) {
                             player.increment_stat(
                                 pumpkin_data::statistic::StatisticCategory::Used,
                                 item_id as i32,
@@ -493,7 +486,7 @@ impl BedrockClient {
                                     crate::entity::equipment_break_status(
                                         &EquipmentSlot::MAIN_HAND,
                                     ),
-                                    None,
+                                    ActorEventID::None,
                                 );
                             }
                         }

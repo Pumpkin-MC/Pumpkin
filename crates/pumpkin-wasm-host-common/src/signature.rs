@@ -416,8 +416,7 @@ pub fn verify_pumpkin_wasm(wasm_bytes: &[u8], public_key_hex: &str) -> Verificat
 
 /// Verifies a WASM plugin binary and logs appropriate warnings if unsigned or invalid.
 pub fn verify_wasm_plugin(wasm_bytes: &[u8], path_str: &str) -> VerificationResult {
-    let public_key = fetch_market_public_key().unwrap_or_default();
-    let result = verify_pumpkin_wasm(wasm_bytes, &public_key);
+    let result = verify_with_market_key(wasm_bytes);
 
     if !result.is_signed {
         warn!(
@@ -438,9 +437,18 @@ pub fn verify_wasm_plugin(wasm_bytes: &[u8], path_str: &str) -> VerificationResu
 /// Checks if a WASM plugin binary has a valid signature.
 #[must_use]
 pub fn is_wasm_signed(wasm_bytes: &[u8]) -> bool {
-    let public_key = fetch_market_public_key().unwrap_or_default();
-    let result = verify_pumpkin_wasm(wasm_bytes, &public_key);
+    let result = verify_with_market_key(wasm_bytes);
     result.is_signed && result.is_valid
+}
+
+/// Verifies a WASM binary, fetching the market key only for signed plugins.
+fn verify_with_market_key(wasm_bytes: &[u8]) -> VerificationResult {
+    let result = verify_pumpkin_wasm(wasm_bytes, "");
+    if result.is_signed {
+        let public_key = fetch_market_public_key().unwrap_or_default();
+        return verify_pumpkin_wasm(wasm_bytes, &public_key);
+    }
+    result
 }
 
 #[cfg(test)]

@@ -195,6 +195,12 @@ impl BeaconBlockEntity {
                 continue;
             }
 
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ConstructBeacon {
+                    level: levels,
+                },
+            );
+
             if let Some(effect) = primary_effect {
                 player.add_effect(pumpkin_data::potion::Effect {
                     effect_type: effect,
@@ -355,6 +361,20 @@ impl BlockEntity for BeaconBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let name_guard = self.custom_name.lock().ok();
+        let name = name_guard.as_ref().and_then(|n| n.as_deref());
+        Some(build_beacon_actor(
+            self.position,
+            self.primary_effect.load(Ordering::Relaxed),
+            self.secondary_effect.load(Ordering::Relaxed),
+            name,
+        ))
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -439,5 +459,36 @@ impl Clearable for BeaconBlockEntity {
         if let Ok(mut payment) = self.payment.try_lock() {
             *payment = ItemStack::EMPTY.clone();
         }
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for beacons.
+#[must_use]
+pub fn build_beacon_actor(
+    position: BlockPos,
+    primary: i32,
+    secondary: i32,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("Beacon", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_int("primary", primary.max(0))
+        .put_int("secondary", secondary.max(0))
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn beacon_actor_builder() {
+        let pos = BlockPos::new(5, 64, 5);
+        let nbt = build_beacon_actor(pos, 1, 1, None);
+        assert_eq!(nbt.get_string("id"), Some("Beacon"));
+        assert_eq!(nbt.get_int("primary"), Some(1));
+        assert_eq!(nbt.get_int("secondary"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }

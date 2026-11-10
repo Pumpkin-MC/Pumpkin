@@ -82,6 +82,29 @@ impl BlockEntity for BeehiveBlockEntity {
         Some(nbt)
     }
 
+    fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        if let Ok(bees) = self.bees.lock()
+            && let Some(bees) = bees.as_ref()
+            && !bees.is_empty()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::BeesImpl {
+                bees: bees.clone(),
+            });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
+        if let Some(bees) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::BeesImpl>()
+            && !bees.bees.is_empty()
+        {
+            *self
+                .bees
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(bees.bees.clone());
+        }
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

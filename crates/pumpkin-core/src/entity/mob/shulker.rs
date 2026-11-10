@@ -14,11 +14,12 @@ use pumpkin_util::math::vector3::Vector3;
 
 use rand::RngExt;
 
-use crate::entity::ai::goal::active_target::ActiveTargetGoal;
+use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::{Controls, Goal};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::{Entity, EntityBase};
@@ -49,6 +50,8 @@ impl BlockDirectionExt for BlockDirection {
     }
 }
 
+const SHULKER_HUNTS: &[Hunt] = &[Hunt::new(2, TargetMatch::Type(&EntityType::PLAYER), true)];
+
 pub struct ShulkerEntity {
     pub mob_entity: MobEntity,
     attach_face: AtomicU8,
@@ -76,23 +79,18 @@ impl ShulkerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(
                 1,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(4, Box::new(ShulkerAttackGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(7, Box::new(ShulkerPeekGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                4,
+                Box::new(ShulkerAttackGoal::new(Arc::downgrade(&mob_arc))),
+            );
+            goal_selector.add_goal(7, Box::new(ShulkerPeekGoal::new(Arc::downgrade(&mob_arc))));
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(
@@ -103,10 +101,8 @@ impl ShulkerEntity {
                         .alerting_others(),
                 ),
             );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, SHULKER_HUNTS);
+            // TODO: search box flattened to 4 along the attach face; ShulkerDefenseAttackGoal at 3.
         };
 
         mob_arc
@@ -376,12 +372,12 @@ impl Mob for ShulkerEntity {
 }
 
 struct ShulkerAttackGoal {
-    shulker: Arc<ShulkerEntity>,
+    shulker: Weak<ShulkerEntity>,
     attack_cooldown: AtomicI32,
 }
 
 impl ShulkerAttackGoal {
-    const fn new(shulker: Arc<ShulkerEntity>) -> Self {
+    const fn new(shulker: Weak<ShulkerEntity>) -> Self {
         Self {
             shulker,
             attack_cooldown: AtomicI32::new(20),
@@ -410,11 +406,15 @@ impl Goal for ShulkerAttackGoal {
 
     fn start(&mut self, _mob: &dyn Mob) {
         self.attack_cooldown.store(20, Ordering::Relaxed);
-        self.shulker.set_raw_peek(100);
+        if let Some(shulker) = self.shulker.upgrade() {
+            shulker.set_raw_peek(100);
+        }
     }
 
     fn stop(&mut self, _mob: &dyn Mob) {
-        self.shulker.set_raw_peek(0);
+        if let Some(shulker) = self.shulker.upgrade() {
+            shulker.set_raw_peek(0);
+        }
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -422,6 +422,9 @@ impl Goal for ShulkerAttackGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
+        let Some(shulker) = self.shulker.upgrade() else {
+            return;
+        };
         let mob_entity = mob.get_mob_entity();
         let target_arc = mob_entity.get_target();
 
@@ -454,7 +457,7 @@ impl Goal for ShulkerAttackGoal {
                 entity,
                 target.get_entity().entity_id,
                 target_pos,
-                self.shulker.get_attach_face().axis_of(),
+                shulker.get_attach_face().axis_of(),
             );
             world.spawn_entity_non_save(Arc::new(bullet));
 
@@ -472,12 +475,12 @@ impl Goal for ShulkerAttackGoal {
 }
 
 struct ShulkerPeekGoal {
-    shulker: Arc<ShulkerEntity>,
+    shulker: Weak<ShulkerEntity>,
     peek_time: AtomicI32,
 }
 
 impl ShulkerPeekGoal {
-    const fn new(shulker: Arc<ShulkerEntity>) -> Self {
+    const fn new(shulker: Weak<ShulkerEntity>) -> Self {
         Self {
             shulker,
             peek_time: AtomicI32::new(0),
@@ -487,6 +490,9 @@ impl ShulkerPeekGoal {
 
 impl Goal for ShulkerPeekGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(shulker) = self.shulker.upgrade() else {
+            return false;
+        };
         let has_target = mob.get_mob_entity().get_target().is_some();
         if has_target {
             return false;
@@ -495,8 +501,8 @@ impl Goal for ShulkerPeekGoal {
             return false;
         }
         let pos = mob.get_mob_entity().living_entity.entity.block_pos.load();
-        let face = self.shulker.get_attach_face();
-        self.shulker.can_stay_at(&pos, face)
+        let face = shulker.get_attach_face();
+        shulker.can_stay_at(&pos, face)
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
@@ -507,13 +513,18 @@ impl Goal for ShulkerPeekGoal {
     fn start(&mut self, mob: &dyn Mob) {
         let duration = 20 * (1 + mob.get_random().random_range(0..3));
         self.peek_time.store(duration, Ordering::Relaxed);
-        self.shulker.set_raw_peek(30);
+        if let Some(shulker) = self.shulker.upgrade() {
+            shulker.set_raw_peek(30);
+        }
     }
 
     fn stop(&mut self, _mob: &dyn Mob) {
-        let has_target = self.shulker.mob_entity.get_target().is_some();
+        let Some(shulker) = self.shulker.upgrade() else {
+            return;
+        };
+        let has_target = shulker.mob_entity.get_target().is_some();
         if !has_target {
-            self.shulker.set_raw_peek(0);
+            shulker.set_raw_peek(0);
         }
     }
 

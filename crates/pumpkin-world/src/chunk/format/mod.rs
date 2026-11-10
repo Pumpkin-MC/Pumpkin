@@ -7,8 +7,8 @@ use std::{
     },
 };
 
-use bytes::Bytes;
-use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
+use bytes::{Buf, BufMut, Bytes};
+use pumpkin_data::{Block, BlockId, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
@@ -43,6 +43,11 @@ impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         Ok(self.internal_to_bytes())
+    }
+
+    #[inline]
+    fn to_pump_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_pump_bytes())
     }
 
     #[inline]
@@ -128,6 +133,18 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
                     pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::String(s) => {
+                        let entry =
+                            crate::generation::structure::template::PaletteEntry::new(s.to_string());
+                        if let Some(state) =
+                            crate::generation::structure::template::BlockStateResolver::resolve_simple(
+                                &entry,
+                            )
+                        {
+                            return state.id;
+                        }
+                        BlockStateId::AIR
+                    }
                     pumpkin_nbt::tag::NbtTag::Compound(compound) => {
                         if let Ok(entry) =
                             crate::generation::structure::template::PaletteEntry::from_nbt_compound(
@@ -201,6 +218,10 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
+        if chunk_data.starts_with(&pump::PUMP_CHUNK_MAGIC) {
+            return Self::internal_from_pump_bytes(chunk_data, position);
+        }
+
         let is_named = chunk_data.len() >= 3
             && chunk_data[0] == 0x0a
             && chunk_data[1] == 0x00
@@ -241,7 +262,16 @@ impl ChunkData {
             })?,
         };
 
-        let mut max_y_section = min_y_section as i8;
+        // Section indices are bytes in this format, and the loops below already
+        // treat them as such. Reject a yPos outside that range instead of
+        // truncating it, because the untruncated value sizes the vectors below.
+        let Ok(min_y_section) = i8::try_from(min_y_section) else {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "yPos {min_y_section} is outside the range of a section index"
+            )));
+        };
+
+        let mut max_y_section = min_y_section;
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
@@ -253,7 +283,8 @@ impl ChunkData {
             }
         }
 
-        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let section_count =
+            (i32::from(max_y_section) - i32::from(min_y_section) + 1).max(0) as usize;
         let mut block_lights = vec![LightContainer::Empty(0); section_count];
         let mut sky_lights = vec![LightContainer::Empty(0); section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
@@ -263,7 +294,10 @@ impl ChunkData {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
                     let y = section_y(section_compound);
-                    let index = (y - min_y_section) as usize;
+                    let Ok(index) = usize::try_from(y.saturating_sub(i32::from(min_y_section)))
+                    else {
+                        continue;
+                    };
                     if index >= section_count {
                         continue;
                     }
@@ -271,7 +305,7 @@ impl ChunkData {
                     let block_light = section_compound
                         .get("BlockLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
+                        .map(|arr| -> Box<[u8]> {
                             // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
                             unsafe {
                                 Box::from(std::slice::from_raw_parts(
@@ -284,7 +318,7 @@ impl ChunkData {
                     let sky_light = section_compound
                         .get("SkyLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| {
+                        .map(|arr| -> Box<[u8]> {
                             // SAFETY: `arr` is an `i8` slice (`&[i8]`). `u8` and `i8` have identical memory layout, alignment (1 byte), and lifetime.
                             unsafe {
                                 Box::from(std::slice::from_raw_parts(
@@ -294,10 +328,15 @@ impl ChunkData {
                             }
                         });
 
-                    block_lights[index] =
-                        block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
-                    sky_lights[index] =
-                        sky_light.map_or(LightContainer::Empty(0), LightContainer::Full);
+                    // `Full` skips the length check `LightContainer::new` makes,
+                    // and every reader indexes it up to `ARRAY_SIZE`, so a
+                    // short array from disk is dropped instead of stored.
+                    block_lights[index] = block_light
+                        .filter(|data| data.len() == LightContainer::ARRAY_SIZE)
+                        .map_or(LightContainer::Empty(0), LightContainer::Full);
+                    sky_lights[index] = sky_light
+                        .filter(|data| data.len() == LightContainer::ARRAY_SIZE)
+                        .map_or(LightContainer::Empty(0), LightContainer::Full);
 
                     if let Some(bs_compound) = section_compound.get_compound("block_states") {
                         let data = bs_compound
@@ -339,7 +378,7 @@ impl ChunkData {
         };
 
         // Assemble the ChunkSections
-        let min_y = section_coords::section_to_block(min_y_section);
+        let min_y = section_coords::section_to_block(i32::from(min_y_section));
         let (random_tick_sections, randomly_ticking_mask) =
             ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
@@ -357,15 +396,20 @@ impl ChunkData {
                 motion_blocking: None,
                 motion_blocking_no_leaves: None,
             },
+            // A heightmap of the wrong length is dropped rather than stored:
+            // every reader indexes it by column and would run off the end.
             |h_compound| ChunkHeightmaps {
                 world_surface: h_compound
                     .get_long_array("WORLD_SURFACE")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
                 motion_blocking: h_compound
                     .get_long_array("MOTION_BLOCKING")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
                 motion_blocking_no_leaves: h_compound
                     .get_long_array("MOTION_BLOCKING_NO_LEAVES")
+                    .filter(|a| a.len() == ChunkHeightmaps::LONGS)
                     .map(|a| a.to_vec().into_boxed_slice()),
             },
         );
@@ -448,7 +492,7 @@ impl ChunkData {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn internal_to_bytes(&self) -> Bytes {
+    pub fn internal_to_bytes(&self) -> Bytes {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -551,8 +595,8 @@ impl ChunkData {
                         let prop_vec = props.to_props();
                         if !prop_vec.is_empty() {
                             let mut props_comp = NbtCompound::new();
-                            for (k, v) in prop_vec {
-                                props_comp.put_string(k, v.to_string());
+                            for p in prop_vec {
+                                props_comp.put_string(p.key_str(), p.value_str().to_string());
                             }
                             comp.put_compound("Properties", props_comp);
                         }
@@ -650,6 +694,458 @@ impl ChunkData {
 
         let nbt = pumpkin_nbt::Nbt::from(root_compound);
         nbt.write()
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn internal_to_pump_bytes(&self) -> Bytes {
+        const PUMP_CHUNK_VERSION: u8 = 1;
+
+        let is_light_correct = self.light_populated.load(Ordering::Relaxed);
+        let block_entities_nbt = {
+            let entities_guard = self
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            entities_guard.values().cloned().collect::<Vec<_>>()
+        };
+
+        let light_lock = self
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let heightmap_lock = self
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let block_lock = self
+            .section
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let biome_lock = self
+            .section
+            .biome_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let ws = heightmap_lock
+            .world_surface
+            .as_deref()
+            .filter(|a| a.len() == ChunkHeightmaps::LONGS);
+        let mb = heightmap_lock
+            .motion_blocking
+            .as_deref()
+            .filter(|a| a.len() == ChunkHeightmaps::LONGS);
+        let mbnl = heightmap_lock
+            .motion_blocking_no_leaves
+            .as_deref()
+            .filter(|a| a.len() == ChunkHeightmaps::LONGS);
+        let has_custom = !custom_data.is_empty();
+
+        let mut flags = u8::from(is_light_correct);
+        if ws.is_some() {
+            flags |= 1 << 1;
+        }
+        if mb.is_some() {
+            flags |= 1 << 2;
+        }
+        if mbnl.is_some() {
+            flags |= 1 << 3;
+        }
+        if has_custom {
+            flags |= 1 << 4;
+        }
+
+        let status_u8 = match self.status {
+            ChunkStatus::Empty => 0,
+            ChunkStatus::StructureStarts => 1,
+            ChunkStatus::StructureReferences => 2,
+            ChunkStatus::Biomes => 3,
+            ChunkStatus::Terrain => 4,
+            ChunkStatus::Features => 5,
+            ChunkStatus::InitializeLight => 6,
+            ChunkStatus::Light => 7,
+            ChunkStatus::Spawn => 8,
+            ChunkStatus::Full => 9,
+        };
+
+        let mut out = Vec::with_capacity(16 * 1024);
+        out.extend_from_slice(&pump::PUMP_CHUNK_MAGIC);
+        out.put_u8(PUMP_CHUNK_VERSION);
+        out.put_i32(WORLD_DATA_VERSION);
+        out.put_i32(self.x);
+        out.put_i32(self.z);
+        out.put_i32(self.section.min_y);
+        out.put_u8(status_u8);
+        out.put_u8(flags);
+        out.put_u64(self.inhabited_time.load(Ordering::Relaxed));
+
+        for hm in [ws, mb, mbnl].into_iter().flatten() {
+            for &val in hm {
+                out.put_i64(val);
+            }
+        }
+
+        out.put_u16(self.section.count as u16);
+        for i in 0..self.section.count {
+            block_lock[i].write_pump_binary(&mut out);
+            biome_lock[i].write_pump_binary(&mut out);
+
+            let bl = match light_lock.block_light.get(i) {
+                Some(LightContainer::Full(data)) if data.len() == LightContainer::ARRAY_SIZE => {
+                    Some(data.as_ref())
+                }
+                _ => None,
+            };
+            let sl = match light_lock.sky_light.get(i) {
+                Some(LightContainer::Full(data)) if data.len() == LightContainer::ARRAY_SIZE => {
+                    Some(data.as_ref())
+                }
+                _ => None,
+            };
+            let mut light_flags = 0u8;
+            if bl.is_some() {
+                light_flags |= 1;
+            }
+            if sl.is_some() {
+                light_flags |= 2;
+            }
+            out.put_u8(light_flags);
+            if let Some(data) = bl {
+                out.extend_from_slice(data);
+            }
+            if let Some(data) = sl {
+                out.extend_from_slice(data);
+            }
+        }
+
+        let block_ticks = self.block_ticks.to_vec();
+        out.put_u32(block_ticks.len() as u32);
+        for tick in block_ticks {
+            out.put_i32(tick.position.0.x);
+            out.put_i32(tick.position.0.y);
+            out.put_i32(tick.position.0.z);
+            out.put_u8(tick.delay);
+            out.put_i8(tick.priority as i32 as i8);
+            out.put_u16(tick.value.id.as_u16());
+        }
+
+        let fluid_ticks = self.fluid_ticks.to_vec();
+        out.put_u32(fluid_ticks.len() as u32);
+        for tick in fluid_ticks {
+            out.put_i32(tick.position.0.x);
+            out.put_i32(tick.position.0.y);
+            out.put_i32(tick.position.0.z);
+            out.put_u8(tick.delay);
+            out.put_i8(tick.priority as i32 as i8);
+            out.put_u16(tick.value.id);
+        }
+
+        out.put_u32(block_entities_nbt.len() as u32);
+        for entity_comp in block_entities_nbt {
+            let bytes = pumpkin_nbt::Nbt::new(String::new(), entity_comp).write_unnamed();
+            out.put_u32(bytes.len() as u32);
+            out.extend_from_slice(&bytes);
+        }
+
+        if has_custom {
+            let bytes = pumpkin_nbt::Nbt::new(String::new(), custom_data.clone()).write_unnamed();
+            out.put_u32(bytes.len() as u32);
+            out.extend_from_slice(&bytes);
+        }
+
+        out.into()
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn internal_from_pump_bytes(
+        chunk_data: &[u8],
+        position: Vector2<i32>,
+    ) -> Result<Self, ChunkParsingError> {
+        const HEADER_MIN_LEN: usize = 4 + 1 + 4 + 4 + 4 + 4 + 1 + 1 + 8;
+        const MAX_SECTIONS: usize = 256;
+        const MAX_TICKS: usize = 65_536;
+        const MAX_BLOCK_ENTITIES: usize = 65_536;
+
+        if chunk_data.len() < HEADER_MIN_LEN || chunk_data[..4] != pump::PUMP_CHUNK_MAGIC {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Invalid pump chunk header".into(),
+            ));
+        }
+
+        let mut buf = &chunk_data[4..];
+        let version = buf.get_u8();
+        if version != 1 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Unsupported pump chunk version {version}"
+            )));
+        }
+
+        let _data_version = buf.get_i32();
+        let x_pos = buf.get_i32();
+        let z_pos = buf.get_i32();
+        if x_pos != position.x || z_pos != position.y {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Expected data for chunk {},{} but got it for {},{}!",
+                position.x, position.y, x_pos, z_pos,
+            )));
+        }
+
+        let min_y = buf.get_i32();
+        let status_u8 = buf.get_u8();
+        let flags = buf.get_u8();
+        let inhabited_time = buf.get_u64();
+
+        let status = match status_u8 {
+            1 => ChunkStatus::StructureStarts,
+            2 => ChunkStatus::StructureReferences,
+            3 => ChunkStatus::Biomes,
+            4 => ChunkStatus::Terrain,
+            5 => ChunkStatus::Features,
+            6 => ChunkStatus::InitializeLight,
+            7 => ChunkStatus::Light,
+            8 => ChunkStatus::Spawn,
+            9 => ChunkStatus::Full,
+            _ => ChunkStatus::Empty,
+        };
+        let light_correct = (flags & 1) != 0;
+
+        let read_heightmap =
+            |buf: &mut &[u8], present: bool| -> Result<Option<Box<[i64]>>, ChunkParsingError> {
+                if !present {
+                    return Ok(None);
+                }
+                if buf.remaining() < ChunkHeightmaps::LONGS * 8 {
+                    return Err(ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading heightmap".into(),
+                    ));
+                }
+                let mut hm = Vec::with_capacity(ChunkHeightmaps::LONGS);
+                for _ in 0..ChunkHeightmaps::LONGS {
+                    hm.push(buf.get_i64());
+                }
+                Ok(Some(hm.into_boxed_slice()))
+            };
+
+        let heightmaps = ChunkHeightmaps {
+            world_surface: read_heightmap(&mut buf, (flags & (1 << 1)) != 0)?,
+            motion_blocking: read_heightmap(&mut buf, (flags & (1 << 2)) != 0)?,
+            motion_blocking_no_leaves: read_heightmap(&mut buf, (flags & (1 << 3)) != 0)?,
+        };
+
+        if buf.remaining() < 2 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading section count".into(),
+            ));
+        }
+        let section_count = buf.get_u16() as usize;
+        if section_count > MAX_SECTIONS {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Section count {section_count} exceeds maximum {MAX_SECTIONS}"
+            )));
+        }
+
+        let mut block_palettes = Vec::with_capacity(section_count);
+        let mut biome_palettes = Vec::with_capacity(section_count);
+        let mut block_lights = Vec::with_capacity(section_count);
+        let mut sky_lights = Vec::with_capacity(section_count);
+
+        for _ in 0..section_count {
+            block_palettes.push(BlockPalette::read_pump_binary(&mut buf)?);
+            biome_palettes.push(BiomePalette::read_pump_binary(&mut buf)?);
+
+            if !buf.has_remaining() {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading section light flags".into(),
+                ));
+            }
+            let light_flags = buf.get_u8();
+            let block_light = if (light_flags & 1) != 0 {
+                if buf.remaining() < LightContainer::ARRAY_SIZE {
+                    return Err(ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading block light".into(),
+                    ));
+                }
+                let data: Box<[u8]> = buf[..LightContainer::ARRAY_SIZE].into();
+                buf.advance(LightContainer::ARRAY_SIZE);
+                LightContainer::Full(data)
+            } else {
+                LightContainer::Empty(0)
+            };
+            let sky_light = if (light_flags & 2) != 0 {
+                if buf.remaining() < LightContainer::ARRAY_SIZE {
+                    return Err(ChunkParsingError::ErrorDeserializingChunk(
+                        "Unexpected EOF reading sky light".into(),
+                    ));
+                }
+                let data: Box<[u8]> = buf[..LightContainer::ARRAY_SIZE].into();
+                buf.advance(LightContainer::ARRAY_SIZE);
+                LightContainer::Full(data)
+            } else {
+                LightContainer::Empty(0)
+            };
+            block_lights.push(block_light);
+            sky_lights.push(sky_light);
+        }
+
+        let (random_tick_sections, randomly_ticking_mask) =
+            ChunkSections::build_random_tick_sections_cache(&block_palettes);
+        let section = ChunkSections {
+            count: block_palettes.len(),
+            block_sections: RwLock::new(block_palettes.into_boxed_slice()),
+            random_tick_sections: RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
+            biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
+            min_y,
+        };
+        let light_engine = ChunkLight {
+            block_light: block_lights.into_boxed_slice(),
+            sky_light: sky_lights.into_boxed_slice(),
+        };
+
+        if buf.remaining() < 4 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading block tick count".into(),
+            ));
+        }
+        let block_tick_count = buf.get_u32() as usize;
+        if block_tick_count > MAX_TICKS || buf.remaining() < block_tick_count * 16 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Invalid block tick count".into(),
+            ));
+        }
+        let mut block_ticks = Vec::with_capacity(block_tick_count);
+        for _ in 0..block_tick_count {
+            let x = buf.get_i32();
+            let y = buf.get_i32();
+            let z = buf.get_i32();
+            let delay = buf.get_u8();
+            let priority = i32::from(buf.get_i8());
+            let raw_id = buf.get_u16();
+            if let Ok(priority) = TickPriority::try_from(priority)
+                && let Some(block_id) = BlockId::new(raw_id)
+            {
+                block_ticks.push(ScheduledTick {
+                    delay,
+                    priority,
+                    position: BlockPos::new(x, y, z),
+                    value: Block::from_id(block_id),
+                });
+            }
+        }
+
+        if buf.remaining() < 4 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading fluid tick count".into(),
+            ));
+        }
+        let fluid_tick_count = buf.get_u32() as usize;
+        if fluid_tick_count > MAX_TICKS || buf.remaining() < fluid_tick_count * 16 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Invalid fluid tick count".into(),
+            ));
+        }
+        let mut fluid_ticks = Vec::with_capacity(fluid_tick_count);
+        for _ in 0..fluid_tick_count {
+            let x = buf.get_i32();
+            let y = buf.get_i32();
+            let z = buf.get_i32();
+            let delay = buf.get_u8();
+            let priority = i32::from(buf.get_i8());
+            let raw_id = buf.get_u16();
+            if let Ok(priority) = TickPriority::try_from(priority)
+                && let Some(fluid) = Fluid::from_id(raw_id)
+            {
+                fluid_ticks.push(ScheduledTick {
+                    delay,
+                    priority,
+                    position: BlockPos::new(x, y, z),
+                    value: fluid,
+                });
+            }
+        }
+
+        if buf.remaining() < 4 {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Unexpected EOF reading block entity count".into(),
+            ));
+        }
+        let be_count = buf.get_u32() as usize;
+        if be_count > MAX_BLOCK_ENTITIES {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(
+                "Invalid block entity count".into(),
+            ));
+        }
+        let mut block_entities = FxHashMap::default();
+        for _ in 0..be_count {
+            if buf.remaining() < 4 {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading block entity length".into(),
+                ));
+            }
+            let len = buf.get_u32() as usize;
+            if buf.remaining() < len {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading block entity payload".into(),
+                ));
+            }
+            let mut cursor = std::io::Cursor::new(&buf[..len]);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?
+                .root_tag;
+            buf.advance(len);
+            if let Some(x) = nbt.get_int("x")
+                && let Some(y) = nbt.get_int("y")
+                && let Some(z) = nbt.get_int("z")
+            {
+                block_entities.insert(BlockPos::new(x, y, z), nbt);
+            }
+        }
+
+        let custom_data = if (flags & (1 << 4)) != 0 {
+            if buf.remaining() < 4 {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading custom data length".into(),
+                ));
+            }
+            let len = buf.get_u32() as usize;
+            if buf.remaining() < len {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading custom data payload".into(),
+                ));
+            }
+            let mut cursor = std::io::Cursor::new(&buf[..len]);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?
+                .root_tag;
+            buf.advance(len);
+            nbt
+        } else {
+            NbtCompound::default()
+        };
+
+        Ok(Self {
+            section,
+            heightmap: std::sync::Mutex::new(heightmaps),
+            x: position.x,
+            z: position.y,
+            dirty: AtomicBool::new(false),
+            block_ticks: ChunkTickScheduler::from_iter(block_ticks),
+            fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
+            pending_block_entities: std::sync::Mutex::new(block_entities),
+            light_engine: std::sync::Mutex::new(light_engine),
+            light_populated: AtomicBool::new(light_correct),
+            status,
+            blending_data: None,
+            inhabited_time: AtomicU64::new(inhabited_time),
+            custom_data: std::sync::Mutex::new(custom_data),
+        })
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
@@ -997,7 +1493,7 @@ mod tests {
 
     fn test_chunk(sections: Vec<NbtCompound>) -> pumpkin_nbt::Nbt {
         let mut root = NbtCompound::new();
-        root.put_int("DataVersion", 4903);
+        root.put_int("DataVersion", 5023);
         root.put_int("xPos", 0);
         root.put_int("zPos", 0);
         root.put_string("Status", "minecraft:full".to_string());
@@ -1162,10 +1658,10 @@ mod tests {
 
         let repeater_state = Block::REPEATER
             .from_properties(&[
-                ("facing", "north"),
-                ("delay", "2"),
-                ("locked", "false"),
-                ("powered", "false"),
+                pumpkin_data::Property::Facing(pumpkin_data::block_properties::Facing::North),
+                pumpkin_data::Property::Delay(2),
+                pumpkin_data::Property::Locked(false),
+                pumpkin_data::Property::Powered(false),
             ])
             .to_state_id(&Block::REPEATER);
         assert_eq!(result[1], repeater_state);

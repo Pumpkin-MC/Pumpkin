@@ -48,6 +48,7 @@ const OVERWORLD_BIOMES: &[&Biome] = &[
     &Biome::FROZEN_RIVER,
     &Biome::RIVER,
     &Biome::ICE_SPIKES,
+    &Biome::DAPPLED_FOREST,
     &Biome::OLD_GROWTH_PINE_TAIGA,
     &Biome::SUNFLOWER_PLAINS,
     &Biome::OLD_GROWTH_BIRCH_FOREST,
@@ -61,7 +62,6 @@ const OVERWORLD_BIOMES: &[&Biome] = &[
     &Biome::LUSH_CAVES,
     &Biome::SULFUR_CAVES,
     &Biome::DEEP_DARK,
-    &Biome::DAPPLED_FOREST,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -87,33 +87,67 @@ impl PartialOrd for FeatureData {
     }
 }
 
+const NETHER_BIOMES: &[&Biome] = &[
+    &Biome::NETHER_WASTES,
+    &Biome::SOUL_SAND_VALLEY,
+    &Biome::CRIMSON_FOREST,
+    &Biome::WARPED_FOREST,
+    &Biome::BASALT_DELTAS,
+];
+
+const END_BIOMES: &[&Biome] = &[
+    &Biome::THE_END,
+    &Biome::END_HIGHLANDS,
+    &Biome::END_MIDLANDS,
+    &Biome::SMALL_END_ISLANDS,
+    &Biome::END_BARRENS,
+];
+
 static OVERWORLD_FEATURES_PER_STEP: LazyLock<Vec<Vec<PlacedFeature>>> =
     LazyLock::new(|| sort_features_per_step(OVERWORLD_BIOMES));
 static OVERWORLD_BIOME_IDS: LazyLock<HashSet<u8>> =
     LazyLock::new(|| OVERWORLD_BIOMES.iter().map(|biome| biome.id).collect());
 
-pub fn select_features(biome_ids: &[u8], step: usize) -> Vec<(usize, PlacedFeature)> {
-    // Feature generation does not currently carry its biome-source identity.
-    // TODO: Consider modeling the Nether and End biome feature orders
-    if !biome_ids
-        .iter()
-        .any(|biome_id| OVERWORLD_BIOME_IDS.contains(biome_id))
-    {
-        let mut selected: Vec<_> = biome_ids
-            .iter()
-            .filter_map(|biome_id| Biome::from_id(*biome_id))
-            .filter_map(|biome| biome.features.get(step))
-            .flat_map(|features| features.iter().copied())
-            .collect();
-        selected.sort_unstable();
-        selected.dedup();
-        return selected.into_iter().enumerate().collect();
-    }
+static NETHER_FEATURES_PER_STEP: LazyLock<Vec<Vec<PlacedFeature>>> =
+    LazyLock::new(|| sort_features_per_step(NETHER_BIOMES));
+static NETHER_BIOME_IDS: LazyLock<HashSet<u8>> =
+    LazyLock::new(|| NETHER_BIOMES.iter().map(|biome| biome.id).collect());
 
+static END_FEATURES_PER_STEP: LazyLock<Vec<Vec<PlacedFeature>>> =
+    LazyLock::new(|| sort_features_per_step(END_BIOMES));
+static END_BIOME_IDS: LazyLock<HashSet<u8>> =
+    LazyLock::new(|| END_BIOMES.iter().map(|biome| biome.id).collect());
+
+pub fn select_features(biome_ids: &[u8], step: usize) -> Vec<(usize, PlacedFeature)> {
+    if biome_ids.iter().any(|b| NETHER_BIOME_IDS.contains(b)) {
+        select_features_for_dimension(
+            biome_ids,
+            step,
+            &NETHER_BIOME_IDS,
+            &NETHER_FEATURES_PER_STEP,
+        )
+    } else if biome_ids.iter().any(|b| END_BIOME_IDS.contains(b)) {
+        select_features_for_dimension(biome_ids, step, &END_BIOME_IDS, &END_FEATURES_PER_STEP)
+    } else {
+        select_features_for_dimension(
+            biome_ids,
+            step,
+            &OVERWORLD_BIOME_IDS,
+            &OVERWORLD_FEATURES_PER_STEP,
+        )
+    }
+}
+
+fn select_features_for_dimension(
+    biome_ids: &[u8],
+    step: usize,
+    allowed_biomes: &HashSet<u8>,
+    features_per_step: &[Vec<PlacedFeature>],
+) -> Vec<(usize, PlacedFeature)> {
     let mut selected = HashSet::new();
 
     for biome_id in biome_ids {
-        if !OVERWORLD_BIOME_IDS.contains(biome_id) {
+        if !allowed_biomes.contains(biome_id) {
             continue;
         }
         if let Some(features) = Biome::from_id(*biome_id).and_then(|biome| biome.features.get(step))
@@ -122,7 +156,7 @@ pub fn select_features(biome_ids: &[u8], step: usize) -> Vec<(usize, PlacedFeatu
         }
     }
 
-    OVERWORLD_FEATURES_PER_STEP
+    features_per_step
         .get(step)
         .into_iter()
         .flatten()
@@ -215,6 +249,11 @@ mod tests {
             step.iter()
                 .position(|feature| *feature == PlacedFeature::PatchDryGrassBadlands),
             Some(74)
+        );
+        assert_eq!(
+            step.iter()
+                .position(|feature| *feature == PlacedFeature::TreesJungle),
+            Some(10)
         );
     }
 

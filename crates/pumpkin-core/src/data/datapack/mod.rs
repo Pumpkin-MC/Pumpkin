@@ -1,10 +1,16 @@
+pub mod advancement_loader;
 pub mod context_provider_loader;
 pub mod damage_type_loader;
 pub mod dynamic_registry_loader;
+pub mod dynamic_registry_manager;
 pub mod function_loader;
+pub mod item_modifier_loader;
 pub mod loot_table_loader;
+pub mod predicate_loader;
 pub mod recipe_loader;
+pub mod slot_source_loader;
 pub mod structure_loader;
+pub mod tag_loader;
 pub mod test_loader;
 pub mod trade_loader;
 
@@ -81,7 +87,13 @@ pub struct DatapackManager {
     damage_types: RwLock<DamageTypeRegistry>,
     loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
     dynamic_registries: RwLock<HashMap<String, HashMap<String, RegistryEntryData>>>,
+    pub dynamic_registry_manager: Arc<dynamic_registry_manager::DynamicRegistryManager>,
     trade_registry: RwLock<TradeRegistry>,
+    advancements: RwLock<HashMap<String, advancement_loader::DynamicAdvancementDefinition>>,
+    predicates: RwLock<HashMap<String, serde_json::Value>>,
+    item_modifiers: RwLock<HashMap<String, serde_json::Value>>,
+    slot_sources: RwLock<HashMap<String, serde_json::Value>>,
+    tags: RwLock<HashMap<String, HashMap<String, tag_loader::DynamicTagEntry>>>,
 }
 
 fn share_function_bodies(
@@ -112,10 +124,21 @@ impl DatapackManager {
             damage_types: RwLock::new(HashMap::new()),
             loot_tables: RwLock::new(HashMap::new()),
             dynamic_registries: RwLock::new(HashMap::new()),
+            dynamic_registry_manager: Arc::new(
+                dynamic_registry_manager::DynamicRegistryManager::new(
+                    pumpkin_data::packet::CURRENT_MC_VERSION,
+                ),
+            ),
             trade_registry: RwLock::new(TradeRegistry::new()),
+            advancements: RwLock::new(HashMap::new()),
+            predicates: RwLock::new(HashMap::new()),
+            item_modifiers: RwLock::new(HashMap::new()),
+            slot_sources: RwLock::new(HashMap::new()),
+            tags: RwLock::new(HashMap::new()),
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn load_all(
         &self,
         world_path: &Path,
@@ -153,6 +176,15 @@ impl DatapackManager {
         let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
             HashMap::new();
         let mut all_trade_registry = TradeRegistry::new();
+        let mut all_advancements: HashMap<
+            String,
+            advancement_loader::DynamicAdvancementDefinition,
+        > = HashMap::new();
+        let mut all_predicates: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut all_item_modifiers: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut all_slot_sources: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut all_tags: HashMap<String, HashMap<String, tag_loader::DynamicTagEntry>> =
+            HashMap::new();
 
         let mut acc = PackContentAccumulators {
             recipes: &mut all_recipes,
@@ -165,6 +197,11 @@ impl DatapackManager {
             loot_tables: &mut all_loot_tables,
             dynamic_registries: &mut all_dynamic_registries,
             trade_registry: &mut all_trade_registry,
+            advancements: &mut all_advancements,
+            predicates: &mut all_predicates,
+            item_modifiers: &mut all_item_modifiers,
+            slot_sources: &mut all_slot_sources,
+            tags: &mut all_tags,
         };
 
         scan_datapacks_dir(
@@ -173,6 +210,8 @@ impl DatapackManager {
             &mut acc,
             &mut loaded_packs_vec,
         );
+
+        load_bundled_datapacks(enabled_packs, &mut acc, &mut loaded_packs_vec);
 
         let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
 
@@ -202,6 +241,15 @@ impl DatapackManager {
             .context_float_providers
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_context_float_providers;
+        for (id, entry) in &damage_type_registry {
+            all_dynamic_registries
+                .entry("minecraft:damage_type".to_string())
+                .or_default()
+                .insert(id.clone(), entry.to_registry_entry());
+        }
+        self.dynamic_registry_manager
+            .apply_custom_registries(&all_dynamic_registries);
+
         *self
             .damage_types
             .write()
@@ -214,10 +262,166 @@ impl DatapackManager {
             .dynamic_registries
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_dynamic_registries;
+
         *self
             .trade_registry
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_trade_registry;
+        *self
+            .advancements
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_advancements;
+        *self
+            .predicates
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_predicates;
+        *self
+            .item_modifiers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_item_modifiers;
+        *self
+            .slot_sources
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_slot_sources;
+        *self
+            .tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_tags;
+    }
+
+    #[must_use]
+    pub fn get_predicate(&self, id: &str) -> Option<serde_json::Value> {
+        let guard = self
+            .predicates
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let full_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+        guard
+            .get(&full_id)
+            .or_else(|| guard.get(id))
+            .cloned()
+            .or_else(|| {
+                pumpkin_data::loot_table::get_loot_predicate(&full_id)
+                    .or_else(|| pumpkin_data::loot_table::get_loot_predicate(id))
+                    .cloned()
+            })
+    }
+
+    #[must_use]
+    pub fn get_predicate_ids(&self) -> Vec<String> {
+        let guard = self
+            .predicates
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_item_modifier(&self, id: &str) -> Option<serde_json::Value> {
+        let guard = self
+            .item_modifiers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let full_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+        guard.get(&full_id).or_else(|| guard.get(id)).cloned()
+    }
+
+    #[must_use]
+    pub fn get_item_modifier_ids(&self) -> Vec<String> {
+        let guard = self
+            .item_modifiers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_slot_source(&self, id: &str) -> Option<serde_json::Value> {
+        let guard = self
+            .slot_sources
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let full_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+        guard.get(&full_id).or_else(|| guard.get(id)).cloned()
+    }
+
+    #[must_use]
+    pub fn get_slot_source_ids(&self) -> Vec<String> {
+        let guard = self
+            .slot_sources
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_tag_values(&self, category: &str, tag_id: &str) -> Option<Vec<String>> {
+        let guard = self
+            .tags
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let cat_map = guard.get(category)?;
+        let full_id = if tag_id.contains(':') {
+            tag_id.to_string()
+        } else {
+            format!("minecraft:{tag_id}")
+        };
+        cat_map
+            .get(&full_id)
+            .or_else(|| cat_map.get(tag_id))
+            .map(|e| e.values.clone())
+    }
+
+    #[must_use]
+    pub fn get_tags_for_category(&self, category: &str) -> HashMap<String, Vec<String>> {
+        let guard = self
+            .tags
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.get(category).map_or_else(HashMap::new, |cat_map| {
+            cat_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.values.clone()))
+                .collect()
+        })
+    }
+
+    pub fn get_advancement(
+        &self,
+        id: &str,
+    ) -> Option<advancement_loader::DynamicAdvancementDefinition> {
+        self.advancements
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    pub fn get_advancement_ids(&self) -> Vec<String> {
+        self.advancements
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keys()
+            .cloned()
+            .collect()
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -490,6 +694,92 @@ impl DatapackManager {
     }
 
     #[must_use]
+    pub fn get_dynamic_registry_raw_id(&self, registry_id: &str, entry_id: &str) -> Option<u32> {
+        self.dynamic_registry_manager
+            .get_raw_id(registry_id, entry_id)
+    }
+
+    #[must_use]
+    pub fn get_dynamic_registry_entry_id(&self, registry_id: &str, raw_id: u32) -> Option<String> {
+        self.dynamic_registry_manager
+            .get_entry_id(registry_id, raw_id)
+    }
+
+    #[must_use]
+    pub fn get_dynamic_registry_entry_data(
+        &self,
+        registry_id: &str,
+        entry_id: &str,
+    ) -> Option<Box<[u8]>> {
+        self.dynamic_registry_manager
+            .get_entry_data(registry_id, entry_id)
+    }
+
+    #[must_use]
+    pub fn get_dynamic_registry_entries(&self, registry_id: &str) -> Vec<RegistryEntryData> {
+        self.dynamic_registry_manager
+            .get_registry_entries(registry_id)
+    }
+
+    #[must_use]
+    pub fn has_dynamic_registry_entry(&self, registry_id: &str, entry_id: &str) -> bool {
+        self.dynamic_registry_manager
+            .contains_entry(registry_id, entry_id)
+    }
+
+    #[must_use]
+    pub fn get_all_synced_registries(&self) -> Vec<pumpkin_data::registry::Registry> {
+        self.dynamic_registry_manager.get_synced_registries()
+    }
+
+    #[must_use]
+    pub fn is_in_tag(&self, category: &str, tag_id: &str, entry_id: &str) -> bool {
+        let guard = self
+            .tags
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let category = category.strip_prefix("minecraft:").unwrap_or(category);
+        if let Some(cat_tags) = guard.get(category) {
+            let tag_id = tag_id.strip_prefix('#').unwrap_or(tag_id);
+            let full_tag = if tag_id.contains(':') {
+                tag_id.to_string()
+            } else {
+                format!("minecraft:{tag_id}")
+            };
+            if let Some(tag_entry) = cat_tags.get(&full_tag).or_else(|| cat_tags.get(tag_id)) {
+                let full_entry = if entry_id.contains(':') {
+                    entry_id.to_string()
+                } else {
+                    format!("minecraft:{entry_id}")
+                };
+                return tag_entry
+                    .values
+                    .iter()
+                    .any(|v| v == &full_entry || v == entry_id);
+            }
+        }
+        false
+    }
+
+    #[must_use]
+    pub fn get_tag_entries(&self, category: &str, tag_id: &str) -> Option<Vec<String>> {
+        let guard = self
+            .tags
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let category = category.strip_prefix("minecraft:").unwrap_or(category);
+        let cat_tags = guard.get(category)?;
+        let tag_id = tag_id.strip_prefix('#').unwrap_or(tag_id);
+        let full_tag = if tag_id.contains(':') {
+            tag_id.to_string()
+        } else {
+            format!("minecraft:{tag_id}")
+        };
+        let tag_entry = cat_tags.get(&full_tag).or_else(|| cat_tags.get(tag_id))?;
+        Some(tag_entry.values.clone())
+    }
+
+    #[must_use]
     pub fn get_villager_trade_set(
         &self,
         profession: &str,
@@ -703,12 +993,10 @@ impl DatapackManager {
         // Fall back to compile-time embedded structures.
         let structure_id = format!("{namespace}:{path}");
 
-        if let Some(bytes) =
-            pumpkin_world::generation::structure::template::template_bytes(&structure_id)
+        if let Some(template) =
+            pumpkin_world::generation::structure::template::get_template(&structure_id)
         {
-            return read_gzip_compound_tag(std::io::Cursor::new(bytes)).map_err(|error| {
-                format!("Failed to parse embedded structure '{structure_id}': {error}")
-            });
+            return Ok(template.save());
         }
 
         Err(format!(
@@ -1234,6 +1522,11 @@ struct PackContentAccumulators<'a> {
     loot_tables: &'a mut HashMap<String, Arc<DynamicLootTable>>,
     dynamic_registries: &'a mut HashMap<String, HashMap<String, RegistryEntryData>>,
     trade_registry: &'a mut TradeRegistry,
+    advancements: &'a mut HashMap<String, advancement_loader::DynamicAdvancementDefinition>,
+    predicates: &'a mut HashMap<String, serde_json::Value>,
+    item_modifiers: &'a mut HashMap<String, serde_json::Value>,
+    slot_sources: &'a mut HashMap<String, serde_json::Value>,
+    tags: &'a mut HashMap<String, HashMap<String, tag_loader::DynamicTagEntry>>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -1252,6 +1545,101 @@ struct PackContentCounts {
     trade_sets: usize,
     trades: usize,
     trade_tags: usize,
+    advancements: usize,
+    predicates: usize,
+    item_modifiers: usize,
+    slot_sources: usize,
+    tags: usize,
+}
+
+fn find_bundled_datapack_dir(pack_name: &str) -> Option<PathBuf> {
+    let sub = format!("assets/datapack/data/minecraft/datapacks/{pack_name}");
+    let candidates = [
+        PathBuf::from(&sub),
+        PathBuf::from(format!("../{sub}")),
+        PathBuf::from(format!("../../{sub}")),
+    ];
+    for candidate in candidates {
+        if candidate.is_dir() {
+            return Some(candidate);
+        }
+    }
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let path = Path::new(&manifest_dir).join(format!("../../{sub}"));
+        if path.is_dir() {
+            return Some(path);
+        }
+    }
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        for ancestor in exe_dir.ancestors().take(5) {
+            let path = ancestor.join(&sub);
+            if path.is_dir() {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn load_bundled_datapacks(
+    enabled_packs: &[String],
+    acc: &mut PackContentAccumulators<'_>,
+    loaded_packs_vec: &mut Vec<LoadedDatapack>,
+) {
+    for bundled in [
+        "trade_rebalance",
+        "minecart_improvements",
+        "redstone_experiments",
+    ] {
+        let is_enabled = enabled_packs.iter().any(|p| {
+            p == bundled
+                || p == &format!("minecraft:{bundled}")
+                || p == &format!("file/{bundled}")
+                || p.strip_prefix("file/") == Some(bundled)
+                || p.strip_prefix("minecraft:") == Some(bundled)
+        });
+        let already_loaded = loaded_packs_vec.iter().any(|p| {
+            p.id == bundled || p.id == format!("minecraft:{bundled}") || p.name == bundled
+        });
+        if is_enabled
+            && !already_loaded
+            && let Some(pack_path) = find_bundled_datapack_dir(bundled)
+        {
+            let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
+            let counts = load_pack_contents(&pack_path, acc);
+            info!(
+                "Loaded bundled datapack '{bundled}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
+                counts.recipes,
+                counts.functions,
+                counts.test_instances,
+                counts.damage_types,
+                counts.int_providers,
+                counts.float_providers,
+                counts.loot_tables,
+                counts.structures,
+                counts.template_pools,
+                counts.processor_lists,
+                counts.dynamic_registries,
+                counts.trade_sets,
+                counts.trades,
+                counts.advancements,
+                counts.predicates,
+                counts.tags,
+            );
+            loaded_packs_vec.push(LoadedDatapack {
+                id: format!("minecraft:{bundled}"),
+                name: bundled.to_string(),
+                description,
+                pack_format,
+                root_path: pack_path,
+                recipe_count: counts.recipes,
+                function_count: counts.functions,
+                known_packs,
+            });
+        }
+    }
 }
 
 fn scan_datapacks_dir(
@@ -1294,7 +1682,7 @@ fn scan_datapacks_dir(
         let counts = load_pack_contents(&pack_path, acc);
 
         info!(
-            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s)",
+            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
             counts.recipes,
             counts.functions,
             counts.test_instances,
@@ -1308,6 +1696,9 @@ fn scan_datapacks_dir(
             counts.dynamic_registries,
             counts.trade_sets,
             counts.trades,
+            counts.advancements,
+            counts.predicates,
+            counts.tags,
         );
 
         loaded_packs_vec.push(LoadedDatapack {
@@ -1374,6 +1765,7 @@ fn load_pack_contents(
                     &tags_dir,
                     acc.function_tags,
                 );
+                counts.tags += tag_loader::load_tags_from_dir(&namespace, &tags_dir, acc.tags);
             }
             // Load game test instances
             let test_instance_dir = ns_path.join("test_instance");
@@ -1431,6 +1823,54 @@ fn load_pack_contents(
                         &namespace,
                         &lt_dir,
                         acc.loot_tables,
+                    );
+                }
+            }
+
+            // Load advancements
+            for adv_sub in ["advancement", "advancements"] {
+                let adv_dir = ns_path.join(adv_sub);
+                if adv_dir.is_dir() {
+                    counts.advancements += advancement_loader::load_advancements_from_dir(
+                        &namespace,
+                        &adv_dir,
+                        acc.advancements,
+                    );
+                }
+            }
+
+            // Load predicates
+            for pred_sub in ["predicate", "predicates"] {
+                let pred_dir = ns_path.join(pred_sub);
+                if pred_dir.is_dir() {
+                    counts.predicates += predicate_loader::load_predicates_from_dir(
+                        &namespace,
+                        &pred_dir,
+                        acc.predicates,
+                    );
+                }
+            }
+
+            // Load item modifiers
+            for im_sub in ["item_modifier", "item_modifiers"] {
+                let im_dir = ns_path.join(im_sub);
+                if im_dir.is_dir() {
+                    counts.item_modifiers += item_modifier_loader::load_item_modifiers_from_dir(
+                        &namespace,
+                        &im_dir,
+                        acc.item_modifiers,
+                    );
+                }
+            }
+
+            // Load slot sources
+            for ss_sub in ["slot_source", "slot_sources"] {
+                let ss_dir = ns_path.join(ss_sub);
+                if ss_dir.is_dir() {
+                    counts.slot_sources += slot_source_loader::load_slot_sources_from_dir(
+                        &namespace,
+                        &ss_dir,
+                        acc.slot_sources,
                     );
                 }
             }
@@ -1579,7 +2019,11 @@ fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {
             })
             .unwrap_or_default();
         let pack_format = pack
-            .and_then(|p| p.get("pack_format"))
+            .and_then(|p| {
+                p.get("pack_format")
+                    .or_else(|| p.get("max_format"))
+                    .or_else(|| p.get("min_format"))
+            })
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(61) as u32;
 
@@ -1825,6 +2269,164 @@ mod tests {
                 "minecraft:redstone_experiments",
                 "minecraft:bundle"
             ]
+        );
+    }
+
+    #[test]
+    fn vanilla_datapack_coverage_test() {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let datapack_path = manifest_dir.join("../../assets/datapack");
+        if !datapack_path.join("data/minecraft").is_dir() {
+            return;
+        }
+
+        let mut recipes = Vec::new();
+        let mut functions = std::collections::HashMap::new();
+        let mut function_tags = std::collections::HashMap::new();
+        let mut test_instances = std::collections::HashMap::new();
+        let mut damage_types = std::collections::HashMap::new();
+        let mut context_int_providers = std::collections::HashMap::new();
+        let mut context_float_providers = std::collections::HashMap::new();
+        let mut loot_tables = std::collections::HashMap::new();
+        let mut dynamic_registries = std::collections::HashMap::new();
+        let mut trade_registry = super::TradeRegistry::new();
+        let mut advancements = std::collections::HashMap::new();
+        let mut predicates = std::collections::HashMap::new();
+        let mut item_modifiers = std::collections::HashMap::new();
+        let mut slot_sources = std::collections::HashMap::new();
+        let mut tags = std::collections::HashMap::new();
+
+        let mut acc = super::PackContentAccumulators {
+            recipes: &mut recipes,
+            functions: &mut functions,
+            function_tags: &mut function_tags,
+            test_instances: &mut test_instances,
+            damage_types: &mut damage_types,
+            context_int_providers: &mut context_int_providers,
+            context_float_providers: &mut context_float_providers,
+            loot_tables: &mut loot_tables,
+            dynamic_registries: &mut dynamic_registries,
+            trade_registry: &mut trade_registry,
+            advancements: &mut advancements,
+            predicates: &mut predicates,
+            item_modifiers: &mut item_modifiers,
+            slot_sources: &mut slot_sources,
+            tags: &mut tags,
+        };
+
+        let counts = super::load_pack_contents(&datapack_path, &mut acc);
+        assert_eq!(counts.recipes, 2042, "all vanilla recipes must load");
+        assert_eq!(
+            counts.loot_tables, 1447,
+            "all vanilla loot tables must load"
+        );
+        assert_eq!(
+            counts.advancements, 1866,
+            "all vanilla advancements must load"
+        );
+        assert_eq!(counts.structures, 1511, "all vanilla structures must load");
+        assert_eq!(
+            counts.template_pools, 245,
+            "all vanilla template pools must load"
+        );
+        assert_eq!(
+            counts.processor_lists, 40,
+            "all vanilla processor lists must load"
+        );
+        assert_eq!(
+            counts.damage_types, 51,
+            "all vanilla damage types must load"
+        );
+        assert_eq!(
+            counts.int_providers, 26,
+            "all vanilla int providers must load"
+        );
+        assert_eq!(
+            counts.float_providers, 4,
+            "all vanilla float providers must load"
+        );
+        assert_eq!(
+            counts.test_instances, 1,
+            "all vanilla test instances must load"
+        );
+        assert!(
+            counts.dynamic_registries >= 2080,
+            "all vanilla dynamic registry entries must load"
+        );
+        assert!(counts.tags >= 1406, "all vanilla tags must load");
+        assert_eq!(counts.predicates, 3, "all vanilla predicates must load");
+    }
+
+    #[test]
+    fn bundled_trade_rebalance_coverage_test() {
+        if let Some(pack_path) = super::find_bundled_datapack_dir("trade_rebalance") {
+            let mut recipes = Vec::new();
+            let mut functions = std::collections::HashMap::new();
+            let mut function_tags = std::collections::HashMap::new();
+            let mut test_instances = std::collections::HashMap::new();
+            let mut damage_types = std::collections::HashMap::new();
+            let mut context_int_providers = std::collections::HashMap::new();
+            let mut context_float_providers = std::collections::HashMap::new();
+            let mut loot_tables = std::collections::HashMap::new();
+            let mut dynamic_registries = std::collections::HashMap::new();
+            let mut trade_registry = super::TradeRegistry::new();
+            let mut advancements = std::collections::HashMap::new();
+            let mut predicates = std::collections::HashMap::new();
+            let mut item_modifiers = std::collections::HashMap::new();
+            let mut slot_sources = std::collections::HashMap::new();
+            let mut tags = std::collections::HashMap::new();
+
+            let mut acc = super::PackContentAccumulators {
+                recipes: &mut recipes,
+                functions: &mut functions,
+                function_tags: &mut function_tags,
+                test_instances: &mut test_instances,
+                damage_types: &mut damage_types,
+                context_int_providers: &mut context_int_providers,
+                context_float_providers: &mut context_float_providers,
+                loot_tables: &mut loot_tables,
+                dynamic_registries: &mut dynamic_registries,
+                trade_registry: &mut trade_registry,
+                advancements: &mut advancements,
+                predicates: &mut predicates,
+                item_modifiers: &mut item_modifiers,
+                slot_sources: &mut slot_sources,
+                tags: &mut tags,
+            };
+
+            let counts = super::load_pack_contents(&pack_path, &mut acc);
+            assert!(counts.trades > 0, "trade rebalance must load trades");
+            assert!(
+                counts.trade_tags > 0,
+                "trade rebalance must load trade tags"
+            );
+            assert!(
+                counts.loot_tables > 0,
+                "trade rebalance must load loot tables"
+            );
+        }
+    }
+
+    #[test]
+    fn datapack_manager_dynamic_registry_and_tag_test() {
+        let manager = super::DatapackManager::new();
+        assert!(
+            manager
+                .dynamic_registry_manager
+                .get_synced_registries()
+                .len()
+                >= 30
+        );
+        let synced = manager.get_all_synced_registries();
+        assert!(
+            synced
+                .iter()
+                .any(|r| r.registry_id == "minecraft:painting_variant")
+        );
+        assert!(
+            synced
+                .iter()
+                .any(|r| r.registry_id == "minecraft:wolf_variant")
         );
     }
 }

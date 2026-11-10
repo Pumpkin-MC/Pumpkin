@@ -1,16 +1,16 @@
 pub mod nethernet;
 pub mod play;
 pub(crate) mod recipe;
-pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
+    time::Instant,
 };
 
 use tracing::{debug, error, warn};
@@ -25,23 +25,31 @@ use pumpkin_protocol::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
         },
+        network_stack_latency::NetworkStackLatency,
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
-            actor_event::SActorEvent, animate::SAnimate, block_pick_request::SBlockPickRequest,
+            actor_event::SActorEvent, animate::SAnimate, block_actor_data::SBlockActorData,
+            block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
-            client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
+            client_cache_status::SClientCacheStatus,
+            client_movement_prediction_sync::SClientMovementPredictionSync,
+            command_request::SCommandRequest, container_close::SContainerClose,
+            cursor_item_drag::SCursorItemDrag, emote::SEmote, emote_list::SEmoteList,
             interact::SInteract, inventory_transaction::SInventoryTransaction,
             item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
-            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
+            matchmaking_cancel::SMatchmakingCancel, mob_equipment::SMobEquipment,
+            modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
-            player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
+            player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
+            register_audio_content::SRegisterAudioContent, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
+            resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
-            set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
+            set_player_inventory_options::SSetPlayerInventoryOptions,
+            stonecutter_set_recipe::SStonecutterSetRecipe, text::SText,
         },
     },
     packet::Packet,
@@ -94,6 +102,16 @@ impl OutgoingPacket {
     }
 }
 
+/// Active resource pack staged for chunk streaming to this client.
+#[derive(Clone)]
+pub struct BedrockStreamingPack {
+    pub pack_id: String,
+    pub chunk_size: u32,
+    pub chunk_count: u32,
+    pub total_size: u64,
+    pub data: Arc<Vec<u8>>,
+}
+
 pub struct BedrockClient {
     session: Arc<NetherNetSession>,
     /// The client's IP address.
@@ -122,10 +140,29 @@ pub struct BedrockClient {
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
+    /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
+    pub input_tick: AtomicU64,
+    /// Client predicted velocity from the last `PlayerAuthInput`. Pushes build on it.
+    pub client_delta: AtomicCell<pumpkin_util::math::vector3::Vector3<f64>>,
+    /// World age of the last server motion sent to the own player.
+    pub own_motion_age: AtomicCell<i64>,
+    /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
+    pub own_motion_tick: AtomicU64,
+    /// Push velocity the client carries from the server's motions.
+    pub push_residual: std::sync::Mutex<crate::entity::player::client_push::PushResidual>,
+    /// Ids and send times of unanswered `NetworkStackLatency` probes, oldest first.
+    pending_latencies: std::sync::Mutex<VecDeque<(u64, Instant)>>,
+    next_latency_id: AtomicU64,
+    last_latency_send: AtomicCell<Instant>,
+    /// Inputs since the last teleport without reaching it. Resent past a threshold.
+    pub teleport_unconfirmed_inputs: AtomicU32,
+    /// Network position of the last own teleport `MovePlayer`, which the client must reach.
+    pub teleport_sent_pos: AtomicCell<pumpkin_util::math::vector3::Vector3<f32>>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
     pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
+    pub streaming_packs: std::sync::Mutex<HashMap<String, BedrockStreamingPack>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -162,9 +199,20 @@ impl BedrockClient {
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
+            input_tick: AtomicU64::new(0),
+            client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
+            own_motion_age: AtomicCell::new(i64::MIN),
+            own_motion_tick: AtomicU64::new(0),
+            push_residual: std::sync::Mutex::default(),
+            pending_latencies: std::sync::Mutex::new(VecDeque::new()),
+            next_latency_id: AtomicU64::new(1),
+            last_latency_send: AtomicCell::new(Instant::now()),
+            teleport_unconfirmed_inputs: AtomicU32::new(0),
+            teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
+            streaming_packs: std::sync::Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
@@ -309,6 +357,10 @@ impl BedrockClient {
         warn!("Closing connection for {}: {message}", self.address);
         self.send_packet(&CDisconnect::new(reason as i32, message))
             .await;
+        let _ = self
+            .session
+            .flush_reliable(std::time::Duration::from_secs(1))
+            .await;
         self.close().await;
     }
 
@@ -329,6 +381,10 @@ impl BedrockClient {
                 filtered_message,
             })
             .await;
+            let _ = self
+                .session
+                .flush_reliable(std::time::Duration::from_secs(1))
+                .await;
         }
         self.close().await;
     }
@@ -373,7 +429,7 @@ impl BedrockClient {
 
         let world = player.world();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        server.compute_pool.spawn(move || {
             let mut encoded_payloads = Vec::with_capacity(valid_chunks.len());
             let mut new_blobs = Vec::new();
             for chunk in valid_chunks {
@@ -735,6 +791,16 @@ impl BedrockClient {
                         .await;
                 });
             }
+            SResourcePackChunkRequest::PACKET_ID => {
+                let packet = SResourcePackChunkRequest::read(reader)?;
+                let client = self.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    client
+                        .handle_resource_pack_chunk_request(packet, &server_c)
+                        .await;
+                });
+            }
             SPlayerAuthInput::PACKET_ID => {
                 let packet = SPlayerAuthInput::read(reader)?;
                 self.handle_player_auth_input(player, packet, server);
@@ -753,7 +819,7 @@ impl BedrockClient {
             }
             SInteract::PACKET_ID => {
                 let packet = SInteract::read(reader)?;
-                self.handle_interaction(&packet);
+                self.handle_interaction(player, &packet);
             }
             SContainerClose::PACKET_ID => {
                 let packet = SContainerClose::read(reader)?;
@@ -787,6 +853,22 @@ impl BedrockClient {
                 let _ = SSetPlayerInventoryOptions::read(reader)?;
                 // Ignore for now
             }
+            SCursorItemDrag::PACKET_ID => {
+                let _ = SCursorItemDrag::read(reader)?;
+                // Ignore for now
+            }
+            SStonecutterSetRecipe::PACKET_ID => {
+                let packet = SStonecutterSetRecipe::read(reader)?;
+                self.handle_stonecutter_set_recipe(player, &packet);
+            }
+            SMatchmakingCancel::PACKET_ID => {
+                let _ = SMatchmakingCancel::read(reader)?;
+                // Ignore for now
+            }
+            SRegisterAudioContent::PACKET_ID => {
+                let _ = SRegisterAudioContent::read(reader)?;
+                // Ignore for now
+            }
             SPlayerAction::PACKET_ID => {
                 let packet = SPlayerAction::read(reader)?;
                 self.handle_player_action(player, server, &packet);
@@ -811,19 +893,29 @@ impl BedrockClient {
                 let form_resp = SModalFormResponse::read(reader)?;
                 self.handle_modal_form_response(player, server, form_resp);
             }
-            SLoadingScreen::PACKET_ID => {
-                // Ignore for now
-            }
+            // Ignore for now; movement is client authoritative, so there is no prediction to sync
+            SLoadingScreen::PACKET_ID | SClientMovementPredictionSync::PACKET_ID => {}
             SBlockPickRequest::PACKET_ID => {
                 let packet = SBlockPickRequest::read(reader)?;
                 self.handle_block_pick_request(player, &packet);
             }
+            SBlockActorData::PACKET_ID => {
+                let packet = SBlockActorData::read(reader)?;
+                self.handle_block_actor_data(player, &packet);
+            }
             SRequestAbility::PACKET_ID => {
                 self.handle_request_ability(player, &SRequestAbility::read(reader)?);
+            }
+            NetworkStackLatency::PACKET_ID => {
+                self.handle_network_stack_latency(player, NetworkStackLatency::read(reader)?);
             }
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;
                 self.handle_mob_equipment(server, player, &packet);
+            }
+            SPlayerHotbar::PACKET_ID => {
+                let packet = SPlayerHotbar::read(reader)?;
+                self.handle_player_hotbar(server, player, &packet);
             }
             SPacketViolationWarning::PACKET_ID => {
                 let warning = SPacketViolationWarning::read(reader)?;
@@ -904,8 +996,7 @@ impl BedrockClient {
         if self.close_token.is_cancelled() {
             None
         } else {
-            let _guard = self.rt_handle.enter();
-            Some(self.tasks.spawn(task))
+            Some(self.tasks.spawn_on(task, &self.rt_handle))
         }
     }
 }

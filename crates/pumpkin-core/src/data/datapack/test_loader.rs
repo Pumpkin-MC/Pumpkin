@@ -18,6 +18,13 @@ pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 pub fn load_embedded_test_instances(registry: &mut TestInstanceRegistry) -> usize {
     let before = registry.len();
 
+    crate::server::builtin_game_tests::ensure_builtin_game_tests_registered();
+    for (id, instance) in pumpkin_gametest::registered_test_definitions() {
+        if instance.is_valid() {
+            registry.insert(id, instance);
+        }
+    }
+
     for &id in pumpkin_world::test_instance::all_names() {
         let Some(content) = pumpkin_world::test_instance::json(id) else {
             warn!("Embedded test instance '{id}' has no JSON payload");

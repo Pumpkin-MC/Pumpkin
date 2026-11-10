@@ -34,8 +34,6 @@ tokio = { workspace = true, features = [
     "net",
     "rt-multi-thread",
     "sync",
-    "io-std",
-    "signal",
     "fs",
     "io-util",
     "time",
@@ -54,8 +52,6 @@ colored.workspace = true
 bytes.workspace = true
 
 rand.workspace = true
-
-num-bigint.workspace = true
 
 # Console line reading
 rustyline.workspace = true
@@ -96,19 +92,17 @@ tokio-util = { workspace = true, features = ["rt"] }
 # System details & Rustc version
 libc = { workspace = true }
 sysinfo.workspace = true
-rustc_version_runtime.workspace = true
 
 flate2.workspace = true
 
-axum.workspace = true
+axum = { workspace = true, features = ["ws"] }
+subtle.workspace = true
 webrtc.workspace = true
 async-trait.workspace = true
 
-ordered-float.workspace = true
-
 
 bitflags = { workspace = true }
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+png = { version = "0.18.1", default-features = false }
 
 indexmap.workspace = true
 xxhash-rust.workspace = true

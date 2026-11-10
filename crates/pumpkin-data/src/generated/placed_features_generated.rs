@@ -5,10 +5,10 @@ fn build_placed_features()
     use crate::block::BlockStateCodec;
     use crate::generation::block_predicate::{
         AllOfBlockPredicate, AnyOfBlockPredicate, BlockPredicate, HasSturdyFacePredicate,
-        InsideWorldBoundsBlockPredicate, MatchingBlockTagPredicate, MatchingBlocksBlockPredicate,
-        MatchingBlocksWrapper, MatchingFluidsBlockPredicate, NotBlockPredicate,
-        OffsetBlocksBlockPredicate, ReplaceableBlockPredicate, SolidBlockPredicate,
-        WouldSurviveBlockPredicate,
+        HeightRangeBlockPredicate, InsideWorldBoundsBlockPredicate, MatchingBlockTagPredicate,
+        MatchingBlocksBlockPredicate, MatchingBlocksWrapper, MatchingFluidsBlockPredicate,
+        NotBlockPredicate, OffsetBlocksBlockPredicate, ReplaceableBlockPredicate,
+        SolidBlockPredicate, WouldSurviveBlockPredicate,
     };
     use crate::generation::height_provider::{
         HeightProvider, TrapezoidHeightProvider, UniformHeightProvider,
@@ -22,7 +22,7 @@ fn build_placed_features()
         UniformIntProvider, WeightedEntry, WeightedListIntProvider,
     };
     use pumpkin_util::math::vector3::Vector3;
-    use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+    use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, RelativeToSeaLevel, YOffset};
     let mut map = std::collections::HashMap::new();
     map.insert(
         pumpkin_data::placed_feature::PlacedFeature::Acacia,
@@ -413,21 +413,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -457,21 +458,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -498,21 +500,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -542,21 +545,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -585,21 +589,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -626,21 +631,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -680,9 +686,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -786,21 +793,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -908,9 +916,10 @@ fn build_placed_features()
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -958,9 +967,10 @@ fn build_placed_features()
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloorWg,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -1051,12 +1061,13 @@ fn build_placed_features()
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
                         min_inclusive: 3i32,
                         max_inclusive: 9i32,
                     })),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -1341,21 +1352,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1382,21 +1394,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1426,21 +1439,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1494,21 +1508,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1545,21 +1560,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1591,21 +1607,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1632,21 +1649,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1673,21 +1691,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -1935,9 +1954,10 @@ fn build_placed_features()
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -2265,9 +2285,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2303,9 +2324,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2339,9 +2361,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -2498,21 +2521,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3494,21 +3518,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3604,21 +3629,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3655,21 +3681,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3706,21 +3733,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3757,21 +3785,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(24i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -5i32,
-                            max_inclusive: 5i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -5i32,
+                        max_inclusive: 5i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -5i32,
+                        max_inclusive: 5i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3790,21 +3819,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(10i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3840,21 +3870,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(10i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3890,21 +3921,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(10i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -3943,21 +3975,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -3981,21 +4014,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(4i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4022,21 +4056,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(4i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4063,21 +4098,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(4i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4102,21 +4138,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4141,21 +4178,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4188,21 +4226,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4300,21 +4339,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4400,21 +4440,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4441,21 +4482,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4479,21 +4521,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4520,21 +4563,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4563,21 +4607,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4622,21 +4667,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(16i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4663,21 +4709,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4706,21 +4753,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4747,21 +4795,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4790,21 +4839,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4830,21 +4880,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4869,21 +4920,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -4912,21 +4964,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -4963,21 +5016,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5019,21 +5073,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5075,21 +5130,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5125,21 +5181,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(8i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5174,21 +5231,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5225,21 +5283,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5315,21 +5374,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5404,21 +5464,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5494,21 +5555,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -4i32,
-                            max_inclusive: 4i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -4i32,
+                        max_inclusive: 4i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -5584,21 +5646,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5619,21 +5682,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5658,21 +5722,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5702,21 +5767,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5743,21 +5809,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(10i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5899,8 +5966,8 @@ fn build_placed_features()
                         max_inclusive: 5i32,
                     })),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::ClampedNormal(
                         ClampedNormalIntProvider {
                             mean: 0f32,
                             deviation: 3f32,
@@ -5908,12 +5975,20 @@ fn build_placed_features()
                             max_inclusive: 10i32,
                         },
                     )),
-                    y_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                    y: IntProvider::Object(NormalIntProvider::ClampedNormal(
                         ClampedNormalIntProvider {
                             mean: 0f32,
                             deviation: 0.6f32,
                             min_inclusive: -2i32,
                             max_inclusive: 2i32,
+                        },
+                    )),
+                    z: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                        ClampedNormalIntProvider {
+                            mean: 0f32,
+                            deviation: 3f32,
+                            min_inclusive: -10i32,
+                            max_inclusive: 10i32,
                         },
                     )),
                 }),
@@ -5940,21 +6015,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -5981,21 +6057,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -6022,21 +6099,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -6063,21 +6141,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -6104,21 +6183,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(96i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -6198,9 +6278,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6239,9 +6320,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6309,21 +6391,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6349,21 +6432,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(32i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6389,21 +6473,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6429,21 +6514,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(40i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6469,21 +6555,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(80i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6509,21 +6596,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6549,21 +6637,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(48i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6589,21 +6678,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6629,21 +6719,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(80i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: 0i32,
-                            max_inclusive: 0i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: 0i32,
+                        max_inclusive: 0i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::OceanFloor,
@@ -6702,9 +6793,10 @@ fn build_placed_features()
                     )),
                     max_steps: 12i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
@@ -6958,9 +7050,10 @@ fn build_placed_features()
                     allowed_search_condition: None,
                     max_steps: 32i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -6998,8 +7091,8 @@ fn build_placed_features()
                         max_inclusive: 5i32,
                     })),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::ClampedNormal(
                         ClampedNormalIntProvider {
                             mean: 0f32,
                             deviation: 3f32,
@@ -7007,12 +7100,20 @@ fn build_placed_features()
                             max_inclusive: 10i32,
                         },
                     )),
-                    y_spread: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                    y: IntProvider::Object(NormalIntProvider::ClampedNormal(
                         ClampedNormalIntProvider {
                             mean: 0f32,
                             deviation: 0.6f32,
                             min_inclusive: -2i32,
                             max_inclusive: 2i32,
+                        },
+                    )),
+                    z: IntProvider::Object(NormalIntProvider::ClampedNormal(
+                        ClampedNormalIntProvider {
+                            mean: 0f32,
+                            deviation: 3f32,
+                            min_inclusive: -10i32,
+                            max_inclusive: 10i32,
                         },
                     )),
                 }),
@@ -7945,21 +8046,24 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Uniform(
-                        UniformIntProvider {
-                            min_inclusive: -8i32,
-                            max_inclusive: 8i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: -8i32,
+                        max_inclusive: 8i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
                         min_inclusive: -4i32,
                         max_inclusive: 4i32,
                     })),
+                    z: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: -8i32,
+                        max_inclusive: 8i32,
+                    })),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(-1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(-1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::EnvironmentScan(EnvironmentScanPlacementModifier {
                     direction_of_search: BlockDirection::Down,
@@ -7974,9 +8078,10 @@ fn build_placed_features()
                     allowed_search_condition: None,
                     max_steps: 32i32,
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Constant(0i32),
-                    y_spread: IntProvider::Constant(1i32),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Constant(0i32),
+                    y: IntProvider::Constant(1i32),
+                    z: IntProvider::Constant(0i32),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
@@ -8102,21 +8207,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -7i32,
-                            max_inclusive: 7i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -3i32,
-                            max_inclusive: 3i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -3i32,
+                        max_inclusive: 3i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -7i32,
+                        max_inclusive: 7i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -8200,21 +8306,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(64i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
@@ -8245,21 +8352,22 @@ fn build_placed_features()
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(8i32),
                 }),
-                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
-                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -6i32,
-                            max_inclusive: 6i32,
-                            plateau: 0i32,
-                        },
-                    )),
-                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
-                        TrapezoidIntProvider {
-                            min_inclusive: -2i32,
-                            max_inclusive: 2i32,
-                            plateau: 0i32,
-                        },
-                    )),
+                PlacementModifier::Offset(OffsetPlacementModifier {
+                    x: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
+                    y: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -2i32,
+                        max_inclusive: 2i32,
+                        plateau: 0i32,
+                    })),
+                    z: IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider {
+                        min_inclusive: -6i32,
+                        max_inclusive: 6i32,
+                        plateau: 0i32,
+                    })),
                 }),
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {

@@ -225,13 +225,34 @@ pub struct StructureTemplate {
 }
 
 /// A single entry in the template's block palette.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct PaletteEntry {
     /// The block name (e.g., "`minecraft:stone_bricks`").
     pub name: String,
 
-    /// Block state properties (e.g., [("facing", "north"), ("lit", "false")]).
-    pub properties: Vec<(String, String)>,
+    /// Block state properties.
+    pub properties: Vec<pumpkin_data::Property>,
+
+    /// Pre-resolved unrotated/unmirrored block state ID, if known.
+    pub state_id: Option<pumpkin_data::BlockStateId>,
+}
+
+impl PartialEq for PaletteEntry {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Some(a), Some(b)) = (self.state_id, other.state_id) {
+            return a == b;
+        }
+        self.name == other.name && self.properties == other.properties
+    }
+}
+
+impl Eq for PaletteEntry {}
+
+impl std::hash::Hash for PaletteEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.properties.hash(state);
+    }
 }
 
 impl PaletteEntry {
@@ -241,18 +262,40 @@ impl PaletteEntry {
         Self {
             name,
             properties: Vec::new(),
+            state_id: None,
         }
     }
 
     /// Creates a new palette entry with the given properties.
     #[must_use]
-    pub const fn with_properties(name: String, properties: Vec<(String, String)>) -> Self {
-        Self { name, properties }
+    pub const fn with_properties(name: String, properties: Vec<pumpkin_data::Property>) -> Self {
+        Self {
+            name,
+            properties,
+            state_id: None,
+        }
+    }
+
+    /// Creates a palette entry from a pre-parsed static palette entry.
+    #[must_use]
+    pub fn from_static(entry: &pumpkin_data::structure_template::StaticPaletteEntry) -> Self {
+        Self {
+            name: entry.name.to_string(),
+            properties: entry.properties.to_vec(),
+            state_id: Some(entry.state_id),
+        }
     }
 
     /// Parses a block state string (e.g. "`minecraft:oak_log`[axis=x]") into a palette entry.
     #[must_use]
     pub fn from_string(s: &str) -> Self {
+        if s == "minecraft:air" || s == "air" {
+            return Self {
+                name: s.to_string(),
+                properties: Vec::new(),
+                state_id: Some(pumpkin_data::Block::AIR.default_state.id),
+            };
+        }
         s.find('[').map_or_else(
             || Self::new(s.to_string()),
             |bracket_pos| {
@@ -263,12 +306,16 @@ impl PaletteEntry {
                     .split(',')
                     .filter_map(|p| {
                         let mut parts = p.split('=');
-                        let key = parts.next()?.trim().to_string();
-                        let value = parts.next()?.trim().to_string();
-                        Some((key, value))
+                        let key = parts.next()?.trim();
+                        let value = parts.next()?.trim();
+                        pumpkin_data::Property::from_str_pair(key, value)
                     })
                     .collect();
-                Self { name, properties }
+                Self {
+                    name,
+                    properties,
+                    state_id: None,
+                }
             },
         )
     }
@@ -302,6 +349,7 @@ impl PaletteEntry {
         Self {
             name: self.name.clone(),
             properties,
+            state_id: None,
         }
     }
 
@@ -312,8 +360,8 @@ impl PaletteEntry {
         compound.put_string("id", self.name.clone());
         if !self.properties.is_empty() {
             let mut props = NbtCompound::new();
-            for (k, v) in &self.properties {
-                props.put_string(k, v.clone());
+            for p in &self.properties {
+                props.put_string(p.key_str(), p.value_str().to_string());
             }
             compound.put_compound("properties", props);
         }
@@ -326,10 +374,11 @@ impl PaletteEntry {
         let name = entry_compound
             .get_string("id")
             .or_else(|| entry_compound.get_string("Name"))
+            .or_else(|| entry_compound.get_string(""))
             .ok_or(TemplateError::MissingField("palette.id"))?
             .to_string();
 
-        let properties: Vec<(String, String)> = entry_compound
+        let properties: Vec<pumpkin_data::Property> = entry_compound
             .get_compound("properties")
             .or_else(|| entry_compound.get_compound("Properties"))
             .map_or_else(Vec::new, |props_compound| {
@@ -338,7 +387,7 @@ impl PaletteEntry {
                     .iter()
                     .filter_map(|(key, value)| {
                         if let NbtTag::String(v) = value {
-                            Some((key.to_string(), v.to_string()))
+                            pumpkin_data::Property::from_str_pair(key, v)
                         } else {
                             None
                         }
@@ -346,7 +395,11 @@ impl PaletteEntry {
                     .collect()
             });
 
-        Ok(Self { name, properties })
+        Ok(Self {
+            name,
+            properties,
+            state_id: None,
+        })
     }
 }
 
@@ -918,18 +971,21 @@ impl StructureTemplate {
 
     #[must_use]
     pub fn get_default_joint_type(state: &PaletteEntry) -> JigsawJointType {
-        if let Some((_, orientation)) = state.properties.iter().find(|(k, _)| k == "orientation") {
-            let front = orientation
-                .split('_')
-                .next()
-                .unwrap_or(orientation.as_str());
-            match front {
-                "north" | "south" | "east" | "west" => JigsawJointType::Aligned,
+        use pumpkin_data::block_properties::{Orientation, Property};
+        state
+            .properties
+            .iter()
+            .find_map(|p| match p {
+                Property::Orientation(o) => Some(*o),
+                _ => None,
+            })
+            .map_or(JigsawJointType::Rollable, |orientation| match orientation {
+                Orientation::NorthUp
+                | Orientation::SouthUp
+                | Orientation::EastUp
+                | Orientation::WestUp => JigsawJointType::Aligned,
                 _ => JigsawJointType::Rollable,
-            }
-        } else {
-            JigsawJointType::Rollable
-        }
+            })
     }
 
     /// Loads a structure template from gzipped NBT bytes.
@@ -942,6 +998,82 @@ impl StructureTemplate {
     pub fn from_nbt_compound(compound: &NbtCompound) -> Result<Self, TemplateError> {
         let mut template = Self::default();
         template.load(compound)?;
+        Ok(template)
+    }
+
+    /// Loads a structure template from a pre-parsed static template definition.
+    pub fn from_static(
+        static_template: &pumpkin_data::structure_template::StaticStructureTemplate,
+    ) -> Result<Self, TemplateError> {
+        let size = Vector3::new(
+            static_template.size[0],
+            static_template.size[1],
+            static_template.size[2],
+        );
+        let author = static_template.author.to_string();
+
+        let mut entity_info_list = Vec::with_capacity(static_template.entities.len());
+        for e in static_template.entities {
+            let mut cursor = Cursor::new(e.nbt);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map(|n| n.root_tag)
+                .unwrap_or_default();
+            entity_info_list.push(StructureEntityInfo::new(
+                Vector3::new(e.pos[0], e.pos[1], e.pos[2]),
+                Vector3::new(e.block_pos[0], e.block_pos[1], e.block_pos[2]),
+                nbt,
+            ));
+        }
+
+        let mut block_entities_map =
+            std::collections::HashMap::with_capacity(static_template.block_entities.len());
+        for be in static_template.block_entities {
+            let mut cursor = Cursor::new(be.nbt);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map(|n| n.root_tag)
+                .unwrap_or_default();
+            block_entities_map.insert(be.pos, nbt);
+        }
+
+        let block_count = static_template.packed_blocks.len() / 4;
+        let mut palettes = Vec::with_capacity(static_template.palettes.len());
+
+        for static_palette in static_template.palettes {
+            let palette_entries: Vec<PaletteEntry> = static_palette
+                .iter()
+                .map(PaletteEntry::from_static)
+                .collect();
+
+            let mut block_info_list = Vec::with_capacity(block_count);
+            for chunk in static_template.packed_blocks.as_chunks::<4>().0 {
+                let pos = Vector3::new(chunk[0] as i32, chunk[1] as i32, chunk[2] as i32);
+                let state_idx = chunk[3] as usize;
+                let state = if state_idx < palette_entries.len() {
+                    palette_entries[state_idx].clone()
+                } else {
+                    PaletteEntry::new("minecraft:air".to_string())
+                };
+                let nbt = block_entities_map.get(&[pos.x, pos.y, pos.z]).cloned();
+                block_info_list.push(StructureBlockInfo::new(pos, state, nbt));
+            }
+            palettes.push(Palette::new(block_info_list));
+        }
+
+        let mut template = Self {
+            palettes,
+            entity_info_list,
+            size,
+            author,
+            name: None,
+            palette: Vec::new(),
+            blocks: Vec::new(),
+            entities: Vec::new(),
+            jigsaw_blocks_cache: OnceLock::new(),
+        };
+
+        template.sync_legacy_fields();
         Ok(template)
     }
 
@@ -1276,7 +1408,7 @@ impl StructureTemplate {
         ];
         tag.put_list(Self::SIZE_TAG, size_tags);
 
-        tag.put_int("DataVersion", 4189);
+        tag.put_int("DataVersion", crate::CURRENT_MC_DATA_VERSION);
 
         tag
     }
@@ -1338,6 +1470,8 @@ impl StructureTemplate {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_data::block_properties::{Facing, Half, Property};
+
     use super::*;
 
     #[test]
@@ -1349,8 +1483,8 @@ mod tests {
         let entry_with_props = PaletteEntry::with_properties(
             "minecraft:oak_stairs".to_string(),
             vec![
-                ("facing".to_string(), "north".to_string()),
-                ("half".to_string(), "bottom".to_string()),
+                Property::Facing(Facing::North),
+                Property::Half(Half::Bottom),
             ],
         );
         assert_eq!(entry_with_props.properties.len(), 2);

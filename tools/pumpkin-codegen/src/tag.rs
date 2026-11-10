@@ -331,11 +331,12 @@ pub(crate) fn build() -> TokenStream {
         entity_id_map.insert(format!("minecraft:{name}"), entity.id);
     }
 
-    let game_events: Vec<String> =
+    let game_events: Vec<crate::game_event::GameEvent> =
         serde_json::from_str(&fs::read_to_string("../../assets/game_event.json").unwrap())
             .expect("Failed to parse game_event.json");
     let mut game_event_id_map: BTreeMap<String, u16> = BTreeMap::new();
-    for (i, name) in game_events.iter().enumerate() {
+    for (i, event) in game_events.iter().enumerate() {
+        let name = &event.name;
         game_event_id_map.insert(name.clone(), i as u16);
         game_event_id_map.insert(format!("minecraft:{name}"), i as u16);
     }
@@ -353,34 +354,10 @@ pub(crate) fn build() -> TokenStream {
         potion_id_map.insert(format!("minecraft:{name}"), u16::from(potion.id));
     }
 
-    const POI_TYPES: &[&str] = &[
-        "armorer",
-        "butcher",
-        "cartographer",
-        "cleric",
-        "farmer",
-        "fisherman",
-        "fletcher",
-        "leatherworker",
-        "librarian",
-        "mason",
-        "shepherd",
-        "toolsmith",
-        "weaponsmith",
-        "home",
-        "meeting",
-        "beehive",
-        "bee_nest",
-        "nether_portal",
-        "lodestone",
-        "lightning_rod",
-        "trial_spawner",
-        "vault",
-    ];
     let mut poi_id_map: BTreeMap<String, u16> = BTreeMap::new();
-    for (i, &name) in POI_TYPES.iter().enumerate() {
-        poi_id_map.insert(name.to_string(), i as u16);
-        poi_id_map.insert(format!("minecraft:{name}"), i as u16);
+    for (name, definition) in crate::poi_type::read_poi_types() {
+        poi_id_map.insert(name.clone(), u16::from(definition.id()));
+        poi_id_map.insert(format!("minecraft:{name}"), u16::from(definition.id()));
     }
 
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();

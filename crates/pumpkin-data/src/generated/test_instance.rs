@@ -10,7 +10,7 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
             "../../../../assets/datapack/data/minecraft/test_instance/always_pass.json"
         )),
         "pumpkin:creeper_should_run_from_cat" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test-example/data/pumpkin/test_instance/creeper_should_run_from_cat.json"
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/creeper_should_run_from_cat.json"
         )),
         "pumpkin:summon_command_regression" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/summon_command_regression.json"

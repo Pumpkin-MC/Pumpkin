@@ -27,7 +27,7 @@ interface block-entity {
         get-size: func() -> u32;
         is-empty: func() -> bool;
         get-stack: func(slot: u32) -> option<item-stack>;
-        set-stack: func(slot: u32, stack: option<item-stack>);
+        set-stack: async func(slot: u32, stack: option<item-stack>);
         remove-stack: func(slot: u32) -> option<item-stack>;
         clear: func();
     }

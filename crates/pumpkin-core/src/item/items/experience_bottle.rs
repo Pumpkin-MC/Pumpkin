@@ -1,10 +1,20 @@
+use rand::RngExt;
 use std::any::Any;
+use std::sync::Arc;
 
-use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
+use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
+use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_util::Hand;
+
+const ROLL: f32 = -20.0;
+const POWER: f32 = 0.7;
+const DIVERGENCE: f32 = 1.0;
 
 pub struct ExperienceBottleItem;
 
@@ -15,21 +25,36 @@ impl ItemMetadata for ExperienceBottleItem {
 }
 
 impl ItemBehaviour for ExperienceBottleItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
+
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
-        let pos = player.eye_position();
-        world.play_sound(
+        let pos = player.position();
+        world.play_sound_fine(
             Sound::EntityExperienceBottleThrow,
-            SoundCategory::Players,
+            SoundCategory::Neutral,
             &pos,
+            0.5,
+            0.4 / (rand::rng().random::<f32>() * 0.4 + 0.8),
         );
 
-        let amount = (rand::random::<u32>() % 9 + 3) as u32; // 3..=11 exp
-        ExperienceOrbEntity::spawn(&world, pos, amount);
+        let inventory = player.inventory();
+        let mut stack = inventory.get_stack_in_hand(hand);
+        let entity = Entity::new(world.clone(), pos, &EntityType::EXPERIENCE_BOTTLE);
+        let bottle = ExperienceBottleEntity::new_shot(entity, player.get_entity());
+        bottle.set_item_stack(stack.copy_with_count(1));
 
-        let mut held = player.inventory().held_item();
-        held.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory().set_held_item(held);
+        bottle
+            .thrown
+            .set_velocity_from(pitch, yaw, ROLL, POWER, DIVERGENCE);
+        world.spawn_entity(Arc::new(bottle));
+
+        stack.decrement_unless_creative(player.gamemode.load(), 1);
+        inventory.set_stack_in_hand(hand, stack);
+        player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -5,15 +5,14 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
+use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_util::Hand;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-
-use crate::world::World;
 
 pub struct BoatItem;
 
@@ -91,45 +90,31 @@ impl ItemMetadata for BoatItem {
 }
 
 impl ItemBehaviour for BoatItem {
-    /// Vanilla: `BoatItem.use()` - raycasts to find placement position
     fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_hand(item, player, yaw, pitch, Hand::Right);
+    }
+
+    /// Vanilla: `BoatItem.use()` - raycasts to find placement position
+    fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
         let world = player.world();
-        let (start_pos, end_pos) = self.get_start_and_end_pos(player);
+        let (start_pos, end_pos) = self.get_start_and_end_pos_with_rotation(player, yaw, pitch);
 
-        // Vanilla: raycast with FluidHandling.ANY - stops on water/lava surface or solid blocks
-        let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
-            let state_id = world_inner.get_block_state_id(pos);
-
-            // Air doesn't stop the raycast
-            if state_id == Block::AIR.default_state.id {
-                return false;
-            }
-
-            // Check if it's a fluid - stop on any fluid (FluidHandling.ANY in vanilla)
-            if Fluid::from_state_id(state_id).is_some() {
-                return true;
-            }
-
-            // Stop on solid blocks
-            true
-        };
-
-        let Some((hit_pos, _direction)) = world.raycast(start_pos, end_pos, checker) else {
+        // Vanilla: BoatItem.use() clips with FluidHandling.ANY and Block.OUTLINE
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            start_pos,
+            end_pos,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::Any,
+        ));
+        if hit.is_miss {
             return;
-        };
+        }
 
-        // Calculate hit position - center of the block top or water surface
-        // TODO: Vanilla uses exact raycast intersection point (hitResult.getPos()),
-        // Pumpkin's raycast only returns block positions.
-        let hit_vec = Vector3::new(
-            f64::from(hit_pos.0.x) + 0.5,
-            f64::from(hit_pos.0.y) + 1.0,
-            f64::from(hit_pos.0.z) + 0.5,
-        );
+        let hit_vec = hit.location;
 
         // Vanilla: Check for entities in the path that would block placement
         // Get player's rotation vector stretched by 5.0 and expanded by 1.0
-        let (yaw, pitch) = player.rotation();
         let rotation_vec =
             Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)).multiply(5.0, 5.0, 5.0);
         let player_entity = player.get_entity().bounding_box.load();
@@ -139,6 +124,9 @@ impl ItemBehaviour for BoatItem {
         let player_eye_pos = player.eye_position();
 
         for entity in &entities {
+            if entity.get_entity().entity_id == player.entity_id() {
+                continue;
+            }
             // Vanilla: EntityPredicates.CAN_HIT = !isSpectator() && canHit()
             if entity.is_spectator() || !entity.can_hit() {
                 continue;
@@ -163,8 +151,18 @@ impl ItemBehaviour for BoatItem {
             return;
         }
 
-        // Check no entities occupy the space
-        if !world.get_entities_at_box(&boat_box).is_empty() {
+        // Check no collidable entities or other players occupy the space
+        if world.get_entities_at_box(&boat_box).iter().any(|entity| {
+            let ent = entity.get_entity();
+            ent.entity_id != player.entity_id()
+                && ent.entity_type != &EntityType::ITEM
+                && ent.entity_type != &EntityType::EXPERIENCE_ORB
+                && (entity.is_pushable() || entity.can_hit())
+        }) || world
+            .get_players_at_box(&boat_box)
+            .iter()
+            .any(|p| p.entity_id() != player.entity_id() && !p.is_spectator())
+        {
             return;
         }
 
@@ -172,30 +170,23 @@ impl ItemBehaviour for BoatItem {
         let entity = Entity::new(world.clone(), hit_vec, entity_type);
 
         // Set yaw to player's yaw
-        let (player_yaw, _) = player.rotation();
-        entity.set_rotation(player_yaw, 0.0);
+        entity.set_rotation(yaw, 0.0);
 
         let boat_entity = Arc::new(BoatEntity::new(entity));
         world.spawn_entity(boat_entity);
+        world.emit_game_event(GameEvent::EntityPlace.name(), hit_vec);
 
-        let mut main_hand = player.inventory.held_item();
-        let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
-            main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory.set_held_item(main_hand);
-            true
-        } else {
-            false
-        };
-
-        if !consumed {
-            let mut off_hand = player.inventory.off_hand_item();
-            if !off_hand.is_empty() && off_hand.item.id == item.id {
-                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                player
-                    .inventory
-                    .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
-            }
+        let mut stack = player.inventory.get_stack_in_hand(hand);
+        if !stack.is_empty() && stack.item.id == item.id {
+            stack.decrement_unless_creative(player.gamemode.load(), 1);
+            player.inventory.set_stack_in_hand(hand, stack.clone());
+            let slot_index = match hand {
+                Hand::Right => player.inventory.get_selected_slot() as usize,
+                Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+            };
+            player.sync_hand_slot(slot_index, stack);
         }
+        player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

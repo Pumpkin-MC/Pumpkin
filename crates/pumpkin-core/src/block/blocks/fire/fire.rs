@@ -141,13 +141,19 @@ impl FireBlock {
     }
 
     fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u8) {
-        let block = world.get_block(pos);
+        let state_id = world.get_block_state_id(pos);
+        let block = state_id.to_block();
+        if block.is_waterlogged(state_id) {
+            return;
+        }
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
             if let Some(server) = world.server.upgrade() {
                 let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
+                    world: world.clone(),
                     igniting_block: &Block::FIRE,
                     block,
+                    block_pos: *pos,
                     cancelled: false,
                 };
                 server.plugin_manager.fire_blocking(&server, &mut event);
@@ -221,7 +227,11 @@ impl BlockBehaviour for FireBlock {
             player: None,
             use_item_on: None,
         }) {
-            self.get_state_for_position(args.world, args.block, args.position)
+            let age = FireProperties::from_state_id(args.state_id).age;
+            let state_id = self.get_state_for_position(args.world, args.block, args.position);
+            let mut props = FireProperties::from_state_id(state_id);
+            props.age = age;
+            props.to_state_id(args.block)
         } else {
             Block::AIR.default_state.id
         }

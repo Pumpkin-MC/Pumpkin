@@ -6,13 +6,17 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     damage::DamageType,
     data_component_impl::{EquipmentSlot, EquipmentType},
-    entity::EntityStatus,
+    entity::{EntityStatus, EntityType},
     item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    tag::{self, Taggable},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use pumpkin_util::math::{
+    boundingbox::EntityDimensions, euler_angle::EulerAngle, vector3::Vector3,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PackedRotation {
@@ -145,6 +149,20 @@ impl ArmorStandEntity {
             current & !(bit_field as u8)
         };
         self.armor_stand_flags.store(new_value, Ordering::Relaxed);
+        self.update_dimensions();
+    }
+
+    /// Vanilla `ArmorStand.getDefaultDimensions`: a marker has no size, a small stand half.
+    fn update_dimensions(&self) {
+        let dimensions = if self.is_marker() {
+            EntityDimensions::new(0.0, 0.0, 0.0)
+        } else if self.is_small() {
+            let size = Entity::type_dimensions(&EntityType::ARMOR_STAND).scale(0.5);
+            EntityDimensions::new(size.width, size.height, 0.9875)
+        } else {
+            Entity::type_dimensions(&EntityType::ARMOR_STAND)
+        };
+        self.living_entity.entity.set_default_dimensions(dimensions);
     }
 
     pub fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
@@ -230,6 +248,10 @@ impl ArmorStandEntity {
 }
 
 impl EntityBase for ArmorStandEntity {
+    fn can_be_seen_by_anyone(&self) -> bool {
+        !self.is_invisible() && !self.is_marker()
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
         // ...
@@ -287,6 +309,7 @@ impl EntityBase for ArmorStandEntity {
         }
 
         self.armor_stand_flags.store(flags, Ordering::Relaxed);
+        self.update_dimensions();
 
         if let Some(pose_tag) = nbt.get("Pose") {
             let packed: PackedRotation = pose_tag.clone().into();
@@ -328,28 +351,22 @@ impl EntityBase for ArmorStandEntity {
             game_rules.mob_griefing
         };
 
-        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
+        // Vanilla: only mob attackers are stopped by `mobGriefing`.
+        if !mob_griefing_gamerule && cause.is_some_and(|cause| cause.get_mob().is_some()) {
             return false;
         }
 
-        let bypasses_invulnerability =
-            damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
-
-        if bypasses_invulnerability {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY) {
             entity.remove();
             return false;
         }
 
-        if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+        if entity.is_invulnerable_to(&damage_type, cause) || self.is_invisible() || self.is_marker()
+        {
             return false;
         }
 
-        let is_explosion = damage_type == DamageType::FIREWORKS
-            || damage_type == DamageType::EXPLOSION
-            || damage_type == DamageType::PLAYER_EXPLOSION
-            || damage_type == DamageType::BAD_RESPAWN_POINT;
-
-        if is_explosion {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
             Self::on_break(entity);
             entity.remove();
             return false;
@@ -358,16 +375,9 @@ impl EntityBase for ArmorStandEntity {
         // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
         // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
 
-        let can_break = damage_type == DamageType::PLAYER_EXPLOSION
-            || damage_type == DamageType::PLAYER_ATTACK
-            || damage_type == DamageType::SPEAR
-            || damage_type == DamageType::MACE_SMASH;
-
-        let always_kills = damage_type == DamageType::ARROW
-            || damage_type == DamageType::TRIDENT
-            || damage_type == DamageType::FIREBALL
-            || damage_type == DamageType::WITHER_SKULL
-            || damage_type == DamageType::WIND_CHARGE;
+        let can_break = damage_type.has_tag(&tag::DamageType::MINECRAFT_CAN_BREAK_ARMOR_STAND);
+        let always_kills =
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_KILLS_ARMOR_STANDS);
 
         if !can_break && !always_kills {
             return false;
@@ -397,7 +407,7 @@ impl EntityBase for ArmorStandEntity {
             .query_gametime();
 
         if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
-            world.send_entity_status(entity, EntityStatus::ArmorstandWobble, None);
+            world.send_entity_status(entity, EntityStatus::ArmorstandWobble, ActorEventID::None);
             world.play_sound(
                 Sound::EntityArmorStandHit,
                 SoundCategory::Neutral,

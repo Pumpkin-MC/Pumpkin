@@ -26,7 +26,7 @@ const PLUGIN_NOT_FOUND_ERROR_TYPE: LiteralCommandErrorType =
 const DESCRIPTION: &str = "Print a help message.";
 const PERMISSION: &str = "minecraft:command.help";
 
-const ARG: &str = "commandOrPage";
+const ARG: &str = "command";
 
 const COMMANDS_PER_PAGE: usize = 7;
 
@@ -362,11 +362,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Allow,
     ));
 
-    dispatcher.register_with_aliases(
+    dispatcher.register(
         command("help", DESCRIPTION)
             .requires(PERMISSION)
             .then(argument(ARG, HelpArgumentType).executes(HelpCommandExecutor))
             .executes(HelpCommandExecutor),
-        &["h", "?"],
     );
 }
