@@ -4520,6 +4520,11 @@ impl Player {
 
                 self.set_client_loaded(false);
                 self.is_changing_dimension.store(true, Ordering::Relaxed);
+                // The client rebuilds its player on respawn, so health, hunger
+                // and experience go out again once the client has loaded.
+                self.last_sent_health.store(-1, Ordering::Relaxed);
+                self.last_sent_food.store(u8::MAX, Ordering::Relaxed);
+                self.last_sent_xp.store(-1, Ordering::Relaxed);
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
                 };
@@ -4608,8 +4613,6 @@ impl Player {
                 ));
 
                 self.on_screen_handler_opened(&self.player_screen_handler);
-
-                self.send_health();
 
                 new_world.send_world_info(&player);
                 new_world.send_center_chunk(&player).await;
