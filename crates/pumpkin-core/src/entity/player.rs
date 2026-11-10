@@ -4633,6 +4633,15 @@ impl Player {
                 let pitch = event.pitch;
                 let new_world = event.new_world;
 
+                // Fired before anything moves, so a cancel leaves the player where they are.
+                let Some((position, yaw, pitch)) =
+                    self.fire_teleport_event(position, Some(yaw), Some(pitch), cause)
+                else {
+                    return;
+                };
+                let yaw = yaw.unwrap_or_else(|| self.living_entity.entity.yaw.load());
+                let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
+
                 self.set_client_loaded(false);
                 self.is_changing_dimension.store(true, Ordering::Relaxed);
                 // The client rebuilds its player on respawn, so health, hunger
@@ -4732,13 +4741,9 @@ impl Player {
                 new_world.send_world_info(&player);
                 new_world.send_center_chunk(&player).await;
 
-                // TODO: a world change fires `PlayerTeleportEvent` here after
-                // `PlayerChangeWorldEvent`, so plugins see two events for one teleport.
-                player.request_teleport_to(position, Some(yaw), Some(pitch), cause);
-                // A cancelled teleport never gets confirmed, so it must not leave the flag set.
-                if player.awaiting_teleport.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none() {
-                    player.is_changing_dimension.store(false, Ordering::Relaxed);
-                }
+                // TODO: a world change fires both `PlayerChangeWorldEvent` and
+                // `PlayerTeleportEvent`, so plugins see two events for one teleport.
+                player.send_teleport(position, Some(yaw), Some(pitch));
 
                 let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
                     player: player.clone(),
@@ -4803,15 +4808,15 @@ impl Player {
         self.request_teleport_to(position, Some(yaw), Some(pitch), TeleportCause::Unknown);
     }
 
-    /// Teleports to `position`. A `None` rotation axis is sent as relative, so
-    /// the client keeps looking where it currently looks.
-    pub fn request_teleport_to(
+    /// Fires `PlayerTeleportEvent` and returns the accepted target, or `None`
+    /// when a plugin cancelled the teleport.
+    fn fire_teleport_event(
         &self,
-        mut position: Vector3<f64>,
-        mut yaw: Option<f32>,
-        mut pitch: Option<f32>,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
         cause: TeleportCause,
-    ) {
+    ) -> Option<(Vector3<f64>, Option<f32>, Option<f32>)> {
         let world = self.world();
         if let Some(server) = world.server.upgrade()
             && server.plugin_manager.has_handlers::<PlayerTeleportEvent>()
@@ -4828,13 +4833,30 @@ impl Player {
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return None;
             }
-            position = event.to;
-            yaw = event.yaw;
-            pitch = event.pitch;
+            return Some((event.to, event.yaw, event.pitch));
         }
+        Some((position, yaw, pitch))
+    }
 
+    /// Teleports to `position`. A `None` rotation axis is sent as relative, so
+    /// the client keeps looking where it currently looks.
+    pub fn request_teleport_to(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        cause: TeleportCause,
+    ) {
+        if let Some((position, yaw, pitch)) = self.fire_teleport_event(position, yaw, pitch, cause)
+        {
+            self.send_teleport(position, yaw, pitch);
+        }
+    }
+
+    /// Moves the player and sends the position packet, without firing an event.
+    fn send_teleport(&self, position: Vector3<f64>, yaw: Option<f32>, pitch: Option<f32>) {
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
         let teleport_id = self.next_teleport_id();
         self.living_entity.entity.set_pos(position);
