@@ -64,12 +64,7 @@ impl JavaClient {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
+        if player.is_awaiting_teleport() {
             return;
         }
         if player.is_movement_locked.load(Ordering::Relaxed) {
@@ -199,12 +194,7 @@ impl JavaClient {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
+        if player.is_awaiting_teleport() {
             return;
         }
         if player.is_movement_locked.load(Ordering::Relaxed) {
@@ -343,7 +333,7 @@ impl JavaClient {
     }
 
     pub fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
-        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
+        let teleport_id = player.next_teleport_id();
         *player
             .awaiting_teleport
             .lock()

@@ -146,12 +146,7 @@ impl EntityBase for EnderPearlEntity {
             }
 
             // In vanilla, teleport handles everything including sound
-            owner.teleport(
-                teleport_pos,
-                Some(owner.get_entity().yaw.load()),
-                Some(owner.get_entity().pitch.load()),
-                world.clone(),
-            );
+            owner.teleport(teleport_pos, None, None, world.clone());
 
             // Play teleport sound at new position
             world.play_sound(
