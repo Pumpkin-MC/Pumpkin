@@ -294,7 +294,7 @@ impl CommandExecutor for RunPlacedExecutor {
             else {
                 continue;
             };
-            let (test_id, rotation) = {
+            let (test_id, rotation, ignore_entities) = {
                 let data = controller
                     .data
                     .lock()
@@ -306,6 +306,8 @@ impl CommandExecutor for RunPlacedExecutor {
                     data.and_then(|data| data.get_string("rotation"))
                         .and_then(TestInstanceRotation::from_serialized_name)
                         .unwrap_or_default(),
+                    data.and_then(|data| data.get_bool("ignore_entities"))
+                        .unwrap_or(false),
                 )
             };
             let Some(test_id) = test_id else {
@@ -339,7 +341,8 @@ impl CommandExecutor for RunPlacedExecutor {
                     rotation_steps,
                     GameTestRetryOptions::new(number_of_times, until_failed),
                 )
-                .with_y(position.0.y),
+                .with_y(position.0.y)
+                .with_ignore_entities(ignore_entities),
             );
         }
         if requests.is_empty() {
@@ -375,7 +378,6 @@ struct ResetExecutor(RunPlacedMode);
 impl CommandExecutor for ResetExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let positions = selected_placed_positions(context, self.0)?;
-        stop_game_tests(context.server());
         let world = context.world().clone();
         let positions: Vec<_> = positions
             .into_iter()
@@ -409,13 +411,39 @@ impl CommandExecutor for ResetExecutor {
             return Err(RESET_NO_TESTS.create_without_context());
         }
         let count = positions.len() as i32;
+        let controllers: Vec<_> = positions
+            .into_iter()
+            .filter_map(|position| {
+                world.get_block_entity(&position).map(|entity| {
+                    let mut nbt = NbtCompound::new();
+                    entity.write_internal(&mut nbt);
+                    (position, nbt)
+                })
+            })
+            .collect();
+        stop_game_tests(context.server());
         let server = context.server().clone();
         let source = (*context.source).clone();
         server.clone().spawn_task(async move {
             server.clear_running_game_tests().await;
             let mut reset = 0;
-            for position in positions {
-                match reset_test_instance(&server, world.clone(), position).await {
+            let adapter = ServerGameTestWorld::new(world.clone());
+            for (position, nbt) in controllers {
+                let result = async {
+                    if world.get_block_entity(&position).is_none() {
+                        adapter
+                            .set_block_state(
+                                &position,
+                                Block::TEST_INSTANCE_BLOCK.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            )
+                            .await?;
+                        adapter.set_block_entity_nbt(&position, &nbt).await?;
+                    }
+                    reset_test_instance(&server, world.clone(), position).await
+                }
+                .await;
+                match result {
                     Ok(true) => reset += 1,
                     Ok(false) => {}
                     Err(error) => source.send_error(TextComponent::text(error.to_string())),

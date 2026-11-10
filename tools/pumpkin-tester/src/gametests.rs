@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 
 use pumpkin_core::{
     server::{
@@ -16,11 +16,8 @@ use pumpkin_data::{
     dimension::Dimension,
     game_rules::{GameRule, GameRuleValue},
 };
-use pumpkin_gametest::{GameTestReporter, GameTestRunner};
-use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2},
-    text::TextComponent,
-};
+use pumpkin_gametest::{GameTestReporter, GameTestRunner, RecordingGameTestReporter};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 
 const TEST_GRID_SPACING: i32 = 16;
 const TESTS_PER_ROW: i32 = 4;
@@ -32,29 +29,6 @@ const TEST_BASE_Z: i32 = 66;
 const CREEPER_TEST_X: i32 = -64;
 const CREEPER_TEST_Z: i32 = -64;
 const MAX_GAMETEST_TICKS: usize = 500;
-
-#[derive(Default)]
-struct CaptureReporter {
-    messages: StdMutex<Vec<String>>,
-}
-
-impl CaptureReporter {
-    fn snapshot(&self) -> Vec<String> {
-        self.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-    }
-}
-
-impl GameTestReporter for CaptureReporter {
-    fn send_message(&self, message: TextComponent) {
-        self.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(message.get_text());
-    }
-}
 
 #[expect(
     clippy::too_many_lines,
@@ -74,7 +48,7 @@ pub async fn run_gametests(
     ];
     all_tests.extend_from_slice(builtin_game_test_ids());
 
-    let reporter = Arc::new(CaptureReporter::default());
+    let reporter = Arc::new(RecordingGameTestReporter::default());
     let report_sink: Arc<dyn GameTestReporter> = reporter.clone();
     let report = Arc::new(GameTestBatchReport::new(
         report_sink.clone(),
@@ -177,7 +151,7 @@ pub async fn run_gametests(
         )
         .await?;
     }
-    let messages = reporter.snapshot();
+    let messages = reporter.messages();
     for msg in &messages {
         summary_lines.push(format!("  {msg}"));
     }

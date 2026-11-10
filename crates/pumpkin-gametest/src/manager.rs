@@ -21,6 +21,25 @@ pub trait GameTestReporter: Send + Sync {
     fn on_outcome(&self, _outcome: &GameTestOutcome) {}
 }
 
+/// Stores plain-text GameTest messages for later inspection.
+#[derive(Default)]
+pub struct RecordingGameTestReporter {
+    messages: Mutex<Vec<String>>,
+}
+
+impl RecordingGameTestReporter {
+    #[must_use]
+    pub fn messages(&self) -> Vec<String> {
+        self.messages.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+    }
+}
+
+impl GameTestReporter for RecordingGameTestReporter {
+    fn send_message(&self, message: TextComponent) {
+        self.messages.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(message.get_text());
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GameTestRetryOptions {
     number_of_tries: i32,

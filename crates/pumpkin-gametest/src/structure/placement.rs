@@ -1,11 +1,11 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_rotation::Mirror};
 use pumpkin_nbt::{NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
 use crate::error::GameTestResult;
 use crate::model::GameTestRotation;
-use crate::structure::template::GameTestStructureTemplate;
+use crate::structure::template::{GameTestStructureBlock, GameTestStructureTemplate};
 use crate::world::GameTestWorld;
 
 const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
@@ -153,6 +153,24 @@ pub async fn place_structure_with_controller_rotation(
     position: GameTestPosition,
     padding: i32,
 ) -> GameTestResult<TestStructureInstance> {
+    place_structure_with_controller_rotation_and_entities(
+        world, template, test_id, rotation, controller_rotation, position, padding, false,
+    )
+    .await
+}
+
+/// Places a test while retaining the controller's entity setting.
+#[expect(clippy::too_many_arguments, reason = "placement uses the saved controller setting")]
+pub async fn place_structure_with_controller_rotation_and_entities(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    test_id: &str,
+    rotation: GameTestRotation,
+    controller_rotation: GameTestRotation,
+    position: GameTestPosition,
+    padding: i32,
+    ignore_entities: bool,
+) -> GameTestResult<TestStructureInstance> {
     // TestInstanceBlockEntity.getStructurePos offsets the controller by padding and
     // then by STRUCTURE_OFFSET. The controller itself is outside the structure box.
     // Reruns retain the original controller Y instead of querying a heightmap again.
@@ -195,7 +213,7 @@ pub async fn place_structure_with_controller_rotation(
         "rotation",
         controller_rotation.serialized_name().to_string(),
     );
-    data.put_bool("ignore_entities", false);
+    data.put_bool("ignore_entities", ignore_entities);
     data.put_string("status", "cleared".to_string());
 
     let mut test_instance_nbt = NbtCompound::new();
@@ -205,7 +223,7 @@ pub async fn place_structure_with_controller_rotation(
         .set_block_entity_nbt(&test_instance_pos, &test_instance_nbt)
         .await?;
 
-    place_existing_structure(world, template, &placement, padding, false).await?;
+    place_existing_structure(world, template, &placement, padding, ignore_entities).await?;
 
     Ok(placement)
 }
@@ -257,16 +275,7 @@ pub async fn place_existing_structure(
         let state = world.rotate_block_state(block.state, rotation).await?;
         world.set_block_state(&position, state, place_flags).await?;
 
-        if let Some(nbt) = &block.nbt {
-            world.set_block_entity_nbt(&position, nbt).await?;
-        } else if let Some(mode) = block.test_mode {
-            let mut nbt = NbtCompound::new();
-            nbt.put_string("id", "minecraft:test_block".to_string());
-            nbt.put_string("mode", mode.serialized_name().to_string());
-            nbt.put_string("message", String::new());
-            nbt.put_bool("powered", false);
-            world.set_block_entity_nbt(&position, &nbt).await?;
-        }
+        place_structure_block_entity(world, &position, block).await?;
     }
 
     if !ignore_entities {
@@ -284,6 +293,25 @@ pub async fn place_existing_structure(
     Ok(())
 }
 
+/// Installs a template block's NBT or its synthesized test-block data.
+pub async fn place_structure_block_entity(
+    world: &dyn GameTestWorld,
+    position: &BlockPos,
+    block: &GameTestStructureBlock,
+) -> GameTestResult<()> {
+    if let Some(nbt) = &block.nbt {
+        world.set_block_entity_nbt(position, nbt).await?;
+    } else if let Some(mode) = block.test_mode {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:test_block".to_string());
+        nbt.put_string("mode", mode.serialized_name().to_string());
+        nbt.put_string("message", String::new());
+        nbt.put_bool("powered", false);
+        world.set_block_entity_nbt(position, &nbt).await?;
+    }
+    Ok(())
+}
+
 async fn place_entities(
     world: &dyn GameTestWorld,
     template: &GameTestStructureTemplate,
@@ -296,43 +324,7 @@ async fn place_entities(
             entity.block_position[1],
             entity.block_position[2],
         ));
-        let mut nbt = entity.nbt.clone();
-        nbt.put(
-            "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
-        );
-        nbt.child_tags.remove("UUID");
-        if nbt.get("block_pos").is_some() {
-            nbt.put(
-                "block_pos",
-                NbtTag::IntArray(vec![
-                    block_position.0.x,
-                    block_position.0.y,
-                    block_position.0.z,
-                ]),
-            );
-        }
-        let rotation_nbt = nbt.get_list("Rotation").unwrap_or_default();
-        let yaw = rotation_nbt
-            .first()
-            .and_then(NbtTag::extract_float)
-            .unwrap_or(0.0);
-        let pitch = rotation_nbt
-            .get(1)
-            .and_then(NbtTag::extract_float)
-            .unwrap_or(0.0);
-        let yaw_offset = match placement.rotation() {
-            GameTestRotation::None => 0.0,
-            GameTestRotation::Clockwise90 => 90.0,
-            GameTestRotation::Clockwise180 => 180.0,
-            GameTestRotation::Counterclockwise90 => 270.0,
-        };
-        let yaw = pumpkin_util::math::wrap_degrees(yaw) + yaw_offset;
-        nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
+        let nbt = entity.placement_nbt(position, block_position, placement.rotation(), Mirror::None);
         world.spawn_structure_entity(&nbt).await?;
     }
     Ok(())

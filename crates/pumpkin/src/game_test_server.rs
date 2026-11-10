@@ -3,7 +3,7 @@ use std::{
     fs::{self, File},
     io::{self, Read},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Instant,
 };
 
@@ -21,7 +21,7 @@ use pumpkin_core::{
 };
 use pumpkin_data::dimension::Dimension;
 use pumpkin_gametest::{
-    GameTestBatchReport, GameTestReporter, GameTestRetryOptions, GameTestRotation, GameTestRunner,
+    GameTestBatchReport, GameTestReporter, GameTestRetryOptions, GameTestRotation, GameTestRunner, RecordingGameTestReporter,
     VERIFY_TEST_BATCH_SIZE, resource_selector_matches,
 };
 use pumpkin_util::{GameMode, text::TextComponent, world_seed::Seed};
@@ -38,27 +38,18 @@ const MAX_PACK_ENTRIES: usize = 10_000;
 const MAX_PACK_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Default)]
-struct LoggingReporter {
-    messages: Mutex<Vec<String>>,
-}
+struct LoggingReporter(RecordingGameTestReporter);
 
 impl LoggingReporter {
     fn messages(&self) -> Vec<String> {
-        self.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        self.0.messages()
     }
 }
 
 impl GameTestReporter for LoggingReporter {
     fn send_message(&self, message: TextComponent) {
-        let text = message.get_text();
-        info!(target: "pumpkin::gametest", "{text}");
-        self.messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(text);
+        info!(target: "pumpkin::gametest", "{}", message.clone().get_text());
+        self.0.send_message(message);
     }
 }
 
@@ -236,10 +227,28 @@ async fn run_test_rotation(
     let sink = Arc::new(LoggingReporter::default());
     let report = Arc::new(GameTestBatchReport::new(Arc::new(SilentReporter), copies));
     let mut runner = GameTestRunner::new();
-    let (column_spacing, row_spacing) = game_test_grid_spacing(server, test_id, rotation)
-        .await
-        .map_err(|error| format!("Failed to prepare GameTest '{test_id}': {error}"))?;
     let started = Instant::now();
+    let name = if verify {
+        format!("{test_id} (rotation {})", rotation.steps())
+    } else {
+        test_id.to_string()
+    };
+    let (column_spacing, row_spacing) = match game_test_grid_spacing(server, test_id, rotation).await {
+        Ok(spacing) => spacing,
+        Err(error) => {
+            for _ in 0..copies {
+                sink.send_message(TextComponent::text(format!("{test_id} failed! {error}")));
+                report.fail_to_start(test_id, &error, test.required);
+            }
+            return Ok(TestOutcome {
+                name,
+                required: test.required,
+                report,
+                elapsed_ms: started.elapsed().as_millis(),
+                messages: sink.messages(),
+            });
+        }
+    };
 
     for _ in 0..copies {
         let (test_x, test_z) = grid.place(column_spacing, row_spacing)?;
@@ -254,10 +263,13 @@ async fn run_test_rotation(
             report.clone(),
         )
         .with_y(TEST_BASE_Y);
-        let manager = prepare_test_run_with_reporter(server, entry, sink.clone())
-            .await
-            .map_err(|error| format!("Failed to prepare GameTest '{test_id}': {error}"))?;
-        runner.enqueue(manager);
+        match prepare_test_run_with_reporter(server, entry, sink.clone()).await {
+            Ok(manager) => runner.enqueue(manager),
+            Err(error) => {
+                sink.send_message(TextComponent::text(format!("{test_id} failed! {error}")));
+                report.fail_to_start(test_id, &error, test.required);
+            }
+        }
         if runner.active_len() == MAX_TESTS_PER_BATCH {
             run_batch(server, &mut runner).await?;
         }
@@ -265,11 +277,7 @@ async fn run_test_rotation(
     run_batch(server, &mut runner).await?;
 
     Ok(TestOutcome {
-        name: if verify {
-            format!("{test_id} (rotation {})", rotation.steps())
-        } else {
-            test_id.to_string()
-        },
+        name,
         required: test.required,
         report,
         elapsed_ms: started.elapsed().as_millis(),

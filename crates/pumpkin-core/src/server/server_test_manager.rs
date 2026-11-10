@@ -144,6 +144,7 @@ pub struct GameTestRunRequest {
     test_z: i32,
     rotation_steps: i32,
     retry_options: GameTestRetryOptions,
+    ignore_entities: bool,
 }
 
 impl GameTestRunRequest {
@@ -164,12 +165,19 @@ impl GameTestRunRequest {
             test_z,
             rotation_steps,
             retry_options,
+            ignore_entities: false,
         }
     }
 
     #[must_use]
     pub const fn with_y(mut self, test_y: i32) -> Self {
         self.test_y = Some(test_y);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ignore_entities(mut self, ignore_entities: bool) -> Self {
+        self.ignore_entities = ignore_entities;
         self
     }
 }
@@ -183,6 +191,7 @@ pub struct GameTestQueueEntry {
     test_z: i32,
     rotation_steps: i32,
     retry_options: GameTestRetryOptions,
+    ignore_entities: bool,
     report: Arc<GameTestBatchReport>,
 }
 
@@ -251,7 +260,8 @@ impl Server {
                 request.rotation_steps,
                 request.retry_options,
                 report.clone(),
-            );
+            )
+            .with_ignore_entities(request.ignore_entities);
             let entry = if let Some(test_y) = request.test_y {
                 entry.with_y(test_y)
             } else {
@@ -317,6 +327,7 @@ impl GameTestQueueEntry {
             test_z,
             rotation_steps,
             retry_options,
+            ignore_entities: false,
             report,
         }
     }
@@ -324,6 +335,12 @@ impl GameTestQueueEntry {
     #[must_use]
     pub const fn with_y(mut self, test_y: i32) -> Self {
         self.test_y = Some(test_y);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ignore_entities(mut self, ignore_entities: bool) -> Self {
+        self.ignore_entities = ignore_entities;
         self
     }
 }
@@ -912,47 +929,40 @@ pub async fn reset_test_instance(
     let definition = test_id
         .as_deref()
         .and_then(|id| server.datapack_manager.get_test_instance(id));
+    let Some(definition) = definition else {
+        return Ok(false);
+    };
+    let placement = test_instance_placement(server, &world, position)?;
+    let template = load_game_test_template(server, &definition.structure).await?;
     let adapter = ServerGameTestWorld {
         world: world.clone(),
         forced_chunks: StdMutex::new(HashSet::new()),
     };
-    let placement = test_instance_placement(server, &world, position).ok();
     let placed = async {
-        if let Some(placement) = &placement {
-            remove_barriers(
-                &adapter,
-                placement,
-                definition.as_ref().is_some_and(|test| test.sky_access),
-            )
-            .await?;
-        }
+        remove_barriers(&adapter, &placement, definition.sky_access).await?;
         entity.clear_error_markers();
-        if let (Some(definition), Some(placement)) = (&definition, &placement)
-            && let Ok(template) = load_game_test_template(server, &definition.structure).await
-        {
-            place_existing_structure(
-                &adapter,
-                &template,
-                placement,
-                definition.padding,
-                ignore_entities,
-            )
-            .await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        place_existing_structure(
+            &adapter,
+            &template,
+            &placement,
+            definition.padding,
+            ignore_entities,
+        )
+        .await?;
+        Ok(true)
     }
     .await;
-    let mut data = entity
-        .data
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    data.get_or_insert_with(NbtCompound::new)
-        .put_string("status", "cleared".to_string());
-    drop(data);
-    let block_entity: Arc<dyn BlockEntity> = entity;
-    world.update_block_entity(&block_entity);
+    if placed.is_ok() {
+        let mut data = entity
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        data.get_or_insert_with(NbtCompound::new)
+            .put_string("status", "cleared".to_string());
+        drop(data);
+        let block_entity: Arc<dyn BlockEntity> = entity;
+        world.update_block_entity(&block_entity);
+    }
     placed
 }
 
@@ -1087,7 +1097,8 @@ pub async fn prepare_test_run_with_reporter(
         request.test_z,
         extra_rotation,
     )
-    .with_y(request.test_y);
+    .with_y(request.test_y)
+    .with_ignore_entities(request.ignore_entities);
 
     Ok(GameTestManager::new(
         run,

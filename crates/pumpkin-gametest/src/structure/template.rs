@@ -1,9 +1,10 @@
-use pumpkin_data::{Block, BlockStateId};
+use pumpkin_data::{Block, BlockStateId, block_rotation::{Mirror, Rotation}};
 use pumpkin_nbt::{NbtCompound, tag::NbtTag};
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::{CURRENT_MC_DATA_VERSION, CURRENT_MC_VERSION};
 
 use crate::error::{GameTestError, GameTestResult};
+use crate::model::GameTestRotation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TestBlockMode {
@@ -49,6 +50,44 @@ pub struct GameTestStructureEntity {
     pub position: Vector3<f64>,
     pub block_position: [i32; 3],
     pub nbt: NbtCompound,
+}
+
+impl GameTestStructureEntity {
+    /// Returns entity NBT positioned and oriented for a structure placement.
+    #[must_use]
+    pub fn placement_nbt(
+        &self,
+        position: Vector3<f64>,
+        block_position: BlockPos,
+        rotation: GameTestRotation,
+        mirror: Mirror,
+    ) -> NbtCompound {
+        let mut nbt = self.nbt.clone();
+        nbt.put("Pos", NbtTag::List(vec![position.x.into(), position.y.into(), position.z.into()]));
+        nbt.child_tags.remove("UUID");
+        if nbt.get("block_pos").is_some() {
+            nbt.put("block_pos", NbtTag::IntArray(vec![
+                block_position.0.x, block_position.0.y, block_position.0.z,
+            ]));
+        }
+        let angles = nbt.get_list("Rotation").unwrap_or_default();
+        let yaw = angles.first().and_then(NbtTag::extract_float).unwrap_or(0.0);
+        let pitch = angles.get(1).and_then(NbtTag::extract_float).unwrap_or(0.0);
+        let angle = pumpkin_util::math::wrap_degrees(yaw);
+        let mirrored = match mirror {
+            Mirror::None => angle,
+            Mirror::LeftRight => 180.0 - angle,
+            Mirror::FrontBack => -angle,
+        };
+        let offset = match rotation.as_block_rotation() {
+            Rotation::None => 0.0,
+            Rotation::Clockwise90 => 90.0,
+            Rotation::Rotate180 => 180.0,
+            Rotation::CounterClockwise90 => 270.0,
+        };
+        nbt.put("Rotation", NbtTag::List(vec![(mirrored + offset).into(), pitch.into()]));
+        nbt
+    }
 }
 
 #[derive(Clone, Debug)]

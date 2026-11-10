@@ -16,7 +16,7 @@ use crate::model::{GameTestRotation, TestType};
 use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
-    clear_success_entities, encase_structure, place_structure_with_controller_rotation,
+    clear_success_entities, encase_structure, place_structure_with_controller_rotation_and_entities,
     remove_barriers,
 };
 use crate::world::GameTestWorld;
@@ -38,6 +38,7 @@ pub struct GameTestSession {
     test_x: i32,
     test_y: Option<i32>,
     test_z: i32,
+    ignore_entities: bool,
     chunks_loaded: bool,
     started_at: Option<Instant>,
     controller: Arc<Mutex<GameTestControllerState>>,
@@ -95,6 +96,7 @@ impl GameTestSession {
             test_x,
             test_y: None,
             test_z,
+            ignore_entities: false,
             chunks_loaded: false,
             started_at: None,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
@@ -104,6 +106,12 @@ impl GameTestSession {
     #[must_use]
     pub const fn with_y(mut self, test_y: Option<i32>) -> Self {
         self.test_y = test_y;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ignore_entities(mut self, ignore_entities: bool) -> Self {
+        self.ignore_entities = ignore_entities;
         self
     }
 
@@ -125,6 +133,7 @@ impl GameTestSession {
             test_x: self.test_x,
             test_y: self.test_y,
             test_z: self.test_z,
+            ignore_entities: self.ignore_entities,
             chunks_loaded: false,
             started_at: None,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
@@ -169,7 +178,7 @@ impl GameTestSession {
     }
 
     async fn tick_queued(&mut self) {
-        let placement = place_structure_with_controller_rotation(
+        let placement = place_structure_with_controller_rotation_and_entities(
             self.world.as_ref(),
             &self.template,
             self.test.id(),
@@ -177,6 +186,7 @@ impl GameTestSession {
             self.extra_rotation,
             GameTestPosition::new(self.test_x, self.test_y, self.test_z),
             self.test.definition().padding,
+            self.ignore_entities,
         )
         .await;
 
