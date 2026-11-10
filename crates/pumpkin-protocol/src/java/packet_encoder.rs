@@ -150,7 +150,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         result
     }
 
-    /// Encrypts the owned frame in place, then writes the full ciphertext through
+    /// Encrypts the owned frame in place, then writes the resulting ciphertext through
     /// the existing writer. On a write error, the connection must be discarded:
     /// the cipher has already advanced and the frame cannot be retried.
     pub async fn write_frame(&mut self, frame: &mut [u8]) -> Result<(), PacketEncodeError> {
