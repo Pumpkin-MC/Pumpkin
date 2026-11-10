@@ -54,6 +54,26 @@ pub struct WeatherData {
     pub profile: Arc<WeatherProfile>,
     /// The state of each of `profile.phases`.
     pub phases: Vec<PhaseState>,
+    writes: Writes,
+}
+
+/// When parts of a cycle were last written, so a cancelled change keeps what event
+/// handlers set while it was being dispatched.
+#[derive(Clone, Copy, Default)]
+struct Writes {
+    last: u64,
+    /// The whole cycle, written by a weather change.
+    all: u64,
+    clear: u64,
+    rain: u64,
+    thunder: u64,
+}
+
+impl Writes {
+    const fn next(&mut self) -> u64 {
+        self.last += 1;
+        self.last
+    }
 }
 
 /// The weather a world is loaded with.
@@ -86,6 +106,28 @@ impl WeatherData {
         self.phases = vec![PhaseState::default(); profile.phases.len()];
         self.profile = profile;
         self
+    }
+
+    /// Sets the ticks left until the clear sky ends, the rain flips or the thunder flips.
+    pub fn set_durations(
+        &mut self,
+        clear: Option<i32>,
+        rain: Option<i32>,
+        thunder: Option<i32>,
+    ) {
+        let stamp = self.writes.next();
+        if let Some(clear) = clear {
+            self.clear_weather_time = clear.max(0);
+            self.writes.clear = stamp;
+        }
+        if let Some(rain) = rain {
+            self.rain_time = rain.max(0);
+            self.writes.rain = stamp;
+        }
+        if let Some(thunder) = thunder {
+            self.thunder_time = thunder.max(0);
+            self.writes.thunder = stamp;
+        }
     }
 
     /// Copies the weather into `data`, for the world to be saved with it.
@@ -438,43 +480,65 @@ impl WeatherData {
     }
 
     /// Puts a flag back to how it was before a cancelled change. With `timer`, the
-    /// countdown the change set for it is put back too. Anything a handler changed since
-    /// `after` is kept.
-    fn restore(&mut self, flag: Flag, before: &Flags, after: &Flags, timer: bool) {
-        fn put_back<T: PartialEq + Copy>(value: &mut T, before: T, after: T) {
-            if *value == after {
-                *value = before;
-            }
-        }
+    /// countdown the change set for it is put back too. Anything written after `mark`
+    /// is kept, and phases only while the profile is still `profile`.
+    fn restore(
+        &mut self,
+        flag: Flag,
+        before: &Flags,
+        mark: u64,
+        timer: bool,
+        profile: &Arc<WeatherProfile>,
+    ) {
+        let writes = self.writes;
+        let kept = |field: u64| writes.all.max(field) > mark;
         match flag {
             Flag::Rain => {
-                put_back(&mut self.raining, before.raining, after.raining);
-                if timer {
-                    put_back(&mut self.rain_time, before.rain_time, after.rain_time);
+                if !kept(0) {
+                    self.raining = before.raining;
+                }
+                if timer && !kept(writes.rain) {
+                    self.rain_time = before.rain_time;
                 }
             }
             Flag::Thunder => {
-                put_back(&mut self.thundering, before.thundering, after.thundering);
-                if timer {
-                    put_back(
-                        &mut self.thunder_time,
-                        before.thunder_time,
-                        after.thunder_time,
-                    );
+                if !kept(0) {
+                    self.thundering = before.thundering;
+                }
+                if timer && !kept(writes.thunder) {
+                    self.thunder_time = before.thunder_time;
                 }
             }
             Flag::Phase(i) => {
-                let Some(phase) = self.phases.get_mut(i) else {
+                if kept(0) || !Arc::ptr_eq(&self.profile, profile) {
                     return;
-                };
-                if let (Some(&was), Some(&now)) = (before.phases.get(i), after.phases.get(i)) {
-                    put_back(&mut phase.active, was, now);
                 }
-                if let (true, Some(&was), Some(&now)) =
-                    (timer, before.phase_times.get(i), after.phase_times.get(i))
-                {
-                    put_back(&mut phase.time, was, now);
+                if let (Some(phase), Some(&was)) = (self.phases.get_mut(i), before.phases.get(i)) {
+                    phase.active = was;
+                    if let (true, Some(&time)) = (timer, before.phase_times.get(i)) {
+                        phase.time = time;
+                    }
                 }
+            }
+        }
+    }
+
+    /// Puts back every countdown a fully cancelled change set, unless written after `mark`.
+    fn restore_timers(&mut self, before: &Flags, mark: u64, profile: &Arc<WeatherProfile>) {
+        let writes = self.writes;
+        let kept = |field: u64| writes.all.max(field) > mark;
+        if !kept(writes.clear) {
+            self.clear_weather_time = before.clear_weather_time;
+        }
+        if !kept(writes.rain) {
+            self.rain_time = before.rain_time;
+        }
+        if !kept(writes.thunder) {
+            self.thunder_time = before.thunder_time;
+        }
+        if !kept(0) && Arc::ptr_eq(&self.profile, profile) {
+            for (phase, &time) in self.phases.iter_mut().zip(&before.phase_times) {
+                phase.time = time;
             }
         }
     }
@@ -538,19 +602,15 @@ impl World {
         cause: WeatherCause,
         edit: impl FnOnce(&mut WeatherData),
     ) {
-        let (before, after, flips, profile, cancellable) = {
+        let (before, mark, flips, profile, cancellable) = {
             let mut data = self.lock_weather_data();
             let cancellable = cause != WeatherCause::Natural || data.clear_weather_time <= 0;
             let before = data.flags();
             edit(&mut data);
             let flips = data.flips_since(&before);
-            (
-                before,
-                data.flags(),
-                flips,
-                data.profile.clone(),
-                cancellable,
-            )
+            let mark = data.writes.next();
+            data.writes.all = mark;
+            (before, mark, flips, data.profile.clone(), cancellable)
         };
         let Some(server) = self.server.upgrade().filter(|_| !flips.is_empty()) else {
             return;
@@ -584,11 +644,10 @@ impl World {
                 // Natural timers already re-rolled; putting them back would flip again every tick.
                 let timer = cause != WeatherCause::Natural;
                 let mut data = self.lock_weather_data();
-                data.restore(flag, &before, &after, timer);
+                data.restore(flag, &before, mark, timer, &profile);
                 restored += 1;
-                if timer && restored == total && data.clear_weather_time == after.clear_weather_time
-                {
-                    data.clear_weather_time = before.clear_weather_time;
+                if timer && restored == total {
+                    data.restore_timers(&before, mark, &profile);
                 }
             }
         }
@@ -649,16 +708,7 @@ impl World {
         rain: Option<i32>,
         thunder: Option<i32>,
     ) {
-        let mut data = self.lock_weather_data();
-        if let Some(clear) = clear {
-            data.clear_weather_time = clear.max(0);
-        }
-        if let Some(rain) = rain {
-            data.rain_time = rain.max(0);
-        }
-        if let Some(thunder) = thunder {
-            data.thunder_time = thunder.max(0);
-        }
+        self.lock_weather_data().set_durations(clear, rain, thunder);
     }
 
     /// A snapshot of this world's weather.
@@ -922,10 +972,11 @@ mod test {
         data.rain_time = 99;
         data.phases[0].active = true;
         let flips = data.flips_since(&before);
-        let after = data.flags();
+        let mark = data.writes.next();
+        let profile = data.profile.clone();
         assert_eq!(flips.len(), 2);
         for (flag, _) in flips {
-            data.restore(flag, &before, &after, true);
+            data.restore(flag, &before, mark, true, &profile);
         }
         assert!(!data.raining && !data.phases[0].active);
         assert_eq!(data.rain_time, before.rain_time);
@@ -935,14 +986,28 @@ mod test {
     fn restore_keeps_handler_edits() {
         let mut data = WeatherData::default();
         let before = data.flags();
-        data.raining = true;
-        data.rain_time = 99;
-        let after = data.flags();
-        // A handler sets the duration while the event runs.
-        data.rain_time = 500;
-        data.restore(Flag::Rain, &before, &after, true);
+        data.set_parameters(0, 99, true, false);
+        let mark = data.writes.next();
+        let profile = data.profile.clone();
+        // A handler sets the same duration the command did while the event runs.
+        data.set_durations(None, Some(99), None);
+        data.restore(Flag::Rain, &before, mark, true, &profile);
+        data.restore_timers(&before, mark, &profile);
         assert!(!data.raining);
-        assert_eq!(data.rain_time, 500);
+        assert_eq!(data.rain_time, 99);
+        // The thunder countdown the command set is put back.
+        assert_eq!(data.thunder_time, before.thunder_time);
+    }
+
+    #[test]
+    fn restore_skips_phases_of_another_profile() {
+        let mut data = blood_moon();
+        let before = data.flags();
+        data.phases[0].active = true;
+        let mark = data.writes.next();
+        let other = Arc::new(WeatherProfile::clone(&data.profile));
+        data.restore(Flag::Phase(0), &before, mark, true, &other);
+        assert!(data.phases[0].active);
     }
 
     #[test]

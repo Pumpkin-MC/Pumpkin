@@ -160,7 +160,8 @@ impl Level {
         let canonical_dim_folder = canonical_dimension_folder(&root_folder, &dimension);
 
         // Use the 26.3 folder if it exists, or fall back to the old root/`DIM-1`/`DIM1` folders
-        let dim_folder = if canonical_dim_folder.exists() {
+        // Keyed on `region`, since per-dimension data can create the folder on its own.
+        let dim_folder = if canonical_dim_folder.join("region").exists() {
             canonical_dim_folder
         } else if dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name
             && root_folder.join("region").exists()
@@ -1117,5 +1118,20 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn dimension_data_keeps_legacy_terrain() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        let config = LevelConfig::default();
+
+        std::fs::create_dir_all(root.join("DIM-1").join("region")).unwrap();
+        // Saved data, such as an own weather cycle, makes the canonical folder.
+        let data = canonical_dimension_folder(&root, &Dimension::THE_NETHER).join("data");
+        std::fs::create_dir_all(data).unwrap();
+
+        let nether_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER);
+        assert_eq!(nether_level.level_folder.dim_folder, root.join("DIM-1"));
     }
 }
