@@ -3681,7 +3681,11 @@ impl Player {
             self.bedrock_spawned.store(false, Ordering::Relaxed);
             return;
         };
-        bedrock_client.try_enqueue_packet(data);
+        if !bedrock_client.try_enqueue_packet_data(data) {
+            // Dropped -> a later tick tries again
+            self.bedrock_spawned.store(false, Ordering::Relaxed);
+            return;
+        }
         // Under the lock, so a world change resetting the sender also undoes this
         self.set_client_loaded(true);
         drop(sender);
