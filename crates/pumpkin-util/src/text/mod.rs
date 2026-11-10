@@ -2294,6 +2294,14 @@ mod custom_name_nbt_tests {
     }
 
     #[test]
+    fn json_null_flag_is_absent() {
+        let json = r#"{"text":"x","bold":null,"italic":true}"#;
+        let style = serde_json::from_str::<TextComponent>(json).unwrap().0.style;
+        assert_eq!(style.bold, None);
+        assert_eq!(style.italic, Some(true));
+    }
+
+    #[test]
     fn plain_string_hover_entity_name_is_text() {
         let mut hover = pumpkin_nbt::compound::NbtCompound::new();
         hover.put_string("action", "show_entity".to_string());

@@ -149,7 +149,7 @@ pub(super) fn optional_component<'de, D: Deserializer<'de>>(
 }
 
 /// A style flag (`Codec.BOOL`): a boolean, or a number as NBT writes it
-/// (`italic: 0b`).
+/// (`italic: 0b`). A JSON `null` is an absent flag.
 pub(super) fn flag<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<bool>, D::Error> {
     struct FlagVisitor;
 
@@ -162,6 +162,14 @@ pub(super) fn flag<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<
 
         fn visit_bool<E: Error>(self, v: bool) -> Result<Self::Value, E> {
             Ok(Some(v))
+        }
+
+        fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
         }
 
         fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
