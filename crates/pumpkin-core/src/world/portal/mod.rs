@@ -166,18 +166,11 @@ impl PortalType {
                 }
             }
             let info = dest_world.level_info.load();
-            let spawn_chunk = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            dest_world
-                .level
-                .get_or_fetch_chunk(spawn_chunk, |_| ())
-                .await;
-
-            let top_block = &dest_world.get_top_block(Vector2::new(info.spawn_x, info.spawn_z)) + 1;
             Some(TeleportTransition {
                 new_world: dest_world,
                 position: Vector3::new(
                     f64::from(info.spawn_x) + 0.5,
-                    f64::from(top_block),
+                    f64::from(info.spawn_y),
                     f64::from(info.spawn_z) + 0.5,
                 ),
                 yaw: None,
