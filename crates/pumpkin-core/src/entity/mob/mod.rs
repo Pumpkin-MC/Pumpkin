@@ -52,7 +52,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Weak};
 use uuid::Uuid;
 
 pub mod bat;
@@ -141,7 +141,7 @@ pub struct MobEntity {
     /// Move and look controls lock this while held, so never lock a control while holding it.
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
-    pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    pub target: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<Box<dyn LookControlTrait>>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
@@ -562,6 +562,28 @@ impl MobEntity {
             .unwrap_or(crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE)
     }
 
+    pub fn set_persistence_required(&self) {
+        self.persistence_required.store(true, Relaxed);
+    }
+
+    pub fn look_at(&self, target: &Entity, max_yaw: f32, max_pitch: f32) {
+        let entity = &self.living_entity.entity;
+        let pos = entity.pos.load();
+        let target_pos = target.pos.load();
+        let dx = target_pos.x - pos.x;
+        let dz = target_pos.z - pos.z;
+        let dy = target.get_eye_y() - entity.get_eye_y();
+        let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
+        let pitch = -(dy.atan2(dx.hypot(dz)).to_degrees() as f32);
+        let rotlerp = |from: f32, to: f32, max: f32| {
+            from + pumpkin_util::math::wrap_degrees(to - from).clamp(-max, max)
+        };
+        entity
+            .pitch
+            .store(rotlerp(entity.pitch.load(), pitch, max_pitch));
+        entity.yaw.store(rotlerp(entity.yaw.load(), yaw, max_yaw));
+    }
+
     pub fn set_guaranteed_drop(&self, slot: &EquipmentSlot) {
         self.living_entity
             .equipment_drop_chances
@@ -828,19 +850,24 @@ impl MobEntity {
         self.target_selector.add_goal(priority, Box::new(goal));
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "matches Mob::apply_mob_target and Wasm host callers"
+    )]
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mut t = self
             .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *t = target;
+        *t = target.as_ref().map(Arc::downgrade);
     }
 
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
         self.target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -1082,11 +1109,7 @@ impl MobEntity {
         let entity = &self.living_entity.entity;
 
         // If already leashed to player, right-clicking unleashes the mob
-        let currently_leashed = entity
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some();
+        let currently_leashed = entity.is_leashed();
 
         if currently_leashed {
             entity.unleash();
@@ -1327,11 +1350,7 @@ impl MobEntity {
                 .is_empty()
             || entity.has_vehicle()
             || entity.has_passengers()
-            || entity
-                .leashed_to
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
+            || entity.is_leashed()
         {
             return None;
         }
@@ -1515,6 +1534,10 @@ pub trait Mob: EntityBase + Send + Sync {
         1.0
     }
 
+    fn mob_is_stepping_carefully(&self) -> bool {
+        self.get_entity().is_sneaking()
+    }
+
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         self.as_animal().is_none()
     }
@@ -1603,6 +1626,11 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn omnidirectional_air_mover(&self) -> bool {
         false
+    }
+
+    /// Extra check a random teleport target must pass for this mob.
+    fn can_randomly_teleport_to(&self, _x: f64, _y: f64, _z: f64) -> bool {
+        true
     }
 
     /// Whether a projectile that starts inside this mob's box still hits it.
@@ -2167,6 +2195,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_cat(&self) -> Option<&crate::entity::passive::cat::CatEntity> {
+        None
+    }
+
     fn as_patrolling_monster(&self) -> Option<&dyn patrol::PatrollingMonster> {
         None
     }
@@ -2397,11 +2429,7 @@ pub trait Mob: EntityBase + Send + Sync {
 
     /// Stores an approved target. Override for side effects of a target change.
     fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        *self
-            .get_mob_entity()
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = target;
+        self.get_mob_entity().set_target(target);
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -2687,6 +2715,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn is_stepping_carefully(&self) -> bool {
+        self.mob_is_stepping_carefully()
+    }
+
     fn is_pushed_by_fluids(&self) -> bool {
         self.mob_is_pushed_by_fluids()
     }
@@ -3563,7 +3595,7 @@ mod lifecycle_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
-        let boat = Arc::new(BoatEntity::new(Entity::new(
+        let boat: Arc<dyn EntityBase> = Arc::new(BoatEntity::new(Entity::new(
             world.clone(),
             Vector3::new(0.0, 64.0, 0.0),
             &EntityType::OAK_BOAT,
@@ -3571,9 +3603,9 @@ mod lifecycle_tests {
         *cow.get_entity()
             .vehicle
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(boat);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&boat));
         let boat_controls = run_controlled_goals(&*cow);
-        let chest_boat = Arc::new(BoatEntity::new(Entity::new(
+        let chest_boat: Arc<dyn EntityBase> = Arc::new(BoatEntity::new(Entity::new(
             world.clone(),
             Vector3::new(0.0, 64.0, 0.0),
             &EntityType::OAK_CHEST_BOAT,
@@ -3581,7 +3613,7 @@ mod lifecycle_tests {
         *cow.get_entity()
             .vehicle
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(chest_boat);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&chest_boat));
         let chest_boat_controls = run_controlled_goals(&*cow);
         world.level.shutdown().await;
         assert_eq!(boat_controls, [true, true, false]);
@@ -3608,11 +3640,12 @@ mod lifecycle_tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(rider.clone());
+        let cow_base: Arc<dyn EntityBase> = cow.clone();
         *rider
             .get_entity()
             .vehicle
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(cow.clone());
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&cow_base));
         rider.get_mob_entity().steered().navigator().set_progress(
             crate::entity::ai::pathfinder::NavigatorGoal::new(
                 Vector3::new(0.0, 64.0, 0.0),

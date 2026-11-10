@@ -6,21 +6,48 @@ env:
   GITHUB_REPOSITORY: ${{ github.repository }}
 
 on:
+  workflow_run:
+    workflows:
+      - "Nightly Release"
+      - "Release"
+    types:
+      - completed
   push:
     branches:
       - "master"
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - ".github/workflows/docker.yml"
   workflow_dispatch:
+    inputs:
+      pumpkin_tag:
+        description: "Release tag to package (e.g. nightly, canary, or a version tag)"
+        required: false
+        default: "nightly"
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   docker-build-deploy:
-    if: github.repository == 'Pumpkin-MC/Pumpkin'
+    if: >-
+      github.repository == 'Pumpkin-MC/Pumpkin' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
 
+    outputs:
+      pumpkin_tag: ${{ steps.release_tag.outputs.pumpkin_tag }}
+
     strategy:
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-26.04-arm
@@ -28,7 +55,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux/amd64
 
-    runs-on: ${{matrix.os}}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Set lowercase repository name
@@ -39,6 +66,25 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Determine release tag
+        id: release_tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.pumpkin_tag }}" ]; then
+            PUMPKIN_TAG="${{ inputs.pumpkin_tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Release" ]; then
+            if [ "${{ github.event.workflow_run.event }}" = "push" ] && [ -n "${{ github.event.workflow_run.head_branch }}" ]; then
+              PUMPKIN_TAG="${{ github.event.workflow_run.head_branch }}"
+            else
+              PUMPKIN_TAG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)
+            fi
+          else
+            PUMPKIN_TAG="nightly"
+          fi
+          echo "PUMPKIN_TAG=${PUMPKIN_TAG}" >> "$GITHUB_ENV"
+          echo "pumpkin_tag=${PUMPKIN_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v7
@@ -67,6 +113,8 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          build-args: |
+            PUMPKIN_TAG=${{ env.PUMPKIN_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
@@ -86,7 +134,9 @@ jobs:
           retention-days: 1
 
   merge:
-    if: github.repository == 'Pumpkin-MC/Pumpkin'
+    if: >-
+      github.repository == 'Pumpkin-MC/Pumpkin' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       packages: write
@@ -100,9 +150,17 @@ jobs:
         run: |
           echo "REGISTRY_IMAGE=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
+      - name: Set release tag
+        env:
+          PUMPKIN_TAG: ${{ needs.docker-build-deploy.outputs.pumpkin_tag }}
+        run: |
+          echo "PUMPKIN_TAG=${PUMPKIN_TAG}" >> "$GITHUB_ENV"
+          echo "DOCKER_RELEASE_TAG=${PUMPKIN_TAG//+/_}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          ref: ${{ needs.docker-build-deploy.outputs.pumpkin_tag != 'nightly' && needs.docker-build-deploy.outputs.pumpkin_tag != 'canary' && needs.docker-build-deploy.outputs.pumpkin_tag != 'latest' && needs.docker-build-deploy.outputs.pumpkin_tag || '' }}
           submodules: recursive
 
       - name: Download Digests
@@ -135,7 +193,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=ref,event=branch
+            type=raw,value=master,enable=${{ env.PUMPKIN_TAG == 'nightly' }}
+            type=raw,value=nightly,enable=${{ env.PUMPKIN_TAG == 'nightly' }}
+            type=raw,value=${{ env.DOCKER_RELEASE_TAG }},enable=${{ env.PUMPKIN_TAG != 'nightly' }}
             type=raw,value=latest
             type=sha
             type=raw,value=mc${{ env.MC_VERSION }}

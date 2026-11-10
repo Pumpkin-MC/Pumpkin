@@ -66,8 +66,8 @@ pub struct PiglinEntity {
     pub disable_walk_to_admire_timer: AtomicI32,
     pub time_trying_to_reach_item: AtomicI32,
     pub admiring_item: Mutex<Option<ItemStack>>,
-    pub nearest_wanted_item: Mutex<Option<Arc<dyn EntityBase>>>,
-    pub nearest_visible_player: Mutex<Option<Arc<Player>>>,
+    pub nearest_wanted_item: Mutex<Option<Weak<dyn EntityBase>>>,
+    pub nearest_visible_player: Mutex<Option<Weak<Player>>>,
     pub near_repellent: AtomicBool,
     pub activity: AtomicCell<PiglinActivity>,
 }
@@ -114,7 +114,10 @@ impl PiglinEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(true)));
-            goal_selector.add_goal(2, Box::new(GoToWantedItemGoal::new(mob_arc.clone(), 1.0)));
+            goal_selector.add_goal(
+                2,
+                Box::new(GoToWantedItemGoal::new(Arc::downgrade(&mob_arc), 1.0)),
+            );
             goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(4, Box::new(RangedCrossbowAttackGoal::new(1.0, 8.0)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
@@ -304,11 +307,7 @@ impl PiglinEntity {
 
     #[must_use]
     pub fn has_attack_target(&self) -> bool {
-        self.mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
+        self.mob_entity.get_target().is_some()
     }
 
     #[must_use]
@@ -452,7 +451,8 @@ impl PiglinEntity {
             .nearest_wanted_item
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+            .as_ref()
+            .and_then(Weak::upgrade);
         item.filter(|item| item.get_entity().is_alive())
     }
 
@@ -462,7 +462,8 @@ impl PiglinEntity {
             .nearest_visible_player
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+            .as_ref()
+            .and_then(Weak::upgrade);
         player.filter(|player| player.get_entity().is_alive())
     }
 
@@ -531,7 +532,8 @@ impl PiglinEntity {
         *self
             .nearest_wanted_item
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = nearest;
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            nearest.as_ref().map(Arc::downgrade);
     }
 
     fn refresh_nearest_visible_player(&self) {
@@ -563,7 +565,8 @@ impl PiglinEntity {
         *self
             .nearest_visible_player
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = nearest;
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            nearest.as_ref().map(Arc::downgrade);
     }
 
     fn refresh_nearest_repellent(&self) {

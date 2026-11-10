@@ -62,7 +62,7 @@ impl AttributeInstance {
             modifiers: Vec::new(),
             permanent_modifiers: Vec::new(),
             cached_value: AtomicU64::new(base_value.to_bits()),
-            dirty: AtomicBool::new(false),
+            dirty: AtomicBool::new(true),
             updated: AtomicBool::new(false),
         }
     }
@@ -73,11 +73,7 @@ impl AttributeInstance {
         self.updated.store(true, Ordering::Relaxed);
     }
 
-    pub fn value(&self) -> f64 {
-        if !self.dirty.load(Ordering::Relaxed) {
-            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
-        }
-
+    fn calculate_raw_value(&self) -> f64 {
         let mut value = self.base_value;
 
         let mut add_sum = 0.0;
@@ -94,7 +90,29 @@ impl AttributeInstance {
         value += add_sum;
         value *= 1.0 + mul_base;
         value *= mul_total;
+        value
+    }
 
+    /// Computes and caches the attribute value clamped to `attribute.min_value..=attribute.max_value`
+    /// (`AttributeInstance::calculateValue` -> `Attribute::sanitizeValue`).
+    pub fn sanitized_value(&self, attribute: &Attributes) -> f64 {
+        if !self.dirty.load(Ordering::Relaxed) {
+            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
+        }
+
+        let value = attribute.sanitize_value(self.calculate_raw_value());
+        self.cached_value.store(value.to_bits(), Ordering::Relaxed);
+        self.dirty.store(false, Ordering::Relaxed);
+
+        value
+    }
+
+    pub fn value(&self) -> f64 {
+        if !self.dirty.load(Ordering::Relaxed) {
+            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
+        }
+
+        let mut value = self.calculate_raw_value();
         if value.is_nan() || value.is_infinite() {
             value = self.base_value;
         }
@@ -238,29 +256,31 @@ pub fn send_attribute_updates_for_living(
         let base_value = living.get_attribute_base(&attribute);
         let effective_value = living.get_attribute_value(&attribute);
 
-        // Pull modifiers for this attribute
-        let mut modifiers = Vec::new();
-        if let Some(inst) = living
-            .attributes
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&attribute.id)
-        {
-            for mod_inst in &inst.modifiers {
-                modifiers.push(JeAttrMod::new(
-                    mod_inst.id.clone(),
-                    mod_inst.amount,
-                    mod_inst.operation as i8,
-                ));
+        if attribute.client_syncable {
+            // Pull modifiers for this attribute
+            let mut modifiers = Vec::new();
+            if let Some(inst) = living
+                .attributes
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&attribute.id)
+            {
+                for mod_inst in &inst.modifiers {
+                    modifiers.push(JeAttrMod::new(
+                        mod_inst.id.clone(),
+                        mod_inst.amount,
+                        mod_inst.operation as i8,
+                    ));
+                }
             }
-        }
 
-        // Move modifiers into the property
-        je_properties.push(JeProperty::new(
-            VarInt(i32::from(attribute.id)),
-            base_value,
-            modifiers,
-        ));
+            // Move modifiers into the property
+            je_properties.push(JeProperty::new(
+                VarInt(i32::from(attribute.id)),
+                base_value,
+                modifiers,
+            ));
+        }
 
         let name = match attribute.id {
             id if id == Attributes::MOVEMENT_SPEED.id => "minecraft:movement".to_string(),
@@ -278,11 +298,11 @@ pub fn send_attribute_updates_for_living(
         };
 
         let be_attribute = BeAttribute {
-            min_value: 0.0,
-            max_value: 3.402_823_5E38,
+            min_value: attribute.min_value as f32,
+            max_value: attribute.max_value as f32,
             current_value: effective_value as f32,
-            default_min_value: 0.0,
-            default_max_value: 3.402_823_5E38,
+            default_min_value: attribute.min_value as f32,
+            default_max_value: attribute.max_value as f32,
             default_value: base_value as f32,
             name,
             // Bedrock receives the already-computed effective value above. Do not advertise
@@ -293,21 +313,33 @@ pub fn send_attribute_updates_for_living(
         be_attributes.push(be_attribute);
     }
 
-    let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
     let world = living.entity.world.load();
-    if be_attributes.is_empty() {
-        world.broadcast_packet_all(&je_packet);
-        return;
+    match (!je_properties.is_empty(), !be_attributes.is_empty()) {
+        (false, false) => {}
+        (true, false) => {
+            let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
+            world.broadcast_packet_all(&je_packet);
+        }
+        (false, true) => {
+            let runtime_id = living.entity.entity_id as u64;
+            let be_packet = BePacket {
+                target_runtime_id: VarULong(runtime_id),
+                attribute_list: be_attributes,
+                tick: VarULong(0),
+            };
+            world.broadcast_bedrock_all(&be_packet);
+        }
+        (true, true) => {
+            let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
+            let runtime_id = living.entity.entity_id as u64;
+            let be_packet = BePacket {
+                target_runtime_id: VarULong(runtime_id),
+                attribute_list: be_attributes,
+                tick: VarULong(0),
+            };
+            world.broadcast_editioned(&je_packet, &be_packet);
+        }
     }
-
-    let runtime_id = living.entity.entity_id as u64;
-    let be_packet = BePacket {
-        target_runtime_id: VarULong(runtime_id),
-        attribute_list: be_attributes,
-        tick: VarULong(0),
-    };
-
-    world.broadcast_editioned(&je_packet, &be_packet);
 }
 
 impl Clone for AttributeInstance {
@@ -474,5 +506,28 @@ mod tests {
             operation: ModifierOperation::MultiplyTotal,
         });
         assert!((instance.value() - 33.66).abs() < 1e-9);
+    }
+
+    #[test]
+    fn sanitized_value_clamps_to_ranged_attribute_bounds() {
+        // ARMOR has bounds 0.0..=30.0
+        let mut armor = AttributeInstance::new(10.0);
+        armor.add_or_replace_modifier(Modifier {
+            id: "overflow".to_string(),
+            amount: 50.0,
+            operation: ModifierOperation::Add,
+        });
+        assert!((armor.sanitized_value(&Attributes::ARMOR) - 30.0).abs() < f64::EPSILON);
+
+        armor.add_or_replace_modifier(Modifier {
+            id: "underflow".to_string(),
+            amount: -100.0,
+            operation: ModifierOperation::Add,
+        });
+        assert!((armor.sanitized_value(&Attributes::ARMOR) - 0.0).abs() < f64::EPSILON);
+
+        // NaN sanitizes to min_value (RangedAttribute::sanitizeValue)
+        let nan_instance = AttributeInstance::new(f64::NAN);
+        assert!((nan_instance.sanitized_value(&Attributes::MAX_HEALTH) - 1.0).abs() < f64::EPSILON);
     }
 }

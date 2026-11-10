@@ -492,10 +492,15 @@ fn build_common_sound_enum(
                 .as_deref()
                 .map(sound_ident_from_str);
             let baby_beg = baby.beg_for_food_sound.as_deref().map(sound_ident_from_str);
-            let stray_amb = adult
+            let adult_stray = adult
                 .stray_ambient_sound
                 .as_deref()
                 .or(adult.ambient_sound.as_deref())
+                .map(sound_ident_from_str);
+            let baby_stray = baby
+                .stray_ambient_sound
+                .as_deref()
+                .or(baby.ambient_sound.as_deref())
                 .map(sound_ident_from_str);
 
             if let (Some(ad), Some(ba)) = (adult_hiss, baby_hiss) {
@@ -518,9 +523,9 @@ fn build_common_sound_enum(
                     Self::#variant_ident => if is_baby { crate::sound::Sound::#ba } else { crate::sound::Sound::#ad },
                 });
             }
-            if let Some(stray) = stray_amb {
+            if let (Some(ad), Some(ba)) = (adult_stray, baby_stray) {
                 stray_ambient_arms.push(quote! {
-                    Self::#variant_ident => crate::sound::Sound::#stray,
+                    Self::#variant_ident => if is_baby { crate::sound::Sound::#ba } else { crate::sound::Sound::#ad },
                 });
             }
         }
@@ -610,7 +615,7 @@ fn build_common_sound_enum(
             }
 
             #[must_use]
-            pub const fn stray_ambient_sound(&self) -> crate::sound::Sound {
+            pub const fn stray_ambient_sound(&self, is_baby: bool) -> crate::sound::Sound {
                 match self {
                     #( #stray_ambient_arms )*
                 }

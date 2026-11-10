@@ -138,7 +138,7 @@ impl WanderingTraderSpawner {
             return;
         };
         let llama = Self::spawn_mob(world, &EntityType::TRADER_LLAMA, spawn_pos);
-        llama.get_entity().attach_leash(trader.clone());
+        llama.get_entity().attach_leash(trader);
     }
 
     fn spawn_mob(

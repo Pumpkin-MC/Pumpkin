@@ -403,9 +403,8 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let vehicle = entity.get_entity().vehicle.lock_ignore_poison();
-        if let Some(v) = vehicle.as_ref() {
-            Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
+        if let Some(v) = entity.get_entity().get_vehicle() {
+            Ok(Some(self.add(v).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
             })?))
         } else {
@@ -807,8 +806,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             Ok((entity, vehicle))
         })?;
         run_blocking(accessor, move || {
-            let current_vehicle = entity.get_entity().vehicle.lock_ignore_poison().clone();
-            if let Some(current_vehicle) = current_vehicle {
+            if let Some(current_vehicle) = entity.get_entity().get_vehicle() {
                 current_vehicle
                     .get_entity()
                     .remove_passenger(entity.get_entity().entity_id);

@@ -8,7 +8,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 const TELEPORT_DISTANCE_SQ: f64 = 144.0;
 
@@ -17,7 +17,7 @@ pub struct FollowOwnerGoal {
     start_distance_sq: f64,
     stop_distance_sq: f64,
     time_to_recalc_path: i32,
-    owner: Option<Arc<Player>>,
+    owner: Option<Weak<Player>>,
     old_water_cost: f32,
 }
 
@@ -151,7 +151,7 @@ impl Goal for FollowOwnerGoal {
             return false;
         }
 
-        self.owner = Some(owner);
+        self.owner = Some(Arc::downgrade(&owner));
         true
     }
 
@@ -161,11 +161,12 @@ impl Goal for FollowOwnerGoal {
             return false;
         }
 
-        if Self::unable_to_move_to_owner(mob, self.owner.as_deref()) {
+        let owner = self.owner.as_ref().and_then(Weak::upgrade);
+        if Self::unable_to_move_to_owner(mob, owner.as_deref()) {
             return false;
         }
 
-        let Some(owner) = &self.owner else {
+        let Some(owner) = &owner else {
             return false;
         };
 
@@ -196,11 +197,11 @@ impl Goal for FollowOwnerGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(owner) = &self.owner else {
+        let Some(owner) = self.owner.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
-        let is_owner_far_away = Self::should_try_teleport_to_owner(mob, owner);
+        let is_owner_far_away = Self::should_try_teleport_to_owner(mob, &owner);
 
         if !is_owner_far_away {
             let mob_entity = mob.get_mob_entity();
@@ -222,7 +223,7 @@ impl Goal for FollowOwnerGoal {
         if self.time_to_recalc_path <= 0 {
             self.time_to_recalc_path = self.get_tick_count(10);
             if is_owner_far_away {
-                Self::try_teleport_to_owner(mob, owner);
+                Self::try_teleport_to_owner(mob, &owner);
             } else {
                 let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                 let owner_pos = owner.living_entity.entity.pos.load();

@@ -248,10 +248,7 @@ impl PiglinAi {
         let target_id = target.get_entity().entity_id;
         let is_attack_target = piglin
             .mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_target()
             .is_some_and(|current| current.get_entity().entity_id == target_id);
         let conditions = TargetPredicate::create_non_attackable()
             .set_base_max_distance(living.get_attribute_value(&Attributes::FOLLOW_RANGE));
