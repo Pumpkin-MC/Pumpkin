@@ -6,7 +6,7 @@ use crate::entity::mob::{Mob, MobEntity};
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 const UNSET: i32 = 0;
 const CAN_TRACK: i32 = 1;
@@ -23,7 +23,7 @@ pub struct TrackTargetGoal {
     /// Factor on the follow range, vanilla `getFollowDistance` overrides.
     pub follow_range_scale: f64,
     /// Fallback target, used while the mob's own target is cleared.
-    target_mob: Option<Arc<dyn EntityBase>>,
+    target_mob: Option<Weak<dyn EntityBase>>,
     /// A plugin cancelled the target change in `start`, so the goal ends without
     /// clearing a target it never set.
     cancelled: bool,
@@ -79,8 +79,8 @@ impl TrackTargetGoal {
     }
 
     /// Set by goals that already know their target.
-    pub fn set_target_mob(&mut self, target: Option<Arc<dyn EntityBase>>) {
-        self.target_mob = target;
+    pub fn set_target_mob(&mut self, target: Option<&Arc<dyn EntityBase>>) {
+        self.target_mob = target.map(Arc::downgrade);
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob) -> bool {
@@ -152,7 +152,10 @@ impl Goal for TrackTargetGoal {
             return false;
         }
         let mob_entity = mob.get_mob_entity();
-        let Some(target_base) = mob_entity.get_target().or_else(|| self.target_mob.clone()) else {
+        let Some(target_base) = mob_entity
+            .get_target()
+            .or_else(|| self.target_mob.as_ref().and_then(Weak::upgrade))
+        else {
             return false;
         };
 

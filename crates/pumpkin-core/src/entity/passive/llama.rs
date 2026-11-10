@@ -167,10 +167,7 @@ impl LlamaEntity {
 
     fn is_leashed_to_wandering_trader(&self) -> bool {
         self.get_entity()
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_leash_holder()
             .is_some_and(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
     }
 

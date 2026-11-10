@@ -850,7 +850,7 @@ impl TrackedEntity {
         }
 
         if let Ok(vehicle_guard) = self.entity.get_entity().vehicle.try_lock()
-            && let Some(vehicle) = vehicle_guard.as_ref()
+            && let Some(vehicle) = vehicle_guard.as_ref().and_then(std::sync::Weak::upgrade)
             && let Ok(vehicle_passengers) = vehicle.get_entity().passengers.try_lock()
         {
             match player.client.as_ref() {

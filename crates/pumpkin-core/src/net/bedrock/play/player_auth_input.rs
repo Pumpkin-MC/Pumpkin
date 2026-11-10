@@ -103,18 +103,11 @@ impl BedrockClient {
             },
         );
 
-        if entity.has_vehicle() {
-            let vehicle = entity
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(vehicle) = vehicle {
-                vehicle.set_paddle_state(
-                    flags.get(InputData::PaddlingLeft as usize),
-                    flags.get(InputData::PaddlingRight as usize),
-                );
-            }
+        if let Some(vehicle) = entity.get_vehicle() {
+            vehicle.set_paddle_state(
+                flags.get(InputData::PaddlingLeft as usize),
+                flags.get(InputData::PaddlingRight as usize),
+            );
         }
 
         // Inventory moves can ride inside the input packet, like the standalone request

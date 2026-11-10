@@ -115,7 +115,7 @@ impl EndermanEntity {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(Arc::downgrade(&mob_arc))));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(
                 7,
@@ -126,10 +126,10 @@ impl EndermanEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(Arc::downgrade(&mob_arc))));
+            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(Arc::downgrade(&mob_arc))));
 
-            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
+            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(&mob_arc)));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
             target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
@@ -250,6 +250,10 @@ impl EndermanEntity {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "matches Mob::apply_mob_target signature"
+    )]
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
         let mut mob_target = self
@@ -260,6 +264,7 @@ impl EndermanEntity {
         let target_id = target.as_ref().map(|target| target.get_entity().entity_id);
         let current_target_id = mob_target
             .as_ref()
+            .and_then(Weak::upgrade)
             .map(|target| target.get_entity().entity_id);
         // `set_mob_target` refreshes an unchanged target, which must not restart the timer.
         if current_target_id != target_id {
@@ -275,7 +280,7 @@ impl EndermanEntity {
             self.target_change_time
                 .store(target_change_time, Ordering::Relaxed);
         }
-        *mob_target = target;
+        *mob_target = target.as_ref().map(Arc::downgrade);
         drop(mob_target);
 
         if is_some {
