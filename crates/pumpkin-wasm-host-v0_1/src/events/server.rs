@@ -19,6 +19,7 @@ use pumpkin_core::plugin::server::{
     server_tick_end::ServerTickEndEvent,
     server_tick_start::ServerTickStartEvent,
 };
+use pumpkin_protocol::ConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
@@ -31,6 +32,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             // Typed view is 26.3
             // for older clients only valid after the multiversion plugin ran.
             ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
+                ConnectionState::Play,
                 self.packet_id,
                 &self.payload,
                 pumpkin_data::packet::CURRENT_MC_VERSION,
@@ -342,5 +344,41 @@ mod tests {
                 .get::<TextComponent>(&Resource::new_own(motd_rep))
                 .is_err()
         );
+    }
+
+    const ACCEPT_TELEPORTATION_26_3: [u8; 33] = [
+        0x01, 0x3F, 0xE0, 0, 0, 0, 0, 0, 0, 0x40, 0x52, 0x40, 0, 0, 0, 0, 0, 0x3F, 0xE0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0xC2, 0xB4, 0, 0,
+    ];
+
+    #[test]
+    fn play_packet_is_not_decoded_as_config_packet_with_the_same_id() {
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
+        let id = <pumpkin_protocol::java::server::play::SConfirmTeleport as pumpkin_protocol::packet::MultiVersionJavaPacket>::to_id(version);
+
+        let packet = generated_packets::deserialize_java_serverbound_packet(
+            ConnectionState::Play,
+            id,
+            &ACCEPT_TELEPORTATION_26_3,
+            version,
+        );
+
+        assert!(packet.is_none());
+    }
+
+    #[test]
+    fn out_of_range_field_leaves_packet_undecoded() {
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
+        let id = <pumpkin_protocol::java::server::play::SClientInformationPlay as pumpkin_protocol::packet::MultiVersionJavaPacket>::to_id(version);
+        let view_distance_minus_one = [5, b'e', b'n', b'_', b'u', b's', 0xFF, 0, 1, 0x7F, 1, 0, 1];
+
+        let packet = generated_packets::deserialize_java_serverbound_packet(
+            ConnectionState::Play,
+            id,
+            &view_distance_minus_one,
+            version,
+        );
+
+        assert!(packet.is_none());
     }
 }
