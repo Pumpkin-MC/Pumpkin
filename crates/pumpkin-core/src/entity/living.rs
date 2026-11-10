@@ -1106,7 +1106,9 @@ impl LivingEntity {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.get(&attribute.id)
-            .map_or(attribute.default_value, AttributeInstance::value)
+            .map_or(attribute.default_value, |instance| {
+                instance.sanitized_value(attribute)
+            })
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
