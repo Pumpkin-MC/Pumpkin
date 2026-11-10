@@ -66,6 +66,7 @@ default = [
     "wolf_variant",
     "cat_variant",
     "frog_variant",
+    "sulfur_cube_archetype",
     "trim_material",
     "trim_pattern",
     "banner_pattern",
@@ -97,6 +98,7 @@ instrument = ["sound"]
 wolf_variant = []
 cat_variant = []
 frog_variant = []
+sulfur_cube_archetype = ["attributes", "damage", "data_component", "sound", "tag"]
 trim_material = []
 trim_pattern = []
 banner_pattern = []

@@ -26,7 +26,7 @@ impl BlockBehaviour for SlimeBlock {
         let entity = args.entity.get_entity();
         let velocity = entity.velocity.load();
         let abs_y = velocity.y.abs();
-        if abs_y < 0.1 && !entity.is_sneaking() {
+        if abs_y < 0.1 && !args.entity.is_stepping_carefully() {
             let scale = 0.4 + abs_y * 0.2;
             entity.velocity.store(Vector3::new(
                 velocity.x * scale,

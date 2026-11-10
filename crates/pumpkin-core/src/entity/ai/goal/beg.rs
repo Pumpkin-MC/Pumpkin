@@ -6,13 +6,13 @@ use crate::entity::player::Player;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
 use rand::RngExt;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 pub struct BegGoal {
     look_distance: f64,
     look_distance_sq: f64,
     look_time: i32,
-    player: Option<Arc<Player>>,
+    player: Option<Weak<Player>>,
 }
 
 impl BegGoal {
@@ -74,12 +74,12 @@ impl Goal for BegGoal {
             return false;
         }
 
-        self.player = Some(player);
+        self.player = Some(Arc::downgrade(&player));
         true
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let Some(player) = &self.player else {
+        let Some(player) = self.player.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -87,11 +87,11 @@ impl Goal for BegGoal {
             return false;
         }
 
-        if Self::distance_sq(mob, player) > self.look_distance_sq {
+        if Self::distance_sq(mob, &player) > self.look_distance_sq {
             return false;
         }
 
-        self.look_time > 0 && Self::player_holding_interesting(player)
+        self.look_time > 0 && Self::player_holding_interesting(&player)
     }
 
     fn start(&mut self, mob: &dyn Mob) {
@@ -106,7 +106,7 @@ impl Goal for BegGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        if let Some(player) = &self.player {
+        if let Some(player) = self.player.as_ref().and_then(Weak::upgrade) {
             let player_pos = player.get_entity().get_eye_pos();
             let mut look_control = mob
                 .get_mob_entity()

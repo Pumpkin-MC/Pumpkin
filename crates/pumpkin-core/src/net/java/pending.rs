@@ -72,6 +72,7 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    pub velocity_message_id: Option<i32>,
     /// Whether a login was started. Used to reject a second `SLoginStart`, which
     /// would otherwise replace an already authenticated profile.
     pub login_started: bool,
@@ -129,6 +130,7 @@ impl PendingConnection {
             login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
+            velocity_message_id: None,
             server,
         }
     }
@@ -316,7 +318,52 @@ impl PendingConnection {
         self.close();
     }
 
+    async fn read_haproxy_header(&mut self) -> bool {
+        let Some(reader) = self.network_reader.reader_mut() else {
+            return false;
+        };
+        let close_token = self.close_token.clone();
+        let result = tokio::select! {
+            () = close_token.cancelled() => {
+                debug!("Canceling pending connection HAProxy header read");
+                return false;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent no HAProxy header for {}s, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
+                return false;
+            },
+            res = crate::net::proxy::haproxy::read_header(reader) => res,
+        };
+
+        match result {
+            Ok(Some(address)) => {
+                debug!("Updated address from HAProxy header for client {}", self.id);
+                self.address = address;
+                true
+            }
+            Ok(None) => true,
+            Err(err) => {
+                debug!(
+                    "Failed to read HAProxy header from client {}: {}",
+                    self.id, err
+                );
+                false
+            }
+        }
+    }
+
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
+        if server.advanced_config.networking.proxy.enabled
+            && server.advanced_config.networking.proxy.haproxy.enabled
+            && !self.read_haproxy_header().await
+        {
+            return PacketHandlerResult::Stop;
+        }
+
         while let Some(packet) = self.get_packet().await {
             if !self.packet_limiter.check_packet() {
                 warn!(

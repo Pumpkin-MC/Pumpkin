@@ -113,19 +113,10 @@ pub fn bucket_mob_pickup(
     let mut bucket = ItemStack::new(1, mob.bucket_item());
     mob.save_to_bucket_tag(&mut bucket);
     crate::item::items::bucket::give_filled_mob_bucket(stack, player, bucket);
-    let leashed = entity
-        .leashed_to
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .is_some();
+    let leashed = entity.is_leashed();
     if leashed {
         entity.unleash();
-        if entity
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
-        {
+        if !entity.is_leashed() {
             world.drop_stack(&entity.block_pos.load(), ItemStack::new(1, &Item::LEAD));
         }
     }
