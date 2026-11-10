@@ -4584,6 +4584,7 @@ impl Player {
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
+    /// Moves the player to another world with an unknown teleport cause.
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
@@ -4595,6 +4596,7 @@ impl Player {
             .await;
     }
 
+    /// Moves the player to another world, reporting `cause` to `PlayerTeleportEvent`.
     #[expect(clippy::too_many_lines)]
     pub async fn teleport_world_with_cause(
         self: &Arc<Self>,
@@ -5136,10 +5138,6 @@ impl Player {
         source: Option<&dyn crate::entity::EntityBase>,
         cause: Option<&dyn crate::entity::EntityBase>,
     ) -> bool {
-        // Vanilla `ServerPlayer.isInvulnerableTo`: nothing hurts a player still loading in
-        if !self.has_client_loaded() {
-            return false;
-        }
         if self
             .abilities
             .lock()
@@ -5150,8 +5148,9 @@ impl Player {
         {
             return false;
         }
-        // Vanilla `ServerPlayer.isInvulnerableTo`. Vanilla keeps the client
-        // loaded across a dimension change, so only the flag counts there.
+        // Vanilla `ServerPlayer.isInvulnerableTo`: nothing hurts a player still
+        // loading in. Vanilla keeps the client loaded across a dimension change,
+        // so only the flag counts there.
         let invulnerable = if self.is_changing_dimension.load(Ordering::Relaxed) {
             damage_type != pumpkin_data::damage::DamageType::ENDER_PEARL
         } else {
@@ -7766,6 +7765,8 @@ impl EntityBase for Player {
             // Same world
             self.request_teleport_to(position, yaw, pitch, cause);
             let entity = self.get_entity();
+            // A plugin may have cancelled or moved the teleport.
+            let position = entity.pos.load();
             let (yaw, pitch) = (entity.yaw.load(), entity.pitch.load());
             let chunk_pos = entity.chunk_pos.load();
             entity.world.load().broadcast_to_chunk_except(
@@ -7786,7 +7787,7 @@ impl EntityBase for Player {
                 let yaw = yaw.unwrap_or_else(|| entity.yaw.load());
                 let pitch = pitch.unwrap_or_else(|| entity.pitch.load());
                 player_arc
-                    .teleport_world(world, position, Some(yaw), Some(pitch))
+                    .teleport_world_with_cause(world, position, Some(yaw), Some(pitch), cause)
                     .await;
             });
         }

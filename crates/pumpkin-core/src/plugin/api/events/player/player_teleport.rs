@@ -9,17 +9,24 @@ use super::PlayerEvent;
 /// Why a player is being teleported.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TeleportCause {
+    /// A thrown ender pearl landed.
     EnderPearl,
+    /// A command such as `/tp`.
     Command,
+    /// A plugin asked for it.
     Plugin,
     NetherPortal,
     EndPortal,
     EndGateway,
+    /// Spectating an entity or player.
     Spectate,
-    /// chorus fruit
+    /// A consumed item, such as a chorus fruit.
     ConsumableEffect,
+    /// Not set anywhere yet.
     Dismount,
+    /// Not set anywhere yet.
     ExitBed,
+    /// The caller gave no cause.
     Unknown,
 }
 
