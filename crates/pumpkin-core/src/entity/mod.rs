@@ -3560,7 +3560,26 @@ impl Entity {
                             let teleport_pos = transition.position;
 
                             // Teleport the main entity
-                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            if transition.play_portal_sound
+                                && let Some(player) = world_clone.get_player_by_id(entity_id)
+                            {
+                                player
+                                    .teleport_world(
+                                        dest_world.clone(),
+                                        teleport_pos,
+                                        yaw_val,
+                                        pitch,
+                                        true,
+                                    )
+                                    .await;
+                            } else {
+                                entity_arc.teleport(
+                                    teleport_pos,
+                                    yaw_val,
+                                    pitch,
+                                    dest_world.clone(),
+                                );
+                            }
 
                             // Teleport all passengers recursively along with the vehicle
                             let yaw_delta = yaw_val.map(|y| y - yaw);
