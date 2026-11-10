@@ -151,8 +151,8 @@ impl PendingConnection {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        // The login handshake's unencrypted response must leave the writer
-        // before it starts producing ciphertext. A failed flush is fatal.
+        // Drain all unencrypted outgoing bytes before switching the wire cipher.
+        // A failed flush is fatal; the client must not see mixed wire modes.
         self.network_writer
             .flush()
             .await

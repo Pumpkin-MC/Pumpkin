@@ -18,7 +18,7 @@ use pumpkin_util::{
 use ser::{ReadingError, WritingError};
 
 use thiserror::Error;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{AsyncRead, ReadBuf};
 
 pub use crate::packet::{MultiVersionJavaPacket, Packet};
 
