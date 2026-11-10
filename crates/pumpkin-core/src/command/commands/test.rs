@@ -30,7 +30,7 @@ use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::string_reader::StringReader;
@@ -72,6 +72,8 @@ const TEST_FULL_SEARCH_RADIUS: i32 = 250;
 const TEST_POS_PICK_DISTANCE: f64 = 10.0;
 const DEFAULT_CREATE_SIZE: i32 = 5;
 const MAX_CREATE_SIZE: i32 = 48;
+const MAX_RUN_MULTIPLE_AMOUNT: i32 = 100;
+const MAX_TEST_RUNS: usize = 4096;
 
 const TEST_INSTANCE_REGISTRY: Identifier = Identifier::parse_static("minecraft:test_instance");
 
@@ -103,6 +105,10 @@ const CREATE_TOO_LARGE: CommandErrorType<1> = CommandErrorType::new(
     java::COMMANDS_TEST_ERROR_TOO_LARGE,
     java::COMMANDS_TEST_ERROR_TOO_LARGE,
 );
+const TOO_MANY_TESTS: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Too many GameTests requested");
+const TEST_GRID_OUT_OF_RANGE: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("GameTest grid exceeds valid coordinates");
 
 struct CommandTestReporter {
     sender: CommandSender,
@@ -687,6 +693,13 @@ impl CommandExecutor for RunExecutor {
         } else {
             1
         };
+        if selected
+            .len()
+            .checked_mul(amount)
+            .is_none_or(|count| count > MAX_TEST_RUNS)
+        {
+            return Err(TOO_MANY_TESTS.create_without_context());
+        }
         let selected = (0..amount).flat_map(|_| selected.iter().cloned()).collect();
         run_selected_tests(context, selected)
     }
@@ -707,6 +720,10 @@ impl CommandExecutor for RunFailedExecutor {
 }
 
 fn run_selected_tests(context: &CommandContext, selected: Vec<String>) -> CommandExecutorResult {
+    if selected.len() > MAX_TEST_RUNS {
+        return Err(TOO_MANY_TESTS.create_without_context());
+    }
+
     // Vanilla TestCommand::run stops the current tests before starting a new run.
     // Clear this server's active tests before the replacement requests are drained.
     context.server().stop_game_tests();
@@ -740,7 +757,19 @@ fn run_selected_tests(context: &CommandContext, selected: Vec<String>) -> Comman
 
     let world = context.world().clone();
     let base_x = context.source.position.x.floor() as i32;
-    let base_z = context.source.position.z.floor() as i32 + TEST_POS_Z_OFFSET_FROM_PLAYER;
+    let base_z = context.source.position.z.floor() as i32;
+
+    let last_index = (selected.len() - 1) as i64;
+    let row_width = i64::from(tests_per_row);
+    let max_column = last_index.min(row_width - 1);
+    let max_row = last_index / row_width;
+    let max_x = i64::from(base_x) + max_column * i64::from(TEST_GRID_SPACING);
+    let max_z = i64::from(base_z)
+        + i64::from(TEST_POS_Z_OFFSET_FROM_PLAYER)
+        + max_row * i64::from(TEST_GRID_SPACING);
+    if i32::try_from(max_x).is_err() || i32::try_from(max_z).is_err() {
+        return Err(TEST_GRID_OUT_OF_RANGE.create_without_context());
+    }
 
     context
         .source
@@ -759,11 +788,17 @@ fn run_selected_tests(context: &CommandContext, selected: Vec<String>) -> Comman
     let mut requests = Vec::with_capacity(selected.len());
 
     for (index, test_id) in selected.into_iter().enumerate() {
-        let index = index as i32;
-        let column = index % tests_per_row;
-        let row = index / tests_per_row;
-        let test_x = base_x + column * TEST_GRID_SPACING;
-        let test_z = base_z + row * TEST_GRID_SPACING;
+        let index = index as i64;
+        let column = index % row_width;
+        let row = index / row_width;
+        let test_x = i32::try_from(i64::from(base_x) + column * i64::from(TEST_GRID_SPACING))
+            .map_err(|_| TEST_GRID_OUT_OF_RANGE.create_without_context())?;
+        let test_z = i32::try_from(
+            i64::from(base_z)
+                + i64::from(TEST_POS_Z_OFFSET_FROM_PLAYER)
+                + row * i64::from(TEST_GRID_SPACING),
+        )
+        .map_err(|_| TEST_GRID_OUT_OF_RANGE.create_without_context())?;
 
         requests.push(GameTestRunRequest::new(
             test_id.clone(),
@@ -1108,7 +1143,13 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let runmultiple = literal("runmultiple").then(
         argument(ARG_TESTS, TestInstanceArgumentType)
             .executes(RunExecutor)
-            .then(argument(ARG_AMOUNT, IntegerArgumentType::any()).executes(RunExecutor)),
+            .then(
+                argument(
+                    ARG_AMOUNT,
+                    IntegerArgumentType::new(0, MAX_RUN_MULTIPLE_AMOUNT),
+                )
+                .executes(RunExecutor),
+            ),
     );
 
     let runfailed = literal("runfailed")
