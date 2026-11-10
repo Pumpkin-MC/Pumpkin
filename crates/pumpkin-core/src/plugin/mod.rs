@@ -345,6 +345,17 @@ struct RegisteredLoader {
     loader: Arc<dyn PluginLoader>,
 }
 
+/// What adding a loader did with the plugin files waiting for one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoaderRetry {
+    /// Added, and this many of those files loaded
+    Loaded(usize),
+    /// Added from an `on_load`: those files load in the background, their outcome is not known yet
+    Pending,
+    /// Not added: its plugin is unloading, or the loader is registered already
+    Refused,
+}
+
 /// Handlers, services and loaders taken off a plugin. Their code lives in its library.
 struct Registrations {
     handlers: Vec<Arc<dyn DynEventHandler>>,
@@ -381,16 +392,18 @@ async fn release_library(
     name: &str,
     registrations: Registrations,
     instance: Option<Arc<dyn Plugin>>,
-    loader: &dyn PluginLoader,
+    loader: &Arc<dyn PluginLoader>,
     loader_data: Box<dyn Any + Send + Sync>,
     commands: bool,
     children_unloading: bool,
 ) -> Result<(), LoaderError> {
-    // Loader keeps the library: untracked plugin work can still run its code
+    // Loader keeps the library: untracked plugin work can still run its code. That may run
+    // the loader's code too, so the loader stays held, as in `discard_loaded`
     if !loader.can_unload() {
         drop(registrations);
         drop(instance);
         Box::leak(loader_data);
+        std::mem::forget(Arc::clone(loader));
         return Ok(());
     }
     // Tree never drops nodes: executors and argument types run its code
@@ -740,8 +753,12 @@ impl PluginManager {
     }
 
     /// Add a new plugin loader implementation
-    pub async fn add_loader(self: &Arc<Self>, server: &Arc<Server>, loader: Arc<dyn PluginLoader>) {
-        self.add_owned_loader(server, None, loader).await;
+    pub async fn add_loader(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        loader: Arc<dyn PluginLoader>,
+    ) -> LoaderRetry {
+        self.add_owned_loader(server, None, loader).await
     }
 
     /// `owner`: plugin whose unload takes the loader off again. Refused once it unloads.
@@ -750,11 +767,19 @@ impl PluginManager {
         server: &Arc<Server>,
         owner: Option<&Context>,
         loader: Arc<dyn PluginLoader>,
-    ) {
+    ) -> LoaderRetry {
         // Checked under the sweep's lock: no add can land after it
         let mut loaders = self.loaders.write().await;
         if owner.is_some_and(Context::is_closed) {
-            return;
+            return LoaderRetry::Refused;
+        }
+        // One registration per loader: its owner is looked up by the loader alone
+        if loaders
+            .iter()
+            .any(|registered| Arc::ptr_eq(&registered.loader, &loader))
+        {
+            warn!("Plugin loader is registered already, not adding it again");
+            return LoaderRetry::Refused;
         }
         loaders.push(RegisteredLoader {
             owner: owner.map(|context| context.get_metadata().name.clone()),
@@ -763,7 +788,7 @@ impl PluginManager {
         drop(loaders);
 
         // Try to load previously unloaded files with the new loader
-        self.retry_unloaded_files(server).await;
+        self.retry_unloaded_files(server).await
     }
 
     /// Start watching the plugins directory for changes
@@ -894,22 +919,36 @@ impl PluginManager {
     }
 
     /// Retry loading files that couldn't be loaded previously
-    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) {
+    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) -> LoaderRetry {
+        // From an on_load, e.g. a plugin adding its loader: a retried plugin may depend on or
+        // wait on that caller. Off its task, so that wait is not taken for a cycle
+        if self.initializing_caller().is_some() {
+            let (manager, server) = (Arc::clone(self), Arc::clone(server));
+            tokio::spawn(async move { manager.start_unloaded_files(&server).await });
+            return LoaderRetry::Pending;
+        }
+        let loaded = join_all(self.start_unloaded_files(server).await)
+            .await
+            .into_iter()
+            .filter(|result| matches!(result, Ok(Ok(()))))
+            .count();
+        LoaderRetry::Loaded(loaded)
+    }
+
+    /// Starts loading the files that couldn't be loaded previously.
+    async fn start_unloaded_files(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+    ) -> Vec<tokio::task::JoinHandle<Result<(), String>>> {
         let files_to_retry: Vec<PathBuf> =
             { self.unloaded_files.read().await.iter().cloned().collect() };
         let mut retry_tasks = Vec::new();
-
         for path in files_to_retry {
             if let Ok((_, task)) = self.start_loading_plugin(server, &path).await {
                 retry_tasks.push(task);
             }
         }
-
-        // From an on_load, e.g. a plugin adding its loader: a retried plugin may wait on that
-        // caller, so they finish after it instead
-        if self.initializing_caller().is_none() {
-            join_all(retry_tasks).await;
-        }
+        retry_tasks
     }
 
     /// Lets every loader run its per-tick work.
@@ -1368,7 +1407,7 @@ impl PluginManager {
                             &plugin_name,
                             registrations,
                             None,
-                            &*loader_clone,
+                            &loader_clone,
                             data,
                             context.has_commands(),
                             children_unloading,
@@ -1914,6 +1953,10 @@ impl PluginManager {
 
     /// `wait_for_initialization`, for the load `token` of `name` only.
     async fn wait_for_load(&self, name: &str, token: u64) -> Result<(), ManagerError> {
+        // Gone already: a later load of the name is not this one, waiting on it is no cycle
+        if !self.holds_load(token) {
+            return Err(ManagerError::PluginNotFound(name.to_string()));
+        }
         let _wait = self.enter_init_wait(name)?;
         loop {
             let notified = self.state_notify.notified();
@@ -2381,7 +2424,7 @@ impl PluginManager {
                     name,
                     registrations,
                     instance,
-                    &*loader,
+                    &loader,
                     data,
                     commands,
                     children_unloading,
@@ -2796,7 +2839,10 @@ mod tests {
     #[derive(Default)]
     struct TestLoader {
         plugins: SyncMutex<HashMap<PathBuf, Arc<Hooks>>>,
+        dependencies: SyncMutex<HashMap<PathBuf, Vec<String>>>,
         unloaded: AtomicU64,
+        /// Without `can_unload`
+        resident: bool,
     }
 
     impl TestLoader {
@@ -2807,6 +2853,13 @@ mod tests {
                 .unwrap_or_else(PoisonError::into_inner)
                 .insert(path.clone(), Arc::new(Hooks { on_load, on_unload }));
             path
+        }
+
+        fn depend(&self, path: &Path, on: &str) {
+            self.dependencies
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(path.to_path_buf(), vec![on.to_string()]);
         }
 
         fn unloaded(&self) -> u64 {
@@ -2831,7 +2884,13 @@ mod tests {
                     version: "1".to_string(),
                     authors: Vec::new(),
                     description: String::new(),
-                    dependencies: Vec::new(),
+                    dependencies: self
+                        .dependencies
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_default(),
                     permissions: Vec::new(),
                 };
                 Ok((plugin, metadata, Box::new(()) as Box<dyn Any + Send + Sync>))
@@ -2855,7 +2914,7 @@ mod tests {
         }
 
         fn can_unload(&self) -> bool {
-            true
+            !self.resident
         }
     }
 
@@ -3311,6 +3370,122 @@ mod tests {
         );
         release.notify_one();
         assert!(matches!(task.await, Ok(Ok(()))));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn replacement_unloading_its_predecessor_is_not_a_deadlock() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let old: Arc<SyncMutex<Option<PluginId>>> = Arc::default();
+        let result = Arc::new(SyncMutex::new(None));
+        let (on_old, on_result) = (Arc::clone(&old), Arc::clone(&result));
+        let path = loader.add(
+            "a",
+            hook(move |context| {
+                let old = on_old
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone();
+                let result = Arc::clone(&on_result);
+                async move {
+                    // The second load unloads the first, which is gone already
+                    if let Some(old) = old {
+                        let unload = context.plugin_manager.unload_loaded(&old).await;
+                        *result.lock().unwrap_or_else(PoisonError::into_inner) = Some(unload);
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        let first = manager.try_load_plugin(&server, &path).await.unwrap();
+        manager.unload_plugin("a").await.unwrap();
+        *old.lock().unwrap_or_else(PoisonError::into_inner) = Some(first);
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+
+        let unload = result.lock().unwrap_or_else(PoisonError::into_inner).take();
+        assert!(
+            matches!(unload, Some(Err(ManagerError::PluginNotFound(_)))),
+            "{unload:?}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn retried_child_depending_on_its_owner_loads() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add("c", ok(), ok());
+        child_loader.depend(&child, "p");
+        let retry = Arc::new(SyncMutex::new(None));
+        let (on_retry, owner_loader) = (Arc::clone(&retry), Arc::clone(&child_loader));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let (retry, child_loader) = (Arc::clone(&on_retry), Arc::clone(&owner_loader));
+                async move {
+                    let added = context.register_plugin_loader(child_loader).await;
+                    *retry.lock().unwrap_or_else(PoisonError::into_inner) = Some(added);
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        // No loader for it yet, so it waits for one
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert_eq!(
+            retry.lock().unwrap_or_else(PoisonError::into_inner).take(),
+            Some(LoaderRetry::Pending)
+        );
+        // c's dependency on p is met once p is loaded
+        eventually(|| manager.is_plugin_active("c")).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn loader_is_registered_once() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        let other = Arc::new(TestLoader::default());
+        other.add("c", ok(), ok());
+        let added = manager.add_loader(&server, Arc::clone(&other) as _).await;
+        assert_eq!(added, LoaderRetry::Loaded(0));
+        let again = manager.add_loader(&server, other).await;
+        assert_eq!(again, LoaderRetry::Refused);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failed_child_of_a_resident_loader_keeps_its_owner() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader {
+            resident: true,
+            ..TestLoader::default()
+        });
+        let child = child_loader.add(
+            "c",
+            hook(|_| async { Err("child fails".to_string()) }),
+            ok(),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        // A loader held from outside counts as in use
+        drop(child_loader);
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        // The child's leaked runtime may still run the loader's code, which is p's
+        let unload = manager.unload_plugin("p").await;
+        assert!(unload.is_err_and(|e| e.is_library_in_use()));
+        assert_eq!(loader.unloaded(), 0);
     }
 
     #[tokio::test]

@@ -430,7 +430,9 @@ impl Context {
     /// - `loader`: The custom plugin loader implementation to register.
     ///
     /// # Returns
-    /// `true` if new plugins were loaded as a result of registering this loader, `false` otherwise.
+    /// What happened to the files waiting for a loader. From `on_load` that is
+    /// [`LoaderRetry::Pending`](crate::plugin::LoaderRetry::Pending): they may depend on this
+    /// plugin, so they load after this call returns.
     ///
     /// # Example
     ///
@@ -442,15 +444,10 @@ impl Context {
     pub async fn register_plugin_loader(
         &self,
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
-    ) -> bool {
-        let before_count = self.plugin_manager.loaded_plugins().len();
+    ) -> crate::plugin::LoaderRetry {
         self.plugin_manager
             .add_owned_loader(&self.server, Some(self), loader)
-            .await;
-        let after_count = self.plugin_manager.loaded_plugins().len();
-
-        // Return true if any new plugins were loaded
-        after_count > before_count
+            .await
     }
 
     /// Initializes logging via the tracing crate for the plugin.
