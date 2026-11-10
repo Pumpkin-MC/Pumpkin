@@ -127,8 +127,8 @@ pub async fn run_gametests(
 
     let finished = runner.is_empty();
     let passed = report.all_required_passed();
-    if finished && passed {
-        check_test_environment(
+    let environment_result = if finished && passed {
+        let inline_result = check_test_environment(
             server,
             runner,
             &world,
@@ -138,25 +138,39 @@ pub async fn run_gametests(
             false,
             7,
         )
-        .await?;
-        check_test_environment(
-            server,
-            runner,
-            &world,
-            report_sink.clone(),
-            "pumpkin:referenced_environment",
-            18000,
-            true,
-            11,
-        )
-        .await?;
-    }
+        .await;
+        if inline_result.is_ok() {
+            check_test_environment(
+                server,
+                runner,
+                &world,
+                report_sink.clone(),
+                "pumpkin:referenced_environment",
+                18000,
+                true,
+                11,
+            )
+            .await
+        } else {
+            inline_result
+        }
+    } else {
+        Ok(())
+    };
     let messages = reporter.messages();
     for msg in &messages {
         summary_lines.push(format!("  {msg}"));
     }
 
     runner.cancel_and_clear().await;
+
+    if let Err(error) = environment_result {
+        return Err(if messages.is_empty() {
+            error
+        } else {
+            format!("{error}:\n{}", messages.join("\n"))
+        });
+    }
 
     if !finished {
         return Err(format!(
