@@ -1503,6 +1503,7 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
         .unwrap_or(("minecraft", resource_location));
 
     if namespace.is_empty()
+        || namespace.bytes().all(|byte| byte == b'.')
         || !namespace.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-' | b'.')
         })
@@ -1516,7 +1517,7 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
     if path.is_empty()
         || path
             .split('/')
-            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            .any(|segment| segment.is_empty() || segment.bytes().all(|byte| byte == b'.'))
         || !path.bytes().all(|byte| {
             byte.is_ascii_lowercase()
                 || byte.is_ascii_digit()
@@ -2191,6 +2192,27 @@ fn load_recipes_from_dir(
 #[cfg(test)]
 mod tests {
     use super::DatapackManager;
+
+    #[test]
+    fn structure_resource_locations_reject_dot_only_components() {
+        for name in [
+            "..:foo",
+            ".:foo",
+            "...:foo",
+            "minecraft:../foo",
+            "minecraft:foo/../bar",
+            "minecraft:foo/.../bar",
+        ] {
+            assert!(
+                super::parse_structure_resource_location(name).is_err(),
+                "accepted {name}"
+            );
+        }
+        assert_eq!(
+            super::parse_structure_resource_location("namespace.with.dots:foo.bar/baz"),
+            Ok(("namespace.with.dots", "foo.bar/baz"))
+        );
+    }
 
     #[test]
     fn function_dispatch_releases_the_functions_lock() {
