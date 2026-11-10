@@ -1,14 +1,23 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_rotation::Mirror};
 use pumpkin_nbt::{NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
 use crate::error::GameTestResult;
 use crate::model::GameTestRotation;
-use crate::structure::template::GameTestStructureTemplate;
+use crate::structure::template::{GameTestStructureBlock, GameTestStructureTemplate};
 use crate::world::GameTestWorld;
 
 const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
+
+fn clear_flags() -> BlockFlags {
+    BlockFlags::NOTIFY_LISTENERS
+        | BlockFlags::SKIP_DROPS
+        | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK
+        | BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT
+        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+        | BlockFlags::UPDATE_KNOWN_SHAPE
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GameTestPosition {
@@ -144,6 +153,34 @@ pub async fn place_structure_with_controller_rotation(
     position: GameTestPosition,
     padding: i32,
 ) -> GameTestResult<TestStructureInstance> {
+    place_structure_with_controller_rotation_and_entities(
+        world,
+        template,
+        test_id,
+        rotation,
+        controller_rotation,
+        position,
+        padding,
+        false,
+    )
+    .await
+}
+
+/// Places a test while retaining the controller's entity setting.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "placement uses the saved controller setting"
+)]
+pub async fn place_structure_with_controller_rotation_and_entities(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    test_id: &str,
+    rotation: GameTestRotation,
+    controller_rotation: GameTestRotation,
+    position: GameTestPosition,
+    padding: i32,
+    ignore_entities: bool,
+) -> GameTestResult<TestStructureInstance> {
     // TestInstanceBlockEntity.getStructurePos offsets the controller by padding and
     // then by STRUCTURE_OFFSET. The controller itself is outside the structure box.
     // Reruns retain the original controller Y instead of querying a heightmap again.
@@ -165,26 +202,8 @@ pub async fn place_structure_with_controller_rotation(
         source_size[2],
     ));
     let size = [rotated_size.x, rotated_size.y, rotated_size.z];
-
-    // Vanilla TestInstanceBlockEntity::placeStructure clears non-player entities
-    // from getTestBounds() before placing a fresh attempt. This is particularly
-    // important for retries: mobs spawned by the previous attempt must not survive
-    // into the next one and keep ticking against the replacement structure.
-    let test_min = BlockPos::new(
-        origin.0.x - padding,
-        origin.0.y - padding,
-        origin.0.z - padding,
-    );
-    let test_max = BlockPos::new(
-        origin.0.x + size[0] + padding,
-        origin.0.y + size[1] + padding,
-        origin.0.z + size[2] + padding,
-    );
-    world
-        .clear_non_player_entities(&test_min, &test_max)
-        .await?;
-
-    clear_test_area(world, &origin, size, padding).await?;
+    let placement =
+        TestStructureInstance::new(test_instance_pos, origin, source_size, size, rotation);
 
     world
         .set_block_state(
@@ -204,7 +223,7 @@ pub async fn place_structure_with_controller_rotation(
         "rotation",
         controller_rotation.serialized_name().to_string(),
     );
-    data.put_bool("ignore_entities", false);
+    data.put_bool("ignore_entities", ignore_entities);
     data.put_string("status", "cleared".to_string());
 
     let mut test_instance_nbt = NbtCompound::new();
@@ -212,6 +231,38 @@ pub async fn place_structure_with_controller_rotation(
     test_instance_nbt.put_compound("data", data);
     world
         .set_block_entity_nbt(&test_instance_pos, &test_instance_nbt)
+        .await?;
+
+    place_existing_structure(world, template, &placement, padding, ignore_entities).await?;
+
+    Ok(placement)
+}
+
+/// Places a template around an existing test controller without changing its saved data.
+pub async fn place_existing_structure(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    placement: &TestStructureInstance,
+    padding: i32,
+    ignore_entities: bool,
+) -> GameTestResult<()> {
+    let origin = placement.origin();
+    let size = placement.size();
+    let source_size = placement.source_size();
+    let rotation = placement.rotation();
+    let test_min = BlockPos::new(
+        origin.0.x - padding,
+        origin.0.y - padding,
+        origin.0.z - padding,
+    );
+    let test_max = BlockPos::new(
+        origin.0.x + size[0] + padding,
+        origin.0.y + size[1] + padding,
+        origin.0.z + size[2] + padding,
+    );
+    clear_test_area(world, origin, size, padding).await?;
+    world
+        .clear_non_player_entities(&test_min, &test_max)
         .await?;
 
     // StructureTemplate.placeInWorld rotates both relative positions and block
@@ -234,16 +285,11 @@ pub async fn place_structure_with_controller_rotation(
         let state = world.rotate_block_state(block.state, rotation).await?;
         world.set_block_state(&position, state, place_flags).await?;
 
-        if let Some(nbt) = &block.nbt {
-            world.set_block_entity_nbt(&position, nbt).await?;
-        } else if let Some(mode) = block.test_mode {
-            let mut nbt = NbtCompound::new();
-            nbt.put_string("id", "minecraft:test_block".to_string());
-            nbt.put_string("mode", mode.serialized_name().to_string());
-            nbt.put_string("message", String::new());
-            nbt.put_bool("powered", false);
-            world.set_block_entity_nbt(&position, &nbt).await?;
-        }
+        place_structure_block_entity(world, &position, block).await?;
+    }
+
+    if !ignore_entities {
+        place_entities(world, template, placement).await?;
     }
 
     // GameTestInfo::placeStructure clears both scheduled block ticks and queued
@@ -254,13 +300,45 @@ pub async fn place_structure_with_controller_rotation(
         .await?;
     world.clear_block_events(&test_min, &test_max).await?;
 
-    Ok(TestStructureInstance::new(
-        test_instance_pos,
-        origin,
-        source_size,
-        size,
-        rotation,
-    ))
+    Ok(())
+}
+
+/// Installs a template block's NBT or its synthesized test-block data.
+pub async fn place_structure_block_entity(
+    world: &dyn GameTestWorld,
+    position: &BlockPos,
+    block: &GameTestStructureBlock,
+) -> GameTestResult<()> {
+    if let Some(nbt) = &block.nbt {
+        world.set_block_entity_nbt(position, nbt).await?;
+    } else if let Some(mode) = block.test_mode {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:test_block".to_string());
+        nbt.put_string("mode", mode.serialized_name().to_string());
+        nbt.put_string("message", String::new());
+        nbt.put_bool("powered", false);
+        world.set_block_entity_nbt(position, &nbt).await?;
+    }
+    Ok(())
+}
+
+async fn place_entities(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    placement: &TestStructureInstance,
+) -> GameTestResult<()> {
+    for entity in template.entities() {
+        let position = placement.transform_vec(entity.position);
+        let block_position = placement.transform(&BlockPos::new(
+            entity.block_position[0],
+            entity.block_position[1],
+            entity.block_position[2],
+        ));
+        let nbt =
+            entity.placement_nbt(position, block_position, placement.rotation(), Mirror::None);
+        world.spawn_structure_entity(&nbt).await?;
+    }
+    Ok(())
 }
 
 /// Encloses the structure with the same one-block barrier shell used by Vanilla.
@@ -300,11 +378,7 @@ pub async fn remove_barriers(
     process_structure_boundary(placement, sky_access, |position| async move {
         if world.block_state_id(&position).await == Block::BARRIER.default_state.id {
             world
-                .set_block_state(
-                    &position,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
+                .set_block_state(&position, Block::AIR.default_state.id, clear_flags())
                 .await?;
         }
         Ok(())
@@ -373,6 +447,38 @@ pub async fn clear_structure_area(
     clear_box(world, origin, size).await
 }
 
+/// Clears a placed test structure, its controller, and its barrier shell.
+pub async fn clear_placed_test(
+    world: &dyn GameTestWorld,
+    placement: &TestStructureInstance,
+    padding: i32,
+) -> GameTestResult<()> {
+    let origin = placement.origin();
+    let size = placement.size();
+    let min = BlockPos::new(
+        origin.0.x - padding,
+        origin.0.y - padding,
+        origin.0.z - padding,
+    );
+    let max = BlockPos::new(
+        origin.0.x + size[0] + padding,
+        origin.0.y + size[1] + padding,
+        origin.0.z + size[2] + padding,
+    );
+    world.clear_non_player_entities(&min, &max).await?;
+    clear_test_area(world, origin, size, padding).await?;
+    world.clear_scheduled_block_ticks(&min, &max).await?;
+    world.clear_block_events(&min, &max).await?;
+    remove_barriers(world, placement, false).await?;
+    world
+        .set_block_state(
+            placement.test_instance_pos(),
+            Block::AIR.default_state.id,
+            clear_flags(),
+        )
+        .await
+}
+
 async fn clear_test_area(
     world: &dyn GameTestWorld,
     origin: &BlockPos,
@@ -398,17 +504,12 @@ async fn clear_box(
     origin: &BlockPos,
     size: [i32; 3],
 ) -> GameTestResult<()> {
-    let clear_flags = BlockFlags::NOTIFY_LISTENERS
-        | BlockFlags::SKIP_DROPS
-        | BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT
-        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
-
     for x in 0..size[0] {
         for y in 0..size[1] {
             for z in 0..size[2] {
                 let position = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z + z);
                 world
-                    .set_block_state(&position, Block::AIR.default_state.id, clear_flags)
+                    .set_block_state(&position, Block::AIR.default_state.id, clear_flags())
                     .await?;
             }
         }

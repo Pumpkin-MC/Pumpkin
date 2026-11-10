@@ -11,6 +11,34 @@ use tracing::warn;
 
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 
+/// Loads embedded test environments into the dynamic registry before on-disk packs.
+pub fn load_embedded_test_environments<S: std::hash::BuildHasher>(
+    registry: &mut HashMap<String, RegistryEntryData, S>,
+) -> usize {
+    let before = registry.len();
+    for &id in pumpkin_data::test_environment::all_test_environment_names() {
+        let Some(content) = pumpkin_data::test_environment::get_test_environment_json(id) else {
+            warn!("Embedded test environment '{id}' has no JSON payload");
+            continue;
+        };
+        match serde_json::from_str::<Value>(content) {
+            Ok(value) => {
+                registry.insert(
+                    id.to_owned(),
+                    RegistryEntryData {
+                        entry_id: id.to_owned(),
+                        data: Some(super::dynamic_registry_loader::json_to_registry_nbt_bytes(
+                            &value,
+                        )),
+                    },
+                );
+            }
+            Err(error) => warn!("Failed to parse embedded test environment '{id}': {error}"),
+        }
+    }
+    registry.len() - before
+}
+
 /// Loads all test instances embedded in the binary at compile time.
 ///
 /// Ids are fully qualified, so entries here can be overridden by later
@@ -86,11 +114,18 @@ fn load_test_instances_recursive(
             let stem_path = stem_path.replace('\\', "/");
             let test_instance_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(instance) = serde_json::from_str::<TestInstance>(&content)
-                && instance.is_valid()
-            {
-                registry.insert(test_instance_id, instance);
+            match fs::read_to_string(&path) {
+                Ok(content) => match serde_json::from_str::<TestInstance>(&content) {
+                    Ok(instance) if instance.is_valid() => {
+                        registry.insert(test_instance_id, instance);
+                    }
+                    Ok(_) => warn!("Test instance '{}' failed validation", path.display()),
+                    Err(error) => warn!(
+                        "Failed to parse test instance '{}': {error}",
+                        path.display()
+                    ),
+                },
+                Err(error) => warn!("Failed to read test instance '{}': {error}", path.display()),
             }
         }
     }
@@ -121,7 +156,7 @@ pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryE
 
     RegistryEntryData {
         entry_id,
-        data: Some(Nbt::from(nbt).write().to_vec().into_boxed_slice()),
+        data: Some(Nbt::from(nbt).write_unnamed().to_vec().into_boxed_slice()),
     }
 }
 

@@ -12,6 +12,12 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:creeper_should_run_from_cat" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/creeper_should_run_from_cat.json"
         )),
+        "pumpkin:inline_environment" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/inline_environment.json"
+        )),
+        "pumpkin:referenced_environment" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/referenced_environment.json"
+        )),
         "pumpkin:summon_command_regression" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/summon_command_regression.json"
         )),
@@ -24,6 +30,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
     &[
         "minecraft:always_pass",
         "pumpkin:creeper_should_run_from_cat",
+        "pumpkin:inline_environment",
+        "pumpkin:referenced_environment",
         "pumpkin:summon_command_regression",
     ]
 }

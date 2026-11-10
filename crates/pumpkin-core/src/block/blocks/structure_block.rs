@@ -2,7 +2,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs, OnPlaceArgs};
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::StructureBlockLikeProperties;
+use pumpkin_data::block_properties::{StructureBlockLikeProperties, StructureblockMode};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::PermissionLvl;
 
@@ -11,7 +11,8 @@ pub struct StructureBlock;
 
 impl BlockBehaviour for StructureBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let props = StructureBlockLikeProperties::default(args.block);
+        let mut props = StructureBlockLikeProperties::default(args.block);
+        props.mode = StructureblockMode::Load;
         props.to_state_id(args.block)
     }
 

@@ -1,8 +1,13 @@
-use pumpkin_data::{Block, BlockStateId};
-use pumpkin_nbt::NbtCompound;
+use pumpkin_data::{
+    Block, BlockStateId,
+    block_rotation::{Mirror, Rotation},
+};
+use pumpkin_nbt::{NbtCompound, tag::NbtTag};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::{CURRENT_MC_DATA_VERSION, CURRENT_MC_VERSION};
 
 use crate::error::{GameTestError, GameTestResult};
+use crate::model::GameTestRotation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TestBlockMode {
@@ -44,9 +49,73 @@ pub struct GameTestStructureBlock {
 }
 
 #[derive(Clone, Debug)]
+pub struct GameTestStructureEntity {
+    pub position: Vector3<f64>,
+    pub block_position: [i32; 3],
+    pub nbt: NbtCompound,
+}
+
+impl GameTestStructureEntity {
+    /// Returns entity NBT positioned and oriented for a structure placement.
+    #[must_use]
+    pub fn placement_nbt(
+        &self,
+        position: Vector3<f64>,
+        block_position: BlockPos,
+        rotation: GameTestRotation,
+        mirror: Mirror,
+    ) -> NbtCompound {
+        let mut nbt = self.nbt.clone();
+        nbt.put(
+            "Pos",
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
+        );
+        nbt.child_tags.remove("UUID");
+        if nbt.get("block_pos").is_some() {
+            nbt.put(
+                "block_pos",
+                NbtTag::IntArray(vec![
+                    block_position.0.x,
+                    block_position.0.y,
+                    block_position.0.z,
+                ]),
+            );
+        }
+        let angles = nbt.get_list("Rotation").unwrap_or_default();
+        let yaw = angles
+            .first()
+            .and_then(NbtTag::extract_float)
+            .unwrap_or(0.0);
+        let pitch = angles.get(1).and_then(NbtTag::extract_float).unwrap_or(0.0);
+        let angle = pumpkin_util::math::wrap_degrees(yaw);
+        let mirrored = match mirror {
+            Mirror::None => angle,
+            Mirror::LeftRight => 180.0 - angle,
+            Mirror::FrontBack => -angle,
+        };
+        let offset = match rotation.as_block_rotation() {
+            Rotation::None => 0.0,
+            Rotation::Clockwise90 => 90.0,
+            Rotation::Rotate180 => 180.0,
+            Rotation::CounterClockwise90 => 270.0,
+        };
+        nbt.put(
+            "Rotation",
+            NbtTag::List(vec![(mirrored + offset).into(), pitch.into()]),
+        );
+        nbt
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct GameTestStructureTemplate {
     size: [i32; 3],
     blocks: Vec<GameTestStructureBlock>,
+    entities: Vec<GameTestStructureEntity>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -78,7 +147,11 @@ impl GameTestStructureTemplate {
             }
         }
 
-        Ok(Self { size, blocks })
+        Ok(Self {
+            size,
+            blocks,
+            entities: Vec::new(),
+        })
     }
 
     pub fn empty(size: [i32; 3]) -> GameTestResult<Self> {
@@ -173,6 +246,7 @@ impl GameTestStructureTemplate {
         Ok(Self {
             size,
             blocks: parsed_blocks,
+            entities: read_entities(structure),
         })
     }
 
@@ -187,9 +261,60 @@ impl GameTestStructureTemplate {
     }
 
     #[must_use]
+    pub fn entities(&self) -> &[GameTestStructureEntity] {
+        &self.entities
+    }
+
+    #[must_use]
     pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
+}
+
+fn read_entities(structure: &NbtCompound) -> Vec<GameTestStructureEntity> {
+    let mut entities = Vec::new();
+    for entry in structure.get_list("entities").unwrap_or_default() {
+        let Some(entry) = entry.extract_compound() else {
+            continue;
+        };
+        let Some(nbt) = entry.get_compound("nbt") else {
+            continue;
+        };
+        let position = entry.get_list("pos").unwrap_or_default();
+        let block_position = entry.get_list("blockPos").unwrap_or_default();
+        entities.push(GameTestStructureEntity {
+            position: Vector3::new(
+                position
+                    .first()
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+                position
+                    .get(1)
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+                position
+                    .get(2)
+                    .and_then(NbtTag::extract_double)
+                    .unwrap_or(0.0),
+            ),
+            block_position: [
+                block_position
+                    .first()
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+                block_position
+                    .get(1)
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+                block_position
+                    .get(2)
+                    .and_then(NbtTag::extract_int)
+                    .unwrap_or(0),
+            ],
+            nbt: nbt.clone(),
+        });
+    }
+    entities
 }
 
 fn read_vec3(compound: &NbtCompound, name: &str) -> GameTestResult<[i32; 3]> {

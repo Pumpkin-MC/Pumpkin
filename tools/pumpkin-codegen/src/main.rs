@@ -174,6 +174,8 @@ pub fn main() {
         (structure_metadata::build, "structure_metadata.rs"),
         (structure_template::build, "structure_template.rs"),
         (test_instance::build, "test_instance.rs"),
+        (test_instance::build_environment, "test_environment.rs"),
+        (test_instance::build_function, "test_function.rs"),
         (painting_variant::build, "painting_variant.rs"),
         (poi_type::build, "poi_type.rs"),
         (context_provider::build, "context_provider.rs"),

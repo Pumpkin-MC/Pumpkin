@@ -1,10 +1,14 @@
-use std::sync::Arc;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use pumpkin_data::translation::java;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::{GameTestError, GameTestSession, GameTestState};
+
+pub const VERIFY_TEST_BATCH_SIZE: usize = 100;
+const MAX_TESTS_PER_BATCH: usize = 50;
 
 /// Receives fully constructed `GameTest` report messages.
 ///
@@ -12,6 +16,34 @@ use crate::{GameTestError, GameTestSession, GameTestState};
 /// where those messages are delivered.
 pub trait GameTestReporter: Send + Sync {
     fn send_message(&self, message: TextComponent);
+
+    /// Receives one final result for each test in the batch.
+    fn on_outcome(&self, _outcome: &GameTestOutcome) {}
+}
+
+/// Stores plain-text `GameTest` messages for later inspection.
+#[derive(Default)]
+pub struct RecordingGameTestReporter {
+    messages: Mutex<Vec<String>>,
+}
+
+impl RecordingGameTestReporter {
+    #[must_use]
+    pub fn messages(&self) -> Vec<String> {
+        self.messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+impl GameTestReporter for RecordingGameTestReporter {
+    fn send_message(&self, message: TextComponent) {
+        self.messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(message.get_text());
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,9 +86,29 @@ impl GameTestRetryOptions {
     }
 }
 
+/// Final status of one `GameTest` in a batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GameTestOutcomeStatus {
+    Passed,
+    Failed,
+    Cancelled,
+}
+
+/// Final result of one `GameTest`, with counts for executions that actually started.
+#[derive(Clone, Debug)]
+pub struct GameTestOutcome {
+    pub id: String,
+    pub required: bool,
+    pub status: GameTestOutcomeStatus,
+    pub attempts: u32,
+    pub successes: u32,
+    pub error: Option<GameTestError>,
+}
+
 /// Shared accounting and reporting for a group of `GameTests`.
 pub struct GameTestBatchReport {
     reporter: Arc<dyn GameTestReporter>,
+    outcomes: Mutex<Vec<GameTestOutcome>>,
     remaining_tests: AtomicUsize,
     total_runs: AtomicUsize,
     failed_required: AtomicUsize,
@@ -68,6 +120,7 @@ impl GameTestBatchReport {
     pub fn new(reporter: Arc<dyn GameTestReporter>, test_count: usize) -> Self {
         Self {
             reporter,
+            outcomes: Mutex::new(Vec::with_capacity(test_count)),
             remaining_tests: AtomicUsize::new(test_count),
             total_runs: AtomicUsize::new(0),
             failed_required: AtomicUsize::new(0),
@@ -80,10 +133,40 @@ impl GameTestBatchReport {
         &self.reporter
     }
 
-    pub fn fail_to_start(&self, error: &GameTestError) {
+    pub fn fail_to_start(&self, id: &str, error: &GameTestError, required: bool) {
         self.reporter
             .send_message(TextComponent::text(error.to_string()).color_named(NamedColor::Red));
-        self.finish_test(true, 1, 0);
+        self.finish_test(
+            GameTestOutcome {
+                id: id.to_string(),
+                required,
+                status: GameTestOutcomeStatus::Failed,
+                attempts: 0,
+                successes: 0,
+                error: Some(error.clone()),
+            },
+            1,
+            0,
+        );
+    }
+
+    /// Records a queued test that was cancelled before it started.
+    pub fn cancel_before_start(&self, id: &str, required: bool) {
+        let error = GameTestError::World("GameTest cancelled".to_string());
+        self.reporter
+            .send_message(TextComponent::text(error.to_string()).color_named(NamedColor::Red));
+        self.finish_test(
+            GameTestOutcome {
+                id: id.to_string(),
+                required,
+                status: GameTestOutcomeStatus::Cancelled,
+                attempts: 0,
+                successes: 0,
+                error: Some(error),
+            },
+            1,
+            0,
+        );
     }
 
     #[must_use]
@@ -111,14 +194,29 @@ impl GameTestBatchReport {
         self.remaining_tests() == 0
     }
 
+    /// Returns a snapshot of the tests that have finished so far.
+    #[must_use]
+    pub fn outcomes(&self) -> Vec<GameTestOutcome> {
+        self.outcomes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     #[must_use]
     pub fn all_required_passed(&self) -> bool {
         self.is_done() && self.failed_required() == 0
     }
 
-    fn finish_test(&self, required: bool, attempts: u32, successes: u32) {
-        let attempts = usize::try_from(attempts).unwrap_or(usize::MAX);
-        let successes = usize::try_from(successes).unwrap_or(usize::MAX);
+    fn finish_test(&self, outcome: GameTestOutcome, counted_attempts: u32, counted_successes: u32) {
+        let attempts = usize::try_from(counted_attempts).unwrap_or(usize::MAX);
+        let successes = usize::try_from(counted_successes).unwrap_or(usize::MAX);
+        let required = outcome.required;
+        self.reporter.on_outcome(&outcome);
+        self.outcomes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(outcome);
         self.total_runs.fetch_add(attempts, Ordering::AcqRel);
         let failures = attempts.saturating_sub(successes);
         if failures != 0 {
@@ -183,7 +281,9 @@ pub struct GameTestManager {
     sink: Arc<dyn GameTestReporter>,
     attempts: u32,
     successes: u32,
+    last_error: Option<GameTestError>,
     rerun_scheduled: bool,
+    rerun_order: Option<usize>,
     done: bool,
 }
 
@@ -202,7 +302,9 @@ impl GameTestManager {
             sink,
             attempts: 0,
             successes: 0,
+            last_error: None,
             rerun_scheduled: false,
+            rerun_order: None,
             done: false,
         }
     }
@@ -214,6 +316,9 @@ impl GameTestManager {
             GameTestState::Failed { tick, error } => (false, *tick, Some(error)),
             _ => return,
         };
+        if let Some(error) = error {
+            self.last_error = Some(error.clone());
+        }
 
         self.attempts = self.attempts.saturating_add(1);
         if passed {
@@ -316,6 +421,7 @@ impl GameTestManager {
                     last_error,
                 };
                 let exhausted_message = exhausted.to_string();
+                self.last_error = Some(exhausted);
                 self.report_failure(Some(&exhausted_message));
                 false
             }
@@ -335,8 +441,24 @@ impl GameTestManager {
             self.successes
         };
 
+        let status = if effective_successes == self.attempts {
+            GameTestOutcomeStatus::Passed
+        } else {
+            GameTestOutcomeStatus::Failed
+        };
         self.report.finish_test(
-            self.run.test.is_required(),
+            GameTestOutcome {
+                id: self.run.test.id().to_string(),
+                required: self.run.test.is_required(),
+                status,
+                attempts: self.attempts,
+                successes: self.successes,
+                error: if status == GameTestOutcomeStatus::Failed {
+                    self.last_error.clone()
+                } else {
+                    None
+                },
+            },
             self.attempts,
             effective_successes,
         );
@@ -350,6 +472,30 @@ impl GameTestManager {
 
         self.run = self.run.copy_reset();
         self.rerun_scheduled = false;
+        self.rerun_order = None;
+    }
+
+    fn cancel(&mut self) {
+        if self.done {
+            return;
+        }
+        self.sink.send_message(
+            TextComponent::text(format!("{} cancelled", self.run.test.id()))
+                .color_named(NamedColor::Yellow),
+        );
+        self.report.finish_test(
+            GameTestOutcome {
+                id: self.run.test.id().to_string(),
+                required: self.run.test.is_required(),
+                status: GameTestOutcomeStatus::Cancelled,
+                attempts: self.attempts,
+                successes: self.successes,
+                error: Some(GameTestError::World("GameTest cancelled".to_string())),
+            },
+            self.attempts.saturating_add(1),
+            self.successes,
+        );
+        self.done = true;
     }
 
     fn report_failure(&self, error_message: Option<&str>) {
@@ -401,37 +547,126 @@ impl GameTestManager {
 #[derive(Default)]
 pub struct GameTestRunner {
     active: Vec<GameTestManager>,
+    pending: VecDeque<GameTestManager>,
+    environment: Option<(
+        Arc<dyn crate::world::GameTestWorld>,
+        Box<dyn std::any::Any + Send>,
+    )>,
+    completed: Vec<GameTestSession>,
+    collect_completed: bool,
+    next_rerun_order: usize,
 }
 
 impl GameTestRunner {
     #[must_use]
     pub const fn new() -> Self {
-        Self { active: Vec::new() }
+        Self {
+            active: Vec::new(),
+            pending: VecDeque::new(),
+            environment: None,
+            completed: Vec::new(),
+            collect_completed: false,
+            next_rerun_order: 0,
+        }
     }
 
     pub fn enqueue(&mut self, run: GameTestManager) {
-        self.active.push(run);
+        self.pending.push_back(run);
     }
 
     pub fn clear(&mut self) {
+        if let Some((world, saved)) = self.environment.take() {
+            world.teardown_test_environment(saved);
+        }
         self.active.clear();
+        self.pending.clear();
+        self.completed.clear();
+        self.collect_completed = false;
+        self.next_rerun_order = 0;
+    }
+
+    pub async fn cancel_and_clear(&mut self) -> Vec<GameTestError> {
+        let mut errors = Vec::new();
+        for managed in &mut self.active {
+            if let Err(error) = managed.run.clear_placement().await {
+                errors.push(error);
+            }
+            managed.cancel();
+        }
+        for completed in &self.completed {
+            if let Err(error) = completed.clear_placement().await {
+                errors.push(error);
+            }
+        }
+        for managed in &mut self.pending {
+            managed.cancel();
+        }
+        self.clear();
+        errors
+    }
+
+    pub const fn collect_completed(&mut self) {
+        self.collect_completed = true;
+    }
+
+    pub fn take_completed(&mut self) -> Vec<GameTestSession> {
+        std::mem::take(&mut self.completed)
+    }
+
+    pub fn stop_collecting_completed(&mut self) {
+        self.completed.clear();
+        self.collect_completed = false;
     }
 
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.active.is_empty()
+    pub fn is_empty(&self) -> bool {
+        self.active.is_empty() && self.pending.is_empty()
     }
 
     #[must_use]
-    pub const fn active_len(&self) -> usize {
-        self.active.len()
+    pub fn active_len(&self) -> usize {
+        self.active.len() + self.pending.len()
     }
 
     pub async fn tick(&mut self) {
+        if self.active.is_empty() {
+            if let Some((world, saved)) = self.environment.take() {
+                world.teardown_test_environment(saved);
+            }
+            if let Some(first) = self.pending.front() {
+                let environment = first.run.environment().clone();
+                let world_key = first.run.environment_world_key();
+                let world = first.run.environment_world();
+                match world.activate_test_environment(&environment) {
+                    Ok(saved) => {
+                        self.environment = Some((world, saved));
+                        while self.active.len() < MAX_TESTS_PER_BATCH
+                            && self.pending.front().is_some_and(|next| {
+                                next.run.environment() == &environment
+                                    && next.run.environment_world_key() == world_key
+                            })
+                        {
+                            if let Some(next) = self.pending.pop_front() {
+                                self.active.push(next);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        if let Some(mut failed) = self.pending.pop_front() {
+                            failed.report.fail_to_start(
+                                failed.run.test.id(),
+                                &error,
+                                failed.run.test.is_required(),
+                            );
+                            failed.done = true;
+                        }
+                    }
+                }
+            }
+        }
         // Vanilla queues copyReset reruns and does not start them until the current
         // set of batches has completed. Treat all currently active executions as one
-        // wave: finish the wave first, then install the scheduled copies so they begin
-        // on the following server tick.
+        // wave, then start copies in the order their original runs finished.
         for managed in &mut self.active {
             if managed.done || managed.rerun_scheduled {
                 continue;
@@ -440,14 +675,37 @@ impl GameTestRunner {
             managed.run.tick().await;
             if managed.run.state.is_finished() {
                 managed.handle_completion();
+                if managed.rerun_scheduled {
+                    managed.rerun_order = Some(self.next_rerun_order);
+                    self.next_rerun_order += 1;
+                }
             }
         }
 
-        self.active.retain(|managed| !managed.done);
+        if self.collect_completed {
+            let mut active = Vec::with_capacity(self.active.len());
+            for managed in self.active.drain(..) {
+                if managed.done {
+                    self.completed.push(managed.run);
+                } else {
+                    active.push(managed);
+                }
+            }
+            self.active = active;
+        } else {
+            self.active.retain(|managed| !managed.done);
+        }
         if self.active.iter().all(|managed| managed.rerun_scheduled) {
+            self.active.sort_by_key(|managed| managed.rerun_order);
             for managed in &mut self.active {
                 managed.install_scheduled_rerun();
             }
+            self.next_rerun_order = 0;
+        }
+        if self.active.is_empty()
+            && let Some((world, saved)) = self.environment.take()
+        {
+            world.teardown_test_environment(saved);
         }
     }
 }

@@ -61,10 +61,14 @@ pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod server_test_manager;
+pub mod structure_editor;
+mod test_environment;
 pub mod tick_rate_manager;
 pub mod ticker;
 
+pub use pumpkin_gametest::{GameTestOutcome, GameTestOutcomeStatus, GameTestReporter};
 pub use recipe::RecipeManager;
+pub use server_test_manager::{GameTestBatchReport, GameTestRetryOptions, GameTestRunRequest};
 
 use crate::data::advancement_data::AdvancementManager;
 
@@ -106,6 +110,8 @@ pub struct Server {
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
     pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
+    game_test_state: server_test_manager::GameTestServerState,
+    game_test_driver: server_test_manager::GameTestDriver,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -319,6 +325,8 @@ impl Server {
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            game_test_state: server_test_manager::GameTestServerState::default(),
+            game_test_driver: server_test_manager::GameTestDriver::default(),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
@@ -840,6 +848,9 @@ impl Server {
     pub async fn shutdown(&self) {
         self.management_hub.broadcast_server_stopping();
 
+        server_test_manager::stop_game_tests(self);
+        self.game_test_driver.shutdown().await;
+
         self.tasks.close();
         debug!("Awaiting tasks for server");
         self.tasks.wait().await;
@@ -1230,7 +1241,7 @@ impl Server {
         self.simulation_pool.install(|| {
             // Do not flush mid-tick; `Flush` is `flushChannel`.
             let suspended = self.suspend_player_flushes();
-            if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+            if self.tick_rate_manager.runs_game_elements() {
                 self.tick_worlds();
                 // Always run player and network ticking, even when game is frozen
             } else {

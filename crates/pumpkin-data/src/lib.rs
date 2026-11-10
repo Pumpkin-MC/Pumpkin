@@ -324,6 +324,16 @@ pub mod structure_template;
 #[path = "generated/test_instance.rs"]
 pub mod test_instance;
 
+#[cfg(feature = "test_environment")]
+#[rustfmt::skip]
+#[path = "generated/test_environment.rs"]
+pub mod test_environment;
+
+#[cfg(feature = "test_function")]
+#[rustfmt::skip]
+#[path = "generated/test_function.rs"]
+pub mod test_function;
+
 #[cfg(feature = "painting_variant")]
 #[rustfmt::skip]
 #[path = "generated/painting_variant.rs"]

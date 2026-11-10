@@ -1,15 +1,20 @@
 use std::{
     fs::{self, File},
-    io::BufWriter,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
+use pumpkin_util::math::vector2::Vector2;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::world_info::{WorldGenSettings, WorldInfoError};
+use crate::world_info::{MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldGenSettings, WorldInfoError};
+
+// Vanilla ChunkMap.FORCED_TICKET_LEVEL is the entity-ticking level (31 in 26.3).
+const FORCED_TICKET_LEVEL: i32 = 31;
+const CHUNK_TICKETS_FILE: &str = "chunk_tickets.dat";
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct DataFileRoot<T> {
@@ -175,6 +180,170 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
     root.put_compound("data", data_comp);
     pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+}
+
+/// Reads persistent `/forceload` chunks for one dimension.
+pub fn read_forced_chunks(dimension_folder: &Path) -> Vec<Vector2<i32>> {
+    let path = minecraft_data_dir(dimension_folder).join(CHUNK_TICKETS_FILE);
+    match read_ticket_storage(&path) {
+        Ok(Some(root)) => match root
+            .get_compound("data")
+            .ok_or_else(|| {
+                WorldInfoError::DeserializationError(
+                    "chunk_tickets.dat has no data compound".to_string(),
+                )
+            })
+            .and_then(ticket_list)
+        {
+            Ok(tickets) => tickets
+                .iter()
+                .filter_map(|tag| match tag {
+                    NbtTag::Compound(ticket) if is_forced_ticket(ticket) => {
+                        match ticket.get_int_array("chunk_pos") {
+                            Some([x, z]) => Some(Vector2::new(*x, *z)),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                })
+                .collect(),
+            Err(error) => {
+                warn!(
+                    "Failed to read forced chunks from {}: {error}",
+                    path.display()
+                );
+                Vec::new()
+            }
+        },
+        Ok(None) => match migrate_legacy_forced_chunks(dimension_folder) {
+            Ok(chunks) => chunks,
+            Err(error) => {
+                warn!("Failed to migrate forced chunks: {error}");
+                Vec::new()
+            }
+        },
+        Err(error) => {
+            warn!(
+                "Failed to read forced chunks from {}: {error}",
+                path.display()
+            );
+            Vec::new()
+        }
+    }
+}
+
+fn read_ticket_storage(path: &Path) -> Result<Option<NbtCompound>, WorldInfoError> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    read_gzip_compound_tag(file)
+        .map(Some)
+        .map_err(|error| WorldInfoError::DeserializationError(error.to_string()))
+}
+
+fn ticket_list(data: &NbtCompound) -> Result<&[NbtTag], WorldInfoError> {
+    match data.get("tickets") {
+        None => Ok(&[]),
+        Some(NbtTag::List(tickets))
+            if tickets.iter().all(|tag| matches!(tag, NbtTag::Compound(_))) =>
+        {
+            Ok(tickets)
+        }
+        _ => Err(WorldInfoError::DeserializationError(
+            "chunk_tickets.dat has an invalid tickets list".to_string(),
+        )),
+    }
+}
+
+fn is_forced_ticket(ticket: &NbtCompound) -> bool {
+    matches!(
+        ticket.get_string("type"),
+        Some("minecraft:forced" | "forced")
+    )
+}
+
+fn migrate_legacy_forced_chunks(
+    dimension_folder: &Path,
+) -> Result<Vec<Vector2<i32>>, WorldInfoError> {
+    let path = minecraft_data_dir(dimension_folder).join("forced_chunks.dat");
+    let file = match File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let root = read_gzip_compound_tag(file)
+        .map_err(|error| WorldInfoError::DeserializationError(error.to_string()))?;
+    let chunks = root.get_list("chunks").ok_or_else(|| {
+        WorldInfoError::DeserializationError("forced_chunks.dat has no chunks list".to_string())
+    })?;
+    let chunks: Vec<_> = chunks
+        .iter()
+        .map(|tag| match tag {
+            NbtTag::IntArray(coords) if coords.len() == 2 => Ok(Vector2::new(coords[0], coords[1])),
+            _ => Err(WorldInfoError::DeserializationError(
+                "forced_chunks.dat has an invalid chunk position".to_string(),
+            )),
+        })
+        .collect::<Result<_, _>>()?;
+
+    write_forced_chunks(dimension_folder, chunks.iter().copied())?;
+    if let Err(error) = fs::remove_file(&path) {
+        warn!("Failed to remove migrated {}: {error}", path.display());
+    }
+    Ok(chunks)
+}
+
+/// Saves persistent `/forceload` chunks for one dimension.
+pub fn write_forced_chunks(
+    dimension_folder: &Path,
+    chunks: impl IntoIterator<Item = Vector2<i32>>,
+) -> Result<(), WorldInfoError> {
+    let directory = ensure_minecraft_data_dir(dimension_folder)?;
+    let path = directory.join(CHUNK_TICKETS_FILE);
+    let temporary = directory.join("chunk_tickets.dat.tmp");
+    let existing = read_ticket_storage(&path)?;
+    let is_new = existing.is_none();
+    let mut root = existing.unwrap_or_else(|| {
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
+        root
+    });
+    let mut data = match root.get("data") {
+        Some(NbtTag::Compound(data)) => data.clone(),
+        None if is_new => NbtCompound::new(),
+        _ => {
+            return Err(WorldInfoError::DeserializationError(
+                "chunk_tickets.dat has an invalid data compound".to_string(),
+            ));
+        }
+    };
+    let mut tickets = ticket_list(&data)?.to_vec();
+    tickets.retain(|tag| !matches!(tag, NbtTag::Compound(ticket) if is_forced_ticket(ticket)));
+
+    let mut forced_chunks: Vec<_> = chunks.into_iter().collect();
+    forced_chunks.sort_unstable_by_key(|pos| (pos.x, pos.y));
+    forced_chunks.dedup();
+    for pos in forced_chunks {
+        let mut ticket = NbtCompound::new();
+        ticket.put("chunk_pos", NbtTag::IntArray(vec![pos.x, pos.y]));
+        ticket.put_string("type", "minecraft:forced".to_string());
+        ticket.put_int("level", FORCED_TICKET_LEVEL);
+        tickets.push(NbtTag::Compound(ticket));
+    }
+    data.put_list("tickets", tickets);
+    root.put_compound("data", data);
+
+    let file = File::create(&temporary)?;
+    let mut writer = BufWriter::new(file);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, &mut writer)
+        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+    writer.flush()?;
+    writer.get_ref().sync_all()?;
+    drop(writer);
+    fs::rename(temporary, path)?;
+    Ok(())
 }
 
 #[must_use]
