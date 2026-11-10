@@ -1034,6 +1034,13 @@ impl EntityBase for ArrowEntity {
             }
         }
 
+        // Pickup callbacks may teleport or respawn the player.
+        if player.world().uuid != self.entity.world.load().uuid
+            || !crate::world::pickup_area(player).intersects(&self.entity.bounding_box.load())
+        {
+            return;
+        }
+
         // Try to insert an arrow into the player's inventory
         let item_stack = self
             .item_stack

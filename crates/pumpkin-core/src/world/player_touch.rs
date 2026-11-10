@@ -21,6 +21,15 @@ pub(super) fn pickup_body(player: &Player) -> (BoundingBox, bool) {
     }
 }
 
+pub fn pickup_area(player: &Player) -> BoundingBox {
+    let (body, mounted) = pickup_body(player);
+    if mounted {
+        body.expand(1.0, 0.0, 1.0)
+    } else {
+        body.expand(1.0, 0.5, 1.0)
+    }
+}
+
 /// Vanilla `Player.aiStep` pickup: touches every entity in the area, then one random orb.
 /// Runs after the player moved and before entities tick, like `doTick` after the level tick.
 pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
@@ -30,12 +39,7 @@ pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
     {
         return;
     }
-    let (body, mounted) = pickup_body(player);
-    let area = if mounted {
-        body.expand(1.0, 0.0, 1.0)
-    } else {
-        body.expand(1.0, 0.5, 1.0)
-    };
+    let area = pickup_area(player);
     let mut orbs = Vec::new();
     // Removed entities may still be indexed; vanilla's section lookup no longer has them
     for entity in world.get_entities_at_box(&area) {
@@ -46,6 +50,9 @@ pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
             orbs.push(entity);
         } else {
             entity.on_player_collision(player);
+            if player.world().uuid != world.uuid {
+                return;
+            }
         }
     }
     if !orbs.is_empty() {

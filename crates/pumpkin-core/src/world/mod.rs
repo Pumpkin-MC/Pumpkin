@@ -185,6 +185,7 @@ pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
 mod player_touch;
+pub(crate) use player_touch::pickup_area;
 pub mod scoreboard;
 pub mod weather;
 
