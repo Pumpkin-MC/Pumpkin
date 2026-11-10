@@ -347,7 +347,7 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     let (close_token, id) = (&ctx.close_token, ctx.id);
     while !packets_to_frame.is_empty() {
         let frame_batch = take_frame_batch(&mut packets_to_frame);
-        let (returned_writer, returned_batch, frame, frame_err) =
+        let (returned_writer, returned_batch, mut frame, frame_err) =
             match frame_batch_maybe_offload(writer, frame_batch).await {
                 Ok(result) => result,
                 Err(err) => {
@@ -366,7 +366,7 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
             return None;
         }
 
-        if let Err(err) = writer.write_frame(&frame).await {
+        if let Err(err) = writer.write_frame(&mut frame).await {
             if !close_token.is_cancelled() {
                 warn!("Failed to send packet batch to client {id}: {err}");
             }

@@ -7,83 +7,17 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
     Aes128Cfb8Enc, ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE,
-    MAX_PACKET_SIZE, PacketEncodeError, StreamEncryptor, VarInt, WritingError,
-    ser::NetworkWriteExt,
+    MAX_PACKET_SIZE, PacketEncodeError, VarInt, WritingError, ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
-
-pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
-    Encrypt(Box<StreamEncryptor<W>>),
-    None(W),
-}
-
-impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
-    #[must_use]
-    pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
-        match self {
-            Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
-            Self::Encrypt(_) => self,
-        }
-    }
-}
-
-impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
-    fn poll_write(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_write(cx, buf)
-            }
-            Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_write(cx, buf)
-            }
-        }
-    }
-
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_flush(cx)
-            }
-            Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_flush(cx)
-            }
-        }
-    }
-
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_shutdown(cx)
-            }
-            Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
-                writer.poll_shutdown(cx)
-            }
-        }
-    }
-}
 
 /// Encoder: Server -> Client
 /// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
-    writer: Option<EncryptionWriter<W>>,
+    writer: W,
+    cipher: Option<Aes128Cfb8Enc>,
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
     // Reused compressor to avoid constructing zlib state per packet.
@@ -96,7 +30,8 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     pub const fn new(writer: W) -> Self {
         Self {
-            writer: Some(EncryptionWriter::None(writer)),
+            writer,
+            cipher: None,
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
@@ -113,17 +48,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
-        if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {
+        if self.cipher.is_some() {
             return Err(PacketEncodeError::Message(
                 "Encryption already enabled".into(),
             ));
         }
         let cipher = Aes128Cfb8Enc::new_from_slices(key, key)
             .map_err(|_| PacketEncodeError::Message("Invalid key".into()))?;
-
-        if let Some(writer) = self.writer.take() {
-            self.writer = Some(writer.upgrade(cipher));
-        }
+        self.cipher = Some(cipher);
         Ok(())
     }
 
@@ -211,19 +143,21 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         frame.clear();
         let framed = self.frame_packet(&packet_data, &mut frame);
         let result = match framed {
-            Ok(()) => self.write_frame(&frame).await,
+            Ok(()) => self.write_frame(&mut frame).await,
             Err(err) => Err(err),
         };
         self.frame_scratch = frame;
         result
     }
 
-    pub async fn write_frame(&mut self, frame: &[u8]) -> Result<(), PacketEncodeError> {
-        let writer = self
-            .writer
-            .as_mut()
-            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
-        writer
+    /// Encrypts the owned frame in place, then writes the full ciphertext through
+    /// the existing writer. On a write error, the connection must be discarded:
+    /// the cipher has already advanced and the frame cannot be retried.
+    pub async fn write_frame(&mut self, frame: &mut [u8]) -> Result<(), PacketEncodeError> {
+        if let Some(cipher) = &mut self.cipher {
+            cipher.encrypt(frame);
+        }
+        self.writer
             .write_all(frame)
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
@@ -338,8 +272,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
-            .as_mut()
-            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?
             .flush()
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
