@@ -26,7 +26,6 @@ pub fn build_java_mapping() -> String {
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
-    let server_states = &["config", "handshake", "login", "play", "status"];
 
     for state in client_states {
         process_packets(
@@ -48,7 +47,14 @@ pub fn build_java_mapping() -> String {
     output.push_str("pub fn deserialize_java_serverbound_packet(state: ConnectionState, id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
     output.push_str("    match state {\n");
 
-    for state in server_states {
+    let server_state_variants = &[
+        ("config", "Config"),
+        ("handshake", "HandShake"),
+        ("login", "Login"),
+        ("play", "Play"),
+        ("status", "Status"),
+    ];
+    for (state, variant) in server_state_variants {
         let mut arms = String::new();
         process_packets(
             &format!("../../crates/pumpkin-protocol/src/java/server/{}", state),
@@ -59,7 +65,6 @@ pub fn build_java_mapping() -> String {
             &format!("pumpkin_protocol::java::server::{}", state),
             MappingMode::Deserialize,
         );
-        let variant = connection_state_variant(state);
         if arms.is_empty() {
             output.push_str(&format!("        ConnectionState::{variant} => None,\n"));
         } else {
@@ -185,17 +190,6 @@ pub fn build_bedrock_mapping() -> String {
     output.push_str("}\n\n");
 
     output
-}
-
-fn connection_state_variant(state: &str) -> &'static str {
-    match state {
-        "handshake" => "HandShake",
-        "status" => "Status",
-        "login" => "Login",
-        "config" => "Config",
-        "play" => "Play",
-        _ => panic!("Unknown connection state directory: {state}"),
-    }
 }
 
 fn narrow(mode: MappingMode) -> &'static str {
