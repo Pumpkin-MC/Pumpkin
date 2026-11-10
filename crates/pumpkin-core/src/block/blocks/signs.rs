@@ -1,9 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::block::entities::hanging_sign::HangingSignBlockEntity;
-use crate::block::entities::sign::{SignBlockEntity, SignEntityRef, Text};
+use crate::block::entities::sign::{SIGN_EDIT_RANGE_BUFFER, SignBlockEntity, SignEntityRef, Text};
 use crate::command::CommandSender;
 use crate::command::context::command_source::CommandSource;
+use bytes::Bytes;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
@@ -11,14 +12,21 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::translation;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_nbt::serializer::{NbtWriteHelper, NbtWriteHelperJava};
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::IdOr;
+use pumpkin_protocol::java::client::dialog::DialogNBT;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::click::{ClickEvent, ClickPayload};
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::tick::TickPriority;
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -38,7 +46,7 @@ use crate::item::items::glowing_ink_sac::GlowingInkSacItem;
 use crate::item::items::honeycomb::HoneyCombItem;
 use crate::item::items::ink_sac::InkSacItem;
 use crate::world::World;
-use pumpkin_protocol::java::client::play::COpenSignEditor;
+use pumpkin_protocol::java::client::play::{COpenSignEditor, CPlayShowDialog};
 
 #[pumpkin_block_from_tag("minecraft:all_signs")]
 pub struct SignBlock;
@@ -559,8 +567,13 @@ impl BlockBehaviour for SignBlock {
             is_facing_front_text(args.world, args.position, args.block, args.player);
         let text = sign_entity.get_text(is_front_text);
 
-        let executed_click_command =
-            execute_click_commands_if_present(args.world, args.player, args.position, text);
+        let executed_click_command = execute_click_commands_if_present(
+            args.world,
+            args.player,
+            args.position,
+            text,
+            sign_entity.allow_op_features(),
+        );
 
         if sign_entity.is_waxed() {
             let is_hanging = args.block.name.contains("hanging");
@@ -647,7 +660,13 @@ impl BlockBehaviour for SignBlock {
             }
 
             if result == BlockActionResult::Success {
-                execute_click_commands_if_present(args.world, args.player, args.position, text);
+                execute_click_commands_if_present(
+                    args.world,
+                    args.player,
+                    args.position,
+                    text,
+                    sign_entity.allow_op_features(),
+                );
                 if pumpkin_item.as_any().is::<GlowingInkSacItem>() {
                     args.player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign,
@@ -693,7 +712,7 @@ fn other_player_is_editing_sign(
     if let Some(editing_player_id) = *currently_editing
         && editing_player_id != player.gameprofile.id
         && let Some(editing_player) = world.get_player_by_uuid(editing_player_id)
-        && editing_player.can_interact_with_block_at(position, 4.0)
+        && editing_player.can_interact_with_block_at(position, SIGN_EDIT_RANGE_BUFFER)
     {
         return true;
     }
@@ -730,47 +749,118 @@ fn is_plain_or_empty_text(text: &str) -> bool {
     }
 }
 
-/// Executes any `run_command` click events defined in the sign's text messages.
+/// Serializes a custom click action payload the same way the client sends it.
+fn click_payload_bytes(payload: &ClickPayload) -> Bytes {
+    let tag = payload.to_nbt();
+    let mut bytes = Vec::new();
+    let mut writer = NbtWriteHelperJava::new(&mut bytes);
+    if writer.write_u8(tag.get_type_id()).is_ok() {
+        let _ = tag.serialize_data(&mut writer);
+    }
+    bytes.into()
+}
+
+/// Shows an inline dialog from a `show_dialog` click event to a Java client.
+fn show_inline_dialog(player: &Arc<Player>, dialog: &ClickPayload) {
+    let NbtTag::Compound(compound) = dialog.to_nbt() else {
+        debug!("Skipping sign show_dialog with a non-inline dialog");
+        return;
+    };
+    if compound.is_empty() {
+        debug!("Skipping sign show_dialog with an empty dialog");
+        return;
+    }
+    let packet = CPlayShowDialog::new(IdOr::Value(DialogNBT::from_nbt(&compound)));
+    player.try_send_client_packet(&packet);
+}
+
+/// Runs a custom click action through the same plugin event used by the client packet.
+fn fire_custom_click_action(
+    server: &Arc<crate::server::Server>,
+    player: &Arc<Player>,
+    id: &str,
+    payload: Option<&ClickPayload>,
+) {
+    let payload = payload.map(click_payload_bytes);
+    let mut event =
+        crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
+            player.clone(),
+            id.to_string(),
+            payload,
+        );
+    server.plugin_manager.fire_blocking(server, &mut event);
+}
+
+/// Executes any click events defined in the sign's text messages.
 fn execute_click_commands_if_present(
     world: &Arc<World>,
     player: &Arc<Player>,
     position: &BlockPos,
     text: &Text,
+    allow_op_features: bool,
 ) -> bool {
     let Some(server) = world.server.upgrade() else {
         return false;
     };
 
-    let messages = text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    let mut has_run_command = false;
-    for msg in messages.iter() {
-        if msg.is_empty() || !msg.starts_with('{') {
+    let messages = text.get_messages(player.is_text_filtering_enabled());
+    let mut has_click_command = false;
+    for message in &messages {
+        let Ok(component) = serde_json::from_str::<TextComponent>(message) else {
+            continue;
+        };
+        let Some(click_event) = component.0.style.click_event else {
+            continue;
+        };
+        if !matches!(
+            &click_event,
+            ClickEvent::RunCommand { .. }
+                | ClickEvent::ShowDialog { .. }
+                | ClickEvent::Custom { .. }
+        ) {
             continue;
         }
-        if let Ok(component) = serde_json::from_str::<TextComponent>(msg)
-            && let Some(ClickEvent::RunCommand { command }) = &component.0.style.click_event
-        {
-            let source = CommandSource::new(
-                CommandSender::Dummy,
-                world.clone(),
-                Some(player.clone()),
-                position.to_centered_f64(),
-                Vector2::new(0.0, 0.0),
-                player.gameprofile.name.clone(),
-                player.get_display_name(),
-                server.clone(),
-            );
-            let command_str = command.strip_prefix('/').unwrap_or(command);
-            let dispatcher = server.command_dispatcher.load();
-            dispatcher.handle_command(&source, command_str);
-            has_run_command = true;
+        has_click_command = true;
+
+        // Recognizing the action is only used to decide whether the disabled overlay
+        // applies. The action runs only when the sign allows op features.
+        if !allow_op_features {
+            continue;
+        }
+
+        match click_event {
+            ClickEvent::RunCommand { command } => {
+                let source = CommandSource::new(
+                    CommandSender::Dummy,
+                    world.clone(),
+                    Some(player.clone()),
+                    position.to_centered_f64(),
+                    Vector2::new(0.0, 0.0),
+                    player.gameprofile.name.clone(),
+                    player.get_display_name(),
+                    server.clone(),
+                );
+                let command = command.strip_prefix('/').unwrap_or(command.as_ref());
+                let dispatcher = server.command_dispatcher.load();
+                dispatcher.handle_command(&source, command);
+            }
+            ClickEvent::ShowDialog { dialog } => show_inline_dialog(player, &dialog),
+            ClickEvent::Custom { id, payload } => {
+                fire_custom_click_action(&server, player, &id, payload.as_ref());
+            }
+            _ => {}
         }
     }
-    has_run_command
+
+    if !allow_op_features && has_click_command {
+        player.send_system_message_raw(
+            &TextComponent::translate(translation::java::SIGN_CLICK_ACTIONS_DISABLED, [])
+                .color_named(NamedColor::Red),
+            true,
+        );
+    }
+
+    has_click_command
 }
 
 /// Returns the direction of the block supporting the wall sign.

@@ -8,6 +8,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
@@ -72,6 +73,12 @@ pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
 /// A player the mob may hold a grudge against.
 fn is_valid_player_target(target: &dyn EntityBase) -> bool {
     target.get_player().is_some_and(Player::is_valid_mob_target)
+}
+
+fn is_alive_target(target: &dyn EntityBase) -> bool {
+    target
+        .get_living_entity()
+        .is_some_and(LivingEntity::is_alive)
 }
 
 /// a timed grudge plus the entity it is held against.
@@ -210,7 +217,7 @@ pub trait NeutralMob: Mob {
             return;
         };
         if let Some(target) = find_by_uuid(world, uuid)
-            && target.get_entity().is_alive()
+            && is_alive_target(target.as_ref())
             && self.can_attack(target.as_ref())
         {
             self.set_mob_target(Some(target), TargetReason::Angry);
@@ -232,7 +239,7 @@ pub trait NeutralMob: Mob {
 
         // Grudge holder killed by someone else
         if let Some(previous) = &target
-            && !previous.get_entity().is_alive()
+            && !is_alive_target(previous.as_ref())
             && previous.get_mob().is_some()
             && anger_target.is_some_and(|angry_at| angry_at == previous.get_entity().entity_uuid)
         {
@@ -240,6 +247,8 @@ pub trait NeutralMob: Mob {
             return;
         }
 
+        // Only the check above looks at a dead target.
+        let target = target.filter(|target| is_alive_target(target.as_ref()));
         let stays_angry = self.stays_angry_with_target();
 
         if let Some(target) = &target {

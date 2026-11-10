@@ -207,8 +207,8 @@ impl Jwk {
         PublicKey::from_sec1_bytes(&sec1).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
     }
 
-    /// Converts this JWK into an RSA `RsaPublicKey`.
-    pub fn to_rsa_public_key(&self) -> Result<rsa::RsaPublicKey, AuthError> {
+    /// Converts this JWK into an RSA [`rsa::PublicKey`].
+    pub fn to_rsa_public_key(&self) -> Result<rsa::PublicKey, AuthError> {
         if self.kty != "RSA" {
             return Err(AuthError::PublicKeyBuild(format!(
                 "Unsupported JWK kty for RSA: {}",
@@ -230,7 +230,7 @@ impl Jwk {
         let n_boxed = crypto_bigint::BoxedUint::from_be_slice_vartime(&n_bytes);
         let e_boxed = crypto_bigint::BoxedUint::from_be_slice_vartime(&e_bytes);
 
-        rsa::RsaPublicKey::new(n_boxed, e_boxed)
+        rsa::PublicKey::new(n_boxed, e_boxed)
             .map_err(|err| AuthError::PublicKeyBuild(err.to_string()))
     }
 }

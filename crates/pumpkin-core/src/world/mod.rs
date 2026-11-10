@@ -1,8 +1,10 @@
 use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_data::poi_type::PoiType;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{
@@ -11,6 +13,7 @@ use pumpkin_protocol::bedrock::client::{
 use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
+use pumpkin_world::poi::{PoiStorage, SectionPos};
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
@@ -32,12 +35,12 @@ pub mod generation_cache;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
+pub mod poi_scan;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
-pub mod villager_poi;
 pub mod wandering_trader_spawner;
 
 use crate::block::RandomTickArgs;
@@ -82,6 +85,7 @@ use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::noise_settings::NoiseSettings;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -160,7 +164,7 @@ use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
     chunk::{io::Dirtiable, palette::bedrock_water_state},
 };
-use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
+use pumpkin_world::{chunk::ChunkData, chunk_system::ChunkPos, world::BlockAccessor};
 use pumpkin_world::{
     level::Level,
     tick::{TickPriority, order},
@@ -180,6 +184,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_touch;
 pub mod scoreboard;
 pub mod weather;
 
@@ -187,6 +192,7 @@ pub use environment::EnvironmentAttributes;
 pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::world::player_touch::{pickup_body, touch_entities};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking, WorldSurface};
@@ -194,10 +200,8 @@ use uuid::Uuid;
 use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
-const POI_TYPE_LIGHTNING_ROD: &str = "minecraft:lightning_rod";
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
-pub(crate) const POI_TYPE_MEETING: &str = "minecraft:meeting";
-const MEETING_MAX_TICKETS: i32 = 32;
+pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -262,8 +266,8 @@ pub struct World {
     unsent_block_changes: std::sync::Mutex<HashMap<BlockPos, BlockStateId>>,
     /// Persisted vanilla POI storage for portal and villager lookups.
     pub portal_poi: std::sync::Mutex<portal::PortalPoiStorage>,
+    poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
-    pub villager_poi: std::sync::Mutex<villager_poi::VillagerPoiStorage>,
     pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
@@ -374,6 +378,7 @@ impl World {
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
+        let poi_chunk_receiver = level.chunk_listener.add_global_chunk_listener();
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| std::sync::Mutex::new(dragon_fight::DragonFight::new()));
 
@@ -423,7 +428,7 @@ impl World {
             synced_block_event_queue: std::sync::Mutex::new(Vec::new()),
             unsent_block_changes: std::sync::Mutex::new(HashMap::new()),
             portal_poi: std::sync::Mutex::new(portal_poi),
-            villager_poi: std::sync::Mutex::new(villager_poi::VillagerPoiStorage::default()),
+            poi_chunk_receiver: std::sync::Mutex::new(poi_chunk_receiver),
             wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
@@ -541,6 +546,30 @@ impl World {
             &self.entities,
             self,
         )));
+    }
+
+    fn process_poi_chunks(&self) {
+        let mut chunks = Vec::new();
+        if let Ok(receiver) = self.poi_chunk_receiver.try_lock() {
+            for _ in 0..poi_scan::MAX_CHUNKS_PER_TICK {
+                let Ok((_, chunk)) = receiver.try_recv() else {
+                    break;
+                };
+                if let Some(chunk) = chunk.upgrade() {
+                    chunks.push(chunk);
+                }
+            }
+        }
+        if chunks.is_empty() {
+            return;
+        }
+        let mut storage = self
+            .portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for chunk in chunks {
+            poi_scan::scan_chunk(&mut storage, &chunk);
+        }
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
@@ -1066,6 +1095,17 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
+    pub fn broadcast_bedrock_all<P: BClientPacket>(&self, packet: &P) {
+        let players = self.players.load();
+        Self::broadcast_bedrock_grouped(
+            packet,
+            players.iter().filter_map(|p| match p.client.as_ref() {
+                ClientPlatform::Bedrock(be) => Some(be),
+                ClientPlatform::Java(_) => None,
+            }),
+        );
+    }
+
     pub fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
         let je_packet = CSystemChatMessage::new(message, overlay);
         let be_packet = Self::component_to_bedrock_text(message);
@@ -1556,6 +1596,7 @@ impl World {
         self.flush_block_updates();
         self.flush_synced_block_events();
         self.update_active_chunks();
+        self.process_poi_chunks();
         self.tick_environment();
         let mut raids = {
             let mut guard = self
@@ -1583,24 +1624,26 @@ impl World {
 
         let players = self.players.load();
         let player_count = players.len();
-        let players_cache: Vec<_> = players
-            .par_iter()
-            .map(|player| {
-                let entity = player.get_entity();
-                let pos = entity.pos.load();
-                let bb = entity.bounding_box.load().expand(1.0, 0.5, 1.0);
-                let chunk_pos = Vector2::new(
-                    get_section_cord(pos.x.floor() as i32),
-                    get_section_cord(pos.z.floor() as i32),
-                );
-                (player, pos, bb, chunk_pos)
-            })
-            .collect();
 
         let t_players = std::time::Instant::now();
+        // Vanilla handles all packets before any player ticks
+        players.par_iter().for_each(|player| {
+            player.process_inbound_packets();
+        });
         players.par_iter().for_each(|player| {
             player.tick(server);
         });
+        // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
+        if server.tick_rate_manager.runs_normally() {
+            for player in players.iter() {
+                player.push_entities();
+            }
+        }
+        // One player after another, before entities move, like vanilla `doTick` after the
+        // level tick
+        for player in players.iter() {
+            touch_entities(self, player);
+        }
         let player_elapsed = t_players.elapsed();
 
         let entities_to_tick = self.entities.load();
@@ -1616,11 +1659,7 @@ impl World {
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
             .filter_map(|entity| {
-                let entity_pos = entity.get_entity().pos.load();
-                let entity_chunk = Vector2::new(
-                    get_section_cord(entity_pos.x.floor() as i32),
-                    get_section_cord(entity_pos.z.floor() as i32),
-                );
+                let entity_chunk = entity.get_entity().chunk_pos.load();
                 if !active_chunks.contains(&entity_chunk) {
                     return None;
                 }
@@ -1667,12 +1706,10 @@ impl World {
                     .filter(|entity| !ticking.contains(&entity.entity_id))
                     .map(|entity| (entity.entity_id, entity.bounding_box.load()))
                     .collect();
+                // Includes the vehicle, like the pickup area.
                 let player_bodies: Vec<_> = players
                     .iter()
-                    .map(|player| {
-                        let entity = player.get_entity();
-                        (entity.entity_id, entity.bounding_box.load())
-                    })
+                    .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
                     .collect();
                 let mut islands =
                     entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
@@ -1697,32 +1734,16 @@ impl World {
 
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
-            let (entity, entity_chunk) = &tickable[index];
+            let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
-            entity.get_entity().tick_count.fetch_add(1, Relaxed);
-            entity.tick(entity.as_ref(), server_ref);
-            // Riders may tick before or after their vehicle, so both ends re-seat them.
-            crate::entity::ride_tick(entity.as_ref());
-            crate::entity::position_riders(entity.as_ref());
-
-            let entity_inner = entity.get_entity();
-            let entity_pos = entity_inner.pos.load();
-            let entity_bb = entity_inner.bounding_box.load();
-
-            for (player, player_pos, player_bb, player_chunk) in &players_cache {
-                if player.living_entity.health.load() > 0.0
-                    && !player.is_spectator()
-                    && (player_chunk.x - entity_chunk.x).abs() <= 1
-                    && (player_chunk.y - entity_chunk.y).abs() <= 1
-                    && (player_pos.x - entity_pos.x).abs() < 5.0
-                    && (player_pos.y - entity_pos.y).abs() < 5.0
-                    && (player_pos.z - entity_pos.z).abs() < 5.0
-                    && player_bb.intersects(&entity_bb)
-                {
-                    entity.on_player_collision(player);
-                }
+            let base = entity.get_entity();
+            base.tick_count.fetch_add(1, Relaxed);
+            // Vanilla `rideTick`: a rider starts its tick without motion
+            if base.has_vehicle() {
+                base.velocity.store(Vector3::default());
             }
+            entity.tick(entity.as_ref(), server_ref);
         };
         if let Some(islands) = islands {
             islands
@@ -1745,9 +1766,19 @@ impl World {
             }
             order::set_entity_order(None);
         }
+        // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
+        tickable.par_iter().for_each(|(entity, _)| {
+            if !entity.is_passenger() && entity.get_entity().has_passengers() {
+                crate::entity::ride_tick_riders(entity.as_ref());
+            }
+        });
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 
+        // Like vanilla `sendChanges`: before the next tick's packets
+        for player in players.iter() {
+            player.send_velocity_changes();
+        }
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
@@ -2486,6 +2517,8 @@ impl World {
         (collisions, positions)
     }
 
+    /// Vanilla `findFreePosition`: the point in `allowed_centers` closest to `preferred_center`
+    /// where a box of `size` touches no block inside the world border.
     pub fn find_free_position(
         &self,
         source: &dyn EntityBase,
@@ -2537,6 +2570,41 @@ impl World {
             }
         }
         true
+    }
+
+    pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty(bounding_box)
+            && self.no_entity_collision(source, bounding_box)
+            && self.no_border_collision(source, bounding_box)
+    }
+
+    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let average_size = ((bounding_box.max.x - bounding_box.min.x)
+            + (bounding_box.max.y - bounding_box.min.y)
+            + (bounding_box.max.z - bounding_box.min.z))
+            / 3.0;
+        if average_size < 1.0E-7 {
+            return true;
+        }
+
+        let area = bounding_box.expand_all(1.0E-7);
+        !self.get_all_at_box(&area).iter().any(|entity| {
+            let other = entity.get_entity();
+            !entity.is_spectator()
+                && (other.entity_type == &EntityType::SHULKER
+                    || other.entity_type == &EntityType::HAPPY_GHAST
+                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+                && !source.get_entity().is_passenger_of_same_vehicle(other)
+        })
+    }
+
+    pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        let border = self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !border.is_inside_close_to_border(source.get_entity(), &bounding_box)
+            || border.collision_shape_contains(&bounding_box)
     }
 
     /// Vanilla's `BlockView.getDismountHeight()`.
@@ -2690,13 +2758,29 @@ impl World {
         center
     }
 
+    pub fn sections_to_village(&self, section: SectionPos) -> i32 {
+        self.portal_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sections_to_village(section)
+    }
+
+    pub fn is_close_to_village(&self, pos: &BlockPos, section_distance: i32) -> bool {
+        section_distance <= PoiStorage::MAX_VILLAGE_DISTANCE
+            && self.sections_to_village(SectionPos::of(pos)) <= section_distance
+    }
+
+    pub fn is_village(&self, pos: &BlockPos) -> bool {
+        self.is_close_to_village(pos, 1)
+    }
+
     fn find_lightning_rod(&self, center: BlockPos) -> Option<BlockPos> {
         let (rod, _) = self
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .find_closest_where(center, LIGHTNING_ROD_SEARCH_RADIUS, |poi_type, rod_pos| {
-                poi_type == POI_TYPE_LIGHTNING_ROD
+                PoiType::from_name(poi_type) == Some(PoiType::LightningRod)
                     && rod_pos.squared_distance(&center)
                         <= LIGHTNING_ROD_SEARCH_RADIUS * LIGHTNING_ROD_SEARCH_RADIUS
                     && rod_pos.0.y
@@ -3022,7 +3106,8 @@ impl World {
             level_name: "Pumpkin world".to_string(),
             premium_world_template_id: String::new(),
             is_trial: false,
-            rewind_history_size: VarInt(0),
+            // Vanilla rewind window so a tick-tagged `SetActorMotion` can replay a jump
+            rewind_history_size: VarInt(40),
             server_authoritative_block_breaking: true,
             current_level_time: self.get_world_age() as _,
             enchantment_seed: VarInt(0),
@@ -3361,6 +3446,7 @@ impl World {
             self.broadcast_system_message(&event.join_message, false);
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(&player);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -3924,6 +4010,7 @@ impl World {
             // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
             info!("{}", event.join_message.to_pretty_console());
         }
+        server.notify_update_if_op(player);
     }
 
     fn send_player_equipment(&self, from: &Player) {
@@ -4376,6 +4463,8 @@ impl World {
             )
             .await;
 
+        // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
+        player.set_client_loaded(false);
         player.living_entity.reset_state();
 
         player.send_permission_lvl_update();
@@ -4434,10 +4523,7 @@ impl World {
         let sleeping_player_count = eligible_players
             .iter()
             .filter(|player| {
-                player
-                    .sleeping_since
-                    .load()
-                    .is_some_and(|since| since >= 100)
+                player.is_sleeping() && player.get_sleep_timer() >= Player::FULL_SLEEP_TICKS
             })
             .count();
         drop(players);
@@ -4597,13 +4683,25 @@ impl World {
     // Gets all entities at a Box
     pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
         let players_guard = self.players.load();
+        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
+        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
+        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
+        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
 
         self.entity_index
             .query(self.entities.load_full(), *aabb)
             .chain(
                 players_guard
                     .iter()
-                    .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+                    .filter(move |player| {
+                        let entity = player.get_entity();
+                        let chunk_pos = entity.chunk_pos.load();
+                        chunk_pos.x >= min_chunk_x
+                            && chunk_pos.x <= max_chunk_x
+                            && chunk_pos.y >= min_chunk_z
+                            && chunk_pos.y <= max_chunk_z
+                            && entity.bounding_box.load().intersects(aabb)
+                    })
                     .map(|p| p.clone() as Arc<dyn EntityBase>),
             )
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
@@ -4621,9 +4719,22 @@ impl World {
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
         let players_guard = self.players.load();
+        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
+        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
+        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
+        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
+
         players_guard
             .iter()
-            .filter(|player| player.get_entity().bounding_box.load().intersects(aabb))
+            .filter(move |player| {
+                let entity = player.get_entity();
+                let chunk_pos = entity.chunk_pos.load();
+                chunk_pos.x >= min_chunk_x
+                    && chunk_pos.x <= max_chunk_x
+                    && chunk_pos.y >= min_chunk_z
+                    && chunk_pos.y <= max_chunk_z
+                    && entity.bounding_box.load().intersects(aabb)
+            })
             .inspect(|player| entity_islands::check_reached(player.entity_id()))
             .cloned()
             .collect()
@@ -5448,29 +5559,26 @@ impl World {
 
     /// Everything `set_block_state` does after the chunk write: callbacks, neighbour updates,
     /// client sync, POI and lighting.
-    fn update_block_poi(&self, position: &BlockPos, old_block: &Block, new_block: &Block) {
+    fn update_poi(
+        &self,
+        position: &BlockPos,
+        old_state_id: BlockStateId,
+        new_state_id: BlockStateId,
+    ) {
+        let old = PoiType::from_state_id(old_state_id.as_u16());
+        let new = PoiType::from_state_id(new_state_id.as_u16());
+        if old == new {
+            return;
+        }
         let mut poi = self
             .portal_poi
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if villager_poi::profession_for_block(old_block).is_some()
-            || old_block == &Block::BELL
-            || pumpkin_data::tag::Taggable::has_tag(
-                old_block,
-                &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
-            )
-        {
+        if old.is_some() {
             poi.remove(position);
         }
-        if let Some(poi_type) = villager_poi::poi_type_for_block(new_block) {
-            poi.add_with_free_tickets(*position, poi_type, 1);
-        } else if pumpkin_data::tag::Taggable::has_tag(
-            new_block,
-            &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
-        ) {
-            poi.add_with_free_tickets(*position, POI_TYPE_LIGHTNING_ROD, 0);
-        } else if new_block == &Block::BELL {
-            poi.add_with_free_tickets(*position, POI_TYPE_MEETING, MEETING_MAX_TICKETS);
+        if let Some(poi_type) = new {
+            poi.add_poi(*position, poi_type);
         }
     }
 
@@ -5557,14 +5665,7 @@ impl World {
                 );
             }
 
-            self.villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .update_block(*position, new_block);
-
-            if is_new_block {
-                self.update_block_poi(position, old_block, new_block);
-            }
+            self.update_poi(position, replaced_block_state_id, block_state_id);
         }
 
         let old_state = replaced_block_state_id.to_state();
@@ -5804,6 +5905,12 @@ impl World {
     }
 
     #[must_use]
+    pub fn get_moon_brightness(&self, pos: &BlockPos) -> f32 {
+        let moon_phase = self.environment_attributes().get_value_moon_phase(pos);
+        MOON_BRIGHTNESS_PER_PHASE[usize::from(moon_phase.index())]
+    }
+
+    #[must_use]
     pub fn can_pillager_patrol_spawn(&self, pos: &BlockPos) -> bool {
         self.environment_attributes().get_value_bool(
             pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCanPillagerPatrolSpawn,
@@ -5838,6 +5945,11 @@ impl World {
     #[must_use]
     pub fn get_light_level_dependent_magic_value(&self, pos: &BlockPos) -> f32 {
         self.light_level_dependent_magic_value_with_sky(pos, self.get_sky_light_level(pos))
+    }
+
+    #[must_use]
+    pub fn get_pathfinding_cost_from_light_levels(&self, pos: &BlockPos) -> f32 {
+        self.get_light_level_dependent_magic_value(pos) - 0.5
     }
 
     /// [`Self::get_light_level_dependent_magic_value`] for a sky light the caller already read.
@@ -6303,6 +6415,26 @@ impl World {
     pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
         let id = self.get_block_state_id(position);
         Self::fluid_state_from_block_state(id)
+    }
+
+    /// Whether the fluid at `position` is in `tag`, with a source counting as the still fluid.
+    pub fn fluid_state_has_tag(
+        &self,
+        position: &BlockPos,
+        tag: &'static pumpkin_data::tag::Tag,
+    ) -> bool {
+        use pumpkin_data::tag::Taggable;
+        let (fluid, state) = self.get_fluid_and_fluid_state(position);
+        let fluid = if !state.is_source {
+            fluid
+        } else if fluid.matches_type(&Fluid::WATER) {
+            &Fluid::WATER
+        } else if fluid.matches_type(&Fluid::LAVA) {
+            &Fluid::LAVA
+        } else {
+            fluid
+        };
+        fluid.has_tag(tag)
     }
 
     /// `FluidState#getHeight` includes the full block when the same fluid is above.
@@ -7696,10 +7828,13 @@ impl WorldPortalExt for WorldPortal {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
     }
 
-    fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
-        for mut nbt in entities {
+    fn spawn_structure_entities(&self, entities: Vec<(NbtCompound, &'static Biome)>) {
+        for (mut nbt, biome) in entities {
             nbt.child_tags.remove("UUID");
             if let Some(entity) = load_static_entity_from_nbt(&nbt, Vector3::default(), &self.0) {
+                if let Some(mob) = entity.get_mob() {
+                    mob.finalize_spawn_in_biome(biome);
+                }
                 self.0.spawn_entity(entity);
             }
         }

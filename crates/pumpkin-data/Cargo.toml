@@ -38,6 +38,7 @@ default = [
     "noise_router",
     "composter",
     "flower_pot",
+    "suspicious_effects",
     "effect",
     "structures",
     "potion",
@@ -59,11 +60,13 @@ default = [
     "trial_spawner",
     "test_instance",
     "painting_variant",
+    "poi_type",
     "context_provider",
     "instrument",
     "wolf_variant",
     "cat_variant",
     "frog_variant",
+    "sulfur_cube_archetype",
     "trim_material",
     "trim_pattern",
     "banner_pattern",
@@ -95,6 +98,7 @@ instrument = ["sound"]
 wolf_variant = []
 cat_variant = []
 frog_variant = []
+sulfur_cube_archetype = ["attributes", "damage", "data_component", "sound", "tag"]
 trim_material = []
 trim_pattern = []
 banner_pattern = []
@@ -102,6 +106,7 @@ decorated_pot_pattern = []
 chat_type = []
 context_provider = []
 painting_variant = []
+poi_type = ["tag"]
 test_instance = []
 trial_spawner = []
 block_transformer = ["block", "sound", "world", "tag"]
@@ -141,6 +146,7 @@ tag = []
 noise_router = []
 composter = []
 flower_pot = []
+suspicious_effects = ["effect"]
 effect = []
 structures = []
 potion = ["potion_brewing"]
@@ -148,7 +154,7 @@ material_rule = []
 noise_settings = []
 chunk_gen_settings = ["noise_settings", "material_rule"]
 carver = []
-villager = ["item", "sound"]
+villager = ["item", "sound", "poi_type"]
 slot_ranges = []
 
 noise_parameter = []

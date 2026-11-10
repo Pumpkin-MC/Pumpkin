@@ -34,7 +34,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 4;
+pub const PLUGIN_API_VERSION: u32 = 5;
 
 const PLUGIN_DIR: &str = "./plugins";
 

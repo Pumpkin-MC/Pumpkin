@@ -1,4 +1,14 @@
 /* This file is generated. Do not edit manually. */
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum CatSpawnCondition {
+    Structure(&'static crate::tag::Tag),
+    MoonBrightness { min: Option<f64>, max: Option<f64> },
+}
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct CatSpawnSelector {
+    pub priority: i32,
+    pub condition: Option<CatSpawnCondition>,
+}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[repr(u8)]
 pub enum CatVariant {
@@ -105,5 +115,66 @@ impl CatVariant {
             Self::Tabby,
             Self::White,
         ]
+    }
+    #[doc = "Returns the spawn selectors of the cat variant, from its `spawn_conditions`."]
+    #[must_use]
+    pub const fn spawn_selectors(&self) -> &'static [CatSpawnSelector] {
+        match self {
+            Self::AllBlack => &[
+                CatSpawnSelector {
+                    priority: 1i32,
+                    condition: Some(CatSpawnCondition::Structure(
+                        &crate::tag::WorldgenStructure::MINECRAFT_CATS_SPAWN_AS_BLACK,
+                    )),
+                },
+                CatSpawnSelector {
+                    priority: 0i32,
+                    condition: Some(CatSpawnCondition::MoonBrightness {
+                        min: Some(0.9f64),
+                        max: None,
+                    }),
+                },
+            ],
+            Self::Black => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::BritishShorthair => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Calico => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Jellie => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Persian => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Ragdoll => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Red => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Siamese => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::Tabby => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+            Self::White => &[CatSpawnSelector {
+                priority: 0i32,
+                condition: None,
+            }],
+        }
     }
 }

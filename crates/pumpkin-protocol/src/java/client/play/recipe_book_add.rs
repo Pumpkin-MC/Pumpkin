@@ -963,6 +963,7 @@ mod tests {
         let result = RecipeResultStruct {
             id: "minecraft:air",
             count: 1,
+            components: &[],
         };
         for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
             let mut bytes = Vec::new();
