@@ -314,7 +314,11 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
-        let radius = base.velocity.load().length()
+        let movement = base.velocity.load().length()
+            + entity
+                .get_mob()
+                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+        let radius = movement
             + config.unaudited_reach
             + entity.get_living_entity().map_or(0.0, |living| {
                 living
@@ -323,6 +327,13 @@ impl EntityReach {
             });
         let mut reach =
             TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
+        if let Some(mob) = entity.get_mob() {
+            let player_radius = radius.max(mob.player_tick_range() + movement);
+            reach.players =
+                base.bounding_box
+                    .load()
+                    .expand(player_radius, player_radius, player_radius);
+        }
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity
             .get_mob()
@@ -346,14 +357,11 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
         .iter()
         .map(|passenger| passenger.get_entity().entity_id)
         .collect();
-    for other in [&base.vehicle, &base.leashed_to] {
-        if let Some(other) = other
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            links.push(other.get_entity().entity_id);
-        }
+    for other in [base.get_vehicle(), base.get_leash_holder()]
+        .into_iter()
+        .flatten()
+    {
+        links.push(other.get_entity().entity_id);
     }
     if let Some(DelayedLeash::Entity(uuid)) = *base
         .delayed_leash
@@ -380,10 +388,11 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     {
         links.push(leader.get_entity().entity_id);
     }
-    if let Some(mob) = entity.get_mob()
-        && let Some(target) = mob.get_mob_entity().get_target()
-    {
-        links.push(target.get_entity().entity_id);
+    if let Some(mob) = entity.get_mob() {
+        links.extend(mob.tick_links());
+        if let Some(target) = mob.get_mob_entity().get_target() {
+            links.push(target.get_entity().entity_id);
+        }
     }
     if let Some(living) = entity.get_living_entity() {
         // Kill credit on death.

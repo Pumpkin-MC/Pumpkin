@@ -3,11 +3,13 @@ use std::sync::Arc;
 use crate::block::entities::bed::BedBlockEntity;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{Block as BlockTag, Taggable};
 use pumpkin_data::translation;
-use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::OnLandedUponArgs;
@@ -18,6 +20,7 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
     OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs,
 };
+use crate::entity::dismount_helper;
 use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
 use pumpkin_data::HorizontalFacingExt;
@@ -379,6 +382,30 @@ impl BedBlock {
 }
 
 impl BedBlock {
+    pub fn find_stand_up_position(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        forward: BlockDirection,
+        yaw: f32,
+    ) -> Option<Vector3<f64>> {
+        let right = forward.rotate_clockwise();
+        let side = if is_facing_angle(right, yaw) {
+            right.opposite()
+        } else {
+            right
+        };
+
+        if is_bunk_bed(world, pos) {
+            find_bunk_bed_stand_up_position(entity_type, world, pos, forward, side)
+        } else {
+            let offsets = bed_stand_up_offsets(forward, side);
+            find_stand_up_position_at_offset(entity_type, world, pos, &offsets, true).or_else(
+                || find_stand_up_position_at_offset(entity_type, world, pos, &offsets, false),
+            )
+        }
+    }
+
     pub fn set_occupied(
         occupied: bool,
         world: &Arc<World>,
@@ -412,6 +439,136 @@ impl BedBlock {
     }
 }
 
+fn find_bunk_bed_stand_up_position(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+    forward: BlockDirection,
+    side: BlockDirection,
+) -> Option<Vector3<f64>> {
+    let offsets = bed_surround_stand_up_offsets(forward, side);
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &offsets, true)
+    {
+        return Some(position);
+    }
+
+    let below = pos.down();
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, &below, &offsets, true)
+    {
+        return Some(position);
+    }
+
+    let above_offsets = bed_above_stand_up_offsets(forward);
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &above_offsets, true)
+    {
+        return Some(position);
+    }
+
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &offsets, false)
+    {
+        return Some(position);
+    }
+
+    find_stand_up_position_at_offset(entity_type, world, &below, &offsets, false).or_else(|| {
+        find_stand_up_position_at_offset(entity_type, world, pos, &above_offsets, false)
+    })
+}
+
+fn find_stand_up_position_at_offset(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+    offsets: &[(i32, i32)],
+    check_dangerous: bool,
+) -> Option<Vector3<f64>> {
+    offsets.iter().find_map(|(dx, dz)| {
+        let check_pos = BlockPos(Vector3::new(pos.0.x + dx, pos.0.y, pos.0.z + dz));
+        dismount_helper::find_safe_dismount_location(
+            entity_type,
+            world,
+            &check_pos,
+            check_dangerous,
+        )
+    })
+}
+
+fn is_bunk_bed(world: &World, pos: &BlockPos) -> bool {
+    world
+        .get_block(&pos.down())
+        .has_tag(&BlockTag::MINECRAFT_BEDS)
+}
+
+fn is_facing_angle(direction: BlockDirection, yaw: f32) -> bool {
+    let radians = yaw.to_radians();
+    let dx = -radians.sin();
+    let dz = radians.cos();
+    let offset = direction.to_offset();
+    offset.x as f32 * dx + offset.z as f32 * dz > 0.0
+}
+
+fn bed_stand_up_offsets(forward: BlockDirection, side: BlockDirection) -> Vec<(i32, i32)> {
+    let mut offsets = bed_surround_stand_up_offsets(forward, side);
+    offsets.extend(bed_above_stand_up_offsets(forward));
+    offsets
+}
+
+fn bed_surround_stand_up_offsets(forward: BlockDirection, side: BlockDirection) -> Vec<(i32, i32)> {
+    let (fx, fz) = step(forward);
+    let (sx, sz) = step(side);
+    vec![
+        (sx, sz),
+        (sx - fx, sz - fz),
+        (sx - fx * 2, sz - fz * 2),
+        (-fx * 2, -fz * 2),
+        (-sx - fx * 2, -sz - fz * 2),
+        (-sx - fx, -sz - fz),
+        (-sx, -sz),
+        (-sx + fx, -sz + fz),
+        (fx, fz),
+        (sx + fx, sz + fz),
+    ]
+}
+
+fn bed_above_stand_up_offsets(forward: BlockDirection) -> Vec<(i32, i32)> {
+    let (fx, fz) = step(forward);
+    vec![(0, 0), (-fx, -fz)]
+}
+
+fn step(direction: BlockDirection) -> (i32, i32) {
+    let offset = direction.to_offset();
+    (offset.x, offset.z)
+}
+
 fn entity_prevents_sleep(entity: &Entity) -> bool {
     NO_SLEEP_IDS.contains(&entity.entity_type.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stand_up_offset_order_matches_vanilla() {
+        assert_eq!(
+            bed_stand_up_offsets(BlockDirection::North, BlockDirection::East),
+            vec![
+                (1, 0),
+                (1, 1),
+                (1, 2),
+                (0, 2),
+                (-1, 2),
+                (-1, 1),
+                (-1, 0),
+                (-1, -1),
+                (0, -1),
+                (1, -1),
+                (0, 0),
+                (0, 1),
+            ]
+        );
+    }
 }

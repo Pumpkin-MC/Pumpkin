@@ -28,7 +28,7 @@ use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
+    ageable::{AgeableData, AgeableMob, BABY_START_AGE},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -391,6 +391,10 @@ impl AgeableMob for FoxEntity {
 }
 
 impl Animal for FoxEntity {
+    fn play_eating_sound(&self) {
+        self.play_entity_sound(Sound::EntityFoxEat, 1.0, 1.0);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FOX_FOOD)
             || FOX_FOOD.iter().any(|i| i.id == item_stack.item.id)
@@ -428,9 +432,23 @@ fn is_thundering(world: &World) -> bool {
 }
 
 impl Mob for FoxEntity {
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        *slot == pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
+            && self.mob_entity.can_pick_up_loot()
+    }
+
+    // Needs fox eating first.
+    fn wants_to_pick_up(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let (variant, size) = if let Some(SpawnGroupData::Fox { variant, size }) = group_data {
@@ -455,7 +473,7 @@ impl Mob for FoxEntity {
         };
         self.set_variant(variant);
         if size >= 2 {
-            self.get_entity().set_age(-24000);
+            self.set_age(BABY_START_AGE);
         }
         self.set_target_goals();
         self.mob_entity.finalize_spawn_base();
@@ -571,6 +589,6 @@ impl Mob for FoxEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

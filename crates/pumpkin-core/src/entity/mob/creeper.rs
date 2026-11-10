@@ -71,7 +71,10 @@ impl CreeperEntity {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                2,
+                Box::new(CreeperIgniteGoal::new(Arc::downgrade(&mob_arc))),
+            );
             fleeing::apply(goal_selector, CREEPER_FLEES);
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
@@ -122,6 +125,23 @@ impl CreeperEntity {
 }
 
 impl Mob for CreeperEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        let damaged =
+            self.mob_entity
+                .living_entity
+                .cause_fall_damage(caller, fall_distance, damage_modifier);
+        let max_swell = self.fuse_time.load(Ordering::Relaxed) - 5;
+        let swell = self.current_fuse_time.load(Ordering::Relaxed) + (fall_distance * 1.5) as i32;
+        self.current_fuse_time
+            .store(swell.min(max_swell), Ordering::Relaxed);
+        damaged
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
         nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);

@@ -7,7 +7,6 @@ use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
@@ -19,7 +18,8 @@ use crate::entity::{
     ai::goal::{
         active_target::TargetCondition, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        polar_bear_attack_players::PolarBearAttackPlayersGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{
@@ -85,7 +85,7 @@ impl PolarBearEntity {
                         .alerting_only(|other| !is_baby(other)),
                 ),
             );
-            // TODO: PolarBearAttackPlayersGoal at 2 -> adults charge when a cub is near.
+            target_selector.add_goal(2, PolarBearAttackPlayersGoal::new(&mob_arc.mob_entity));
             apply_targets(target_selector, &mob_arc.mob_entity, 3, 5, false);
             hunting::apply(target_selector, &mob_arc.mob_entity, POLAR_BEAR_HUNTS);
         };
@@ -147,14 +147,6 @@ impl Mob for PolarBearEntity {
         Some(self)
     }
 
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
-    }
-
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -172,6 +164,6 @@ impl Mob for PolarBearEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.animal_interact(player, item_stack, Sound::EntityPolarBearAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

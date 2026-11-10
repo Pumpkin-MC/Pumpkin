@@ -1,5 +1,7 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
@@ -52,6 +54,21 @@ impl DrownedEntity {
 }
 
 impl Mob for DrownedEntity {
+    fn xp_reward(&self) -> u32 {
+        self.entity.xp_reward()
+    }
+
+    fn can_hold_item(&self, stack: &ItemStack) -> bool {
+        self.entity.can_hold_item(stack)
+    }
+
+    fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
+        !stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SPEARS)
+            && super::wants_to_pick_up(self, stack)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityDrownedStep, 0.15, 1.0);
     }

@@ -159,6 +159,10 @@ impl PiglinBruteEntity {
 }
 
 impl Mob for PiglinBruteEntity {
+    fn wants_to_pick_up(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
+        stack.item.id == pumpkin_data::item::Item::GOLDEN_AXE.id && self.can_hold_item(stack)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityPiglinBruteStep, 0.15, 1.0);
     }
@@ -214,7 +218,7 @@ impl Mob for PiglinBruteEntity {
         }
     }
 
-    fn get_base_experience_reward(&self) -> u32 {
+    fn xp_reward(&self) -> u32 {
         Self::XP_REWARD
     }
 }

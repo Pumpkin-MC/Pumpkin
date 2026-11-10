@@ -25,10 +25,10 @@ use tracing::{debug, error, info, trace, warn};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct TaskPriority {
-    stage: u8,
+    eff_level: i8,
+    rev_stage: u8,
     x: i32,
     z: i32,
-    eff_level: i8,
 }
 
 pub(crate) struct TaskHeapNode(TaskPriority, NodeKey);
@@ -75,6 +75,7 @@ pub struct GenerationSchedule {
 
     io_lock: IOLock,
     running_task_count: u16,
+    running_gen_count: u16,
     max_in_flight: u16,
     queue_dirty: bool,
     recv_chunk: crossbeam::channel::Receiver<(ChunkPos, RecvChunk)>,
@@ -168,6 +169,7 @@ impl GenerationSchedule {
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
                     running_task_count: 0,
+                    running_gen_count: 0,
                     max_in_flight,
                     queue_dirty: false,
                     recv_chunk,
@@ -219,61 +221,63 @@ impl GenerationSchedule {
         }
     }
 
-    fn calc_priority(
+    pub(crate) fn calc_priority(
         last_level: &ChunkLevel,
         last_high_priority: &[ChunkPos],
         pos: ChunkPos,
         stage: StagedChunkEnum,
     ) -> TaskPriority {
-        let max_r = match stage {
-            StagedChunkEnum::Full | StagedChunkEnum::Spawn => 0,
-            StagedChunkEnum::Lighting | StagedChunkEnum::Features => 1,
-            StagedChunkEnum::Carvers | StagedChunkEnum::Surface | StagedChunkEnum::Noise => 2,
-            StagedChunkEnum::Biomes
+        let stage_radius = match stage {
+            StagedChunkEnum::Full => 0,
+            StagedChunkEnum::Spawn => 1,
+            StagedChunkEnum::Lighting => 2,
+            StagedChunkEnum::Features => 3,
+            StagedChunkEnum::Carvers
+            | StagedChunkEnum::Surface
+            | StagedChunkEnum::Noise
             | StagedChunkEnum::StructureReferences
-            | StagedChunkEnum::StructureStart
-            | StagedChunkEnum::Empty
-            | StagedChunkEnum::None => 3,
+            | StagedChunkEnum::StructureStart => 4,
+            StagedChunkEnum::Biomes | StagedChunkEnum::Empty | StagedChunkEnum::None => 5,
         };
-        let mut eff_level = ChunkLoading::MAX_LEVEL;
-        for dx in -max_r..=max_r {
-            for dz in -max_r..=max_r {
-                if let Some(&lvl) = last_level.get(&pos.add_raw(dx, dz))
-                    && lvl < eff_level
-                {
-                    eff_level = lvl;
-                }
-            }
-        }
-        if eff_level == ChunkLoading::MAX_LEVEL {
+        let rev_stage = u8::MAX - (stage as u8);
+        let base_level = *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        if base_level == ChunkLoading::MAX_LEVEL {
+            let is_outer_dep = matches!(stage, StagedChunkEnum::Empty | StagedChunkEnum::Biomes)
+                && (-1..=1)
+                    .any(|dx| (-1..=1).any(|dz| last_level.contains_key(&pos.add_raw(dx, dz))));
+            let eff_level = if is_outer_dep {
+                ChunkLoading::MAX_LEVEL - stage_radius
+            } else {
+                127
+            };
             return TaskPriority {
-                eff_level: 127,
-                stage: stage as u8,
+                eff_level,
+                rev_stage,
                 x: pos.x,
                 z: pos.y,
             };
         }
+        let eff_level = base_level.saturating_sub(stage_radius);
         if !last_high_priority.is_empty() {
-            let mut min_dst = i32::MAX;
             for i in last_high_priority {
                 let dst = max((i.x - pos.x).abs(), (i.y - pos.y).abs());
-                min_dst = min_dst.min(dst);
                 if dst <= StagedChunkEnum::FULL_RADIUS
                     && stage <= StagedChunkEnum::FULL_DEPENDENCIES[dst as usize]
                 {
                     return TaskPriority {
-                        eff_level: eff_level.saturating_sub(100).saturating_add(dst as i8),
-                        stage: stage as u8,
+                        eff_level: eff_level
+                            .saturating_sub(100)
+                            .saturating_add((dst as i8).saturating_sub(stage_radius).max(0)),
+                        rev_stage,
                         x: pos.x,
                         z: pos.y,
                     };
                 }
             }
-            eff_level = eff_level.saturating_add(min_dst.min(60) as i8);
         }
         TaskPriority {
             eff_level,
-            stage: stage as u8,
+            rev_stage,
             x: pos.x,
             z: pos.y,
         }
@@ -283,17 +287,18 @@ impl GenerationSchedule {
         if self.queue.is_empty() {
             return;
         }
-        let mut tasks: Vec<_> = self.queue.drain().collect();
-        for i in &mut tasks {
-            if let Some(node) = self.graph.nodes.get(i.1) {
-                i.0 = Self::calc_priority(
-                    &self.last_level,
-                    &self.last_high_priority,
-                    node.pos,
-                    node.stage,
-                );
-            }
-        }
+        let graph = &self.graph;
+        let last_level = &self.last_level;
+        let last_high_priority = &self.last_high_priority;
+        let tasks: Vec<_> = self
+            .queue
+            .drain()
+            .filter_map(|mut i| {
+                let node = graph.nodes.get(i.1)?;
+                i.0 = Self::calc_priority(last_level, last_high_priority, node.pos, node.stage);
+                Some(i)
+            })
+            .collect();
         self.queue = BinaryHeap::from(tasks);
     }
 
@@ -510,47 +515,15 @@ impl GenerationSchedule {
         newly_created
     }
 
-    pub(crate) fn is_features_order_ready(
-        chunk_map: &HashMap<ChunkPos, ChunkHolder>,
-        pos: ChunkPos,
-    ) -> bool {
-        for dx in -2..=2 {
-            for dz in -2..=2 {
-                if dx > 0 || (dx == 0 && dz >= 0) {
-                    continue;
-                }
-                let neighbor_pos = pos.add_raw(dx, dz);
-                if let Some(holder) = chunk_map.get(&neighbor_pos) {
-                    let effective_target = holder.target_stage.max(holder.dependency_stage);
-                    if effective_target >= StagedChunkEnum::Features
-                        && holder.current_stage < StagedChunkEnum::Features
-                    {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
-
     fn is_task_ready(&self, pos: ChunkPos, stage: StagedChunkEnum) -> bool {
         let read_radius = stage.get_read_radius();
-        let chunks_present = (-read_radius..=read_radius).all(|dx| {
+        (-read_radius..=read_radius).all(|dx| {
             (-read_radius..=read_radius).all(|dy| {
                 self.chunk_map
                     .get(&pos.add_raw(dx, dy))
                     .is_some_and(|h| h.chunk.is_some())
             })
-        });
-        if !chunks_present {
-            return false;
-        }
-        if stage == StagedChunkEnum::Features
-            && !Self::is_features_order_ready(&self.chunk_map, pos)
-        {
-            return false;
-        }
-        true
+        })
     }
 
     /// Check if any tasks parked in `waiting_for_chunks` now have all their neighbor
@@ -620,8 +593,9 @@ impl GenerationSchedule {
             self.queue_dirty = true;
         }
         let Some(new_level) = new_data.0 else {
-            return true;
+            return false;
         };
+        self.last_level = new_level.1;
         let mut worklist: std::collections::VecDeque<(ChunkPos, StagedChunkEnum, NodeKey)> =
             std::collections::VecDeque::new();
 
@@ -630,7 +604,10 @@ impl GenerationSchedule {
             debug_assert_eq!(
                 new_stage,
                 StagedChunkEnum::level_to_stage(
-                    *new_level.1.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL)
+                    *self
+                        .last_level
+                        .get(&pos)
+                        .unwrap_or(&ChunkLoading::MAX_LEVEL)
                 )
             );
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
@@ -739,7 +716,7 @@ impl GenerationSchedule {
                         node.in_queue = true;
                         self.queue.push(TaskHeapNode(
                             Self::calc_priority(
-                                &new_level.1,
+                                &self.last_level,
                                 &self.last_high_priority,
                                 pos,
                                 node.stage,
@@ -758,7 +735,7 @@ impl GenerationSchedule {
             let newly_created = Self::ensure_dependency_chain(
                 &mut self.graph,
                 &mut self.queue,
-                &new_level.1,
+                &self.last_level,
                 &self.last_high_priority,
                 dep_task,
                 pos,
@@ -783,7 +760,6 @@ impl GenerationSchedule {
             self.chunk_map.insert(pos, holder);
         }
 
-        self.last_level = new_level.1;
         self.queue_dirty = true;
         true
     }
@@ -861,7 +837,9 @@ impl GenerationSchedule {
             }
         }
 
-        self.purge_dropped_queue_entries();
+        if !self.queue_dirty {
+            self.purge_dropped_queue_entries();
+        }
     }
 
     /// Drop heap entries whose node has been cancelled. They are skipped when popped,
@@ -1260,12 +1238,16 @@ impl GenerationSchedule {
 
                 // Neighbor chunks returned to holders — unblock waiting tasks
                 self.check_waiting_tasks();
+                self.running_gen_count -= 1;
             }
             RecvChunk::GenerationFailure {
                 pos: fail_pos,
                 stage,
                 error,
             } => {
+                if stage != StagedChunkEnum::Empty {
+                    self.running_gen_count -= 1;
+                }
                 error!(
                     "Received generation failure notification for chunk {:?} at stage {:?}: {}",
                     fail_pos, stage, error
@@ -1385,7 +1367,23 @@ impl GenerationSchedule {
 
             // 4. Process ready tasks in the queue (up to max_in_flight)
             let mut io_batch = Vec::with_capacity(16);
-            'out2: while let Some(task) = self.queue.pop() {
+            'out2: loop {
+                // Drain completed tasks before popping so newly unlocked higher-stage tasks
+                // for closer chunks enter the priority queue immediately.
+                while let Ok((pos, data)) = self.recv_chunk.try_recv() {
+                    self.receive_chunk(pos, data);
+                    if self.resort_work(self.send_level.get()) {
+                        self.garbage_collect_dependencies();
+                        self.check_waiting_tasks();
+                        self.queue_dirty = true;
+                        break 'out2;
+                    }
+                }
+
+                let Some(task) = self.queue.pop() else {
+                    break 'out2;
+                };
+
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
                     info!("Shutdown detected during task processing, saving chunks...");
@@ -1393,28 +1391,24 @@ impl GenerationSchedule {
                     break 'out2;
                 }
 
-                if self.running_task_count >= self.max_in_flight {
+                // Cap total in-flight (CPU + IO) tasks so IO reads remain bounded while not
+                // starving the CPU generation pool.
+                if self.running_task_count >= self.max_in_flight + 64 {
                     self.queue.push(task);
                     break 'out2;
-                }
-
-                // Briefly check for high-priority results or world changes to avoid stalling
-                while let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                    self.receive_chunk(pos, data);
-                    if self.resort_work(self.send_level.get()) {
-                        // If world state changed, we MUST re-sort before continuing
-                        self.garbage_collect_dependencies();
-                        self.check_waiting_tasks();
-                        self.queue.push(task);
-                        self.queue_dirty = true;
-                        break 'out2;
-                    }
                 }
 
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
                     node.in_queue = false;
                     if node.in_degree != 0 {
                         continue;
+                    }
+                    if node.stage != StagedChunkEnum::Empty
+                        && self.running_gen_count >= self.max_in_flight
+                    {
+                        node.in_queue = true;
+                        self.queue.push(task);
+                        break 'out2;
                     }
                     node.in_flight = true;
                     let node = node.clone();
@@ -1479,7 +1473,7 @@ impl GenerationSchedule {
                         holder.occupied = occupy;
 
                         io_batch.push(node.pos);
-                        if io_batch.len() >= 16
+                        if io_batch.len() >= 4
                             && self
                                 .io_read
                                 .blocking_send(std::mem::take(&mut io_batch))
@@ -1505,7 +1499,6 @@ impl GenerationSchedule {
                         let write_radius = node.stage.get_write_radius();
 
                         // Pre-validate that every chunk in the read area has its data present
-                        // (and higher-priority overlapping Features tasks have finished)
                         // before we snapshot neighbors or swap the write area out.
                         if !self.is_task_ready(node.pos, node.stage) {
                             if let Some(n) = self.graph.nodes.get_mut(task.1) {
@@ -1513,12 +1506,6 @@ impl GenerationSchedule {
                                 n.in_flight = false;
                             }
                             self.waiting_for_chunks.insert(task.1);
-                            // Close the TOCTOU window: the chunk we're waiting for may
-                            // have arrived in the recv_chunk drain that happened earlier
-                            // in this same loop iteration, before this task was parked.
-                            // If so, check_waiting_tasks() will immediately re-queue it
-                            // so it isn't stranded with running_task_count==0.
-                            self.check_waiting_tasks();
                             continue;
                         }
 
@@ -1612,6 +1599,7 @@ impl GenerationSchedule {
                         }
 
                         self.running_task_count += 1;
+                        self.running_gen_count += 1;
                         let pos = node.pos;
                         let stage = node.stage;
                         let send_chunk = self.send_chunk.clone();
@@ -1696,7 +1684,9 @@ impl GenerationSchedule {
                     self.sort_queue();
                     self.queue_dirty = false;
                 }
-            } else if self.running_task_count >= self.max_in_flight {
+            } else if self.running_gen_count >= self.max_in_flight
+                || self.running_task_count >= self.max_in_flight + 64
+            {
                 // Queue has tasks, but we are at maximum in-flight capacity.
                 // Wait for an in-flight worker to finish instead of busy-spinning.
                 match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
@@ -1778,6 +1768,7 @@ impl GenerationSchedule {
             }
 
             self.running_task_count = 0;
+            self.running_gen_count = 0;
         }
 
         drop(self.io_write);

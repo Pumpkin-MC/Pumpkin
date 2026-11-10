@@ -14,8 +14,7 @@ use crate::logging::{
 };
 use crate::net::bedrock::{
     BedrockClient,
-    nethernet::{NetherNetListener, load_or_create_identity_key},
-    status::{IceSocket, StatusResponder},
+    nethernet::{IceSocket, NetherNetListener, load_or_create_identity_key},
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
@@ -64,6 +63,7 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod telemetry;
+pub mod update_checker;
 pub mod world;
 
 pub struct LoggingConfig {
@@ -309,7 +309,6 @@ pub enum ServerSetupError {
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
-    pub bedrock_status: Option<StatusResponder>,
     pub nethernet_listener: Option<NetherNetListener>,
     /// Whether this instance owns the process: on shutdown, a standalone server also stops the
     /// process, while an embedded server only ends its own world.
@@ -357,10 +356,7 @@ impl PumpkinServer {
             None
         };
 
-        let (bedrock_status, ice_socket) = match Self::bind_bedrock_status(&server).await? {
-            Some((status, ice)) => (Some(status), Some(ice)),
-            None => (None, None),
-        };
+        let ice_socket = Self::bind_bedrock_ice(&server).await?;
 
         let management = server.advanced_config.networking.management.clone();
 
@@ -412,7 +408,6 @@ impl PumpkinServer {
         Ok(Self {
             server,
             tcp_listener,
-            bedrock_status,
             nethernet_listener,
             standalone,
         })
@@ -463,26 +458,22 @@ impl PumpkinServer {
         }
     }
 
-    /// Binds the UDP port used by Bedrock status and `NetherNet`'s ICE agent.
-    async fn bind_bedrock_status(
-        server: &Arc<Server>,
-    ) -> Result<Option<(StatusResponder, IceSocket)>, ServerSetupError> {
+    /// Binds the UDP port used by Bedrock's `NetherNet` ICE agent.
+    async fn bind_bedrock_ice(server: &Arc<Server>) -> Result<Option<IceSocket>, ServerSetupError> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
             return Ok(None);
         }
-        match StatusResponder::bind(config.nethernet.address).await {
-            Ok((status, ice)) => {
-                if let Ok((ipv4, ipv6)) = status.local_addrs() {
-                    info!(
-                        "Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)"
-                    );
+        match IceSocket::bind(config.nethernet.address).await {
+            Ok(ice) => {
+                if let Ok(addr) = ice.local_addr() {
+                    info!("Bedrock NetherNet ICE is listening on {addr}");
                 }
-                Ok(Some((status, ice)))
+                Ok(Some(ice))
             }
             Err(err) => {
                 error!(
-                    "Bedrock status and NetherNet ICE use this UDP port; make sure nothing else \
+                    "Bedrock NetherNet ICE uses this UDP port; make sure nothing else \
                      is using it and start the server again"
                 );
                 Err(ServerSetupError::BedrockBind {
@@ -555,6 +546,7 @@ impl PumpkinServer {
             .await;
 
         self.server.start_telemetry();
+        self.server.start_update_checker();
         self.server.management_hub.broadcast_server_started();
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -700,16 +692,6 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for Bedrock status and NetherNet ICE packets.
-            status_result = resolve_some(
-                self.bedrock_status.as_ref(),
-                |status: &StatusResponder| status.receive(&self.server),
-            ) => {
-                if let Err(error) = status_result {
-                    debug!("Bedrock status packet failed: {error}");
-                }
-            },
-
             // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
             nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
                 if let Some((session, client_addr)) = nethernet_result {
@@ -808,9 +790,15 @@ fn setup_stdin_console(server: &Arc<Server>) {
     });
     let server_clone = server.clone();
     server.spawn_task(async move {
-        while !SHOULD_STOP.load(Ordering::Relaxed)
-            && let Some(command) = rx.recv().await
-        {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
+            // stdin may never reach EOF (a pipe), so stopping must wake this up too
+            let command = select! {
+                command = rx.recv() => command,
+                () = STOP_INTERRUPT.cancelled() => None,
+            };
+            let Some(command) = command else {
+                break;
+            };
             let mut event = ServerCommandEvent::new(command.clone());
             server_clone
                 .plugin_manager

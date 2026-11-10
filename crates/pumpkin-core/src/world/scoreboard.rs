@@ -21,9 +21,6 @@ use tracing::warn;
 use super::World;
 use crate::{entity::player::Player, net::bedrock::BedrockClient};
 
-#[cfg(test)]
-mod tests;
-
 pub trait ScoreboardTarget: Send + Sync {
     fn send_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
         &self,
@@ -372,14 +369,11 @@ impl Scoreboard {
 
         let be_packet = BSetScore {
             action: VarInt(0), // Change
-            entries: vec![BScoreEntry {
-                scoreboard_id: score.entity_name.as_ptr() as i64, // Internal ID
-                objective_name: score.objective_name.clone(),
-                score: score.value,
-                entry_type: VarInt(3), // Fake player / Literal
-                entity_unique_id: 0,
-                custom_name: score.entity_name.clone(),
-            }],
+            entries: vec![bedrock_score_entry(
+                &score.entity_name,
+                &score.objective_name,
+                score.value.0,
+            )],
         };
 
         target.send_editioned(&je_packet, &be_packet);
@@ -436,14 +430,7 @@ impl Scoreboard {
 
         let be_packet = BSetScore {
             action: VarInt(1), // Remove
-            entries: vec![BScoreEntry {
-                scoreboard_id: entity_name.as_ptr() as i64,
-                objective_name: objective_name.to_string(),
-                score: VarInt(0),
-                entry_type: VarInt(3),
-                entity_unique_id: 0,
-                custom_name: entity_name.to_string(),
-            }],
+            entries: vec![bedrock_score_entry(entity_name, objective_name, 0)],
         };
 
         target.send_editioned(&je_packet, &be_packet);
@@ -459,14 +446,7 @@ impl Scoreboard {
         let mut be_entries = Vec::new();
         for (obj_name, obj_scores) in &self.scores {
             if obj_scores.contains_key(entity_name) {
-                be_entries.push(BScoreEntry {
-                    scoreboard_id: entity_name.as_ptr() as i64,
-                    objective_name: obj_name.clone(),
-                    score: VarInt(0),
-                    entry_type: VarInt(3),
-                    entity_unique_id: 0,
-                    custom_name: entity_name.to_string(),
-                });
+                be_entries.push(bedrock_score_entry(entity_name, obj_name, 0));
             }
         }
 
@@ -685,14 +665,11 @@ impl Scoreboard {
                 );
                 let be_packet = BSetScore {
                     action: VarInt(0),
-                    entries: vec![BScoreEntry {
-                        scoreboard_id: score.entity_name.as_ptr() as i64,
-                        objective_name: score.objective_name.clone(),
-                        score: score.value,
-                        entry_type: VarInt(3),
-                        entity_unique_id: 0,
-                        custom_name: score.entity_name.clone(),
-                    }],
+                    entries: vec![bedrock_score_entry(
+                        &score.entity_name,
+                        &score.objective_name,
+                        score.value.0,
+                    )],
                 };
                 player.try_enqueue_packet_editioned(&je_packet, &be_packet);
             }
@@ -916,7 +893,11 @@ impl BedrockScoreboard {
             .filter(|(_, objective_name)| objective_name.as_str() == name)
             .map(|(slot, _)| *slot)
             .collect();
-        if slots.is_empty() {
+        if slots.is_empty()
+            && !self
+                .display_slots
+                .contains_key(&BedrockDisplaySlot::Sidebar)
+        {
             slots.push(BedrockDisplaySlot::Sidebar);
         }
 
@@ -1122,10 +1103,7 @@ impl BedrockScoreboard {
 
     pub fn send_to_player(&self, player: &Player) {
         if let Some(client) = player.client.bedrock() {
-            let mut names: Vec<_> = self.objectives.keys().collect();
-            // Explicit display slots take precedence over the default sidebar.
-            names.sort_by_key(|name| self.display_slots.values().any(|value| value == *name));
-            for name in names {
+            for name in self.objectives.keys() {
                 for packet in self.objective_packets(name) {
                     packet.send(client);
                 }
@@ -1299,5 +1277,136 @@ impl BedrockScoreboardBuilder {
     #[must_use]
     pub fn build(self) -> BedrockScoreboard {
         self.scoreboard
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use super::*;
+
+    #[test]
+    fn bedrock_row_ids_survive_updates_and_distinguish_objectives() {
+        let original = bedrock_score_entry("§fOnline players: 12", "voxel_board", 7);
+        let name = String::from("§fOnline players: 12");
+        let updated = bedrock_score_entry(&name, "voxel_board", 6);
+        let removed = bedrock_score_entry(&name, "voxel_board", 0);
+        assert_eq!(original.scoreboard_id, updated.scoreboard_id);
+        assert_eq!(original.scoreboard_id, removed.scoreboard_id);
+        assert_ne!(
+            original.scoreboard_id,
+            bedrock_score_entry(&name, "other_board", 7).scoreboard_id
+        );
+        assert_ne!(
+            original.scoreboard_id,
+            bedrock_score_entry("§fRank: None", "voxel_board", 7).scoreboard_id
+        );
+        assert_eq!(original.objective_name, "voxel_board");
+        assert_eq!(original.custom_name, name);
+        assert_eq!(original.score.0, 7);
+        assert_eq!(original.entry_type.0, 3);
+    }
+
+    #[test]
+    fn bedrock_objective_refresh_restores_rows_after_all_displays() -> Result<(), Box<dyn Error>> {
+        let rows = [
+            ("§0", 8),
+            ("§fOnline players: 12", 7),
+            ("§2", 6),
+            ("§fRank: §4Owner", 5),
+            ("§fPing: 0 ms", 4),
+            ("§5", 3),
+            ("§fWebsite and IP:", 2),
+            ("§evxl.gg", 1),
+        ];
+        let mut board = BedrockScoreboardBuilder::new()
+            .objective("voxel_board", "Voxel Network", BedrockSortOrder::Descending)
+            .objective("other", "Other board", BedrockSortOrder::Ascending)
+            .display_slot(BedrockDisplaySlot::Sidebar, "voxel_board")
+            .display_slot(BedrockDisplaySlot::PlayerList, "voxel_board")
+            .score("unrelated", "other", 99)
+            .build();
+        for (name, value) in rows {
+            board
+                .scores
+                .insert((name.into(), "voxel_board".into()), value);
+        }
+        let scores = board.scores.clone();
+        let mut previous_ids = None;
+        for title in [
+            "§b§lVoxel Network",
+            "§f§lVoxel Network",
+            "§b§lVoxel Network",
+        ] {
+            board
+                .objectives
+                .get_mut("voxel_board")
+                .ok_or("Missing objective")?
+                .display_name = title.into();
+            let packets = board.objective_packets("voxel_board");
+            let [
+                BedrockObjectivePacket::Remove(remove),
+                BedrockObjectivePacket::Display(first),
+                BedrockObjectivePacket::Display(second),
+                BedrockObjectivePacket::Scores(scores),
+            ] = packets.as_slice()
+            else {
+                return Err("Expected remove, both displays, then restored scores".into());
+            };
+            assert_eq!(remove.objective_name, "voxel_board");
+            let mut slots = [
+                first.display_slot_name.as_str(),
+                second.display_slot_name.as_str(),
+            ];
+            slots.sort_unstable();
+            assert_eq!(slots, ["list", "sidebar"]);
+            for display in [first, second] {
+                assert_eq!(display.objective_name, "voxel_board");
+                assert_eq!(display.objective_display_name, title);
+                assert_eq!(display.sort_order.0, 1);
+            }
+            assert_eq!(scores.action.0, 0);
+            assert_eq!(scores.entries.len(), rows.len());
+            let mut ids = FxHashMap::default();
+            for entry in &scores.entries {
+                assert_eq!(entry.objective_name, "voxel_board");
+                let expected = rows
+                    .iter()
+                    .find(|(name, _)| *name == entry.custom_name)
+                    .ok_or("Unexpected score row")?;
+                assert_eq!(entry.score.0, expected.1);
+                assert_eq!(entry.entry_type.0, 3);
+                ids.insert(entry.custom_name.clone(), entry.scoreboard_id);
+            }
+            if let Some(previous) = previous_ids {
+                assert_eq!(ids, previous);
+            }
+            previous_ids = Some(ids);
+        }
+        assert_eq!(board.scores, scores);
+        Ok(())
+    }
+
+    #[test]
+    fn unassigned_bedrock_objective_preserves_an_occupied_sidebar() {
+        let mut board = BedrockScoreboardBuilder::new()
+            .objective("displayed", "Displayed", BedrockSortOrder::Ascending)
+            .objective("unassigned", "Unassigned", BedrockSortOrder::Ascending)
+            .build();
+
+        assert!(board.objective_packets("unassigned").iter().any(|packet| {
+            matches!(packet, BedrockObjectivePacket::Display(display) if display.display_slot_name == "sidebar")
+        }));
+
+        board
+            .display_slots
+            .insert(BedrockDisplaySlot::Sidebar, "displayed".into());
+        assert!(
+            !board
+                .objective_packets("unassigned")
+                .iter()
+                .any(|packet| { matches!(packet, BedrockObjectivePacket::Display(_)) })
+        );
     }
 }

@@ -2,6 +2,7 @@
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
 use pumpkin_data::screen::WindowType;
+use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::{
     anvil::anvil_screen_handler::AnvilScreenHandler, beacon_screen_handler::BeaconScreenHandler,
     cartography_table_screen_handler::CartographyTableScreenHandler,
@@ -36,11 +37,23 @@ impl BedrockClient {
 
             let mut responses = Vec::with_capacity(packet.requests.len());
 
-            for request in packet.requests {
+            for mut request in packet.requests {
                 let mut created_item: Option<ItemStack> = None;
                 let mut crafting_inputs_consumed = false;
                 let mut updates = Vec::new();
                 let mut result = 0u8; // 0 = Success, 1 = Error
+
+                if request
+                    .actions
+                    .iter()
+                    .any(|action| touches_unroutable_slot(&*screen_handler, action))
+                {
+                    tracing::debug!(
+                        "Item stack request targets armor/offhand outside the player screen"
+                    );
+                    result = 1;
+                    request.actions.clear();
+                }
 
                 for action in request.actions {
                     match action {
@@ -797,6 +810,7 @@ impl BedrockClient {
                             }
                         }
                         ItemStackRequestAction::CraftResultsDeprecated { .. }
+                        | ItemStackRequestAction::CraftReserved { .. }
                         | ItemStackRequestAction::Create { .. }
                         | ItemStackRequestAction::LabTableCombine
                         | ItemStackRequestAction::CraftNonImplemented => {
@@ -899,18 +913,66 @@ impl BedrockClient {
     }
 }
 
+/// Whether `action` touches an armor or offhand slot that doesn't resolve on the open screen.
+/// Such requests are rejected whole, before any stack changes.
+fn touches_unroutable_slot(
+    screen_handler: &dyn ScreenHandler,
+    action: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction,
+) -> bool {
+    use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction as A;
+    let slots = match action {
+        A::Take {
+            source,
+            destination,
+            ..
+        }
+        | A::Place {
+            source,
+            destination,
+            ..
+        } => [Some(source), Some(destination)],
+        A::Swap { slot1, slot2 } => [Some(slot1), Some(slot2)],
+        A::Drop { source, .. } | A::Destroy { source, .. } | A::Consume { source, .. } => {
+            [Some(source), None]
+        }
+        _ => [None, None],
+    };
+    slots.into_iter().flatten().any(|slot| {
+        let name = slot.container_name.container_name;
+        matches!(name, ContainerName::Armor | ContainerName::Offhand)
+            && map_bedrock_container_slot(screen_handler, name, slot.slot_id).is_none()
+    })
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn map_bedrock_container_slot(
     screen_handler: &dyn ScreenHandler,
     container_name: ContainerName,
     slot_id: u8,
 ) -> Option<usize> {
-    let is_player_screen = screen_handler.window_type().is_none();
+    let mount_equip_slot = screen_handler
+        .as_any()
+        .downcast_ref::<MountScreenHandler>()
+        .and_then(|mount| mount.bedrock_equip_slot);
+    let is_player_screen = screen_handler.window_type().is_none() && mount_equip_slot.is_none();
     let container_slots = screen_handler
         .get_behaviour()
         .slots
         .len()
         .saturating_sub(PlayerInventory::MAIN_SIZE);
+
+    if let Some(equip_slot) = mount_equip_slot {
+        match container_name {
+            ContainerName::HorseEquip => return Some(equip_slot),
+            ContainerName::LevelEntity => {
+                let slot = slot_id as usize + 1;
+                return (slot >= MountScreenHandler::SLOT_INVENTORY_START
+                    && slot < container_slots)
+                    .then_some(slot);
+            }
+            _ => {}
+        }
+    }
 
     match container_name {
         ContainerName::HotBar => {
@@ -937,8 +999,11 @@ pub(crate) fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
-        ContainerName::Offhand => (slot_id == 0).then_some(45),
+        // Armor and offhand live only on the player's own screen.
+        ContainerName::Armor => (is_player_screen && slot_id < 4).then(|| 5 + slot_id as usize),
+        ContainerName::Offhand => {
+            (is_player_screen && u32::from(slot_id) <= super::OFF_HAND_BEDROCK_SLOT).then_some(45)
+        }
         ContainerName::Cursor => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
@@ -1248,24 +1313,7 @@ fn update_slot_stack(
             let current_stack =
                 screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack();
             if !current_stack.are_items_and_components_equal(&new_stack) {
-                if (5..9).contains(&screen_slot) {
-                    player.enqueue_equipment_change(
-                        &match screen_slot {
-                            5 => EquipmentSlot::HEAD,
-                            6 => EquipmentSlot::CHEST,
-                            7 => EquipmentSlot::LEGS,
-                            8 => EquipmentSlot::FEET,
-                            _ => unreachable!(),
-                        },
-                        &new_stack,
-                    );
-                } else if (36..45).contains(&screen_slot) {
-                    let hotbar_slot = screen_slot - 36;
-                    if player.inventory().get_selected_slot() == hotbar_slot as u8 {
-                        let equipment = &[(EquipmentSlot::MAIN_HAND, new_stack.clone())];
-                        player.living_entity.send_equipment_changes(equipment);
-                    }
-                }
+                player.sync_screen_slot_equipment(screen_slot, &new_stack);
             }
         }
 
