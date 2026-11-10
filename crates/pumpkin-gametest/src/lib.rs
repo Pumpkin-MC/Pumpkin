@@ -17,7 +17,7 @@ pub use helper::{
 };
 pub use manager::{
     GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
-    GameTestRetryOptions, GameTestRunner, VERIFY_TEST_BATCH_SIZE,
+    GameTestRetryOptions, GameTestRunner, RecordingGameTestReporter, VERIFY_TEST_BATCH_SIZE,
 };
 pub use model::{GameTestDefinition, GameTestRotation, TestType};
 pub use runner::{GameTestSession, GameTestState, TestRunner};
@@ -26,7 +26,8 @@ pub use structure::{
     GameTestPosition, GameTestStructureBlock, GameTestStructureEntity, GameTestStructureTemplate,
     TestBlockMode, TestStructureInstance, clear_placed_test, clear_structure_area,
     encase_structure, place_existing_structure, place_structure,
-    place_structure_with_controller_rotation, remove_barriers,
+    place_structure_block_entity, place_structure_with_controller_rotation,
+    place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
 pub use world::GameTestWorld;
 

@@ -14,3 +14,5 @@ convertable = "convertable"
 # Vanilla method names
 areMergable = "areMergable"
 isMergable = "isMergable"
+# Generated identifier for vanilla's `commands.test.error.non_existant_test` key.
+COMMANDS_TEST_ERROR_NON_EXISTANT_TEST = "COMMANDS_TEST_ERROR_NON_EXISTANT_TEST"

@@ -192,6 +192,7 @@ impl JavaClient {
                 {
                     let player = player.clone();
                     let position = packet.pos;
+                    let ignore_entities = packet.data.ignore_entities;
                     server.clone().spawn_task(async move {
                         match reset_test_instance(&server, world.clone(), position).await {
                             Ok(true) => {
@@ -215,7 +216,8 @@ impl JavaClient {
                                         GameTestRetryOptions::no_retries(),
                                         report,
                                     )
-                                    .with_y(position.0.y),
+                                    .with_y(position.0.y)
+                                    .with_ignore_entities(ignore_entities),
                                 );
                             }
                             Ok(false) => player.send_system_message(

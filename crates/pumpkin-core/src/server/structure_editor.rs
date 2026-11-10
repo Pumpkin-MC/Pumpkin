@@ -5,6 +5,7 @@ use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_gametest::{
     GameTestResult, GameTestRotation, GameTestStructureTemplate, GameTestWorld,
+    place_structure_block_entity,
 };
 use pumpkin_nbt::{NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
@@ -114,16 +115,7 @@ pub async fn place_editor_structure(
             .id;
         let state = adapter.rotate_block_state(mirrored, rotation).await?;
         adapter.set_block_state(&position, state, flags).await?;
-        if let Some(nbt) = &block.nbt {
-            adapter.set_block_entity_nbt(&position, nbt).await?;
-        } else if let Some(mode) = block.test_mode {
-            let mut nbt = NbtCompound::new();
-            nbt.put_string("id", "minecraft:test_block".to_string());
-            nbt.put_string("mode", mode.serialized_name().to_string());
-            nbt.put_string("message", String::new());
-            nbt.put_bool("powered", false);
-            adapter.set_block_entity_nbt(&position, &nbt).await?;
-        }
+        place_structure_block_entity(&adapter, &position, block).await?;
     }
     if !ignore_entities {
         for entity in template.entities() {
@@ -137,47 +129,20 @@ pub async fn place_editor_structure(
                 mirror,
                 block_rotation,
             );
-            let mut nbt = entity.nbt.clone();
-            nbt.put(
-                "Pos",
-                NbtTag::List(vec![
-                    (f64::from(origin.0.x) + relative.x).into(),
-                    (f64::from(origin.0.y) + relative.y).into(),
-                    (f64::from(origin.0.z) + relative.z).into(),
-                ]),
+            let nbt = entity.placement_nbt(
+                Vector3::new(
+                    f64::from(origin.0.x) + relative.x,
+                    f64::from(origin.0.y) + relative.y,
+                    f64::from(origin.0.z) + relative.z,
+                ),
+                BlockPos::new(
+                    origin.0.x + block_relative.x,
+                    origin.0.y + block_relative.y,
+                    origin.0.z + block_relative.z,
+                ),
+                rotation,
+                mirror,
             );
-            nbt.child_tags.remove("UUID");
-            if nbt.get("block_pos").is_some() {
-                nbt.put(
-                    "block_pos",
-                    NbtTag::IntArray(vec![
-                        origin.0.x + block_relative.x,
-                        origin.0.y + block_relative.y,
-                        origin.0.z + block_relative.z,
-                    ]),
-                );
-            }
-            let angles = nbt.get_list("Rotation").unwrap_or_default();
-            let yaw = angles
-                .first()
-                .and_then(NbtTag::extract_float)
-                .unwrap_or(0.0);
-            let pitch = angles.get(1).and_then(NbtTag::extract_float).unwrap_or(0.0);
-            let angle = pumpkin_util::math::wrap_degrees(yaw);
-            let mirrored = match mirror {
-                Mirror::None => angle,
-                Mirror::LeftRight => 180.0 - angle,
-                Mirror::FrontBack => -angle,
-            };
-            let rotated = angle
-                + match block_rotation {
-                    Rotation::None => 0.0,
-                    Rotation::Clockwise90 => 90.0,
-                    Rotation::Rotate180 => 180.0,
-                    Rotation::CounterClockwise90 => 270.0,
-                };
-            let yaw = rotated + mirrored - angle;
-            nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
             adapter.spawn_structure_entity(&nbt).await?;
         }
     }
@@ -198,6 +163,24 @@ fn update_capture_tickets(world: &World, chunks: &[Vector2<i32>], add: bool) {
         }
     }
     loading.send_change();
+}
+
+struct CaptureTickets<'a> {
+    world: &'a World,
+    chunks: Vec<Vector2<i32>>,
+}
+
+impl<'a> CaptureTickets<'a> {
+    fn new(world: &'a World, chunks: Vec<Vector2<i32>>) -> Self {
+        update_capture_tickets(world, &chunks, true);
+        Self { world, chunks }
+    }
+}
+
+impl Drop for CaptureTickets<'_> {
+    fn drop(&mut self) {
+        update_capture_tickets(self.world, &self.chunks, false);
+    }
 }
 
 /// Captures a loaded world region in the 26.3 structure template format.
@@ -242,9 +225,15 @@ pub async fn capture_structure(
             chunks.push(Vector2::new(x, z));
         }
     }
-    update_capture_tickets(world, &chunks, true);
-    for &chunk in &chunks {
+    let tickets = CaptureTickets::new(world, chunks);
+    for &chunk in &tickets.chunks {
         world.level.get_or_fetch_chunk(chunk, |_| ()).await;
+    }
+    if include_entities {
+        for &chunk in &tickets.chunks {
+            let entities = world.level.get_entity_chunk(chunk).await;
+            world.activate_entity_chunk(&entities);
+        }
     }
 
     let mut palette_ids: HashMap<BlockStateId, i32> = HashMap::new();
@@ -335,6 +324,5 @@ pub async fn capture_structure(
     root.put_list("palette", palette);
     root.put_list("blocks", blocks);
     root.put_list("entities", entities);
-    update_capture_tickets(world, &chunks, false);
     Ok(root)
 }
