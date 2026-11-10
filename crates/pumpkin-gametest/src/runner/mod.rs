@@ -16,8 +16,8 @@ use crate::model::{GameTestRotation, TestType};
 use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
-    clear_success_entities, encase_structure, place_structure_with_controller_rotation_and_entities,
-    remove_barriers,
+    clear_success_entities, encase_structure,
+    place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
 use crate::world::GameTestWorld;
 

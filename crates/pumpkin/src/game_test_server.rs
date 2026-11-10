@@ -21,8 +21,8 @@ use pumpkin_core::{
 };
 use pumpkin_data::dimension::Dimension;
 use pumpkin_gametest::{
-    GameTestBatchReport, GameTestReporter, GameTestRetryOptions, GameTestRotation, GameTestRunner, RecordingGameTestReporter,
-    VERIFY_TEST_BATCH_SIZE, resource_selector_matches,
+    GameTestBatchReport, GameTestReporter, GameTestRetryOptions, GameTestRotation, GameTestRunner,
+    RecordingGameTestReporter, VERIFY_TEST_BATCH_SIZE, resource_selector_matches,
 };
 use pumpkin_util::{GameMode, text::TextComponent, world_seed::Seed};
 use tracing::info;
@@ -233,22 +233,23 @@ async fn run_test_rotation(
     } else {
         test_id.to_string()
     };
-    let (column_spacing, row_spacing) = match game_test_grid_spacing(server, test_id, rotation).await {
-        Ok(spacing) => spacing,
-        Err(error) => {
-            for _ in 0..copies {
-                sink.send_message(TextComponent::text(format!("{test_id} failed! {error}")));
-                report.fail_to_start(test_id, &error, test.required);
+    let (column_spacing, row_spacing) =
+        match game_test_grid_spacing(server, test_id, rotation).await {
+            Ok(spacing) => spacing,
+            Err(error) => {
+                for _ in 0..copies {
+                    sink.send_message(TextComponent::text(format!("{test_id} failed! {error}")));
+                    report.fail_to_start(test_id, &error, test.required);
+                }
+                return Ok(TestOutcome {
+                    name,
+                    required: test.required,
+                    report,
+                    elapsed_ms: started.elapsed().as_millis(),
+                    messages: sink.messages(),
+                });
             }
-            return Ok(TestOutcome {
-                name,
-                required: test.required,
-                report,
-                elapsed_ms: started.elapsed().as_millis(),
-                messages: sink.messages(),
-            });
-        }
-    };
+        };
 
     for _ in 0..copies {
         let (test_x, test_z) = grid.place(column_spacing, row_spacing)?;

@@ -154,13 +154,23 @@ pub async fn place_structure_with_controller_rotation(
     padding: i32,
 ) -> GameTestResult<TestStructureInstance> {
     place_structure_with_controller_rotation_and_entities(
-        world, template, test_id, rotation, controller_rotation, position, padding, false,
+        world,
+        template,
+        test_id,
+        rotation,
+        controller_rotation,
+        position,
+        padding,
+        false,
     )
     .await
 }
 
 /// Places a test while retaining the controller's entity setting.
-#[expect(clippy::too_many_arguments, reason = "placement uses the saved controller setting")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "placement uses the saved controller setting"
+)]
 pub async fn place_structure_with_controller_rotation_and_entities(
     world: &dyn GameTestWorld,
     template: &GameTestStructureTemplate,
@@ -324,7 +334,8 @@ async fn place_entities(
             entity.block_position[1],
             entity.block_position[2],
         ));
-        let nbt = entity.placement_nbt(position, block_position, placement.rotation(), Mirror::None);
+        let nbt =
+            entity.placement_nbt(position, block_position, placement.rotation(), Mirror::None);
         world.spawn_structure_entity(&nbt).await?;
     }
     Ok(())

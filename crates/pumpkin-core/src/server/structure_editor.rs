@@ -61,10 +61,6 @@ fn transform_entity(pos: Vector3<f64>, mirror: Mirror, rotation: Rotation) -> Ve
     clippy::too_many_arguments,
     reason = "structure block settings come from one editor packet"
 )]
-#[expect(
-    clippy::too_many_lines,
-    reason = "structure placement applies every editor setting"
-)]
 pub async fn place_editor_structure(
     world: Arc<World>,
     template: &GameTestStructureTemplate,
