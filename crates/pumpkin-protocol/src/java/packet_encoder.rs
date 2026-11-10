@@ -7,7 +7,8 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
     Aes128Cfb8Enc, ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE,
-    MAX_PACKET_SIZE, PacketEncodeError, VarInt, WritingError, ser::NetworkWriteExt,
+    MAX_PACKET_SIZE, PacketEncodeError, VarInt, WritingError,
+    ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -819,6 +820,7 @@ mod tests {
         Aes128Cfb8Enc::new_from_slices(&key, &key)
             .unwrap()
             .encrypt(&mut expected_encrypted);
+        drop(encoder);
         assert_eq!(&output[..5], &[1, 2, 3, 4, 5]);
         assert_eq!(&output[5..], expected_encrypted);
     }
