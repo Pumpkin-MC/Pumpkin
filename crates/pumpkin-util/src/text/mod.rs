@@ -2302,6 +2302,26 @@ mod custom_name_nbt_tests {
     }
 
     #[test]
+    fn empty_hover_values_stay_readable() {
+        let json = r#"{"text":"x","hover_event":{"action":"show_text","value":[]}}"#;
+        let component: TextComponent = serde_json::from_str(json).unwrap();
+        let hover = super::hover::HoverEvent::ShowText { value: Vec::new() };
+        assert_eq!(component.0.style.hover_event, Some(hover.clone()));
+
+        let tag = NbtTag::Compound(
+            TextComponent::text("x")
+                .hover_event(hover)
+                .0
+                .to_nbt_compound(),
+        );
+        let back = TextComponent::from_nbt(&tag);
+        assert!(matches!(
+            back.0.style.hover_event,
+            Some(super::hover::HoverEvent::ShowText { value }) if value.is_empty()
+        ));
+    }
+
+    #[test]
     fn plain_string_hover_entity_name_is_text() {
         let mut hover = pumpkin_nbt::compound::NbtCompound::new();
         hover.put_string("action", "show_entity".to_string());

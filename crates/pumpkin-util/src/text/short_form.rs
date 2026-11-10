@@ -134,18 +134,64 @@ pub(super) fn arguments<'de, D: Deserializer<'de>>(
     Ok(list.into_iter().map(|c| c.0).collect())
 }
 
-/// One component (a hover event's `value`), kept as a list of one.
+/// A hover event's component, kept as a list of one. An empty list stays
+/// empty, as older `show_text` values were written.
+struct HoverComponents(Vec<TextComponentBase>);
+
+impl<'de> Deserialize<'de> for HoverComponents {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct HoverVisitor;
+
+        impl<'de> Visitor<'de> for HoverVisitor {
+            type Value = HoverComponents;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("a text component, a string or a list of components")
+            }
+
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+                let component = ComponentVisitor {
+                    with_primitives: false,
+                }
+                .visit_str(v)?;
+                Ok(HoverComponents(vec![component]))
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let Some(Component(mut first)) = seq.next_element()? else {
+                    return Ok(HoverComponents(Vec::new()));
+                };
+                while let Some(Component(next)) = seq.next_element()? {
+                    first.extra.push(next);
+                }
+                Ok(HoverComponents(vec![first]))
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+                let component = ComponentVisitor {
+                    with_primitives: false,
+                }
+                .visit_map(map)?;
+                Ok(HoverComponents(vec![component]))
+            }
+        }
+
+        deserializer.deserialize_any(HoverVisitor)
+    }
+}
+
+/// A hover event's `value`.
 pub(super) fn one_component<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Vec<TextComponentBase>, D::Error> {
-    Ok(vec![Component::deserialize(deserializer)?.0])
+    Ok(HoverComponents::deserialize(deserializer)?.0)
 }
 
-/// An optional component (a hover event's `name`), kept as a list of one.
+/// A hover event's `name`.
 pub(super) fn optional_component<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Vec<TextComponentBase>>, D::Error> {
-    Ok(Option::<Component>::deserialize(deserializer)?.map(|c| vec![c.0]))
+    Ok(Option::<HoverComponents>::deserialize(deserializer)?.map(|c| c.0))
 }
 
 /// A style flag (`Codec.BOOL`): a boolean, or a number as NBT writes it
