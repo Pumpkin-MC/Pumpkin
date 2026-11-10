@@ -348,15 +348,19 @@ impl Level {
     }
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
-        let arc_chunk = Arc::new(ChunkEntityData {
-            x: pos.x,
-            z: pos.y,
-            data: std::sync::Mutex::new(Vec::new()),
-            live: AtomicBool::new(false),
-            dirty: AtomicBool::new(false),
-        });
-
-        self.loaded_entity_chunks.insert(pos, arc_chunk.clone());
+        let arc_chunk = self
+            .loaded_entity_chunks
+            .entry(pos)
+            .or_insert_with(|| {
+                Arc::new(ChunkEntityData {
+                    x: pos.x,
+                    z: pos.y,
+                    data: std::sync::Mutex::new(Vec::new()),
+                    live: AtomicBool::new(false),
+                    dirty: AtomicBool::new(false),
+                })
+            })
+            .clone();
 
         if let Some((_, waiters)) = self.pending_entity_generations.remove(&pos) {
             for tx in waiters {
@@ -762,6 +766,13 @@ impl Level {
         }
     }
 
+    fn cache_entity_chunk(&self, pos: Vector2<i32>, chunk: SyncEntityChunk) -> SyncEntityChunk {
+        self.loaded_entity_chunks
+            .entry(pos)
+            .or_insert(chunk)
+            .clone()
+    }
+
     pub fn receive_entity_chunks(
         self: &Arc<Self>,
         chunks: Vec<Vector2<i32>>,
@@ -798,7 +809,7 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = Vector2::new(chunk.x, chunk.z);
-                                level.loaded_entity_chunks.insert(pos, chunk.clone());
+                                let chunk = level.cache_entity_chunk(pos, chunk);
                                 let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
@@ -839,29 +850,35 @@ impl Level {
             return chunk.clone();
         }
 
-        if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
-            self.loaded_entity_chunks.insert(pos, chunk.clone());
-            chunk
-        } else {
-            let (tx, rx) = oneshot::channel();
-            match self.pending_entity_generations.entry(pos) {
-                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                    entry.get_mut().push(tx);
+        match self.load_single_entity_chunk(pos).await {
+            Ok((chunk, _)) => self.cache_entity_chunk(pos, chunk),
+            Err(err) => {
+                if !matches!(err, ChunkReadingError::ChunkNotExist) {
+                    warn!("Failed to load entity chunk {},{}: {err}", pos.x, pos.y);
                 }
-                dashmap::mapref::entry::Entry::Vacant(entry) => {
-                    entry.insert(vec![tx]);
-                    self.spawn_entity_generation(pos);
+                let (tx, rx) = oneshot::channel();
+                match self.pending_entity_generations.entry(pos) {
+                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                        entry.get_mut().push(tx);
+                    }
+                    dashmap::mapref::entry::Entry::Vacant(entry) => {
+                        entry.insert(vec![tx]);
+                        self.spawn_entity_generation(pos);
+                    }
                 }
-            }
-            rx.await.unwrap_or_else(|_| {
-                Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: std::sync::Mutex::new(Vec::new()),
-                    live: AtomicBool::new(false),
-                    dirty: AtomicBool::new(false),
+                rx.await.unwrap_or_else(|_| {
+                    self.cache_entity_chunk(
+                        pos,
+                        Arc::new(ChunkEntityData {
+                            x: pos.x,
+                            z: pos.y,
+                            data: std::sync::Mutex::new(Vec::new()),
+                            live: AtomicBool::new(false),
+                            dirty: AtomicBool::new(false),
+                        }),
+                    )
                 })
-            })
+            }
         }
     }
 
@@ -1087,7 +1104,30 @@ impl Level {
 mod tests {
     use super::*;
     use pumpkin_config::world::LevelConfig;
+    use pumpkin_nbt::compound::NbtCompound;
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn generating_entity_chunk_twice_keeps_existing_records() {
+        let folder = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+
+        level.spawn_entity_generation(pos);
+        let first = level.get_entity_chunk(pos).await;
+        first.data.lock().unwrap().push(NbtCompound::new());
+        first.mark_dirty(true);
+
+        level.spawn_entity_generation(pos);
+        let cached = level.get_entity_chunk(pos).await;
+        assert!(Arc::ptr_eq(&first, &cached));
+        assert_eq!(cached.data.lock().unwrap().len(), 1);
+    }
 
     #[tokio::test]
     async fn dimension_paths_26_2() {
