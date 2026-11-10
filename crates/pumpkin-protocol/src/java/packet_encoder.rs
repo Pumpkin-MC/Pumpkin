@@ -728,4 +728,113 @@ mod tests {
         assert_eq!(buffer, expected_payload);
         Ok(())
     }
+
+    /// A downstream writer that alternates Pending and short successful writes.
+    /// The encoder must keep the entire encrypted frame alive across all retries.
+    struct PartialPendingWriter {
+        bytes: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        max_write: usize,
+        pending_next: bool,
+    }
+
+    impl AsyncWrite for PartialPendingWriter {
+        fn poll_write(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            if self.pending_next {
+                self.pending_next = false;
+                cx.waker().wake_by_ref();
+                return std::task::Poll::Pending;
+            }
+            self.pending_next = true;
+            let len = buf.len().min(self.max_write);
+            self.bytes.lock().unwrap().extend_from_slice(&buf[..len]);
+            std::task::Poll::Ready(Ok(len))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn encrypted_frames_keep_cipher_state_through_partial_pending_writes() {
+        let key = [0x35; 16];
+        let mut first: Vec<u8> = (0..50_000).map(|i| (i % 251) as u8).collect();
+        let mut second: Vec<u8> = (0..3_000).map(|i| (i % 197) as u8).collect();
+        let first_len = first.len();
+        let mut expected = first.clone();
+        expected.extend_from_slice(&second);
+        Aes128Cfb8Enc::new_from_slices(&key, &key)
+            .unwrap()
+            .encrypt(&mut expected);
+
+        let bytes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut encoder = TCPNetworkEncoder::new(PartialPendingWriter {
+            bytes: bytes.clone(),
+            max_write: 137,
+            pending_next: true,
+        });
+        encoder.set_encryption(&key).unwrap();
+        encoder.write_frame(&mut first).await.unwrap();
+        encoder.flush().await.unwrap();
+        assert!(encoder.set_encryption(&key).is_err());
+        encoder.write_frame(&mut second).await.unwrap();
+        encoder.flush().await.unwrap();
+
+        assert_eq!(first.as_slice(), &expected[..first_len]);
+        assert_eq!(second.as_slice(), &expected[first_len..]);
+        assert_eq!(*bytes.lock().unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn buffered_plaintext_is_flushed_before_encryption_activation() {
+        let key = [0x59; 16];
+        let mut output = Vec::new();
+        let mut encoder =
+            TCPNetworkEncoder::new(tokio::io::BufWriter::with_capacity(256, &mut output));
+
+        let mut plaintext = vec![1, 2, 3, 4, 5];
+        encoder.write_frame(&mut plaintext).await.unwrap();
+        // Before flush the plaintext remains only in the outer BufWriter.
+        encoder.flush().await.unwrap();
+        encoder.set_encryption(&key).unwrap();
+        let mut encrypted = vec![6, 7, 8, 9, 10];
+        encoder.write_frame(&mut encrypted).await.unwrap();
+        encoder.flush().await.unwrap();
+
+        let mut expected_encrypted = vec![6, 7, 8, 9, 10];
+        Aes128Cfb8Enc::new_from_slices(&key, &key)
+            .unwrap()
+            .encrypt(&mut expected_encrypted);
+        assert_eq!(&output[..5], &[1, 2, 3, 4, 5]);
+        assert_eq!(&output[5..], expected_encrypted);
+    }
+
+    #[tokio::test]
+    async fn encrypted_frame_write_zero_is_reported() {
+        let key = [0x13; 16];
+        let bytes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut encoder = TCPNetworkEncoder::new(PartialPendingWriter {
+            bytes,
+            max_write: 0,
+            pending_next: false,
+        });
+        encoder.set_encryption(&key).unwrap();
+        let mut frame = vec![1, 2, 3];
+        let result = encoder.write_frame(&mut frame).await;
+        assert!(result.is_err());
+    }
 }
