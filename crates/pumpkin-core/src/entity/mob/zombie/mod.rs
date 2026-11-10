@@ -154,6 +154,7 @@ pub fn wants_to_pick_up<M: Mob + ?Sized>(mob: &M, stack: &ItemStack) -> bool {
     stack.item.id != Item::GLOW_INK_SAC.id && mob.can_hold_item(stack)
 }
 
+// TODO: vanilla `Zombie.getBaseExperienceReward` gives babies 2.5x experience.
 impl Mob for ZombieEntityBase {
     fn xp_reward(&self) -> u32 {
         zombie_xp_reward(

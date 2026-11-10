@@ -4,6 +4,9 @@ use std::sync::{
 };
 
 use super::BlockEntity;
+use crate::entity::player::Player;
+use crate::world::World;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
@@ -11,10 +14,17 @@ use pumpkin_util::text::click::ClickEvent;
 
 pub use pumpkin_data::dye_color::DyeColor;
 
+/// Extra reach allowed when checking that a sign editor is still near the sign.
+///
+/// Added on top of the block interaction range. Vanilla passes the same value to
+/// `Player#isWithinBlockInteractionRange` from `SignBlockEntity#playerIsTooFarAwayToEdit`.
+pub const SIGN_EDIT_RANGE_BUFFER: f64 = 4.0;
+
 pub struct SignBlockEntity {
     pub front_text: SignText,
     pub back_text: SignText,
     pub is_waxed: AtomicBool,
+    pub allow_op_features: AtomicBool,
     position: BlockPos,
     pub currently_editing_player: Arc<Mutex<Option<uuid::Uuid>>>,
 }
@@ -50,6 +60,58 @@ impl Default for SignText {
     }
 }
 
+fn component_to_json(component: &TextComponent) -> Box<str> {
+    Box::from(component.to_json_for_version(&CURRENT_MC_VERSION))
+}
+
+/// Converts a stored NBT message to JSON.
+///
+/// String tags are literal text unless the sign allows op features, where they may be
+/// component JSON written by an older Pumpkin version.
+fn nbt_message_to_json(tag: &NbtTag, allow_op_features: bool) -> Box<str> {
+    match tag {
+        NbtTag::String(value) => {
+            if allow_op_features && let Ok(component) = serde_json::from_str::<TextComponent>(value)
+            {
+                return component_to_json(&component);
+            }
+            component_to_json(&TextComponent::text(value.to_string()))
+        }
+        _ => component_to_json(&TextComponent::from_nbt(tag)),
+    }
+}
+
+/// Converts a stored JSON message to NBT, writing parsed components as compounds.
+///
+/// Writing a simple literal back as a string tag would let an enabled sign promote
+/// saved client text into a component with click actions on the next load.
+fn json_message_to_nbt(message: &str) -> NbtTag {
+    serde_json::from_str::<TextComponent>(message).map_or_else(
+        |_| NbtTag::String(Box::from(message)),
+        |component| NbtTag::Compound(component.to_nbt_compound_for_version(&CURRENT_MC_VERSION)),
+    )
+}
+
+/// Wraps a client-submitted line in a literal component, keeping the original line's style.
+fn literal_message(raw: &str, original: &str) -> Box<str> {
+    let style = serde_json::from_str::<TextComponent>(original)
+        .map(|component| component.0.style)
+        .unwrap_or_default();
+    let mut component = TextComponent::text(raw.to_string());
+    component.0.style = style;
+    component_to_json(&component)
+}
+
+/// Returns whether a stored line has visible component text rather than only structure.
+fn message_has_text(message: &str) -> bool {
+    if message.is_empty() {
+        return false;
+    }
+    serde_json::from_str::<TextComponent>(message).map_or(true, |component| {
+        !component.0.to_bedrock_string().is_empty()
+    })
+}
+
 #[allow(clippy::fallible_impl_from)]
 impl From<SignText> for NbtTag {
     fn from(value: SignText) -> Self {
@@ -66,7 +128,7 @@ impl From<SignText> for NbtTag {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         nbt.put_list(
             "messages",
-            messages.iter().map(|s| Self::String(s.clone())).collect(),
+            messages.iter().map(|s| json_message_to_nbt(s)).collect(),
         );
 
         let filtered_messages = value
@@ -78,7 +140,7 @@ impl From<SignText> for NbtTag {
                 "filtered_messages",
                 filtered_messages
                     .iter()
-                    .map(|s| Self::String(s.clone()))
+                    .map(|s| json_message_to_nbt(s))
                     .collect(),
             );
         }
@@ -89,6 +151,13 @@ impl From<SignText> for NbtTag {
 
 impl From<NbtTag> for SignText {
     fn from(tag: NbtTag) -> Self {
+        Self::from_nbt_tag(&tag, false)
+    }
+}
+
+impl SignText {
+    /// Converts a sign text compound, preserving legacy component strings only for trusted signs.
+    pub fn from_nbt_tag(tag: &NbtTag, allow_op_features: bool) -> Self {
         let Some(nbt) = tag.extract_compound() else {
             return Self::default();
         };
@@ -96,7 +165,7 @@ impl From<NbtTag> for SignText {
         let color = nbt.get_string("color").unwrap_or("black");
         let messages: Vec<Box<str>> = nbt.get_list("messages").map_or_else(Vec::new, |list| {
             list.iter()
-                .filter_map(|tag| tag.extract_string().map(Box::from))
+                .map(|tag| nbt_message_to_json(tag, allow_op_features))
                 .collect()
         });
         let get_message =
@@ -112,7 +181,7 @@ impl From<NbtTag> for SignText {
         let filtered_messages: Option<Vec<Box<str>>> =
             nbt.get_list("filtered_messages").map(|list| {
                 list.iter()
-                    .filter_map(|tag| tag.extract_string().map(Box::from))
+                    .map(|tag| nbt_message_to_json(tag, allow_op_features))
                     .collect()
             });
 
@@ -230,10 +299,11 @@ impl SignText {
             .clone()
     }
 
+    /// Returns whether any line has visible text content.
     #[must_use]
     pub fn has_message(&self, should_filter: bool) -> bool {
         let messages = self.get_messages(should_filter);
-        messages.iter().any(|msg| !msg.is_empty())
+        messages.iter().any(|msg| message_has_text(msg))
     }
 
     #[must_use]
@@ -251,6 +321,27 @@ impl SignText {
         }
         false
     }
+
+    /// Replaces the raw and filtered messages with lines submitted by a client.
+    ///
+    /// Each line is stored as a literal component with the previous line's style,
+    /// matching `SignBlockEntity#updateMessages`. A submitted line must never keep
+    /// the component syntax the client typed, because that could carry a click event.
+    pub fn set_client_messages(&self, messages: &[Box<str>; 4]) {
+        let mut raw = self
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let new_messages = std::array::from_fn(|i| literal_message(&messages[i], &raw[i]));
+        raw.clone_from(&new_messages);
+        drop(raw);
+
+        let mut filtered = self
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *filtered = new_messages;
+    }
 }
 
 impl BlockEntity for SignBlockEntity {
@@ -266,15 +357,14 @@ impl BlockEntity for SignBlockEntity {
     where
         Self: Sized,
     {
+        let allow_op_features = nbt.get_bool("allow_op_features").unwrap_or(false);
         let front_text = nbt
             .get("front_text")
-            .cloned()
-            .map(SignText::from)
+            .map(|tag| SignText::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let back_text = nbt
             .get("back_text")
-            .cloned()
-            .map(SignText::from)
+            .map(|tag| SignText::from_nbt_tag(tag, allow_op_features))
             .unwrap_or_default();
         let is_waxed = nbt.get_bool("is_waxed").unwrap_or(false);
         Self {
@@ -282,6 +372,7 @@ impl BlockEntity for SignBlockEntity {
             front_text,
             back_text,
             is_waxed: AtomicBool::new(is_waxed),
+            allow_op_features: AtomicBool::new(allow_op_features),
             currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
@@ -290,6 +381,7 @@ impl BlockEntity for SignBlockEntity {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
+        write_allow_op_features(nbt, &self.allow_op_features);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -297,6 +389,7 @@ impl BlockEntity for SignBlockEntity {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
         nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
+        write_allow_op_features(&mut nbt, &self.allow_op_features);
         Some(nbt)
     }
 
@@ -319,6 +412,8 @@ impl BlockEntity for SignBlockEntity {
 
     fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
         apply_sign_item_components(&self.front_text, &self.back_text, &self.is_waxed, stack);
+        // Item data must not be able to enable op-level click commands.
+        self.allow_op_features.store(false, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -406,6 +501,7 @@ impl SignBlockEntity {
         Self {
             position,
             is_waxed: AtomicBool::new(false),
+            allow_op_features: AtomicBool::new(false),
             front_text: if is_front {
                 SignText::from_messages(messages.clone())
             } else {
@@ -425,6 +521,7 @@ impl SignBlockEntity {
         Self {
             position,
             is_waxed: AtomicBool::new(false),
+            allow_op_features: AtomicBool::new(false),
             front_text: SignText::default(),
             back_text: SignText::default(),
             currently_editing_player: Arc::new(Mutex::new(None)),
@@ -498,6 +595,62 @@ impl<'a> SignEntityRef<'a> {
             Self::Hanging(s) => &s.currently_editing_player,
         }
     }
+
+    /// Returns whether this sign is allowed to run op-level click commands.
+    #[must_use]
+    pub fn allow_op_features(&self) -> bool {
+        match self {
+            Self::Sign(s) => s.allow_op_features.load(Ordering::Relaxed),
+            Self::Hanging(s) => s.allow_op_features.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Returns the sign's block position.
+    #[must_use]
+    pub fn block_pos(&self) -> BlockPos {
+        match self {
+            Self::Sign(s) => s.get_position(),
+            Self::Hanging(s) => s.get_position(),
+        }
+    }
+
+    /// Mirrors the gate in `SignBlockEntity#updateSignText`: only the player the editor was
+    /// opened for may write text, and only while they can still reach the sign. Vanilla keeps
+    /// that registration from going stale in `SignBlockEntity#tick`; Pumpkin has no sign
+    /// ticker, so `SignBlockEntity#playerIsTooFarAwayToEdit` is checked here instead.
+    #[must_use]
+    pub fn may_update_text(&self, world: &World, player: &Player) -> bool {
+        if self.is_waxed() {
+            return false;
+        }
+
+        let mut editor = self
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *editor != Some(player.gameprofile.id) {
+            return false;
+        }
+
+        let pos = self.block_pos();
+        if !world.level.is_chunk_loaded(&pos.chunk_position()) {
+            return false;
+        }
+        if !player.can_interact_with_block_at(&pos, SIGN_EDIT_RANGE_BUFFER) {
+            // Vanilla clears this from `SignBlockEntity#tick`; without a sign ticker,
+            // clear it when the registered editor is out of range.
+            *editor = None;
+            return false;
+        }
+        true
+    }
+}
+
+/// Writes the sign's operator-feature flag, matching vanilla's write-only-when-true NBT.
+pub(crate) fn write_allow_op_features(nbt: &mut NbtCompound, allow_op_features: &AtomicBool) {
+    if allow_op_features.load(Ordering::Relaxed) {
+        nbt.put_bool("allow_op_features", true);
+    }
 }
 
 /// Converts a [`DyeColor`] into the signed 32-bit ARGB integer used by Bedrock signs.
@@ -551,7 +704,16 @@ pub const fn bedrock_sign_text_color_to_dye_color(color: i32) -> DyeColor {
 pub fn build_sign_text_compound(sign_text: &SignText) -> NbtCompound {
     let mut compound = NbtCompound::new();
     let messages = sign_text.get_messages(false);
-    let text = messages.join("\n");
+    let text = messages
+        .iter()
+        .map(|message| {
+            serde_json::from_str::<TextComponent>(message).map_or_else(
+                |_| message.to_string(),
+                |component| component.0.to_bedrock_string(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     compound.put_string("Text", text);
     compound.put_int(
         "SignTextColor",
@@ -639,5 +801,220 @@ mod tests {
         let nbt = build_sign_actor(pos, true, &front, &back, true);
         assert_eq!(nbt.get_string("id"), Some("HangingSign"));
         assert_eq!(nbt.get_bool("IsWaxed"), Some(true));
+    }
+
+    #[test]
+    fn allow_op_features_round_trips_through_nbt() {
+        let pos = BlockPos::new(1, 64, 2);
+        let sign = SignBlockEntity::empty(pos);
+
+        let mut nbt = NbtCompound::new();
+        sign.write_nbt(&mut nbt);
+        assert_eq!(nbt.get_bool("allow_op_features"), None);
+
+        sign.allow_op_features.store(true, Ordering::Relaxed);
+        let mut nbt = NbtCompound::new();
+        sign.write_nbt(&mut nbt);
+        assert_eq!(nbt.get_bool("allow_op_features"), Some(true));
+
+        let loaded = SignBlockEntity::from_nbt(&nbt, pos);
+        assert!(loaded.allow_op_features.load(Ordering::Relaxed));
+    }
+
+    fn plain_text(message: &str) -> String {
+        serde_json::from_str::<TextComponent>(message).map_or_else(
+            |_| message.to_string(),
+            |component| component.0.to_bedrock_string(),
+        )
+    }
+
+    #[test]
+    fn literal_client_messages_do_not_carry_click_commands() {
+        let text = SignText::default();
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        text.set_client_messages(&[
+            Box::from(crafted),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        assert!(!text.has_any_click_commands(false));
+        assert_eq!(plain_text(&text.get_message(0, false)), crafted);
+    }
+
+    #[test]
+    fn client_messages_keep_previous_style_and_filtered_text() {
+        use pumpkin_util::text::color::{Color, NamedColor};
+
+        let text = SignText::default();
+        let styled = r#"{"text":"old","color":"red"}"#;
+        *text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = [
+            Box::from(styled),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ];
+        *text
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = [
+            Box::from(styled),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ];
+
+        text.set_client_messages(&[
+            Box::from("new"),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        let messages = text.get_messages(false);
+        assert_eq!(messages, text.get_messages(true));
+        let component = serde_json::from_str::<TextComponent>(&messages[0])
+            .expect("stored client message should be valid JSON");
+        assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
+        assert!(component.0.style.click_event.is_none());
+    }
+
+    #[test]
+    fn bedrock_sign_text_keeps_client_lines_literal() {
+        let text = SignText::default();
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        text.set_client_messages(&[
+            Box::from(crafted),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        let nbt = build_sign_text_compound(&text);
+        let expected = format!("{crafted}\n\n\n");
+        assert_eq!(nbt.get_string("Text"), Some(expected.as_str()));
+    }
+
+    #[test]
+    fn component_messages_round_trip_through_nbt() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let text = SignText::from_messages([
+            Box::from("hello"),
+            Box::from(crafted),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        let loaded = SignText::from(NbtTag::from(text));
+
+        assert_eq!(plain_text(&loaded.get_message(0, false)), "hello");
+        assert!(loaded.has_any_click_commands(false));
+    }
+
+    #[test]
+    fn client_text_stays_literal_after_enabled_sign_reload() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let pos = BlockPos::new(1, 64, 2);
+        let sign = SignBlockEntity::empty(pos);
+        sign.allow_op_features.store(true, Ordering::Relaxed);
+        sign.front_text.set_client_messages(&[
+            Box::from(crafted),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+
+        let mut nbt = NbtCompound::new();
+        sign.write_nbt(&mut nbt);
+        let reloaded = SignBlockEntity::from_nbt(&nbt, pos);
+
+        assert!(!reloaded.front_text.has_any_click_commands(false));
+        assert_eq!(
+            plain_text(&reloaded.front_text.get_message(0, false)),
+            crafted
+        );
+    }
+
+    #[test]
+    fn old_string_messages_load_as_literal_text() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let mut nbt = NbtCompound::new();
+        nbt.put_list(
+            "messages",
+            vec![
+                NbtTag::String(Box::from(crafted)),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+            ],
+        );
+
+        let text = SignText::from(NbtTag::Compound(nbt));
+
+        assert!(!text.has_any_click_commands(false));
+        assert_eq!(plain_text(&text.get_message(0, false)), crafted);
+    }
+
+    #[test]
+    fn trusted_legacy_string_components_load_as_components() {
+        let crafted =
+            r#"{"text":"click","click_event":{"action":"run_command","command":"/say hi"}}"#;
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("allow_op_features", true);
+        let mut front = NbtCompound::new();
+        front.put_list(
+            "messages",
+            vec![
+                NbtTag::String(Box::from(crafted)),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+                NbtTag::String(Box::from("")),
+            ],
+        );
+        nbt.put_compound("front_text", front);
+
+        let trusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
+        assert!(trusted.front_text.has_any_click_commands(false));
+
+        nbt.put_bool("allow_op_features", false);
+        let untrusted = SignBlockEntity::from_nbt(&nbt, BlockPos::new(1, 64, 2));
+        assert!(!untrusted.front_text.has_any_click_commands(false));
+    }
+
+    #[test]
+    fn empty_literal_messages_are_not_content() {
+        let text = SignText::default();
+        text.set_client_messages(&[Box::from(""), Box::from(""), Box::from(""), Box::from("")]);
+        assert!(!text.has_message(false));
+
+        text.set_client_messages(&[
+            Box::from("visible"),
+            Box::from(""),
+            Box::from(""),
+            Box::from(""),
+        ]);
+        assert!(text.has_message(false));
+    }
+
+    #[test]
+    fn item_components_do_not_enable_op_features() {
+        let sign = SignBlockEntity::empty(BlockPos::new(1, 64, 2));
+        sign.allow_op_features.store(true, Ordering::Relaxed);
+
+        sign.apply_item_components(&pumpkin_data::item_stack::ItemStack::new(
+            1,
+            &pumpkin_data::item::Item::OAK_SIGN,
+        ));
+
+        assert!(!sign.allow_op_features.load(Ordering::Relaxed));
     }
 }

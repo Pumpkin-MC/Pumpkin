@@ -47,8 +47,13 @@ impl WanderAroundGoal {
 
     #[must_use]
     pub const fn water_avoiding(speed: f64) -> Self {
+        Self::water_avoiding_with_probability(speed, PROBABILITY)
+    }
+
+    #[must_use]
+    pub const fn water_avoiding_with_probability(speed: f64, probability: f32) -> Self {
         let mut goal = Self::new(speed);
-        goal.water_avoiding_probability = Some(PROBABILITY);
+        goal.water_avoiding_probability = Some(probability);
         goal
     }
 
