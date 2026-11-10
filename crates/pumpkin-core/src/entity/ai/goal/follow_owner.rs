@@ -114,6 +114,8 @@ impl FollowOwnerGoal {
                 continue;
             }
 
+            // TODO: fire `EntityTeleportEvent` for mob teleports like this one:
+            // `Entity::teleport` skips it and `TeleportCause` has no mob variant.
             mob_entity.teleport(
                 Vector3::new(
                     target_x as f64 + 0.5,

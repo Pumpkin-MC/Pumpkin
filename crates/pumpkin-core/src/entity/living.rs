@@ -1,3 +1,4 @@
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -4434,7 +4435,13 @@ impl LivingEntity {
                     };
                     let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
                     let world = self.entity.world.load_full();
-                    caller.teleport(pos, Some(yaw), Some(pitch), world.clone());
+                    caller.teleport_with_cause(
+                        pos,
+                        Some(yaw),
+                        Some(pitch),
+                        world.clone(),
+                        TeleportCause::ConsumableEffect,
+                    );
 
                     let destination = self.entity.pos.load();
                     if destination != center {

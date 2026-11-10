@@ -315,7 +315,7 @@ use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
-use crate::plugin::player::player_teleport::PlayerTeleportEvent;
+use crate::plugin::player::player_teleport::{PlayerTeleportEvent, TeleportCause};
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
@@ -4471,13 +4471,25 @@ impl Player {
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
-    #[expect(clippy::too_many_lines)]
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
+    ) {
+        self.teleport_world_with_cause(new_world, position, yaw, pitch, TeleportCause::Unknown)
+            .await;
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub async fn teleport_world_with_cause(
+        self: &Arc<Self>,
+        new_world: Arc<World>,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        cause: TeleportCause,
     ) {
         let current_world = self.living_entity.entity.world.load_full();
         let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
@@ -4602,7 +4614,9 @@ impl Player {
                 new_world.send_world_info(&player);
                 new_world.send_center_chunk(&player).await;
 
-                player.request_teleport(position, yaw, pitch);
+                // TODO: a world change fires `PlayerTeleportEvent` here after
+                // `PlayerChangeWorldEvent`, so plugins see two events for one teleport.
+                player.request_teleport_to(position, Some(yaw), Some(pitch), cause);
                 // A cancelled teleport never gets confirmed, so it must not leave the flag set.
                 if player.awaiting_teleport.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none() {
                     player.is_changing_dimension.store(false, Ordering::Relaxed);
@@ -4668,7 +4682,7 @@ impl Player {
     }
 
     pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        self.request_teleport_to(position, Some(yaw), Some(pitch));
+        self.request_teleport_to(position, Some(yaw), Some(pitch), TeleportCause::Unknown);
     }
 
     /// Teleports to `position`. A `None` rotation axis is sent as relative, so
@@ -4676,8 +4690,9 @@ impl Player {
     pub fn request_teleport_to(
         &self,
         mut position: Vector3<f64>,
-        yaw: Option<f32>,
-        pitch: Option<f32>,
+        mut yaw: Option<f32>,
+        mut pitch: Option<f32>,
+        cause: TeleportCause,
     ) {
         let world = self.world();
         if let Some(server) = world.server.upgrade()
@@ -4688,6 +4703,9 @@ impl Player {
                 player: player_arc,
                 from: self.living_entity.entity.pos.load(),
                 to: position,
+                yaw,
+                pitch,
+                cause,
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -4695,6 +4713,8 @@ impl Player {
                 return;
             }
             position = event.to;
+            yaw = event.yaw;
+            pitch = event.pitch;
         }
 
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
@@ -7607,16 +7627,17 @@ impl EntityBase for Player {
         }
     }
 
-    fn teleport(
+    fn teleport_with_cause(
         &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
+        cause: TeleportCause,
     ) {
         if Arc::ptr_eq(&world, &self.world()) {
             // Same world
-            self.request_teleport_to(position, yaw, pitch);
+            self.request_teleport_to(position, yaw, pitch, cause);
             let entity = self.get_entity();
             let (yaw, pitch) = (entity.yaw.load(), entity.pitch.load());
             let chunk_pos = entity.chunk_pos.load();

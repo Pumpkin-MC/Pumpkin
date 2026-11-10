@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 
 impl JavaClient {
     pub fn handle_teleport_to_entity(
@@ -26,7 +27,12 @@ impl JavaClient {
             player.camera_target_id.store(Some(target_id));
             player.try_send_client_packet(&CSetCamera::new(target_id.into()));
 
-            player.request_teleport(target_pos, target_yaw, target_pitch);
+            player.request_teleport_to(
+                target_pos,
+                Some(target_yaw),
+                Some(target_pitch),
+                TeleportCause::Spectate,
+            );
         }
     }
 }

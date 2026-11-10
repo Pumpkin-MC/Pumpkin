@@ -780,7 +780,16 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             Ok((entity, world))
         })?;
         let pos = Vector3::new(pos.0, pos.1, pos.2);
-        run_blocking(accessor, move || entity.teleport(pos, None, None, world)).await
+        run_blocking(accessor, move || {
+            entity.teleport_with_cause(
+                pos,
+                None,
+                None,
+                world,
+                pumpkin_core::plugin::player::player_teleport::TeleportCause::Plugin,
+            );
+        })
+        .await
     }
 
     async fn set_swimming(

@@ -1,5 +1,6 @@
 use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
 use crate::entity::projectile::owner::ProjectileOwner;
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
@@ -146,7 +147,13 @@ impl EntityBase for EnderPearlEntity {
             }
 
             // In vanilla, teleport handles everything including sound
-            owner.teleport(teleport_pos, None, None, world.clone());
+            owner.teleport_with_cause(
+                teleport_pos,
+                None,
+                None,
+                world.clone(),
+                TeleportCause::EnderPearl,
+            );
 
             // Play teleport sound at new position
             world.play_sound(
