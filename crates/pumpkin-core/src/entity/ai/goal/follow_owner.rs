@@ -115,17 +115,20 @@ impl FollowOwnerGoal {
                 continue;
             }
 
-            if !mob.teleport_with_cause(
-                Vector3::new(
-                    target_x as f64 + 0.5,
-                    f64::from(target_y),
-                    target_z as f64 + 0.5,
-                ),
-                None,
-                None,
-                world,
-                TeleportCause::Unknown,
-            ) {
+            if mob
+                .teleport_with_cause(
+                    Vector3::new(
+                        target_x as f64 + 0.5,
+                        f64::from(target_y),
+                        target_z as f64 + 0.5,
+                    ),
+                    None,
+                    None,
+                    world,
+                    TeleportCause::Unknown,
+                )
+                .is_none()
+            {
                 return;
             }
 

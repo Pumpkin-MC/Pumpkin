@@ -408,8 +408,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Teleports the entity. Plugins can move or cancel it through
     /// `EntityTeleportEvent`. A player gets `PlayerTeleportEvent` with the cause.
-    /// Returns false if a plugin cancelled it. A player changing world only
-    /// starts the move, so true does not mean it has finished.
+    /// Returns the position the entity was moved to, or `None` if a plugin
+    /// cancelled it. A player changing world only starts the move, so the
+    /// position is the requested one and a later world-change event may still
+    /// alter it.
     fn teleport_with_cause(
         &self,
         mut position: Vector3<f64>,
@@ -417,7 +419,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         pitch: Option<f32>,
         world: Arc<World>,
         _cause: TeleportCause,
-    ) -> bool {
+    ) -> Option<Vector3<f64>> {
         let entity = self.get_entity();
         if let Some(server) = entity.world.load().server.upgrade()
             && server.plugin_manager.has_handlers::<EntityTeleportEvent>()
@@ -425,12 +427,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             let mut event = EntityTeleportEvent::new(entity.entity_id, entity.pos.load(), position);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return false;
+                return None;
             }
             position = event.to_position;
         }
         entity.teleport(position, yaw, pitch, &world);
-        true
+        Some(position)
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -3548,6 +3550,7 @@ impl Entity {
         self.velocity.store(velo);
     }
 
+    /// Advances the portal timer and, once it completes, teleports the entity and its passengers.
     fn tick_portal(&self, caller: &dyn EntityBase) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
@@ -3595,15 +3598,15 @@ impl Entity {
                                 PortalType::Nether => TeleportCause::NetherPortal,
                                 PortalType::End => TeleportCause::EndPortal,
                             };
-                            if !entity_arc.teleport_with_cause(
+                            let Some(teleport_pos) = entity_arc.teleport_with_cause(
                                 teleport_pos,
                                 yaw_val,
                                 pitch,
                                 dest_world.clone(),
                                 cause,
-                            ) {
+                            ) else {
                                 return;
-                            }
+                            };
 
                             // Teleport all passengers recursively along with the vehicle
                             let yaw_delta = yaw_val.map(|y| y - yaw);
@@ -3652,7 +3655,7 @@ impl Entity {
             let passenger_yaw = yaw_delta.map(|delta| passenger_entity.yaw.load() + delta);
             let passenger_pitch = pitch_delta.map(|delta| passenger_entity.pitch.load() + delta);
             let passenger_old_position = passenger_entity.pos.load();
-            let passenger_position = position + (passenger_old_position - old_position);
+            let requested_position = position + (passenger_old_position - old_position);
             passenger_entity.portal_cooldown.store(
                 passenger_entity.default_portal_cooldown(),
                 Ordering::Relaxed,
@@ -3665,15 +3668,17 @@ impl Entity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
 
-            if !passenger.teleport_with_cause(
-                passenger_position,
+            let Some(passenger_position) = passenger.teleport_with_cause(
+                requested_position,
                 passenger_yaw,
                 passenger_pitch,
                 dest_world.clone(),
                 cause,
-            ) {
+            ) else {
+                // Do not leave a link between entities in different worlds.
+                entity.remove_passenger_before_teleport(passenger_entity.entity_id);
                 continue;
-            }
+            };
 
             // Recursively teleport nested passengers
             for nested in nested_passengers {
@@ -5523,6 +5528,7 @@ impl Entity {
         self.remove_passenger_internal(passenger_id, true);
     }
 
+    /// Removes a passenger without repositioning it, because it is about to be teleported.
     pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
         self.remove_passenger_internal(passenger_id, false);
     }

@@ -7780,6 +7780,7 @@ impl EntityBase for Player {
         }
     }
 
+    /// Teleports the player, firing `PlayerTeleportEvent`. See `EntityBase::teleport_with_cause`.
     fn teleport_with_cause(
         &self,
         position: Vector3<f64>,
@@ -7787,11 +7788,11 @@ impl EntityBase for Player {
         pitch: Option<f32>,
         world: Arc<World>,
         cause: TeleportCause,
-    ) -> bool {
+    ) -> Option<Vector3<f64>> {
         if Arc::ptr_eq(&world, &self.world()) {
             // Same world
             if !self.request_teleport_to(position, yaw, pitch, cause) {
-                return false;
+                return None;
             }
             let entity = self.get_entity();
             // A plugin may have cancelled or moved the teleport.
@@ -7810,7 +7811,7 @@ impl EntityBase for Player {
                     entity.on_ground.load(Ordering::SeqCst),
                 ),
             );
-            true
+            Some(entity.pos.load())
         } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
             self.spawn_task(async move {
                 let entity = player_arc.get_entity();
@@ -7820,9 +7821,9 @@ impl EntityBase for Player {
                     .teleport_world_with_cause(world, position, Some(yaw), Some(pitch), cause)
                     .await;
             });
-            true
+            Some(position)
         } else {
-            false
+            None
         }
     }
 
