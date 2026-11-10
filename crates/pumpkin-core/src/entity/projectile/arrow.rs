@@ -608,6 +608,10 @@ impl EntityBase for ArrowEntity {
                     vel.y *= rand::random::<f64>() * 0.2;
                     vel.z *= rand::random::<f64>() * 0.2;
                     entity.velocity.store(vel);
+                    // Vanilla `startFalling`: restart the despawn timer. The block hit latch is
+                    // cleared too, or the next block hit is ignored and the arrow falls through.
+                    self.life.store(0, Ordering::Relaxed);
+                    self.has_hit.store(false, Ordering::Relaxed);
                 }
             }
 
