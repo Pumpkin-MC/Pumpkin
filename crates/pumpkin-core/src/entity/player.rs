@@ -4643,7 +4643,6 @@ impl Player {
                 let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
 
                 self.set_client_loaded(false);
-                self.is_changing_dimension.store(true, Ordering::Relaxed);
                 // The client rebuilds its player on respawn, so health, hunger
                 // and experience go out again once the client has loaded.
                 self.last_sent_health.store(-1, Ordering::Relaxed);
@@ -4652,6 +4651,7 @@ impl Player {
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
                 };
+                self.is_changing_dimension.store(true, Ordering::Relaxed);
                new_world.players.rcu(|current_list| {
                     let mut new_list = (**current_list).clone();
                     new_list.push(player.clone());
