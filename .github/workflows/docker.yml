@@ -28,6 +28,10 @@ on:
         default: "nightly"
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   docker-build-deploy:
     if: >-
@@ -43,6 +47,7 @@ jobs:
       pumpkin_tag: ${{ steps.release_tag.outputs.pumpkin_tag }}
 
     strategy:
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-26.04-arm

@@ -5,8 +5,8 @@ ARG TARGETVARIANT
 ARG PUMPKIN_TAG=nightly
 ARG USE_X64_V3=auto
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates netcat-openbsd && \
+RUN apt-get -o Acquire::Retries=3 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends curl ca-certificates netcat-openbsd && \
     case "${TARGETARCH}" in \
         "amd64") \
             if [ "${TARGETVARIANT}" = "v3" ] || [ "${USE_X64_V3}" = "true" ]; then \
@@ -25,7 +25,7 @@ RUN apt-get update && \
     else \
         DOWNLOAD_URL="https://github.com/Pumpkin-MC/Pumpkin/releases/download/${PUMPKIN_TAG}/pumpkin-${BIN_ARCH}-Linux"; \
     fi && \
-    curl -fsSL "${DOWNLOAD_URL}" -o /usr/local/bin/pumpkin && \
+    curl -fsSL --retry 3 "${DOWNLOAD_URL}" -o /usr/local/bin/pumpkin && \
     chmod +x /usr/local/bin/pumpkin && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/* && \
