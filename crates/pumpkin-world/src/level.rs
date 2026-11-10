@@ -527,7 +527,6 @@ impl Level {
             .contains_key(&chunk)
     }
 
-    // In Level::clean_entity_chunks()
     pub fn clean_entity_chunks(
         self: &Arc<Self>,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
@@ -549,8 +548,9 @@ impl Level {
                     return None;
                 }
 
-                // Keep both retention guards through the final removal check.
-                self.loaded_entity_chunks.remove(pos)
+                self.loaded_entity_chunks
+                    .get(pos)
+                    .map(|chunk| (*pos, chunk.clone()))
             })
             .collect();
 
@@ -561,7 +561,28 @@ impl Level {
         let level = self.clone();
         self.spawn_task(async move {
             debug!("Writing {} entity chunks to disk", chunks_to_process.len());
-            level.write_entity_chunks(chunks_to_process).await;
+            level.write_entity_chunks(chunks_to_process.clone()).await;
+
+            for (pos, saved_chunk) in chunks_to_process {
+                let watchers = level.chunk_watchers.entry(pos);
+                if matches!(&watchers, Entry::Occupied(entry) if *entry.get() != 0) {
+                    continue;
+                }
+
+                let loading = level
+                    .chunk_loading
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if loading.ticket.contains_key(&pos) || saved_chunk.is_dirty() {
+                    continue;
+                }
+
+                if let Entry::Occupied(entry) = level.loaded_entity_chunks.entry(pos)
+                    && Arc::ptr_eq(entry.get(), &saved_chunk)
+                {
+                    entry.remove();
+                }
+            }
         });
     }
 
@@ -1106,6 +1127,37 @@ mod tests {
     use pumpkin_config::world::LevelConfig;
     use pumpkin_nbt::compound::NbtCompound;
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn cleaning_entity_chunk_keeps_it_cached_until_saved() {
+        let folder = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+        level.spawn_entity_generation(pos);
+        let chunk = level.get_entity_chunk(pos).await;
+        chunk.data.lock().unwrap().push(NbtCompound::new());
+        chunk.mark_dirty(true);
+
+        level.clean_entity_chunks([pos]);
+        let cached = level.get_entity_chunk_sync(&pos).unwrap();
+        assert!(Arc::ptr_eq(&chunk, &cached));
+
+        level.shutdown().await;
+        let reopened = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let saved = reopened.get_entity_chunk(pos).await;
+        assert_eq!(saved.data.lock().unwrap().len(), 1);
+        reopened.shutdown().await;
+    }
 
     #[tokio::test]
     async fn generating_entity_chunk_twice_keeps_existing_records() {
