@@ -4,10 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_data::Block;
-use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use super::{PandaEntity, TOTAL_UNHAPPY_TIME, as_panda};
@@ -17,19 +14,11 @@ use crate::entity::ai::goal::breed::BreedGoal;
 use crate::entity::ai::goal::look_at_entity::LookTargetSlot;
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
-use crate::entity::ai::goal::try_find_water::TryFindWaterGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
-use crate::entity::ai::util::default_random_pos;
 use crate::entity::mob::Mob;
 
-/// Vanilla `PanicGoal.WATER_CHECK_DISTANCE_VERTICAL` is 1, the horizontal distance is 5.
-const WATER_SEARCH_XZ: i32 = 5;
-const WATER_SEARCH_Y: i32 = 1;
-/// `DefaultRandomPos.getPos(mob, 5, 4)` of `PanicGoal.findRandomPosition`.
-const HORIZONTAL_RANGE: i32 = 5;
-const VERTICAL_RANGE: i32 = 4;
 /// `PandaBreedGoal` looks for bamboo in rings of radius 0 to 7 and at 0 to 2 blocks above.
 const BAMBOO_SEARCH_RADIUS: i32 = 7;
 const BAMBOO_SEARCH_HEIGHT: i32 = 2;
@@ -114,139 +103,6 @@ impl<G: Goal> Goal for PandaGoal<G> {
     /// The panda check only reads the panda itself, so the inner reach holds.
     fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
         self.inner.tick_reach(mob, running)
-    }
-}
-
-/// Vanilla `PandaPanicGoal`: `PanicGoal` for `#minecraft:panic_environmental_causes` only, and
-/// it gives up as soon as the panda sits.
-pub struct PandaPanicGoal {
-    speed: f64,
-    target: Option<Vector3<f64>>,
-    running: bool,
-}
-
-impl PandaPanicGoal {
-    /// Vanilla `PandaPanicGoal(mob, speedModifier)`.
-    #[must_use]
-    pub const fn new(speed: f64) -> Self {
-        Self {
-            speed,
-            target: None,
-            running: false,
-        }
-    }
-
-    /// Vanilla `PanicGoal.shouldPanic`: the last damage is an environmental panic cause.
-    fn should_panic(mob: &dyn Mob) -> bool {
-        mob.get_mob_entity()
-            .living_entity
-            .get_last_damage_type()
-            .is_some_and(|damage_type| {
-                damage_type.has_tag(&tag::DamageType::MINECRAFT_PANIC_ENVIRONMENTAL_CAUSES)
-            })
-    }
-
-    /// Vanilla `PanicGoal.lookForWater`: the nearest water within 5 blocks, unless the panda
-    /// stands inside a solid block.
-    fn look_for_water(mob: &dyn Mob) -> Option<BlockPos> {
-        let entity = mob.get_entity();
-        let world = entity.world.load();
-        let mob_pos = entity.block_pos.load();
-
-        if world
-            .get_block_state(&mob_pos)
-            .get_block_collision_shapes_at(&mob_pos)
-            .next()
-            .is_some()
-        {
-            return None;
-        }
-
-        let mut best: Option<(i32, BlockPos)> = None;
-        for dx in -WATER_SEARCH_XZ..=WATER_SEARCH_XZ {
-            for dy in -WATER_SEARCH_Y..=WATER_SEARCH_Y {
-                for dz in -WATER_SEARCH_XZ..=WATER_SEARCH_XZ {
-                    let pos = BlockPos::new(mob_pos.0.x + dx, mob_pos.0.y + dy, mob_pos.0.z + dz);
-                    if !TryFindWaterGoal::is_water(&world, &pos) {
-                        continue;
-                    }
-                    let distance = dx.abs() + dy.abs() + dz.abs();
-                    if best.is_none_or(|(best_distance, _)| distance < best_distance) {
-                        best = Some((distance, pos));
-                    }
-                }
-            }
-        }
-        best.map(|(_, pos)| pos)
-    }
-}
-
-impl Goal for PandaPanicGoal {
-    /// Same reach as the shared panic goal: only fleeing is fast, and the self-inflicted causes
-    /// (fire, lava, freezing, poison, wither) are the only ones that start it unnoticed.
-    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
-        let living = &mob.get_mob_entity().living_entity;
-        let entity = &living.entity;
-        let may_flee = running
-            || Self::should_panic(mob)
-            || entity.fire_ticks.load(Relaxed) > 0
-            || entity.frozen_ticks.load(Relaxed) > 0
-            || entity.touching_lava.load(Relaxed)
-            || living.has_effect(&StatusEffect::POISON)
-            || living.has_effect(&StatusEffect::WITHER);
-        Some(GoalReach {
-            speed: if may_flee { self.speed } else { 0.0 },
-            ..GoalReach::default()
-        })
-    }
-
-    /// Vanilla `PanicGoal.canUse`: water when on fire, else a random position.
-    fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !Self::should_panic(mob) {
-            return false;
-        }
-
-        if mob.get_entity().fire_ticks.load(Relaxed) > 0
-            && let Some(water) = Self::look_for_water(mob)
-        {
-            self.target = Some(water.to_f64());
-            return true;
-        }
-
-        self.target = default_random_pos::get_pos(mob, HORIZONTAL_RANGE, VERTICAL_RANGE);
-        self.target.is_some()
-    }
-
-    /// Vanilla `PandaPanicGoal.canContinueToUse`: a sitting panda stops walking and gives up.
-    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if as_panda(mob).is_some_and(PandaEntity::is_sitting) {
-            mob.get_mob_entity().steered().navigator().stop();
-            return false;
-        }
-        !mob.is_navigator_idle()
-    }
-
-    /// Vanilla `PanicGoal.start`: walk to the chosen spot at the panic speed.
-    fn start(&mut self, mob: &dyn Mob) {
-        if let Some(target) = self.target {
-            let pos = mob.get_entity().pos.load();
-            mob.get_mob_entity()
-                .steered()
-                .navigator()
-                .set_progress(NavigatorGoal::new(pos, target, self.speed));
-        }
-        self.running = true;
-    }
-
-    /// Vanilla `PanicGoal.stop`.
-    fn stop(&mut self, _mob: &dyn Mob) {
-        self.target = None;
-        self.running = false;
-    }
-
-    /// Vanilla `PanicGoal` flags: move only.
-    fn controls(&self) -> Controls {
-        Controls::MOVE
     }
 }
 

@@ -28,6 +28,7 @@ use crate::entity::{
         behavior::fleeing::{self, Flee},
         goal::{
             avoid_entity::not_spectator,
+            escape_danger::EscapeDangerGoal,
             follow_parent::FollowParentGoal,
             look_around::RandomLookAroundGoal,
             look_at_entity::{LookAtEntityGoal, LookTargetSlot},
@@ -39,7 +40,7 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{
-        Mob, MobEntity, PathAwareEntity,
+        Mob, MobEntity,
         spawn::{EntitySpawnReason, SpawnGroupData},
     },
     passive::animal::Animal,
@@ -47,9 +48,7 @@ use crate::entity::{
 };
 use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
 use crate::world::World;
-use goals::{
-    PandaBreedGoal, PandaGoal, PandaPanicGoal, PandaSitGoal, attack_goal, hurt_by_target_goal,
-};
+use goals::{PandaBreedGoal, PandaGoal, PandaSitGoal, attack_goal, hurt_by_target_goal};
 use lie_on_back::PandaLieOnBackGoal;
 use move_control::PandaMoveControl;
 use roll::PandaRollGoal;
@@ -236,7 +235,12 @@ impl PandaEntity {
             let look_target = Arc::new(LookTargetSlot::default());
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(PandaPanicGoal::new(2.0)));
+            goal_selector.add_goal(
+                2,
+                EscapeDangerGoal::new(2.0)
+                    .with_panic_tag(|_| &tag::DamageType::MINECRAFT_PANIC_ENVIRONMENTAL_CAUSES)
+                    .giving_up_when(|mob| as_panda(mob).is_some_and(Self::is_sitting)),
+            );
             goal_selector.add_goal(2, Box::new(PandaBreedGoal::new(1.0, look_target.clone())));
             goal_selector.add_goal(3, Box::new(attack_goal(ATTACK_SPEED_MODIFIER)));
             goal_selector.add_goal(
@@ -737,21 +741,7 @@ impl Animal for PandaEntity {
     }
 }
 
-/// Vanilla `PathfinderMob.isPanicking`: the shared panic detection (breeding partners, leash
-/// pulling) only knows `EscapeDangerGoal`, so the panda-local panic goal reports itself here.
-impl PathAwareEntity for PandaEntity {
-    fn is_panicking(&self) -> bool {
-        self.mob_entity
-            .goals_selector
-            .is_running::<PandaPanicGoal>()
-    }
-}
-
 impl Mob for PandaEntity {
-    fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
-        Some(self)
-    }
-
     fn can_dispenser_equip_into_slot(
         &self,
         slot: &pumpkin_data::data_component_impl::EquipmentSlot,
@@ -967,8 +957,8 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    /// Tries allowed for the random flee position in the panic test.
-    const PANIC_START_ATTEMPTS: usize = 20;
+    /// Goal ticks allowed for the random flee position in the panic test.
+    const PANIC_START_ATTEMPTS: i32 = 20;
 
     fn panda(world: &Arc<World>) -> Arc<PandaEntity> {
         PandaEntity::new(Entity::new(
@@ -1374,65 +1364,40 @@ mod tests {
         hit.damage(hit.as_ref(), 1.0, DamageType::MOB_ATTACK);
         pricked.damage(pricked.as_ref(), 1.0, DamageType::CACTUS);
 
-        let mut goal = PandaPanicGoal::new(2.0);
-        assert!(
-            !goal.can_start(hit.as_ref()),
-            "a panda hit by a mob panicked"
-        );
-        // The flee position is random and may not be reachable, so allow a few tries.
-        let started = (0..PANIC_START_ATTEMPTS).any(|_| {
-            goal.can_start(pricked.as_ref()) && {
-                goal.start(pricked.as_ref());
-                !pricked.is_navigator_idle()
-            }
-        });
-        assert!(started, "a panda pricked by a cactus did not panic");
-        assert!(goal.should_continue(pricked.as_ref()));
-
-        pricked.set_sitting(true);
-        assert!(
-            !goal.should_continue(pricked.as_ref()),
-            "a sitting panda kept panicking"
-        );
-        assert!(
-            pricked.is_navigator_idle(),
-            "the panic path was kept while sitting"
-        );
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn a_running_panic_goal_counts_as_panicking_for_the_shared_checks() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        stone_floor(&world);
-        let calm = spawn_panda(&world, 0.5, 0.5);
-        let pricked = spawn_panda(&world, 6.5, 0.5);
-        pricked.damage(pricked.as_ref(), 1.0, DamageType::CACTUS);
-
-        let mut panicked = false;
-        for tick in 1..=20 {
-            for panda in [&calm, &pricked] {
+        let step = |tick: i32| {
+            for panda in [&hit, &pricked] {
                 set_tick(panda, tick);
                 panda
                     .mob_entity
                     .server_ai_step(panda.as_ref(), panda.as_ref());
             }
-            panicked = pricked
+        };
+        let panicked = (1..=PANIC_START_ATTEMPTS).any(|tick| {
+            step(tick);
+            pricked
                 .mob_entity
                 .goals_selector
-                .is_running::<PandaPanicGoal>();
-            if panicked {
-                break;
-            }
-        }
+                .is_running::<EscapeDangerGoal>()
+        });
         assert!(panicked, "a panda pricked by a cactus did not panic");
         assert!(
             EntityBase::is_panicking(pricked.as_ref()),
-            "the shared check did not see the panda panic goal"
+            "the shared check did not see the panda panic"
         );
-        assert!(!EntityBase::is_panicking(calm.as_ref()));
+        assert!(
+            !EntityBase::is_panicking(hit.as_ref()),
+            "a panda hit by a mob panicked"
+        );
+
+        pricked.set_sitting(true);
+        for tick in 1..=4 {
+            step(PANIC_START_ATTEMPTS + tick);
+        }
+        assert!(!EntityBase::is_panicking(pricked.as_ref()));
+        assert!(
+            pricked.is_navigator_idle(),
+            "the panic path was kept while sitting"
+        );
         world.level.shutdown().await;
         Ok(())
     }
