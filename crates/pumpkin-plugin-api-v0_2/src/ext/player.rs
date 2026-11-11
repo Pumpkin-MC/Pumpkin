@@ -138,7 +138,7 @@ impl BanIpOptions {
 
 /// Extension trait providing typed cooldown helpers for `Player`.
 pub trait PlayerCooldownExt {
-    /// Sets a client-side item cooldown overlay using an item key or typed `Item`.
+    /// Sets a client-side item cooldown overlay using a plain name or namespaced item key.
     fn set_cooldown(&self, item: impl crate::item::IntoItemKey, ticks: i32);
 
     /// Returns the remaining cooldown ticks for an item, if active.

@@ -96,7 +96,7 @@ pub use wit::pumpkin::plugin::{
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can
 // name them directly (e.g. build an `ItemStack` for a GUI or `/give`).
-pub use block::{BlockStateTypeExt, BlockType, BlockTypeExt, IntoBlockKey};
+pub use block::{BlockStateTypeExt, BlockTypeExt, IntoBlockKey};
 pub use damage_types_wit::DamageType;
 pub use datapack::{DatapackInfo, DatapackManager, EnablePosition};
 pub use display::{
@@ -116,7 +116,7 @@ pub use game_events_wit::GameEvent;
 pub use host::game_rules::{GameRule, GameRuleValue};
 pub use host::world::{ChunkBuffer, GenerationPhase};
 pub use inventory::{Inventory, PlayerInventory};
-pub use item::{IntoItemKey, Item, ItemStackExt};
+pub use item::{IntoItemKey, ItemStackExt};
 pub use mobs::{
     Ageable, AgeableData, Cat, CatData, Creeper, CreeperData, DyeColor, Enderman, EndermanData,
     EntityCastExt, Fox, FoxData, IronGolem, IronGolemData, MobCast, MobData, Sheep, SheepData,

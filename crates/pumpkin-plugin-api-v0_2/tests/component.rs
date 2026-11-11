@@ -57,9 +57,6 @@ fn fixture_path() -> &'static PathBuf {
                 "build",
                 "--package",
                 "pumpkin-plugin-api-v0_2",
-                "--package",
-                "pumpkin-plugin-helpers",
-                "--lib",
                 "--locked",
                 "--example",
                 "component_fixture",
@@ -72,23 +69,7 @@ fn fixture_path() -> &'static PathBuf {
             .status()
             .expect("failed to run cargo to build the fixture");
         assert!(status.success(), "building the fixture component failed");
-        let plugin_path = target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm");
-        let helper_path = target_dir.join("wasm32-wasip2/debug/pumpkin_plugin_helpers.wasm");
-        let process_dir = target_dir.join(std::process::id().to_string());
-        std::fs::create_dir_all(&process_dir).expect("create process fixture directory");
-        // Definition names come from filenames and must be valid component identifiers.
-        let definition = process_dir.join("registry-helpers.wasm");
-        std::fs::copy(helper_path, &definition).expect("copy helper definition");
-        let config = wasm_compose::config::Config {
-            definitions: vec![definition],
-            ..Default::default()
-        };
-        let composed = wasm_compose::composer::ComponentComposer::new(&plugin_path, &config)
-            .compose()
-            .expect("compose fixture");
-        let output = process_dir.join("composed-fixture.wasm");
-        std::fs::write(&output, composed).expect("write composed fixture");
-        output
+        target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm")
     })
 }
 
@@ -144,11 +125,6 @@ fn component_declares_the_mixed_v0_2_world() {
     let engine = engine();
     let component = load(&engine);
     let ty = component.component_type();
-    assert!(
-        ty.imports(&engine)
-            .all(|(name, _)| !name.starts_with("pumpkin:helpers/")),
-        "helper imports must be satisfied inside the distributed plugin"
-    );
 
     for name in ASYNC_CALLBACKS {
         let export = ty.get_export(&engine, name).map(|export| export.ty);

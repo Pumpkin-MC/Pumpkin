@@ -2,7 +2,7 @@
 #![cfg(target_family = "wasm")]
 
 use pumpkin_plugin_api_v0_2::{
-    Context, Item, ItemStack, ItemStackExt, PersistentDataHolder, Plugin, PluginMetadata, Result,
+    Context, ItemStack, ItemStackExt, PersistentDataHolder, Plugin, PluginMetadata, Result,
     TextComponent, enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder, register_plugin,
 };
 
@@ -25,7 +25,7 @@ impl Plugin for Example {
     }
 
     async fn on_load(&self, context: Context) -> Result<()> {
-        let output = ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 1);
+        let output = ItemStack::of("diamond", 1);
         output.set_string("sdk-helpers", "origin", "recipe").await;
         ShapedRecipeBuilder::new("sdk_helpers:diamond", output)
             .pattern(["CC", "CC"])

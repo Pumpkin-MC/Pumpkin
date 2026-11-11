@@ -16,7 +16,6 @@ serde_json.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 wasmtime = { workspace = true }
-wasm-compose = { version = "=0.259.0", default-features = false }
 
 [[example]]
 name = "component_fixture"

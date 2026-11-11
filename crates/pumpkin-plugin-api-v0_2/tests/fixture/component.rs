@@ -125,7 +125,7 @@ impl Plugin for Fixture {
 
     async fn on_load(&self, context: Context) -> Result<()> {
         use pumpkin_plugin_api_v0_2::{
-            Item, ItemStack, ItemStackExt, PlayerEnderChestExt, TextComponent,
+            ItemStack, ItemStackExt, PlayerEnderChestExt, TextComponent,
             enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder,
         };
         context.register_event_handler::<PlayerChatEvent, _>(
@@ -147,15 +147,12 @@ impl Plugin for Fixture {
         player
             .set_all_ender_chest_items(std::iter::repeat_with(|| None).take(30))
             .await;
-        ShapedRecipeBuilder::new(
-            "fixture:diamond",
-            ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2),
-        )
-        .pattern(["DD"])
-        .key('D', "diamond")
-        .register_to_context(&context)
-        .await
-        .map_err(|error| error.to_string())?;
+        ShapedRecipeBuilder::new("fixture:diamond", ItemStack::of("diamond", 2))
+            .pattern(["DD"])
+            .key('D', "diamond")
+            .register_to_context(&context)
+            .await
+            .map_err(|error| error.to_string())?;
         EnchantmentBuilder::new("fixture:test", TextComponent::text("Test"))
             .register_to_context(&context)
             .await
@@ -192,25 +189,18 @@ impl Plugin for Fixture {
     ) -> Result<ipc::IpcMessage> {
         if sender == "helpers" {
             use pumpkin_plugin_api_v0_2::{
-                BlockType, IntoBlockKey, IntoItemKey, Item, ItemStack, ItemStackExt,
-                PersistentDataHolder, TextComponent, TransformationBuilder,
+                IntoBlockKey, IntoItemKey, ItemStack, ItemStackExt, PersistentDataHolder,
+                TextComponent, TransformationBuilder,
                 enchantment::EnchantmentBuilder,
                 forms::{FormResponse, SimpleFormBuilder},
                 recipe::{Ingredient, ShapedRecipeBuilder},
             };
-            let item = ItemStack::of(Item::from_name("diamond").ok_or("unknown diamond item")?, 2);
-            assert_eq!(item.get_item().await, Item::from_name("minecraft:diamond"));
+            let item = ItemStack::of("diamond", 2);
             assert!(item.matches_item("diamond").await);
             assert_eq!("diamond".into_item_key(), "minecraft:diamond");
             assert_eq!("custom:item".into_item_key(), "custom:item");
             assert_eq!("stone".into_block_key(), "minecraft:stone");
             assert_eq!("custom:block".into_block_key(), "custom:block");
-            let stone = BlockType::from_name("stone").ok_or("unknown stone block")?;
-            assert_eq!(stone.resource_location(), "minecraft:stone");
-            assert_eq!(stone.as_str(), "stone");
-            assert_eq!(Some(stone), BlockType::from_registry_key("minecraft:stone"));
-            assert!(Item::from_name("custom:diamond").is_none());
-            assert!(BlockType::from_name("custom:stone").is_none());
             item.set_string("fixture", "owner", "guest").await;
             assert_eq!(
                 item.get_string("fixture", "owner").await.as_deref(),
