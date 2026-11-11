@@ -17,6 +17,7 @@ use crate::block::{
     OnLandedUponArgs, OnPlaceArgs, RandomTickArgs,
 };
 use crate::entity::EntityBase;
+use crate::entity::passive::turtle::TurtleEntity;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 
@@ -203,6 +204,9 @@ impl BlockBehaviour for TurtleEggBlock {
                         from_type(&EntityType::TURTLE, spawn_pos, args.world, Uuid::new_v4());
                     if let Some(mob) = turtle.get_mob() {
                         mob.spawn_as_baby();
+                    }
+                    if let Some(turtle) = turtle.cast_any().downcast_ref::<TurtleEntity>() {
+                        turtle.set_home_pos(*args.position);
                     }
                     args.world.spawn_entity(turtle);
                 }

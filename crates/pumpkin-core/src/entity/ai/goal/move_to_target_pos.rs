@@ -106,11 +106,6 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     }
 
     #[must_use]
-    pub const fn should_reset_path(&self) -> bool {
-        self.trying_time % 40 == 0
-    }
-
-    #[must_use]
     pub const fn is_reached_target(&self) -> bool {
         self.reached
     }
@@ -138,6 +133,11 @@ pub trait MoveToTargetPos: Send + Sync {
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
+    }
+
+    /// Vanilla `shouldRecalculatePath`.
+    fn should_recalculate_path(&self, trying_time: i32) -> bool {
+        trying_time % 40 == 0
     }
 
     fn next_start_tick(&self, mob: &dyn Mob) -> i32
@@ -201,7 +201,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
         } else {
             self.reached = false;
             self.trying_time += 1;
-            if self.should_reset_path() {
+            if move_to_target_pos.should_recalculate_path(self.trying_time) {
                 let steered = mob.get_mob_entity().steered();
                 let mut navigator = steered.navigator();
 
