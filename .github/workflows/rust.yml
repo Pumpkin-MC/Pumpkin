@@ -218,6 +218,9 @@ jobs:
       needs.clippy.result == 'success' &&
       (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_PLATFORM: 24
+      CARGO_BUILD_JOBS: 1
     steps:
       - uses: actions/checkout@v7
         with:
@@ -231,6 +234,9 @@ jobs:
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
       - run: cargo install cargo-ndk
+      # Keep workspace features consistent so the test step reuses these binaries.
+      - name: Build Android test binaries before starting the emulator
+        run: cargo ndk -t arm64-v8a test --workspace --no-run
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -238,8 +244,6 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Start Android emulator and test
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          CARGO_NDK_PLATFORM: 24
         with:
           api-level: 35
           target: google_apis
@@ -247,7 +251,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo ndk-test -t arm64-v8a
+          script: cargo ndk-test -t arm64-v8a --workspace
 
   build_pull_request:
     name: Build affected packages
