@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_7x4x4",
+  "function": "pumpkin:redstone_wire_dual_sources_max",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

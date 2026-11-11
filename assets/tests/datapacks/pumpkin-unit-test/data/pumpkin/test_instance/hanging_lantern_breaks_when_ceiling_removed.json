@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:hanging_lantern_breaks_when_ceiling_removed",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

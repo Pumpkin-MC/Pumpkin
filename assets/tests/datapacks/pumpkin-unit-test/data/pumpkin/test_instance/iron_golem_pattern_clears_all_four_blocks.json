@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:iron_golem_pattern_clears_all_four_blocks",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

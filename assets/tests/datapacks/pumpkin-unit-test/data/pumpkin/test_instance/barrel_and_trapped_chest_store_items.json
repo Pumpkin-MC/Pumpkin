@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:barrel_and_trapped_chest_store_items",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

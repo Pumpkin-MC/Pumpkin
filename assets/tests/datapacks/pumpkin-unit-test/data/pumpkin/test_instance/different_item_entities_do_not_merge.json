@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_4x4x4",
+  "function": "pumpkin:different_item_entities_do_not_merge",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

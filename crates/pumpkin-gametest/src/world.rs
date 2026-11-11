@@ -1,14 +1,37 @@
 use std::any::Any;
 
 use async_trait::async_trait;
-use pumpkin_data::BlockStateId;
+use pumpkin_data::{BlockStateId, item_stack::ItemStack};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::world::BlockFlags;
 use serde_json::Value;
 
 use crate::error::{GameTestError, GameTestResult};
 use crate::model::GameTestRotation;
+
+/// Controls a player admitted to the server for a `GameTest`.
+#[async_trait]
+pub trait SimulatedPlayer: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+
+    fn name(&self) -> &str;
+
+    fn position(&self) -> Vector3<f64>;
+
+    fn selected_hotbar_slot(&self) -> u8;
+
+    fn set_selected_hotbar_slot(&self, slot: u8) -> GameTestResult<()>;
+
+    fn held_item(&self, hand: Hand) -> ItemStack;
+
+    fn set_held_item(&self, hand: Hand, stack: ItemStack) -> GameTestResult<()>;
+
+    async fn move_to(&self, position: Vector3<f64>) -> GameTestResult<()>;
+
+    async fn disconnect(&self) -> GameTestResult<()>;
+}
 
 #[async_trait]
 pub trait GameTestWorld: Send + Sync {
@@ -119,6 +142,25 @@ pub trait GameTestWorld: Send + Sync {
         Err(GameTestError::World(
             "entity spawning is not supported by this GameTestWorld".to_string(),
         ))
+    }
+
+    async fn spawn_simulated_player(
+        &self,
+        _name: &str,
+        _position: Vector3<f64>,
+        _gamemode: GameMode,
+    ) -> GameTestResult<std::sync::Arc<dyn SimulatedPlayer>> {
+        Err(GameTestError::World(
+            "simulated players are not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        Ok(())
+    }
+
+    async fn simulated_player_position(&self, _name: &str) -> Option<Vector3<f64>> {
+        None
     }
 
     async fn spawn_item(

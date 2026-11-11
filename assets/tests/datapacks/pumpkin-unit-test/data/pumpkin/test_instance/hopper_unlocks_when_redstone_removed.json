@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:hopper_unlocks_when_redstone_removed",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

@@ -18,10 +18,7 @@ use pumpkin_protocol::{
             config::{SAcknowledgeFinishConfig, SClientInformationConfig, SKnownPacks},
             handshake::SHandShake,
             login::{SLoginAcknowledged, SLoginStart},
-            play::{
-                Action, SChatCommand, SConfirmTeleport, SPlayerAction, SPlayerCommand,
-                SPlayerLoaded, SPlayerPosition, SSetHeldItem, SUseItemOn, Status,
-            },
+            play::{SConfirmTeleport, SPlayerLoaded, SPlayerPosition, SUseItemOn},
         },
     },
     packet::MultiVersionJavaPacket,
@@ -185,27 +182,6 @@ impl HeadlessBot {
         .await
     }
 
-    pub async fn send_command(&mut self, command: &str) -> Result<(), String> {
-        self.send_packet(&SChatCommand { command }).await
-    }
-
-    pub async fn set_held_item(&mut self, slot: i16) -> Result<(), String> {
-        self.send_packet(&SSetHeldItem { slot }).await
-    }
-
-    pub async fn send_player_command(
-        &mut self,
-        entity_id: i32,
-        action: Action,
-    ) -> Result<(), String> {
-        self.send_packet(&SPlayerCommand {
-            entity_id: VarInt(entity_id),
-            action,
-            jump_boost: VarInt(0),
-        })
-        .await
-    }
-
     pub async fn use_block(&mut self, position: BlockPos, sequence: i32) -> Result<(), String> {
         self.send_packet(&SUseItemOn {
             hand: VarInt(0),
@@ -214,16 +190,6 @@ impl HeadlessBot {
             cursor_pos: Vector3::new(0.5, 0.5, 0.5),
             inside_block: false,
             is_against_world_border: false,
-            sequence: VarInt(sequence),
-        })
-        .await
-    }
-
-    pub async fn start_digging(&mut self, position: BlockPos, sequence: i32) -> Result<(), String> {
-        self.send_packet(&SPlayerAction {
-            status: VarInt(Status::StartedDigging as i32),
-            position,
-            face: 1,
             sequence: VarInt(sequence),
         })
         .await

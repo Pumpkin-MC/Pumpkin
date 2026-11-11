@@ -11,7 +11,7 @@ use std::{
     num::NonZero,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -133,19 +133,38 @@ pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
     });
 }
 
-/// This is just a Wrapper for both Java & Bedrock connections
+/// Server-side connection state for a simulated player.
+#[derive(Default)]
+pub struct SimulatedClient {
+    disconnect_started: AtomicBool,
+}
+
+/// The connection used by a player.
 #[expect(clippy::large_enum_variant)]
 #[repr(C)]
 pub enum ClientPlatform {
     Java(JavaClient),
     Bedrock(Arc<BedrockClient>),
+    Simulated(SimulatedClient),
 }
 
 impl ClientPlatform {
+    pub(crate) fn simulated() -> Self {
+        Self::Simulated(SimulatedClient::default())
+    }
+
+    pub(crate) fn begin_simulated_disconnect(&self) -> bool {
+        match self {
+            Self::Simulated(client) => !client.disconnect_started.swap(true, Ordering::AcqRel),
+            _ => false,
+        }
+    }
+
     pub fn address(&self) -> SocketAddr {
         match self {
             Self::Java(java) => java.address,
             Self::Bedrock(bedrock) => bedrock.address,
+            Self::Simulated(_) => SocketAddr::from(([127, 0, 0, 1], 0)),
         }
     }
 
@@ -174,19 +193,20 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.is_closed(),
             Self::Bedrock(bedrock) => bedrock.is_closed(),
+            Self::Simulated(client) => client.disconnect_started.load(Ordering::Acquire),
         }
     }
 
     pub fn java_version(&self) -> JavaMinecraftVersion {
         match self {
             Self::Java(java) => java.version.load(),
-            Self::Bedrock(_) => JavaMinecraftVersion::Unknown,
+            Self::Bedrock(_) | Self::Simulated(_) => JavaMinecraftVersion::Unknown,
         }
     }
 
     pub fn bedrock_version(&self) -> BedrockMinecraftVersion {
         match self {
-            Self::Java(_) => BedrockMinecraftVersion::Unknown,
+            Self::Java(_) | Self::Simulated(_) => BedrockMinecraftVersion::Unknown,
             Self::Bedrock(bedrock) => bedrock.version.load(),
         }
     }
@@ -195,6 +215,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.set_player(player),
             Self::Bedrock(bedrock) => bedrock.set_player(player),
+            Self::Simulated(_) => {}
         }
     }
 
@@ -202,6 +223,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.clear_player(),
             Self::Bedrock(bedrock) => bedrock.clear_player(),
+            Self::Simulated(_) => {}
         }
     }
 
@@ -210,6 +232,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.pending_bytes.load(Ordering::Relaxed),
             Self::Bedrock(bedrock) => bedrock.pending_bytes.load(Ordering::Relaxed),
+            Self::Simulated(_) => 0,
         }
     }
 
@@ -221,6 +244,7 @@ impl ClientPlatform {
             Self::Bedrock(bedrock) => {
                 bedrock.try_enqueue_packet_data(packet_data);
             }
+            Self::Simulated(_) => {}
         }
     }
 
@@ -234,6 +258,7 @@ impl ClientPlatform {
             Self::Bedrock(bedrock) => {
                 bedrock.try_enqueue_packet_data_unobserved(packet_data);
             }
+            Self::Simulated(_) => {}
         }
     }
 
@@ -241,6 +266,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.await_close_interrupt().await,
             Self::Bedrock(bedrock) => bedrock.await_close_interrupt().await,
+            Self::Simulated(_) => {}
         }
     }
 
@@ -252,6 +278,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.spawn_task(task),
             Self::Bedrock(bedrock) => bedrock.spawn_task(task),
+            Self::Simulated(_) => None,
         }
     }
 
@@ -271,6 +298,7 @@ impl ClientPlatform {
                     bedrock.enqueue_packet(data).await;
                 }
             }
+            Self::Simulated(_) => {}
         }
     }
 
@@ -290,6 +318,7 @@ impl ClientPlatform {
                     bedrock.try_enqueue_packet(data);
                 }
             }
+            Self::Simulated(_) => {}
         }
     }
 
@@ -297,6 +326,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.enqueue_packet(packet_data).await,
             Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet_data).await,
+            Self::Simulated(_) => {}
         }
     }
 
@@ -304,6 +334,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.try_enqueue_packet(packet_data),
             Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(packet_data),
+            Self::Simulated(_) => {}
         }
     }
 
@@ -315,6 +346,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => entity.send_java_spawn_packet(java),
             Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock),
+            Self::Simulated(_) => {}
         }
     }
 
@@ -323,6 +355,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
             Self::Bedrock(bedrock) => bedrock.send_chunks(chunks, None).await,
+            Self::Simulated(_) => ChunkSendOutcome::default(),
         }
     }
 
@@ -330,6 +363,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.send_packet_now(packet_data).await,
             Self::Bedrock(bedrock) => bedrock.send_game_packet(packet_data).await,
+            Self::Simulated(_) => {}
         }
     }
 
@@ -349,6 +383,7 @@ impl ClientPlatform {
                     bedrock.send_game_packet(data).await;
                 }
             }
+            Self::Simulated(_) => {}
         }
     }
 
@@ -360,6 +395,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.try_kick(message),
             Self::Bedrock(bedrock) => bedrock.try_kick(reason, message.clone().get_text()),
+            Self::Simulated(_) => {}
         }
     }
 
@@ -367,6 +403,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.kick(message).await,
             Self::Bedrock(bedrock) => bedrock.kick(reason, message.get_text()).await,
+            Self::Simulated(_) => {}
         }
     }
 }

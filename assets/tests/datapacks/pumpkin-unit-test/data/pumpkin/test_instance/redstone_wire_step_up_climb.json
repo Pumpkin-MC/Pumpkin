@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_6x5x4",
+  "function": "pumpkin:redstone_wire_step_up_climb",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

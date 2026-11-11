@@ -1,6 +1,6 @@
 pub mod block_based;
+pub mod context;
 pub mod error;
-pub mod helper;
 pub mod manager;
 pub mod model;
 pub mod runner;
@@ -9,12 +9,10 @@ pub mod structure;
 pub mod world;
 
 pub use block_based::BlockBasedTest;
-pub use error::{GameTestError, GameTestResult};
-pub use helper::{
-    GameTestFunction, GameTestHelper, GameTestSequence, get_test_function,
-    register_flaky_function_test, register_function_test, register_test_function,
-    registered_test_definitions,
+pub use context::{
+    GameTestContext, GameTestFunction, GameTestSequence, get_test_function, register_test_function,
 };
+pub use error::{GameTestError, GameTestResult};
 pub use manager::{
     GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
     GameTestRetryOptions, GameTestRunner, RecordingGameTestReporter, VERIFY_TEST_BATCH_SIZE,
@@ -29,7 +27,7 @@ pub use structure::{
     place_structure_with_controller_rotation,
     place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
-pub use world::GameTestWorld;
+pub use world::{GameTestWorld, SimulatedPlayer};
 
 #[cfg(test)]
 mod tests {
@@ -288,16 +286,14 @@ mod tests {
             padding: 0,
         };
 
-        let func: Arc<dyn GameTestFunction> = Arc::new(|helper: GameTestHelper| async move {
+        let func: Arc<dyn GameTestFunction> = Arc::new(|test: GameTestContext| async move {
             let pos = BlockPos::new(1, 1, 1);
-            helper
-                .start_sequence()
-                .then_execute(move |helper| async move {
-                    helper.set_block_default(&pos, &Block::REDSTONE_BLOCK).await
+            test.start_sequence()
+                .then_execute(move |test| async move {
+                    test.set_block_default(&pos, &Block::REDSTONE_BLOCK).await
                 })
-                .then_execute_after(2, move |helper| async move {
-                    helper
-                        .assert_block_present(&pos, &Block::REDSTONE_BLOCK)
+                .then_execute_after(2, move |test| async move {
+                    test.assert_block_present(&pos, &Block::REDSTONE_BLOCK)
                         .await
                 })
                 .then_succeed();
@@ -319,6 +315,41 @@ mod tests {
             "expected Passed state, got {:?}",
             session.state
         );
+    }
+
+    #[tokio::test]
+    #[expect(clippy::expect_used, reason = "unit test fixtures")]
+    async fn resolves_plugin_function_from_test_instance_id() {
+        let definition: GameTestDefinition = serde_json::from_str(
+            r#"{
+                "type": "minecraft:function",
+                "environment": "minecraft:default",
+                "structure": "minecraft:empty",
+                "function": "example_plugin:custom_callback",
+                "max_ticks": 10
+            }"#,
+        )
+        .expect("valid function test instance");
+        register_test_function(
+            "example_plugin:custom_callback",
+            |test: GameTestContext| async move {
+                test.succeed();
+                Ok(())
+            },
+        );
+
+        let world: Arc<dyn GameTestWorld> = Arc::new(InMemoryTestWorld::default());
+        let template =
+            Arc::new(GameTestStructureTemplate::empty([1, 1, 1]).expect("empty template"));
+        let test = BlockBasedTest::new("example_plugin:custom_instance", definition);
+        let mut session = GameTestSession::new(test, world, template, 0, 0);
+        for _ in 0..8 {
+            session.tick().await;
+            if session.state.is_finished() {
+                break;
+            }
+        }
+        assert!(matches!(session.state, GameTestState::Passed { .. }));
     }
 
     #[tokio::test]
@@ -345,7 +376,7 @@ mod tests {
         };
 
         let attempts_clone = attempts.clone();
-        let func: Arc<dyn GameTestFunction> = Arc::new(move |helper: GameTestHelper| {
+        let func: Arc<dyn GameTestFunction> = Arc::new(move |test: GameTestContext| {
             let attempts = attempts_clone.clone();
             async move {
                 let current = {
@@ -356,9 +387,9 @@ mod tests {
                     *guard
                 };
                 if current == 1 {
-                    Err(helper.fail("First attempt fails"))
+                    Err(test.fail("First attempt fails"))
                 } else {
-                    helper.succeed();
+                    test.succeed();
                     Ok(())
                 }
             }
@@ -578,14 +609,14 @@ mod tests {
                 padding: 0,
             };
             let calls = calls.clone();
-            let function: Arc<dyn GameTestFunction> = Arc::new(move |helper: GameTestHelper| {
+            let function: Arc<dyn GameTestFunction> = Arc::new(move |test: GameTestContext| {
                 let calls = calls.clone();
                 async move {
                     calls
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .push(name);
-                    helper.succeed();
+                    test.succeed();
                     Ok(())
                 }
             });

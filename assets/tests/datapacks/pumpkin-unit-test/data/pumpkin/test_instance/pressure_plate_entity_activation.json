@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x4",
+  "function": "pumpkin:pressure_plate_entity_activation",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

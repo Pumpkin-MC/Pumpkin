@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:wooden_pressure_plate_activates_on_item_and_clears",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

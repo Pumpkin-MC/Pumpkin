@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:sugar_cane_tall_column_cascades_break",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

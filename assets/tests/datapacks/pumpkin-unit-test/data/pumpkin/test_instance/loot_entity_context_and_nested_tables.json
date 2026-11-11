@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:loot_entity_context_and_nested_tables",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

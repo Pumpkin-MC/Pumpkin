@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_6x4x4",
+  "function": "pumpkin:oak_and_spruce_doors_redstone",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

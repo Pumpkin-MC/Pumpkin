@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x6x5",
+  "function": "pumpkin:falling_concrete_powder_and_anvil_land",
+  "max_ticks": 60,
+  "setup_ticks": 0
+}

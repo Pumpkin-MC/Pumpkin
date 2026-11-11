@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x8",
+  "function": "pumpkin:redstone_double_inverter_buffer",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

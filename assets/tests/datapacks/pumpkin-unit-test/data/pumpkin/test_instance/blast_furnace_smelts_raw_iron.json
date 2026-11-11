@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_4x4x4",
+  "function": "pumpkin:blast_furnace_smelts_raw_iron",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

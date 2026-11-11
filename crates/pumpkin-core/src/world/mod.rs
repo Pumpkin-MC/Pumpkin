@@ -1192,7 +1192,7 @@ impl World {
             packet,
             players.iter().filter_map(|p| match p.client.as_ref() {
                 ClientPlatform::Bedrock(be) => Some(be),
-                ClientPlatform::Java(_) => None,
+                ClientPlatform::Java(_) | ClientPlatform::Simulated(_) => None,
             }),
         );
     }
@@ -1251,7 +1251,7 @@ impl World {
             be_packet,
             players.iter().filter_map(|p| match p.client.as_ref() {
                 ClientPlatform::Bedrock(be) => Some(be),
-                ClientPlatform::Java(_) => None,
+                ClientPlatform::Java(_) | ClientPlatform::Simulated(_) => None,
             }),
         );
     }
@@ -1359,7 +1359,7 @@ impl World {
                 }
                 match p.client.as_ref() {
                     ClientPlatform::Bedrock(be_client) => Some(be_client),
-                    ClientPlatform::Java(_) => None,
+                    ClientPlatform::Java(_) | ClientPlatform::Simulated(_) => None,
                 }
             }),
         );
@@ -1385,6 +1385,7 @@ impl World {
             match p.client.as_ref() {
                 ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
 
@@ -2110,6 +2111,7 @@ impl World {
                         ClientPlatform::Bedrock(be_client) => {
                             bedrock_recipients.push(be_client);
                         }
+                        ClientPlatform::Simulated(_) => {}
                     }
                 }
 
@@ -3727,7 +3729,11 @@ impl World {
 
         player.has_played_before.store(true, Ordering::Relaxed);
 
-        // 3. Trigger Join Event and Broadcast Join Message
+        self.announce_player_join(&player, server).await;
+    }
+
+    /// Fires the join event after a player has entered this world.
+    pub async fn announce_player_join(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
             translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
@@ -3742,7 +3748,7 @@ impl World {
             self.broadcast_system_message(&event.join_message, false);
             info!("{}", event.join_message.to_pretty_console());
         }
-        server.notify_update_if_op(&player);
+        server.notify_update_if_op(player);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -4260,22 +4266,7 @@ impl World {
                 java_client.send_packet_now(data).await;
             }
         }
-        let msg_comp = TextComponent::translate_cross(
-            translation::java::MULTIPLAYER_PLAYER_JOINED,
-            translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
-            [TextComponent::text(player.gameprofile.name.clone())],
-        )
-        .color_named(NamedColor::Yellow);
-        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
-
-        server.plugin_manager.fire(server, &mut event).await;
-
-        if !event.cancelled {
-            self.broadcast_system_message(&event.join_message, false);
-            // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
-            info!("{}", event.join_message.to_pretty_console());
-        }
-        server.notify_update_if_op(player);
+        self.announce_player_join(player, server).await;
     }
 
     fn send_player_equipment(&self, from: &Player) {
@@ -5271,6 +5262,13 @@ impl World {
             new_list
         });
         // Entity tracking starts in the spawn path, after the tab list reached viewers.
+        if matches!(player.client.as_ref(), ClientPlatform::Simulated(_)) {
+            Self::with_player_list_entry(player, |java, bedrock| {
+                self.broadcast_packet_except_editioned(&[player.gameprofile.id], java, bedrock);
+            });
+            self.entity_tracker
+                .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        }
         Ok(())
     }
 
@@ -7944,6 +7942,7 @@ impl World {
             match p.client.as_ref() {
                 ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
 
@@ -7996,6 +7995,7 @@ impl World {
             match p.client.as_ref() {
                 ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
 

@@ -38,12 +38,8 @@ pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, Advanc
 }
 
 pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Server>, String> {
-    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/tests/datapacks/pumpkin-unit-test");
-    let target = temp_dir.path().join("datapacks/pumpkin-unit-test");
-    copy_datapack(&source, &target)?;
     let (basic_config, advanced_config) = test_configs(temp_dir);
-    let server = Server::new(
+    Server::new(
         basic_config,
         advanced_config,
         TelemetryConfig::default(),
@@ -51,33 +47,7 @@ pub async fn create_test_server(temp_dir: &tempfile::TempDir) -> Result<Arc<Serv
         Vec::new(),
     )
     .await
-    .map_err(|err| format!("Failed to initialize test Server: {err}"))?;
-    let mut level_info = (**server.level_info.load()).clone();
-    level_info
-        .data_packs
-        .enabled
-        .push("file/pumpkin-unit-test".to_string());
-    server.level_info.store(Arc::new(level_info));
-    server.reload_datapacks(&server);
-    Ok(server)
-}
-
-fn copy_datapack(source: &std::path::Path, target: &std::path::Path) -> Result<(), String> {
-    std::fs::create_dir_all(target).map_err(|error| error.to_string())?;
-    for entry in std::fs::read_dir(source).map_err(|error| error.to_string())? {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let destination = target.join(entry.file_name());
-        if entry
-            .file_type()
-            .map_err(|error| error.to_string())?
-            .is_dir()
-        {
-            copy_datapack(&entry.path(), &destination)?;
-        } else {
-            std::fs::copy(entry.path(), destination).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+    .map_err(|err| format!("Failed to initialize test Server: {err}"))
 }
 
 /// Generates the overworld spawn chunk, so a bot's join waits on the network, not on world

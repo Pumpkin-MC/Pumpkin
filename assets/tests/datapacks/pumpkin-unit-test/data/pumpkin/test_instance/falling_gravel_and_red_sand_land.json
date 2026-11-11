@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x6x5",
+  "function": "pumpkin:falling_gravel_and_red_sand_land",
+  "max_ticks": 60,
+  "setup_ticks": 0
+}

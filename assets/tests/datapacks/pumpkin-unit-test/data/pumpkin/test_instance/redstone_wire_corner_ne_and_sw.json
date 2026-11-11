@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_6x4x6",
+  "function": "pumpkin:redstone_wire_corner_ne_and_sw",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

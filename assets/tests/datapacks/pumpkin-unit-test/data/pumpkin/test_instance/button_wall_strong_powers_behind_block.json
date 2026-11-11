@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:button_wall_strong_powers_behind_block",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

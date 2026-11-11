@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:crafter_crafts_sticks_from_two_planks",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

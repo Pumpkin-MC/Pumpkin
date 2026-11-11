@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_8x4x5",
+  "function": "pumpkin:note_block_instruments_emerald_hay_glowstone_default",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

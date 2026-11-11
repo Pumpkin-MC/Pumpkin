@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:world_block_use_and_break",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

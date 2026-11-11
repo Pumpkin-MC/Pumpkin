@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_4x4x4",
+  "function": "pumpkin:smoker_cooks_raw_beef",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}
