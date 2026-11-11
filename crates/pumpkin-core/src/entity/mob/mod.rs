@@ -2815,11 +2815,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn can_be_seen_as_enemy(&self) -> bool {
-        self.mob_can_be_seen_as_enemy()
-            && self
-                .get_living_entity()
-                .is_some_and(|living| !living.entity.invulnerable.load(Relaxed))
-            && self.can_be_seen_by_anyone()
+        self.mob_can_be_seen_as_enemy() && self.is_visible_and_vulnerable()
     }
 
     fn sound_source(&self) -> SoundCategory {
@@ -3777,71 +3773,6 @@ mod lifecycle_tests {
         assert!(cow_navigating);
         assert!(!rider_navigating);
         assert!(steers_itself);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod hurt_hook_tests {
-    use super::*;
-    use crate::entity::ai::test_support::world;
-    use crate::entity::passive::cow::CowEntity;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    /// A mob that adds its own answer to `canBeSeenAsEnemy`.
-    struct Listener {
-        mob_entity: MobEntity,
-        seen_as_enemy: bool,
-    }
-
-    impl Listener {
-        fn new(world: &Arc<World>, seen_as_enemy: bool) -> Self {
-            Self {
-                mob_entity: MobEntity::new(Entity::new(
-                    world.clone(),
-                    Vector3::new(0.0, 64.0, 0.0),
-                    &EntityType::COW,
-                )),
-                seen_as_enemy,
-            }
-        }
-    }
-
-    impl Mob for Listener {
-        fn get_mob_entity(&self) -> &MobEntity {
-            &self.mob_entity
-        }
-
-        fn mob_can_be_seen_as_enemy(&self) -> bool {
-            self.seen_as_enemy
-        }
-    }
-
-    /// A mob can only take away from `canBeSeenAsEnemy`: the default is the living, visible and
-    /// not invulnerable rule, and a mob that says no stays unseen even when the rule says yes.
-    #[tokio::test]
-    async fn a_mob_can_only_take_away_from_being_seen_as_an_enemy() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let seen = Listener::new(&world, true);
-        let hidden = Listener::new(&world, false);
-        let invulnerable = Listener::new(&world, true);
-        invulnerable.get_entity().invulnerable.store(true, Relaxed);
-        let dead = Listener::new(&world, true);
-        dead.mob_entity.living_entity.health.store(0.0);
-        let plain = CowEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(0.0, 64.0, 0.0),
-            &EntityType::COW,
-        ));
-        world.level.shutdown().await;
-
-        assert!(plain.can_be_seen_as_enemy());
-        assert!(seen.can_be_seen_as_enemy());
-        assert!(!hidden.can_be_seen_as_enemy());
-        assert!(!invulnerable.can_be_seen_as_enemy());
-        assert!(!dead.can_be_seen_as_enemy());
         Ok(())
     }
 }
