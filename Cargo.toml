@@ -26,7 +26,7 @@ members = [
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
     "tools/pumpkin-fuzzer",
-    "tools/pumpkin-tester",
+    "tools/pumpkin-headless-client-bot",
 ]
 
 # [workspace.lints.rust]

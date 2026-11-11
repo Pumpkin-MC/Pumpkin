@@ -16,11 +16,11 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 async fn main() -> ExitCode {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let _ = rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("Rayon-Tester-{i}"))
+        .thread_name(|i| format!("Rayon-Headless-Bot-{i}"))
         .build_global();
 
     let start = Instant::now();
-    println!("Starting pumpkin-tester (single server + headless bots)...");
+    println!("Starting pumpkin-headless-client-bot (single server + headless bots)...");
 
     let temp_dir = match tempfile::tempdir() {
         Ok(dir) => dir,
@@ -83,7 +83,7 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(err) => {
-            eprintln!("pumpkin-tester FAILED:\n{err}");
+            eprintln!("pumpkin-headless-client-bot FAILED:\n{err}");
             ExitCode::FAILURE
         }
     }

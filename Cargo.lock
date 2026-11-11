@@ -3154,6 +3154,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-headless-client-bot"
+version = "0.2.2+26.3-26.63"
+dependencies = [
+ "bytes",
+ "pumpkin-config",
+ "pumpkin-core",
+ "pumpkin-data",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "rayon",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "pumpkin-inventory"
 version = "0.2.2+26.3-26.63"
 dependencies = [
@@ -3263,25 +3282,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "pumpkin-tester"
-version = "0.2.2+26.3-26.63"
-dependencies = [
- "bytes",
- "pumpkin-config",
- "pumpkin-core",
- "pumpkin-data",
- "pumpkin-protocol",
- "pumpkin-util",
- "rayon",
- "rustls",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "uuid",
 ]
 
 [[package]]
