@@ -120,6 +120,7 @@ pub enum ItemStackRequestAction {
     CraftRecipeAuto {
         recipe_id: VarUInt,
         repetitions: u8,
+        ingredients: Vec<StackRequestItem>,
     },
     CraftCreative {
         creative_item_id: VarUInt,
@@ -202,13 +203,15 @@ impl PacketRead for ItemStackRequestAction {
             11 => {
                 let recipe_id = VarUInt::read(buf)?;
                 let repetitions = u8::read(buf)?;
-                let count = collection_length(buf, "auto-craft ingredients")?;
-                for _ in 0..count {
-                    skip_autocraft_ingredient(buf)?;
+                let ingredients_len = collection_length(buf, "auto-craft ingredients")?;
+                let mut ingredients = Vec::with_capacity(ingredients_len);
+                for _ in 0..ingredients_len {
+                    ingredients.push(StackRequestItem::read(buf)?);
                 }
                 Ok(Self::CraftRecipeAuto {
                     recipe_id,
                     repetitions,
+                    ingredients,
                 })
             }
             12 => Ok(Self::CraftCreative {
@@ -251,33 +254,6 @@ impl PacketRead for ItemStackRequestAction {
             )),
         }
     }
-}
-
-fn skip_autocraft_ingredient<R: Read>(reader: &mut R) -> Result<(), Error> {
-    let descriptor_type = VarUInt::read(reader)?.0;
-    let _legacy_type = u8::read(reader)?;
-    match descriptor_type {
-        0 => {}
-        1 => {
-            let _identifier = String::read(reader)?;
-            let _aux = VarInt::read(reader)?;
-        }
-        2 => {
-            let _expression = String::read(reader)?;
-            let _version = i16::read(reader)?;
-        }
-        3 => {
-            let _tag = String::read(reader)?;
-        }
-        _ => {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("unknown item descriptor type {descriptor_type}"),
-            ));
-        }
-    }
-    let _count = u16::read(reader)?;
-    Ok(())
 }
 
 /// An individual inventory request containing slot manipulation actions.
