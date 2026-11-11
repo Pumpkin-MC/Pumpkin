@@ -454,7 +454,7 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
         .func_wrap("schedule-delayed-task", |store, (id, delay): (u32, u64)| {
             assert_eq!(delay, 20);
             store.data().ids.lock().expect("ids").insert("task", id);
-            Ok((400u32,))
+            Ok((400 + id,))
         })
         .expect("schedule task");
     scheduler
@@ -468,7 +468,7 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
                     .lock()
                     .expect("ids")
                     .insert("repeating", id);
-                Ok((401u32,))
+                Ok((400 + id,))
             },
         )
         .expect("schedule repeating task");

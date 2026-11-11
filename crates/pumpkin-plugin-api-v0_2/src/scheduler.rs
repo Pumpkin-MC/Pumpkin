@@ -31,7 +31,38 @@ enum TaskHandler {
 }
 
 static TASK_HANDLERS: Registry<TaskHandler> = Registry::new();
-static TASK_IDS: Mutex<BTreeMap<u32, u32>> = Mutex::new(BTreeMap::new());
+struct TaskIds {
+    by_task: BTreeMap<u32, u32>,
+    by_handler: BTreeMap<u32, u32>,
+}
+
+impl TaskIds {
+    const fn new() -> Self {
+        Self {
+            by_task: BTreeMap::new(),
+            by_handler: BTreeMap::new(),
+        }
+    }
+
+    fn insert(&mut self, task_id: u32, handler_id: u32) {
+        self.by_task.insert(task_id, handler_id);
+        self.by_handler.insert(handler_id, task_id);
+    }
+
+    fn remove_task(&mut self, task_id: u32) -> Option<u32> {
+        let handler_id = self.by_task.remove(&task_id)?;
+        self.by_handler.remove(&handler_id);
+        Some(handler_id)
+    }
+
+    fn remove_handler(&mut self, handler_id: u32) {
+        if let Some(task_id) = self.by_handler.remove(&handler_id) {
+            self.by_task.remove(&task_id);
+        }
+    }
+}
+
+static TASK_IDS: Mutex<TaskIds> = Mutex::new(TaskIds::new());
 
 pub(crate) async fn dispatch(handler_id: u32, server: Server) {
     let Some(handler) = TASK_HANDLERS.get(handler_id) else {
@@ -43,7 +74,7 @@ pub(crate) async fn dispatch(handler_id: u32, server: Server) {
             TASK_IDS
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .retain(|_, id| *id != handler_id);
+                .remove_handler(handler_id);
             // Another dispatch may already have cloned the entry. Only one may consume it.
             let callback = callback
                 .lock()
@@ -126,8 +157,30 @@ pub fn cancel_task(task_id: u32) {
     let handler_id = TASK_IDS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&task_id);
+        .remove_task(task_id);
     if let Some(handler_id) = handler_id {
         TASK_HANDLERS.take(handler_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskIds;
+
+    #[test]
+    fn completed_and_cancelled_tasks_remove_both_ids() {
+        let mut ids = TaskIds::new();
+        ids.insert(400, 0);
+        ids.insert(401, 1);
+        ids.insert(402, 2);
+
+        ids.remove_handler(1);
+        assert_eq!(ids.remove_task(401), None);
+        assert_eq!(ids.remove_task(400), Some(0));
+        ids.remove_handler(0);
+        assert_eq!(ids.by_handler.get(&2), Some(&402));
+        assert_eq!(ids.remove_task(402), Some(2));
+        assert!(ids.by_task.is_empty());
+        assert!(ids.by_handler.is_empty());
     }
 }
