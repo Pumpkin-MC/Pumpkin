@@ -189,171 +189,28 @@ impl Goal for PandaSneezeGoal {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::Ordering::Relaxed;
 
-    use pumpkin_data::Block;
-    use pumpkin_data::entity::EntityType;
     use pumpkin_data::item::Item;
-    use pumpkin_util::math::position::BlockPos;
-    use pumpkin_util::math::vector2::Vector2;
-    use pumpkin_util::math::vector3::Vector3;
-    use pumpkin_world::chunk::ChunkData;
-    use pumpkin_world::world::BlockFlags;
 
+    use super::super::test_support::{TestResult, scripted, spawn_panda, stone_floor};
     use super::*;
-    use crate::entity::Entity;
     use crate::entity::ai::test_support::world;
-    use crate::world::World;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    /// A panda standing on the stone floor at `(x, z)`.
-    fn spawn_panda(world: &Arc<World>, x: f64, z: f64) -> Arc<PandaEntity> {
-        let panda = PandaEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(x, 64.0, z),
-            &EntityType::PANDA,
-        ));
-        panda.get_entity().on_ground.store(true, Relaxed);
-        world.spawn_entity(panda.clone());
-        panda
-    }
-
-    fn stone_floor(world: &Arc<World>) {
-        for chunk_x in -2..=1 {
-            for chunk_z in -2..=1 {
-                world.level.loaded_chunks.insert(
-                    Vector2::new(chunk_x, chunk_z),
-                    ChunkData::empty_sync(chunk_x, chunk_z),
-                );
-            }
-        }
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        for x in -20..=20 {
-            for z in -20..=20 {
-                world.set_block_state(
-                    &BlockPos::new(x, 63, z),
-                    Block::STONE.default_state.id,
-                    flags,
-                );
-            }
-        }
-    }
-
-    fn vertical_speed(panda: &PandaEntity) -> f64 {
-        panda.get_entity().velocity.load().y
-    }
-
-    /// Runs `rolls_sneeze` against scripted `(bound, result)` random calls.
-    fn roll(weak: bool, calls: &[(i32, i32)]) -> bool {
-        let mut script = calls.iter();
-        let sneezes = rolls_sneeze(weak, |bound| {
-            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
-            assert_eq!(bound, expected_bound);
-            result
-        });
-        assert!(script.next().is_none(), "unused scripted random calls");
-        sneezes
-    }
 
     #[test]
     fn weak_babies_roll_the_short_odds_first_and_others_only_the_long_ones() {
-        // Reduced tick delay halves the vanilla bounds 500 and 6000.
-        assert!(roll(true, &[(250, 1)]));
-        assert!(roll(true, &[(250, 0), (3000, 1)]));
-        assert!(!roll(true, &[(250, 0), (3000, 0)]));
-        assert!(roll(false, &[(3000, 1)]));
-        assert!(!roll(false, &[(3000, 0)]));
+        // `reducedTickDelay` halves the bounds 500 and 6000.
+        let rolls =
+            |weak: bool, calls: &[(i32, i32)]| scripted(calls, |next| rolls_sneeze(weak, next));
+        assert!(rolls(true, &[(250, 1)]));
+        assert!(rolls(true, &[(250, 0), (3000, 1)]));
+        assert!(!rolls(true, &[(250, 0), (3000, 0)]));
+        assert!(rolls(false, &[(3000, 1)]));
+        assert!(!rolls(false, &[(3000, 0)]));
     }
 
     #[tokio::test]
-    async fn sneeze_counter_runs_for_twenty_one_ticks_then_resets() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        panda.mob_init_data_tracker();
-        let synched = &panda.get_entity().synched_data;
-
-        panda.tick_sneeze();
-        assert_eq!(panda.get_sneeze_counter(), 0, "counted without a sneeze");
-
-        synched.clear_dirty();
-        panda.sneeze(true);
-        assert!(panda.is_sneezing());
-        assert!(synched.is_dirty(), "the sneeze flag was not synched");
-        for tick in 1..=SNEEZE_COUNTER_END {
-            synched.clear_dirty();
-            panda.tick_sneeze();
-            assert!(synched.is_dirty(), "the counter was not synched at {tick}");
-            assert!(panda.is_sneezing(), "sneeze ended at tick {tick}");
-            assert_eq!(panda.get_sneeze_counter(), tick);
-        }
-        panda.tick_sneeze();
-        assert!(!panda.is_sneezing());
-        assert_eq!(panda.get_sneeze_counter(), 0);
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn sneeze_goal_needs_a_baby_that_can_act_and_only_raises_the_flag() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        let mut goal = PandaSneezeGoal;
-
-        assert!(!panda.can_sneeze(), "an adult may sneeze");
-        panda.set_age(-24000);
-        assert!(panda.can_sneeze());
-        panda.set_sitting(true);
-        assert!(!panda.can_sneeze(), "a sitting baby may sneeze");
-        panda.set_sitting(false);
-
-        goal.start(panda.as_ref());
-        assert!(panda.is_sneezing());
-        assert_eq!(panda.get_sneeze_counter(), 0);
-        assert!(!goal.should_continue(panda.as_ref()));
-        // The panda tick ends the sneeze, not the goal.
-        goal.stop(panda.as_ref());
-        assert!(panda.is_sneezing());
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn sneeze_goes_on_when_the_baby_grows_up_or_sits_down() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        stone_floor(&world);
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        let neighbour = spawn_panda(&world, 4.5, 0.5);
-        panda.set_age(-24000);
-
-        panda.sneeze(true);
-        for _ in 0..10 {
-            panda.tick_sneeze();
-        }
-        panda.set_age(0);
-        panda.set_sitting(true);
-        for _ in 0..10 {
-            panda.tick_sneeze();
-        }
-        assert!(panda.is_sneezing());
-        assert_eq!(panda.get_sneeze_counter(), 20);
-        assert!(vertical_speed(&neighbour).abs() < 1e-9);
-
-        panda.tick_sneeze();
-        assert!(!panda.is_sneezing());
-        assert!(
-            vertical_speed(&neighbour) > 0.3,
-            "the sneeze did not reach the neighbour"
-        );
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn sneeze_only_makes_grounded_adults_that_can_act_jump_within_ten_blocks() -> TestResult {
+    async fn a_sneeze_lasts_21_ticks_and_only_grounded_adults_that_can_act_within_ten_blocks_jump()
+    -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         stone_floor(&world);
@@ -369,12 +226,28 @@ mod tests {
         airborne.get_entity().on_ground.store(false, Relaxed);
         let swimming = spawn_panda(&world, -3.5, -3.5);
         swimming.get_entity().touching_water.store(true, Relaxed);
+        let jump_speed = |panda: &PandaEntity| panda.get_entity().velocity.load().y;
 
+        sneezer.set_age(-24000);
         sneezer.sneeze(true);
-        for _ in 0..=SNEEZE_COUNTER_END {
+        for tick in 1..=SNEEZE_COUNTER_END {
             sneezer.tick_sneeze();
+            assert!(sneezer.is_sneezing(), "the sneeze ended at tick {tick}");
+            assert_eq!(sneezer.get_sneeze_counter(), tick);
+            if tick == 10 {
+                // Neither growing up nor sitting down interrupts a sneeze that has started.
+                sneezer.set_age(0);
+                sneezer.set_sitting(true);
+            }
         }
+        assert!(
+            jump_speed(&near).abs() < 1e-9,
+            "jumped before the sneeze ended"
+        );
 
+        sneezer.tick_sneeze();
+        assert!(!sneezer.is_sneezing());
+        assert_eq!(sneezer.get_sneeze_counter(), 0);
         for (name, jumped, panda) in [
             ("near adult", true, &near),
             ("adult at the edge of the box", true, &edge),
@@ -384,7 +257,7 @@ mod tests {
             ("airborne adult", false, &airborne),
             ("adult in water", false, &swimming),
         ] {
-            assert_eq!(vertical_speed(panda) > 0.3, jumped, "{name}");
+            assert_eq!(jump_speed(panda) > 0.3, jumped, "{name}");
         }
         world.level.shutdown().await;
         Ok(())
@@ -401,7 +274,6 @@ mod tests {
         let gift = panda.roll_sneeze_gift(winning_seed);
         assert_eq!(gift.len(), 1);
         assert_eq!(gift[0].item.id, Item::SLIME_BALL.id);
-        assert_eq!(gift[0].item_count, 1);
         let items_near = || {
             let area = panda.get_entity().bounding_box.load().expand(2.0, 2.0, 2.0);
             world

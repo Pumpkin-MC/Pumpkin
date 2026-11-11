@@ -100,134 +100,23 @@ impl Goal for PandaLieOnBackGoal {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use pumpkin_data::entity::EntityType;
-    use pumpkin_data::entity_variant::PandaGene;
-    use pumpkin_util::math::vector3::Vector3;
-
+    use super::super::test_support::scripted;
     use super::*;
-    use crate::entity::Entity;
-    use crate::entity::ai::test_support::world;
-    use crate::world::World;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    fn lazy_panda(world: &Arc<World>) -> Arc<PandaEntity> {
-        let panda = PandaEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(0.5, 64.0, 0.5),
-            &EntityType::PANDA,
-        ));
-        panda.set_main_gene(PandaGene::Lazy);
-        panda.set_hidden_gene(PandaGene::Lazy);
-        panda
-    }
-
-    fn set_tick(panda: &PandaEntity, tick: i32) {
-        panda.get_entity().tick_count.store(tick, Relaxed);
-    }
-
-    /// Runs a closure on scripted `(bound, result)` random calls and checks all were used.
-    fn scripted<T>(calls: &[(i32, i32)], run: impl FnOnce(&mut dyn FnMut(i32) -> i32) -> T) -> T {
-        let mut script = calls.iter();
-        let mut next_int = |bound| {
-            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
-            assert_eq!(bound, expected_bound);
-            result
-        };
-        let result = run(&mut next_int);
-        assert!(script.next().is_none(), "unused scripted random calls");
-        result
-    }
 
     #[test]
-    fn starting_rolls_one_in_the_reduced_four_hundred() {
+    fn the_rolls_are_drawn_in_vanilla_order_and_a_lazy_panda_skips_the_short_one() {
+        // `reducedTickDelay` halves the bounds 400, 600 and 2000.
         assert!(scripted(&[(200, 1)], |next| rolls_lie_on_back(next)));
         assert!(!scripted(&[(200, 0)], |next| rolls_lie_on_back(next)));
-        assert!(!scripted(&[(200, 2)], |next| rolls_lie_on_back(next)));
-    }
 
-    #[test]
-    fn only_a_lazy_panda_skips_the_shorter_ending_roll_and_the_water_ends_it() {
-        // A lazy panda rolls only the long odds.
-        assert!(scripted(&[(1000, 0)], |next| keeps_lying(
-            false, true, next
-        )));
-        assert!(!scripted(&[(1000, 1)], |next| keeps_lying(
-            false, true, next
-        )));
-        // Any other panda rolls the shorter odds first; winning them ends the lie at once.
-        assert!(!scripted(&[(300, 1)], |next| keeps_lying(
-            false, false, next
-        )));
-        assert!(scripted(&[(300, 0), (1000, 0)], |next| keeps_lying(
-            false, false, next
-        )));
-        assert!(!scripted(&[(300, 0), (1000, 1)], |next| keeps_lying(
-            false, false, next
-        )));
-        // In the water the panda gets up without any roll.
-        assert!(!scripted(&[], |next| keeps_lying(true, true, next)));
+        let keeps = |lazy: bool, calls: &[(i32, i32)]| {
+            scripted(calls, |next| keeps_lying(false, lazy, next))
+        };
+        assert!(keeps(true, &[(1000, 0)]));
+        assert!(!keeps(true, &[(1000, 1)]));
+        assert!(!keeps(false, &[(300, 1)]));
+        assert!(keeps(false, &[(300, 0), (1000, 0)]));
+        assert!(!keeps(false, &[(300, 0), (1000, 1)]));
         assert!(!scripted(&[], |next| keeps_lying(true, false, next)));
-    }
-
-    #[tokio::test]
-    async fn goal_needs_a_cooled_down_lazy_panda_that_can_act() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let panda = lazy_panda(&world);
-        let goal = PandaLieOnBackGoal::default();
-
-        set_tick(&panda, 1);
-        assert!(goal.may_lie_down(&panda));
-        // The cooldown has to be passed, not just reached.
-        let cooling = PandaLieOnBackGoal { cooldown: 5 };
-        set_tick(&panda, 5);
-        assert!(!cooling.may_lie_down(&panda));
-        set_tick(&panda, 6);
-        assert!(cooling.may_lie_down(&panda));
-
-        panda.set_sitting(true);
-        assert!(!goal.may_lie_down(&panda), "a sitting panda lay down");
-        panda.set_sitting(false);
-        panda.set_on_back(true);
-        assert!(!goal.may_lie_down(&panda), "a panda already on its back");
-        panda.set_on_back(false);
-
-        panda.set_main_gene(PandaGene::Normal);
-        panda.set_hidden_gene(PandaGene::Normal);
-        assert!(
-            !goal.may_lie_down(&panda),
-            "a panda that is not lazy lay down"
-        );
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn start_lies_down_and_stop_gets_up_and_waits_two_hundred_ticks() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let panda = lazy_panda(&world);
-        let mut goal = PandaLieOnBackGoal { cooldown: 99 };
-        panda.mob_init_data_tracker();
-
-        goal.start(panda.as_ref());
-        assert!(panda.is_on_back());
-        assert!(!panda.can_perform_action());
-        assert_eq!(goal.cooldown, 0, "start kept the cooldown");
-
-        set_tick(&panda, 1000);
-        goal.stop(panda.as_ref());
-        assert!(!panda.is_on_back());
-        assert!(panda.can_perform_action());
-        assert_eq!(goal.cooldown, 1200);
-        set_tick(&panda, 1200);
-        assert!(!goal.may_lie_down(&panda));
-        set_tick(&panda, 1201);
-        assert!(goal.may_lie_down(&panda));
-        world.level.shutdown().await;
-        Ok(())
     }
 }

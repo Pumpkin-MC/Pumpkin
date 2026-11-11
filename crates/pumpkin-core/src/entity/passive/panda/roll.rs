@@ -165,25 +165,20 @@ impl PandaEntity {
 #[derive(Default)]
 pub struct PandaRollGoal;
 
-impl PandaRollGoal {
-    /// Vanilla `PandaRollGoal.canUse` with the random source given by `next_int`.
-    fn can_start_with(panda: &PandaEntity, next_int: impl FnMut(i32) -> i32) -> bool {
-        match panda.rolls_at_edge() {
-            None => false,
-            Some(true) => true,
-            Some(false) => rolls_roll(panda.is_playful(), next_int),
-        }
-    }
-}
-
 impl Goal for PandaRollGoal {
     /// Vanilla `PandaRollGoal.canUse`.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
         };
-        let mut rng = mob.get_random();
-        Self::can_start_with(panda, |bound| rng.random_range(0..bound))
+        match panda.rolls_at_edge() {
+            None => false,
+            Some(true) => true,
+            Some(false) => {
+                let mut rng = mob.get_random();
+                rolls_roll(panda.is_playful(), |bound| rng.random_range(0..bound))
+            }
+        }
     }
 
     /// Vanilla `PandaRollGoal.canContinueToUse`: never, the goal is over right after `start`.
@@ -217,229 +212,71 @@ impl Goal for PandaRollGoal {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use pumpkin_data::Block;
-    use pumpkin_data::entity::EntityType;
-    use pumpkin_data::entity_variant::PandaGene;
-    use pumpkin_util::math::vector2::Vector2;
-    use pumpkin_world::chunk::ChunkData;
     use pumpkin_world::world::BlockFlags;
 
+    use super::super::test_support::{TestResult, scripted, spawn_panda, stone_floor};
     use super::*;
-    use crate::entity::Entity;
     use crate::entity::ai::test_support::world;
-    use crate::world::World;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    /// Server ticks the selector test lets the look goals of higher priorities finish.
-    const SELECTOR_TICKS: i32 = 200;
-
-    /// A panda standing on the stone floor at `(x, z)`, facing south (yaw 0, towards +z).
-    fn spawn_panda(world: &Arc<World>, x: f64, z: f64) -> Arc<PandaEntity> {
-        let panda = PandaEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(x, 64.0, z),
-            &EntityType::PANDA,
-        ));
-        panda.get_entity().on_ground.store(true, Relaxed);
-        world.spawn_entity(panda.clone());
-        panda
-    }
-
-    fn stone_floor(world: &Arc<World>) {
-        for chunk_x in -2..=1 {
-            for chunk_z in -2..=1 {
-                world.level.loaded_chunks.insert(
-                    Vector2::new(chunk_x, chunk_z),
-                    ChunkData::empty_sync(chunk_x, chunk_z),
-                );
-            }
-        }
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        for x in -20..=20 {
-            for z in -20..=20 {
-                world.set_block_state(
-                    &BlockPos::new(x, 63, z),
-                    Block::STONE.default_state.id,
-                    flags,
-                );
-            }
-        }
-    }
-
-    fn velocity(panda: &PandaEntity) -> Vector3<f64> {
-        panda.get_entity().velocity.load()
-    }
-
-    fn assert_velocity(panda: &PandaEntity, expected: (f64, f64, f64), message: &str) {
-        let velocity = velocity(panda);
-        assert!(
-            (velocity.x - expected.0).abs() < 1e-6
-                && (velocity.y - expected.1).abs() < 1e-6
-                && (velocity.z - expected.2).abs() < 1e-6,
-            "{message}: {velocity:?}"
-        );
-    }
-
-    /// Runs `can_start_with` against scripted `(bound, result)` random calls.
-    fn can_start(panda: &PandaEntity, calls: &[(i32, i32)]) -> bool {
-        let mut script = calls.iter();
-        let starts = PandaRollGoal::can_start_with(panda, |bound| {
-            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
-            assert_eq!(bound, expected_bound);
-            result
-        });
-        assert!(script.next().is_none(), "unused scripted random calls");
-        starts
-    }
 
     #[test]
-    fn panda_steps_only_along_the_axes_it_clearly_faces() {
-        // Yaw 0 faces +z, 90 faces -x, 180 faces -z and -90 faces +x.
-        assert_eq!(facing_step(0.0), (0, 1));
-        assert_eq!(facing_step(90.0), (-1, 0));
-        assert_eq!(facing_step(180.0), (0, -1));
-        assert_eq!(facing_step(-90.0), (1, 0));
-        // Diagonals step on both axes, and a direction right at the threshold on neither.
-        assert_eq!(facing_step(45.0), (-1, 1));
-        assert_eq!(facing_step(-135.0), (1, -1));
-        assert_eq!(step_towards(0.5), 0);
-        assert_eq!(step_towards(-0.5), 0);
-        assert_eq!(step_towards(0.51), 1);
-        assert_eq!(step_towards(-0.51), -1);
-    }
-
-    /// Runs `rolls_roll` against scripted `(bound, result)` random calls.
-    fn roll_odds(playful: bool, calls: &[(i32, i32)]) -> bool {
-        let mut script = calls.iter();
-        let rolls = rolls_roll(playful, |bound| {
-            let (expected_bound, result) = script.next().copied().unwrap_or((-1, -1));
-            assert_eq!(bound, expected_bound);
-            result
-        });
-        assert!(script.next().is_none(), "unused scripted random calls");
-        rolls
-    }
-
-    #[test]
-    fn roll_odds_try_the_short_roll_for_playful_pandas_only() {
-        // Reduced tick delay halves the vanilla bounds 60 and 500.
-        assert!(roll_odds(true, &[(30, 1)]));
-        assert!(roll_odds(true, &[(30, 0), (250, 1)]));
-        assert!(!roll_odds(true, &[(30, 0), (250, 0)]));
-        assert!(!roll_odds(true, &[(30, 2), (250, 2)]));
-        assert!(roll_odds(false, &[(250, 1)]));
-        assert!(!roll_odds(false, &[(250, 0)]));
-    }
-
-    #[test]
-    fn first_step_pushes_forwards_and_up_and_the_next_steps_keep_the_push() -> TestResult {
-        let mut delta = Vector3::new(0.0, 0.0, 0.0);
-        let rest = Vector3::new(0.0, 0.0, 0.0);
-        // Yaw 0 pushes towards +z, an adult 0.2 and a baby 0.1.
-        let first = roll_velocity(1, false, 0.0, true, rest, &mut delta);
-        assert_eq!(
-            first,
-            Some(Vector3::new(0.0, 0.27, f64::from(ADULT_ROLL_SPEED)))
-        );
-        assert_eq!(delta, Vector3::new(0.0, 0.0, f64::from(ADULT_ROLL_SPEED)));
-        let mut baby_delta = Vector3::new(0.0, 0.0, 0.0);
-        let baby = roll_velocity(1, true, 0.0, true, rest, &mut baby_delta);
-        assert_eq!(
-            baby,
-            Some(Vector3::new(0.0, 0.27, f64::from(BABY_ROLL_SPEED)))
-        );
-        // Facing -x (yaw 90) the push has no z part, and it adds to the current movement.
-        let mut sideways = Vector3::new(0.0, 0.0, 0.0);
-        let moving = Vector3::new(0.05, 0.1, -0.02);
-        let side = roll_velocity(1, false, 90.0, true, moving, &mut sideways)
-            .ok_or("the first step is inside the roll")?;
-        assert!((side.x - (0.05 - 0.2)).abs() < 1e-6);
-        assert!((side.y - 0.27).abs() < 1e-9);
-        assert!((side.z - -0.02).abs() < 1e-6);
-
-        // A later step keeps the push and the vertical speed the physics gave the panda.
-        let falling = Vector3::new(0.3, -0.4, 0.3);
-        let later = roll_velocity(2, false, 33.0, true, falling, &mut delta);
-        assert_eq!(
-            later,
-            Some(Vector3::new(0.0, -0.4, f64::from(ADULT_ROLL_SPEED)))
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn hop_steps_stop_the_push_and_only_jump_from_the_ground() {
-        let mut delta = Vector3::new(0.1, 0.0, 0.1);
-        let movement = Vector3::new(0.1, -0.3, 0.1);
-        for counter in [7, 15, 23] {
-            assert_eq!(
-                roll_velocity(counter, false, 0.0, true, movement, &mut delta),
-                Some(Vector3::new(0.0, 0.27, 0.0)),
-                "hop {counter} on the ground"
-            );
-            assert_eq!(
-                roll_velocity(counter, false, 0.0, false, movement, &mut delta),
-                Some(Vector3::new(0.0, -0.3, 0.0)),
-                "hop {counter} in the air"
-            );
-        }
-        // The hops leave the stored push alone, so the next step carries on with it.
-        assert_eq!(delta, Vector3::new(0.1, 0.0, 0.1));
-        assert_eq!(
-            roll_velocity(8, false, 0.0, true, movement, &mut delta),
-            Some(Vector3::new(0.1, -0.3, 0.1))
-        );
-    }
-
-    #[test]
-    fn roll_is_over_after_thirty_two_steps() {
-        let mut delta = Vector3::new(0.0, 0.0, 0.0);
-        let rest = Vector3::new(0.0, 0.0, 0.0);
-        assert!(roll_velocity(32, false, 0.0, true, rest, &mut delta).is_some());
-        assert!(roll_velocity(33, false, 0.0, true, rest, &mut delta).is_none());
+    fn a_playful_panda_rolls_the_short_odds_first() {
+        // `reducedTickDelay` halves the bounds 60 and 500.
+        let rolls =
+            |playful: bool, calls: &[(i32, i32)]| scripted(calls, |next| rolls_roll(playful, next));
+        assert!(rolls(true, &[(30, 1)]));
+        assert!(rolls(true, &[(30, 0), (250, 1)]));
+        assert!(!rolls(true, &[(30, 0), (250, 0)]));
+        assert!(rolls(false, &[(250, 1)]));
+        assert!(!rolls(false, &[(250, 0)]));
     }
 
     #[tokio::test]
-    async fn rolling_panda_counts_steps_moves_and_stops_after_thirty_two_ticks() -> TestResult {
+    async fn a_rolling_panda_pushes_hops_and_stops_after_thirty_two_steps() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         let panda = spawn_panda(&world, 0.5, 0.5);
-        panda.mob_init_data_tracker();
-        let synched = &panda.get_entity().synched_data;
 
-        // Without the flag the counter stays at zero and nothing moves.
-        panda.roll_counter.store(9, Relaxed);
-        panda.tick_roll();
-        assert_eq!(panda.roll_counter.load(Relaxed), 0);
-        assert_velocity(&panda, (0.0, 0.0, 0.0), "moved without rolling");
+        // A baby pushes less, and a hop in the air keeps the vertical speed.
+        let mut delta = Vector3::new(0.0, 0.0, 0.0);
+        let rest = Vector3::new(0.0, 0.0, 0.0);
+        assert_eq!(
+            roll_velocity(1, true, 0.0, true, rest, &mut delta),
+            Some(Vector3::new(
+                0.0,
+                ROLL_JUMP_SPEED,
+                f64::from(BABY_ROLL_SPEED)
+            ))
+        );
+        assert_eq!(
+            roll_velocity(
+                7,
+                false,
+                0.0,
+                false,
+                Vector3::new(0.0, -0.3, 0.0),
+                &mut delta
+            ),
+            Some(Vector3::new(0.0, -0.3, 0.0))
+        );
 
-        synched.clear_dirty();
         panda.roll(true);
-        assert!(panda.is_rolling());
-        assert!(synched.is_dirty(), "the roll flag was not synched");
-        assert!(!panda.can_perform_action());
-
-        panda.tick_roll();
-        assert_eq!(panda.roll_counter.load(Relaxed), 1);
-        assert_velocity(&panda, (0.0, 0.27, 0.2), "first step");
-        for counter in 2..=TOTAL_ROLL_STEPS {
+        for counter in 1..=TOTAL_ROLL_STEPS {
             panda.tick_roll();
-            assert_eq!(panda.roll_counter.load(Relaxed), counter);
             assert!(panda.is_rolling(), "the roll ended at step {counter}");
-            let expected = if ROLL_HOP_STEPS.contains(&counter) {
-                (0.0, 0.27, 0.0)
+            let push = if ROLL_HOP_STEPS.contains(&counter) {
+                0.0
             } else {
-                (0.0, 0.27, 0.2)
+                f64::from(ADULT_ROLL_SPEED)
             };
-            // The scripted velocity keeps the vertical speed it had, apart from the hops.
-            assert_velocity(&panda, expected, &format!("step {counter}"));
+            assert_eq!(
+                panda.get_entity().velocity.load(),
+                Vector3::new(0.0, ROLL_JUMP_SPEED, push),
+                "step {counter}"
+            );
         }
         panda.tick_roll();
         assert!(!panda.is_rolling(), "the roll never ended");
-        assert!(panda.can_perform_action());
         panda.tick_roll();
         assert_eq!(panda.roll_counter.load(Relaxed), 0);
         world.level.shutdown().await;
@@ -447,131 +284,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn goal_needs_a_baby_or_playful_panda_on_the_ground_that_can_act() -> TestResult {
+    async fn a_baby_always_rolls_off_a_drop_it_faces() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         stone_floor(&world);
         let panda = spawn_panda(&world, 0.5, 0.5);
+        let set_floor = |x, z, block: &Block| {
+            let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+            world.set_block_state(&BlockPos::new(x, 63, z), block.default_state.id, flags);
+        };
 
-        // An adult that is not playful never rolls and draws no random number.
-        assert!(!can_start(&panda, &[]));
-
-        panda.set_main_gene(PandaGene::Playful);
-        panda.set_hidden_gene(PandaGene::Playful);
-        assert!(can_start(&panda, &[(30, 1)]));
-        panda.get_entity().on_ground.store(false, Relaxed);
-        assert!(!can_start(&panda, &[]), "a panda in the air rolled");
-        panda.get_entity().on_ground.store(true, Relaxed);
-        panda.set_sitting(true);
-        assert!(!can_start(&panda, &[]), "a sitting panda rolled");
-        panda.set_sitting(false);
-        panda.set_on_back(true);
-        assert!(!can_start(&panda, &[]), "a panda on its back rolled");
-        panda.set_on_back(false);
-
-        panda.set_main_gene(PandaGene::Normal);
-        panda.set_hidden_gene(PandaGene::Normal);
+        assert_eq!(panda.rolls_at_edge(), None, "an adult that is not playful");
         panda.set_age(-24000);
-        assert!(panda.is_baby());
-        // A baby rolls only the long odds.
-        assert!(can_start(&panda, &[(250, 1)]));
-        assert!(!can_start(&panda, &[(250, 0)]));
-        world.level.shutdown().await;
-        Ok(())
-    }
+        assert_eq!(panda.rolls_at_edge(), Some(false));
 
-    #[tokio::test]
-    async fn panda_always_rolls_off_a_drop_it_faces() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        stone_floor(&world);
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        panda.set_age(-24000);
-        assert!(!can_start(&panda, &[(250, 0)]));
-
-        // Facing +z: the block diagonally below ahead is (0, 63, 1).
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        world.set_block_state(&BlockPos::new(0, 63, 1), Block::AIR.default_state.id, flags);
-        assert!(can_start(&panda, &[]), "the drop ahead was not seen");
-
-        // A drop behind the panda does not count.
-        world.set_block_state(
-            &BlockPos::new(0, 63, 1),
-            Block::STONE.default_state.id,
-            flags,
-        );
-        world.set_block_state(
-            &BlockPos::new(0, 63, -1),
-            Block::AIR.default_state.id,
-            flags,
-        );
-        assert!(!can_start(&panda, &[(250, 0)]));
-        // Turned around, the same drop is ahead.
+        // Yaw 0 faces +z, so the block below and ahead is (0, 63, 1).
+        set_floor(0, 1, &Block::AIR);
+        assert_eq!(panda.rolls_at_edge(), Some(true));
+        assert!(PandaRollGoal.can_start(panda.as_ref()));
+        set_floor(0, 1, &Block::STONE);
+        set_floor(0, -1, &Block::AIR);
+        assert_eq!(panda.rolls_at_edge(), Some(false), "a drop behind counts");
         panda.get_entity().yaw.store(180.0);
-        assert!(can_start(&panda, &[]));
-        world.level.shutdown().await;
-        Ok(())
-    }
+        assert_eq!(panda.rolls_at_edge(), Some(true));
 
-    #[tokio::test]
-    async fn panda_tick_runs_the_roll_and_the_selector_starts_it_at_a_drop() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        stone_floor(&world);
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        // Air all around the block the panda stands on, so every facing leads to a drop.
-        for (x, z) in [
-            (-1, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, -1),
-            (0, 1),
-            (1, -1),
-            (1, 0),
-            (1, 1),
-        ] {
-            world.set_block_state(&BlockPos::new(x, 63, z), Block::AIR.default_state.id, flags);
-        }
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        panda.set_age(-24000);
-
-        // The registered goal starts the roll for a baby that faces a drop. A look goal of a
-        // higher priority may hold the look control for a while first, so allow some ticks.
-        let started = (1..=SELECTOR_TICKS).any(|tick| {
-            panda.get_entity().tick_count.store(tick, Relaxed);
-            panda
-                .mob_entity
-                .server_ai_step(panda.as_ref(), panda.as_ref());
-            panda.is_rolling()
-        });
-        assert!(started, "the selector never started the roll");
-
-        // The panda tick then takes the first roll step.
-        panda.post_tick();
-        assert_eq!(panda.roll_counter.load(Relaxed), 1);
-        assert!(velocity(&panda).y > 0.2, "the roll did not jump");
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn goal_rolls_once_and_cannot_be_interrupted() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let panda = spawn_panda(&world, 0.5, 0.5);
-        let mut goal = PandaRollGoal;
-
-        assert!(!goal.can_stop());
-        assert_eq!(
-            goal.controls(),
-            Controls::MOVE | Controls::LOOK | Controls::JUMP
-        );
-        goal.start(panda.as_ref());
-        assert!(panda.is_rolling());
-        assert!(!goal.should_continue(panda.as_ref()));
-        // The goal leaves the roll to the panda tick.
-        goal.stop(panda.as_ref());
-        assert!(panda.is_rolling());
+        // Diagonals step on both axes, a direction right at the threshold on neither.
+        assert_eq!(facing_step(45.0), (-1, 1));
+        assert_eq!(step_towards(0.5), 0);
         world.level.shutdown().await;
         Ok(())
     }

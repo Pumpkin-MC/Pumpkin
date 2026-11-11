@@ -278,22 +278,6 @@ impl PandaSitGoal {
         }
         next_int(to_goal_ticks(SIT_FORCED_END_ODDS)) != 1
     }
-
-    /// Vanilla `stop` with `next_int(bound)` standing for `RandomSource.nextInt`: an item in the
-    /// mouth is dropped and the panda waits before it sits down again. It stands up either way.
-    pub(super) fn leave_sit(&mut self, panda: &PandaEntity, mut next_int: impl FnMut(i32) -> i32) {
-        if panda.drop_main_hand_item() {
-            let range = if panda.is_lazy() {
-                LAZY_SIT_COOLDOWN_RANGE_SECONDS
-            } else {
-                SIT_COOLDOWN_RANGE_SECONDS
-            };
-            let wait_seconds = next_int(range) + SIT_COOLDOWN_MIN_SECONDS;
-            self.cooldown =
-                panda.get_entity().tick_count.load(Relaxed) + wait_seconds * TICKS_PER_SECOND;
-        }
-        panda.set_sitting(false);
-    }
 }
 
 impl Goal for PandaSitGoal {
@@ -356,10 +340,20 @@ impl Goal for PandaSitGoal {
 
     /// Vanilla `stop`.
     fn stop(&mut self, mob: &dyn Mob) {
-        if let Some(panda) = as_panda(mob) {
-            let mut rng = panda.get_random();
-            self.leave_sit(panda, |bound| rng.random_range(0..bound));
+        let Some(panda) = as_panda(mob) else {
+            return;
+        };
+        if panda.drop_main_hand_item() {
+            let range = if panda.is_lazy() {
+                LAZY_SIT_COOLDOWN_RANGE_SECONDS
+            } else {
+                SIT_COOLDOWN_RANGE_SECONDS
+            };
+            let wait_seconds = panda.get_random().random_range(0..range) + SIT_COOLDOWN_MIN_SECONDS;
+            self.cooldown =
+                panda.get_entity().tick_count.load(Relaxed) + wait_seconds * TICKS_PER_SECOND;
         }
+        panda.set_sitting(false);
     }
 
     /// Vanilla `PandaSitGoal` flags: move only.
