@@ -33,6 +33,32 @@ pub struct WasmSignatureEnvelope {
     pub algorithm: String,
     pub public_key_hex: String,
     pub signature_hex: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata_signature_hex: Option<String>,
+}
+
+/// Builds a canonical, deterministic byte representation of `PumpkinMetadata` for Ed25519 signing.
+#[must_use]
+pub fn canonical_metadata_bytes(meta: &PumpkinMetadata) -> Vec<u8> {
+    let clean_issued_at = meta
+        .issued_at
+        .split('#')
+        .next()
+        .unwrap_or(meta.issued_at.as_str());
+    format!(
+        "pumpkin_meta_v1|url={}|plugin_id={}|name={}|ver={}|dev_id={}|dev_name={}|paid={}|user_id={}|lic={}|issued={}",
+        meta.marketplace_url,
+        meta.plugin_id,
+        meta.plugin_name,
+        meta.version,
+        meta.dev_id,
+        meta.dev_name,
+        meta.is_paid,
+        meta.user_id,
+        meta.license_key.as_deref().unwrap_or(""),
+        clean_issued_at,
+    )
+    .into_bytes()
 }
 
 /// Keypair manager for Ed25519 signing and verification.
@@ -63,6 +89,13 @@ impl KeyManager {
     #[must_use]
     pub fn sign(&self, data: &[u8]) -> Vec<u8> {
         self.signing_key.sign(data).to_bytes().to_vec()
+    }
+
+    /// Signs `PumpkinMetadata` with the marketplace Ed25519 private key.
+    #[must_use]
+    pub fn sign_metadata(&self, meta: &PumpkinMetadata) -> String {
+        let payload = canonical_metadata_bytes(meta);
+        hex::encode(self.sign(&payload))
     }
 }
 
@@ -136,6 +169,7 @@ pub fn inject_pumpkin_sections(
         algorithm: "Ed25519".into(),
         public_key_hex: key_manager.public_key_hex(),
         signature_hex: hex::encode(&raw_sig),
+        metadata_signature_hex: Some(key_manager.sign_metadata(meta)),
     };
     let sig_json = serde_json::to_vec(&sig_envelope).map_err(|e| e.to_string())?;
 
@@ -403,11 +437,23 @@ pub fn verify_pumpkin_wasm(wasm_bytes: &[u8], public_key_hex: &str) -> Verificat
             public_key_hex: target_pub_key,
         }
     } else {
+        let mut verified_meta = meta;
+        if !verified_meta.issued_at.contains('#')
+            && let Some(ref env) = sig_envelope
+        {
+            let sig_proof = env
+                .metadata_signature_hex
+                .as_deref()
+                .unwrap_or(&env.signature_hex);
+            if !sig_proof.is_empty() {
+                verified_meta.issued_at = format!("{}#{}", verified_meta.issued_at, sig_proof);
+            }
+        }
         VerificationResult {
             is_valid: true,
             is_signed: true,
             error: None,
-            metadata: Some(meta),
+            metadata: Some(verified_meta),
             signature_envelope: sig_envelope,
             public_key_hex: target_pub_key,
         }
