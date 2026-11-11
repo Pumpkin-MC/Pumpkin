@@ -190,6 +190,13 @@ impl CatEntity {
         );
     }
 
+    pub fn hiss(&self) {
+        self.make_sound(
+            self.get_sound_variant()
+                .hiss_sound(self.mob_entity.living_entity.is_baby()),
+        );
+    }
+
     fn get_sound_variant(&self) -> CatSoundVariant {
         CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
     }
