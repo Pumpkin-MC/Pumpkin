@@ -50,6 +50,7 @@ impl AnimalMakeLove {
             .find_closest(&tick.visibility(), |entity| {
                 entity.get_entity().entity_type == self.partner_type
                     && entity.get_mob().and_then(|mob| mob.as_animal()).is_some()
+                    && entity.is_in_love()
                     && animal.can_mate(entity.as_ref())
                     && !entity.is_panicking()
             })
@@ -109,6 +110,8 @@ impl Behavior for AnimalMakeLove {
             return false;
         };
         partner.get_entity().is_alive()
+            && tick.mob.get_mob_entity().is_in_love()
+            && partner.is_in_love()
             && tick
                 .mob
                 .as_animal()

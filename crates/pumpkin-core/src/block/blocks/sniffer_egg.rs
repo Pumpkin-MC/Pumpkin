@@ -46,6 +46,8 @@ impl BlockBehaviour for SnifferEggBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
+        let boosted = Self::hatch_boost(args.world.as_ref(), args.position);
+        let delay = Self::get_hatch_delay(boosted);
         let mut props = SnifferEggLikeProperties::from_state_id(state_id);
 
         if props.hatch < 2 {
@@ -62,13 +64,28 @@ impl BlockBehaviour for SnifferEggBlock {
                 &args.position.to_f64(),
             );
 
-            let boosted = Self::hatch_boost(args.world.as_ref(), args.position);
-            let delay = Self::get_hatch_delay(boosted);
             args.world
                 .schedule_block_tick(args.block, *args.position, delay, TickPriority::Normal);
         } else {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+            if args
+                .world
+                .break_block(
+                    args.position,
+                    None,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+                )
+                .is_none()
+            {
+                if args.world.get_block_state_id(args.position) == state_id {
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        delay,
+                        TickPriority::Normal,
+                    );
+                }
+                return;
+            }
 
             args.world.play_sound(
                 Sound::BlockSnifferEggHatch,

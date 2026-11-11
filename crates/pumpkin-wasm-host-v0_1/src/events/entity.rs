@@ -872,6 +872,7 @@ impl ToFromWasmEvent for EntityDropItemEvent {
         cleanup_event(&event, state);
         if let Event::EntityDropItemEvent(data) = event {
             self.cancelled = data.cancelled;
+            self.count = data.count;
         }
     }
 

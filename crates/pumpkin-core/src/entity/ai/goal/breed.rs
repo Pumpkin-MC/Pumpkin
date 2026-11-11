@@ -15,6 +15,7 @@ use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type:
 use super::{Controls, Goal, GoalReach};
 
 const PARTNER_RANGE: f64 = 8.0;
+const BREEDING_COOLDOWN: i32 = 6000;
 
 pub struct BreedGoal {
     speed: f64,
@@ -112,9 +113,9 @@ impl BreedGoal {
             mob_entity.reset_love_ticks();
             mob_entity
                 .breeding_cooldown
-                .store(6000, std::sync::atomic::Ordering::Relaxed);
+                .store(BREEDING_COOLDOWN, std::sync::atomic::Ordering::Relaxed);
             mate.reset_love();
-            mate.set_breeding_cooldown(6000);
+            mate.set_breeding_cooldown(BREEDING_COOLDOWN);
             return;
         };
 
@@ -147,16 +148,15 @@ impl BreedGoal {
         mob_entity.reset_love_ticks();
         mob_entity
             .breeding_cooldown
-            .store(6000, std::sync::atomic::Ordering::Relaxed);
+            .store(BREEDING_COOLDOWN, std::sync::atomic::Ordering::Relaxed);
 
         mate.reset_love();
-        mate.set_breeding_cooldown(6000);
+        mate.set_breeding_cooldown(BREEDING_COOLDOWN);
 
-        if let Some(baby) = baby {
+        let animal_without_offspring = baby.map_or(animal, |baby| {
             world_full.spawn_entity(baby);
-        } else if let Some(animal) = animal {
-            animal.on_bred_without_offspring(brain);
-        }
+            None
+        });
 
         world_full.send_entity_status(
             entity,
@@ -168,6 +168,9 @@ impl BreedGoal {
             && experience > 0
         {
             ExperienceOrbEntity::spawn(&world_full, parent_pos, experience);
+        }
+        if let Some(animal) = animal_without_offspring {
+            animal.on_bred_without_offspring(brain);
         }
     }
 }

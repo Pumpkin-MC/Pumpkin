@@ -448,6 +448,9 @@ pub trait PathNavigationTrait: Send + Sync {
     fn set_max_visited_nodes_multiplier(&mut self, multiplier: f32);
     fn reset_max_visited_nodes_multiplier(&mut self);
     fn get_target_pos(&self) -> Option<BlockPos>;
+    fn recompute_target(&self) -> Option<BlockPos> {
+        None
+    }
     fn can_path_to_targets_below_surface(&self) -> bool;
     fn set_can_path_to_targets_below_surface(&mut self, can_path: bool);
 
@@ -477,6 +480,8 @@ pub struct PathNavigation {
     pub is_stuck: bool,
     pub required_path_length: f32,
     pub path_type_overrides: FxHashMap<PathType, f32>,
+    // Runs with the navigator locked and changes only the evaluator's temporary data.
+    pub(crate) on_pathfinding_start: Option<fn(&LivingEntity, &mut MobData)>,
     has_pending_path: bool,
     pub can_float: bool,
     pub can_walk_over_fences: bool,
@@ -530,6 +535,7 @@ impl PathNavigation {
             is_stuck: false,
             required_path_length: 16.0,
             path_type_overrides: FxHashMap::default(),
+            on_pathfinding_start: None,
             has_pending_path: false,
             can_float: false,
             can_walk_over_fences: false,
@@ -662,6 +668,10 @@ impl PathNavigation {
 
         for (&path_type, &malus) in &self.path_type_overrides {
             mob_data.set_pathfinding_malus(path_type, malus);
+        }
+
+        if let Some(on_pathfinding_start) = self.on_pathfinding_start {
+            on_pathfinding_start(entity, &mut mob_data);
         }
 
         self.evaluator.set_can_float(self.can_float);
@@ -1402,6 +1412,14 @@ impl PathNavigationTrait for GroundPathNavigation {
 
     fn get_target_pos(&self) -> Option<BlockPos> {
         self.inner.target_pos
+    }
+
+    fn recompute_target(&self) -> Option<BlockPos> {
+        if self.inner.has_delayed_recomputation || self.is_in_progress() {
+            self.get_target_pos()
+        } else {
+            None
+        }
     }
 
     fn can_path_to_targets_below_surface(&self) -> bool {
@@ -2654,6 +2672,46 @@ mod tests {
             Vector3::new(0.5, 64.0, 0.5),
             entity_type,
         ))
+    }
+
+    #[tokio::test]
+    async fn sniffer_water_cost_changes_only_during_fire_or_immersion() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        for (entity_type, water_escape, expected_costs) in [
+            (&EntityType::SNIFFER, true, [-1.0, 0.0, 0.0, -1.0]),
+            (&EntityType::COW, false, [-1.0; 4]),
+        ] {
+            let living = living(world.clone(), entity_type);
+            let mut navigation = GroundPathNavigation::new();
+            navigation.set_can_float(true);
+            navigation.set_pathfinding_malus(PathType::Water, -1.0);
+            navigation.inner.on_pathfinding_start = water_escape
+                .then_some(crate::entity::passive::sniffer::SnifferEntity::on_pathfinding_start);
+            for ((fire, water), expected) in [(0, false), (20, false), (0, true), (0, false)]
+                .into_iter()
+                .zip(expected_costs)
+            {
+                living.entity.fire_ticks.store(fire, Ordering::Relaxed);
+                living.entity.touching_water.store(water, Ordering::Relaxed);
+                navigation.inner.prepare_evaluator(&living);
+                let EvaluatorKind::Walk(evaluator) = &navigation.inner.evaluator else {
+                    return Err("expected ground evaluator".into());
+                };
+                let data = evaluator
+                    .base
+                    .mob_data
+                    .as_ref()
+                    .ok_or("missing path data")?;
+                assert!(
+                    (data.get_pathfinding_malus(PathType::Water) - expected).abs() < f32::EPSILON
+                );
+                navigation.inner.evaluator.done();
+                assert!(navigation.get_pathfinding_malus(PathType::Water) < 0.0);
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]

@@ -70,3 +70,22 @@ pub(super) async fn test_zombie_pathfinds_to_villager(
     })?;
     Ok(())
 }
+
+pub(super) async fn test_sniffers_breed_into_an_egg(helper: GameTestHelper) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    for x in [1, 3] {
+        helper
+            .execute_command(
+                &BlockPos::new(x, 1, 2),
+                "summon minecraft:sniffer ~ ~ ~ {InLove:600,PersistenceRequired:1b}",
+            )
+            .await?;
+    }
+
+    helper.succeed_when(|helper| async move {
+        helper
+            .assert_item_entity_count("minecraft:sniffer_egg", &BlockPos::new(2, 1, 2), 3.0, 1)
+            .await?;
+        helper.assert_entities_present("minecraft:sniffer", 2).await
+    })
+}

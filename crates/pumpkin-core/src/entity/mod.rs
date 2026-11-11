@@ -6392,13 +6392,13 @@ mod dimension_tests {
 
         // Sniffer 1.35 high while digging
         let sniffer = SnifferEntity::new(at(&EntityType::SNIFFER));
-        sniffer.set_state(SnifferState::Digging);
+        sniffer.transition_to(SnifferState::Digging);
         let entity = &sniffer.mob_entity.living_entity.entity;
         assert!(close(
             f64::from(entity.entity_dimension.load().height),
             1.35
         ));
-        sniffer.set_state(SnifferState::Idling);
+        sniffer.transition_to(SnifferState::Idling);
         assert!(close(
             f64::from(entity.entity_dimension.load().height),
             1.75
