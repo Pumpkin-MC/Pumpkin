@@ -1095,6 +1095,17 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
+    pub fn broadcast_bedrock_all<P: BClientPacket>(&self, packet: &P) {
+        let players = self.players.load();
+        Self::broadcast_bedrock_grouped(
+            packet,
+            players.iter().filter_map(|p| match p.client.as_ref() {
+                ClientPlatform::Bedrock(be) => Some(be),
+                ClientPlatform::Java(_) => None,
+            }),
+        );
+    }
+
     pub fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
         let je_packet = CSystemChatMessage::new(message, overlay);
         let be_packet = Self::component_to_bedrock_text(message);
