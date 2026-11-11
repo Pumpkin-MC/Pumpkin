@@ -5,6 +5,7 @@ use crate::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::borrow::Cow;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -112,14 +113,18 @@ pub struct CustomNameImpl {
 }
 impl CustomNameImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|name| Self {
-            name: TextComponent::text(name.to_string()),
-        })
+        match data {
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_) => Some(Self {
+                name: TextComponent::from_nbt(data),
+            }),
+            _ => None,
+        }
     }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().get_text().into())
+        self.name
+            .to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_2)
     }
     fn get_hash(&self) -> i32 {
         get_str_hash(self.name.clone().get_text().as_str()) as i32
@@ -133,21 +138,54 @@ pub struct ItemNameImpl {
 }
 impl ItemNameImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let name = match data {
-            NbtTag::String(name) => name.to_string(),
-            NbtTag::Compound(component) => component
-                .get_string("translate")
-                .or_else(|| component.get_string("text"))?
-                .to_owned(),
-            _ => return None,
-        };
-        Some(Self {
-            name: Cow::Owned(name),
-        })
+        match data {
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_) => {
+                Some(Self::from_component_tag(data))
+            }
+            _ => None,
+        }
     }
+
+    /// Builds an item name from a text component tag. Bare translation keys are
+    /// kept as-is; styled components (or legacy JSON strings from datapacks) are
+    /// stored as their JSON so their color and formatting survive.
+    #[must_use]
+    pub fn from_component_tag(data: &NbtTag) -> Self {
+        let plain = match data {
+            NbtTag::String(name) if !is_json_component(name) => Some(name.to_string()),
+            NbtTag::Compound(component) if component.child_tags.len() == 1 => component
+                .get_string("translate")
+                .or_else(|| component.get_string("text"))
+                .map(str::to_owned),
+            _ => None,
+        };
+        let name = plain.unwrap_or_else(|| {
+            serde_json::to_string(&TextComponent::from_nbt(data)).unwrap_or_default()
+        });
+        Self {
+            name: Cow::Owned(name),
+        }
+    }
+
+    /// The full component when the name holds one, `None` for a translation key.
+    #[must_use]
+    pub fn styled_component(&self) -> Option<TextComponent> {
+        if !is_json_component(&self.name) {
+            return None;
+        }
+        serde_json::from_str(&self.name).ok()
+    }
+}
+
+fn is_json_component(value: &str) -> bool {
+    let trimmed = value.trim_start();
+    trimmed.starts_with('{') || trimmed.starts_with('[')
 }
 impl DataComponentImpl for ItemNameImpl {
     fn write_data(&self) -> NbtTag {
+        if let Some(component) = self.styled_component() {
+            return component.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_2);
+        }
         let mut component = NbtCompound::new();
         component.put_string("translate", self.name.to_string());
         NbtTag::Compound(component)
@@ -732,5 +770,28 @@ impl std::hash::Hash for SoundEvent {
 impl SoundEvent {
     pub const fn new(sound_name: String, range: Option<f32>) -> Self {
         Self { sound_name, range }
+    }
+}
+
+#[cfg(test)]
+mod item_name_tests {
+    use super::ItemNameImpl;
+    use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn translation_key_stays_plain() {
+        let name = ItemNameImpl::from_component_tag(&NbtTag::String("item.minecraft.stone".into()));
+        assert_eq!(name.name, "item.minecraft.stone");
+        assert!(name.styled_component().is_none());
+    }
+
+    #[test]
+    fn legacy_json_name_keeps_text_and_color() {
+        let tag = NbtTag::String(r##"{"text":"Vehicle Relocator","color":"#FFC757"}"##.into());
+        let component = ItemNameImpl::from_component_tag(&tag)
+            .styled_component()
+            .expect("styled component");
+        assert!(component.0.style.color.is_some());
+        assert_eq!(component.get_text(), "Vehicle Relocator");
     }
 }
