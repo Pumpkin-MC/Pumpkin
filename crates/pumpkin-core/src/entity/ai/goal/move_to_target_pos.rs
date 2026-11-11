@@ -135,7 +135,6 @@ pub trait MoveToTargetPos: Send + Sync {
         1.0
     }
 
-    /// Vanilla `shouldRecalculatePath`.
     fn should_recalculate_path(&self, trying_time: i32) -> bool {
         trying_time % 40 == 0
     }

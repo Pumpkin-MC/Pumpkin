@@ -6438,6 +6438,15 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
+    /// Whether every chunk touching the block rectangle is loaded.
+    #[must_use]
+    pub fn has_chunks_at(&self, x0: i32, z0: i32, x1: i32, z1: i32) -> bool {
+        (x0 >> 4..=x1 >> 4).all(|chunk_x| {
+            (z0 >> 4..=z1 >> 4)
+                .all(|chunk_z| self.level.is_chunk_loaded(&Vector2::new(chunk_x, chunk_z)))
+        })
+    }
+
     pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();

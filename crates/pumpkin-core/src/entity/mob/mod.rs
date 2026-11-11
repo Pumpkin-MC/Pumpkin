@@ -1261,8 +1261,8 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
-/// Vanilla `LivingEntity.dropFromGiftLootTable`: rolls the table at the mob and hands each
-/// stack a plugin did not cancel to `drop`. Returns whether anything was dropped.
+/// Rolls a gift loot table at the mob and hands each stack a plugin did not cancel to `drop`.
+/// Returns whether anything was dropped.
 pub(crate) fn drop_from_gift_loot_table(
     mob: &dyn Mob,
     key: &str,
@@ -2238,7 +2238,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
-    /// Vanilla `PathNavigation.isStableDestination`, for navigations a mob customizes.
+    /// Whether a random target position is safe to path to.
     fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
         self.get_mob_entity()
             .navigator

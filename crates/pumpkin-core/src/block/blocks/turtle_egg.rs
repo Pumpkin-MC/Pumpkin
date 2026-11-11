@@ -27,6 +27,9 @@ type TurtleEggProperties = TurtleEggLikeProperties;
 pub struct TurtleEggBlock;
 
 impl TurtleEggBlock {
+    pub const MIN_EGGS: u8 = 1;
+    pub const MAX_EGGS: u8 = 4;
+
     #[must_use]
     pub fn is_sand(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         world.get_block(pos).has_tag(&tag::Block::MINECRAFT_SAND)
@@ -97,7 +100,7 @@ impl BlockBehaviour for TurtleEggBlock {
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
             let mut properties = TurtleEggProperties::from_state_id(state_id);
-            if properties.eggs < 4 {
+            if properties.eggs < Self::MAX_EGGS {
                 properties.eggs += 1;
             }
             return properties.to_state_id(args.block);
@@ -110,7 +113,7 @@ impl BlockBehaviour for TurtleEggBlock {
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let b = BlockAccessor::get_block(args.world, args.position);
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && TurtleEggProperties::from_state_id(args.state_id).eggs < 4
+            && TurtleEggProperties::from_state_id(args.state_id).eggs < Self::MAX_EGGS
             && args.block.id == b.id
     }
 

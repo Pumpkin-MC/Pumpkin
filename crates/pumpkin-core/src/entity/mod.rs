@@ -2008,7 +2008,7 @@ impl Entity {
             .collect()
     }
 
-    /// Vanilla `Entity.nextStep`: one block of walking past the current distance.
+    /// One block of walking past the current distance.
     #[must_use]
     pub fn default_next_step(&self) -> f32 {
         (self.move_dist.load() as i32 + 1) as f32
