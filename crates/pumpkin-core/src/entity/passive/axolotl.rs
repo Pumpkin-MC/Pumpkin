@@ -34,7 +34,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
 use super::water_animal;
@@ -315,47 +314,6 @@ impl AxolotlEntity {
         } else {
             self.get_ambient_sound()
         }
-    }
-
-    /// Vanilla `getTarget` is `getTargetFromBrain`, the attack target memory. The `target` of the
-    /// mob is what the rest of the server reads (`execute on target`, plugins), so it follows the
-    /// memory: a new target and a lost one both go through `EntityTargetEvent`, and the brain is
-    /// then made to agree with the target the mob ended up with (a plugin may have refused the
-    /// change or replaced the target).
-    fn follow_attack_target(&self, attack_target: Option<Arc<dyn EntityBase>>) {
-        self.follow_attack_target_with(attack_target, |target, reason| {
-            self.set_mob_target(target, reason)
-        });
-    }
-
-    /// `follow_attack_target` with the target change passed in: it returns whether the change
-    /// was not refused, and may leave the mob with another target than the one asked for.
-    fn follow_attack_target_with(
-        &self,
-        attack_target: Option<Arc<dyn EntityBase>>,
-        set_target: impl FnOnce(Option<Arc<dyn EntityBase>>, TargetReason) -> bool,
-    ) {
-        let entity_id = |target: &Option<Arc<dyn EntityBase>>| {
-            target.as_ref().map(|t| t.get_entity().entity_id)
-        };
-        let wanted = entity_id(&attack_target);
-        if entity_id(&self.mob_entity.get_target()) == wanted {
-            return;
-        }
-        let reason = if wanted.is_some() {
-            TargetReason::ClosestEntity
-        } else {
-            TargetReason::ForgotTarget
-        };
-        set_target(attack_target, reason);
-        let settled = self.mob_entity.get_target();
-        if entity_id(&settled) == wanted {
-            return;
-        }
-        self.mob_entity.with_brain(self, |brain| match settled {
-            Some(target) => brain.set(types::ATTACK_TARGET, target),
-            None => brain.erase(types::ATTACK_TARGET.id()),
-        });
     }
 
     /// Vanilla `Axolotl.onStopAttacking`: when the target that ended the fight died to a player
@@ -639,7 +597,8 @@ impl Mob for AxolotlEntity {
         if !self.mob_entity.is_no_ai() {
             self.set_playing_dead(play_dead_ticks.is_some_and(|ticks| ticks > 0));
         }
-        self.follow_attack_target(attack_target);
+        // `getTarget` reads the brain's attack target.
+        self.mob_entity.set_target(attack_target);
     }
 
     fn mob_init_data_tracker(&self) {
@@ -1691,95 +1650,6 @@ mod tests {
 
         assert_eq!(after_set, Some(prey_id));
         assert_eq!(after_forgetting, None);
-        Ok(())
-    }
-
-    /// A plugin that redirects the new target (or clears it) leaves the mob with another target
-    /// than the brain asked for: the brain follows. A refused change leaves the old target, and
-    /// a lost target is announced as `ForgotTarget` and cannot be kept by the brain alone.
-    #[tokio::test]
-    async fn the_brain_follows_the_target_the_event_settled_on() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let axolotl = axolotl(&world);
-        let wanted = cod(&world, 2.0);
-        let redirected = cod(&world, 3.0);
-        let old = cod(&world, 4.0);
-        let id =
-            |entity: &Arc<crate::entity::passive::cod::CodEntity>| entity.get_entity().entity_id;
-        let brain_target = |axolotl: &Arc<AxolotlEntity>| {
-            axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
-                brain
-                    .get(types::ATTACK_TARGET)
-                    .map(|target| target.get_entity().entity_id)
-            })
-        };
-        let mob_target = |axolotl: &Arc<AxolotlEntity>| {
-            axolotl
-                .mob_entity
-                .get_target()
-                .map(|target| target.get_entity().entity_id)
-        };
-        let mut reasons = Vec::new();
-
-        // Redirected: the mob ends up with another cod, the brain takes that one.
-        let other: Arc<dyn EntityBase> = redirected.clone();
-        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, reason| {
-            reasons.push(reason);
-            axolotl.mob_entity.set_target(Some(other));
-            true
-        });
-        let after_redirect = (mob_target(&axolotl), brain_target(&axolotl));
-
-        // Refused while the mob has another target: the brain gets that one back.
-        axolotl.mob_entity.set_target(Some(old.clone()));
-        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, reason| {
-            reasons.push(reason);
-            false
-        });
-        let after_refusal = (mob_target(&axolotl), brain_target(&axolotl));
-
-        // Refused with no target at all: the brain forgets it.
-        axolotl.mob_entity.set_target(None);
-        axolotl.follow_attack_target_with(Some(wanted.clone()), |_, _| false);
-        let after_refusal_without_target = (mob_target(&axolotl), brain_target(&axolotl));
-
-        // A lost target: asked through the event, and a refusal keeps it in the brain too.
-        axolotl.mob_entity.set_target(Some(old.clone()));
-        axolotl.follow_attack_target_with(None, |target, reason| {
-            assert!(target.is_none());
-            reasons.push(reason);
-            false
-        });
-        let after_refused_loss = (mob_target(&axolotl), brain_target(&axolotl));
-        axolotl.mob_entity.with_brain(axolotl.as_ref(), |brain| {
-            brain.erase(types::ATTACK_TARGET.id());
-        });
-        axolotl.follow_attack_target_with(None, |_, reason| {
-            reasons.push(reason);
-            axolotl.mob_entity.set_target(None);
-            true
-        });
-        let after_loss = (mob_target(&axolotl), brain_target(&axolotl));
-        world.level.shutdown().await;
-
-        assert_eq!(
-            after_redirect,
-            (Some(id(&redirected)), Some(id(&redirected)))
-        );
-        assert_eq!(after_refusal, (Some(id(&old)), Some(id(&old))));
-        assert_eq!(after_refusal_without_target, (None, None));
-        assert_eq!(after_refused_loss, (Some(id(&old)), Some(id(&old))));
-        assert_eq!(after_loss, (None, None));
-        assert_eq!(
-            reasons,
-            [
-                TargetReason::ClosestEntity,
-                TargetReason::ClosestEntity,
-                TargetReason::ForgotTarget,
-                TargetReason::ForgotTarget
-            ]
-        );
         Ok(())
     }
 
