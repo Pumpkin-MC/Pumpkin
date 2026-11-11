@@ -537,7 +537,7 @@ impl World {
         let spawnable_chunks = self.count_natural_spawn_chunks(
             players
                 .iter()
-                .filter(|player| !player.is_spectator())
+                .filter(|player| spectators_generate_chunks || !player.is_spectator())
                 .map(|player| player.get_entity().chunk_pos.load()),
         );
         for pos in migrations {
@@ -7683,8 +7683,8 @@ fn bedrock_block_breaking_rate(speed: f32) -> i32 {
     (speed.clamp(0.0, 1.0) * f32::from(u16::MAX)) as i32
 }
 
-/// Vanilla `DistanceManager`'s fixed radius-8 spawning footprint around every
-/// non-spectator player, independent of simulation distance.
+/// Fixed radius-8 spawning footprint around every player that loads chunks,
+/// independent of simulation distance.
 fn natural_spawn_chunk_count(player_chunks: impl Iterator<Item = Vector2<i32>>) -> i32 {
     let offsets =
         pumpkin_data::chunk_view_lut::get_chebyshev_square(natural_spawner::SPAWN_DISTANCE_CHUNK);
