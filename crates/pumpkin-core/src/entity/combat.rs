@@ -67,19 +67,26 @@ pub fn knockback_after_resistance(strength: f64, resistance: f64) -> f64 {
     strength * (1.0 - resistance)
 }
 
-pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f64) {
+pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f64, damage: f32) {
     let resistance = victim.get_living_entity().map_or(0.0, |living| {
         living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
     });
     // Resistance is checked in `apply_knockback`, so full resistance still fires the events
     if strength > 0.0 {
         let yaw = attacker.yaw.load();
-        victim.get_entity().apply_knockback(
-            knockback_after_resistance(strength * 0.5, resistance),
-            f64::from((yaw.to_radians()).sin()),
-            f64::from(-(yaw.to_radians()).cos()),
-            Some(attacker),
-        );
+        let x = f64::from((yaw.to_radians()).sin());
+        let z = f64::from(-(yaw.to_radians()).cos());
+        let handled = victim.get_mob().is_some_and(|mob| {
+            mob.mob_knockback(strength * 0.5, x, z, Some(attacker), damage, false)
+        });
+        if !handled {
+            victim.get_entity().apply_knockback(
+                knockback_after_resistance(strength * 0.5, resistance),
+                x,
+                z,
+                Some(attacker),
+            );
+        }
     }
 
     let velocity = attacker.velocity.load();

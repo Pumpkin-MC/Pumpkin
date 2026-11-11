@@ -817,6 +817,9 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
 }
 
 impl Player {
+    pub const FULL_SLEEP_TICKS: u8 = 100;
+    pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
+
     pub async fn fetch_skin(
         properties: &[Property],
     ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
@@ -1420,13 +1423,7 @@ impl Player {
             self.on_handled_screen_closed();
         }
 
-        let vehicle = self
-            .living_entity
-            .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let vehicle = self.living_entity.entity.get_vehicle();
         if let Some(vehicle) = vehicle {
             self.root_vehicle_uuid
                 .store(Some(vehicle.get_entity().entity_uuid));
@@ -1805,7 +1802,12 @@ impl Player {
             // `Entity::knockback` halves the current velocity, so calling it with 0.0
             // would still slow the victim down.
             if config.knockback && knockback_strength > 0.0 {
-                combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
+                combat::handle_knockback(
+                    attacker_entity,
+                    victim.as_ref(),
+                    knockback_strength,
+                    damage as f32,
+                );
             }
         }
 
@@ -2626,8 +2628,13 @@ impl Player {
             &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
         );
 
-        self.sleeping_since.store(None);
+        self.sleeping_since.store(Some(Self::FULL_SLEEP_TICKS));
         self.sleeping_bed_pos.store(None);
+    }
+
+    #[must_use]
+    pub fn get_sleep_timer(&self) -> u8 {
+        self.sleeping_since.load().unwrap_or(0)
     }
 
     pub fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -2840,6 +2847,15 @@ impl Player {
             if event.cancelled {
                 return;
             }
+        }
+        if let Some(block_entity) = self.world().get_block_entity(&location)
+            && let Some(sign) =
+                crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        {
+            *sign
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.gameprofile.id);
         }
         self.try_enqueue_packet_editioned(
             &COpenSignEditor::new(location, is_front_text),
@@ -3237,10 +3253,19 @@ impl Player {
             .entity
             .tick_count
             .fetch_add(1, Ordering::Relaxed);
-        if let Some(sleeping_since) = self.sleeping_since.load()
-            && sleeping_since < 101
-        {
-            self.sleeping_since.store(Some(sleeping_since + 1));
+        if let Some(sleeping_since) = self.sleeping_since.load() {
+            if self.is_sleeping() {
+                self.sleeping_since.store(Some(
+                    sleeping_since.saturating_add(1).min(Self::FULL_SLEEP_TICKS),
+                ));
+            } else if sleeping_since > 0
+                && sleeping_since.saturating_add(1) < Self::SLEEP_TIMER_RESET_TICKS
+            {
+                self.sleeping_since
+                    .store(Some(sleeping_since.saturating_add(1)));
+            } else {
+                self.sleeping_since.store(None);
+            }
         }
 
         if self.mining.load(Ordering::Relaxed)
@@ -3931,74 +3956,66 @@ impl Player {
     #[allow(clippy::too_many_lines)]
     pub fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
-        if entity.has_vehicle() {
-            let vehicle = entity
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(vehicle) = vehicle.as_ref() {
-                let entity_type = vehicle.get_entity().entity_type;
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
-                    || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
-                    || entity_type == &EntityType::OAK_BOAT
-                    || entity_type == &EntityType::SPRUCE_BOAT
-                    || entity_type == &EntityType::BIRCH_BOAT
-                    || entity_type == &EntityType::JUNGLE_BOAT
-                    || entity_type == &EntityType::ACACIA_BOAT
-                    || entity_type == &EntityType::DARK_OAK_BOAT
-                    || entity_type == &EntityType::MANGROVE_BOAT
-                    || entity_type == &EntityType::CHERRY_BOAT
-                    || entity_type == &EntityType::PALE_OAK_BOAT
-                    || entity_type == &EntityType::BAMBOO_RAFT
-                    || entity_type == &EntityType::OAK_CHEST_BOAT
-                    || entity_type == &EntityType::SPRUCE_CHEST_BOAT
-                    || entity_type == &EntityType::BIRCH_CHEST_BOAT
-                    || entity_type == &EntityType::JUNGLE_CHEST_BOAT
-                    || entity_type == &EntityType::ACACIA_CHEST_BOAT
-                    || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::MANGROVE_CHEST_BOAT
-                    || entity_type == &EntityType::CHERRY_CHEST_BOAT
-                    || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::BAMBOO_CHEST_RAFT
-                {
-                    return statistics::CustomStatistic::BoatOneCm;
-                }
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
-                    || entity_type == &EntityType::MINECART
-                    || entity_type == &EntityType::CHEST_MINECART
-                    || entity_type == &EntityType::FURNACE_MINECART
-                    || entity_type == &EntityType::TNT_MINECART
-                    || entity_type == &EntityType::HOPPER_MINECART
-                    || entity_type == &EntityType::COMMAND_BLOCK_MINECART
-                    || entity_type == &EntityType::SPAWNER_MINECART
-                {
-                    return statistics::CustomStatistic::MinecartOneCm;
-                }
-                if entity_type == &EntityType::HORSE
-                    || entity_type == &EntityType::DONKEY
-                    || entity_type == &EntityType::MULE
-                    || entity_type == &EntityType::SKELETON_HORSE
-                    || entity_type == &EntityType::ZOMBIE_HORSE
-                    || entity_type == &EntityType::CAMEL
-                    || entity_type == &EntityType::LLAMA
-                    || entity_type == &EntityType::TRADER_LLAMA
-                {
-                    return statistics::CustomStatistic::HorseOneCm;
-                }
-                if entity_type == &EntityType::PIG {
-                    return statistics::CustomStatistic::PigOneCm;
-                }
-                if entity_type == &EntityType::STRIDER {
-                    return statistics::CustomStatistic::StriderOneCm;
-                }
-                if entity_type == &EntityType::HAPPY_GHAST {
-                    return statistics::CustomStatistic::HappyGhastOneCm;
-                }
-                if entity_type == &EntityType::NAUTILUS
-                    || entity_type == &EntityType::ZOMBIE_NAUTILUS
-                {
-                    return statistics::CustomStatistic::NautilusOneCm;
-                }
+        if let Some(vehicle) = entity.get_vehicle() {
+            let entity_type = vehicle.get_entity().entity_type;
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
+                || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
+                || entity_type == &EntityType::OAK_BOAT
+                || entity_type == &EntityType::SPRUCE_BOAT
+                || entity_type == &EntityType::BIRCH_BOAT
+                || entity_type == &EntityType::JUNGLE_BOAT
+                || entity_type == &EntityType::ACACIA_BOAT
+                || entity_type == &EntityType::DARK_OAK_BOAT
+                || entity_type == &EntityType::MANGROVE_BOAT
+                || entity_type == &EntityType::CHERRY_BOAT
+                || entity_type == &EntityType::PALE_OAK_BOAT
+                || entity_type == &EntityType::BAMBOO_RAFT
+                || entity_type == &EntityType::OAK_CHEST_BOAT
+                || entity_type == &EntityType::SPRUCE_CHEST_BOAT
+                || entity_type == &EntityType::BIRCH_CHEST_BOAT
+                || entity_type == &EntityType::JUNGLE_CHEST_BOAT
+                || entity_type == &EntityType::ACACIA_CHEST_BOAT
+                || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
+                || entity_type == &EntityType::MANGROVE_CHEST_BOAT
+                || entity_type == &EntityType::CHERRY_CHEST_BOAT
+                || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
+                || entity_type == &EntityType::BAMBOO_CHEST_RAFT
+            {
+                return statistics::CustomStatistic::BoatOneCm;
+            }
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
+                || entity_type == &EntityType::MINECART
+                || entity_type == &EntityType::CHEST_MINECART
+                || entity_type == &EntityType::FURNACE_MINECART
+                || entity_type == &EntityType::TNT_MINECART
+                || entity_type == &EntityType::HOPPER_MINECART
+                || entity_type == &EntityType::COMMAND_BLOCK_MINECART
+                || entity_type == &EntityType::SPAWNER_MINECART
+            {
+                return statistics::CustomStatistic::MinecartOneCm;
+            }
+            if entity_type == &EntityType::HORSE
+                || entity_type == &EntityType::DONKEY
+                || entity_type == &EntityType::MULE
+                || entity_type == &EntityType::SKELETON_HORSE
+                || entity_type == &EntityType::ZOMBIE_HORSE
+                || entity_type == &EntityType::CAMEL
+                || entity_type == &EntityType::LLAMA
+                || entity_type == &EntityType::TRADER_LLAMA
+            {
+                return statistics::CustomStatistic::HorseOneCm;
+            }
+            if entity_type == &EntityType::PIG {
+                return statistics::CustomStatistic::PigOneCm;
+            }
+            if entity_type == &EntityType::STRIDER {
+                return statistics::CustomStatistic::StriderOneCm;
+            }
+            if entity_type == &EntityType::HAPPY_GHAST {
+                return statistics::CustomStatistic::HappyGhastOneCm;
+            }
+            if entity_type == &EntityType::NAUTILUS || entity_type == &EntityType::ZOMBIE_NAUTILUS {
+                return statistics::CustomStatistic::NautilusOneCm;
             }
         }
 
@@ -7882,10 +7899,7 @@ impl EntityBase for Player {
         let vehicle_uuid = self
             .living_entity
             .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_vehicle()
             .map(|vehicle| vehicle.get_entity().entity_uuid)
             .or_else(|| self.root_vehicle_uuid.load());
         if let Some(vehicle_uuid) = vehicle_uuid {

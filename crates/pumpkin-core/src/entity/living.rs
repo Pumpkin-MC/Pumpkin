@@ -1106,7 +1106,9 @@ impl LivingEntity {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.get(&attribute.id)
-            .map_or(attribute.default_value, AttributeInstance::value)
+            .map_or(attribute.default_value, |instance| {
+                instance.sanitized_value(attribute)
+            })
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
@@ -1992,6 +1994,7 @@ impl LivingEntity {
             // Only players read the friction, and they are never mobs.
             if let Some(mob) = caller.get_mob() {
                 mob.travel_in_water(caller, gravity, falling);
+                mob.mob_travel_in_fluid(caller);
                 return 1.0;
             }
             return self.travel_in_water(caller, gravity, falling);
@@ -2020,6 +2023,9 @@ impl LivingEntity {
 
         self.entity.velocity.store(velo);
         self.jump_out_of_fluid(old_y);
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_travel_in_fluid(caller);
+        }
         0.5
     }
 
@@ -2191,6 +2197,8 @@ impl LivingEntity {
 
         if self.entity.entity_type == &EntityType::BREEZE {
             eye_height
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            f64::from(self.entity.height()) * 0.2
         } else if eye_height < 0.4 {
             0.0
         } else {
@@ -3091,12 +3099,7 @@ impl LivingEntity {
                 .get_block(&entity.get_eye_pos().to_block_pos())
                 != &Block::BUBBLE_COLUMN
         {
-            if !entity
-                .entity_type
-                .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
-                && !water_breathing
-                && !nautilus_breathing
-            {
+            if !caller.can_breathe_underwater() && !water_breathing && !nautilus_breathing {
                 entity.set_air_supply(caller.mob_decrease_air_supply(current));
                 if self.should_take_drowning_damage() {
                     entity.set_air_supply(0);
@@ -3856,7 +3859,7 @@ impl LivingEntity {
             let knockback_allowed =
                 config.knockback || cause.or(source).and_then(EntityBase::get_player).is_none();
             if knockback_allowed && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
-                self.deal_default_knockback(position, source);
+                self.deal_default_knockback(caller, position, source, cause, amount);
             }
         }
 
@@ -3963,10 +3966,13 @@ impl LivingEntity {
 
     /// Vanilla `LivingEntity.dealDefaultKnockback`.
     // Callers pass the hit point as `position` for projectiles, so the source entity goes first.
-    fn deal_default_knockback(
+    pub(crate) fn deal_default_knockback(
         &self,
+        caller: &dyn EntityBase,
         position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        damage: f32,
     ) {
         let target_pos = self.entity.pos.load();
         let (dx, dz) = source
@@ -3975,6 +3981,18 @@ impl LivingEntity {
             .map_or((0.0, 0.0), |pos| {
                 (pos.x - target_pos.x, pos.z - target_pos.z)
             });
+        if caller.get_mob().is_some_and(|mob| {
+            mob.mob_knockback(
+                0.4,
+                dx,
+                dz,
+                cause.or(source).map(EntityBase::get_entity),
+                damage,
+                false,
+            )
+        }) {
+            return;
+        }
         let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
         self.entity.apply_knockback(
             knockback_after_resistance(0.4, resistance),
@@ -4480,13 +4498,7 @@ impl LivingEntity {
                 }
                 ConsumeEffect::TeleportRandomly(diameter) => {
                     // Java Edition dismounts the consumer before random teleport attempts.
-                    let vehicle = caller
-                        .get_entity()
-                        .vehicle
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone();
-                    if let Some(vehicle) = vehicle {
+                    if let Some(vehicle) = caller.get_entity().get_vehicle() {
                         vehicle
                             .get_entity()
                             .remove_passenger_sync(caller.get_entity().entity_id);
@@ -4531,6 +4543,89 @@ impl LivingEntity {
                 }
             }
         }
+    }
+
+    /// Teleports to the first standable block at or below the target, when the spot is free.
+    pub fn random_teleport(
+        &self,
+        caller: &dyn EntityBase,
+        target: Vector3<f64>,
+        show_particles: bool,
+        is_invalid: impl Fn(&pumpkin_data::Block) -> bool,
+    ) -> bool {
+        let entity = &self.entity;
+        let world = entity.world.load_full();
+        let (x, z) = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clamp_to_bound(target.x, target.z);
+        let block_x = x.floor() as i32;
+        let block_z = z.floor() as i32;
+        let min_y = world.dimension.min_y;
+        let mut block_y = target.y.floor() as i32;
+        let column_pos = BlockPos::new(
+            block_x,
+            block_y.clamp(min_y, min_y + world.dimension.height - 1),
+            block_z,
+        );
+        if !world.is_loaded(&column_pos) {
+            return false;
+        }
+
+        // Walks down to the first block an entity can stand on, keeping the fractional Y.
+        let mut y = target.y;
+        let ground = loop {
+            if block_y <= min_y {
+                return false;
+            }
+            block_y -= 1;
+            let block = world.get_block(&BlockPos::new(block_x, block_y, block_z));
+            if block.has_tag(&tag::Block::MINECRAFT_ENTITIES_CAN_TELEPORT_TO) {
+                break block;
+            }
+            y -= 1.0;
+        };
+        if is_invalid(ground) {
+            return false;
+        }
+        let bounding_box = BoundingBox::new_from_pos(x, y, z, &entity.entity_dimension.load());
+        if !world.is_space_empty(bounding_box)
+            || !world.no_entity_collision(caller, bounding_box)
+            || world.contains_any_liquid(bounding_box)
+            || BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+                .any(|pos| is_invalid(world.get_block(&pos)))
+        {
+            return false;
+        }
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.can_randomly_teleport_to(x, y, z))
+        {
+            return false;
+        }
+
+        let new_pos = Vector3::new(x, y, z);
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
+                    entity.entity_id,
+                    entity.pos.load(),
+                    new_pos,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+        entity.teleport(new_pos, None, None, &world);
+        if show_particles {
+            world.send_entity_status(entity, EntityStatus::Teleport, ActorEventID::None);
+        }
+        if let Some(mob) = caller.get_mob() {
+            mob.get_mob_entity().steered().navigator().stop();
+        }
+        true
     }
 
     fn find_random_teleport_target(&self, diameter: f32) -> Option<Vector3<f64>> {
