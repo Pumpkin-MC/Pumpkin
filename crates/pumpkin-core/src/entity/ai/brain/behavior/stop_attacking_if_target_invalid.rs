@@ -5,12 +5,8 @@ use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
 use crate::entity::EntityBase;
 
-/// How long the target may stay out of reach before the mob gives up (vanilla
-/// `TIMEOUT_TO_GET_WITHIN_ATTACK_RANGE`).
 const TIMEOUT_TO_GET_WITHIN_ATTACK_RANGE: i64 = 200;
 
-/// Vanilla `StopAttackingIfTargetInvalid.create()`: drops the attack target once it can no longer
-/// be attacked, died, left the world or stayed out of reach for too long.
 #[must_use]
 pub fn create() -> OneShot {
     create_with_callback(|_, _| {})
@@ -85,7 +81,6 @@ mod tests {
         ))
     }
 
-    /// A brain that records the id of every target it is told about, holding `target`.
     fn attacking(target: Arc<dyn EntityBase>) -> (Brain, Erased) {
         let erased = Erased::default();
         let record = erased.clone();
@@ -117,8 +112,6 @@ mod tests {
             .clone()
     }
 
-    /// A target the mob may attack and can reach stays; a dead one and one that may not be
-    /// attacked go, each reported once to the callback before the memory is erased.
     #[tokio::test]
     async fn keeps_a_valid_target_and_drops_a_dead_or_unattackable_one() -> TestResult {
         let folder = tempfile::tempdir()?;

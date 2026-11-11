@@ -2,7 +2,6 @@ use super::super::BrainTick;
 use super::super::memory::{MemoryModuleId, MemoryStatus};
 use super::OneShot;
 
-/// Vanilla `EraseMemoryIf`: forgets `memory` while it holds a value and `predicate` is true.
 #[must_use]
 pub fn create(
     predicate: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
@@ -41,8 +40,6 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    /// The memory goes only while the predicate holds, and a memory that is not there is not
-    /// even looked at (the entry condition), so the predicate is not asked.
     #[tokio::test]
     async fn erases_the_memory_only_while_the_predicate_holds() -> TestResult {
         let folder = tempfile::tempdir()?;

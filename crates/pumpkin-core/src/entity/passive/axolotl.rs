@@ -42,25 +42,15 @@ use controls::{AxolotlLookControl, AxolotlMoveControl};
 mod ai;
 mod controls;
 
-/// `Axolotl.getMaxHeadXRot`: how far the head may turn up or down per tick.
 const MAX_HEAD_X_ROT: f32 = 1.0;
-/// `Axolotl.getMaxHeadYRot`: how far the head may turn away from the body.
 const MAX_HEAD_Y_ROT: f32 = 1.0;
-/// Vanilla `AXOLOTL_TOTAL_AIR_SUPPLY`: `getMaxAirSupply`, 5 minutes against the default 15 seconds.
 const AXOLOTL_TOTAL_AIR_SUPPLY: i32 = 6000;
-/// Vanilla `REHYDRATE_AIR_SUPPLY`: what `rehydrate` adds.
 const REHYDRATE_AIR_SUPPLY: i32 = 1800;
-/// The damage `Axolotl.handleAirSupply` deals with `DamageSources.dryOut`.
 const DRY_OUT_DAMAGE: f32 = 2.0;
-/// Per tick factor of `Axolotl.travelInWater` on the velocity after the move.
 const WATER_DRAG: f64 = 0.9;
-/// Vanilla `Axolotl.RARE_VARIANT_CHANCE`: one in this many babies takes the rare variant.
 const RARE_VARIANT_CHANCE: u32 = 1200;
-/// Members already in a spawn group from which `Axolotl.finalizeSpawn` makes babies.
 const BABY_GROUP_SIZE: u32 = 2;
 
-/// Vanilla `Axolotl.Variant.getSpawnVariant`: a uniform pick among the variants whose `common`
-/// flag matches.
 fn get_spawn_variant<R: Rng + ?Sized>(rng: &mut R, common: bool) -> AxolotlVariant {
     let valid: Vec<AxolotlVariant> = AxolotlVariant::ALL
         .iter()
@@ -73,18 +63,14 @@ fn get_spawn_variant<R: Rng + ?Sized>(rng: &mut R, common: bool) -> AxolotlVaria
         .unwrap_or(AxolotlVariant::DEFAULT)
 }
 
-/// Vanilla `Axolotl.Variant.getCommonSpawnVariant`.
 fn get_common_spawn_variant<R: Rng + ?Sized>(rng: &mut R) -> AxolotlVariant {
     get_spawn_variant(rng, true)
 }
 
-/// Vanilla `Axolotl.Variant.getRareSpawnVariant`.
 fn get_rare_spawn_variant<R: Rng + ?Sized>(rng: &mut R) -> AxolotlVariant {
     get_spawn_variant(rng, false)
 }
 
-/// Vanilla `Axolotl.getBreedOffspring` variant rule: one baby in `RARE_VARIANT_CHANCE` gets a rare
-/// variant, every other one takes this parent's variant or the partner's with equal odds.
 fn get_breed_variant<R: Rng + ?Sized>(
     parent: AxolotlVariant,
     partner: AxolotlVariant,
@@ -99,9 +85,6 @@ fn get_breed_variant<R: Rng + ?Sized>(
     }
 }
 
-/// Vanilla `AxolotlGroupData` joined by one more axolotl: the first member of a group draws two
-/// common variants and every member takes one of them; from the third member on the axolotl is a
-/// baby. Returns the member's variant, whether it is a baby, and the updated group.
 fn join_spawn_group<R: Rng + ?Sized>(
     group_data: Option<&SpawnGroupData>,
     rng: &mut R,
@@ -133,29 +116,20 @@ fn fed_item_remainder(item: &Item) -> Option<&'static Item> {
     (item == &Item::TROPICAL_FISH_BUCKET).then_some(&Item::WATER_BUCKET)
 }
 
-/// Reads the `Variant` tag the way vanilla's legacy codec does: a missing tag is the default
-/// variant and an unknown id falls back to it too.
 fn read_variant(nbt: &NbtCompound) -> AxolotlVariant {
     nbt.get_int("Variant")
         .map_or(AxolotlVariant::DEFAULT, AxolotlVariant::by_id)
 }
 
-/// The axolotl behind a control's mob.
 fn as_axolotl(mob: &dyn Mob) -> Option<&AxolotlEntity> {
     mob.cast_any().downcast_ref::<AxolotlEntity>()
 }
 
-/// Vanilla `TOTAL_PLAYDEAD_TIME`: the ticks a hit sets the play dead memory to.
 const TOTAL_PLAYDEAD_TIME: i32 = 200;
-/// Vanilla `PLAYER_REGEN_DETECTION_RANGE`: how far from the axolotl a player has to be to be
-/// thanked for a kill.
 const PLAYER_REGEN_DETECTION_RANGE: f64 = 20.0;
-/// Vanilla `REGEN_BUFF_MAX_DURATION`.
 const REGEN_BUFF_MAX_DURATION: i32 = 2400;
-/// What `applySupportingEffects` adds to the regeneration a player has.
 const REGEN_BUFF_BASE_DURATION: i32 = 100;
 
-/// What `Axolotl.hurtServer` looks at to decide that a hit makes the axolotl play dead.
 struct HurtCheck {
     no_ai: bool,
     damage: f32,
@@ -166,10 +140,6 @@ struct HurtCheck {
     playing_dead: bool,
 }
 
-/// The condition of vanilla `hurtServer` in its own order, so that the random numbers drawn (and
-/// how many) are the vanilla ones: without AI none, then one in three, then a second draw below
-/// the damage or less than half of the health left, then the damage below the health, in the
-/// water, with an entity behind the hit, and not already playing dead.
 fn plays_dead_when_hurt<R: Rng + ?Sized>(rng: &mut R, hit: &HurtCheck) -> bool {
     !hit.no_ai
         && rng.random_range(0..3) == 0
@@ -195,8 +165,6 @@ fn supporting_regeneration_duration(current: Option<(i32, i32)>) -> Option<i32> 
     renewed.then_some((REGEN_BUFF_BASE_DURATION + left.unwrap_or(0)).min(REGEN_BUFF_MAX_DURATION))
 }
 
-/// Vanilla `Axolotl.applySupportingEffects`: regeneration for the player (see
-/// [`supporting_regeneration_duration`]) and the end of mining fatigue.
 fn apply_supporting_effects(player: &Player) {
     let current = player
         .get_effect(&StatusEffect::REGENERATION)
@@ -255,13 +223,11 @@ impl AxolotlEntity {
         Arc::new(axolotl)
     }
 
-    /// Vanilla `Axolotl.getVariant`.
     #[must_use]
     pub fn get_variant(&self) -> AxolotlVariant {
         AxolotlVariant::by_id(self.variant.load(Ordering::Relaxed))
     }
 
-    /// Vanilla `Axolotl.setVariant`: stores the variant and syncs it to clients.
     pub fn set_variant(&self, variant: AxolotlVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
         let entity = self.get_entity();
@@ -283,7 +249,6 @@ impl AxolotlEntity {
         );
     }
 
-    /// Vanilla `Axolotl.rehydrate`: adds `REHYDRATE_AIR_SUPPLY` air, up to the maximum.
     pub fn rehydrate(&self) {
         let entity = self.get_entity();
         let air_supply = entity
@@ -307,7 +272,6 @@ impl AxolotlEntity {
         );
     }
 
-    /// The ambient sound `playAmbientSound` plays: none while playing dead.
     fn audible_ambient_sound(&self) -> Option<Sound> {
         if self.is_playing_dead() {
             None
@@ -316,8 +280,6 @@ impl AxolotlEntity {
         }
     }
 
-    /// Vanilla `Axolotl.onStopAttacking`: when the target that ended the fight died to a player
-    /// within 20 blocks of the axolotl, the axolotl thanks the player with [`apply_supporting_effects`].
     fn on_stop_attacking(tick: &BrainTick<'_>, target: &Arc<dyn EntityBase>) {
         let Some(living) = target.get_living_entity() else {
             return;
@@ -366,8 +328,6 @@ impl AgeableMob for AxolotlEntity {
 }
 
 impl Animal for AxolotlEntity {
-    /// Vanilla `Axolotl.getBreedOffspring`: the baby gets a variant by [`get_breed_variant`] and
-    /// is kept from despawning.
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
         let entity = self.get_entity();
         let baby = Self::new(Entity::new(
@@ -390,13 +350,10 @@ impl Animal for AxolotlEntity {
         baby
     }
 
-    /// Vanilla `Axolotl.isFood`: only the `axolotl_food` item tag.
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_AXOLOTL_FOOD)
     }
 
-    /// Vanilla `Axolotl.usePlayerItem`: the tropical fish bucket becomes a water bucket
-    /// (`ItemUtils.createFilledResult`), anything else is used up as usual.
     fn use_player_item(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
         if let Some(remainder) = fed_item_remainder(item_stack.get_item()) {
             crate::item::items::bucket::create_filled_result(
@@ -420,26 +377,19 @@ impl Mob for AxolotlEntity {
         Some(self)
     }
 
-    /// Vanilla `Axolotl.removeWhenFarAway`: only axolotls released from a bucket or named ones
-    /// stay.
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
         !self.is_from_bucket() && (**self.get_entity().custom_name.load()).is_none()
     }
 
-    /// Vanilla `Axolotl.requiresCustomPersistence`: `Mob`'s rule (a passenger or a leashed mob
-    /// stays) or a bucket axolotl.
     fn requires_custom_persistence(&self) -> bool {
         let entity = self.get_entity();
         entity.has_vehicle() || entity.is_leashed() || self.is_from_bucket()
     }
 
-    /// Vanilla `Axolotl.checkSpawnObstruction`: only blocking entities obstruct, water does not.
     fn check_spawn_obstruction(&self, world: &World) -> bool {
         super::water_animal::check_spawn_obstruction(self, world)
     }
 
-    /// Vanilla `Axolotl.finalizeSpawn`: bucket spawns keep the group untouched, everything else
-    /// joins the spawn group (see [`join_spawn_group`]).
     fn finalize_spawn(
         &self,
         _world: &Arc<World>,
@@ -469,7 +419,6 @@ impl Mob for AxolotlEntity {
         self.set_from_bucket(nbt.get_bool("FromBucket").unwrap_or(false));
     }
 
-    /// Vanilla `Axolotl.getMaxAirSupply`.
     fn mob_max_air_supply(&self) -> i32 {
         AXOLOTL_TOTAL_AIR_SUPPLY
     }
@@ -491,13 +440,10 @@ impl Mob for AxolotlEntity {
         0.0
     }
 
-    /// Vanilla `Axolotl.isPushedByFluid`.
     fn mob_is_pushed_by_fluids(&self) -> bool {
         false
     }
 
-    /// Vanilla `Axolotl.travelInWater`: it swims by its own `getSpeed()` with neither gravity nor
-    /// the jump out of the water of other mobs, and the water slows it by a tenth each tick.
     fn travel_in_water(&self, caller: &dyn EntityBase, _gravity: f64, _falling: bool) {
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
@@ -509,9 +455,6 @@ impl Mob for AxolotlEntity {
         entity.velocity.store(entity.velocity.load() * WATER_DRAG);
     }
 
-    /// Vanilla `Axolotl.hurtServer`, the part before `super`: a hit may make the axolotl play dead
-    /// (see [`plays_dead_when_hurt`]), which sets the `PLAY_DEAD_TICKS` memory to 200. It never
-    /// ends the damage itself, so the normal damage path goes on.
     fn mob_hurt_server(
         &self,
         amount: f32,
@@ -538,12 +481,10 @@ impl Mob for AxolotlEntity {
         None
     }
 
-    /// Vanilla `Axolotl.canBeSeenAsEnemy`: not while playing dead.
     fn mob_can_be_seen_as_enemy(&self) -> bool {
         !self.is_playing_dead()
     }
 
-    /// Vanilla `Axolotl.playAmbientSound`: silent while playing dead.
     fn play_ambient_sound(&self) {
         if let Some(sound) = self.audible_ambient_sound() {
             self.make_sound(sound);
@@ -560,17 +501,14 @@ impl Mob for AxolotlEntity {
         })
     }
 
-    /// Vanilla `Axolotl.playAttackSound`, played when the axolotl hurts its target.
     fn on_attack(&self, _target: &dyn EntityBase) {
         self.play_entity_sound(Sound::EntityAxolotlAttack, 1.0, 1.0);
     }
 
-    /// Vanilla `Axolotl.getMaxHeadXRot`.
     fn get_max_look_pitch_change(&self) -> f32 {
         MAX_HEAD_X_ROT
     }
 
-    /// Vanilla `Axolotl.getMaxHeadYRot`.
     fn get_max_head_rotation(&self) -> f32 {
         MAX_HEAD_Y_ROT
     }
@@ -583,8 +521,6 @@ impl Mob for AxolotlEntity {
         ai::make_brain(self, packed)
     }
 
-    /// Vanilla `Axolotl.customServerAiStep`: the brain ticks, the activity is chosen, and the
-    /// playing dead flag follows the `PLAY_DEAD_TICKS` memory unless the axolotl has no AI.
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         self.mob_entity.tick_brain(self);
         let (play_dead_ticks, attack_target) = self.mob_entity.with_brain(self, |brain| {
@@ -597,7 +533,6 @@ impl Mob for AxolotlEntity {
         if !self.mob_entity.is_no_ai() {
             self.set_playing_dead(play_dead_ticks.is_some_and(|ticks| ticks > 0));
         }
-        // `getTarget` reads the brain's attack target.
         self.mob_entity.set_target(attack_target);
     }
 
@@ -664,10 +599,6 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    /// A random source that hands out prepared draws, so a test fixes the value of every call
-    /// and how many calls the code under test makes. A draw is a fraction in `[0, 1)`; a request
-    /// for a range of `bound` values gets the index `floor(fraction * bound)`, and a `bool` is true
-    /// from one half up.
     struct ScriptedRng(VecDeque<f64>);
 
     impl ScriptedRng {
@@ -675,7 +606,6 @@ mod tests {
             Self(draws.iter().copied().collect())
         }
 
-        /// The draw that makes a request for `bound` values pick `index`.
         fn pick(index: u32, bound: u32) -> f64 {
             (f64::from(index) + 0.5) / f64::from(bound)
         }
@@ -719,7 +649,6 @@ mod tests {
         ))
     }
 
-    /// The variants and member count of an axolotl group.
     fn group_parts(group: &SpawnGroupData) -> ([AxolotlVariant; 2], u32) {
         let SpawnGroupData::Axolotl { types, group_size } = group else {
             panic!("not an axolotl group");
@@ -727,8 +656,6 @@ mod tests {
         (*types, *group_size)
     }
 
-    /// The first axolotl draws the two group variants and then its own pick; later members only
-    /// pick, and only the third and later members are babies.
     #[test]
     fn spawn_group_draws_its_variants_once_and_makes_babies_from_the_third_member() {
         let mut rng = ScriptedRng::new(&[
@@ -759,8 +686,6 @@ mod tests {
         assert_eq!(rng.remaining(), 0);
     }
 
-    /// `Variant` is the vanilla id and a missing, negative or unknown id is Lucy, not what the
-    /// entity had before. `FromBucket` is read the same way.
     #[tokio::test]
     async fn variant_and_from_bucket_round_trip_through_nbt() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -821,8 +746,6 @@ mod tests {
         }
     }
 
-    /// Without the rare roll the baby takes this parent's variant or the partner's, chosen by the
-    /// draw after the rare roll; a blue parent passes blue on like any other variant.
     #[test]
     fn breeding_takes_this_parent_or_the_partner() {
         let miss = ScriptedRng::pick(600, 1200);
@@ -841,7 +764,6 @@ mod tests {
         axolotl.get_entity().air_supply.load(Ordering::Relaxed)
     }
 
-    /// Out of the water the air drops by one a tick. In water it is full at once, whatever it was.
     #[tokio::test]
     async fn air_runs_down_on_land_and_refills_in_water() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -935,10 +857,6 @@ mod tests {
             .with_brain(axolotl.as_ref(), |brain| read(brain))
     }
 
-    /// The playing dead flag follows the `PLAY_DEAD_TICKS` memory on every AI step, after the
-    /// brain has counted it down by one: on while the memory is still above 0, so 2 ticks left
-    /// are on and 1 tick left is off, and off at 0 and without the memory. An axolotl without AI
-    /// keeps whatever flag it had.
     #[tokio::test]
     async fn the_playing_dead_flag_follows_the_memory_unless_there_is_no_ai() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -974,8 +892,6 @@ mod tests {
         Ok(())
     }
 
-    /// The target the mob reports (what `execute on target` and plugins read) is the attack
-    /// target memory, set when the brain picks a target and cleared when it forgets it.
     #[tokio::test]
     async fn the_mob_target_follows_the_attack_target_memory() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -1007,10 +923,6 @@ mod tests {
         Ok(())
     }
 
-    /// The whole hunt through the real brain: a cod in the water within 8 blocks becomes the
-    /// nearest attackable, the axolotl starts attacking and fights, and bites it with
-    /// `MOB_ATTACK` once it is in reach. When the cod dies the fight ends and the hunting
-    /// cooldown starts.
     #[tokio::test]
     async fn the_brain_hunts_a_cod_in_the_water_and_rests_after_the_kill() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -1067,9 +979,6 @@ mod tests {
         Ok(())
     }
 
-    /// The memories vanilla saves survive a save and load: the play dead ticks (and the playing
-    /// dead flag that follows them) and the hunting cooldown with its ticks left. The attack
-    /// target is not saved.
     #[tokio::test]
     async fn the_saved_memories_come_back_from_nbt() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -1112,8 +1021,6 @@ mod tests {
         Ok(())
     }
 
-    /// A hit in the water by an entity on an unhurt-looking axolotl; the tests change one thing at
-    /// a time from it.
     fn hit() -> HurtCheck {
         HurtCheck {
             no_ai: false,
@@ -1126,7 +1033,6 @@ mod tests {
         }
     }
 
-    /// The outcome of the play dead rule for the scripted draws, and how many draws are left.
     fn plays_dead(hit: &HurtCheck, draws: &[u32]) -> (bool, usize) {
         let mut rng = ScriptedRng::new(
             &draws
@@ -1138,8 +1044,6 @@ mod tests {
         (result, rng.remaining())
     }
 
-    /// The first draw has to be a 0 of 3 and the second one below the damage (here 1: only a 0),
-    /// and the second draw is only made after the first one passed.
     #[test]
     fn a_hit_plays_dead_one_time_in_three_and_then_by_the_damage() {
         let one = hit();
@@ -1156,8 +1060,6 @@ mod tests {
         assert_eq!(plays_dead(&two, &[0, 2]), (false, 0));
     }
 
-    /// A hit that would kill it, or only just not, and the other conditions: all of them are
-    /// needed, and without AI not even the first random number is drawn.
     #[test]
     fn a_deadly_hit_or_a_missing_condition_keeps_it_standing() {
         let deadly = HurtCheck {
@@ -1270,8 +1172,6 @@ mod tests {
         Ok(())
     }
 
-    /// Playing dead takes the axolotl out of what monsters see as an enemy, and its idle sound
-    /// is not played.
     #[tokio::test]
     async fn playing_dead_hides_it_from_enemies_and_silences_it() -> TestResult {
         let folder = tempfile::tempdir()?;

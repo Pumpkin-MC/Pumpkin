@@ -8,9 +8,6 @@ pub fn create(speed_modifier: f32, close_enough_distance: i32) -> OneShot {
     create_with(|_| true, move |_| speed_modifier, close_enough_distance)
 }
 
-/// Vanilla `SetWalkTargetFromLookTarget.create(canSetWalkTargetPredicate, speedModifier, ...)`:
-/// the walk target is only set when `can_set_walk_target` agrees, at a speed that depends on the
-/// mob.
 #[must_use]
 pub fn create_with(
     can_set_walk_target: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,

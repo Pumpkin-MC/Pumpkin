@@ -2,13 +2,8 @@ use super::super::memory::{MemoryStatus, types, walk_target::WalkTarget};
 use super::{OneShot, utils};
 use crate::entity::mob::Mob;
 
-/// The walk target of vanilla `SetWalkTargetFromAttackTargetIfTargetOutOfReach`: right on the
-/// target.
 const CLOSE_ENOUGH_DISTANCE: i32 = 0;
 
-/// Vanilla `SetWalkTargetFromAttackTargetIfTargetOutOfReach`: walks to the attack target at
-/// `speed_modifier` while it is out of reach or out of sight, and stands still once it is in
-/// reach.
 #[must_use]
 pub fn create(speed_modifier: fn(&dyn Mob) -> f32) -> OneShot {
     OneShot::new(
@@ -110,8 +105,6 @@ mod tests {
         Some((tracked, walk.speed_modifier(), walk.close_enough_dist()))
     }
 
-    /// Out of reach it looks at the target and walks to it at the chasing speed of the water it
-    /// is in; once the target is in reach the walk target is dropped.
     #[tokio::test]
     async fn walks_to_a_target_out_of_reach_and_stops_once_it_is_in_reach() -> TestResult {
         let folder = tempfile::tempdir()?;

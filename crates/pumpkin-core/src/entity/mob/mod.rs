@@ -2072,8 +2072,6 @@ pub trait Mob: EntityBase + Send + Sync {
         self.pre_damage(damage_type, source)
     }
 
-    /// What a mob adds to vanilla's `canBeSeenAsEnemy` (`!invulnerable && canBeSeenByAnyone`): it
-    /// can only take it away, as the axolotl does while it plays dead.
     fn mob_can_be_seen_as_enemy(&self) -> bool {
         true
     }

@@ -141,7 +141,6 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    /// Whether the behavior starts for a mob that is in the water or out of it.
     fn starts(mut behavior: OneShot, in_water: bool) -> Result<bool, Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
@@ -166,8 +165,6 @@ mod tests {
         Ok(started)
     }
 
-    /// `stroll(speed, false)` is the stroll that does not begin in water; the plain `stroll` and
-    /// the `true` form still do, as before.
     #[tokio::test]
     async fn a_stroll_that_may_not_start_in_water_waits_for_dry_land() -> TestResult {
         let not_from_water = stroll_with_water(0.15, false);

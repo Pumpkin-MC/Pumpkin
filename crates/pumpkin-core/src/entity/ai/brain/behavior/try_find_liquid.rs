@@ -8,19 +8,13 @@ use super::super::memory::{MemoryStatus, types};
 use super::{OneShot, utils};
 use crate::world::World;
 
-/// Ticks until the next search after one that ran (vanilla `nextOkStartTime = timestamp + 40`).
 const SEARCH_INTERVAL: i64 = 40;
-/// How long a start that fell into the interval pushes the next search away from itself
-/// (vanilla `timestamp + 20 + 2`).
 const RETRY_DELAY: i64 = 20 + 2;
 /// A liquid block this close to the mob is only a last resort (vanilla
 /// `closerToCenterThan(position, 1.5)`).
 const TOO_CLOSE_DISTANCE: f64 = 1.5;
 const CLOSE_ENOUGH_DISTANCE: i32 = 0;
 
-/// Vanilla `getFluidState(pos).getType()` for the fluid families that exist here: a source
-/// block (and any block holding still water) is the still variant, the rest of a liquid block the
-/// flowing one. The fluid tags list the two apart, `axolotl_tries_to_find` has only still water.
 fn fluid_type_at(world: &World, pos: &BlockPos) -> &'static Fluid {
     let (family, state) = world.get_fluid_and_fluid_state(pos);
     if family.matches_type(&Fluid::WATER) {
@@ -40,9 +34,6 @@ fn fluid_type_at(world: &World, pos: &BlockPos) -> &'static Fluid {
     }
 }
 
-/// The first liquid block of `fluid_tag` around the mob, nearest by manhattan distance, on the
-/// way to which vanilla `TryFindLiquid` prefers one with air above it (the surface) over one
-/// that is covered, and a covered one that is not right at the mob over none.
 fn find_liquid(
     tick: &BrainTick<'_>,
     origin: BlockPos,
@@ -74,11 +65,6 @@ fn find_liquid(
     covered
 }
 
-/// Vanilla `TryFindLiquid.create(range, speedModifier, fluidTag)`.
-///
-/// A mob that is out of its liquid walks and looks to a liquid block within `range` blocks
-/// (manhattan), searching at most every 40 ticks. It starts only without an attack target and a
-/// walk target, and does nothing while it is in the liquid.
 #[must_use]
 pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneShot {
     let mut next_ok_start_time = 0i64;
@@ -173,7 +159,6 @@ mod tests {
         world.set_block_state(&BlockPos::new(x, y, z), block.default_state.id, flags);
     }
 
-    /// Water of the given flow level (0 is a source block, the rest flows).
     fn place_level(world: &Arc<World>, x: i32, y: i32, z: i32, level: u8) {
         let flags = BlockFlags::NOTIFY_LISTENERS
             | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
@@ -182,7 +167,6 @@ mod tests {
         world.set_block_state(&BlockPos::new(x, y, z), state, flags);
     }
 
-    /// Where the walk target is, how fast it walks and whether it also looks there.
     fn walking_to(brain: &Brain) -> Option<(BlockPos, f32, bool)> {
         let walk = brain.get(types::WALK_TARGET)?;
         let pos = walk.target().current_block_position();
@@ -192,8 +176,6 @@ mod tests {
         Some((pos, walk.speed_modifier(), looks))
     }
 
-    /// The surface water wins over nearer water that is covered by a block: the covered block
-    /// three blocks away is only a fallback and the search goes on to the one with air above it.
     #[tokio::test]
     async fn walks_to_water_with_air_above_it_rather_than_to_covered_water() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -214,8 +196,6 @@ mod tests {
         Ok(())
     }
 
-    /// With no surface water the first covered water that is not right at the mob is taken: the
-    /// block next to it is closer than 1.5 and skipped, the nearest of the others wins.
     #[tokio::test]
     async fn falls_back_to_the_nearest_covered_water_that_is_not_beside_the_mob() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -237,9 +217,6 @@ mod tests {
         Ok(())
     }
 
-    /// Water in the mob's own column (here two blocks down, with air above it) is no target, nor
-    /// is water that flows (the tag has only still water); and a mob standing in flowing water is
-    /// not in its liquid and still looks.
     #[tokio::test]
     async fn ignores_its_own_column_and_flowing_water() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -264,7 +241,6 @@ mod tests {
         Ok(())
     }
 
-    /// A mob in its liquid does not search at all.
     #[tokio::test]
     async fn does_nothing_while_standing_in_water() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -281,9 +257,6 @@ mod tests {
         Ok(())
     }
 
-    /// A search is followed by 40 quiet ticks, and a start that falls into them pushes the next
-    /// search 22 ticks after itself, so a mob asked every tick does not search again, while one
-    /// asked after a pause does, from the 40th tick on.
     #[tokio::test]
     async fn searches_again_only_after_the_interval() -> TestResult {
         let folder = tempfile::tempdir()?;

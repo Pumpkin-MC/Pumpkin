@@ -390,8 +390,6 @@ mod tests {
         axolotl
     }
 
-    /// A water potion that hits the ground rehydrates the axolotls around it through the real
-    /// `on_hit` path, and a potion that is not in the tag does not.
     #[tokio::test]
     async fn a_thrown_water_potion_rehydrates_the_axolotls_it_lands_next_to() -> TestResult {
         let folder = tempfile::tempdir()?;

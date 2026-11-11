@@ -79,8 +79,6 @@ mod tests {
         brain
     }
 
-    /// Nothing to attack, something it may not attack, and something it may attack: only the
-    /// last one becomes the attack target, and it also clears the unreachable walk target mark.
     #[tokio::test]
     async fn takes_the_found_target_only_when_it_may_be_attacked() -> TestResult {
         let folder = tempfile::tempdir()?;

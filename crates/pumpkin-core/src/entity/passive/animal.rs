@@ -80,7 +80,6 @@ pub trait Animal: Mob {
 
     fn play_eating_sound(&self) {}
 
-    /// Vanilla `Mob.usePlayerItem`: uses up one fed item, which creative players keep.
     fn use_player_item(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
     }

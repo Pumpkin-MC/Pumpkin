@@ -8,24 +8,16 @@ use crate::entity::ai::control::{
 };
 use crate::entity::mob::Mob;
 
-/// `maxTurnX` of `AxolotlMoveControl`.
 const MAX_TURN_X: i32 = 85;
-/// `maxTurnY` of `AxolotlMoveControl`.
 const MAX_TURN_Y: i32 = 10;
-/// `inWaterSpeedModifier` of `AxolotlMoveControl`.
 const IN_WATER_SPEED_MODIFIER: f32 = 0.1;
-/// `outsideWaterSpeedModifier` of `AxolotlMoveControl`.
 const OUTSIDE_WATER_SPEED_MODIFIER: f32 = 0.5;
-/// `maxYRotFromCenter` of `AxolotlLookControl`.
 const MAX_Y_ROT_FROM_CENTER: i32 = 20;
 
-/// Whether the mob behind a control is an axolotl that is playing dead.
 fn is_playing_dead(mob: &dyn Mob) -> bool {
     as_axolotl(mob).is_some_and(super::AxolotlEntity::is_playing_dead)
 }
 
-/// Vanilla `Axolotl.AxolotlMoveControl`: a `SmoothSwimmingMoveControl` that does nothing while
-/// the axolotl plays dead. The wanted position is kept, so it moves on again afterwards.
 pub struct AxolotlMoveControl {
     inner: SmoothSwimmingMoveControl,
 }
@@ -74,8 +66,6 @@ impl MoveControlTrait for AxolotlMoveControl {
     }
 }
 
-/// Vanilla `Axolotl.AxolotlLookControl`: a `SmoothSwimmingLookControl` that does nothing while
-/// the axolotl plays dead.
 pub struct AxolotlLookControl {
     inner: SmoothSwimmingLookControl,
 }

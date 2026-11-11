@@ -130,9 +130,6 @@ mod tests {
         brain
     }
 
-    /// In reach and in sight it hits once, looks at the target and starts the 20 tick cooldown;
-    /// the sound plays only for a hit that did damage; during the cooldown it does not hit, and
-    /// it hits again the tick after the cooldown memory has run out.
     #[tokio::test]
     async fn hits_once_per_cooldown_and_plays_the_sound_for_damaging_hits() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -168,7 +165,6 @@ mod tests {
         Ok(())
     }
 
-    /// A target out of reach or out of sight is not hit and starts no cooldown.
     #[tokio::test]
     async fn does_not_hit_a_target_out_of_reach_or_out_of_sight() -> TestResult {
         let folder = tempfile::tempdir()?;

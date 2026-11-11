@@ -11,14 +11,8 @@ const REQUIRES: [MemoryModuleId; 3] = [
     types::HAS_HUNTING_COOLDOWN.id(),
 ];
 
-/// Vanilla `TARGET_DETECTION_DISTANCE`: 8 blocks, compared as a squared distance.
 const TARGET_DETECTION_DISTANCE_SQR: f64 = 8.0 * 8.0;
 
-/// Vanilla `AxolotlAttackablesSensor`.
-///
-/// Remembers the nearest visible living entity in the water within 8 blocks that the axolotl may
-/// attack and that is one it always fights (the drowned and guardians) or, while it has no hunting
-/// cooldown, one it hunts (the fish and squids).
 pub struct AxolotlAttackablesSensor;
 
 impl Sensor for AxolotlAttackablesSensor {
@@ -47,8 +41,6 @@ impl Sensor for AxolotlAttackablesSensor {
     }
 }
 
-/// The part of vanilla `isMatchingEntity` that does not need the targeting conditions: close,
-/// in the water, and either always hostile or (without a hunting cooldown) a hunt target.
 fn is_matching_entity(squared_distance: f64, entity: &dyn EntityBase, hunting: bool) -> bool {
     let entity = entity.get_entity();
     squared_distance <= TARGET_DETECTION_DISTANCE_SQR
@@ -104,8 +96,6 @@ mod tests {
         entity.get_entity().entity_id
     }
 
-    /// The nearest attackable the sensor picks out of `visible` (nearest first) for an axolotl at
-    /// the origin, with or without a hunting cooldown, after a previous pick of `previous`.
     fn sense(
         world: &Arc<World>,
         visible: Vec<Arc<dyn EntityBase>>,
@@ -137,8 +127,6 @@ mod tests {
         state.get(types::NEAREST_ATTACKABLE).map(id)
     }
 
-    /// Fish in the water are prey, the drowned are always an enemy, and a cow in the water, a
-    /// fish out of it and a fish too far are not, the 8 block limit itself being in.
     #[tokio::test]
     async fn picks_water_bound_prey_within_eight_blocks() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -174,8 +162,6 @@ mod tests {
         Ok(())
     }
 
-    /// With a hunting cooldown the axolotl leaves the fish alone but still fights the drowned, and
-    /// it picks the first of the entities that qualify (the list is nearest first).
     #[tokio::test]
     async fn a_hunting_cooldown_spares_fish_but_not_the_always_hostile() -> TestResult {
         let folder = tempfile::tempdir()?;

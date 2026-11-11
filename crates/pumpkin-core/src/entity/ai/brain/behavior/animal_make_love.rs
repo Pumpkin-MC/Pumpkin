@@ -44,7 +44,6 @@ impl AnimalMakeLove {
         )
     }
 
-    /// Vanilla's `AnimalMakeLove(partnerType, speedModifier, closeEnoughDistance)`.
     #[must_use]
     pub const fn with_speed_and_distance(
         partner_type: &'static EntityType,

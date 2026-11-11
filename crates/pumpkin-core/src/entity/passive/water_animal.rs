@@ -38,8 +38,6 @@ pub(super) fn check_spawn_obstruction<M: Mob + ?Sized>(
     world.is_unobstructed(mob.get_entity())
 }
 
-/// Runs out of air by one a tick unless `wet` (the water, or for the axolotl also rain) and
-/// takes `dry_out_damage` of `dry_out_damage_type` once the air hits the drowning threshold.
 pub(super) fn handle_air_supply<M: Mob + ?Sized>(
     mob: &M,
     pre_tick_air_supply: i32,
@@ -75,8 +73,6 @@ mod tests {
     use crate::entity::passive::abstract_fish::AbstractFish;
     use crate::entity::passive::cod::CodEntity;
 
-    /// Fish keep the rule they had before it took parameters: 300 air in water, one less a tick on
-    /// land, and a drowning hit of 2 once the air passes -20.
     #[tokio::test]
     async fn fish_keep_the_drowning_rule() -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;

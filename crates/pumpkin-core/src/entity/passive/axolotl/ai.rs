@@ -29,20 +29,15 @@ use crate::entity::mob::Mob;
 
 use super::AxolotlEntity;
 
-/// Vanilla `ADULT_FOLLOW_RANGE`: a baby follows an adult 5 to 16 blocks away.
 const ADULT_FOLLOW_RANGE: (i32, i32) = (5, 16);
 const SPEED_MULTIPLIER_WHEN_MAKING_LOVE: f32 = 0.2;
 const SPEED_MULTIPLIER_ON_LAND: f32 = 0.15;
 const SPEED_MULTIPLIER_WHEN_IDLING_IN_WATER: f32 = 0.5;
 const SPEED_MULTIPLIER_WHEN_CHASING_IN_WATER: f32 = 0.6;
 const SPEED_MULTIPLIER_WHEN_FOLLOWING_ADULT_IN_WATER: f32 = 0.6;
-/// Vanilla `MeleeAttack.create(20)`: ticks between two bites.
 const ATTACK_COOLDOWN: i32 = 20;
-/// Vanilla `PlayDead`'s duration (`super(..., 200)`).
 const PLAY_DEAD_BEHAVIOR_DURATION: i32 = 200;
-/// The regeneration `PlayDead.start` gives: `new MobEffectInstance(REGENERATION, 200, 0)`.
 const PLAY_DEAD_REGENERATION_DURATION: i32 = 200;
-/// Vanilla `AxolotlAi.updateActivity`: the hunting cooldown that follows a fight.
 const HUNTING_COOLDOWN: i64 = 2400;
 
 pub(super) fn make_brain(axolotl: &AxolotlEntity, packed: &PackedMemories) -> Brain {
@@ -60,7 +55,6 @@ pub(super) fn make_brain(axolotl: &AxolotlEntity, packed: &PackedMemories) -> Br
     .make_brain(axolotl, packed)
 }
 
-/// Vanilla `AxolotlAi.getActivities`: core, idle, fight and play dead.
 fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
     vec![
         init_core_activity(),
@@ -228,8 +222,6 @@ fn init_idle_activity() -> ActivityData {
     )
 }
 
-/// Vanilla `canSetWalkTargetFromLookTarget`: the look target has to be in the same kind of place
-/// (water or not) as the axolotl is in.
 fn can_set_walk_target_from_look_target(tick: &BrainTick<'_>) -> bool {
     tick.state.get(types::LOOK_TARGET).is_some_and(|look| {
         let in_water_at_target = tick
@@ -240,8 +232,6 @@ fn can_set_walk_target_from_look_target(tick: &BrainTick<'_>) -> bool {
     })
 }
 
-/// Vanilla `AxolotlAi.updateActivity`: picks play dead, else fight, else idle, unless it is
-/// playing dead already, and starts the hunting cooldown when a fight has just ended.
 pub(super) fn update_activity(brain: &mut Brain) {
     let old_activity = brain.get_active_non_core_activity();
     if old_activity == Some(Activity::PlayDead) {
@@ -283,7 +273,6 @@ fn speed_modifier(mob: &dyn Mob) -> f32 {
     }
 }
 
-/// Vanilla `findNearestValidAttackTarget`: what the sensor found, unless the axolotl is breeding.
 fn find_nearest_valid_attack_target(tick: &BrainTick<'_>) -> Option<Arc<dyn EntityBase>> {
     if utils::is_breeding(tick.state) {
         None
@@ -292,8 +281,6 @@ fn find_nearest_valid_attack_target(tick: &BrainTick<'_>) -> Option<Arc<dyn Enti
     }
 }
 
-/// Vanilla `ValidatePlayDead`: counts the play dead ticks down and, once they are used up,
-/// forgets them and the attacker and goes back to the default activity.
 fn validate_play_dead() -> OneShot {
     OneShot::new(
         "ValidatePlayDead",
@@ -317,7 +304,6 @@ fn validate_play_dead() -> OneShot {
     )
 }
 
-/// Vanilla `PlayDead`: the axolotl lies still in the water and regenerates.
 struct PlayDead;
 
 const PLAY_DEAD_CONDITIONS: [(MemoryModuleId, MemoryStatus); 2] = [
@@ -416,7 +402,6 @@ mod tests {
         axolotl.mob_entity.with_brain(axolotl.as_ref(), callback)
     }
 
-    /// The tracked activity after an activity update, and whether the hunting cooldown is set.
     fn update(axolotl: &Arc<AxolotlEntity>) -> (Option<Activity>, bool) {
         with_brain(axolotl, |brain| {
             update_activity(brain);
@@ -427,8 +412,6 @@ mod tests {
         })
     }
 
-    /// A fight is what the target memory puts the axolotl in, and ending it starts the 2400 tick
-    /// hunting cooldown as a real expiry; no fight, no cooldown.
     #[tokio::test]
     async fn a_finished_fight_starts_the_hunting_cooldown() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -456,7 +439,6 @@ mod tests {
         Ok(())
     }
 
-    /// Playing dead outranks a fight (which ends it, so the cooldown starts) and holds the activity.
     #[tokio::test]
     async fn playing_dead_outranks_a_fight_and_holds_the_activity() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -478,9 +460,6 @@ mod tests {
         Ok(())
     }
 
-    /// `ValidatePlayDead` alone: a tick off the memory per tick, and at 0 the memory and the
-    /// attacker are forgotten and the default activity is back, on the tick after the count
-    /// reached 0.
     #[tokio::test]
     async fn validate_play_dead_counts_down_and_ends_the_activity() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -527,8 +506,6 @@ mod tests {
         Ok(())
     }
 
-    /// The state `PlayDead` starts from: play dead ticks, an attacker, and somewhere it was going
-    /// and looking.
     fn play_dead_state(attacker: &Arc<dyn EntityBase>) -> BrainState {
         let mut state = BrainState::default();
         for id in [
@@ -559,9 +536,6 @@ mod tests {
         )
     }
 
-    /// `PlayDead` starts only in the water: it forgets where it was going and looking and gets
-    /// 200 ticks of regeneration I, which heal 4 health over their duration. Out of the water it
-    /// does not start and nothing is forgotten or given.
     #[tokio::test]
     async fn playing_dead_regenerates_in_the_water_only() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -620,8 +594,6 @@ mod tests {
         Ok(())
     }
 
-    /// The attack target `StartAttacking` is offered is what the sensor found, unless the
-    /// axolotl is breeding.
     #[tokio::test]
     async fn a_breeding_axolotl_is_offered_no_attack_target() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -653,8 +625,6 @@ mod tests {
         Ok(())
     }
 
-    /// An axolotl walks to what it looked at only when that spot is water exactly when the
-    /// axolotl is in the water itself; with nothing looked at, it does not walk.
     #[tokio::test]
     async fn a_look_target_is_walked_to_only_in_the_same_kind_of_place() -> TestResult {
         let folder = tempfile::tempdir()?;

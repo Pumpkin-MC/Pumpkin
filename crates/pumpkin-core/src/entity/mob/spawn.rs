@@ -52,8 +52,6 @@ pub enum SpawnGroupData {
         is_baby: bool,
         can_spawn_jockey: bool,
     },
-    /// Vanilla `AxolotlGroupData`: the two common variants a group shares and how many
-    /// axolotls joined so far.
     Axolotl {
         types: [AxolotlVariant; 2],
         group_size: u32,
