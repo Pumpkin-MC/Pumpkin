@@ -160,17 +160,12 @@ impl EntityBase for LeashKnotEntity {
 
         let mut any_dropped = false;
         if !attached_mob {
+            let player_holder = player.clone() as Arc<dyn EntityBase>;
             for entity_base in &entities {
-                let ent = entity_base.get_entity();
-                // The guard must be released first: `leash_to` locks `leashed_to` again.
-                let leashed_to_knot = ent
-                    .leashed_to
-                    .try_lock()
-                    .ok()
-                    .and_then(|guard| guard.as_ref().and_then(std::sync::Weak::upgrade))
-                    .is_some_and(|holder| holder.get_entity().entity_id == knot_id);
-                if leashed_to_knot {
-                    ent.leash_to(player.clone() as Arc<dyn EntityBase>);
+                if entity_base
+                    .get_entity()
+                    .leash_to_if_held_by(knot_id, &player_holder)
+                {
                     any_dropped = true;
                 }
             }
