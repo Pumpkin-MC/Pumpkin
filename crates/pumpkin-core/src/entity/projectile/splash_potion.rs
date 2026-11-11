@@ -60,16 +60,10 @@ impl SplashPotionEntity {
             .item_stack
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(potion) = stack
-            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-            .and_then(|contents| contents.potion_id)
-            .and_then(|id| u8::try_from(id).ok())
-            .and_then(pumpkin_data::potion::Potion::from_id)
-        else {
-            return false;
-        };
-        let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
-        names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
+        potion_has_tag(
+            &stack,
+            pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES,
+        )
     }
 }
 
@@ -80,15 +74,21 @@ fn is_water_potion(stack: &ItemStack) -> bool {
         == Some(pumpkin_data::potion::Potion::WATER.id as i32)
 }
 
-/// Vanilla `PotionContents.is(PotionTags.REHYDRATES_AXOLOTLS)`.
-fn rehydrates_axolotls(stack: &ItemStack) -> bool {
-    let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_REHYDRATES_AXOLOTLS;
+fn potion_has_tag(stack: &ItemStack, tag: pumpkin_data::tag::Tag) -> bool {
+    let (names, ids) = tag;
     stack
         .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
         .and_then(|contents| contents.potion_id)
         .and_then(|id| u8::try_from(id).ok())
         .and_then(pumpkin_data::potion::Potion::from_id)
         .is_some_and(|potion| names.contains(&potion.name) || ids.contains(&u16::from(potion.id)))
+}
+
+fn rehydrates_axolotls(stack: &ItemStack) -> bool {
+    potion_has_tag(
+        stack,
+        pumpkin_data::tag::Potion::MINECRAFT_REHYDRATES_AXOLOTLS,
+    )
 }
 
 /// Vanilla `AbstractThrownPotion.affectEntitiesAround`: a potion that rehydrates axolotls gives
