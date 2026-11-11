@@ -14,7 +14,7 @@ pub enum BedRuleOption {
 pub struct BedRule {
     pub can_sleep: BedRuleOption,
     pub can_set_spawn: BedRuleOption,
-    pub explodes: bool,
+    pub destroy_on_use: bool,
 }
 impl BedRule {
     #[inline]
@@ -113,7 +113,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::WhenDark,
             can_set_spawn: BedRuleOption::Always,
-            explodes: false,
+            destroy_on_use: false,
         },
         timelines: Some("#minecraft:in_overworld"),
     };
@@ -157,7 +157,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::WhenDark,
             can_set_spawn: BedRuleOption::Always,
-            explodes: false,
+            destroy_on_use: false,
         },
         timelines: Some("#minecraft:in_overworld"),
     };
@@ -196,7 +196,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::Never,
             can_set_spawn: BedRuleOption::Never,
-            explodes: false,
+            destroy_on_use: true,
         },
         timelines: Some("#minecraft:in_end"),
     };
@@ -235,7 +235,7 @@ impl Dimension {
         bed_rule: BedRule {
             can_sleep: BedRuleOption::Never,
             can_set_spawn: BedRuleOption::Never,
-            explodes: false,
+            destroy_on_use: true,
         },
         timelines: Some("#minecraft:in_nether"),
     };

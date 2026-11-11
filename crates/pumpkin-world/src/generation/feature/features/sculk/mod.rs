@@ -176,12 +176,12 @@ impl<T: GenerationCache> SculkLevel for T {
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
         let (fluid, fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid == Fluid::WATER && fluid_state.is_source
+        *fluid == Fluid::WATER && fluid_state.is_source
     }
 
     fn sculk_is_water(&self, pos: BlockPos) -> bool {
         let (fluid, _fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid == Fluid::WATER
+        *fluid == Fluid::WATER
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {

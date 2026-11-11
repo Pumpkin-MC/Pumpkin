@@ -35,7 +35,7 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::bucket::{
-    FilledBucketItem, play_bucket_evaporation, should_evaporate_in_nether, try_pickup_fluid_at,
+    FilledBucketItem, bucket_evaporates, play_bucket_evaporation, try_pickup_fluid_at,
     try_place_filled_bucket,
 };
 use crate::item::items::honeycomb::try_wax_block;
@@ -834,7 +834,7 @@ impl DispenserBlock {
         let front = Self::target_position(ctx);
 
         // TODO: Spawn the stored entity for axolotl/fish/tadpole buckets, like the player path.
-        let emptied = if should_evaporate_in_nether(item.item, ctx.world) {
+        let emptied = if bucket_evaporates(item.item, ctx.world, &front) {
             play_bucket_evaporation(ctx.world, &front.to_f64());
             true
         } else {

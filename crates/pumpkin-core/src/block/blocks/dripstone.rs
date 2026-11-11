@@ -20,6 +20,7 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
+// TODO: randomTick, maybeTransferFluid (mud to clay, cauldron fill) and growth
 #[pumpkin_block_from_tag("minecraft:speleothems")]
 pub struct DripstoneBlock;
 
@@ -100,7 +101,7 @@ impl BlockBehaviour for DripstoneBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }

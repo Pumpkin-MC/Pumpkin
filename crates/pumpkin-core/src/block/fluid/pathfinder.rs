@@ -1,24 +1,15 @@
 use super::physics;
 use crate::block::fluid::flowing_trait::FlowingFluid;
 use crate::world::World;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     Block, BlockDirection,
-    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    fluid::{Falling, FlowingFluidProperties, Fluid, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
-/// Represents a node in the BFS pathfinding queue for fluid flow calculation.
-#[derive(Clone, Copy)]
-pub struct PathNode {
-    pub pos: BlockPos,
-    pub distance: i32,
-    pub exclude_dir: BlockDirection,
-}
-
 /// Checks if a position has a hole (downward flow opportunity) below it.
-fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
+fn is_hole(world: &Arc<World>, fluid: &'static Fluid, pos: &BlockPos) -> bool {
     let below_pos = pos.down();
     let below_state = world.get_block_state(&below_pos);
     let below_block = Block::from_state_id(below_state.id);
@@ -29,23 +20,25 @@ fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
 ///
 /// - Holes (downward flow opportunities) get distance 0 priority
 /// - All directions with equal minimum distance are returned
-/// - Returns up to 4 directions with their computed fluid states
+/// - One entry per horizontal direction that receives fluid
 pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
     fluid_impl: &T,
     world: &Arc<World>,
-    fluid: &Fluid,
+    fluid: &'static Fluid,
     block_pos: &BlockPos,
-) -> ([(BlockDirection, BlockStateId); 4], usize) {
+) -> [Option<(BlockDirection, FlowingFluidProperties)>; 4] {
     let mut min_dist = 1000;
-    let mut result = [(BlockDirection::North, BlockStateId::default()); 4];
-    let mut result_count = 0;
+    let mut result = [None; 4];
 
-    for direction in [
+    for (slot, direction) in [
         BlockDirection::North,
         BlockDirection::South,
         BlockDirection::West,
         BlockDirection::East,
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let side_pos = block_pos.offset(direction.to_offset());
         let side_state = world.get_block_state(&side_pos);
         let side_state_id = side_state.id;
@@ -67,8 +60,6 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             continue;
         };
 
-        let new_state_id = new_fluid_props.to_state_id(fluid);
-
         // Holes get distance 0
         let slope_dist = if is_hole(world, fluid, &side_pos) {
             0
@@ -84,7 +75,7 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
 
         // Clear results if we find a shorter path
         if slope_dist < min_dist {
-            result_count = 0;
+            result = [None; 4];
         }
 
         // Add all directions with equal minimum distance
@@ -97,83 +88,57 @@ pub fn get_spread<T: FlowingFluid + Sync + ?Sized>(
                 new_level > target_level || sp.falling == Falling::True
             });
 
-            if can_replace && result_count < 4 {
-                result[result_count] = (direction, new_state_id);
-                result_count += 1;
+            if can_replace {
+                result[slot] = Some((direction, new_fluid_props));
             }
 
             min_dist = slope_dist;
         }
     }
-    (result, result_count)
+    result
 }
 
-/// Performs iterative BFS search to find the shortest distance to a downward flow opportunity.
+/// Largest hole search reach: `getSlopeFindDistance` + 1.
+const MAX_REACH: i32 = Fluid::MAX_SLOPE_FIND_DISTANCE as i32 + 1;
+/// Grid around the start holding every node within reach.
+const GRID: i32 = 2 * MAX_REACH + 1;
+const CELLS: usize = (GRID * GRID) as usize;
+
+/// BFS distance to the nearest hole, 1000 if none is within reach.
 ///
-/// Uses stack-allocated array for zero heap allocations. Searches up to `get_max_flow_distance`
-/// (dynamic) horizontally from the starting position.
-///
-/// # Returns
-/// Distance to nearest hole, or 1000 if no hole found within search distance
+/// Each grid cell is queued at most once, so the queue cannot overflow.
 pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
     fluid_impl: &T,
     world: &Arc<World>,
-    fluid: &Fluid,
+    fluid: &'static Fluid,
     start_pos: BlockPos,
     initial_exclude_dir: BlockDirection,
 ) -> i32 {
-    const MAX_QUEUE_SIZE: usize = 64;
-
-    let mut queue: [PathNode; MAX_QUEUE_SIZE] = [PathNode {
-        pos: BlockPos::new(0, 0, 0),
-        distance: 0,
-        exclude_dir: BlockDirection::North,
-    }; MAX_QUEUE_SIZE];
-
-    let mut queue_start = 0;
-    let mut queue_end = 0;
-
-    queue[queue_end] = PathNode {
-        pos: start_pos,
-        distance: 1,
-        exclude_dir: initial_exclude_dir,
-    };
-    queue_end = 1;
-
-    let mut visited_bitset = [0u64; 4];
-    let slope_find_distance = fluid_impl.get_max_flow_distance(world);
-
-    let get_bit_index = |pos: BlockPos| -> Option<usize> {
-        let dx = pos.0.x - start_pos.0.x + slope_find_distance;
-        let dz = pos.0.z - start_pos.0.z + slope_find_distance;
-        let grid_size = slope_find_distance * 2 + 1;
-        (dx >= 0 && dx < grid_size && dz >= 0 && dz < grid_size)
-            .then(|| (dz * grid_size + dx) as usize)
+    let reach = fluid_impl.get_max_flow_distance(world);
+    let cell = |pos: BlockPos| {
+        ((pos.0.z - start_pos.0.z + MAX_REACH) * GRID + pos.0.x - start_pos.0.x + MAX_REACH)
+            as usize
     };
 
-    while queue_start < queue_end {
-        let node = queue[queue_start];
-        queue_start += 1;
+    let mut visited = [false; CELLS];
+    // the spreading block itself is never part of a path
+    visited[cell(start_pos.offset(initial_exclude_dir.to_offset()))] = true;
+    visited[cell(start_pos)] = true;
+    let mut queue = [(start_pos, 0); CELLS];
+    queue[0] = (start_pos, 1);
+    let (mut head, mut tail) = (0, 1);
 
-        if node.distance > slope_find_distance {
-            continue;
-        }
+    while head < tail {
+        let (pos, distance) = queue[head];
+        head += 1;
 
-        if let Some(bit_idx) = get_bit_index(node.pos) {
-            let word_idx = bit_idx / 64;
-            let bit_pos = bit_idx % 64;
-            if (visited_bitset[word_idx] & (1u64 << bit_pos)) != 0 {
-                continue;
-            }
-            visited_bitset[word_idx] |= 1u64 << bit_pos;
-        }
-
-        // Check for hole (downward flow opportunity)
-        let below_pos = node.pos.down();
-        let below_state = world.get_block_state(&below_pos);
+        let below_state = world.get_block_state(&pos.down());
         let below_block = Block::from_state_id(below_state.id);
         if physics::can_be_replaced(below_state, below_block, fluid) {
-            return node.distance;
+            return distance;
+        }
+        if distance == reach {
+            continue;
         }
 
         for direction in [
@@ -182,11 +147,10 @@ pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
             BlockDirection::West,
             BlockDirection::East,
         ] {
-            if direction == node.exclude_dir {
+            let next_pos = pos.offset(direction.to_offset());
+            if visited[cell(next_pos)] {
                 continue;
             }
-
-            let next_pos = node.pos.offset(direction.to_offset());
 
             let next_state = world.get_block_state(&next_pos);
             let next_block = Block::from_state_id(next_state.id);
@@ -195,22 +159,16 @@ pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
             }
 
             // Source blocks (including waterlogged) block horizontal pathfinding
-            let next_state_id = world.get_block_state_id(&next_pos);
             if fluid_impl
-                .get_effective_props(fluid, next_state_id)
+                .get_effective_props(fluid, next_state.id)
                 .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)
             {
                 continue;
             }
 
-            if queue_end < MAX_QUEUE_SIZE {
-                queue[queue_end] = PathNode {
-                    pos: next_pos,
-                    distance: node.distance + 1,
-                    exclude_dir: direction.opposite(),
-                };
-                queue_end += 1;
-            }
+            visited[cell(next_pos)] = true;
+            queue[tail] = (next_pos, distance + 1);
+            tail += 1;
         }
     }
 

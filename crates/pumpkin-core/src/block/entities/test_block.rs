@@ -46,10 +46,8 @@ impl TestBlockMode {
     #[must_use]
     pub fn from_block_state(state_id: BlockStateId) -> Option<Self> {
         Block::TEST_BLOCK
-            .properties(state_id)?
-            .to_props()
-            .into_iter()
-            .find_map(|p| match p {
+            .get_property(state_id, pumpkin_data::PropertyKey::Mode)
+            .and_then(|p| match p {
                 pumpkin_data::Property::TestBlockMode(mode) => Some(match mode {
                     pumpkin_data::block_properties::TestBlockMode::Start => Self::Start,
                     pumpkin_data::block_properties::TestBlockMode::Log => Self::Log,

@@ -181,11 +181,11 @@ impl ItemBehaviour for GlassBottleItem {
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &Block,
+        _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
         let world = player.world();
-        let state_id = world.get_block_state_id(&location);
+        let (block, state_id) = world.get_block_and_state_id(&location);
 
         if !matches!(block.id, BlockId::WATER | BlockId::WATER_CAULDRON)
             && !block.is_waterlogged(state_id)

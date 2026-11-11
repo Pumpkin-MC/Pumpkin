@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, fluid::FluidProperties};
+use pumpkin_data::Block;
 use pumpkin_gametest::{GameTestHelper, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
@@ -29,11 +29,10 @@ pub(super) async fn test_water_lava_interactions(helper: GameTestHelper) -> Game
 
     let lava_cobble_pos = BlockPos::new(2, 1, 3);
     let water_adj_pos = BlockPos::new(1, 1, 3);
-    let mut flowing_lava = pumpkin_data::fluid::FlowingWaterLikeFluidProperties::default(
-        &pumpkin_data::fluid::Fluid::FLOWING_LAVA,
-    );
-    flowing_lava.level = pumpkin_data::fluid::Level::L2;
-    flowing_lava.falling = pumpkin_data::fluid::Falling::False;
+    let flowing_lava = pumpkin_data::fluid::FlowingFluidProperties {
+        level: pumpkin_data::fluid::Level::L2,
+        falling: pumpkin_data::fluid::Falling::False,
+    };
     helper
         .set_block_default(&water_adj_pos, &Block::WATER)
         .await?;

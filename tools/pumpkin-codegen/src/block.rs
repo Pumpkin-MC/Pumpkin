@@ -1,5 +1,5 @@
 use heck::{ToPascalCase, ToShoutySnakeCase, ToUpperCamelCase};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Literal, Span, TokenStream};
 use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
@@ -27,22 +27,6 @@ fn fill_array<T: Clone + ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
     }
 
     raw_id_from_state_id_ordered
-}
-
-/// Converts a sparse `(block_ident, state_index, state_id)` list into a dense `TokenStream` array.
-///
-/// # Arguments
-/// – `array` – triples of `(block_ident, state_index, state_id)` mapping each state ID to the block constant and local index.
-fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
-    let max_index = array.iter().map(|(_, _, index)| index).max().unwrap();
-    let mut ret = vec![quote! { Missed State }; (max_index + 1) as usize];
-
-    for (block, index, state_id) in array {
-        let index_lit = LitInt::new(&index.to_string(), Span::call_site());
-        ret[state_id as usize] = quote! { &Block::#block.states[#index_lit] };
-    }
-
-    ret
 }
 
 /// Converts a block registry name into the SCREAMING_SNAKE_CASE constant identifier.
@@ -108,6 +92,45 @@ enum PropertyType {
         canonical_enum_name: String,
         shared_none_variants: Vec<(String, String)>,
     },
+}
+
+impl PropertyType {
+    fn variant_count(&self) -> u16 {
+        match self {
+            Self::Bool => 2,
+            Self::Int { min, max } => u16::from(max - min) + 1,
+            Self::Enum { values, .. } => values.len() as u16,
+        }
+    }
+
+    // slot values, same mapping as to_props
+    fn value_tokens(&self, key: &Ident) -> Vec<TokenStream> {
+        match self {
+            Self::Bool => vec![
+                quote! { Property::#key(true) },
+                quote! { Property::#key(false) },
+            ],
+            Self::Int { min, max } => (*min..=*max)
+                .map(|value| quote! { Property::#key(#value) })
+                .collect(),
+            Self::Enum {
+                values,
+                prop_variant_name,
+                canonical_enum_name,
+                ..
+            } => {
+                let variant = Ident::new(prop_variant_name, Span::call_site());
+                let canonical = Ident::new(canonical_enum_name, Span::call_site());
+                values
+                    .iter()
+                    .map(|value| {
+                        let value = Ident::new(&value.to_upper_camel_case(), Span::call_site());
+                        quote! { Property::#variant(#canonical::#value) }
+                    })
+                    .collect()
+            }
+        }
+    }
 }
 
 /// Maps a single block-property field to its Rust type representation.
@@ -271,25 +294,25 @@ impl ToTokens for BlockPropertyStruct {
             Ident::new(&const_block_name_from_block_name(name), Span::call_site())
         });
 
-        let to_index_logic = self.data.variant_mappings.iter().rev().map(|entry| {
+        let mut stride = 1u16;
+        let mut to_index_logic = Vec::new();
+        for entry in self.data.variant_mappings.iter().rev() {
             let field = Ident::new_raw(&entry.original_name, Span::call_site());
-            match &entry.property_type {
-                PropertyType::Bool => quote! { (!self.#field as u16, 2) },
-                PropertyType::Int { min, max } => {
-                    let count = (max - min + 1) as u16;
-
-                    if *min > 0 {
-                        quote! { ((self.#field - #min) as u16, #count) }
-                    } else {
-                        quote! { (self.#field as u16, #count) }
-                    }
+            let value = match &entry.property_type {
+                PropertyType::Bool => quote! { u16::from(!self.#field) },
+                PropertyType::Int { min, .. } if *min > 0 => {
+                    quote! { u16::from(self.#field - #min) }
                 }
-                PropertyType::Enum { name, .. } => {
-                    let ty = Ident::new(name, Span::call_site());
-                    quote! { (self.#field.to_index(), #ty::variant_count()) }
-                }
-            }
-        });
+                PropertyType::Int { .. } => quote! { u16::from(self.#field) },
+                PropertyType::Enum { .. } => quote! { self.#field.to_index() },
+            };
+            to_index_logic.push(if stride == 1 {
+                value
+            } else {
+                quote! { #value * #stride }
+            });
+            stride *= entry.property_type.variant_count();
+        }
 
         let from_index_body = self
             .data
@@ -484,10 +507,7 @@ impl ToTokens for BlockPropertyStruct {
 
             impl BlockProperties for #name {
                fn to_index(&self) -> u16 {
-                    let (index, _) = [#(#to_index_logic),*]
-                        .iter()
-                        .fold((0, 1), |(curr, mul), &(val, count)| (curr + val * mul, mul * count));
-                    index
+                    #(#to_index_logic)+*
                 }
 
                 #[allow(unused_assignments)]
@@ -502,9 +522,10 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn to_state_id(&self, block: &Block) -> BlockStateId {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", block.name, #struct_name);
-                    }
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", block.name, #struct_name
+                    );
                     block.states[self.to_index() as usize].id
                 }
 
@@ -529,9 +550,10 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn default(block: &Block) -> Self {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", block.name, #struct_name);
-                    }
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", block.name, #struct_name
+                    );
                     Self::from_state_id(block.default_state.id)
                 }
 
@@ -731,6 +753,8 @@ impl BlockState {
     const IS_SOLID_RENDER: u16 = 1 << 10;
     const CAN_OCCLUDE: u16 = 1 << 11;
     const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+    /// Set by codegen, not extractor.
+    const IS_WATERLOGGED: u16 = 1 << 13;
 
     /// Returns `true` if this state receives random tick events.
     const fn has_random_ticks(&self) -> bool {
@@ -902,6 +926,8 @@ pub struct Block {
     spawn_floor_predicate: Option<SpawnFloorPredicate>,
     /// Suffocation predicate for this block, if it differs from the default.
     suffocation_predicate: Option<SuffocationPredicate>,
+    #[serde(skip)]
+    property_slots: Vec<TokenStream>,
 }
 
 impl ToTokens for Block {
@@ -929,17 +955,11 @@ impl ToTokens for Block {
         } else {
             quote! { None }
         };
-        // Generate state tokens
-        let states = self.states.iter().map(BlockState::to_tokens);
-
-        let default_state_ref: &BlockState = self
-            .states
-            .iter()
-            .find(|state| state.id == self.default_state_id)
-            .unwrap();
-        let mut default_state = default_state_ref.clone();
-        default_state.id = default_state_ref.id;
-        let default_state = default_state.to_tokens();
+        // flat states
+        let first_state = Literal::usize_unsuffixed(self.states[0].id.0 as usize);
+        let state_count = Literal::usize_unsuffixed(self.states.len());
+        let default_state = Literal::usize_unsuffixed(self.default_state_id.0 as usize);
+        let property_slots = &self.property_slots;
         let flammable = if let Some(flammable) = &self.flammable {
             let flammable_tokens = flammable.to_token_stream();
             quote! { Some(#flammable_tokens) }
@@ -957,8 +977,9 @@ impl ToTokens for Block {
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
                 item_id: #item_id,
-                default_state: &#default_state,
-                states: &[#(#states),*],
+                default_state: &mappings::BLOCK_STATES[#default_state],
+                states: block_states(#first_state, #state_count),
+                property_slots: &[#(#property_slots),*],
                 flammable: #flammable,
                 experience: #experience,
                 loot_table: #loot_table,
@@ -1323,7 +1344,6 @@ pub fn build() -> TokenStream {
 
     let mut random_tick_states = Vec::new();
     let mut air_states = Vec::new();
-    let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
     let mut block_id_constants = Vec::new();
@@ -1341,7 +1361,7 @@ pub fn build() -> TokenStream {
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
-    let mut state_from_state_id_array = Vec::<(Ident, usize, u16)>::new();
+    let mut flat_states = Vec::new();
 
     let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     for generated_property in &generated_properties {
@@ -1363,7 +1383,9 @@ pub fn build() -> TokenStream {
     let mut property_collection_map: BTreeMap<Vec<i32>, PropertyCollectionData> = BTreeMap::new();
     let mut existing_item_ids: HashSet<u16> = HashSet::new();
 
-    for block in blocks_assets.blocks {
+    let mut max_block_properties = 0usize;
+    let mut property_value_consts: BTreeMap<String, Vec<TokenStream>> = BTreeMap::new();
+    for mut block in blocks_assets.blocks {
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
 
@@ -1412,24 +1434,41 @@ pub fn build() -> TokenStream {
             });
         }
 
-        let mut multiplier = 1;
-        let mut property_descriptors = Vec::new();
-        for hash in block.properties.iter().rev() {
-            let gen_prop = generated_prop_map.get(hash).unwrap();
-            let variant_count = match &gen_prop.property_type {
-                GeneratedPropertyType::Boolean => 2,
-                GeneratedPropertyType::Int { min, max } => (max - min + 1) as u16,
-                GeneratedPropertyType::Enum { values } => values.len() as u16,
-            };
-            property_descriptors.push(quote! {
-                PropertyDescriptor {
-                    hash_key: #hash,
-                    multiplier: #multiplier,
-                    variant_count: #variant_count,
-                }
-            });
-            multiplier *= variant_count;
+        // property slots
+        let mut strides = vec![0u16; property_mapping.len()];
+        let mut multiplier = 1u16;
+        let mut waterlogged_multiplier = None;
+        for (slot, mapping) in property_mapping.iter().enumerate().rev() {
+            strides[slot] = multiplier;
+            if mapping.original_name == "waterlogged" {
+                waterlogged_multiplier = Some(multiplier);
+            }
+            multiplier *= mapping.property_type.variant_count();
         }
+        assert_eq!(multiplier as usize, block.states.len(), "{}", block.name);
+        max_block_properties = max_block_properties.max(property_mapping.len());
+        block.property_slots = property_mapping
+            .iter()
+            .zip(&strides)
+            .zip(&block.properties)
+            .map(|((mapping, stride), hash)| {
+                let key = Ident::new(
+                    &mapping.original_name.to_upper_camel_case(),
+                    Span::call_site(),
+                );
+                let values_name = format!(
+                    "{}_VALUES",
+                    generated_prop_map[hash].enum_name.to_shouty_snake_case()
+                );
+                let values = format_ident!("{}", values_name);
+                property_value_consts
+                    .entry(values_name)
+                    .or_insert_with(|| mapping.property_type.value_tokens(&key));
+                quote! {
+                    PropertySlot { key: PropertyKey::#key, stride: #stride, values: #values }
+                }
+            })
+            .collect();
 
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
@@ -1448,9 +1487,6 @@ pub fn build() -> TokenStream {
             });
         }
 
-        // let mut block_with_descriptors = block.clone();
-        // block_with_descriptors.property_descriptors = property_descriptors;
-
         constants_list.push(quote! {
             pub const #const_ident: Self = #block;
         });
@@ -1459,10 +1495,10 @@ pub fn build() -> TokenStream {
             pub const #const_ident: Self = #block_id;
         });
 
-        type_from_raw_id_array.push((block.id.0, quote! { &Block::#const_ident }));
+        type_from_raw_id_array.push((block.id.0, quote! { Block::#const_ident }));
 
         block_from_name_entries.push(quote! {
-            #name_str => Block::#const_ident,
+            #name_str => BlockId::#const_ident,
         });
 
         for (i, state) in block.states.iter().enumerate() {
@@ -1474,10 +1510,11 @@ pub fn build() -> TokenStream {
                 let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 air_states.push(state_id);
             }
-            if state.is_liquid() {
-                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
-                liquid_states.push(state_id);
+            let mut flat_state = state.clone();
+            if waterlogged_multiplier.is_some_and(|m| (i as u16 / m) % 2 == 0) {
+                flat_state.state_flags |= BlockState::IS_WATERLOGGED;
             }
+            flat_states.push(flat_state.to_tokens());
 
             let mut matched_be_id = air_be_network_id;
 
@@ -1505,7 +1542,6 @@ pub fn build() -> TokenStream {
 
             block_state_to_bedrock.push((state.id.0, matched_be_id));
             raw_id_from_state_id_array.push((state.id.0, quote! { BlockId::#const_ident }));
-            state_from_state_id_array.push((const_ident.clone(), i, state.id.0));
         }
 
         if !property_collection.is_empty() {
@@ -1520,7 +1556,7 @@ pub fn build() -> TokenStream {
 
         if existing_item_ids.insert(item_id) {
             block_from_item_id_arms.push(quote! {
-                #item_id => Some(&Self::#const_ident),
+                #item_id => Some(Self::from_id(BlockId::#const_ident)),
             });
         }
     }
@@ -1580,7 +1616,10 @@ pub fn build() -> TokenStream {
         .map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
-    let liquid_state_ids = quote! { #(#liquid_states)|* };
+    let property_value_names = property_value_consts
+        .keys()
+        .map(|name| format_ident!("{}", name));
+    let property_value_lists = property_value_consts.values();
 
     let block_props = block_properties.iter().map(ToTokens::to_token_stream);
     let properties = property_enums.values().map(ToTokens::to_token_stream);
@@ -1610,11 +1649,7 @@ pub fn build() -> TokenStream {
     let max_type_id = type_from_raw_id_vec.len();
     let type_from_raw_id_items = quote! { #(#type_from_raw_id_vec),* };
 
-    let state_from_state_id_vec = fill_state_array(state_from_state_id_array);
-    let max_state_id_2 = state_from_state_id_vec.len();
-    let state_from_state_id = quote! { #(#state_from_state_id_vec),* };
-
-    assert_eq!(max_state_id, max_state_id_2);
+    assert_eq!(max_state_id, flat_states.len());
 
     let Bitset {
         items,
@@ -1634,7 +1669,7 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
+            blocks::{Flammable, PropertySlot, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate, SuffocationPredicate},
         };
         use crate::block_state::{PistonBehavior, SoundType};
         use crate::sound::Sound;
@@ -1644,6 +1679,10 @@ pub fn build() -> TokenStream {
         use std::collections::BTreeMap;
 
         #items
+
+        pub const MAX_BLOCK_PROPERTIES: usize = #max_block_properties;
+
+        #(pub const #property_value_names: &[Property] = &[#(#property_value_lists),*];)*
 
         #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
         pub enum PropertyKey {
@@ -1773,10 +1812,10 @@ pub fn build() -> TokenStream {
             matches!(id.as_u16(), #air_state_ids)
         }
 
-         #[inline(always)]
-         #[must_use]
+        #[inline(always)]
+        #[must_use]
         pub const fn is_liquid(id: BlockStateId) -> bool {
-            matches!(id.as_u16(), #liquid_state_ids)
+            BlockState::from_id(id).is_liquid()
         }
 
         #[inline(always)]
@@ -1800,16 +1839,8 @@ pub fn build() -> TokenStream {
             #[inline]
             #[must_use]
             pub const fn from_id(id: BlockStateId) -> &'static Self {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::STATE_FROM_STATE_ID[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { lookup(&mappings::BLOCK_STATES, id.as_u16()) }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
@@ -1823,30 +1854,35 @@ pub fn build() -> TokenStream {
 
             #[must_use]
             pub const fn to_be_network_id(id: BlockStateId) -> u32 {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                Self::STATE_ID_TO_BEDROCK[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { *lookup(Self::STATE_ID_TO_BEDROCK, id.as_u16()) }
             }
         }
 
         impl BlockStateId {
             pub const AIR: Self = Block::AIR.default_state.id;
 
-            pub(crate) const STATE_COUNT: u16 = mappings::STATE_FROM_STATE_ID.len() as u16;
+            pub(crate) const STATE_COUNT: u16 = mappings::BLOCK_STATES.len() as u16;
+        }
+
+        // unchecked lookup
+        #[inline(always)]
+        const unsafe fn lookup<T>(table: &'static [T], index: u16) -> &'static T {
+            unsafe { &*table.as_ptr().add(index as usize) }
+        }
+
+        // block states
+        const fn block_states(first: usize, len: usize) -> &'static [BlockState] {
+            mappings::BLOCK_STATES.split_at(first).1.split_at(len).0
         }
 
         mod mappings {
+            use super::NoteblockInstrument;
+            use crate::block_state::PistonBehavior;
             use crate::{Block, BlockId, BlockState, BlockStateId};
             use phf;
 
-            pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
+            pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, BlockId> = phf::phf_map!{
                 #(#block_from_name_entries)*
             };
 
@@ -1854,13 +1890,38 @@ pub fn build() -> TokenStream {
                 #raw_id_from_state_id
             ];
 
-            pub(super) static TYPE_FROM_RAW_ID: [&Block; #max_type_id] = [
+            // flat blocks
+            pub(super) static BLOCKS: [Block; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
-            pub(super) static STATE_FROM_STATE_ID: [&BlockState; #max_state_id] = [
-                #state_from_state_id
+            // flat states
+            pub(super) static BLOCK_STATES: [BlockState; #max_state_id] = [
+                #(#flat_states),*
             ];
+
+            // layout asserts
+            const _: () = {
+                let mut state = 0;
+                while state < BLOCK_STATES.len() {
+                    assert!(BLOCK_STATES[state].id.as_u16() as usize == state);
+                    state += 1;
+                }
+                let mut index = 0;
+                while index < BLOCKS.len() {
+                    let block = &BLOCKS[index];
+                    assert!(block.id.as_u16() as usize == index);
+                    let first = block.states[0].id.as_u16() as usize;
+                    let default = block.default_state.id.as_u16() as usize;
+                    assert!(default >= first && default < first + block.states.len());
+                    let mut offset = 0;
+                    while offset < block.states.len() {
+                        assert!(BLOCK_ID_FROM_STATE_ID[first + offset].as_u16() == block.id.as_u16());
+                        offset += 1;
+                    }
+                    index += 1;
+                }
+            };
         }
 
 
@@ -1894,30 +1955,22 @@ pub fn build() -> TokenStream {
             #[inline]
             #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
-                mappings::BLOCK_FROM_NAME_MAP.get(name)
+                mappings::BLOCK_FROM_NAME_MAP.get(name).map(|id| Self::from_id(*id))
             }
 
             #[doc = r" Try to get a block from a namespace prefixed name."]
             #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 let key = name.strip_prefix("minecraft:").unwrap_or(name);
-                mappings::BLOCK_FROM_NAME_MAP.get(key)
+                mappings::BLOCK_FROM_NAME_MAP.get(key).map(|id| Self::from_id(*id))
             }
 
             /// Get a [`Block`] from a [`BlockId`]
             #[inline]
             #[must_use]
             pub const fn from_id(id: BlockId) -> &'static Self {
-                // Safety: We always check this condition when creating a BlockId.
-                // the u16 field is private and immutable. BlockId::BLOCK_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockId::BLOCK_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::TYPE_FROM_RAW_ID[id.as_u16() as usize]
+                // SAFETY: BlockId < BLOCK_COUNT, see layout asserts.
+                unsafe { lookup(&mappings::BLOCKS, id.as_u16()) }
             }
 
             /// Get a [`Block`] from a state id
@@ -1959,22 +2012,14 @@ pub fn build() -> TokenStream {
         impl BlockId {
             #(#block_id_constants)*
 
-            pub(crate) const BLOCK_COUNT: u16 = mappings::TYPE_FROM_RAW_ID.len() as u16;
+            pub(crate) const BLOCK_COUNT: u16 = mappings::BLOCKS.len() as u16;
 
             /// Get a [`BlockId`] from a [`BlockStateId`]
             #[inline]
             #[must_use]
             pub const fn from_state_id(id: BlockStateId) -> BlockId {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::BLOCK_ID_FROM_STATE_ID[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { *lookup(&mappings::BLOCK_ID_FROM_STATE_ID, id.as_u16()) }
             }
         }
 

@@ -8,10 +8,11 @@ use crate::{
     entity::EntityBase,
     world::World,
 };
+use pumpkin_data::fluid::FlowingFluidProperties;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
-    fluid::{Falling, Fluid, FluidProperties, Level},
+    fluid::{Falling, Fluid, Level},
     tag::{self, Taggable},
     world::WorldEvent,
 };
@@ -19,7 +20,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
-type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 pub struct FlowingLava;
 
@@ -148,14 +148,11 @@ impl FlowingLava {
     }
 }
 
-const LAVA_FLOW_SPEED_NETHER: u8 = 10;
-const LAVA_FLOW_SPEED_SLOW: u8 = 30;
-
 impl FluidBehaviour for FlowingLava {
     fn placed(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         state_id: BlockStateId,
         block_pos: &BlockPos,
         old_state_id: BlockStateId,
@@ -167,14 +164,14 @@ impl FluidBehaviour for FlowingLava {
         }
     }
 
-    fn on_scheduled_tick(&self, world: &Arc<World>, _fluid: &Fluid, block_pos: &BlockPos) {
-        Self.on_scheduled_tick_internal(world, &Fluid::FLOWING_LAVA, block_pos);
+    fn on_scheduled_tick(&self, world: &Arc<World>, _fluid: &'static Fluid, block_pos: &BlockPos) {
+        self.on_scheduled_tick_internal(world, self.fluid(), block_pos);
     }
 
     fn on_neighbor_update(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: &BlockPos,
         _notify: bool,
     ) {
@@ -194,7 +191,7 @@ impl FluidBehaviour for FlowingLava {
         }
     }
 
-    fn random_tick(&self, _fluid: &Fluid, world: &Arc<World>, block_pos: &BlockPos) {
+    fn random_tick(&self, _fluid: &'static Fluid, world: &Arc<World>, block_pos: &BlockPos) {
         if !Self::can_spread_fire_around(world, block_pos) {
             return;
         }
@@ -250,21 +247,8 @@ impl FluidBehaviour for FlowingLava {
 }
 
 impl FlowingFluid for FlowingLava {
-    fn get_level_decrease_per_block(&self, world: &World) -> i32 {
-        if world.dimension.fast_lava { 1 } else { 2 }
-    }
-
-    fn get_flow_speed(&self, world: &World) -> u8 {
-        // EnvironmentAttributes.FAST_LAVA
-        if world.dimension.fast_lava {
-            LAVA_FLOW_SPEED_NETHER
-        } else {
-            LAVA_FLOW_SPEED_SLOW
-        }
-    }
-
-    fn get_max_flow_distance(&self, world: &World) -> i32 {
-        if world.dimension.fast_lava { 5 } else { 3 }
+    fn fluid(&self) -> &'static Fluid {
+        &Fluid::FLOWING_LAVA
     }
 
     /// Determines if lava can convert to source blocks based on game rules.
@@ -272,8 +256,13 @@ impl FlowingFluid for FlowingLava {
         world.level_info.load().game_rules.lava_source_conversion
     }
 
-    fn spread_to(&self, world: &Arc<World>, fluid: &Fluid, pos: &BlockPos, state_id: BlockStateId) {
-        let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
+    fn spread_to(
+        &self,
+        world: &Arc<World>,
+        fluid: &'static Fluid,
+        pos: &BlockPos,
+        new_props: FlowingFluidProperties,
+    ) {
         let current_state_id = world.get_block_state_id(pos);
         let block = Block::from_state_id(current_state_id);
 
@@ -292,6 +281,6 @@ impl FlowingFluid for FlowingLava {
         }
 
         // Delegate quiescence, replacement and scheduling to the shared helper
-        self.apply_spread(world, fluid, pos, state_id, new_props);
+        self.apply_spread(world, fluid, pos, new_props);
     }
 }

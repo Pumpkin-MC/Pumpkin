@@ -503,12 +503,11 @@ pub(super) fn matches_block(predicate: &Value, params: &LootContextParameters<'_
             }),
             "state" | "properties" => expected.as_object().is_some_and(|expected| {
                 expected.is_empty()
-                    || block.properties(state.id).is_some_and(|properties| {
-                        let properties = properties.to_props();
+                    || (!block.property_slots.is_empty() && {
                         expected.iter().all(|(key, expected)| {
                             let key = key.strip_prefix("minecraft:").unwrap_or(key);
-                            properties
-                                .iter()
+                            block
+                                .property_values(state.id)
                                 .find(|property| property.key_str() == key)
                                 .is_some_and(|actual| {
                                     if let Some(expected) = expected.as_str() {
@@ -848,14 +847,8 @@ pub(super) fn matches_location(
                     let block = state.id.to_block();
                     (block == &pumpkin_data::Block::CAMPFIRE
                         || block == &pumpkin_data::Block::SOUL_CAMPFIRE)
-                        && block
-                            .properties(state.id)
-                            .and_then(|p| {
-                                p.to_props()
-                                    .into_iter()
-                                    .find(|prop| prop.key_str() == "lit")
-                            })
-                            .is_some_and(|prop| prop.value_str() == "true")
+                        && block.get_property(state.id, pumpkin_data::PropertyKey::Lit)
+                            == Some(pumpkin_data::Property::Lit(true))
                 });
                 expected.as_bool().is_some_and(|exp| is_smokey == exp)
             }

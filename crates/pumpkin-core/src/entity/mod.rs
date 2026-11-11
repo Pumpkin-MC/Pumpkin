@@ -2967,7 +2967,7 @@ impl Entity {
                             in_fluid[i] = true;
 
                             if !is_pushed {
-                                fluids.insert(fluid.id, fluid);
+                                fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
 
                                 continue;
                             }
@@ -2982,7 +2982,7 @@ impl Entity {
 
                             fluid_n[i] += 1;
 
-                            fluids.insert(fluid.id, fluid);
+                            fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
                         }
                     }
                 }
