@@ -5,9 +5,7 @@ pub use crate::wit::pumpkin::plugin::display::{
     ItemDisplayEntity, ItemDisplayMode, Quaternionf, TextAlignment, TextDisplayEntity, Vector3f,
 };
 
-pub use crate::ext::display::{
-    DisplayEntityExt, EntityDisplayExt, ItemDisplayEntityExt, TextDisplayEntityExt,
-};
+pub use crate::ext::display::{DisplayEntityExt, EntityDisplayExt, TextDisplayEntityExt};
 
 /// Builder for constructing [`DisplayTransformation`].
 #[derive(Clone, Copy, Debug)]
