@@ -1389,6 +1389,9 @@ pub fn ride_tick(entity: &dyn EntityBase) {
         living.fall_distance.store(0.0);
     }
     position_rider(vehicle.as_ref(), entity);
+    if let Some(mob) = entity.get_mob() {
+        mob.mob_ride_tick();
+    }
 }
 
 /// Vanilla `rideTick` for every rider of a root vehicle, top-down once all entities have
@@ -4733,7 +4736,8 @@ impl Entity {
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
         let to = other.get_eye_pos();
-        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+        let distance_sq = from.squared_distance_to_vec(&to);
+        if distance_sq.is_nan() || distance_sq > 128.0 * 128.0 {
             return false;
         }
         self.world

@@ -41,6 +41,7 @@ pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+pub mod village_siege;
 pub mod wandering_trader_spawner;
 
 use crate::block::RandomTickArgs;
@@ -269,6 +270,7 @@ pub struct World {
     poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
     pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
+    pub village_siege: village_siege::VillageSiege,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -431,6 +433,7 @@ impl World {
             portal_poi: std::sync::Mutex::new(portal_poi),
             poi_chunk_receiver: std::sync::Mutex::new(poi_chunk_receiver),
             wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
+            village_siege: village_siege::VillageSiege::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
@@ -1395,6 +1398,35 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    /// Spawns `minecraft:item` particles textured like `stack`.
+    pub fn spawn_item_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        stack: &ItemStack,
+    ) {
+        let mut data = Vec::new();
+        if ItemStackSerializer::from(stack.clone())
+            .write(&mut data)
+            .is_err()
+        {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            (pumpkin_data::particle::Particle::Item.to_id() as i32).into(),
+            &data,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
@@ -2286,6 +2318,7 @@ impl World {
         }
 
         if spawn_mobs && self.dimension == Dimension::OVERWORLD {
+            self.village_siege.tick(self, spawn_enemies);
             self.wandering_trader_spawner.tick(self);
         }
 
@@ -2596,6 +2629,33 @@ impl World {
             }
         }
         true
+    }
+
+    /// No other entity that blocks building overlaps `entity`, ignoring its own vehicle group.
+    pub fn is_unobstructed(&self, entity: &Entity) -> bool {
+        let bounds = entity.bounding_box.load();
+        let root_vehicle = entity.root_vehicle_id();
+        let unobstructed = |other: &dyn EntityBase| {
+            let other = other.get_entity();
+            !other.is_alive() || !other.blocks_building || other.root_vehicle_id() == root_vehicle
+        };
+        self.get_entities_at_box(&bounds)
+            .iter()
+            .all(|other| unobstructed(other.as_ref()))
+            && self
+                .get_players_at_box(&bounds)
+                .iter()
+                .all(|player| player.is_spectator() || unobstructed(player.as_ref()))
+    }
+
+    /// A living, non-spectator player is within `range` of `pos`; a negative range matches any.
+    pub fn has_nearby_alive_player(&self, pos: Vector3<f64>, range: f64) -> bool {
+        self.players.load().iter().any(|player| {
+            !player.is_spectator()
+                && player.get_entity().is_alive()
+                && (range < 0.0
+                    || player.get_entity().pos.load().squared_distance_to_vec(&pos) < range * range)
+        })
     }
 
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
@@ -5286,8 +5346,14 @@ impl World {
                 .get_mob()
                 .map(|vehicle| vehicle.get_mob_entity().take_pending_riders())
                 .unwrap_or_default();
-            own_vehicle.init_data_tracker();
-            self.add_entity_silent(own_vehicle.clone());
+            // A jockey can mount a mob that is already in the world.
+            if self
+                .get_entity_by_id(own_vehicle.get_entity().entity_id)
+                .is_none()
+            {
+                own_vehicle.init_data_tracker();
+                self.add_entity_silent(own_vehicle.clone());
+            }
             own_vehicle
                 .get_entity()
                 .add_passenger(own_vehicle.clone(), vehicle.clone());

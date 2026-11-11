@@ -862,12 +862,17 @@ impl MobEntity {
         *t = target.as_ref().map(Arc::downgrade);
     }
 
+    /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
+        let target = self
+            .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .and_then(Weak::upgrade)
+            .and_then(Weak::upgrade)?;
+        (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
+            && self.living_entity.can_attack(target.as_ref()))
+        .then_some(target)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -2205,6 +2210,30 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn as_raider(&self) -> Option<&dyn raider::Raider> {
         None
+    }
+
+    fn as_zombie(&self) -> Option<&zombie::ZombieEntityBase> {
+        None
+    }
+
+    fn on_offspring_spawned_from_egg(&self, _spawner: &Player, _offspring: &dyn Mob) {}
+
+    /// Runs after this mob was positioned on its vehicle.
+    fn mob_ride_tick(&self) {}
+
+    /// How much faster a spear rider charges on this mount.
+    fn charge_speed_modifier(&self) -> f32 {
+        1.0
+    }
+
+    /// Whether this monster keeps `player` from sleeping nearby.
+    fn is_preventing_player_rest(&self, _player: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Called on the entity credited with a kill; `false` skips the victim's death loot.
+    fn killed_entity(&self, _killed: &dyn EntityBase) -> bool {
+        true
     }
 
     /// Must return `Some(self)` for every `NeutralMob` implementor. Not compiler-enforced.

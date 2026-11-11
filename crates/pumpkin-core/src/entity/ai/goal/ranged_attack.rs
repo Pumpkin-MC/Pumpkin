@@ -60,6 +60,17 @@ impl RangedAttackGoal {
     }
 }
 
+impl RangedAttackGoal {
+    /// The target picked when the goal started is still alive.
+    #[must_use]
+    pub fn target_alive(&self) -> bool {
+        self.target
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|target| target.get_entity().is_alive())
+    }
+}
+
 impl Goal for RangedAttackGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target();

@@ -74,7 +74,7 @@ impl Stepping for DestroyEggGoal {
             Sound::EntityZombieDestroyEgg as u16,
             SoundCategory::Hostile,
             &pos_f64,
-            0.7,
+            0.5,
             random.mul_add(0.2, 0.9),
         );
     }
