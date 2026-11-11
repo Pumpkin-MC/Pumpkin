@@ -112,11 +112,9 @@ impl TargetMatch {
         }
         // The spatial index keeps list order, so ties go to the first like vanilla.
         let entity = world
-            .get_entities_at_box(&area.area)
+            .get_entities_of_type_at_box(&area.area, |entity_type| self.matches(entity_type))
             .into_iter()
-            .filter(|entity| {
-                self.matches(entity.get_entity().entity_type) && accept(entity.as_ref())
-            })
+            .filter(|entity| accept(entity.as_ref()))
             .min_by(|a, b| dist(a.as_ref()).total_cmp(&dist(b.as_ref())));
         match (player, entity) {
             (Some(player), Some(entity)) => {

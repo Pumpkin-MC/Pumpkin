@@ -1287,7 +1287,7 @@ pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
     }
 }
 
-fn has_game_event_listener(mob: &dyn Mob) -> bool {
+pub(crate) fn has_game_event_listener(mob: &dyn Mob) -> bool {
     let mut listens = false;
     mob.for_each_game_event_listener(&mut |_| listens = true);
     listens
@@ -1324,8 +1324,7 @@ pub(crate) fn game_event_listener_links(
     links.extend(
         world
             .entity_index
-            .query(world.entities.load_full(), area)
-            .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+            .listeners(world.entities.load_full(), area)
             .map(|other| other.get_entity().entity_id),
     );
 }
@@ -1915,6 +1914,7 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().can_pick_up_loot()
     }
 
+    /// Must not change over the mob's life: the entity index caches which mobs listen.
     fn for_each_game_event_listener(
         &self,
         _visit: &mut dyn FnMut(&dyn crate::world::game_event::GameEventListener),

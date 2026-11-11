@@ -4742,6 +4742,18 @@ impl World {
             .collect()
     }
 
+    /// Non-player entities at a box whose type passes `matches`, in list order.
+    pub fn get_entities_of_type_at_box(
+        &self,
+        aabb: &BoundingBox,
+        matches: impl Fn(&'static EntityType) -> bool,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        self.entity_index
+            .query_types(self.entities.load_full(), *aabb, matches)
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
+            .collect()
+    }
+
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
         let players_guard = self.players.load();
