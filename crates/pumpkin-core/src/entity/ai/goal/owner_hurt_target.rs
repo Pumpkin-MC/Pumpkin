@@ -3,12 +3,13 @@ use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
-use std::sync::Arc;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{Arc, Weak};
 
 pub struct OwnerHurtTargetGoal {
     track_target_goal: TrackTargetGoal,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     target_predicate: TargetPredicate,
     timestamp: i32,
 }
@@ -27,7 +28,7 @@ impl OwnerHurtTargetGoal {
 
 impl Goal for OwnerHurtTargetGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !mob.is_tamed() || mob.is_sitting() {
+        if !mob.is_tamed() || mob.ordered_to_sit() {
             return false;
         }
 
@@ -62,7 +63,7 @@ impl Goal for OwnerHurtTargetGoal {
             return false;
         }
 
-        self.target = Some(other);
+        self.target = Some(Arc::downgrade(&other));
         true
     }
 
@@ -71,7 +72,11 @@ impl Goal for OwnerHurtTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        mob.set_mob_target(self.target.clone());
+        self.track_target_goal.start_targeting(
+            mob,
+            self.target.as_ref().and_then(Weak::upgrade),
+            TargetReason::OwnerAttackedTarget,
+        );
 
         if let Some(owner_uuid) = mob.get_owner_uuid() {
             let world = mob.get_mob_entity().living_entity.entity.world.load_full();

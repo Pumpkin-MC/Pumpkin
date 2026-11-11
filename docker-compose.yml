@@ -6,6 +6,7 @@ services:
     build: .
     ports:
       - "25565:25565"
+      - "19132:19132"
       - "19132:19132/udp"
     volumes:
       # Pumpkin runs as UID/GID 2613. On Linux hosts, make sure the data
@@ -19,6 +20,8 @@ services:
       # - pumpkin-data:/pumpkin
       # Use the following mount if you want to make your config immutable.
       # - ./pumpkin.toml:/pumpkin/pumpkin.toml:ro
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

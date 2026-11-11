@@ -677,6 +677,10 @@ impl DayTimeline {
         BoolKeyframe::new(12600i32, true),
         BoolKeyframe::new(23401i32, false),
     ];
+    pub const CAT_WAKING_UP_GIFT_CHANCE_KEYFRAMES: &'static [FloatKeyframe] = &[
+        FloatKeyframe::new(362i32, 0f32),
+        FloatKeyframe::new(23667i32, 0.7f32),
+    ];
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MoonPhase {

@@ -41,7 +41,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -150,6 +150,10 @@ pub struct Server {
     pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
     pub runtime: tokio::runtime::Handle,
+    /// Dedicated Rayon thread pool for synchronous world and entity simulation (ticks).
+    pub simulation_pool: Arc<rayon::ThreadPool>,
+    /// Dedicated Rayon thread pool for background CPU computation (RSA, Bedrock crypto, compression).
+    pub compute_pool: Arc<rayon::ThreadPool>,
     pub management_hub: Arc<crate::net::management::hub::ManagementHub>,
     /// Cancelled when this server should stop. A child of [`crate::STOP_INTERRUPT`], so a
     /// process-wide stop reaches it, while an integrated server can stop without ending the
@@ -157,6 +161,8 @@ pub struct Server {
     pub stop_token: CancellationToken,
     /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
     admission_closed: std::sync::RwLock<bool>,
+    /// Stores the latest available Pumpkin release if the startup update checker found a newer version.
+    pub available_update: std::sync::OnceLock<crate::update_checker::GitHubRelease>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -252,6 +258,7 @@ impl Server {
         );
         let advancement_manager = Arc::new(AdvancementManager::new(
             players_dir.clone(),
+            advanced_config.advancement.enabled,
             advanced_config.advancement.save_advancements,
         ));
         let white_list = AtomicBool::new(basic_config.white_list);
@@ -284,6 +291,23 @@ impl Server {
         let management_hub = Arc::new(crate::net::management::hub::ManagementHub::new(
             management_settings,
         ));
+
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let simulation_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(cpus)
+                .thread_name(|i| format!("Simulation-{i}"))
+                .build()
+                .map_err(|e| WorldInfoError::IoError(std::io::Error::other(e)))?,
+        );
+        let compute_threads = (cpus / 2).clamp(2, 8);
+        let compute_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(compute_threads)
+                .thread_name(|i| format!("Compute-{i}"))
+                .build()
+                .map_err(|e| WorldInfoError::IoError(std::io::Error::other(e)))?,
+        );
 
         let server = Self {
             basic_config,
@@ -326,6 +350,8 @@ impl Server {
             stop_token: crate::STOP_INTERRUPT.child_token(),
             admission_closed: std::sync::RwLock::new(false),
             runtime: tokio::runtime::Handle::current(),
+            simulation_pool,
+            compute_pool,
             scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
@@ -333,6 +359,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
             management_hub,
+            available_update: std::sync::OnceLock::new(),
         };
         let server = Arc::new(server);
 
@@ -698,6 +725,18 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        let player_clone = player.clone();
+        self.spawn_task(async move {
+            let properties = player_clone.gameprofile.properties.load().clone();
+            if let Some(mut skin) = Player::fetch_skin(&properties).await {
+                if skin.skin_id == "Standard_Custom" {
+                    let skin_id = format!("pumpkin:{}", player_clone.gameprofile.id);
+                    skin.skin_id.clone_from(&skin_id);
+                    skin.full_id = skin_id;
+                }
+                player_clone.bedrock_skin.store(Arc::new(skin));
+            }
+        });
         {
             let mut advancements = player
                 .advancements
@@ -1087,6 +1126,16 @@ impl Server {
         crate::telemetry::start_telemetry(self.clone());
     }
 
+    /// Starts the background update checker task if enabled in configuration.
+    pub fn start_update_checker(self: &Arc<Self>) {
+        crate::update_checker::start_update_checker(self);
+    }
+
+    /// Notifies a joining player in chat if they are an operator and a Pumpkin update is available.
+    pub fn notify_update_if_op(&self, player: &Player) {
+        crate::update_checker::notify_update_if_op(self, player);
+    }
+
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
@@ -1115,7 +1164,7 @@ impl Server {
         self.key_store
             .get_or_init(|| async {
                 let (tx, rx) = tokio::sync::oneshot::channel();
-                rayon::spawn(move || {
+                self.compute_pool.spawn(move || {
                     let _ = tx.send(Arc::new(KeyStore::new()));
                 });
                 rx.await.unwrap_or_else(|_| Arc::new(KeyStore::new()))
@@ -1139,7 +1188,7 @@ impl Server {
         let key_store = self.get_or_init_key_store().await.clone();
         let data = data.to_vec();
         let (tx, rx) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        self.compute_pool.spawn(move || {
             let _ = tx.send(key_store.decrypt(&data));
         });
         rx.await.map_err(|_| EncryptionError::FailedDecrypt)?
@@ -1178,17 +1227,19 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
-        // Do not flush mid-tick; `Flush` is `flushChannel`.
-        let suspended = self.suspend_player_flushes();
-        if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
-            self.tick_worlds();
-            // Always run player and network ticking, even when game is frozen
-        } else {
-            self.sync_game_time();
-            self.tick_players_and_network();
-        }
-        self.flush_pending_block_updates();
-        Self::resume_player_flushes(&suspended);
+        self.simulation_pool.install(|| {
+            // Do not flush mid-tick; `Flush` is `flushChannel`.
+            let suspended = self.suspend_player_flushes();
+            if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+                self.tick_worlds();
+                // Always run player and network ticking, even when game is frozen
+            } else {
+                self.sync_game_time();
+                self.tick_players_and_network();
+            }
+            self.flush_pending_block_updates();
+            Self::resume_player_flushes(&suspended);
+        });
     }
 
     fn flush_pending_block_updates(&self) {
@@ -1201,16 +1252,16 @@ impl Server {
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
-        let handle = self.runtime.clone();
 
         for world in worlds.iter() {
             world.flush_block_updates();
             world.flush_synced_block_events();
 
             let players = world.players.load();
-            let player_handle = handle.clone();
             players.par_iter().for_each(|player| {
-                let _guard = player_handle.enter();
+                player.process_inbound_packets();
+            });
+            players.par_iter().for_each(|player| {
                 player.tick(self);
             });
         }
@@ -1234,9 +1285,7 @@ impl Server {
         self.sync_game_time();
 
         let worlds = self.worlds.load();
-        let handle = self.runtime.clone();
         worlds.par_iter().for_each(|world| {
-            let _guard = handle.enter();
             world.tick(self);
         });
 

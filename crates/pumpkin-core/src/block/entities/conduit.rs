@@ -47,9 +47,11 @@ impl ConduitBlockEntity {
             return true;
         }
         let world = Arc::clone(world);
-        tokio::runtime::Handle::current().spawn(async move {
-            world.get_block_state_id_async(&pos).await;
-        });
+        if let Some(server) = world.server.upgrade() {
+            server.spawn_task(async move {
+                world.get_block_state_id_async(&pos).await;
+            });
+        }
         false
     }
 
@@ -263,6 +265,18 @@ impl BlockEntity for ConduitBlockEntity {
                 );
             }
         }
+    }
+
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Conduit", self.position)
+                .put_bool("Active", self.active.load(Ordering::Relaxed))
+                .put_long("Target", -1)
+                .finish(),
+        )
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -1,4 +1,4 @@
-use super::server_test_manager::drain_game_test_queue;
+use super::server_test_manager::{drain_game_test_queue, has_pending_game_tests};
 
 use crate::{
     plugin::server::{
@@ -47,7 +47,6 @@ pub struct Ticker;
 impl Ticker {
     /// Runs the main server tick loop on a dedicated thread.
     pub fn run(server: &Arc<Server>) {
-        let _guard = server.runtime.enter();
         // Single monotonic base, the schedule is plain nanosecond arithmetic.
         let base = Instant::now();
         let mut schedule = TickSchedule::new();
@@ -90,14 +89,13 @@ impl Ticker {
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
             if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
-                server.runtime.block_on(
-                    server
-                        .plugin_manager
-                        .fire(server, &mut ServerTickStartEvent::new(tick_number)),
-                );
+                server
+                    .plugin_manager
+                    .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
             }
 
-            let should_tick_game_tests = manager.runs_normally() || sprinting;
+            let should_tick_game_tests = (manager.runs_normally() || sprinting)
+                && (has_pending_game_tests() || !game_test_runner.is_empty());
 
             if sprinting {
                 manager.start_sprint_tick_work();
@@ -121,10 +119,10 @@ impl Ticker {
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
             if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
-                server.runtime.block_on(server.plugin_manager.fire(
+                server.plugin_manager.fire_blocking(
                     server,
                     &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
-                ));
+                );
             }
 
             server.update_tick_times(tick_duration_nanos);

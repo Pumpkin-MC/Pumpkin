@@ -162,6 +162,11 @@ pub fn build() -> TokenStream {
             }
 
             #[must_use]
+            pub fn by_id_or_white(id: i32) -> Self {
+                u8::try_from(id).ok().and_then(Self::by_id).unwrap_or(Self::White)
+            }
+
+            #[must_use]
             pub fn by_name(name: &str) -> Option<Self> {
                 match name {
                     #name_match_arms

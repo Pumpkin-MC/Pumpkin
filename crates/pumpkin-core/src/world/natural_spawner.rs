@@ -74,9 +74,17 @@ impl MobCounts {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ActiveSpawnPlayer {
+    entity_id: i32,
+    chunk_pos: Vector2<i32>,
+    pos: Vector3<f64>,
+}
+
 pub struct LocalMobCapCalculator {
     player_mob_counts: DashMap<i32, MobCounts>,
     players_near_chunk: DashMap<Vector2<i32>, Arc<[i32]>>,
+    active_players: Option<Arc<[ActiveSpawnPlayer]>>,
 }
 
 impl Clone for LocalMobCapCalculator {
@@ -92,6 +100,7 @@ impl Clone for LocalMobCapCalculator {
         Self {
             player_mob_counts,
             players_near_chunk,
+            active_players: self.active_players.clone(),
         }
     }
 }
@@ -101,6 +110,7 @@ impl Default for LocalMobCapCalculator {
         Self {
             player_mob_counts: DashMap::new(),
             players_near_chunk: DashMap::new(),
+            active_players: None,
         }
     }
 }
@@ -114,10 +124,64 @@ impl fmt::Debug for LocalMobCapCalculator {
 }
 
 impl LocalMobCapCalculator {
+    fn for_world(world: &World) -> Self {
+        let players = world.players.load();
+        let mut active = Vec::with_capacity(players.len());
+        for player in players.iter() {
+            if player.gamemode.load() == GameMode::Spectator {
+                continue;
+            }
+            let entity = player.get_entity();
+            active.push(ActiveSpawnPlayer {
+                entity_id: player.entity_id(),
+                chunk_pos: entity.chunk_pos.load(),
+                pos: entity.pos.load(),
+            });
+        }
+        Self {
+            player_mob_counts: DashMap::new(),
+            players_near_chunk: DashMap::new(),
+            active_players: Some(active.into()),
+        }
+    }
+
     const fn calc_distance(chunk_pos: Vector2<i32>, player_pos: &Vector3<f64>) -> f64 {
         let dx = ((chunk_pos.x << 4) + 8) as f64 - player_pos.x;
         let dy = ((chunk_pos.y << 4) + 8) as f64 - player_pos.z;
         dx * dx + dy * dy
+    }
+
+    fn nearest_player_distance_sq(&self, world: &World, x: f64, y: f64, z: f64) -> Option<f64> {
+        let mut min_dst_sq = f64::MAX;
+        let mut found = false;
+        if let Some(active_players) = &self.active_players {
+            for p in active_players.iter() {
+                let dx = x - p.pos.x;
+                let dy = y - p.pos.y;
+                let dz = z - p.pos.z;
+                let dist_sq = dx * dx + dy * dy + dz * dz;
+                if dist_sq < min_dst_sq {
+                    min_dst_sq = dist_sq;
+                    found = true;
+                }
+            }
+        } else {
+            let players = world.players.load();
+            for player in players.iter() {
+                if player.gamemode.load() != GameMode::Spectator {
+                    let ppos = player.position();
+                    let dx = x - ppos.x;
+                    let dy = y - ppos.y;
+                    let dz = z - ppos.z;
+                    let dist_sq = dx * dx + dy * dy + dz * dz;
+                    if dist_sq < min_dst_sq {
+                        min_dst_sq = dist_sq;
+                        found = true;
+                    }
+                }
+            }
+        }
+        found.then_some(min_dst_sq)
     }
 
     fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Arc<[i32]> {
@@ -126,12 +190,23 @@ impl LocalMobCapCalculator {
         }
 
         let mut players = Vec::new();
-        for player in world.players.load().iter() {
-            if player.gamemode.load() == GameMode::Spectator {
-                continue;
+        if let Some(active_players) = &self.active_players {
+            for p in active_players.iter() {
+                if (chunk_pos.x - p.chunk_pos.x).abs() <= 9
+                    && (chunk_pos.y - p.chunk_pos.y).abs() <= 9
+                    && Self::calc_distance(chunk_pos, &p.pos) < 16384.0
+                {
+                    players.push(p.entity_id);
+                }
             }
-            if Self::calc_distance(chunk_pos, &player.position()) < 16384.0 {
-                players.push(player.entity_id());
+        } else {
+            for player in world.players.load().iter() {
+                if player.gamemode.load() == GameMode::Spectator {
+                    continue;
+                }
+                if Self::calc_distance(chunk_pos, &player.position()) < 16384.0 {
+                    players.push(player.entity_id());
+                }
             }
         }
         let players: Arc<[i32]> = players.into();
@@ -364,7 +439,7 @@ impl SpawnState {
         world: &World,
     ) -> Self {
         let potential = PotentialCalculator::default();
-        let local_mob_cap = LocalMobCapCalculator::default();
+        let local_mob_cap = LocalMobCapCalculator::for_world(world);
         let counter = MobCounts::default();
         let active_chunks = world
             .active_chunks
@@ -617,13 +692,23 @@ pub fn spawn_mobs_for_chunk_generation(
                         fx,
                         f64::from(pos.0.y),
                         fz,
-                    )) && check_spawn_rules(entity_type, world, &check_pos, false)
-                    {
+                    )) && check_spawn_rules(
+                        entity_type,
+                        world,
+                        &check_pos,
+                        false,
+                        crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
+                    ) {
                         let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
                         entity
                             .get_entity()
                             .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-                        group_data = finalize_spawn(&entity, world, group_data);
+                        group_data = finalize_spawn(
+                            &entity,
+                            world,
+                            crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
+                            group_data,
+                        );
                         world.spawn_entity_non_save(entity);
                         success = true;
                     }
@@ -756,25 +841,9 @@ pub fn spawn_category_for_position(
             let xx = f64::from(x) + 0.5;
             let zz = f64::from(z) + 0.5;
 
-            let nearest_player_distance_sq = {
-                let players = world.players.load();
-                let mut min_dst_sq = f64::MAX;
-                let mut found = false;
-                for player in players.iter() {
-                    if player.gamemode.load() != GameMode::Spectator {
-                        let ppos = player.position();
-                        let dx = xx - ppos.x;
-                        let dy = f64::from(y_start) - ppos.y;
-                        let dz = zz - ppos.z;
-                        let dist_sq = dx * dx + dy * dy + dz * dz;
-                        if dist_sq < min_dst_sq {
-                            min_dst_sq = dist_sq;
-                            found = true;
-                        }
-                    }
-                }
-                found.then_some(min_dst_sq)
-            };
+            let nearest_player_distance_sq = spawn_state
+                .local_mob_cap_calculator
+                .nearest_player_distance_sq(world, xx, f64::from(y_start), zz);
 
             if let Some(player_distance_sq) = nearest_player_distance_sq
                 && is_right_distance_to_player_and_spawn_point(
@@ -827,7 +896,12 @@ pub fn spawn_category_for_position(
                     });
 
                     if is_valid_for_mob {
-                        group_data = finalize_spawn(&entity, world, group_data);
+                        group_data = finalize_spawn(
+                            &entity,
+                            world,
+                            crate::entity::mob::spawn::EntitySpawnReason::Natural,
+                            group_data,
+                        );
                         cluster_size += 1;
                         group_size += 1;
                         let max_group_size_reached = entity
@@ -988,7 +1062,13 @@ pub fn is_valid_spawn_position_for_type(
     if !is_spawn_position_ok(world, block_pos, entity_type) {
         return false;
     }
-    if !check_spawn_rules(entity_type, world, block_pos, is_thundering) {
+    if !check_spawn_rules(
+        entity_type,
+        world,
+        block_pos,
+        is_thundering,
+        crate::entity::mob::spawn::EntitySpawnReason::Natural,
+    ) {
         return false;
     }
     if !world.is_space_empty(entity_type.get_spawn_bounding_box(
@@ -1022,7 +1102,7 @@ pub fn is_spawn_position_ok(
                 return false;
             }
             let above_state = world.get_block_state(&block_pos.up());
-            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_full_cube()
+            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_solid_block()
         }
         SpawnLocation::OnGround => {
             if !within_bounds {
@@ -1063,7 +1143,7 @@ pub fn is_spawn_position_ok_cache(
 
             state.is_liquid()
                 && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
-                && !above_state.is_full_cube()
+                && !above_state.is_solid_block()
         }
         SpawnLocation::OnGround => {
             let down_pos = block_pos.down().0;
@@ -1103,7 +1183,10 @@ pub fn is_valid_empty_spawn_block(
 }
 
 #[must_use]
-fn is_valid_spawn_floor(state: &'static BlockState, entity_type: &'static EntityType) -> bool {
+pub(crate) fn is_valid_spawn_floor(
+    state: &'static BlockState,
+    entity_type: &'static EntityType,
+) -> bool {
     match Block::from_state_id(state.id).spawn_floor_predicate() {
         SpawnFloorPredicate::Default => {
             state.is_side_solid(BlockDirection::Up) && state.luminance < 14

@@ -726,6 +726,7 @@ impl HostMob for PluginHostState {
                 {
                     wolf.set_tame(wolf_data.is_tamed);
                     wolf.set_owner(wolf_data.owner.map(|u| Uuid::from_wit(&u)));
+                    wolf.set_ordered_to_sit(wolf_data.is_sitting);
                     wolf.set_in_sitting_pose(wolf_data.is_sitting);
                     wolf.set_collar_color(from_wit_dye_color(wolf_data.collar_color));
                     return Ok(true);
@@ -735,11 +736,10 @@ impl HostMob for PluginHostState {
                 if let Some(cat) =
                     any.downcast_ref::<pumpkin_core::entity::passive::cat::CatEntity>()
                 {
-                    cat.set_tame(
-                        cat_data.is_tamed,
-                        cat_data.owner.map(|u| Uuid::from_wit(&u)),
-                    );
-                    cat.set_sitting(cat_data.is_sitting);
+                    cat.set_tame(cat_data.is_tamed);
+                    cat.set_owner(cat_data.owner.map(|u| Uuid::from_wit(&u)));
+                    cat.set_ordered_to_sit(cat_data.is_sitting);
+                    cat.set_in_sitting_pose(cat_data.is_sitting);
                     cat.set_collar_color(from_wit_dye_color(cat_data.collar_color));
                     return Ok(true);
                 }

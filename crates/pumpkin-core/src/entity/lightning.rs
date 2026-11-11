@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
 };
 
@@ -26,7 +26,7 @@ pub struct LightningBoltEntity {
     seed: AtomicI64,
     flashes: AtomicI32,
     visual_only: AtomicBool,
-    cause: Mutex<Option<Arc<Player>>>,
+    cause: Mutex<Option<Weak<Player>>>,
     hit_entities: Mutex<FxHashSet<i32>>,
     blocks_set_on_fire: AtomicI32,
 }
@@ -56,14 +56,17 @@ impl LightningBoltEntity {
         self.visual_only.load(Ordering::Relaxed)
     }
 
-    pub fn set_cause(&self, cause: Option<Arc<Player>>) {
+    pub fn set_cause(&self, cause: Option<&Arc<Player>>) {
         if let Ok(mut c) = self.cause.lock() {
-            *c = cause;
+            *c = cause.map(Arc::downgrade);
         }
     }
 
     pub fn get_cause(&self) -> Option<Arc<Player>> {
-        self.cause.lock().ok().and_then(|c| c.clone())
+        self.cause
+            .lock()
+            .ok()
+            .and_then(|c| c.as_ref().and_then(Weak::upgrade))
     }
 
     pub fn get_blocks_set_on_fire(&self) -> i32 {
@@ -262,6 +265,28 @@ impl EntityBase for LightningBoltEntity {
                     let hit_id = hit_entity.get_entity().entity_id;
                     if hit_guard.insert(hit_id) {
                         hit_entity.on_lightning_strike(hit_entity.as_ref(), self);
+                        if let Some(player) = self.get_cause() {
+                            let type_name = format!(
+                                "minecraft:{}",
+                                hit_entity.get_entity().entity_type.resource_name
+                            );
+                            player.trigger_advancement(
+                                crate::entity::player::advancement::trigger::AdvancementTrigger::ChanneledLightning {
+                                    victim_type: type_name.clone(),
+                                },
+                            );
+                            let distance = (player
+                                .position()
+                                .squared_distance_to_vec(&self.entity.pos.load()))
+                            .sqrt();
+                            player.trigger_advancement(
+                                crate::entity::player::advancement::trigger::AdvancementTrigger::LightningStrike {
+                                    bystander_type: Some(type_name),
+                                    blocks_set_on_fire: self.blocks_set_on_fire.load(Ordering::Relaxed),
+                                    distance,
+                                },
+                            );
+                        }
                     }
                 }
             }

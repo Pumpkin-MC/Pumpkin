@@ -1,3 +1,4 @@
+use crate::entity::mob::Mob;
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -21,6 +22,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Enchantment, tag};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -88,9 +90,9 @@ impl ItemBehaviour for SpearItem {
         }
 
         let damage = Self::attack_damage(player, stack) as f32;
-        let mut hit_something = false;
+        let mut hit_count = 0;
         for target in Self::targets_in_range(player, &server, stack) {
-            hit_something |= Self::stab_attack(
+            if Self::stab_attack(
                 player,
                 &server,
                 Hand::Right,
@@ -101,6 +103,16 @@ impl ItemBehaviour for SpearItem {
                     damage: true,
                     knockback: piercing.deals_knockback,
                     dismount: piercing.dismounts,
+                },
+            ) {
+                hit_count += 1;
+            }
+        }
+        let hit_something = hit_count > 0;
+        if hit_something {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::SpearMobs {
+                    count: hit_count,
                 },
             );
         }
@@ -178,6 +190,7 @@ impl SpearItem {
         } else {
             0.0
         };
+        let old_movement = target_entity.velocity.load();
         let was_hurt = effects.damage
             && target.damage_with_context(
                 target.as_ref(),
@@ -189,14 +202,23 @@ impl SpearItem {
             );
 
         let config = &server.advanced_config.pvp;
-        if effects.knockback && config.knockback && target.get_living_entity().is_some() {
+        if effects.knockback && target.get_living_entity().is_some() {
             let attacker = player.get_entity();
-            combat::handle_knockback(attacker, target.as_ref(), 0.8);
-            let knockback_level = Self::knockback_level(stack);
-            if knockback_level > 0 {
-                combat::handle_knockback(attacker, target.as_ref(), f64::from(knockback_level));
+            if config.knockback {
+                combat::handle_knockback(attacker, target.as_ref(), 0.8, total_damage);
             }
-            target_entity.send_velocity();
+            // Vanilla syncs after the first knockback, so a hit player's own client
+            // doesn't get the enchantment knockback.
+            combat::sync_hit_player_velocity(target.as_ref(), old_movement);
+            let knockback_level = Self::knockback_level(stack);
+            if config.knockback && knockback_level > 0 {
+                combat::handle_knockback(
+                    attacker,
+                    target.as_ref(),
+                    f64::from(knockback_level),
+                    total_damage,
+                );
+            }
         }
 
         let mut dismounted = false;
@@ -301,7 +323,11 @@ impl SpearItem {
         }
 
         if affected {
-            world.send_entity_status(player.get_entity(), EntityStatus::KineticHit, None);
+            world.send_entity_status(
+                player.get_entity(),
+                EntityStatus::KineticHit,
+                ActorEventID::KineticDamageDealt,
+            );
         }
     }
 
@@ -609,7 +635,10 @@ impl SpearItem {
         let entity = target.get_entity();
         if entity.entity_id == player.entity_id()
             || entity.is_removed()
-            || entity.invulnerable.load(Ordering::Relaxed)
+            || target.get_mob().map_or_else(
+                || entity.invulnerable.load(Ordering::Relaxed),
+                Mob::is_invulnerable_to_piercing_weapon,
+            )
             || target.is_spectator()
         {
             return false;

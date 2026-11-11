@@ -144,6 +144,13 @@ pub trait MoveToTargetPos: Send + Sync {
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
     }
+
+    fn next_start_tick(&self, mob: &dyn Mob) -> i32
+    where
+        Self: Sized,
+    {
+        MoveToTargetPosGoal::<Self>::get_interval(mob)
+    }
 }
 
 impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
@@ -152,7 +159,10 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
             self.cooldown -= 1;
             return false;
         }
-        self.cooldown = Self::get_interval(mob);
+        self.cooldown = self.move_to_target_pos.get().map_or_else(
+            || Self::get_interval(mob),
+            |move_to_target_pos| move_to_target_pos.next_start_tick(mob),
+        );
         self.find_target_pos(mob)
     }
 
