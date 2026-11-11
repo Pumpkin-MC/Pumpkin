@@ -416,61 +416,76 @@ impl BedrockClient {
                                 );
                             }
                         }
-                        ItemStackRequestAction::CraftRecipe { .. } => {
-                            // For CraftRecipe, the client should have already populated the grid via Place actions
-                            // Fall through to generic crafting logic
-                        }
-                        ItemStackRequestAction::CraftRecipeAuto {
+                        ItemStackRequestAction::CraftRecipe {
                             recipe_id,
                             repetitions,
-                            ingredients,
+                        }
+                        | ItemStackRequestAction::CraftRecipeAuto {
+                            recipe_id,
+                            repetitions,
+                            ..
                         } => {
                             // For CraftRecipeAuto, populate the crafting grid with the provided ingredients
-                            if !ingredients.is_empty() && repetitions > 0 {
-                                let is_player = screen_handler.window_type().is_none();
-                                let grid_size = if is_player { 4 } else { 9 };
-                                let slot_base = if is_player { 28 } else { 32 };
-                                
-                                // Populate the crafting grid with the ingredients
-                                for (i, ingredient) in ingredients.iter().take(grid_size).enumerate() {
-                                    if ingredient.count > 0 && ingredient.count <= u8::MAX as u16 {
-                                        // Try to convert the ingredient to a Java item stack
-                                        let item_stack = if let Some(id_str) = &ingredient.identifier {
-                                            // Try to get the item from the registry key
-                                            if let Some(java_item) = pumpkin_data::item::Item::from_registry_key(id_str) {
-                                                ItemStack::new(ingredient.count as u8, java_item)
+                            if let ItemStackRequestAction::CraftRecipeAuto { ingredients, .. } =
+                                &action
+                            {
+                                if !ingredients.is_empty() && repetitions > 0 {
+                                    let is_player = screen_handler.window_type().is_none();
+                                    let grid_size = if is_player { 4 } else { 9 };
+                                    let slot_base = if is_player { 28 } else { 32 };
+
+                                    for (i, ingredient) in
+                                        ingredients.iter().take(grid_size).enumerate()
+                                    {
+                                        if ingredient.count > 0
+                                            && u8::try_from(ingredient.count).is_ok()
+                                        {
+                                            let item_stack = if let Some(id_str) =
+                                                &ingredient.identifier
+                                            {
+                                                if let Some(java_item) =
+                                                    pumpkin_data::item::Item::from_registry_key(
+                                                        id_str,
+                                                    )
+                                                {
+                                                    ItemStack::new(
+                                                        ingredient.count as u8,
+                                                        java_item,
+                                                    )
+                                                } else {
+                                                    tracing::warn!(
+                                                        "Failed to map bedrock item identifier '{}' to Java item",
+                                                        id_str
+                                                    );
+                                                    continue;
+                                                }
                                             } else {
-                                                // If we can't find the item, log a warning and skip
                                                 tracing::warn!(
-                                                    "Failed to map bedrock item identifier '{}' to Java item",
-                                                    id_str
+                                                    "Auto-craft ingredient has no identifier"
                                                 );
                                                 continue;
-                                            }
-                                        } else {
-                                            // No identifier, skip this ingredient
-                                            tracing::warn!("Auto-craft ingredient has no identifier");
-                                            continue;
-                                        };
-                                        
-                                        let slot_id = (slot_base + i) as u8;
-                                        
-                                        update_slot_stack(
-                                            player,
-                                            &mut *screen_handler,
-                                            &ItemStackRequestSlotInfo {
-                                                container_name: FullContainerName {
-                                                    container_name: ContainerName::CraftingInput,
-                                                    dynamic_id: None,
+                                            };
+
+                                            let slot_id = (slot_base + i) as u8;
+                                            update_slot_stack(
+                                                player,
+                                                &mut *screen_handler,
+                                                &ItemStackRequestSlotInfo {
+                                                    container_name: FullContainerName {
+                                                        container_name:
+                                                            ContainerName::CraftingInput,
+                                                        dynamic_id: None,
+                                                    },
+                                                    slot_id,
+                                                    stack_id: 0,
                                                 },
-                                                slot_id,
-                                                stack_id: 0,
-                                            },
-                                            item_stack,
-                                        );
+                                                item_stack,
+                                            );
+                                        }
                                     }
                                 }
                             }
+
                             if screen_handler.window_type()
                                 == Some(pumpkin_data::screen::WindowType::Merchant)
                             {
