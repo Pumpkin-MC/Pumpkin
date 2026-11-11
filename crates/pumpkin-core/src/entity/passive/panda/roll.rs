@@ -43,25 +43,20 @@ fn step_towards(component: f32) -> i32 {
     }
 }
 
-/// The (x, z) block offset of the block the panda faces: vanilla `PandaRollGoal.canUse` turns
-/// the yaw into a direction and steps along each axis it clearly points to.
 fn facing_step(yaw: f32) -> (i32, i32) {
     let angle = yaw * DEGREES_TO_RADIANS;
     (step_towards(-sin(angle)), step_towards(cos(angle)))
 }
 
-/// Vanilla `PandaRollGoal.canUse` once the panda faces a block that is not air: a playful
-/// panda first rolls the short odds and every panda falls back to the long odds.
-/// `next_int(bound)` stands for vanilla's `RandomSource.nextInt`, and both bounds go through
-/// `reducedTickDelay` because the selector asks every second tick.
+/// Vanilla `PandaRollGoal.canUse` once the panda faces a block that is not air. Both bounds go
+/// through `reducedTickDelay` because the selector asks every second tick.
 fn rolls_roll(playful: bool, mut next_int: impl FnMut(i32) -> i32) -> bool {
     (playful && next_int(to_goal_ticks(PLAYFUL_ROLL_BOUND)) == 1)
         || next_int(to_goal_ticks(ROLL_BOUND)) == 1
 }
 
-/// The velocity of one `handleRoll` step for a roll counter that already counts this tick, or
-/// `None` once the roll is over. `roll_delta` is the horizontal push of the first step and is
-/// replaced by it.
+/// The velocity of one `handleRoll` step for a roll counter that already counts this tick, or `None`
+/// once the roll is over.
 fn roll_velocity(
     counter: i32,
     baby: bool,
@@ -107,8 +102,6 @@ impl PandaEntity {
         self.set_rolling(value);
     }
 
-    /// The rolling part of vanilla `Panda.tick`: while the flag is set `handleRoll` runs,
-    /// otherwise the roll counter is reset.
     pub(super) fn tick_roll(&self) {
         if self.is_rolling() {
             self.handle_roll();
@@ -117,9 +110,7 @@ impl PandaEntity {
         }
     }
 
-    /// Vanilla `Panda.handleRoll`: the counter goes up each tick and the roll ends after 32. The
-    /// first step pushes the panda forwards and up, later steps keep that push, and steps 7, 15
-    /// and 23 stop it and hop.
+    /// Vanilla `Panda.handleRoll`: steps 7, 15 and 23 stop the push and hop.
     fn handle_roll(&self) {
         let counter = self.roll_counter.fetch_add(1, Relaxed) + 1;
         let entity = self.get_entity();
@@ -144,8 +135,6 @@ impl PandaEntity {
         }
     }
 
-    /// The part of vanilla `PandaRollGoal.canUse` before the random rolls: a baby or playful panda
-    /// on the ground that can act and whose facing block is air to roll off.
     fn rolls_at_edge(&self) -> Option<bool> {
         let entity = self.get_entity();
         if !((self.is_baby() || self.is_playful()) && entity.on_ground.load(Relaxed))
@@ -166,7 +155,6 @@ impl PandaEntity {
 pub struct PandaRollGoal;
 
 impl Goal for PandaRollGoal {
-    /// Vanilla `PandaRollGoal.canUse`.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -203,8 +191,7 @@ impl Goal for PandaRollGoal {
         Controls::MOVE | Controls::LOOK | Controls::JUMP
     }
 
-    /// The goal reads one block next to the panda and raises its roll flag, so it reaches no
-    /// other entity. The roll movement belongs to the panda tick, not to this goal.
+    /// Reads one block next to the panda and raises its roll flag, so it reaches no other entity.
     fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
         Some(GoalReach::default())
     }

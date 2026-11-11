@@ -18,16 +18,14 @@ const END_BOUND: i32 = 2000;
 /// Server ticks the panda waits after lying down before it may do so again.
 const COOLDOWN_TICKS: i32 = 200;
 
-/// Vanilla `PandaLieOnBackGoal.canUse` after the cooldown, laziness and `canPerformAction`
-/// checks. `next_int(bound)` stands for vanilla's `RandomSource.nextInt`; the bound goes
-/// through `reducedTickDelay` because the selector asks every second tick.
+/// Vanilla `PandaLieOnBackGoal.canUse` after its cooldown, laziness and `canPerformAction` checks.
+/// The bound goes through `reducedTickDelay` because the selector asks every second tick.
 fn rolls_lie_on_back(mut next_int: impl FnMut(i32) -> i32) -> bool {
     next_int(to_goal_ticks(START_BOUND)) == 1
 }
 
-/// Vanilla `PandaLieOnBackGoal.canContinueToUse`: a panda in the water gets up, a lazy panda
-/// only rolls the long odds and any other panda rolls the shorter ones first. The rolls
-/// short-circuit like vanilla's, so a panda that is out wins no extra draw.
+/// Vanilla `PandaLieOnBackGoal.canContinueToUse`. The rolls short-circuit like vanilla's, so a panda
+/// that is out wins no extra draw.
 fn keeps_lying(in_water: bool, lazy: bool, mut next_int: impl FnMut(i32) -> i32) -> bool {
     if in_water || (!lazy && next_int(to_goal_ticks(NOT_LAZY_END_BOUND)) == 1) {
         return false;
@@ -53,7 +51,6 @@ impl PandaLieOnBackGoal {
 }
 
 impl Goal for PandaLieOnBackGoal {
-    /// Vanilla `PandaLieOnBackGoal.canUse`: cooled down, lazy, able to act and a won roll.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -65,7 +62,6 @@ impl Goal for PandaLieOnBackGoal {
         rolls_lie_on_back(|bound| rng.random_range(0..bound))
     }
 
-    /// Vanilla `PandaLieOnBackGoal.canContinueToUse`.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -76,7 +72,6 @@ impl Goal for PandaLieOnBackGoal {
         })
     }
 
-    /// Vanilla `PandaLieOnBackGoal.start`: lie down and clear the cooldown.
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(panda) = as_panda(mob) {
             panda.set_on_back(true);
@@ -84,7 +79,6 @@ impl Goal for PandaLieOnBackGoal {
         self.cooldown = 0;
     }
 
-    /// Vanilla `PandaLieOnBackGoal.stop`: get up and wait before lying down again.
     fn stop(&mut self, mob: &dyn Mob) {
         if let Some(panda) = as_panda(mob) {
             panda.set_on_back(false);

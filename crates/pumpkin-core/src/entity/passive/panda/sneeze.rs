@@ -26,9 +26,7 @@ const SNEEZE_JUMP_RANGE: f64 = 10.0;
 /// `BuiltInLootTables.PANDA_SNEEZE`.
 const PANDA_SNEEZE_LOOT_TABLE: &str = "minecraft:gameplay/panda_sneeze";
 
-/// Vanilla `PandaSneezeGoal.canUse` after the baby and `canPerformAction` checks: a weak panda
-/// first rolls the short odds and falls back to the long odds, any other panda only rolls the
-/// long ones. `next_int(bound)` stands for vanilla's `RandomSource.nextInt`, and both bounds go
+/// Vanilla `PandaSneezeGoal.canUse` after the baby and `canPerformAction` checks. Both bounds go
 /// through `reducedTickDelay` because the selector asks every second tick.
 fn rolls_sneeze(weak: bool, mut next_int: impl FnMut(i32) -> i32) -> bool {
     (weak && next_int(to_goal_ticks(WEAK_BABY_SNEEZE_BOUND)) == 1)
@@ -49,7 +47,6 @@ impl PandaEntity {
         }
     }
 
-    /// Vanilla `getSneezeCounter`.
     #[must_use]
     pub fn get_sneeze_counter(&self) -> i32 {
         self.sneeze_counter.load(Relaxed)
@@ -64,9 +61,6 @@ impl PandaEntity {
         );
     }
 
-    /// The sneeze part of vanilla `Panda.tick`: while the flag is set the counter grows by one
-    /// per tick, plays `PANDA_PRE_SNEEZE` at 1 and ends the sneeze with `afterSneeze` once it
-    /// passes 20.
     pub(super) fn tick_sneeze(&self) {
         if !self.is_sneezing() {
             return;
@@ -81,9 +75,8 @@ impl PandaEntity {
         }
     }
 
-    /// Vanilla `Panda.afterSneeze`: plays `PANDA_SNEEZE`, makes the adult pandas within 10
-    /// blocks jump and may drop the sneeze gift. The sneeze particle is added by the client
-    /// from the synched sneeze counter, so no particle packet is sent.
+    /// Vanilla `Panda.afterSneeze`. The client adds the sneeze particle from the synched counter, so no
+    /// particle packet is sent.
     ///
     /// This reads and changes other entities up to 10 blocks away from the panda's tick, which
     /// the conservative entity island reach covers only because `has_audited_tick` is false for
@@ -115,8 +108,6 @@ impl PandaEntity {
         self.drop_sneeze_gift(self.get_random().random());
     }
 
-    /// The loot rolled by `dropFromGiftLootTable` with `PANDA_SNEEZE` for a loot seed; empty if
-    /// the table is unknown.
     fn roll_sneeze_gift(&self, seed: i64) -> Vec<ItemStack> {
         let world = self.get_entity().world.load_full();
         let Some(table) = world.get_loot_table(PANDA_SNEEZE_LOOT_TABLE) else {
@@ -131,9 +122,8 @@ impl PandaEntity {
         generate_loot_from_handle(&table, seed, &params)
     }
 
-    /// The end of vanilla `afterSneeze`: with `mob_drops` on, drops the `PANDA_SNEEZE` gift at
-    /// the panda's feet. A plugin can cancel each stack through `EntityDropItemEvent`. Returns
-    /// whether an item was dropped.
+    /// The end of vanilla `afterSneeze`. A plugin can cancel each stack through `EntityDropItemEvent`.
+    /// Returns whether an item was dropped.
     fn drop_sneeze_gift(&self, seed: i64) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load_full();
@@ -179,8 +169,7 @@ impl Goal for PandaSneezeGoal {
         }
     }
 
-    /// The goal only reads the panda itself and raises its sneeze flag, so it reaches no other
-    /// entity. The 10 block sneeze effect belongs to the panda tick, not to this goal.
+    /// Reads the panda itself and raises its sneeze flag, so it reaches no other entity.
     fn tick_reach(&self, _mob: &dyn Mob, _running: bool) -> Option<GoalReach> {
         Some(GoalReach::default())
     }

@@ -391,9 +391,7 @@ impl PandaEntity {
         self.set_flag(FLAG_SIT, val);
     }
 
-    /// Vanilla `Mob.lookAt(entity, yMax, xMax)`: turns the panda's body yaw and pitch towards the
-    /// target right away, by at most the given angles per axis. Unlike the look control this does
-    /// not wait for the next tick and does not move the head only.
+    /// Vanilla `Mob.lookAt(entity, yMax, xMax)`: unlike the look control it turns the body at once.
     fn turn_towards(&self, target: &Arc<dyn EntityBase>, max_yaw: f32, max_pitch: f32) {
         let entity = self.get_entity();
         let pos = entity.pos.load();
@@ -433,13 +431,11 @@ impl PandaEntity {
         self.set_flag(FLAG_ROLL, val);
     }
 
-    /// Vanilla `getUnhappyCounter`.
     #[must_use]
     pub fn get_unhappy_counter(&self) -> i32 {
         self.unhappy_counter.load(Ordering::Relaxed)
     }
 
-    /// Vanilla `setUnhappyCounter`.
     pub fn set_unhappy_counter(&self, value: i32) {
         self.unhappy_counter.store(value, Ordering::Relaxed);
         self.get_entity().set_synced_data(
@@ -448,13 +444,11 @@ impl PandaEntity {
         );
     }
 
-    /// Vanilla `isEating`: the eat counter is running.
     #[must_use]
     pub fn is_eating(&self) -> bool {
         self.get_eat_counter() > 0
     }
 
-    /// Vanilla `getEatCounter`.
     #[must_use]
     fn get_eat_counter(&self) -> i32 {
         self.eat_counter.load(Ordering::Relaxed)
@@ -469,12 +463,10 @@ impl PandaEntity {
         );
     }
 
-    /// Vanilla `eat`: starts or stops the eat counter.
     pub fn eat(&self, value: bool) {
         self.set_eat_counter(i32::from(value));
     }
 
-    /// Vanilla `getItemBySlot(MAINHAND)`: what the panda holds in its mouth.
     fn main_hand_item(&self) -> ItemStack {
         self.mob_entity
             .living_entity
@@ -496,15 +488,12 @@ impl PandaEntity {
             .set_item_slot(&EquipmentSlot::MAIN_HAND, stack)
     }
 
-    /// Vanilla `spawnAtLocation(held)` followed by `setItemSlot(MAINHAND, EMPTY)`. A plugin can
-    /// cancel the drop through `EntityDropItemEvent`, and the panda then keeps what it holds.
-    /// Returns whether the panda held anything.
+    /// A plugin can cancel the drop through `EntityDropItemEvent`, and the panda then keeps what it holds.
     pub fn drop_main_hand_item(&self) -> bool {
         self.drop_main_hand_item_if(|held| self.plugin_allows_drop(held))
     }
 
-    /// `drop_main_hand_item` with the plugin decision passed in: the mouth is only emptied once
-    /// the drop is allowed.
+    /// `drop_main_hand_item` with the plugin decision passed in.
     fn drop_main_hand_item_if(&self, allowed: impl FnOnce(&ItemStack) -> bool) -> bool {
         let held = self.main_hand_item();
         if held.is_empty() {
@@ -517,8 +506,6 @@ impl PandaEntity {
         true
     }
 
-    /// Vanilla `spawnAtLocation(stack)` at the panda's feet, with the plugin hook. Returns whether
-    /// an item entity was spawned.
     fn spawn_stack_at_feet(&self, stack: ItemStack) -> bool {
         if stack.is_empty() || !self.plugin_allows_drop(&stack) {
             return false;
@@ -557,10 +544,8 @@ impl PandaEntity {
         self.set_sitting(true);
     }
 
-    /// Vanilla `handleEating` with `next_int(bound)` standing for `RandomSource.nextInt`: a
-    /// sitting panda that holds an item starts to eat now and then, the meal sounds every
-    /// `EATING_EFFECT_INTERVAL` ticks, and a long meal ends. The item particles are made by the
-    /// client from the synched eat counter and the held item, so none are sent.
+    /// Vanilla `handleEating` with `next_int(bound)` standing for `RandomSource.nextInt`. The client
+    /// makes the item particles from the synched eat counter, so none are sent.
     fn handle_eating_with(&self, mut next_int: impl FnMut(i32) -> i32) {
         let holds_item = self.is_holding_item();
         if !self.is_eating()
@@ -601,7 +586,6 @@ impl PandaEntity {
         self.set_eat_counter(counter + 1);
     }
 
-    /// Vanilla `handleEating` with the real random source.
     fn handle_eating(&self) {
         let mut rng = self.get_random();
         self.handle_eating_with(|bound| rng.random_range(0..bound));
@@ -613,12 +597,8 @@ impl PandaEntity {
         self.is_worried() && is_thundering(&self.get_entity().world.load())
     }
 
-    /// The last branch of vanilla `Panda.mobInteract` for food: an adult panda that cannot be
-    /// bred sits down and eats the item. It drops what it held before (unless the player has
-    /// infinite materials, i.e. in creative mode), holds one of the given item and the player's
-    /// stack shrinks. Returns whether the interaction was handled.
-    ///
-    /// A plugin that cancels the drop of the old item leaves everything as it was.
+    /// The last branch of vanilla `Panda.mobInteract` for food: it drops what the panda held (unless the
+    /// player has infinite materials) and a plugin that cancels that drop leaves everything as it was.
     fn sit_and_eat(&self, item_stack: &mut ItemStack, gamemode: GameMode) -> bool {
         if self.is_baby() || self.is_sitting() || self.get_entity().is_in_water() {
             return false;
@@ -633,8 +613,6 @@ impl PandaEntity {
         true
     }
 
-    /// Item entities within `range` blocks of the panda's box that it would pick up and eat, as
-    /// vanilla `getEntitiesOfClass(ItemEntity.class, box.inflate(range), Panda::canPickUpAndEat)`.
     fn ground_items_to_eat(&self, range: f64) -> Vec<Arc<dyn EntityBase>> {
         let entity = self.get_entity();
         let area = entity.bounding_box.load().expand(range, range, range);
@@ -832,9 +810,7 @@ impl Mob for PandaEntity {
         );
     }
 
-    /// Vanilla `Panda.tick` after the super tick: worried pandas sit through thunderstorms, a lost
-    /// target clears the bamboo and bite state, the unhappy counter counts down, a sitting panda
-    /// has pitch 0, `handleEating` runs and a rolling panda takes its next roll step.
+    /// Vanilla `Panda.tick` after the super tick.
     fn post_tick(&self) {
         if self.is_worried() {
             if self.is_scared() && !self.get_entity().is_in_water() {
@@ -877,9 +853,6 @@ impl Mob for PandaEntity {
         self.play_entity_sound(Sound::EntityPandaBite, 1.0, 1.0);
     }
 
-    /// Vanilla `Panda.mobInteract`: a scared panda ignores the player, a panda on its back gets
-    /// up, bamboo for a panda with a target calms it later, an adult that cannot be bred sits
-    /// down and eats the food, and the rest is the shared animal feeding.
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if self.is_scared() {
             return false;

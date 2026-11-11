@@ -65,37 +65,30 @@ impl<G: Goal> Goal for PandaGoal<G> {
         as_panda(mob).is_some_and(self.start_if) && self.inner.can_start(mob)
     }
 
-    /// Vanilla `canContinueToUse`, left to the inner goal.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.inner.should_continue(mob)
     }
 
-    /// Vanilla `start` of the inner goal.
     fn start(&mut self, mob: &dyn Mob) {
         self.inner.start(mob);
     }
 
-    /// Vanilla `stop` of the inner goal.
     fn stop(&mut self, mob: &dyn Mob) {
         self.inner.stop(mob);
     }
 
-    /// Vanilla `tick` of the inner goal.
     fn tick(&mut self, mob: &dyn Mob) {
         self.inner.tick(mob);
     }
 
-    /// Vanilla `requiresUpdateEveryTick` of the inner goal.
     fn should_run_every_tick(&self) -> bool {
         self.inner.should_run_every_tick()
     }
 
-    /// Vanilla's interruptible check of the inner goal.
     fn can_stop(&self) -> bool {
         self.inner.can_stop()
     }
 
-    /// Vanilla `getFlags` of the inner goal.
     fn controls(&self) -> Controls {
         self.inner.controls()
     }
@@ -138,9 +131,8 @@ impl PandaBreedGoal {
             .map(|player| player as Arc<dyn EntityBase>)
     }
 
-    /// Vanilla `PandaBreedGoal.canFindBamboo`: a bamboo block within 7 blocks horizontally and 0
-    /// to 2 blocks above the panda's feet block. Vanilla walks square rings from the centre
-    /// outwards and stops at the first hit, which only matters for the order of the reads.
+    /// Vanilla walks square rings from the centre outwards and stops at the first hit, which only
+    /// matters for the order of the reads.
     fn can_find_bamboo(mob: &dyn Mob) -> bool {
         let entity = mob.get_entity();
         let world = entity.world.load();
@@ -158,8 +150,7 @@ impl PandaBreedGoal {
 }
 
 impl Goal for PandaBreedGoal {
-    /// Vanilla `PandaBreedGoal.canUse`. Without bamboo the panda starts to sulk once per
-    /// `UNHAPPY_COOLDOWN_TICKS` and never breeds.
+    /// Without bamboo the panda starts to sulk once per `UNHAPPY_COOLDOWN_TICKS` and never breeds.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -182,37 +173,30 @@ impl Goal for PandaBreedGoal {
         false
     }
 
-    /// Vanilla `canContinueToUse`, left to the breed goal.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.inner.should_continue(mob)
     }
 
-    /// Vanilla `start` of the breed goal.
     fn start(&mut self, mob: &dyn Mob) {
         self.inner.start(mob);
     }
 
-    /// Vanilla `stop` of the breed goal.
     fn stop(&mut self, mob: &dyn Mob) {
         self.inner.stop(mob);
     }
 
-    /// Vanilla `tick` of the breed goal.
     fn tick(&mut self, mob: &dyn Mob) {
         self.inner.tick(mob);
     }
 
-    /// Vanilla `requiresUpdateEveryTick` of the breed goal.
     fn should_run_every_tick(&self) -> bool {
         self.inner.should_run_every_tick()
     }
 
-    /// Vanilla's interruptible check of the breed goal.
     fn can_stop(&self) -> bool {
         self.inner.can_stop()
     }
 
-    /// Vanilla `getFlags` of the breed goal.
     fn controls(&self) -> Controls {
         self.inner.controls()
     }
@@ -267,8 +251,7 @@ pub struct PandaSitGoal {
 }
 
 impl PandaSitGoal {
-    /// Vanilla `canContinueToUse` with `next_int(bound)` standing for `RandomSource.nextInt`: a
-    /// panda leaves the water and the sit with small random chances per goal tick.
+    /// Vanilla `canContinueToUse` with `next_int(bound)` standing for `RandomSource.nextInt`.
     pub(super) fn keeps_sitting(panda: &PandaEntity, mut next_int: impl FnMut(i32) -> i32) -> bool {
         if panda.get_entity().is_in_water() {
             return false;
@@ -281,8 +264,6 @@ impl PandaSitGoal {
 }
 
 impl Goal for PandaSitGoal {
-    /// Vanilla `canUse`: not in cooldown, an adult out of the water that can act, not sulking
-    /// and either holding an item or with food on the ground nearby.
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let Some(panda) = as_panda(mob) else {
             return false;
@@ -298,7 +279,6 @@ impl Goal for PandaSitGoal {
                     .is_empty())
     }
 
-    /// Vanilla `canContinueToUse`.
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         as_panda(mob).is_some_and(|panda| {
             let mut rng = panda.get_random();
@@ -306,8 +286,6 @@ impl Goal for PandaSitGoal {
         })
     }
 
-    /// Vanilla `start`: sit down with the held item, or with an empty mouth walk to the first
-    /// food on the ground. Either way the cooldown is cleared.
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(panda) = as_panda(mob) {
             if panda.is_holding_item() {
@@ -338,7 +316,6 @@ impl Goal for PandaSitGoal {
         }
     }
 
-    /// Vanilla `stop`.
     fn stop(&mut self, mob: &dyn Mob) {
         let Some(panda) = as_panda(mob) else {
             return;
@@ -356,7 +333,6 @@ impl Goal for PandaSitGoal {
         panda.set_sitting(false);
     }
 
-    /// Vanilla `PandaSitGoal` flags: move only.
     fn controls(&self) -> Controls {
         Controls::MOVE
     }
