@@ -6447,6 +6447,24 @@ impl World {
         })
     }
 
+    /// Whether `pos` lies in a piece of a generated structure from the `structures` tag.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: BlockPos,
+        structures: &pumpkin_data::tag::Tag,
+    ) -> bool {
+        let wanted: Vec<_> = structures
+            .0
+            .iter()
+            .filter_map(|name| pumpkin_data::structures::StructureKeys::from_name(name))
+            .collect();
+        self.level
+            .world_gen
+            .load()
+            .has_structure_piece_at(pos, &wanted)
+    }
+
     pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();

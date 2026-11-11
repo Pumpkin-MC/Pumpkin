@@ -110,6 +110,20 @@ impl WorldGenerator {
         }
     }
 
+    /// Whether a piece of one of the `wanted` structures covers `pos`. Only noise worlds
+    /// generate structures.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: pumpkin_util::math::position::BlockPos,
+        wanted: &[StructureKeys],
+    ) -> bool {
+        match self {
+            Self::Noise(noise_gen) => noise_gen.has_structure_piece_at(pos, wanted),
+            Self::Flat(_) | Self::Custom(_) => false,
+        }
+    }
+
     #[must_use]
     pub fn global_structure_cache(
         &self,
@@ -161,6 +175,40 @@ impl VanillaGenerator {
             && ProtoChunk::structure_biomes(key)
                 .iter()
                 .any(|biome| self.possible_biomes.contains(biome))
+    }
+
+    /// Whether a piece of one of the `wanted` structures covers `pos`.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: pumpkin_util::math::position::BlockPos,
+        wanted: &[StructureKeys],
+    ) -> bool {
+        let dimension = &self.dimension;
+        let bottom_y = dimension.min_y as i8;
+        let shape = self
+            .settings
+            .shape
+            .trim_height(bottom_y, (dimension.min_y + dimension.height) as u16);
+        let min_y = i32::from(shape.min_y.max(bottom_y));
+        let height = shape.height.min(dimension.height as u16);
+        ProtoChunk::structure_references_in_chunk(
+            self,
+            pos.0.x >> 4,
+            pos.0.z >> 4,
+            min_y,
+            height,
+            |key| wanted.contains(&key),
+        )
+        .iter()
+        .any(|(_, collector)| {
+            collector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pieces
+                .iter()
+                .any(|piece| piece.bounding_box().contains_pos(&pos.0))
+        })
     }
 
     #[must_use]
