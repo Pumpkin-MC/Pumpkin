@@ -4,7 +4,7 @@
 //! vanilla Minecraft's `populateDefaultEquipmentSlots` and
 //! `populateDefaultEquipmentEnchantments` behaviour. It features:
 //!
-//! - A data-driven `EQUIPMENT_REGISTRY` mapping 13 mob types to their weapon/armor
+//! - A data-driven `EQUIPMENT_REGISTRY` mapping mob types to their weapon/armor
 //!   configurations.
 //! - Exact vanilla `RegionalDifficulty` computation (game time, chunk inhabited time,
 //!   moon phase).
@@ -216,32 +216,6 @@ pub struct MobEquipmentDef {
 /// equipment tables).
 pub static EQUIPMENT_REGISTRY: LazyLock<HashMap<&'static str, MobEquipmentDef>> =
     LazyLock::new(|| {
-        static ZOMBIE_WEAPONS: [WeaponEntry; 3] = [
-            WeaponEntry {
-                item: &Item::IRON_SWORD,
-                weight: 1.0,
-            },
-            WeaponEntry {
-                item: &Item::IRON_SPEAR,
-                weight: 1.0,
-            },
-            WeaponEntry {
-                item: &Item::IRON_SHOVEL,
-                weight: 4.0,
-            },
-        ];
-
-        static DROWNED_WEAPONS: [WeaponEntry; 2] = [
-            WeaponEntry {
-                item: &Item::TRIDENT,
-                weight: 10.0,
-            },
-            WeaponEntry {
-                item: &Item::FISHING_ROD,
-                weight: 6.0,
-            },
-        ];
-
         static PIGLIN_WEAPONS: [WeaponEntry; 3] = [
             WeaponEntry {
                 item: &Item::CROSSBOW,
@@ -280,94 +254,7 @@ pub static EQUIPMENT_REGISTRY: LazyLock<HashMap<&'static str, MobEquipmentDef>> 
             },
         ];
 
-        static ZOMBIFIED_PIGLIN_WEAPONS: [WeaponEntry; 2] = [
-            WeaponEntry {
-                item: &Item::GOLDEN_SWORD,
-                weight: 19.0,
-            },
-            WeaponEntry {
-                item: &Item::GOLDEN_SPEAR,
-                weight: 1.0,
-            },
-        ];
-
         let mut m = HashMap::new();
-
-        // ─── Zombie ───
-        m.insert(
-            "zombie",
-            MobEquipmentDef {
-                entity_type: "zombie",
-                weapon: WeaponConfig::Chance {
-                    on_hard: 0.05,
-                    otherwise: 0.01,
-                    items: &ZOMBIE_WEAPONS,
-                },
-                armor: ArmorConfig::Vanilla,
-                enchanted: true,
-                can_pick_up_loot: true,
-            },
-        );
-
-        // ─── Husk ───
-        m.insert(
-            "husk",
-            MobEquipmentDef {
-                entity_type: "husk",
-                weapon: WeaponConfig::Chance {
-                    on_hard: 0.05,
-                    otherwise: 0.01,
-                    items: &ZOMBIE_WEAPONS,
-                },
-                armor: ArmorConfig::Vanilla,
-                enchanted: true,
-                can_pick_up_loot: true,
-            },
-        );
-
-        // ─── Zombie Villager ───
-        m.insert(
-            "zombie_villager",
-            MobEquipmentDef {
-                entity_type: "zombie_villager",
-                weapon: WeaponConfig::Chance {
-                    on_hard: 0.05,
-                    otherwise: 0.01,
-                    items: &ZOMBIE_WEAPONS,
-                },
-                armor: ArmorConfig::Vanilla,
-                enchanted: true,
-                can_pick_up_loot: true,
-            },
-        );
-
-        // ─── Drowned ───
-        m.insert(
-            "drowned",
-            MobEquipmentDef {
-                entity_type: "drowned",
-                weapon: WeaponConfig::Chance {
-                    on_hard: 0.10,
-                    otherwise: 0.10,
-                    items: &DROWNED_WEAPONS,
-                },
-                armor: ArmorConfig::None,
-                enchanted: true,
-                can_pick_up_loot: true,
-            },
-        );
-
-        // ─── Zombified Piglin ───
-        m.insert(
-            "zombified_piglin",
-            MobEquipmentDef {
-                entity_type: "zombified_piglin",
-                weapon: WeaponConfig::AlwaysWeighted(&ZOMBIFIED_PIGLIN_WEAPONS),
-                armor: ArmorConfig::None,
-                enchanted: true,
-                can_pick_up_loot: false,
-            },
-        );
 
         // ─── Skeleton ───
         m.insert(

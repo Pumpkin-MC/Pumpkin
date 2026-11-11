@@ -1074,11 +1074,11 @@ mod tests {
         assert!(bucket.requires_custom_persistence());
 
         let leashed = axolotl(&world);
-        *leashed.get_entity().leashed_to.lock().unwrap() = Some(other.clone());
+        *leashed.get_entity().leashed_to.lock().unwrap() = Some(Arc::downgrade(&other));
         assert!(leashed.requires_custom_persistence());
 
         let rider = axolotl(&world);
-        *rider.get_entity().vehicle.lock().unwrap() = Some(other);
+        *rider.get_entity().vehicle.lock().unwrap() = Some(Arc::downgrade(&other));
         assert!(rider.requires_custom_persistence());
         Ok(())
     }

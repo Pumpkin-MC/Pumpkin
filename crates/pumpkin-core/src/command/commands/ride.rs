@@ -34,24 +34,13 @@ static ERROR_NOT_RIDING: CommandErrorType<1> = CommandErrorType::new(
     "Not riding anything",
 );
 
-#[allow(clippy::assigning_clones)]
 fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
-    let mut current = possible_vehicle
-        .get_entity()
-        .vehicle
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
+    let mut current = possible_vehicle.get_entity().get_vehicle();
     while let Some(vehicle) = current {
         if vehicle.get_entity().entity_id == entity.get_entity().entity_id {
             return true;
         }
-        current = vehicle
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        current = vehicle.get_entity().get_vehicle();
     }
     false
 }
@@ -63,12 +52,7 @@ impl CommandExecutor for RideMountExecutor {
         let target = EntityArgumentType::get_entity(context, "target")?;
         let vehicle = EntityArgumentType::get_entity(context, "vehicle")?;
 
-        let current_vehicle = target
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let current_vehicle = target.get_entity().get_vehicle();
         if let Some(ref curr_veh) = current_vehicle {
             return Err(ERROR_ALREADY_RIDING
                 .create_without_context(target.get_display_name(), curr_veh.get_display_name()));
@@ -111,12 +95,7 @@ impl CommandExecutor for RideDismountExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let target = EntityArgumentType::get_entity(context, "target")?;
 
-        let current_vehicle = target
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let current_vehicle = target.get_entity().get_vehicle();
         current_vehicle.map_or_else(
             || Err(ERROR_NOT_RIDING.create_without_context(target.get_display_name())),
             |vehicle| {

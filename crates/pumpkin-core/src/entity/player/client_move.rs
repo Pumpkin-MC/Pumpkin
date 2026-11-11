@@ -450,12 +450,7 @@ fn packed_delta(last_pos: Vector3<f64>, pos: Vector3<f64>) -> Vector3<i16> {
 }
 
 fn dismount_if_riding(entity: &crate::entity::Entity) {
-    let vehicle = entity
-        .vehicle
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
-    if let Some(vehicle) = vehicle {
+    if let Some(vehicle) = entity.get_vehicle() {
         vehicle.get_entity().remove_passenger(entity.entity_id);
     }
 }

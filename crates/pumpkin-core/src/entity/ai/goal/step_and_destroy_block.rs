@@ -3,10 +3,14 @@ use crate::entity::ai::goal::ParentHandle;
 use crate::entity::ai::goal::move_to_target_pos::{MoveToTargetPos, MoveToTargetPosGoal};
 use crate::entity::mob::Mob;
 use crate::world::World;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 use std::sync::Arc;
 
 const MAX_COOLDOWN: i32 = 20;
@@ -132,7 +136,15 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
                 .living_entity
                 .entity
                 .set_velocity(Vector3::new(velocity.x, 0.3, velocity.z));
-            // TODO: spawn particles
+            let mut rng = mob.get_random();
+            let mut spread = || (rng.random::<f32>() - 0.5) * 0.08;
+            world.spawn_item_particle(
+                tweak_pos.0.to_f64() + Vector3::new(0.5, 0.7, 0.5),
+                Vector3::new(spread(), spread(), spread()),
+                0.15,
+                3,
+                &ItemStack::new(1, &Item::EGG),
+            );
         }
 
         if counter % 2 == 0 {
@@ -153,7 +165,13 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
         if counter > 60 {
             // Replace with air, no drops.
             world.set_block_state(&tweak_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
-            // TODO: spawn the poof particles
+            world.spawn_particle(
+                tweak_pos.0.to_f64() + Vector3::new(0.5, 0.0, 0.5),
+                Vector3::new(0.02, 0.02, 0.02),
+                0.15,
+                20,
+                Particle::Poof,
+            );
             if let Some(stepping) = self.stepping.get() {
                 stepping.on_destroy_block(world, tweak_pos);
             } else {
@@ -176,7 +194,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
 impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> MoveToTargetPos
     for StepAndDestroyBlockGoal<S, M>
 {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         world.get_block(&block_pos).id == self.target_block.id
             && world.get_block_state(&block_pos.up()).is_air()
             && world.get_block_state(&block_pos.up_height(2)).is_air()

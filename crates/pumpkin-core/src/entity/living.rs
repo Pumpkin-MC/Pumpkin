@@ -406,6 +406,12 @@ impl LivingEntity {
         }
     }
 
+    /// Still inside the hurt animation of the last hit taken.
+    #[must_use]
+    pub fn was_hurt_recently(&self) -> bool {
+        self.hurt_cooldown.load(Relaxed) > HURT_DURATION
+    }
+
     pub fn get_last_hurt_by_mob_timestamp(&self) -> i32 {
         self.last_hurt_by_mob_timestamp.load(Relaxed)
     }
@@ -1106,7 +1112,9 @@ impl LivingEntity {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.get(&attribute.id)
-            .map_or(attribute.default_value, AttributeInstance::value)
+            .map_or(attribute.default_value, |instance| {
+                instance.sanitized_value(attribute)
+            })
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
@@ -1910,12 +1918,17 @@ impl LivingEntity {
     }
 
     pub(crate) fn travel_flying(&self, caller: &dyn EntityBase) {
+        self.travel_flying_with_speed(caller, self.get_speed());
+    }
+
+    /// Flies with `air_speed` out of fluids, slowing down in water and lava.
+    pub(crate) fn travel_flying_with_speed(&self, caller: &dyn EntityBase, air_speed: f32) {
         let (speed, drag) = if self.entity.is_in_water() {
             (f64::from(0.02f32), f64::from(0.8f32))
         } else if self.entity.touching_lava.load(Relaxed) {
             (f64::from(0.02f32), 0.5)
         } else {
-            (f64::from(self.get_speed()), f64::from(0.91f32))
+            (f64::from(air_speed), f64::from(0.91f32))
         };
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -2515,6 +2528,9 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
             self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
+            let perished = killer
+                .and_then(EntityBase::get_mob)
+                .is_none_or(|mob| mob.killed_entity(&*dyn_self));
             world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2569,13 +2585,14 @@ impl LivingEntity {
                 ..Default::default()
             };
 
-            let should_drop_loot = dyn_self.should_drop_loot();
+            let should_drop_loot = perished && dyn_self.should_drop_loot();
             if should_drop_loot {
                 self.drop_loot(&*dyn_self, &params);
             }
 
             // Award experience
-            if params.killed_by_player.unwrap_or(false)
+            if perished
+                && params.killed_by_player.unwrap_or(false)
                 && world.level_info.load().game_rules.mob_drops
                 && dyn_self.should_drop_experience()
             {
@@ -2589,7 +2606,7 @@ impl LivingEntity {
             if should_drop_loot {
                 self.drop_equipment(looting_level);
             }
-            if let Some(mob) = dyn_self.get_mob() {
+            if perished && let Some(mob) = dyn_self.get_mob() {
                 mob.drop_inventory();
             }
 
@@ -4133,19 +4150,17 @@ impl EntityBase for LivingEntity {
 
         self.tick_effects();
 
-        if let Some(player) = caller.get_player() {
-            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
-            if remaining_use_ticks > 0 {
-                let item_in_use = self
-                    .item_in_use
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(item) = item_in_use.as_ref() {
-                    server
-                        .item_registry
-                        .on_use_tick(item, player, remaining_use_ticks);
-                }
+        let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+        if remaining_use_ticks > 0 {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(item) = item_in_use.as_ref() {
+                server
+                    .item_registry
+                    .on_use_tick(item, caller, remaining_use_ticks);
             }
         }
 
@@ -4392,6 +4407,8 @@ impl EntityBase for LivingEntity {
 }
 
 const LAST_HURT_BY_PLAYER_MEMORY_TIME: i32 = 100;
+/// Ticks of the hurt animation; the damage cooldown runs twice as long.
+const HURT_DURATION: i32 = 10;
 
 pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";
 pub const SPEED_MODIFIER_SPRINTING_AMOUNT: f64 = 0.300_000_011_920_928_96;
@@ -4496,13 +4513,7 @@ impl LivingEntity {
                 }
                 ConsumeEffect::TeleportRandomly(diameter) => {
                     // Java Edition dismounts the consumer before random teleport attempts.
-                    let vehicle = caller
-                        .get_entity()
-                        .vehicle
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone();
-                    if let Some(vehicle) = vehicle {
+                    if let Some(vehicle) = caller.get_entity().get_vehicle() {
                         vehicle
                             .get_entity()
                             .remove_passenger_sync(caller.get_entity().entity_id);
