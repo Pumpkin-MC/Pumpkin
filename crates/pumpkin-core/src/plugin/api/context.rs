@@ -1,7 +1,10 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock, PoisonError, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use crate::{
@@ -40,6 +43,13 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<PermissionManager>,
     pub logger: Arc<OnceLock<LoggerOption>>,
+    /// Set when unload starts: handlers, services and loaders are refused from then on.
+    closed: AtomicBool,
+    /// Set by a command registration: the tree keeps its code for good.
+    commands: AtomicBool,
+    /// Set before unload's last sweep, after `on_unload`: commands and permissions are refused.
+    /// A lock: sealing waits for a permission registration that is under way.
+    sealed: RwLock<bool>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -67,7 +77,39 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
+            closed: AtomicBool::new(false),
+            commands: AtomicBool::new(false),
+            sealed: RwLock::new(false),
         }
+    }
+
+    /// Refuses further handlers, services and loaders, set before unload takes them off.
+    pub(crate) fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+    }
+
+    #[must_use]
+    pub(crate) fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
+    }
+
+    /// Refuses further commands and permissions, set before unload's last sweep of them.
+    pub(crate) fn seal(&self) {
+        *self.sealed.write().unwrap_or_else(PoisonError::into_inner) = true;
+    }
+
+    fn is_sealed(&self) -> bool {
+        *self.sealed.read().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Library must stay loaded: the command tree holds its code.
+    pub(crate) fn mark_commands(&self) {
+        self.commands.store(true, Ordering::SeqCst);
+    }
+
+    #[must_use]
+    pub(crate) fn has_commands(&self) -> bool {
+        self.commands.load(Ordering::SeqCst)
     }
 
     #[must_use]
@@ -121,7 +163,16 @@ impl Context {
         name: N,
         service: Arc<T>,
     ) {
+        // Owner recorded: unloading it takes the service off again
+        let service = crate::plugin::Service {
+            owner: self.metadata.name.clone(),
+            payload: service,
+        };
         let mut services = self.plugin_manager.services.write().await;
+        // Checked under the sweep's lock: no insert can land after it
+        if self.is_closed() {
+            return;
+        }
         services.insert(name.into(), service);
     }
 
@@ -151,7 +202,7 @@ impl Context {
     /// ```
     pub async fn get_service<T: Payload + 'static>(&self, name: &str) -> Option<Arc<T>> {
         let services = self.plugin_manager.services.read().await;
-        let service = services.get(name)?.clone();
+        let service = Arc::clone(services.get(name)?);
         <dyn Payload>::downcast_arc::<T>(service)
     }
 
@@ -183,6 +234,11 @@ impl Context {
             })));
 
         self.server.command_dispatcher.rcu(|dispatcher| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_sealed() {
+                return Arc::clone(dispatcher);
+            }
+            self.mark_commands();
             let mut new_dispatcher = (**dispatcher).clone();
             new_dispatcher.register(node.clone());
             Arc::new(new_dispatcher)
@@ -216,6 +272,11 @@ impl Context {
             })));
 
         self.server.command_dispatcher.rcu(|dispatcher| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_sealed() {
+                return Arc::clone(dispatcher);
+            }
+            self.mark_commands();
             let mut new_dispatcher = (**dispatcher).clone();
             new_dispatcher.register_with_aliases(node.clone(), aliases);
             Arc::new(new_dispatcher)
@@ -247,6 +308,12 @@ impl Context {
         });
 
         self.reload_commands_for_everyone();
+    }
+
+    /// Removes every permission node this plugin registered, so it is free again
+    pub(crate) fn unregister_permissions(&self) {
+        self.permission_manager
+            .unregister_namespace(&self.metadata.name);
     }
 
     /// Reloads (resends) all commands for all currently online players.
@@ -288,6 +355,11 @@ impl Context {
             ));
         }
 
+        // Held across the insert, so the last sweep comes after it
+        let sealed = self.sealed.read().unwrap_or_else(PoisonError::into_inner);
+        if *sealed {
+            return Err(format!("Plugin {} is unloading", self.metadata.name));
+        }
         self.permission_manager.register_permission(permission)
     }
 
@@ -334,6 +406,10 @@ impl Context {
         });
 
         self.handlers.rcu(|handlers| {
+            // Checked per attempt: an rcu that lost to the sweep sees the flag on retry
+            if self.is_closed() {
+                return Arc::clone(handlers);
+            }
             let mut new_handlers = (**handlers).clone();
             new_handlers
                 .entry(E::get_name_static())
@@ -354,7 +430,9 @@ impl Context {
     /// - `loader`: The custom plugin loader implementation to register.
     ///
     /// # Returns
-    /// `true` if new plugins were loaded as a result of registering this loader, `false` otherwise.
+    /// What happened to the files waiting for a loader. From `on_load` that is
+    /// [`LoaderRetry::Pending`](crate::plugin::LoaderRetry::Pending): they may depend on this
+    /// plugin, so they load after this call returns.
     ///
     /// # Example
     ///
@@ -366,13 +444,10 @@ impl Context {
     pub async fn register_plugin_loader(
         &self,
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
-    ) -> bool {
-        let before_count = self.plugin_manager.loaded_plugins().len();
-        self.plugin_manager.add_loader(&self.server, loader).await;
-        let after_count = self.plugin_manager.loaded_plugins().len();
-
-        // Return true if any new plugins were loaded
-        after_count > before_count
+    ) -> crate::plugin::LoaderRetry {
+        self.plugin_manager
+            .add_owned_loader(&self.server, Some(self), loader)
+            .await
     }
 
     /// Initializes logging via the tracing crate for the plugin.

@@ -1,13 +1,18 @@
 use arc_swap::ArcSwap;
-use futures::future::join_all;
+use futures::{FutureExt, future::join_all};
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
     any::Any,
+    borrow::Cow,
     collections::{HashMap, HashSet},
+    panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
+    sync::{
+        Arc, Mutex as SyncMutex, PoisonError, RwLock as SyncRwLock,
+        atomic::{AtomicBool, AtomicU64},
+    },
     thread::ThreadId,
     time::Duration,
 };
@@ -28,13 +33,26 @@ pub mod loader;
 pub mod permissions;
 
 use crate::{LOGGER_IMPL, server::Server};
+
+tokio::task_local! {
+    /// The plugin whose `on_load` runs on this task
+    static INITIALIZING_PLUGIN: PluginKey;
+    /// Manager id and token of each plugin whose `on_unload` runs on this task
+    static UNLOADING_PLUGINS: Vec<(u64, u64)>;
+}
+
+/// A plugin and the manager that owns it, since managers can hold same-named plugins.
+type PluginKey = (u64, String);
+
+/// Gives every manager its own id.
+static NEXT_MANAGER_ID: AtomicU64 = AtomicU64::new(0);
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 5;
+pub const PLUGIN_API_VERSION: u32 = 6;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -180,14 +198,320 @@ pub enum PluginState {
     Failed(String),
 }
 
+/// State of a plugin file the manager knows about, running or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginStatus {
+    Active,
+    Loading,
+    /// Unloaded on request
+    Unloaded,
+    /// Turned off in the configuration
+    Disabled,
+    /// Unsigned while `allow_unsigned` is off
+    Unsigned,
+    PermissionDenied,
+    /// Loader or initialization error
+    Failed(String),
+    /// No loader accepts the file
+    NoLoader,
+}
+
+impl PluginStatus {
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
+        matches!(self, Self::Active)
+    }
+}
+
+impl std::fmt::Display for PluginStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => f.write_str("Active"),
+            Self::Loading => f.write_str("Loading"),
+            Self::Unloaded => f.write_str("Unloaded"),
+            Self::Disabled => f.write_str("Disabled in the server configuration"),
+            Self::Unsigned => {
+                f.write_str("Unsigned or invalid signature, and allow_unsigned is off")
+            }
+            Self::PermissionDenied => f.write_str("Permission request denied"),
+            Self::Failed(error) => write!(f, "Failed: {error}"),
+            Self::NoLoader => f.write_str("No plugin loader accepts this file"),
+        }
+    }
+}
+
+/// A plugin file, running or not.
+#[derive(Debug, Clone)]
+pub struct PluginEntry {
+    /// `None` when the file never got far enough to name itself
+    pub metadata: Option<PluginMetadata>,
+    pub path: PathBuf,
+    pub status: PluginStatus,
+    /// False while the loader holds it and cannot release it at runtime
+    pub can_unload: bool,
+}
+
+impl PluginEntry {
+    /// The plugin name, or the file name when it never named itself.
+    #[must_use]
+    pub fn name(&self) -> Cow<'_, str> {
+        self.metadata.as_ref().map_or_else(
+            || self.path.file_name().unwrap_or_default().to_string_lossy(),
+            |metadata| Cow::Borrowed(metadata.name.as_str()),
+        )
+    }
+}
+
+/// Keeps the first, richer record when a later source names the same file again.
+///
+/// Another file declaring a known name stays listed.
+fn push_unless_known(entries: &mut Vec<PluginEntry>, entry: PluginEntry) {
+    if !entries
+        .iter()
+        .any(|known| known.name() == entry.name() && same_file(&known.path, &entry.path))
+    {
+        entries.push(entry);
+    }
+}
+
+/// Equal paths, or two spellings of one file.
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b || std::fs::canonicalize(a).is_ok_and(|a| std::fs::canonicalize(b).is_ok_and(|b| a == b))
+}
+
+/// Whether a file claims to be a plugin, by extension.
+fn is_plugin_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| {
+        ["wasm", "so", "dll", "dylib"]
+            .iter()
+            .any(|known| ext.eq_ignore_ascii_case(known))
+    })
+}
+
+/// Server permission namespaces, never a plugin name.
+const RESERVED_NAMESPACES: [&str; 2] = ["minecraft", "pumpkin"];
+
+/// How long an unload waits for events still running the plugin's handlers.
+const HANDLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+const HANDLER_DRAIN_POLL: Duration = Duration::from_millis(10);
+
+/// A registered service and the plugin that registered it.
+pub(crate) struct Service {
+    pub(crate) owner: String,
+    pub(crate) payload: Arc<dyn Payload>,
+}
+
+/// Services by name, plus replaced ones a holder may still use.
+#[derive(Default)]
+pub(crate) struct Services {
+    active: HashMap<String, Service>,
+    /// Off the map, still drained with their owner.
+    replaced: Vec<Service>,
+}
+
+impl Services {
+    pub(crate) fn insert(&mut self, name: String, service: Service) {
+        // Only our count left: owner still loaded, safe to drop
+        self.replaced
+            .retain(|old| Arc::strong_count(&old.payload) > 1);
+        if let Some(old) = self.active.insert(name, service) {
+            self.replaced.push(old);
+        }
+    }
+
+    pub(crate) fn get(&self, name: &str) -> Option<&Arc<dyn Payload>> {
+        self.active.get(name).map(|service| &service.payload)
+    }
+
+    /// Takes every service `owner` registered, replaced ones included.
+    fn take_owned(&mut self, owner: &str) -> Vec<Arc<dyn Payload>> {
+        let mut taken = Vec::new();
+        let mut take = |service: &Service| {
+            let keep = service.owner != owner;
+            if !keep {
+                taken.push(Arc::clone(&service.payload));
+            }
+            keep
+        };
+        self.active.retain(|_, service| take(service));
+        self.replaced.retain(|service| take(service));
+        taken
+    }
+}
+
+/// A plugin loader and the plugin that registered it, `None` for the server's own.
+struct RegisteredLoader {
+    owner: Option<String>,
+    loader: Arc<dyn PluginLoader>,
+}
+
+/// What adding a loader did with the plugin files waiting for one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoaderRetry {
+    /// Added, and this many of those files loaded
+    Loaded(usize),
+    /// Added from an `on_load`: those files load in the background, their outcome is not known yet
+    Pending,
+    /// Not added: its plugin is unloading, or the loader is registered already
+    Refused,
+}
+
+/// Handlers, services and loaders taken off a plugin. Their code lives in its library.
+struct Registrations {
+    handlers: Vec<Arc<dyn DynEventHandler>>,
+    services: Vec<Arc<dyn Payload>>,
+    loaders: Vec<Arc<dyn PluginLoader>>,
+}
+
+impl Registrations {
+    /// Any count above ours: a running event, a service holder, or a plugin from that loader.
+    fn in_use(&self) -> bool {
+        self.handlers.iter().any(|h| Arc::strong_count(h) > 1)
+            || self.services.iter().any(|s| Arc::strong_count(s) > 1)
+            || self.loaders.iter().any(|l| Arc::strong_count(l) > 1)
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.handlers.extend(other.handlers);
+        self.services.extend(other.services);
+        self.loaders.extend(other.loaders);
+    }
+}
+
+/// Hands a plugin's library back to its loader once nothing runs its handlers, holds its
+/// services, or holds its instance.
+///
+/// `commands`: its commands stay in the command tree, the library is kept right away.
+/// `children_unloading`: plugins from its loaders still run, the library is kept right away.
+/// A loader without `can_unload` keeps it right away too, without an error.
+///
+/// Anything still running or held after `HANDLER_DRAIN_TIMEOUT` keeps the library
+/// loaded for good, releasing it would pull the code out from under that call. That is
+/// `LibraryInUse`.
+async fn release_library(
+    name: &str,
+    registrations: Registrations,
+    instance: Option<Arc<dyn Plugin>>,
+    loader: &Arc<dyn PluginLoader>,
+    loader_data: Box<dyn Any + Send + Sync>,
+    commands: bool,
+    children_unloading: bool,
+) -> Result<(), LoaderError> {
+    // Loader keeps the library: untracked plugin work can still run its code. That may run
+    // the loader's code too, so the loader stays held, as in `discard_loaded`
+    if !loader.can_unload() {
+        drop(registrations);
+        drop(instance);
+        Box::leak(loader_data);
+        std::mem::forget(Arc::clone(loader));
+        return Ok(());
+    }
+    // Tree never drops nodes: executors and argument types run its code
+    // TODO: remove a plugin's nodes from the command tree after reload
+    if commands {
+        drop(registrations);
+        drop(instance);
+        warn!("Plugin {name} registered commands, keeping its library loaded");
+        Box::leak(loader_data);
+        return Err(LoaderError::CommandsResident);
+    }
+    if children_unloading {
+        drop(registrations);
+        drop(instance);
+        warn!("Plugins loaded by {name} are still unloading, keeping its library loaded");
+        Box::leak(loader_data);
+        return Err(LoaderError::LibraryInUse);
+    }
+    // Each handler is wrapped once per registration, so any count above ours is a running event.
+    // The same goes for the instance, which `send_message` holds across `on_ipc_message`
+    let drained = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
+        while registrations.in_use()
+            || instance
+                .as_ref()
+                .is_some_and(|instance| Arc::strong_count(instance) > 1)
+        {
+            tokio::time::sleep(HANDLER_DRAIN_POLL).await;
+        }
+    })
+    .await
+    .is_ok();
+    // Their code lives in the library, so they go first
+    drop(registrations);
+    drop(instance);
+    if drained {
+        loader.unload(loader_data).await
+    } else {
+        warn!(
+            "Plugin {name} still has event handlers, services or IPC calls in use, keeping its library loaded"
+        );
+        Box::leak(loader_data);
+        Err(LoaderError::LibraryInUse)
+    }
+}
+
+/// An `on_load` waiting on another plugin's initialization, for as long as the wait runs.
+struct InitWait<'a> {
+    waits: &'a SyncMutex<Vec<(PluginKey, PluginKey)>>,
+    edge: (PluginKey, PluginKey),
+}
+
+impl Drop for InitWait<'_> {
+    fn drop(&mut self) {
+        let mut waits = self.waits.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(index) = waits.iter().position(|edge| *edge == self.edge) {
+            waits.swap_remove(index);
+        }
+    }
+}
+
+/// Releases a plugin that was loaded but will not run.
+async fn discard_loaded(
+    instance: Arc<dyn Plugin>,
+    loader: &Arc<dyn PluginLoader>,
+    loader_data: Box<dyn Any + Send + Sync>,
+) {
+    // The instance's code lives in the library, so it goes first
+    drop(instance);
+    // Loader keeps the library, as `release_library` does. Its work may run the loader's
+    // code too, so the loader stays held and its owner's unload keeps that library
+    if !loader.can_unload() {
+        Box::leak(loader_data);
+        std::mem::forget(Arc::clone(loader));
+        return;
+    }
+    loader.unload(loader_data).await.ok();
+}
+
+/// A started load and its initialization task.
+type LoadStart = (PluginId, tokio::task::JoinHandle<Result<(), String>>);
+
+/// A plugin a scan loaded but has not started yet.
+type Prepared = (
+    Arc<dyn Plugin>,
+    PluginMetadata,
+    Box<dyn Any + Send + Sync>,
+    Arc<dyn PluginLoader>,
+    PathBuf,
+);
+
+/// One load of a plugin: a later load of the same name is another one.
+#[derive(Debug, Clone)]
+pub struct PluginId {
+    pub name: String,
+    token: u64,
+}
+
 /// Core plugin management system
 #[repr(C)]
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
-    loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
+    next_plugin_token: AtomicU64,
+    loaders: RwLock<Vec<RegisteredLoader>>,
     pub handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
-    services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
+    /// Plugin files that are known but not running, by path
+    inactive: SyncRwLock<HashMap<PathBuf, PluginEntry>>,
+    services: Arc<RwLock<Services>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
@@ -198,6 +522,31 @@ pub struct PluginManager {
     // Thread ID of the thread that created the plugin manager.
     // Permission prompts use rustyline, which is only safe on this thread.
     main_thread_id: ThreadId,
+    /// (waiting plugin, awaited plugin) for every `on_load` waiting on an initialization
+    init_waits: SyncMutex<Vec<(PluginKey, PluginKey)>>,
+    /// Tells this manager's plugins from same-named ones of another manager
+    id: u64,
+}
+
+/// Ends an unload's claim on its record, however the unload returns.
+struct UnloadGuard<'a> {
+    manager: &'a PluginManager,
+    token: u64,
+}
+
+impl Drop for UnloadGuard<'_> {
+    fn drop(&mut self) {
+        let mut plugins = self
+            .manager
+            .plugins
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(plugin) = plugins.iter_mut().find(|p| p.token == self.token) {
+            plugin.unloading = false;
+        }
+        drop(plugins);
+        self.manager.state_notify.notify_waiters();
+    }
 }
 
 /// Represents a successfully loaded plugin
@@ -205,11 +554,14 @@ pub struct PluginManager {
 /// OS specific issues
 /// - Windows: Plugin cannot be unloaded, it can be only active or not
 struct LoadedPlugin {
+    token: u64,
     metadata: PluginMetadata,
     instance: Option<Arc<dyn Plugin>>,
     loader: Arc<dyn PluginLoader>,
     loader_data: Option<Box<dyn Any + Send + Sync>>,
     is_active: bool,
+    /// Claimed by an unload that has not finished
+    unloading: bool,
     context: Arc<Context>,
     path: PathBuf,
 }
@@ -225,6 +577,19 @@ pub enum ManagerError {
     IoError(#[from] std::io::Error),
     #[error("Dependency error: {0}")]
     DependencyError(String),
+    #[error("Waiting on plugin {0} would deadlock, its initialization waits on the caller")]
+    InitializationDeadlock(String),
+}
+
+impl ManagerError {
+    /// Unload done, only the library stays loaded.
+    #[must_use]
+    pub const fn is_library_in_use(&self) -> bool {
+        matches!(
+            self,
+            Self::LoaderError(LoaderError::LibraryInUse | LoaderError::CommandsResident)
+        )
+    }
 }
 
 impl Default for PluginManager {
@@ -237,56 +602,200 @@ impl PluginManager {
     /// Create a new plugin manager with the native loader and the given extra loaders
     #[must_use]
     pub fn new(extra_loaders: Vec<Arc<dyn PluginLoader>>) -> Self {
-        let mut loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(NativePluginLoader)];
-        loaders.extend(extra_loaders);
+        let loaders = std::iter::once(Arc::new(NativePluginLoader) as Arc<dyn PluginLoader>)
+            .chain(extra_loaders)
+            .map(|loader| RegisteredLoader {
+                owner: None,
+                loader,
+            })
+            .collect();
         Self {
             plugins: SyncRwLock::new(Vec::new()),
+            next_plugin_token: AtomicU64::new(0),
             loaders: RwLock::new(loaders),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
-            services: Arc::new(RwLock::new(HashMap::new())),
+            inactive: SyncRwLock::new(HashMap::new()),
+            services: Arc::new(RwLock::new(Services::default())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
             main_thread_id: std::thread::current().id(),
+            init_waits: SyncMutex::new(Vec::new()),
+            id: NEXT_MANAGER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         }
     }
 
     /// Unload all loaded plugins
-    pub async fn unload_all_plugins(&self) -> Result<(), ManagerError> {
-        let plugin_names: Vec<String> = {
+    pub async fn unload_all_plugins(self: &Arc<Self>) -> Result<(), ManagerError> {
+        self.unload_active_plugins(|_| true).await
+    }
+
+    /// The active plugins matching `filter` with their files, dependents before what they depend on
+    fn unload_order(&self, filter: impl Fn(&LoadedPlugin) -> bool) -> Vec<(String, PathBuf)> {
+        let selected: Vec<(String, Vec<String>, PathBuf)> = {
             let plugins = self
                 .plugins
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             plugins
                 .iter()
-                .filter(|p| p.is_active)
-                .map(|p| p.metadata.name.clone())
+                .filter(|p| p.is_active && filter(p))
+                .map(|p| {
+                    (
+                        p.metadata.name.clone(),
+                        p.metadata.dependencies.clone(),
+                        p.path.clone(),
+                    )
+                })
                 .collect()
         };
 
+        // Dependencies outside the selection stay loaded, so they don't take part
+        let names: HashSet<&String> = selected.iter().map(|(name, _, _)| name).collect();
+        let relations: Vec<(String, Vec<String>)> = selected
+            .iter()
+            .map(|(name, deps, _)| {
+                let inside = deps.iter().filter(|dep| names.contains(dep)).cloned();
+                (name.clone(), inside.collect())
+            })
+            .collect();
+        let mut paths: HashMap<String, PathBuf> = selected
+            .iter()
+            .map(|(name, _, path)| (name.clone(), path.clone()))
+            .collect();
+        match Self::topological_sort(&relations) {
+            Ok(mut order) => {
+                order.reverse();
+                order
+                    .into_iter()
+                    .filter_map(|name| paths.remove(&name).map(|path| (name, path)))
+                    .collect()
+            }
+            Err(e) => {
+                warn!("Unloading plugins in listed order: {e}");
+                selected
+                    .into_iter()
+                    .map(|(name, _, path)| (name, path))
+                    .collect()
+            }
+        }
+    }
+
+    /// Unload the active plugins matching `filter`, reporting the first failure
+    async fn unload_active_plugins(
+        self: &Arc<Self>,
+        filter: impl Fn(&LoadedPlugin) -> bool,
+    ) -> Result<(), ManagerError> {
+        let plugin_names = self.unload_order(filter).into_iter().map(|(name, _)| name);
+
+        // Keep unloading the rest even if one fails, but report the failure so a caller
+        // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
+        let mut first_error = None;
         for name in plugin_names {
-            if let Err(e) = self.unload_plugin(&name).await {
-                error!("Failed to unload plugin {name}: {e}");
+            match self.unload_plugin(&name).await {
+                Ok(()) => {}
+                // Unloaded all the same, its library is only kept
+                Err(e) if e.is_library_in_use() => warn!("Plugin {name}: {e}"),
+                Err(e) => {
+                    error!("Failed to unload plugin {name}: {e}");
+                    first_error.get_or_insert(e);
+                }
             }
         }
 
+        first_error.map_or(Ok(()), Err)
+    }
+
+    /// Unload everything that can be unloaded, then rescan the plugin directory.
+    ///
+    /// Picks up files added since the last scan, which is what separates it from reloading
+    /// plugins one by one. Plugins whose loader can't unload stay loaded, because the rescan
+    /// would skip their retained records and leave them inactive until restart.
+    pub async fn reload_all_plugins(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+    ) -> Result<(), ManagerError> {
+        if !server.advanced_config.plugins.enabled {
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                "Plugin system is disabled in configuration".to_string(),
+            )));
+        }
+
+        let unloading = self.unload_order(|p| p.loader.can_unload());
+        let names: HashSet<&String> = unloading.iter().map(|(name, _)| name).collect();
+        self.unload_active_plugins(|p| p.is_active && names.contains(&p.metadata.name))
+            .await?;
+        self.prune_missing_files().await;
+        if let Err(e) = self.load_plugins(server).await {
+            // The rescan failed as a whole, so bring back what was running before it
+            for (name, path) in unloading.iter().rev() {
+                if let Err(err) = self.try_load_plugin(server, path).await {
+                    error!("Failed to restore plugin {name}: {err}");
+                }
+            }
+            return Err(e);
+        }
         Ok(())
     }
 
+    /// Forget plugin files that are gone from disk, so a rescan stops listing them.
+    async fn prune_missing_files(&self) {
+        self.inactive
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|path, _| path.exists());
+        self.unloaded_files
+            .write()
+            .await
+            .retain(|path| path.exists());
+    }
+
     /// Add a new plugin loader implementation
-    pub async fn add_loader(self: &Arc<Self>, server: &Arc<Server>, loader: Arc<dyn PluginLoader>) {
-        self.loaders.write().await.push(loader);
+    pub async fn add_loader(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        loader: Arc<dyn PluginLoader>,
+    ) -> LoaderRetry {
+        self.add_owned_loader(server, None, loader).await
+    }
+
+    /// `owner`: plugin whose unload takes the loader off again. Refused once it unloads.
+    pub(crate) async fn add_owned_loader(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        owner: Option<&Context>,
+        loader: Arc<dyn PluginLoader>,
+    ) -> LoaderRetry {
+        // Checked under the sweep's lock: no add can land after it
+        let mut loaders = self.loaders.write().await;
+        if owner.is_some_and(Context::is_closed) {
+            return LoaderRetry::Refused;
+        }
+        // One registration per loader: its owner is looked up by the loader alone
+        if loaders
+            .iter()
+            .any(|registered| Arc::ptr_eq(&registered.loader, &loader))
+        {
+            warn!("Plugin loader is registered already, not adding it again");
+            return LoaderRetry::Refused;
+        }
+        loaders.push(RegisteredLoader {
+            owner: owner.map(|context| context.get_metadata().name.clone()),
+            loader,
+        });
+        drop(loaders);
 
         // Try to load previously unloaded files with the new loader
-        self.retry_unloaded_files(server).await;
+        self.retry_unloaded_files(server).await
     }
 
     /// Start watching the plugins directory for changes
     pub async fn start_watcher(self: &Arc<Self>, server: &Arc<Server>) -> Result<(), ManagerError> {
-        if self.hot_reload_task.read().await.is_some() {
+        // Held until the task is stored, so two starts cannot both spawn a watcher
+        let mut task_slot = self.hot_reload_task.write().await;
+        if task_slot.is_some() {
             return Ok(());
         }
 
@@ -329,31 +838,14 @@ impl PluginManager {
                                 // Give it a small delay to ensure file is completely written
                                 tokio::time::sleep(Duration::from_millis(100)).await;
 
-                                // We need to find if this plugin is already loaded to unload it first
-                                let plugin_name = {
-                                    let plugins = manager
-                                        .plugins
-                                        .read()
-                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                    plugins
-                                        .iter()
-                                        .find(|p| p.path == path)
-                                        .map(|p| p.metadata.name.clone())
-                                };
-
-                                if let Some(name) = plugin_name {
-                                    info!("Hot-reloading plugin: {}", name);
-                                    let _ = manager.unload_plugin(&name).await;
-                                }
-
-                                // For now, we just try to load it. If it's already loaded,
-                                // the loader might handle it or we might get a duplicate.
-                                // Most WASM loaders will just create a new instance.
-                                if let Err(e) =
-                                    manager.start_loading_plugin(&server_clone, &path).await
-                                {
-                                    error!("Failed to hot-reload plugin {:?}: {}", path, e);
-                                }
+                                // Its own task: stopping the watcher must not cut an unload or
+                                // load off halfway
+                                let manager = Arc::clone(&manager);
+                                let server = Arc::clone(&server_clone);
+                                let reload = server_clone.spawn_task(async move {
+                                    manager.hot_reload(&server, &path).await;
+                                });
+                                reload.await.ok();
                             }
                         }
                     }
@@ -362,9 +854,49 @@ impl PluginManager {
             }
         });
 
-        *self.hot_reload_task.write().await = Some(task);
+        *task_slot = Some(task);
+        drop(task_slot);
         self.set_hot_reload_enabled(true);
         Ok(())
+    }
+
+    /// Replace the plugin loaded from `path` with the file's current contents.
+    async fn hot_reload(self: &Arc<Self>, server: &Arc<Server>, path: &Path) {
+        // We need to find if this plugin is already loaded to unload it first
+        let plugin_name = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins
+                .iter()
+                .find(|p| p.path == path)
+                .map(|p| p.metadata.name.clone())
+        };
+
+        let unload_failed = if let Some(name) = plugin_name {
+            info!("Hot-reloading plugin: {}", name);
+            match self.unload_plugin(&name).await {
+                Ok(()) => false,
+                Err(e) if e.is_library_in_use() => {
+                    warn!("Plugin {name}: {e}");
+                    false
+                }
+                Err(e) => {
+                    error!("Failed to unload plugin {name} for hot-reload, not reloading: {e}");
+                    true
+                }
+            }
+        } else {
+            false
+        };
+
+        // Skip the reload when unload failed
+        // the loader may still hold the old resources, loading would create
+        // a duplicate instead of a replacement.
+        if !unload_failed && let Err(e) = self.start_loading_plugin(server, path).await {
+            error!("Failed to hot-reload plugin {:?}: {}", path, e);
+        }
     }
 
     /// Stop watching the plugins directory for changes
@@ -387,26 +919,43 @@ impl PluginManager {
     }
 
     /// Retry loading files that couldn't be loaded previously
-    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) {
+    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) -> LoaderRetry {
+        // From an on_load, e.g. a plugin adding its loader: a retried plugin may depend on or
+        // wait on that caller. Off its task, so that wait is not taken for a cycle
+        if self.initializing_caller().is_some() {
+            let (manager, server) = (Arc::clone(self), Arc::clone(server));
+            tokio::spawn(async move { manager.start_unloaded_files(&server).await });
+            return LoaderRetry::Pending;
+        }
+        let loaded = join_all(self.start_unloaded_files(server).await)
+            .await
+            .into_iter()
+            .filter(|result| matches!(result, Ok(Ok(()))))
+            .count();
+        LoaderRetry::Loaded(loaded)
+    }
+
+    /// Starts loading the files that couldn't be loaded previously.
+    async fn start_unloaded_files(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+    ) -> Vec<tokio::task::JoinHandle<Result<(), String>>> {
         let files_to_retry: Vec<PathBuf> =
             { self.unloaded_files.read().await.iter().cloned().collect() };
         let mut retry_tasks = Vec::new();
-
         for path in files_to_retry {
-            if let Ok(task) = self.start_loading_plugin(server, &path).await {
+            if let Ok((_, task)) = self.start_loading_plugin(server, &path).await {
                 retry_tasks.push(task);
             }
         }
-
-        // Wait for all retry tasks to complete
-        join_all(retry_tasks).await;
+        retry_tasks
     }
 
     /// Lets every loader run its per-tick work.
     pub fn tick_loaders(&self, server: &Arc<Server>) {
         if let Ok(loaders) = self.loaders.try_read() {
-            for loader in loaders.iter() {
-                loader.on_tick(server);
+            for registered in loaders.iter() {
+                registered.loader.on_tick(server);
             }
         }
     }
@@ -414,7 +963,32 @@ impl PluginManager {
     /// Get a clone of the loaders for context use
     #[must_use]
     pub async fn get_loaders(&self) -> Vec<Arc<dyn PluginLoader>> {
-        self.loaders.read().await.clone()
+        self.loaders
+            .read()
+            .await
+            .iter()
+            .map(|registered| Arc::clone(&registered.loader))
+            .collect()
+    }
+
+    /// Loaders a load may use: not those of a plugin that is unloading.
+    async fn usable_loaders(&self) -> Vec<Arc<dyn PluginLoader>> {
+        let loaders = self.loaders.read().await;
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loaders
+            .iter()
+            .filter(|registered| {
+                registered.owner.as_deref().is_none_or(|owner| {
+                    plugins
+                        .iter()
+                        .any(|p| p.metadata.name == owner && !p.context.is_closed())
+                })
+            })
+            .map(|registered| Arc::clone(&registered.loader))
+            .collect()
     }
 
     /// Helper for topological sort of plugins based on dependencies
@@ -555,18 +1129,14 @@ impl PluginManager {
     async fn spawn_plugin_initialization(
         self: &Arc<Self>,
         server: Arc<Server>,
+        // Before `instance`: a cancelled call drops parameters last to first, the instance's
+        // code must still be mapped when it drops
+        loader_data: Box<dyn Any + Send + Sync>,
         instance: Arc<dyn Plugin>,
         metadata: PluginMetadata,
-        loader_data: Box<dyn Any + Send + Sync>,
         loader: Arc<dyn PluginLoader>,
         path: PathBuf,
-    ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
-        // Mark plugin as loading
-        self.plugin_states
-            .write()
-            .await
-            .insert(metadata.name.clone(), PluginState::Loading);
-
+    ) -> Result<LoadStart, ManagerError> {
         let context = Arc::new(Context::new(
             metadata.clone(),
             server.clone(),
@@ -575,52 +1145,172 @@ impl PluginManager {
             Arc::clone(&LOGGER_IMPL),
         ));
 
-        // Create the plugin structure first
-        let plugin = LoadedPlugin {
-            metadata: metadata.clone(),
-            instance: None, // Will be set after successful initialization
-            loader: loader.clone(),
-            loader_data: Some(loader_data),
-            is_active: false, // Will be set to true after successful initialization
-            context: context.clone(),
-            path,
-        };
+        let plugin_path = path.clone();
 
-        let plugin_index = {
+        // Unload drops every node under `{name}:`: no server namespace, no other plugin's
+        let invalid = if RESERVED_NAMESPACES.contains(&metadata.name.as_str()) {
+            Some("is reserved by the server")
+        } else if metadata.name.contains(':') {
+            Some("contains ':'")
+        } else {
+            None
+        };
+        if let Some(invalid) = invalid {
+            let reason = format!("name {} {invalid}", metadata.name);
+            self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason.clone()));
+            discard_loaded(instance, &loader, loader_data).await;
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                format!("Plugin \"{}\": {reason}", metadata.name),
+            )));
+        }
+
+        // Claiming the name and inserting the record: two loads of
+        // the same plugin would otherwise both initialize and register handlers
+        let token = self
+            .next_plugin_token
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // `None`: taken off already, or its owner is closed. The owner goes by token, a
+        // same-named replacement must not vouch for a retired loader. Looked up under the
+        // loaders lock: the owner's record keeps its name until its loader is off
+        let owner = {
+            let loaders = self.loaders.read().await;
+            match loaders
+                .iter()
+                .find(|registered| Arc::ptr_eq(&registered.loader, &loader))
+                .map(|registered| registered.owner.as_deref())
+            {
+                None => None,
+                Some(None) => Some(None),
+                Some(Some(owner)) => self
+                    .plugins
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .find(|p| p.metadata.name == owner && !p.context.is_closed())
+                    .map(|p| Some(p.token)),
+            }
+        };
+        // States first, then plugins, like `plugin_entries`; the Loading state is set in the same
+        // section so an unload in between cannot leave it stuck
+        let mut states = self.plugin_states.write().await;
+        let reserved = {
             let mut plugins = self
                 .plugins
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            plugins.push(plugin);
-            plugins.len() - 1
+            // Same lock as the owner's children snapshot, which comes after it closes: a child
+            // either shows up in it or sees the owner closed
+            let owner_gone = match owner {
+                None => true,
+                Some(None) => false,
+                Some(Some(owner)) => !plugins
+                    .iter()
+                    .any(|p| p.token == owner && !p.context.is_closed()),
+            };
+            if owner_gone {
+                Err((loader_data, true))
+            } else if plugins.iter().any(|p| p.metadata.name == metadata.name) {
+                Err((loader_data, false))
+            } else {
+                plugins.push(LoadedPlugin {
+                    token,
+                    metadata: metadata.clone(),
+                    instance: None, // Will be set after successful initialization
+                    loader: loader.clone(),
+                    loader_data: Some(loader_data),
+                    is_active: false, // Will be set to true after successful initialization
+                    unloading: false,
+                    context: context.clone(),
+                    path,
+                });
+                states.insert(metadata.name.clone(), PluginState::Loading);
+                Ok(())
+            }
         };
+        drop(states);
+
+        if let Err((loader_data, owner_gone)) = reserved {
+            // Nothing owns the runtime the loader built -> release it again
+            discard_loaded(instance, &loader, loader_data).await;
+            let reason = if owner_gone {
+                // Tried again once a loader for it is added. One added before the insert
+                // may have retried already, so it loads again here then, for this caller
+                self.unloaded_files
+                    .write()
+                    .await
+                    .insert(plugin_path.clone());
+                let usable = self.usable_loaders().await;
+                if usable.iter().any(|loader| loader.can_load(&plugin_path)) {
+                    return self.start_loading_boxed(&server, &plugin_path).await;
+                }
+                "lost its loader to an unload"
+            } else {
+                "is already loaded"
+            };
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                format!("Plugin \"{}\" {reason}", metadata.name),
+            )));
+        }
 
         // Spawn async task for plugin initialization
         let self_ref_clone = Arc::clone(self);
         let state_notify = Arc::clone(&self.state_notify);
         let plugin_name = metadata.name.clone();
+        let id = PluginId {
+            name: plugin_name.clone(),
+            token,
+        };
+        let manager_id = self.id;
         let loader_clone = loader.clone();
 
         let task = server.spawn_task(async move {
-            // Initialize the plugin
-            match instance.on_load(context.clone()).await {
+            // A panic must still reach the failure path, or the plugin stays Loading forever
+            let result = INITIALIZING_PLUGIN
+                .scope(
+                    (manager_id, plugin_name.clone()),
+                    // Called inside the block: a panic before the future exists is caught too
+                    AssertUnwindSafe(async { instance.on_load(context.clone()).await })
+                        .catch_unwind(),
+                )
+                .await
+                .unwrap_or_else(|_| Err("on_load panicked".to_string()));
+            match result {
                 Ok(()) => {
                     // Update plugin state to loaded
-                    {
+                    let still_reserved = {
                         let mut plugins = self_ref_clone
                             .plugins
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(plugin) = plugins.get_mut(plugin_index) {
+                        if let Some(plugin) = plugins.iter_mut().find(|p| p.token == token) {
                             plugin.instance = Some(instance);
                             plugin.is_active = true;
+                            true
+                        } else {
+                            false
                         }
+                    };
+
+                    // Unloaded while it was still initializing, so this load owns nothing
+                    // any more
+                    if !still_reserved {
+                        warn!(
+                            "Plugin {plugin_name} was unloaded while it was initializing, dropping the load"
+                        );
+                        state_notify.notify_waiters();
+                        return Err("Unloaded while it was initializing".to_string());
                     }
+
                     self_ref_clone
                         .plugin_states
                         .write()
                         .await
                         .insert(plugin_name.clone(), PluginState::Loaded);
+                    self_ref_clone
+                        .inactive
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(&plugin_path);
                     state_notify.notify_waiters();
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
@@ -631,11 +1321,73 @@ impl PluginManager {
                             metadata.name, metadata.permissions
                         );
                     }
+                    Ok(())
                 }
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
-                    let _ = instance.on_unload(context).await;
+
+                    // Failed before the cleanup: a child's on_load waiting on this plugin must
+                    // go on, unloading that child below waits for it. The record keeps the name.
+                    // Marked unloading, so an owner's unload still waits for this cleanup
+                    let held = {
+                        let mut states = self_ref_clone.plugin_states.write().await;
+                        let held = self_ref_clone
+                            .plugins
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .iter_mut()
+                            .find(|p| p.token == token)
+                            .map(|p| p.unloading = true)
+                            .is_some();
+                        if held {
+                            states.insert(
+                                plugin_name.clone(),
+                                PluginState::Failed(error_msg.clone()),
+                            );
+                        }
+                        held
+                    };
+                    state_notify.notify_waiters();
+                    if !held {
+                        error!("Failed to initialize plugin {plugin_name}: {error_msg}");
+                        return Err(e);
+                    }
+                    let _unloading = UnloadGuard {
+                        manager: &self_ref_clone,
+                        token,
+                    };
+
+                    // on_load may have registered handlers, commands or permissions before
+                    // failing partway through, leaving them would block every future load.
+                    // Closed first: it can't add a loader the children snapshot misses
+                    context.close();
+                    let children_unloading =
+                        !self_ref_clone.unload_children(&plugin_name).await;
+                    let owner = self_ref_clone.loader_owner(&loader_clone).await;
+                    let mut registrations = self_ref_clone.take_registrations(&plugin_name).await;
+                    context.unregister_commands();
+                    context.unregister_permissions();
+                    // Unloading too: an owner unload its on_unload waits on gives up right away
+                    let mut unloading =
+                        UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+                    unloading.push((manager_id, token));
+                    let _ = UNLOADING_PLUGINS
+                        .scope(
+                            unloading,
+                            AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
+                                .catch_unwind(),
+                        )
+                        .await;
+                    // on_unload can register again, that must not outlive the library
+                    registrations.extend(self_ref_clone.take_registrations(&plugin_name).await);
+                    // Last sweep: the plugin's own tasks can't register past it
+                    context.seal();
+                    context.unregister_commands();
+                    context.unregister_permissions();
+                    self_ref_clone.pin_owner(&context, owner.as_deref());
+                    // The instance's code lives in the library, so drop it before unloading
+                    drop(instance);
 
                     // Get the loader data before removing the plugin
                     let loader_data: Option<Box<dyn Any + Send + Sync>> = {
@@ -643,40 +1395,73 @@ impl PluginManager {
                             .plugins
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(plugin) = plugins.get_mut(plugin_index) {
-                            plugin.loader_data.take()
-                        } else {
-                            None
-                        }
+                        plugins
+                            .iter_mut()
+                            .find(|p| p.token == token)
+                            .and_then(|plugin| plugin.loader_data.take())
                     };
 
-                    // Try to unload the plugin data
+                    // Library still in use: stays leaked, the name is free again anyway
                     if let Some(data) = loader_data {
-                        loader_clone.unload(data).await.ok();
+                        release_library(
+                            &plugin_name,
+                            registrations,
+                            None,
+                            &loader_clone,
+                            data,
+                            context.has_commands(),
+                            children_unloading,
+                        )
+                        .await
+                        .ok();
                     }
 
-                    {
-                        let mut plugins = self_ref_clone
-                            .plugins
-                            .write()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if plugin_index < plugins.len() {
-                            plugins.remove(plugin_index);
+                    // Same states-then-plugins section as the reservation, so a new load of
+                    // this name cannot reserve in between and get its state overwritten
+                    let owned = {
+                        let mut states = self_ref_clone.plugin_states.write().await;
+                        let owned = {
+                            let mut plugins = self_ref_clone
+                                .plugins
+                                .write()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            let index = plugins.iter().position(|p| p.token == token);
+                            if let Some(index) = index {
+                                plugins.remove(index);
+                            }
+                            index.is_some()
+                        };
+                        if owned {
+                            states.insert(
+                                plugin_name.clone(),
+                                PluginState::Failed(error_msg.clone()),
+                            );
                         }
+                        owned
                     };
-                    self_ref_clone
-                        .plugin_states
-                        .write()
-                        .await
-                        .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
+
+                    // Unloaded during on_unload
+                    if !owned {
+                        error!("Failed to initialize plugin {plugin_name}: {error_msg}");
+                        state_notify.notify_waiters();
+                        return Err(e);
+                    }
+
+                    // Keep it listed with its error, so it can be tried again
+                    self_ref_clone.mark_inactive(
+                        &plugin_path,
+                        Some(&metadata),
+                        PluginStatus::Failed(error_msg.clone()),
+                    );
                     state_notify.notify_waiters();
 
-                    error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
+                    error!("Failed to initialize plugin {plugin_name}: {error_msg}");
+                    Err(e)
                 }
             }
         });
 
-        Ok(task)
+        Ok((id, task))
     }
 
     /// Load all plugins from the plugin directory
@@ -696,10 +1481,17 @@ impl PluginManager {
         let mut cache = cache::PermissionCache::load(&cache_path).await;
 
         let mut prepared_plugins = Vec::new();
-        let loaders = self.loaders.read().await.clone();
+        let loaders = self.usable_loaders().await;
 
         for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    self.discard_prepared(prepared_plugins, &e.to_string())
+                        .await;
+                    return Err(e.into());
+                }
+            };
             let path = entry.path();
 
             if path.is_dir() {
@@ -713,12 +1505,24 @@ impl PluginManager {
                 continue;
             }
 
+            // Loading a resident file again would build a second instance and loader handle
+            if self.is_path_resident(&path) {
+                continue;
+            }
+
             // Find a loader that can handle this file
             let mut loader_found = false;
             for loader in &loaders {
                 if loader.can_load(&path) {
                     match loader.load(&path).await {
                         Ok((instance, metadata, loader_data)) => {
+                            // A rescan must not register a second copy of something still resident
+                            if self.is_plugin_loaded(&metadata.name) {
+                                discard_loaded(instance, loader, loader_data).await;
+                                loader_found = true;
+                                break;
+                            }
+
                             let plugin_override =
                                 server.advanced_config.plugins.overrides.get(&metadata.name);
 
@@ -727,6 +1531,8 @@ impl PluginManager {
                                     "Plugin \"{}\" is disabled in configuration, skipping.",
                                     metadata.name
                                 );
+                                self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled);
+                                discard_loaded(instance, loader, loader_data).await;
                                 loader_found = true;
                                 break;
                             }
@@ -740,6 +1546,8 @@ impl PluginManager {
                                     "Plugin \"{}\" ({:?}) is unsigned or invalid and allow_unsigned is disabled in configuration, skipping.",
                                     metadata.name, path
                                 );
+                                self.mark_inactive(&path, Some(&metadata), PluginStatus::Unsigned);
+                                discard_loaded(instance, loader, loader_data).await;
                                 loader_found = true;
                                 break;
                             }
@@ -753,7 +1561,11 @@ impl PluginManager {
                             ));
                             loader_found = true;
                         }
-                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                        Err(err) => {
+                            error!("Failed to load plugin from {:?}: {}", path, err);
+                            self.mark_load_failed(&path, &err);
+                            loader_found = true;
+                        }
                     }
                     break;
                 }
@@ -765,26 +1577,60 @@ impl PluginManager {
         }
 
         // Resolve dependencies
-        let metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
+        let mut metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
             .iter()
             .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
+        // A needed dependency that is still loading must finish (or fail) before it counts. The
+        // plugin calling this from its own on_load is never waited for, it would wait on itself
+        let caller = self.initializing_caller();
+        let needed: HashSet<&String> = metadata_list.iter().flat_map(|(_, deps)| deps).collect();
+        let loading: Vec<String> = self
+            .plugin_states
+            .read()
+            .await
+            .iter()
+            .filter(|(name, state)| {
+                matches!(state, PluginState::Loading)
+                    && needed.contains(name)
+                    && caller.as_ref() != Some(*name)
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        // One that can't be waited on counts as missing, failing only its dependents below
+        for name in loading {
+            if let Err(e) = self.wait_for_initialization(&name).await {
+                warn!("Not waiting on plugin {name}: {e}");
+            }
+        }
+        // Active plugins satisfy dependencies, they are already initialized, so they have none left
+        // to resolve. Records still loading or kept after an unload are not active
+        let resident: Vec<(String, Vec<String>)> = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|p| p.is_active)
+            .map(|p| (p.metadata.name.clone(), Vec::new()))
+            .collect();
+        metadata_list.extend(resident);
+        // A dependency that is neither prepared nor active fails only its dependents, in the
+        // activity check below, not the whole pass
+        let known: HashSet<String> = metadata_list.iter().map(|(name, _)| name.clone()).collect();
+        for (_, deps) in &mut metadata_list {
+            deps.retain(|dep| known.contains(dep));
+        }
 
-        let sorted_names =
-            Self::topological_sort(&metadata_list).map_err(ManagerError::DependencyError)?;
+        let sorted_names = match Self::topological_sort(&metadata_list) {
+            Ok(sorted) => sorted,
+            Err(e) => {
+                self.discard_prepared(prepared_plugins, &e).await;
+                return Err(ManagerError::DependencyError(e));
+            }
+        };
 
         // Map names back to prepared plugins
-        #[expect(clippy::type_complexity)]
-        let mut plugins_map: HashMap<
-            String,
-            (
-                Arc<dyn Plugin>,
-                PluginMetadata,
-                Box<dyn Any + Send + Sync>,
-                Arc<dyn PluginLoader>,
-                PathBuf,
-            ),
-        > = prepared_plugins
+        let mut plugins_map: HashMap<String, Prepared> = prepared_plugins
             .into_iter()
             .map(|(i, m, d, l, p)| (m.name.clone(), (i, m, d, l, p)))
             .collect();
@@ -794,6 +1640,21 @@ impl PluginManager {
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
+                // Declared after `loader_data`, so a cancelled load drops it before its library
+                let instance = instance;
+                // A dependency that failed or was skipped earlier in this pass is not active
+                let missing = metadata
+                    .dependencies
+                    .iter()
+                    .find(|dep| !self.is_plugin_active(dep));
+                if let Some(dep) = missing {
+                    let reason = format!("dependency {dep} is not active");
+                    warn!("Skipping plugin \"{}\": {reason}", metadata.name);
+                    self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason));
+                    discard_loaded(instance, &loader, loader_data).await;
+                    continue;
+                }
+
                 let (allowed, wait_time) = self
                     .clone()
                     .check_permissions_cached(&path, &metadata, &mut cache, &cache_path, server)
@@ -806,32 +1667,51 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
+                    self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied);
+                    discard_loaded(instance, &loader, loader_data).await;
                     continue;
                 }
 
                 match self
                     .spawn_plugin_initialization(
                         server.clone(),
+                        loader_data,
                         instance,
                         metadata,
-                        loader_data,
                         loader,
                         path,
                     )
                     .await
                 {
-                    Ok(task) => {
-                        // We must await each initialization to ensure dependencies are ready
-                        if let Err(err) = task.await {
-                            error!("Plugin initialization task panicked: {}", err);
+                    // Its on_load waiting on this caller is refused instead of deadlocking. It
+                    // keeps initializing, the rest of the pass goes on without it
+                    Ok((id, task)) => match self.enter_init_wait(&id.name) {
+                        Ok(_wait) => {
+                            // We must await each initialization to ensure dependencies are ready
+                            if let Err(err) = task.await {
+                                error!("Plugin initialization task panicked: {}", err);
+                            }
                         }
-                    }
+                        Err(e) => error!("Not waiting on plugin {name}: {e}"),
+                    },
                     Err(err) => error!("{}", err),
                 }
             }
         }
 
         Ok(total_wait_time)
+    }
+
+    /// Releases plugins a scan loaded but will not start, listing them with `reason`.
+    async fn discard_prepared(&self, prepared: Vec<Prepared>, reason: &str) {
+        for (instance, metadata, loader_data, loader, path) in prepared {
+            self.mark_inactive(
+                &path,
+                Some(&metadata),
+                PluginStatus::Failed(reason.to_string()),
+            );
+            discard_loaded(instance, &loader, loader_data).await;
+        }
     }
 
     async fn check_permissions_cached(
@@ -909,26 +1789,49 @@ impl PluginManager {
         (allowed, wait_time)
     }
 
+    // Boxed: a load turned away from a retired loader loads again through it
+    fn start_loading_boxed<'a>(
+        self: &'a Arc<Self>,
+        server: &'a Arc<Server>,
+        path: &'a Path,
+    ) -> BoxFuture<'a, Result<LoadStart, ManagerError>> {
+        Box::pin(self.start_loading_plugin(server, path))
+    }
+
     /// Start loading a plugin asynchronously
     async fn start_loading_plugin(
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
+    ) -> Result<LoadStart, ManagerError> {
         if !server.advanced_config.plugins.enabled {
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                 "Plugin system is disabled in configuration".to_string(),
             )));
         }
 
-        let loaders = self.loaders.read().await.clone();
+        let loaders = self.usable_loaders().await;
         for loader in &loaders {
             if loader.can_load(path) {
-                let (instance, metadata, loader_data) = loader.load(path).await?;
+                // A loader took it, so it is no longer waiting for one
+                self.unloaded_files.write().await.remove(path);
+
+                let (instance, metadata, loader_data) = match loader.load(path).await {
+                    Ok(loaded) => loaded,
+                    Err(err) => {
+                        error!("Failed to load plugin from {:?}: {}", path, err);
+                        self.mark_load_failed(path, &err);
+                        return Err(err.into());
+                    }
+                };
+                // Declared after `loader_data`, so a cancelled load drops it before its library
+                let instance = instance;
 
                 let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
 
                 if plugin_override.is_some_and(|o| !o.enabled) {
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::Disabled);
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!("Plugin \"{}\" is disabled in configuration", metadata.name),
                     )));
@@ -939,11 +1842,34 @@ impl PluginManager {
                     .unwrap_or(server.advanced_config.plugins.allow_unsigned);
 
                 if !allow_unsigned && !loader.is_signed(path) {
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::Unsigned);
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!(
                             "Plugin \"{}\" is unsigned or invalid and allow_unsigned is disabled",
                             metadata.name
                         ),
+                    )));
+                }
+
+                // A dependency still initializing must finish first, one that can't be waited on
+                // counts as missing
+                let mut missing = None;
+                for dep in &metadata.dependencies {
+                    if self.wait_for_initialization(dep).await.is_err()
+                        || !self.is_plugin_active(dep)
+                    {
+                        missing = Some(dep.clone());
+                        break;
+                    }
+                }
+                if let Some(dep) = missing {
+                    let reason = format!("dependency {dep} is not active");
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::Failed(reason.clone()));
+                    discard_loaded(instance, loader, loader_data).await;
+                    return Err(ManagerError::DependencyError(format!(
+                        "Plugin \"{}\": {reason}",
+                        metadata.name
                     )));
                 }
 
@@ -959,6 +1885,8 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied);
+                    discard_loaded(instance, loader, loader_data).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         "Permission denied".to_string(),
                     )));
@@ -967,9 +1895,9 @@ impl PluginManager {
                 return self
                     .spawn_plugin_initialization(
                         server.clone(),
+                        loader_data,
                         instance,
                         metadata,
-                        loader_data,
                         loader.clone(),
                         path.to_path_buf(),
                     )
@@ -985,42 +1913,135 @@ impl PluginManager {
         ))
     }
 
-    /// Attempt to load a single plugin file
+    /// Attempt to load a single plugin file, returns the plugin the file declares
     pub async fn try_load_plugin(
         self: &Arc<Self>,
         server: &Arc<Server>,
         path: &Path,
-    ) -> Result<(), ManagerError> {
-        self.start_loading_plugin(server, path)
-            .await?
-            .await
+    ) -> Result<PluginId, ManagerError> {
+        let (id, task) = self.start_loading_plugin(server, path).await?;
+        // Its on_load waiting on this caller is refused instead of deadlocking
+        let _wait = self.enter_init_wait(&id.name)?;
+        task.await
             .map_err(|e| {
                 ManagerError::LoaderError(LoaderError::InitializationFailed(format!(
                     "Task join error: {e}"
                 )))
-            })
+            })?
+            .map_err(|e| ManagerError::LoaderError(LoaderError::InitializationFailed(e)))?;
+        Ok(id)
+    }
+
+    /// Wait until a plugin is no longer initializing, whether it succeeded or failed.
+    ///
+    /// From an `on_load`, waiting on a plugin whose initialization waits on the caller (or on the
+    /// caller itself) fails instead of deadlocking.
+    pub async fn wait_for_initialization(&self, plugin_name: &str) -> Result<(), ManagerError> {
+        let _wait = self.enter_init_wait(plugin_name)?;
+        loop {
+            // Create the waiter before checking, so a notify in between is not missed
+            let notified = self.state_notify.notified();
+            if !matches!(
+                self.plugin_states.read().await.get(plugin_name),
+                Some(PluginState::Loading)
+            ) {
+                return Ok(());
+            }
+            notified.await;
+        }
+    }
+
+    /// `wait_for_initialization`, for the load `token` of `name` only.
+    async fn wait_for_load(&self, name: &str, token: u64) -> Result<(), ManagerError> {
+        // Gone already: a later load of the name is not this one, waiting on it is no cycle
+        if !self.holds_load(token) {
+            return Err(ManagerError::PluginNotFound(name.to_string()));
+        }
+        let _wait = self.enter_init_wait(name)?;
+        loop {
+            let notified = self.state_notify.notified();
+            // One record per name, so a Loading state with this record is this load's
+            let loading = matches!(
+                self.plugin_states.read().await.get(name),
+                Some(PluginState::Loading)
+            ) && self.holds_load(token);
+            if !loading {
+                return Ok(());
+            }
+            notified.await;
+        }
+    }
+
+    /// Whether the record of load `token` is still there.
+    fn holds_load(&self, token: u64) -> bool {
+        self.plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|p| p.token == token)
+    }
+
+    /// The plugin of this manager whose `on_load` runs on this task, if any.
+    fn initializing_caller(&self) -> Option<String> {
+        INITIALIZING_PLUGIN
+            .try_with(|(manager, name)| (*manager == self.id).then(|| name.clone()))
+            .ok()
+            .flatten()
+    }
+
+    /// Records that the calling `on_load` waits on `plugin_name`, unless that closes a cycle.
+    ///
+    /// `None` outside an `on_load`, nothing waits on such a caller.
+    fn enter_init_wait(&self, plugin_name: &str) -> Result<Option<InitWait<'_>>, ManagerError> {
+        let Ok(caller) = INITIALIZING_PLUGIN.try_with(Clone::clone) else {
+            return Ok(None);
+        };
+        let awaited = (self.id, plugin_name.to_string());
+        let mut waits = self
+            .init_waits
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        // Follow what `plugin_name` waits on, reaching the caller means it waits on the caller
+        let mut pending = vec![awaited.clone()];
+        let mut seen = HashSet::new();
+        while let Some(name) = pending.pop() {
+            if name == caller {
+                return Err(ManagerError::InitializationDeadlock(
+                    plugin_name.to_string(),
+                ));
+            }
+            pending.extend(
+                waits
+                    .iter()
+                    .filter(|(waiter, _)| *waiter == name)
+                    .map(|(_, next)| next.clone()),
+            );
+            seen.insert(name);
+            pending.retain(|name| !seen.contains(name));
+        }
+        let edge = (caller, awaited);
+        waits.push(edge.clone());
+        Ok(Some(InitWait {
+            waits: &self.init_waits,
+            edge,
+        }))
     }
 
     /// Wait for a plugin to finish loading
     pub async fn wait_for_plugin(&self, plugin_name: &str) -> Result<(), ManagerError> {
         loop {
-            let state = self.plugin_states.read().await.get(plugin_name).cloned();
-            if let Some(state) = state {
-                match state {
-                    PluginState::Loaded => return Ok(()),
-                    PluginState::Failed(error) => {
-                        return Err(ManagerError::LoaderError(
-                            LoaderError::InitializationFailed(error),
-                        ));
-                    }
-                    PluginState::Loading => {
-                        // Wait for state change notification
-                        self.state_notify.notified().await;
-                        continue;
-                    }
+            self.wait_for_initialization(plugin_name).await?;
+            match self.plugin_states.read().await.get(plugin_name).cloned() {
+                Some(PluginState::Loaded) => return Ok(()),
+                Some(PluginState::Failed(error)) => {
+                    return Err(ManagerError::LoaderError(
+                        LoaderError::InitializationFailed(error),
+                    ));
                 }
+                // A new load reserved the name after the wait
+                Some(PluginState::Loading) => {}
+                None => return Err(ManagerError::PluginNotFound(plugin_name.to_string())),
             }
-            return Err(ManagerError::PluginNotFound(plugin_name.to_string()));
         }
     }
 
@@ -1055,6 +2076,15 @@ impl PluginManager {
             .collect()
     }
 
+    /// Whether a loaded plugin came from this file.
+    fn is_path_resident(&self, path: &Path) -> bool {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins.iter().any(|p| p.path == path)
+    }
+
     /// Checks if plugin loaded
     #[must_use]
     pub fn is_plugin_loaded(&self, name: &str) -> bool {
@@ -1075,54 +2105,496 @@ impl PluginManager {
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }
 
+    /// Every plugin file the manager knows about: running, unloaded, failed or without a loader.
+    ///
+    /// Sorted by name; the first, richer record wins when a file is listed more than once.
+    pub async fn plugin_entries(&self) -> Vec<PluginEntry> {
+        let states = self.plugin_states.read().await;
+
+        let mut entries: Vec<PluginEntry> = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins
+                .iter()
+                .map(|p| PluginEntry {
+                    status: if p.is_active && p.instance.is_some() {
+                        PluginStatus::Active
+                    } else {
+                        match states.get(&p.metadata.name) {
+                            Some(PluginState::Loading) => PluginStatus::Loading,
+                            Some(PluginState::Failed(error)) => PluginStatus::Failed(error.clone()),
+                            _ => PluginStatus::Unloaded,
+                        }
+                    },
+                    metadata: Some(p.metadata.clone()),
+                    path: p.path.clone(),
+                    can_unload: p.loader.can_unload(),
+                })
+                .collect()
+        };
+        drop(states);
+
+        {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for entry in inactive.values() {
+                push_unless_known(&mut entries, entry.clone());
+            }
+        }
+
+        for path in self.unloaded_files.read().await.iter() {
+            // Only files that claim to be a plugin, not a readme or a config next to them
+            if !is_plugin_file(path) {
+                continue;
+            }
+            push_unless_known(
+                &mut entries,
+                PluginEntry {
+                    metadata: None,
+                    path: path.clone(),
+                    status: PluginStatus::NoLoader,
+                    can_unload: true,
+                },
+            );
+        }
+
+        entries.sort_by(|a, b| a.name().cmp(&b.name()));
+        entries
+    }
+
+    /// The plugin with this name, running or not.
+    ///
+    /// Reloading needs it: `unload_plugin` takes a name but `try_load_plugin` takes a file.
+    pub async fn plugin_entry(&self, name: &str) -> Option<PluginEntry> {
+        self.plugin_entries()
+            .await
+            .into_iter()
+            .find(|entry| entry.name() == name)
+    }
+
+    /// Record a failed load, keeping the metadata an earlier record of the file already had.
+    fn mark_load_failed(&self, path: &Path, err: &LoaderError) {
+        let metadata = self
+            .inactive
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .and_then(|entry| entry.metadata.clone());
+        self.mark_inactive(
+            path,
+            metadata.as_ref(),
+            PluginStatus::Failed(err.to_string()),
+        );
+    }
+
+    /// Records why a plugin file is not running, so it can be reported and not only logged.
+    fn mark_inactive(&self, path: &Path, metadata: Option<&PluginMetadata>, status: PluginStatus) {
+        self.inactive
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                path.to_path_buf(),
+                PluginEntry {
+                    metadata: metadata.cloned(),
+                    path: path.to_path_buf(),
+                    status,
+                    // Nothing is resident, so there is nothing that could block a load
+                    can_unload: true,
+                },
+            );
+    }
+
+    /// Names of every plugin the manager knows, running or not, for command completion.
+    #[must_use]
+    pub fn plugin_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins.iter().map(|p| p.metadata.name.clone()).collect()
+        };
+
+        let inactive_names: Vec<String> = {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inactive
+                .values()
+                .map(|entry| entry.name().into_owned())
+                .collect()
+        };
+        names.extend(inactive_names);
+
+        // Files without a loader are listed by file name, skip the lock if it is busy
+        if let Ok(files) = self.unloaded_files.try_read() {
+            names.extend(
+                files
+                    .iter()
+                    .filter(|path| is_plugin_file(path))
+                    .filter_map(|path| path.file_name())
+                    .map(|name| name.to_string_lossy().into_owned()),
+            );
+        }
+
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// Names of plugins that are known but not running, for completing `load`.
+    #[must_use]
+    pub fn inactive_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inactive
+                .values()
+                .map(|entry| entry.name().into_owned())
+                .collect()
+        };
+
+        names.sort();
+        names
+    }
+
     /// Unload a plugin by name
-    pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
-        let mut plugin = {
+    pub fn unload_plugin<'a>(
+        self: &'a Arc<Self>,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<(), ManagerError>> {
+        self.unload_boxed(name, None)
+    }
+
+    // Boxed: the unload task unloads children through it, an opaque future would be a cycle
+    fn unload_boxed<'a>(
+        self: &'a Arc<Self>,
+        name: &'a str,
+        load: Option<u64>,
+    ) -> BoxFuture<'a, Result<(), ManagerError>> {
+        Box::pin(self.unload(name, load))
+    }
+
+    /// Unload the plugin `id` names, not a later load of the same name.
+    pub async fn unload_loaded(self: &Arc<Self>, id: &PluginId) -> Result<(), ManagerError> {
+        self.unload(&id.name, Some(id.token)).await
+    }
+
+    /// `load`: only that load of `name`.
+    async fn unload(self: &Arc<Self>, name: &str, load: Option<u64>) -> Result<(), ManagerError> {
+        // The record is claimed, not removed: it keeps the name until the release attempt, so a
+        // load of the same plugin is refused instead of running next to the old copy. State goes in
+        // the same section, or a load reserving the name would lose its Loading state to this unload
+        let (token, instance, context, loader, metadata, path) = loop {
+            // on_load runs inside the library, so it must finish before the library is released.
+            // With `load`, only that load's: a later one of the name is not waited on
+            match load {
+                Some(token) => self.wait_for_load(name, token).await?,
+                None => self.wait_for_initialization(name).await?,
+            }
+
+            let mut states = self.plugin_states.write().await;
+            // A load can reserve the name between the wait and the lock
+            if matches!(states.get(name), Some(PluginState::Loading)) {
+                if load.is_some_and(|token| !self.holds_load(token)) {
+                    return Err(ManagerError::PluginNotFound(name.to_string()));
+                }
+                continue;
+            }
             let mut plugins = self
                 .plugins
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let index = plugins
-                .iter()
-                .position(|p| p.metadata.name == name)
+            // An inactive record is already unloaded, or another unload is releasing it
+            let plugin = plugins
+                .iter_mut()
+                .find(|p| {
+                    p.metadata.name == name
+                        && p.is_active
+                        && load.is_none_or(|token| p.token == token)
+                })
                 .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?;
-            plugins.remove(index)
+            plugin.is_active = false;
+            plugin.unloading = true;
+            states.remove(name);
+            break (
+                plugin.token,
+                plugin.instance.take(),
+                Arc::clone(&plugin.context),
+                Arc::clone(&plugin.loader),
+                plugin.metadata.clone(),
+                plugin.path.clone(),
+            );
         };
 
-        self.unregister_handlers(name);
-        plugin.context.unregister_commands();
-
-        if let Some(instance) = plugin.instance.take() {
-            instance.on_unload(plugin.context.clone()).await.ok();
-        }
-
-        if plugin.loader.can_unload() {
-            if let Some(data) = plugin.loader_data {
-                plugin.loader.unload(data).await?;
-            }
-        } else {
-            plugin.is_active = false;
-            self.plugins
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(plugin);
-        }
-
-        // Remove from plugin states
-        self.plugin_states.write().await.remove(name);
-
-        Ok(())
+        // Nothing frees a claimed record but this unload, so it runs on even if the caller is
+        // cancelled. The task-locals go along, the deadlock checks read them
+        let manager = Arc::clone(self);
+        let name = name.to_string();
+        let initializing = INITIALIZING_PLUGIN.try_with(Clone::clone).ok();
+        let unloading = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+        let release = UNLOADING_PLUGINS.scope(unloading, async move {
+            manager
+                .release_claimed(&name, token, instance, context, loader, metadata, path)
+                .await
+        });
+        let task = match initializing {
+            Some(caller) => tokio::spawn(INITIALIZING_PLUGIN.scope(caller, release)),
+            None => tokio::spawn(release),
+        };
+        task.await.map_err(|e| {
+            ManagerError::LoaderError(LoaderError::RuntimeError(format!(
+                "Unload task failed: {e}"
+            )))
+        })?
     }
 
-    fn unregister_handlers(&self, source: &str) {
+    /// Rest of `unload` for the record it claimed.
+    #[expect(clippy::too_many_arguments, reason = "the parts of the claimed record")]
+    async fn release_claimed(
+        self: &Arc<Self>,
+        name: &str,
+        token: u64,
+        instance: Option<Arc<dyn Plugin>>,
+        context: Arc<Context>,
+        loader: Arc<dyn PluginLoader>,
+        metadata: PluginMetadata,
+        path: PathBuf,
+    ) -> Result<(), ManagerError> {
+        let _unloading = UnloadGuard {
+            manager: self,
+            token,
+        };
+
+        // Closed first: the owner can't add a loader the children snapshot misses
+        context.close();
+        let children_unloading = !self.unload_children(name).await;
+        let owner = self.loader_owner(&loader).await;
+        let mut registrations = self.take_registrations(name).await;
+        context.unregister_commands();
+        context.unregister_permissions();
+
+        if let Some(instance) = &instance {
+            let mut unloading = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+            unloading.push((self.id, token));
+            match UNLOADING_PLUGINS
+                .scope(
+                    unloading,
+                    AssertUnwindSafe(async { instance.on_unload(context.clone()).await })
+                        .catch_unwind(),
+                )
+                .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => warn!("Plugin {name} failed to unload cleanly: {e}"),
+                Err(_) => error!("Plugin {name} panicked in on_unload"),
+            }
+            // on_unload can register again, that must not outlive the library
+            registrations.extend(self.take_registrations(name).await);
+        }
+        // Last sweep: the plugin's own tasks can't register past it
+        context.seal();
+        context.unregister_commands();
+        context.unregister_permissions();
+        self.pin_owner(&context, owner.as_deref());
+
+        // The loader keeps the library, so the record stays as an inactive copy until restart
+        if !loader.can_unload() {
+            return Ok(());
+        }
+
+        let loader_data = self
+            .plugins
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter_mut()
+            .find(|p| p.token == token)
+            .and_then(|p| p.loader_data.take());
+        let unloaded = match loader_data {
+            Some(data) => {
+                let commands = context.has_commands();
+                release_library(
+                    name,
+                    registrations,
+                    instance,
+                    &loader,
+                    data,
+                    commands,
+                    children_unloading,
+                )
+                .await
+            }
+            None => Ok(()),
+        };
+
+        // Listed before the record goes, so a load that reserves the name next replaces the entry
+        // instead of having it written over its own
+        let status = match &unloaded {
+            Ok(()) => PluginStatus::Unloaded,
+            Err(e) => PluginStatus::Failed(e.to_string()),
+        };
+        self.mark_inactive(&path, Some(&metadata), status);
+        // Also on `LibraryInUse`: the leaked library stays mapped, a new load may start
+        self.plugins
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|p| p.token != token);
+
+        unloaded.map_err(ManagerError::from)
+    }
+
+    /// The plugin that registered `loader`, if a plugin did.
+    async fn loader_owner(&self, loader: &Arc<dyn PluginLoader>) -> Option<String> {
+        self.loaders
+            .read()
+            .await
+            .iter()
+            .find(|registered| Arc::ptr_eq(&registered.loader, loader))
+            .and_then(|registered| registered.owner.clone())
+    }
+
+    /// Commands of a plugin from another plugin's loader run that plugin's code too.
+    /// Called after `on_unload`, which can still register commands.
+    fn pin_owner(&self, context: &Context, owner: Option<&str>) {
+        let Some(owner) = owner.filter(|_| context.has_commands()) else {
+            return;
+        };
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for plugin in plugins.iter().filter(|p| p.metadata.name == owner) {
+            plugin.context.mark_commands();
+        }
+    }
+
+    /// Unloads what `owner`'s loaders loaded: it can't run without them.
+    ///
+    /// `false`: a child is still unloading, so `owner`'s library must stay loaded.
+    async fn unload_children(self: &Arc<Self>, owner: &str) -> bool {
+        let owned: Vec<Arc<dyn PluginLoader>> = self
+            .loaders
+            .read()
+            .await
+            .iter()
+            .filter(|registered| registered.owner.as_deref() == Some(owner))
+            .map(|registered| Arc::clone(&registered.loader))
+            .collect();
+        if owned.is_empty() {
+            return true;
+        }
+        let children: Vec<(String, u64)> = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|p| owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader)))
+            .map(|p| (p.metadata.name.clone(), p.token))
+            .collect();
+        let mut deferred = false;
+        for (child, token) in children {
+            // By token: a replacement of the same name is not this child
+            match self.unload_boxed(&child, Some(token)).await {
+                Ok(()) | Err(ManagerError::PluginNotFound(_)) => {}
+                // Its on_load waits on the caller: unloaded once that is done, off this task so
+                // the wait is not a cycle. Its code still runs, so the library stays
+                Err(ManagerError::InitializationDeadlock(_)) => {
+                    deferred = true;
+                    let manager = Arc::clone(self);
+                    let owner = owner.to_string();
+                    tokio::spawn(async move {
+                        // Waits for that load's on_load first
+                        match manager.unload_boxed(&child, Some(token)).await {
+                            Ok(()) | Err(ManagerError::PluginNotFound(_)) => {}
+                            Err(e) => warn!("Plugin {child} loaded by {owner}: {e}"),
+                        }
+                    });
+                }
+                Err(e) => warn!("Plugin {child} loaded by {owner}: {e}"),
+            }
+        }
+        if deferred {
+            return false;
+        }
+
+        // A child another unload claimed can still register in its on_unload, so the owner's
+        // state is only final once it is done. Its on_unload may itself wait on this unload,
+        // directly or through a spawned task, so the wait is bounded
+        let on_this_task = UNLOADING_PLUGINS.try_with(Clone::clone).unwrap_or_default();
+        let busy = |p: &LoadedPlugin| {
+            p.unloading && owned.iter().any(|loader| Arc::ptr_eq(loader, &p.loader))
+        };
+        let plugins = || {
+            self.plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        // Its on_unload is up the call stack, waiting can only time out
+        if plugins()
+            .iter()
+            .any(|p| busy(p) && on_this_task.contains(&(self.id, p.token)))
+        {
+            return false;
+        }
+        tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, async {
+            loop {
+                // Create the waiter before checking, so a notify in between is not missed
+                let notified = self.state_notify.notified();
+                if !plugins().iter().any(busy) {
+                    return;
+                }
+                notified.await;
+            }
+        })
+        .await
+        .is_ok()
+    }
+
+    /// Takes a plugin's handlers, services and loaders off and returns them.
+    async fn take_registrations(&self, source: &str) -> Registrations {
+        let services = self.services.write().await.take_owned(source);
+        let mut loaders = Vec::new();
+        self.loaders.write().await.retain(|registered| {
+            let keep = registered.owner.as_deref() != Some(source);
+            if !keep {
+                loaders.push(Arc::clone(&registered.loader));
+            }
+            keep
+        });
+        Registrations {
+            handlers: self.unregister_handlers(source),
+            services,
+            loaders,
+        }
+    }
+
+    /// Takes a plugin's handlers off the map and returns them.
+    fn unregister_handlers(&self, source: &str) -> Vec<Arc<dyn DynEventHandler>> {
+        let mut removed = Vec::new();
         self.handlers.rcu(|handlers| {
+            // rcu retries on a concurrent change, only the last attempt counts
+            removed.clear();
             let mut new_handlers = (**handlers).clone();
             new_handlers.retain(|_, handlers| {
-                handlers.retain(|handler| handler.source() != Some(source));
+                handlers.retain(|handler| {
+                    let keep = handler.source() != Some(source);
+                    if !keep {
+                        removed.push(Arc::clone(handler));
+                    }
+                    keep
+                });
                 !handlers.is_empty()
             });
             Arc::new(new_handlers)
         });
+        removed
     }
 
     /// Get all plugins that are currently loading
@@ -1158,10 +2630,24 @@ impl PluginManager {
             .any(|state| matches!(state, PluginState::Loading))
     }
 
-    /// Wait for all plugins to finish loading
-    pub async fn wait_for_all_plugins(&self) {
-        while !self.all_plugins_loaded().await {
-            self.state_notify.notified().await;
+    /// Wait for all plugins to finish loading.
+    ///
+    /// Fails from an `on_load`, the caller itself is still loading.
+    pub async fn wait_for_all_plugins(&self) -> Result<(), ManagerError> {
+        loop {
+            let loading = self.get_loading_plugins().await;
+            if loading.is_empty() {
+                return Ok(());
+            }
+            // The caller is still loading, so waiting for everything would wait on itself
+            if let Some(caller) = self.initializing_caller()
+                && loading.contains(&caller)
+            {
+                return Err(ManagerError::InitializationDeadlock(caller));
+            }
+            for name in loading {
+                self.wait_for_initialization(&name).await?;
+            }
         }
     }
 
@@ -1319,6 +2805,775 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin::api::PluginFuture;
+
+    type Hook =
+        Box<dyn Fn(Arc<Context>) -> PluginFuture<'static, Result<(), String>> + Send + Sync>;
+
+    fn hook<F>(f: impl Fn(Arc<Context>) -> F + Send + Sync + 'static) -> Hook
+    where
+        F: Future<Output = Result<(), String>> + Send + 'static,
+    {
+        Box::new(move |context| Box::pin(f(context)))
+    }
+
+    struct Hooks {
+        on_load: Hook,
+        on_unload: Hook,
+    }
+
+    /// One instance per load: a loader holding it would look like a running call.
+    struct TestPlugin(Arc<Hooks>);
+
+    impl Plugin for TestPlugin {
+        fn on_load(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+            (self.0.on_load)(context)
+        }
+
+        fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+            (self.0.on_unload)(context)
+        }
+    }
+
+    /// Loads `<name>.test` files from memory, counting released libraries.
+    #[derive(Default)]
+    struct TestLoader {
+        plugins: SyncMutex<HashMap<PathBuf, Arc<Hooks>>>,
+        dependencies: SyncMutex<HashMap<PathBuf, Vec<String>>>,
+        unloaded: AtomicU64,
+        /// Without `can_unload`
+        resident: bool,
+    }
+
+    impl TestLoader {
+        fn add(&self, name: &str, on_load: Hook, on_unload: Hook) -> PathBuf {
+            let path = PathBuf::from(format!("{name}.test"));
+            self.plugins
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(path.clone(), Arc::new(Hooks { on_load, on_unload }));
+            path
+        }
+
+        fn depend(&self, path: &Path, on: &str) {
+            self.dependencies
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(path.to_path_buf(), vec![on.to_string()]);
+        }
+
+        fn unloaded(&self) -> u64 {
+            self.unloaded.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl PluginLoader for TestLoader {
+        fn load<'a>(&'a self, path: &'a Path) -> loader::PluginLoadFuture<'a> {
+            Box::pin(async move {
+                let hooks = self
+                    .plugins
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get(path)
+                    .cloned()
+                    .ok_or(LoaderError::InvalidLoaderData)?;
+                let plugin: Arc<dyn Plugin> = Arc::new(TestPlugin(hooks));
+                let name = path.file_stem().unwrap_or_default().to_string_lossy();
+                let metadata = PluginMetadata {
+                    name: name.into_owned(),
+                    version: "1".to_string(),
+                    authors: Vec::new(),
+                    description: String::new(),
+                    dependencies: self
+                        .dependencies
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_default(),
+                    permissions: Vec::new(),
+                };
+                Ok((plugin, metadata, Box::new(()) as Box<dyn Any + Send + Sync>))
+            })
+        }
+
+        fn can_load(&self, path: &Path) -> bool {
+            self.plugins
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains_key(path)
+        }
+
+        fn unload(&self, _data: Box<dyn Any + Send + Sync>) -> loader::PluginUnloadFuture<'_> {
+            // Counted when it runs, not when it is created
+            Box::pin(async {
+                self.unloaded
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })
+        }
+
+        fn can_unload(&self) -> bool {
+            !self.resident
+        }
+    }
+
+    fn ok() -> Hook {
+        hook(|_| async { Ok(()) })
+    }
+
+    /// A server with its world in `world`, loading plugins through `loader`.
+    async fn test_server(world: &tempfile::TempDir, loader: Arc<TestLoader>) -> Arc<Server> {
+        let basic = pumpkin_config::BasicConfiguration {
+            default_level_name: world.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let vanilla_data = crate::data::VanillaData {
+            banned_ip_list: SyncRwLock::default(),
+            banned_player_list: SyncRwLock::default(),
+            operator_config: SyncRwLock::default(),
+            user_cache: SyncRwLock::default(),
+            whitelist_config: SyncRwLock::default(),
+        };
+        Server::new(
+            basic,
+            pumpkin_config::AdvancedConfiguration::default(),
+            pumpkin_config::TelemetryConfig::default(),
+            vanilla_data,
+            vec![loader],
+        )
+        .await
+        .expect("a fresh world sets up")
+    }
+
+    /// Waits for `condition`, failing the test after the drain timeout and a margin.
+    async fn eventually(condition: impl Fn() -> bool) {
+        let waited = tokio::time::timeout(HANDLER_DRAIN_TIMEOUT * 2, async {
+            while !condition() {
+                tokio::time::sleep(HANDLER_DRAIN_POLL).await;
+            }
+        })
+        .await;
+        assert!(waited.is_ok(), "condition never held");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancelled_unload_still_releases_the_plugin() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let started = Arc::new(Notify::new());
+        let finish = Arc::new(Notify::new());
+        let (on_started, on_finish) = (Arc::clone(&started), Arc::clone(&finish));
+        let path = loader.add(
+            "a",
+            ok(),
+            hook(move |_| {
+                let (started, finish) = (Arc::clone(&on_started), Arc::clone(&on_finish));
+                async move {
+                    started.notify_one();
+                    finish.notified().await;
+                    Ok(())
+                }
+            }),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+
+        // The caller gives up while on_unload runs
+        tokio::select! {
+            _ = manager.unload_plugin("a") => panic!("on_unload is still blocked"),
+            () = started.notified() => {}
+        }
+        finish.notify_one();
+
+        eventually(|| !manager.is_plugin_loaded("a")).await;
+        assert_eq!(loader.unloaded(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failed_owner_does_not_wait_on_a_child_waiting_for_it() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let waiting = Arc::new(Notify::new());
+        let child_waiting = Arc::clone(&waiting);
+        let child = child_loader.add(
+            "c",
+            hook(move |context| {
+                let waiting = Arc::clone(&child_waiting);
+                async move {
+                    waiting.notify_one();
+                    context
+                        .plugin_manager
+                        .wait_for_plugin("p")
+                        .await
+                        .map_err(|e| e.to_string())
+                }
+            }),
+            ok(),
+        );
+        let owner_loader = SyncMutex::new(Some(Arc::clone(&child_loader)));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = owner_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                let (waiting, child) = (Arc::clone(&waiting), child.clone());
+                async move {
+                    let Some(child_loader) = child_loader else {
+                        return Err("loaded twice".to_string());
+                    };
+                    context.register_plugin_loader(child_loader).await;
+                    // Its own task: the child's wait on this on_load is not seen as a cycle
+                    let server = Arc::clone(&context.server);
+                    tokio::spawn(async move {
+                        server.plugin_manager.try_load_plugin(&server, &child).await
+                    });
+                    waiting.notified().await;
+                    Err("owner fails".to_string())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        drop(child_loader);
+
+        let loaded = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT * 2,
+            server.plugin_manager.try_load_plugin(&server, &owner),
+        )
+        .await;
+        assert!(matches!(loaded, Ok(Err(_))), "owner cleanup hung");
+        assert!(!server.plugin_manager.is_plugin_loaded("c"));
+        assert_eq!(loader.unloaded(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn child_of_an_unloading_owner_goes_to_another_loader() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add("c", ok(), ok());
+        let owner_loader = SyncMutex::new(Some(Arc::clone(&child_loader)));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = owner_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                async move {
+                    if let Some(child_loader) = child_loader {
+                        context.register_plugin_loader(child_loader).await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+
+        // Where unload stands right after it closes the owner, before the children snapshot
+        let context = manager
+            .plugins
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|p| p.metadata.name == "p")
+            .map(|p| Arc::clone(&p.context))
+            .expect("p was just loaded");
+        context.close();
+        // Another loader for the file, the refused child goes to it
+        let other = Arc::new(TestLoader::default());
+        other.add("c", ok(), ok());
+        manager.add_loader(&server, other).await;
+
+        // A load that picked the loader before the close: loads skip it after
+        let (instance, metadata, loader_data) = child_loader.load(&child).await.unwrap();
+        let picked: Arc<dyn PluginLoader> = Arc::clone(&child_loader) as _;
+        let reserved = manager
+            .spawn_plugin_initialization(
+                Arc::clone(&server),
+                loader_data,
+                instance,
+                metadata,
+                picked,
+                child.clone(),
+            )
+            .await;
+        // The caller gets the load through the other loader
+        let (_, task) = reserved.expect("loaded again through the other loader");
+        assert!(matches!(task.await, Ok(Ok(()))));
+        assert_eq!(child_loader.unloaded(), 1);
+        assert!(manager.is_plugin_loaded("c"));
+        assert!(!manager.unloaded_files.read().await.contains(&child));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sealed_context_refuses_commands_and_permissions() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let path = loader.add("a", ok(), ok());
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+        let context = manager
+            .plugins
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|p| p.metadata.name == "a")
+            .map(|p| Arc::clone(&p.context))
+            .expect("a was just loaded");
+
+        context.seal();
+        context.register_command(
+            crate::command::argument_builder::command("late", ""),
+            "late",
+        );
+        assert!(!context.has_commands());
+        let permission = pumpkin_util::permission::Permission::new(
+            "a:late",
+            "",
+            pumpkin_util::permission::PermissionDefault::Allow,
+        );
+        assert!(context.register_permission(permission).is_err());
+        assert!(!server.permission_manager.registry.has_permission("a:late"));
+    }
+
+    /// `p`, which registers `child_loader` as its loader on its first load.
+    fn owner_of(loader: &TestLoader, child_loader: &Arc<TestLoader>) -> PathBuf {
+        let child_loader = SyncMutex::new(Some(Arc::clone(child_loader)));
+        loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = child_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                async move {
+                    if let Some(child_loader) = child_loader {
+                        context.register_plugin_loader(child_loader).await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        )
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn owner_unload_waits_for_a_failed_child_cleanup() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let (started, finish) = (Arc::new(Notify::new()), Arc::new(Notify::new()));
+        let (on_started, on_finish) = (Arc::clone(&started), Arc::clone(&finish));
+        let child = child_loader.add(
+            "c",
+            hook(|context| async move {
+                // Its code stays in the tree, so p's library stays for good
+                context.register_command(
+                    crate::command::argument_builder::command("late", ""),
+                    "late",
+                );
+                Err("child fails".to_string())
+            }),
+            hook(move |_| {
+                let (started, finish) = (Arc::clone(&on_started), Arc::clone(&on_finish));
+                async move {
+                    started.notify_one();
+                    finish.notified().await;
+                    Ok(())
+                }
+            }),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        // A loader held from outside counts as in use
+        drop(child_loader);
+        assert!(
+            server
+                .plugin_manager
+                .try_load_plugin(&server, &owner)
+                .await
+                .is_ok()
+        );
+
+        let loading = Arc::clone(&server);
+        tokio::spawn(async move {
+            loading
+                .plugin_manager
+                .try_load_plugin(&loading, &child)
+                .await
+        });
+        started.notified().await;
+
+        // The child's commands pin p, so p's library must stay
+        let unloading = Arc::clone(&server);
+        let unload = tokio::spawn(async move { unloading.plugin_manager.unload_plugin("p").await });
+        // Lets p's unload reach the child before its cleanup goes on
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !unload.is_finished(),
+            "p's unload did not wait for the child"
+        );
+
+        finish.notify_one();
+        let unload = unload.await;
+        assert!(
+            matches!(&unload, Ok(Err(e)) if e.is_library_in_use()),
+            "{unload:?}"
+        );
+        assert_eq!(loader.unloaded(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn child_waiting_on_the_unloading_caller_is_unloaded_later() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add(
+            "c",
+            hook(|context| async move {
+                context
+                    .plugin_manager
+                    .wait_for_initialization("x")
+                    .await
+                    .map_err(|e| e.to_string())
+            }),
+            ok(),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let unloaded = Arc::new(SyncMutex::new(None));
+        let result = Arc::clone(&unloaded);
+        let caller = loader.add(
+            "x",
+            hook(move |context| {
+                let (result, child) = (Arc::clone(&result), child.clone());
+                async move {
+                    let manager = Arc::clone(&context.plugin_manager);
+                    let server = Arc::clone(&context.server);
+                    // Its own task: the child's wait on this on_load is not seen as a cycle
+                    tokio::spawn(async move {
+                        server.plugin_manager.try_load_plugin(&server, &child).await
+                    });
+                    eventually(|| {
+                        !manager
+                            .init_waits
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .is_empty()
+                    })
+                    .await;
+                    // The child's unload waits on this on_load, so it is a cycle here
+                    let started = std::time::Instant::now();
+                    let unload = manager.unload_plugin("p").await;
+                    *result.lock().unwrap_or_else(PoisonError::into_inner) =
+                        Some((unload, started.elapsed()));
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert!(manager.try_load_plugin(&server, &caller).await.is_ok());
+
+        let (unload, took) = unloaded
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+            .expect("x unloaded p");
+        // Kept for the deferred child right away, not after the drain timed out
+        assert!(took < HANDLER_DRAIN_TIMEOUT, "took {took:?}");
+        assert!(unload.is_err_and(|e| e.is_library_in_use()));
+        assert_eq!(
+            loader.unloaded(),
+            0,
+            "p released under an initializing child"
+        );
+        eventually(|| !manager.is_plugin_loaded("c")).await;
+        eventually(|| child_loader.unloaded() == 1).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn retried_child_waiting_on_its_owner_does_not_hang() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add(
+            "c",
+            hook(|context| async move {
+                context
+                    .plugin_manager
+                    .wait_for_initialization("p")
+                    .await
+                    .map_err(|e| e.to_string())
+            }),
+            ok(),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        // No loader for it yet, so it waits for one
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        // p's on_load adds the loader, which retries c, and c waits on p
+        let loaded = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT,
+            manager.try_load_plugin(&server, &owner),
+        )
+        .await;
+        assert!(matches!(loaded, Ok(Ok(_))), "{loaded:?}");
+        // c's wait on p ends once p is loaded, it is not refused as a cycle
+        eventually(|| manager.is_plugin_active("c")).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unloading_an_old_load_does_not_wait_on_a_new_one() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let (release, first) = (Arc::new(Notify::new()), Arc::new(AtomicBool::new(true)));
+        let (on_release, on_first) = (Arc::clone(&release), Arc::clone(&first));
+        let path = loader.add(
+            "a",
+            hook(move |_| {
+                let (release, first) = (Arc::clone(&on_release), Arc::clone(&on_first));
+                async move {
+                    // The second load stays in on_load until released
+                    if !first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                        release.notified().await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        let old = manager.try_load_plugin(&server, &path).await.unwrap();
+        manager.unload_plugin("a").await.unwrap();
+        let (_, task) = manager.start_loading_plugin(&server, &path).await.unwrap();
+
+        let unload =
+            tokio::time::timeout(Duration::from_secs(1), manager.unload_loaded(&old)).await;
+        assert!(
+            matches!(unload, Ok(Err(ManagerError::PluginNotFound(_)))),
+            "{unload:?}"
+        );
+        release.notify_one();
+        assert!(matches!(task.await, Ok(Ok(()))));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn replacement_unloading_its_predecessor_is_not_a_deadlock() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let old: Arc<SyncMutex<Option<PluginId>>> = Arc::default();
+        let result = Arc::new(SyncMutex::new(None));
+        let (on_old, on_result) = (Arc::clone(&old), Arc::clone(&result));
+        let path = loader.add(
+            "a",
+            hook(move |context| {
+                let old = on_old
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone();
+                let result = Arc::clone(&on_result);
+                async move {
+                    // The second load unloads the first, which is gone already
+                    if let Some(old) = old {
+                        let unload = context.plugin_manager.unload_loaded(&old).await;
+                        *result.lock().unwrap_or_else(PoisonError::into_inner) = Some(unload);
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        let first = manager.try_load_plugin(&server, &path).await.unwrap();
+        manager.unload_plugin("a").await.unwrap();
+        *old.lock().unwrap_or_else(PoisonError::into_inner) = Some(first);
+        assert!(manager.try_load_plugin(&server, &path).await.is_ok());
+
+        let unload = result.lock().unwrap_or_else(PoisonError::into_inner).take();
+        assert!(
+            matches!(unload, Some(Err(ManagerError::PluginNotFound(_)))),
+            "{unload:?}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn retried_child_depending_on_its_owner_loads() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader::default());
+        let child = child_loader.add("c", ok(), ok());
+        child_loader.depend(&child, "p");
+        let retry = Arc::new(SyncMutex::new(None));
+        let (on_retry, owner_loader) = (Arc::clone(&retry), Arc::clone(&child_loader));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let (retry, child_loader) = (Arc::clone(&on_retry), Arc::clone(&owner_loader));
+                async move {
+                    let added = context.register_plugin_loader(child_loader).await;
+                    *retry.lock().unwrap_or_else(PoisonError::into_inner) = Some(added);
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        // No loader for it yet, so it waits for one
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert_eq!(
+            retry.lock().unwrap_or_else(PoisonError::into_inner).take(),
+            Some(LoaderRetry::Pending)
+        );
+        // c's dependency on p is met once p is loaded
+        eventually(|| manager.is_plugin_active("c")).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn loader_is_registered_once() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        let other = Arc::new(TestLoader::default());
+        other.add("c", ok(), ok());
+        let added = manager.add_loader(&server, Arc::clone(&other) as _).await;
+        assert_eq!(added, LoaderRetry::Loaded(0));
+        let again = manager.add_loader(&server, other).await;
+        assert_eq!(again, LoaderRetry::Refused);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failed_child_of_a_resident_loader_keeps_its_owner() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader {
+            resident: true,
+            ..TestLoader::default()
+        });
+        let child = child_loader.add(
+            "c",
+            hook(|_| async { Err("child fails".to_string()) }),
+            ok(),
+        );
+        let owner = owner_of(&loader, &child_loader);
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        // A loader held from outside counts as in use
+        drop(child_loader);
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert!(manager.try_load_plugin(&server, &child).await.is_err());
+
+        // The child's leaked runtime may still run the loader's code, which is p's
+        let unload = manager.unload_plugin("p").await;
+        assert!(unload.is_err_and(|e| e.is_library_in_use()));
+        assert_eq!(loader.unloaded(), 0);
+    }
+
+    #[tokio::test]
+    async fn same_named_plugin_of_another_manager_is_not_a_deadlock() {
+        let manager = Arc::new(PluginManager::new(Vec::new()));
+        let other = PluginManager::new(Vec::new());
+        manager
+            .plugin_states
+            .write()
+            .await
+            .insert("a".to_string(), PluginState::Loading);
+
+        // other's "a" loading does not make waiting on this manager's "a" a self-wait
+        INITIALIZING_PLUGIN
+            .scope((other.id, "a".to_string()), async {
+                // Polled on this task, so the wait sees other's scope
+                let mut wait = std::pin::pin!(manager.wait_for_all_plugins());
+                assert!(futures::poll!(&mut wait).is_pending());
+                manager
+                    .plugin_states
+                    .write()
+                    .await
+                    .insert("a".to_string(), PluginState::Loaded);
+                manager.state_notify.notify_waiters();
+                assert!(matches!(wait.await, Ok(())));
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn on_load_wait_cycles_fail_instead_of_hanging() {
+        let manager = Arc::new(PluginManager::new(Vec::new()));
+        let mut states = manager.plugin_states.write().await;
+        states.insert("a".to_string(), PluginState::Loading);
+        states.insert("b".to_string(), PluginState::Loading);
+        drop(states);
+
+        // An on_load waiting on itself
+        let own = INITIALIZING_PLUGIN
+            .scope(
+                (manager.id, "a".to_string()),
+                manager.wait_for_initialization("a"),
+            )
+            .await;
+        assert!(matches!(own, Err(ManagerError::InitializationDeadlock(_))));
+
+        // b's on_load waits on a, so a's on_load must not wait on b
+        let waiting = Arc::clone(&manager);
+        let b_waits_on_a = tokio::spawn(
+            INITIALIZING_PLUGIN.scope((manager.id, "b".to_string()), async move {
+                waiting.wait_for_initialization("a").await
+            }),
+        );
+        while manager
+            .init_waits
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_empty()
+        {
+            tokio::task::yield_now().await;
+        }
+        let mutual = INITIALIZING_PLUGIN
+            .scope(
+                (manager.id, "a".to_string()),
+                manager.wait_for_initialization("b"),
+            )
+            .await;
+        assert!(matches!(
+            mutual,
+            Err(ManagerError::InitializationDeadlock(_))
+        ));
+
+        // Once a finishes, b's wait ends and leaves no edge behind
+        manager
+            .plugin_states
+            .write()
+            .await
+            .insert("a".to_string(), PluginState::Loaded);
+        manager.state_notify.notify_waiters();
+        assert!(matches!(b_waits_on_a.await, Ok(Ok(()))));
+        assert!(
+            manager
+                .init_waits
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty()
+        );
+    }
 
     #[tokio::test]
     async fn topological_sort() {
