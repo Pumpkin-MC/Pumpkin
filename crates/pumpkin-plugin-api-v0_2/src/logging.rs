@@ -48,33 +48,4 @@ impl tracing::Subscriber for WitSubscriber {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// The log severity level used with [`log`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
-impl LogLevel {
-    /// Converts this level to the WIT-generated `Level` type expected by the host.
-    const fn to_wit(self) -> wit::pumpkin::plugin::logging::Level {
-        match self {
-            Self::Trace => wit::pumpkin::plugin::logging::Level::Trace,
-            Self::Debug => wit::pumpkin::plugin::logging::Level::Debug,
-            Self::Info => wit::pumpkin::plugin::logging::Level::Info,
-            Self::Warn => wit::pumpkin::plugin::logging::Level::Warn,
-            Self::Error => wit::pumpkin::plugin::logging::Level::Error,
-        }
-    }
-}
-
-/// Sends a log message to the server at the given severity level.
-///
-/// Prefer the standard `tracing` macros (`tracing::info!`, `tracing::warn!`, etc.)
-/// for structured logging; use this function when you need a direct, low-level log call.
-pub fn log(level: LogLevel, message: &str) {
-    wit::pumpkin::plugin::logging::log(level.to_wit(), message);
-}
+pub use crate::wit::pumpkin::plugin::logging::{Level as LogLevel, log};

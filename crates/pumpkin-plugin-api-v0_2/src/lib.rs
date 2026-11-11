@@ -101,9 +101,8 @@ pub use damage_types_wit::DamageType;
 pub use datapack::{DatapackInfo, DatapackManager, EnablePosition};
 pub use display::{
     BillboardMode, BlockDisplayEntity, DisplayEntity, DisplayEntityExt, DisplayTransformation,
-    EntityDisplayExt, InteractionEntity, ItemDisplayEntity, ItemDisplayEntityExt, ItemDisplayMode,
-    Quaternionf, TextAlignment, TextDisplayEntity, TextDisplayEntityExt, TransformationBuilder,
-    Vector3f,
+    EntityDisplayExt, InteractionEntity, ItemDisplayEntity, ItemDisplayMode, Quaternionf,
+    TextAlignment, TextDisplayEntity, TextDisplayEntityExt, TransformationBuilder, Vector3f,
 };
 pub use enchantment::{
     AttributeModifierSlot, CustomEnchantment, CustomEnchantmentValue, Enchantment,
@@ -174,21 +173,7 @@ pub use host::{
 /// The result type used by plugin callbacks
 pub type Result<T, E = String> = core::result::Result<T, E>;
 
-/// Describes a plugin to the server
-pub struct PluginMetadata {
-    /// The plugin name, which other plugins use as the recipient of an IPC message
-    pub name: String,
-    /// The version of the plugin itself; it does not select the ABI
-    pub version: String,
-    /// The plugin authors
-    pub authors: Vec<String>,
-    /// A short description of the plugin
-    pub description: String,
-    /// Names of the plugins this one depends on, which the host loads first
-    pub dependencies: Vec<String>,
-    /// The permissions the plugin requests
-    pub permissions: Vec<String>,
-}
+pub use wit::exports::pumpkin::plugin::metadata::PluginMetadata;
 
 /// The entry point of a v0.2 plugin
 ///
@@ -547,15 +532,7 @@ macro_rules! register_plugin {
             impl $crate::wit::exports::pumpkin::plugin::metadata::Guest for PumpkinPluginComponent {
                 fn get_metadata() -> $crate::wit::exports::pumpkin::plugin::metadata::PluginMetadata
                 {
-                    let metadata = $crate::runtime::metadata();
-                    $crate::wit::exports::pumpkin::plugin::metadata::PluginMetadata {
-                        name: metadata.name,
-                        version: metadata.version,
-                        authors: metadata.authors,
-                        description: metadata.description,
-                        dependencies: metadata.dependencies,
-                        permissions: metadata.permissions,
-                    }
+                    $crate::runtime::metadata()
                 }
             }
 
