@@ -27,7 +27,6 @@ use crate::entity::{
         },
         pathfinder::node::PathType,
     },
-    breath::DROWNING_INTERVAL,
     mob::{
         Mob, MobEntity,
         spawn::{EntitySpawnReason, SpawnGroupData},
@@ -38,6 +37,7 @@ use crate::entity::{
 use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 
+use super::water_animal;
 use controls::{AxolotlLookControl, AxolotlMoveControl};
 
 mod ai;
@@ -126,41 +126,6 @@ fn join_spawn_group<R: Rng + ?Sized>(
             group_size: group_size + 1,
         },
     )
-}
-
-/// The air of an axolotl after one tick and whether it dried out in it.
-struct NextAirSupply {
-    air_supply: i32,
-    dries_out: bool,
-}
-
-/// Vanilla `Axolotl.handleAirSupply`: out of water and rain the air runs down by one from what
-/// it was before this tick, and at the drowning threshold it is set to 0 and the axolotl dries
-/// out; in water or rain (or when dead) it is the maximum at once.
-const fn next_air_supply(
-    alive: bool,
-    in_water_or_rain: bool,
-    pre_tick_air_supply: i32,
-    max_air_supply: i32,
-) -> NextAirSupply {
-    if !alive || in_water_or_rain {
-        return NextAirSupply {
-            air_supply: max_air_supply,
-            dries_out: false,
-        };
-    }
-    let air_supply = pre_tick_air_supply.saturating_sub(1);
-    if air_supply <= -DROWNING_INTERVAL {
-        NextAirSupply {
-            air_supply: 0,
-            dries_out: true,
-        }
-    } else {
-        NextAirSupply {
-            air_supply,
-            dries_out: false,
-        }
-    }
 }
 
 /// What `Axolotl.usePlayerItem` gives back for a fed item instead of just using it up: the
@@ -307,20 +272,16 @@ impl AxolotlEntity {
         );
     }
 
-    /// Vanilla `Axolotl.handleAirSupply`: applies [`next_air_supply`] and hurts the axolotl when
-    /// it dries out.
     fn handle_air_supply(&self, pre_tick_air_supply: i32) {
-        let entity = self.get_entity();
-        let air = next_air_supply(
-            self.mob_entity.living_entity.is_alive(),
-            entity.is_in_water_or_rain(),
+        water_animal::handle_air_supply(
+            self,
             pre_tick_air_supply,
+            self,
+            self.get_entity().is_in_water_or_rain(),
             self.get_max_air_supply(),
+            DRY_OUT_DAMAGE,
+            DamageType::DRY_OUT,
         );
-        entity.set_air_supply(air.air_supply);
-        if air.dries_out {
-            self.damage(self, DRY_OUT_DAMAGE, DamageType::DRY_OUT);
-        }
     }
 
     /// Vanilla `Axolotl.rehydrate`: adds `REHYDRATE_AIR_SUPPLY` air, up to the maximum.
@@ -1520,33 +1481,6 @@ mod tests {
         assert_eq!(air_supply(&axolotl), 6000);
         world.level.shutdown().await;
         Ok(())
-    }
-
-    /// The pure air rule: one less a tick on land, dry out at -20 with the air back at 0, the maximum
-    /// in water or rain and when dead, and the drop always starts from the air before the tick.
-    #[test]
-    fn next_air_supply_follows_the_vanilla_rule() {
-        let cases = [
-            // (alive, wet, before, air, dries out)
-            (true, false, 6000, 5999, false),
-            (true, false, 1, 0, false),
-            (true, false, -18, -19, false),
-            (true, false, -19, 0, true),
-            (true, false, -20, 0, true),
-            (true, false, i32::MIN, 0, true),
-            (true, true, 100, 6000, false),
-            (true, true, -50, 6000, false),
-            (false, false, 100, 6000, false),
-            (false, true, -50, 6000, false),
-        ];
-        for (alive, wet, before, air, dries_out) in cases {
-            let next = next_air_supply(alive, wet, before, 6000);
-            assert_eq!(
-                (next.air_supply, next.dries_out),
-                (air, dries_out),
-                "alive {alive}, wet {wet}, before {before}"
-            );
-        }
     }
 
     /// At -20 air the axolotl dries out: the air is set to 0 and it is hurt by `DRY_OUT` for 2, then
