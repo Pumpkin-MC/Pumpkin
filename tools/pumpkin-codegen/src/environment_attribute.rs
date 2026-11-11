@@ -403,6 +403,8 @@ struct TimelineJson {
     #[serde(default)]
     period_ticks: Option<i32>,
     #[serde(default)]
+    time_markers: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
     tracks: std::collections::BTreeMap<String, TimelineTrackJson>,
 }
 
@@ -418,9 +420,36 @@ struct KeyframeJson {
     value: serde_json::Value,
 }
 
+/// `NAME_TIME_MARKER` constants for each time marker of a timeline. A marker is either its
+/// tick or an object with `ticks`.
+fn time_marker_consts(timeline: &TimelineJson) -> Vec<TokenStream> {
+    timeline
+        .time_markers
+        .iter()
+        .filter_map(|(name, marker)| {
+            let ticks = marker
+                .as_i64()
+                .or_else(|| marker.get("ticks")?.as_i64())
+                .and_then(|ticks| i32::try_from(ticks).ok())?;
+            let ident = format_ident!(
+                "{}_TIME_MARKER",
+                name.strip_prefix("minecraft:")
+                    .unwrap_or(name)
+                    .to_uppercase()
+            );
+            Some(quote! { pub const #ident: i32 = #ticks; })
+        })
+        .collect()
+}
+
 pub fn build() -> TokenStream {
     let timeline_path =
         std::path::Path::new("../../assets/datapack/data/minecraft/timeline/day.json");
+    let day_time_markers = std::fs::read_to_string(timeline_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<TimelineJson>(&content).ok())
+        .map(|timeline| time_marker_consts(&timeline))
+        .unwrap_or_default();
     let (
         period_ticks,
         sky_light_level_keyframes,
@@ -797,6 +826,7 @@ pub fn build() -> TokenStream {
 
         impl DayTimeline {
             pub const PERIOD_TICKS: i32 = #period_ticks;
+            #(#day_time_markers)*
             pub const SKY_LIGHT_LEVEL_KEYFRAMES: &'static [FloatKeyframe] = &[
                 #(#sky_light_level_keyframes),*
             ];

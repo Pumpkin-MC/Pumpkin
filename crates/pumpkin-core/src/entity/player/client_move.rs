@@ -306,6 +306,18 @@ impl Player {
         }
 
         self.do_check_fall_damage(delta, requested.on_ground, requested.horizontal_collision);
+        if delta.y > 0.0 {
+            self.living_entity.fall_distance.store(0.0);
+        }
+        if requested.on_ground
+            || self.living_entity.has_landed_in_liquid()
+            || self.on_climbable()
+            || self.is_spectator()
+            || entity.is_fall_flying()
+            || self.living_entity.is_auto_spin_attack()
+        {
+            self.living_entity.try_reset_current_impulse_context();
+        }
 
         if pos_changed && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
             chunker::update_position(&player);
@@ -450,12 +462,7 @@ fn packed_delta(last_pos: Vector3<f64>, pos: Vector3<f64>) -> Vector3<i16> {
 }
 
 fn dismount_if_riding(entity: &crate::entity::Entity) {
-    let vehicle = entity
-        .vehicle
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
-    if let Some(vehicle) = vehicle {
+    if let Some(vehicle) = entity.get_vehicle() {
         vehicle.get_entity().remove_passenger(entity.entity_id);
     }
 }

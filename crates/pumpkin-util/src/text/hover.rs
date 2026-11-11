@@ -39,7 +39,7 @@ impl ItemComponents {
 }
 
 /// JSON as NBT: whole numbers as the smallest integer tag that holds them.
-fn json_to_nbt(value: &serde_json::Value) -> pumpkin_nbt::tag::NbtTag {
+pub(super) fn json_to_nbt(value: &serde_json::Value) -> pumpkin_nbt::tag::NbtTag {
     use pumpkin_nbt::tag::NbtTag;
     match value {
         serde_json::Value::Null => NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()),

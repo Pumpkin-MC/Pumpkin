@@ -3435,7 +3435,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ('L', RecipeIngredientTypes::Simple("minecraft:pale_oak_log")),
             ('R', RecipeIngredientTypes::Simple("minecraft:resin_block")),
         ],
-        pattern: &[" L ", " R ", " L "],
+        pattern: &["L", "R", "L"],
         result: RecipeResultStruct {
             id: "minecraft:creaking_heart",
             count: 1u8,
@@ -11116,7 +11116,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ('#', RecipeIngredientTypes::Simple("minecraft:heavy_core")),
             ('I', RecipeIngredientTypes::Simple("minecraft:breeze_rod")),
         ],
-        pattern: &[" # ", " I "],
+        pattern: &["#", "I"],
         result: RecipeResultStruct {
             id: "minecraft:mace",
             count: 1u8,
@@ -16170,7 +16170,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ),
             ('X', RecipeIngredientTypes::Simple("minecraft:copper_ingot")),
         ],
-        pattern: &[" # ", " X ", " X "],
+        pattern: &["#", "X", "X"],
         result: RecipeResultStruct {
             id: "minecraft:spyglass",
             count: 1u8,
@@ -17668,7 +17668,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_chiseled_copper",
             count: 1u8,
@@ -17944,7 +17944,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_exposed_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_chiseled_copper",
             count: 1u8,
@@ -18246,7 +18246,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_chiseled_copper",
             count: 1u8,
@@ -18535,7 +18535,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_weathered_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_chiseled_copper",
             count: 1u8,

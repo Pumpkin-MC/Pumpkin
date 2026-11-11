@@ -327,7 +327,10 @@ use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
-use super::combat::{self, AttackType, player_attack_sound};
+use super::combat::{
+    self, AttackType, can_smash_attack, mace_smash_damage_bonus, mace_smash_knockback,
+    player_attack_sound,
+};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
@@ -1423,13 +1426,7 @@ impl Player {
             self.on_handled_screen_closed();
         }
 
-        let vehicle = self
-            .living_entity
-            .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let vehicle = self.living_entity.entity.get_vehicle();
         if let Some(vehicle) = vehicle {
             self.root_vehicle_uuid
                 .store(Some(vehicle.get_entity().entity_uuid));
@@ -1658,20 +1655,23 @@ impl Player {
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32);
 
-        if matches!(attack_type, AttackType::Critical) {
-            damage *= 1.5;
-        }
-
-        let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
+        let is_mace_smash = item_stack.item.id == pumpkin_data::item::Item::MACE.id
+            && can_smash_attack(&self.living_entity);
+        // Vanilla adds the weapon's damage bonus before the critical hit multiplier.
         if is_mace_smash {
-            let fall_distance = self.living_entity.fall_distance.load();
+            let fall_distance = f64::from(self.living_entity.fall_distance.load());
             let mut smash_bonus_per_block = 0.0f64;
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
                     enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
                 }
             }
-            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
+            damage += smash_bonus_per_block
+                .mul_add(fall_distance, mace_smash_damage_bonus(fall_distance));
+        }
+
+        if matches!(attack_type, AttackType::Critical) {
+            damage *= 1.5;
         }
 
         let old_movement = victim_entity.velocity.load();
@@ -1701,32 +1701,35 @@ impl Player {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
-        crate::enchantment::EnchantmentHelper::on_post_attack(victim_entity, &item_stack);
+        let is_mace_smash_living = is_mace_smash && victim.get_living_entity().is_some();
+        if is_mace_smash_living {
+            let attacker = &self.living_entity.entity;
+            let velocity = attacker.velocity.load();
+            self.set_velocity(Vector3::new(velocity.x, f64::from(0.01f32), velocity.z));
+            let impact_pos = self.living_entity.calculate_impact_position();
+            self.living_entity
+                .set_ignore_fall_damage_from_current_impulse(true, impact_pos);
 
-        if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            self.living_entity.fall_distance.store(0.0);
-            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
-                for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::WIND_BURST {
-                        let boost_y = 0.5 + 0.25 * (*level as f64);
-                        let vel = self.living_entity.entity.velocity.load();
-                        self.living_entity
-                            .entity
-                            .velocity
-                            .store(Vector3::new(vel.x, boost_y, vel.z));
-                    }
-                }
-            }
-            world.play_sound(
+            let sound = if victim_entity.on_ground.load(Ordering::Relaxed) {
+                self.spawn_extra_particles_on_fall
+                    .store(true, Ordering::Relaxed);
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
                 } else {
                     Sound::ItemMaceSmashGround
-                },
-                SoundCategory::Players,
-                &pos,
-            );
+                }
+            } else {
+                Sound::ItemMaceSmashAir
+            };
+            world.play_sound(sound, SoundCategory::Players, &attacker.pos.load());
+            mace_smash_knockback(&world, self, victim.as_ref());
+        }
+
+        crate::enchantment::EnchantmentHelper::on_post_attack(self, victim_entity, &item_stack);
+
+        if is_mace_smash_living {
+            self.living_entity.fall_distance.store(0.0);
         }
 
         player_attack_sound(&pos, &world, attack_type);
@@ -2854,6 +2857,15 @@ impl Player {
                 return;
             }
         }
+        if let Some(block_entity) = self.world().get_block_entity(&location)
+            && let Some(sign) =
+                crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        {
+            *sign
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.gameprofile.id);
+        }
         self.try_enqueue_packet_editioned(
             &COpenSignEditor::new(location, is_front_text),
             &pumpkin_protocol::bedrock::client::open_sign::COpenSign::new(location, is_front_text),
@@ -3583,6 +3595,29 @@ impl Player {
         {
             return;
         }
+        let fall_distance = self.living_entity.fall_distance.load();
+        if self.spawn_extra_particles_on_fall.load(Ordering::Relaxed)
+            && on_ground
+            && fall_distance > 0.0
+        {
+            let pos = self.living_entity.entity.get_pos_with_y_offset(0.2).0;
+            let on_state = self.world().get_block_state(&pos);
+            let centered = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 1.0,
+                f64::from(pos.0.z) + 0.5,
+            );
+            let particles = (50.0 * f64::from(fall_distance)).clamp(0.0, 200.0) as i32;
+            self.world().spawn_block_particle(
+                centered,
+                Vector3::new(0.3, 0.3, 0.3),
+                0.15,
+                particles,
+                on_state.id.as_u16(),
+            );
+            self.spawn_extra_particles_on_fall
+                .store(false, Ordering::Relaxed);
+        }
         // Fall damage comes with the move packet, the glide wall damage with the tick after it
         self.living_entity.fall(self, movement.y, on_ground);
         if horizontal_collision && self.living_entity.entity.is_fall_flying() {
@@ -3953,74 +3988,66 @@ impl Player {
     #[allow(clippy::too_many_lines)]
     pub fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
-        if entity.has_vehicle() {
-            let vehicle = entity
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(vehicle) = vehicle.as_ref() {
-                let entity_type = vehicle.get_entity().entity_type;
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
-                    || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
-                    || entity_type == &EntityType::OAK_BOAT
-                    || entity_type == &EntityType::SPRUCE_BOAT
-                    || entity_type == &EntityType::BIRCH_BOAT
-                    || entity_type == &EntityType::JUNGLE_BOAT
-                    || entity_type == &EntityType::ACACIA_BOAT
-                    || entity_type == &EntityType::DARK_OAK_BOAT
-                    || entity_type == &EntityType::MANGROVE_BOAT
-                    || entity_type == &EntityType::CHERRY_BOAT
-                    || entity_type == &EntityType::PALE_OAK_BOAT
-                    || entity_type == &EntityType::BAMBOO_RAFT
-                    || entity_type == &EntityType::OAK_CHEST_BOAT
-                    || entity_type == &EntityType::SPRUCE_CHEST_BOAT
-                    || entity_type == &EntityType::BIRCH_CHEST_BOAT
-                    || entity_type == &EntityType::JUNGLE_CHEST_BOAT
-                    || entity_type == &EntityType::ACACIA_CHEST_BOAT
-                    || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::MANGROVE_CHEST_BOAT
-                    || entity_type == &EntityType::CHERRY_CHEST_BOAT
-                    || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::BAMBOO_CHEST_RAFT
-                {
-                    return statistics::CustomStatistic::BoatOneCm;
-                }
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
-                    || entity_type == &EntityType::MINECART
-                    || entity_type == &EntityType::CHEST_MINECART
-                    || entity_type == &EntityType::FURNACE_MINECART
-                    || entity_type == &EntityType::TNT_MINECART
-                    || entity_type == &EntityType::HOPPER_MINECART
-                    || entity_type == &EntityType::COMMAND_BLOCK_MINECART
-                    || entity_type == &EntityType::SPAWNER_MINECART
-                {
-                    return statistics::CustomStatistic::MinecartOneCm;
-                }
-                if entity_type == &EntityType::HORSE
-                    || entity_type == &EntityType::DONKEY
-                    || entity_type == &EntityType::MULE
-                    || entity_type == &EntityType::SKELETON_HORSE
-                    || entity_type == &EntityType::ZOMBIE_HORSE
-                    || entity_type == &EntityType::CAMEL
-                    || entity_type == &EntityType::LLAMA
-                    || entity_type == &EntityType::TRADER_LLAMA
-                {
-                    return statistics::CustomStatistic::HorseOneCm;
-                }
-                if entity_type == &EntityType::PIG {
-                    return statistics::CustomStatistic::PigOneCm;
-                }
-                if entity_type == &EntityType::STRIDER {
-                    return statistics::CustomStatistic::StriderOneCm;
-                }
-                if entity_type == &EntityType::HAPPY_GHAST {
-                    return statistics::CustomStatistic::HappyGhastOneCm;
-                }
-                if entity_type == &EntityType::NAUTILUS
-                    || entity_type == &EntityType::ZOMBIE_NAUTILUS
-                {
-                    return statistics::CustomStatistic::NautilusOneCm;
-                }
+        if let Some(vehicle) = entity.get_vehicle() {
+            let entity_type = vehicle.get_entity().entity_type;
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
+                || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
+                || entity_type == &EntityType::OAK_BOAT
+                || entity_type == &EntityType::SPRUCE_BOAT
+                || entity_type == &EntityType::BIRCH_BOAT
+                || entity_type == &EntityType::JUNGLE_BOAT
+                || entity_type == &EntityType::ACACIA_BOAT
+                || entity_type == &EntityType::DARK_OAK_BOAT
+                || entity_type == &EntityType::MANGROVE_BOAT
+                || entity_type == &EntityType::CHERRY_BOAT
+                || entity_type == &EntityType::PALE_OAK_BOAT
+                || entity_type == &EntityType::BAMBOO_RAFT
+                || entity_type == &EntityType::OAK_CHEST_BOAT
+                || entity_type == &EntityType::SPRUCE_CHEST_BOAT
+                || entity_type == &EntityType::BIRCH_CHEST_BOAT
+                || entity_type == &EntityType::JUNGLE_CHEST_BOAT
+                || entity_type == &EntityType::ACACIA_CHEST_BOAT
+                || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
+                || entity_type == &EntityType::MANGROVE_CHEST_BOAT
+                || entity_type == &EntityType::CHERRY_CHEST_BOAT
+                || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
+                || entity_type == &EntityType::BAMBOO_CHEST_RAFT
+            {
+                return statistics::CustomStatistic::BoatOneCm;
+            }
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
+                || entity_type == &EntityType::MINECART
+                || entity_type == &EntityType::CHEST_MINECART
+                || entity_type == &EntityType::FURNACE_MINECART
+                || entity_type == &EntityType::TNT_MINECART
+                || entity_type == &EntityType::HOPPER_MINECART
+                || entity_type == &EntityType::COMMAND_BLOCK_MINECART
+                || entity_type == &EntityType::SPAWNER_MINECART
+            {
+                return statistics::CustomStatistic::MinecartOneCm;
+            }
+            if entity_type == &EntityType::HORSE
+                || entity_type == &EntityType::DONKEY
+                || entity_type == &EntityType::MULE
+                || entity_type == &EntityType::SKELETON_HORSE
+                || entity_type == &EntityType::ZOMBIE_HORSE
+                || entity_type == &EntityType::CAMEL
+                || entity_type == &EntityType::LLAMA
+                || entity_type == &EntityType::TRADER_LLAMA
+            {
+                return statistics::CustomStatistic::HorseOneCm;
+            }
+            if entity_type == &EntityType::PIG {
+                return statistics::CustomStatistic::PigOneCm;
+            }
+            if entity_type == &EntityType::STRIDER {
+                return statistics::CustomStatistic::StriderOneCm;
+            }
+            if entity_type == &EntityType::HAPPY_GHAST {
+                return statistics::CustomStatistic::HappyGhastOneCm;
+            }
+            if entity_type == &EntityType::NAUTILUS || entity_type == &EntityType::ZOMBIE_NAUTILUS {
+                return statistics::CustomStatistic::NautilusOneCm;
             }
         }
 
@@ -5570,6 +5597,7 @@ impl Player {
         if gamemode == GameMode::Creative {
             self.get_entity().extinguish();
             self.get_entity().set_on_fire(false);
+            self.living_entity.reset_current_impulse_context();
         }
 
         // Stop elytra flight and reset sneaking when switching to spectator mode
@@ -7904,10 +7932,7 @@ impl EntityBase for Player {
         let vehicle_uuid = self
             .living_entity
             .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_vehicle()
             .map(|vehicle| vehicle.get_entity().entity_uuid)
             .or_else(|| self.root_vehicle_uuid.load());
         if let Some(vehicle_uuid) = vehicle_uuid {
