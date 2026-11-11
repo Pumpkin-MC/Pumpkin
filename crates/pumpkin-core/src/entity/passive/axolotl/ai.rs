@@ -244,13 +244,7 @@ fn can_set_walk_target_from_look_target(tick: &BrainTick<'_>) -> bool {
 /// playing dead already, and starts the hunting cooldown when a fight has just ended.
 pub(super) fn update_activity(brain: &mut Brain) {
     let old_activity = brain.get_active_non_core_activity();
-    // Playing dead holds the activity while the memory is there. When something erased the memory
-    // (breeding does, `EraseMemoryIf` in the play dead activity) `ValidatePlayDead` has nothing to
-    // end and the play dead activity has nothing left to run, so the choice is made again
-    // instead of leaving the axolotl without behaviors (vanilla keeps the stale activity).
-    if old_activity == Some(Activity::PlayDead)
-        && brain.has_memory_value(types::PLAY_DEAD_TICKS.id())
-    {
+    if old_activity == Some(Activity::PlayDead) {
         return;
     }
     brain.set_active_activity_to_first_valid(&[
@@ -463,8 +457,7 @@ mod tests {
         Ok(())
     }
 
-    /// Playing dead outranks a fight (which ends it, so the cooldown starts), and while it lasts
-    /// the activity is not touched; once the memory is gone the choice is made again.
+    /// Playing dead outranks a fight (which ends it, so the cooldown starts) and holds the activity.
     #[tokio::test]
     async fn playing_dead_outranks_a_fight_and_holds_the_activity() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -476,18 +469,13 @@ mod tests {
         let fighting = update(&axolotl);
         with_brain(&axolotl, |brain| brain.set(types::PLAY_DEAD_TICKS, 150));
         let playing_dead = update(&axolotl);
-        let held = update(&axolotl);
         with_brain(&axolotl, |brain| brain.erase(types::PLAY_DEAD_TICKS.id()));
-        let released = update(&axolotl);
+        let held = update(&axolotl);
         world.level.shutdown().await;
 
         assert_eq!(fighting, (Some(Activity::Fight), false));
         assert_eq!(playing_dead, (Some(Activity::PlayDead), true));
         assert_eq!(held.0, Some(Activity::PlayDead));
-        // Breeding erased the memory: the choice is made again and falls to idle (the fight had
-        // already been replaced by playing dead, which started the cooldown and dropped the
-        // attack target).
-        assert_eq!(released, (Some(Activity::Idle), true));
         Ok(())
     }
 
