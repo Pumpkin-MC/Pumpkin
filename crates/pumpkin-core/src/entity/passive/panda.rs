@@ -27,9 +27,13 @@ use crate::entity::{
     ai::{
         behavior::fleeing::{self, Flee},
         goal::{
-            avoid_entity::not_spectator, follow_parent::FollowParentGoal,
-            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-            tempt::TemptGoal, wander_around::WanderAroundGoal,
+            avoid_entity::not_spectator,
+            follow_parent::FollowParentGoal,
+            look_around::RandomLookAroundGoal,
+            look_at_entity::{LookAtEntityGoal, LookTargetSlot},
+            swim::SwimGoal,
+            tempt::TemptGoal,
+            wander_around::WanderAroundGoal,
         },
         target_match::TargetMatch,
     },
@@ -229,10 +233,11 @@ impl PandaEntity {
 
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
+            let look_target = Arc::new(LookTargetSlot::default());
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(PandaPanicGoal::new(2.0)));
-            goal_selector.add_goal(2, Box::new(PandaBreedGoal::new(1.0)));
+            goal_selector.add_goal(2, Box::new(PandaBreedGoal::new(1.0, look_target.clone())));
             goal_selector.add_goal(3, Box::new(attack_goal(ATTACK_SPEED_MODIFIER)));
             goal_selector.add_goal(
                 4,
@@ -249,7 +254,8 @@ impl PandaEntity {
             goal_selector.add_goal(
                 9,
                 Box::new(PandaGoal::new(
-                    *LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                    (*LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0))
+                        .with_target_slot(look_target),
                     Self::can_perform_action,
                 )),
             );
@@ -1449,7 +1455,7 @@ mod tests {
                 BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
             );
         };
-        let mut goal = PandaBreedGoal::new(1.0);
+        let mut goal = PandaBreedGoal::new(1.0, Arc::default());
 
         set_tick(100);
         assert!(!goal.can_start(panda.as_ref()), "bred without bamboo");
@@ -1479,6 +1485,48 @@ mod tests {
         assert!(
             !goal.can_start(panda.as_ref()),
             "a sulking panda started to breed"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn the_sulk_points_the_look_goal_only_with_effective_ai() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        stone_floor(&world);
+        let panda = spawn_panda(&world, 0.5, 0.5);
+        let mate = spawn_panda(&world, 1.5, 0.5);
+        for in_love in [&panda, &mate] {
+            in_love.mob_entity.set_love_ticks(600, None);
+        }
+        let mob: Arc<dyn Mob> = panda.clone();
+        let slot = Arc::new(LookTargetSlot::default());
+        let mut sulk = PandaBreedGoal::new(1.0, slot.clone());
+        let mut look =
+            LookAtEntityGoal::new(Arc::downgrade(&mob), &EntityType::PLAYER, 6.0, 1.0, false)
+                .with_target_slot(slot.clone());
+
+        // The look goal starts from the preset target, and only the sulk can replace it with
+        // the nearest player (here there is none).
+        slot.set_target(Some(mate.clone()));
+        panda.mob_entity.set_no_ai(true);
+        panda.get_entity().tick_count.store(100, Ordering::Relaxed);
+        assert!(!sulk.can_start(panda.as_ref()));
+        assert!(
+            look.can_start(panda.as_ref()),
+            "a panda without AI changed its look target"
+        );
+        look.stop(panda.as_ref());
+
+        panda.mob_entity.set_no_ai(false);
+        panda.set_unhappy_counter(0);
+        panda.get_entity().tick_count.store(1000, Ordering::Relaxed);
+        slot.set_target(Some(mate));
+        assert!(!sulk.can_start(panda.as_ref()));
+        assert!(
+            !look.can_start(panda.as_ref()),
+            "the sulk did not set the look target"
         );
         world.level.shutdown().await;
         Ok(())

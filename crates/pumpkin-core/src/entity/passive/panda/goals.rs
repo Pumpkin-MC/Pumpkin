@@ -1,5 +1,6 @@
 //! Vanilla `Panda` inner goals that the shared goals cannot express.
 
+use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_data::Block;
@@ -13,11 +14,13 @@ use super::{PandaEntity, TOTAL_UNHAPPY_TIME, as_panda};
 use crate::entity::EntityBase;
 use crate::entity::ageable::AgeableMob;
 use crate::entity::ai::goal::breed::BreedGoal;
+use crate::entity::ai::goal::look_at_entity::LookTargetSlot;
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
 use crate::entity::ai::goal::try_find_water::TryFindWaterGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::mob::Mob;
 
@@ -48,6 +51,8 @@ const SIT_GROUND_ITEM_WALK_RANGE: f64 = 8.0;
 const SIT_GROUND_ITEM_SPEED: f64 = 1.2;
 /// Server ticks the panda waits after a sulk before it sulks about missing bamboo again.
 const UNHAPPY_COOLDOWN_TICKS: i32 = 600;
+/// `Panda.BREED_TARGETING` range: the sulk looks at the nearest player within this many blocks.
+const SULK_LOOK_RANGE: f64 = 8.0;
 
 type PandaCheck = fn(&PandaEntity) -> bool;
 
@@ -249,16 +254,32 @@ impl Goal for PandaPanicGoal {
 pub struct PandaBreedGoal {
     inner: Box<BreedGoal>,
     unhappy_cooldown: i32,
+    look_target: Arc<LookTargetSlot>,
 }
 
 impl PandaBreedGoal {
-    /// Vanilla `PandaBreedGoal(panda, speedModifier)`.
+    /// Vanilla `PandaBreedGoal(panda, speedModifier)`; `look_target` is the slot of the panda's
+    /// look goal, which the sulk points at the nearest player.
     #[must_use]
-    pub fn new(speed: f64) -> Self {
+    pub fn new(speed: f64, look_target: Arc<LookTargetSlot>) -> Self {
         Self {
             inner: BreedGoal::new(speed),
             unhappy_cooldown: 0,
+            look_target,
         }
+    }
+
+    /// `BREED_TARGETING`: the nearest player within 8 blocks that a non-combat check accepts.
+    fn nearest_player(mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let targeting =
+            TargetPredicate::create_non_attackable().set_base_max_distance(SULK_LOOK_RANGE);
+        world
+            .get_nearest_player(entity.pos.load(), SULK_LOOK_RANGE, |player| {
+                targeting.test(&world, Some(mob), player.as_ref())
+            })
+            .map(|player| player as Arc<dyn EntityBase>)
     }
 
     /// Vanilla `PandaBreedGoal.canFindBamboo`: a bamboo block within 7 blocks horizontally and 0
@@ -298,6 +319,9 @@ impl Goal for PandaBreedGoal {
         if self.unhappy_cooldown <= tick_count {
             panda.set_unhappy_counter(TOTAL_UNHAPPY_TIME);
             self.unhappy_cooldown = tick_count + UNHAPPY_COOLDOWN_TICKS;
+            if !panda.mob_entity.is_no_ai() {
+                self.look_target.set_target(Self::nearest_player(mob));
+            }
         }
         false
     }
