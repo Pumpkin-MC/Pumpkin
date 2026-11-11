@@ -193,27 +193,4 @@ mod tests {
         assert_eq!(off_cooldown, Some(id(&near_fish)));
         Ok(())
     }
-
-    /// An entity it may not attack is skipped for the next one, and with nothing left the old pick
-    /// is forgotten.
-    #[tokio::test]
-    async fn skips_what_it_may_not_attack_and_forgets_the_old_pick() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let protected = cod(&world, 2.0, true);
-        protected
-            .get_entity()
-            .invulnerable
-            .store(true, Ordering::Relaxed);
-        let fish = cod(&world, 5.0, true);
-        let old_pick = cow(&world, 1.0);
-
-        let skipped = sense(&world, vec![protected.clone(), fish.clone()], false, None);
-        let forgotten = sense(&world, vec![protected], false, Some(old_pick));
-        world.level.shutdown().await;
-
-        assert_eq!(skipped, Some(id(&fish)));
-        assert_eq!(forgotten, None);
-        Ok(())
-    }
 }

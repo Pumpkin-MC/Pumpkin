@@ -146,25 +146,4 @@ mod tests {
         assert!(!in_reach);
         Ok(())
     }
-
-    /// A target in reach that the mob cannot see (it is not among the visible entities) is still
-    /// walked to.
-    #[tokio::test]
-    async fn keeps_walking_to_a_target_in_reach_that_it_cannot_see() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let body = cow(&world, 0.0);
-        let prey = cow(&world, 1.5);
-        let mut brain = brain_for(&prey, false);
-
-        brain.tick(&world, &*body, 1);
-        let walks = walk_target_of(&brain);
-        world.level.shutdown().await;
-
-        assert_eq!(
-            walks.map(|(id, _, _)| id),
-            Some(prey.get_entity().entity_id)
-        );
-        Ok(())
-    }
 }

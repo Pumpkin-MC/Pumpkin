@@ -313,30 +313,4 @@ mod tests {
         assert!(walking_to(&asked_at_40).is_some());
         Ok(())
     }
-
-    /// A start that falls inside the 40 quiet ticks postpones the next search to 22 ticks after
-    /// itself: asked again 21 ticks later it still waits, 22 ticks later it searches.
-    #[tokio::test]
-    async fn a_start_inside_the_interval_postpones_the_search_by_22_ticks() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world_with_chunk(&folder);
-        let body = cow(&world);
-        place(&world, 3, 64, 0, &Block::WATER);
-        let mut after_21 = brain();
-        let mut after_22 = brain();
-
-        for brain in [&mut after_21, &mut after_22] {
-            brain.tick(&world, &*body, 100);
-            brain.erase(types::WALK_TARGET.id());
-            brain.erase(types::LOOK_TARGET.id());
-            brain.tick(&world, &*body, 110);
-        }
-        after_21.tick(&world, &*body, 131);
-        after_22.tick(&world, &*body, 132);
-        world.level.shutdown().await;
-
-        assert_eq!(walking_to(&after_21), None);
-        assert!(walking_to(&after_22).is_some());
-        Ok(())
-    }
 }

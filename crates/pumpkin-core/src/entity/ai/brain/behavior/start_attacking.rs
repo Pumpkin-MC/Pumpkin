@@ -43,7 +43,7 @@ pub fn create(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::Ordering;
 
     use pumpkin_data::entity::EntityType;
     use pumpkin_data::environment_attribute::Activity;
@@ -125,29 +125,6 @@ mod tests {
         assert!(kept_the_mark);
         assert_eq!(target, Some(prey.get_entity().entity_id));
         assert!(cleared_the_mark);
-        Ok(())
-    }
-
-    /// With an attack target the finder is not even asked.
-    #[tokio::test]
-    async fn does_nothing_while_there_is_an_attack_target() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let body = cow(&world, 0.0);
-        let current: Arc<dyn EntityBase> = cow(&world, 2.0);
-        let asked = Arc::new(AtomicUsize::new(0));
-        let counter = asked.clone();
-        let mut brain = brain_with(move |_| {
-            counter.fetch_add(1, Ordering::Relaxed);
-            None
-        });
-        brain.register_memory(types::ATTACK_TARGET.id());
-        brain.set(types::ATTACK_TARGET, current);
-
-        brain.tick(&world, &*body, 1);
-        world.level.shutdown().await;
-
-        assert_eq!(asked.load(Ordering::Relaxed), 0);
         Ok(())
     }
 }

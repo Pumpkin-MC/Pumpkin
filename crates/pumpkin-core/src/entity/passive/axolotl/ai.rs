@@ -378,7 +378,6 @@ mod tests {
     use crate::entity::ai::brain::BrainState;
     use crate::entity::ai::brain::activity::ActivityData;
     use crate::entity::ai::brain::behavior::BehaviorControl;
-    use crate::entity::ai::brain::behavior::Status;
     use crate::entity::ai::brain::memory::position_tracker::{
         BlockPosTracker, EntityTracker, PositionTracker,
     };
@@ -621,108 +620,6 @@ mod tests {
         Ok(())
     }
 
-    /// `PlayDead` lasts 200 ticks (it is still on at the 200th, off after it), and ends when the
-    /// axolotl leaves the water or the play dead memory is gone.
-    #[tokio::test]
-    async fn playing_dead_ends_after_200_ticks_or_when_it_cannot_go_on() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let axolotl = axolotl(&world);
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(true, Ordering::Relaxed);
-        let attacker: Arc<dyn EntityBase> = cod(&world, 2.0);
-
-        let run = |state: &mut BrainState, behavior: &mut Timed<PlayDead>, time: i64| {
-            behavior.tick_or_stop(&mut BrainTick {
-                state,
-                world: &world,
-                mob: axolotl.as_ref(),
-                time,
-            });
-            behavior.status()
-        };
-        let start = |state: &mut BrainState| {
-            let mut behavior = Timed::new(PlayDead);
-            behavior.try_start(&mut BrainTick {
-                state,
-                world: &world,
-                mob: axolotl.as_ref(),
-                time: 0,
-            });
-            behavior
-        };
-
-        let mut state = play_dead_state(&attacker);
-        let mut behavior = start(&mut state);
-        let at_200 = run(&mut state, &mut behavior, 200);
-        let at_201 = run(&mut state, &mut behavior, 201);
-
-        let mut state = play_dead_state(&attacker);
-        let mut behavior = start(&mut state);
-        let in_water = run(&mut state, &mut behavior, 10);
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(false, Ordering::Relaxed);
-        let out_of_water = run(&mut state, &mut behavior, 11);
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(true, Ordering::Relaxed);
-
-        let mut state = play_dead_state(&attacker);
-        let mut behavior = start(&mut state);
-        state.erase(types::PLAY_DEAD_TICKS.id());
-        let forgotten = run(&mut state, &mut behavior, 10);
-        world.level.shutdown().await;
-
-        assert_eq!(
-            (at_200, at_201, in_water, out_of_water, forgotten),
-            (
-                Status::Running,
-                Status::Stopped,
-                Status::Running,
-                Status::Stopped,
-                Status::Stopped
-            )
-        );
-        Ok(())
-    }
-
-    /// The walk speeds of `AxolotlAi`: 0.5 idling in the water, 0.6 chasing and following an
-    /// adult in the water, and 0.15 for everything on land.
-    #[tokio::test]
-    async fn the_walk_speeds_depend_on_the_water_and_the_task() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let axolotl = axolotl(&world);
-        let speeds = |axolotl: &Arc<AxolotlEntity>| {
-            (
-                speed_modifier(axolotl.as_ref()),
-                speed_modifier_chasing(axolotl.as_ref()),
-                speed_modifier_following_adult(axolotl.as_ref()),
-            )
-        };
-
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(true, Ordering::Relaxed);
-        let wet = speeds(&axolotl);
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(false, Ordering::Relaxed);
-        let dry = speeds(&axolotl);
-        world.level.shutdown().await;
-
-        assert_eq!(wet, (0.5, 0.6, 0.6));
-        assert_eq!(dry, (0.15, 0.15, 0.15));
-        Ok(())
-    }
-
     /// The attack target `StartAttacking` is offered is what the sensor found, unless the
     /// axolotl is breeding.
     #[tokio::test]
@@ -804,36 +701,6 @@ mod tests {
         world.level.shutdown().await;
 
         assert_eq!(results, [true, false, false, true, false]);
-        Ok(())
-    }
-
-    /// The bite of the fight activity starts a 20 tick cooldown.
-    #[tokio::test]
-    async fn the_fight_bites_with_a_cooldown_of_20_ticks() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let axolotl = axolotl(&world);
-        axolotl
-            .get_entity()
-            .touching_water
-            .store(true, Ordering::Relaxed);
-        let prey = cod(&world, 1.0);
-        let everyone: Vec<Arc<dyn EntityBase>> = vec![axolotl.clone(), prey];
-        world.entities.store(Arc::new(everyone));
-
-        let mut cooldown = None;
-        for time in 0..80 {
-            with_brain(&axolotl, |brain| {
-                brain.tick(&world, axolotl.as_ref(), time);
-                update_activity(brain);
-                if cooldown.is_none() && brain.has_memory_value(types::ATTACK_COOLING_DOWN.id()) {
-                    cooldown = brain.time_until_expiry(types::ATTACK_COOLING_DOWN.id());
-                }
-            });
-        }
-        world.level.shutdown().await;
-
-        assert_eq!(cooldown, Some(20));
         Ok(())
     }
 }

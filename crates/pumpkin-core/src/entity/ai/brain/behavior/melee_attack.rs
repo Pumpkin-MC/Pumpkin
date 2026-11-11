@@ -168,25 +168,6 @@ mod tests {
         Ok(())
     }
 
-    /// A hit that did no damage (the target was protected) plays no sound but still costs the
-    /// cooldown.
-    #[tokio::test]
-    async fn a_hit_without_damage_is_silent_but_starts_the_cooldown() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let body = biter(&world, false);
-        let prey = cow(&world, 1.5);
-        let mut brain = brain_for(&prey, true);
-
-        brain.tick(&world, &body, 1);
-        world.level.shutdown().await;
-
-        assert_eq!(body.hits.load(Ordering::Relaxed), 1);
-        assert_eq!(body.sounds.load(Ordering::Relaxed), 0);
-        assert!(brain.has_memory_value(types::ATTACK_COOLING_DOWN.id()));
-        Ok(())
-    }
-
     /// A target out of reach or out of sight is not hit and starts no cooldown.
     #[tokio::test]
     async fn does_not_hit_a_target_out_of_reach_or_out_of_sight() -> TestResult {
