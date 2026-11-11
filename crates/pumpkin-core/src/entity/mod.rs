@@ -4821,7 +4821,52 @@ impl Entity {
         reason = "callers pass owned or cast Arc<dyn EntityBase>"
     )]
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
-        let holder_entity_id = holder.get_entity().entity_id;
+        if self.fire_leash_event(&holder) {
+            self.attach_leash(&holder);
+        }
+    }
+
+    /// Moves the leash to `holder` only while `expected_holder_id` still holds it. The check and
+    /// the swap happen under one lock, so concurrent transfers (players' packets are handled in
+    /// parallel) cannot both win. Returns whether the leash moved.
+    pub fn leash_to_if_held_by(
+        &self,
+        expected_holder_id: i32,
+        holder: &Arc<dyn EntityBase>,
+    ) -> bool {
+        let held_by = |leashed_to: &Option<Weak<dyn EntityBase>>| {
+            leashed_to
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_some_and(|current| current.get_entity().entity_id == expected_holder_id)
+        };
+        // Cheap check first so the plugin event only fires for entities that will move. Each lock
+        // is released before the next call: the event and `attach_leash` may lock it again.
+        let held = held_by(
+            &self
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if !held || !self.fire_leash_event(holder) {
+            return false;
+        }
+        let mut leashed_to = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !held_by(&leashed_to) {
+            return false;
+        }
+        *leashed_to = Some(Arc::downgrade(holder));
+        drop(leashed_to);
+        self.attach_leash(holder);
+        true
+    }
+
+    /// Fires `PlayerLeashEntityEvent` when a player becomes the holder. Returns false if a plugin
+    /// cancelled it.
+    fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -4831,16 +4876,13 @@ impl Entity {
                 crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
                     player: player_arc,
                     entity_id: self.entity_id,
-                    holder_id: holder_entity_id,
+                    holder_id: holder.get_entity().entity_id,
                     cancelled: false,
                 };
             server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
+            return !event.cancelled;
         }
-
-        self.attach_leash(&holder);
+        true
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
