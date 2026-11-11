@@ -36,7 +36,7 @@ pub struct StackRequestItem {
     pub extra_data: Vec<u8>,
 }
 
-/// Simplified ingredient format used in CraftRecipeAuto action
+/// Simplified ingredient format used in `CraftRecipeAuto` action
 #[derive(Debug)]
 pub struct AutocraftIngredient {
     pub identifier: Option<String>,

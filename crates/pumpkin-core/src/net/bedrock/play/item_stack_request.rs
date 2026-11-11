@@ -428,60 +428,54 @@ impl BedrockClient {
                             // For CraftRecipeAuto, populate the crafting grid with the provided ingredients
                             if let ItemStackRequestAction::CraftRecipeAuto { ingredients, .. } =
                                 &action
+                                && !ingredients.is_empty()
+                                && repetitions > 0
                             {
-                                if !ingredients.is_empty() && repetitions > 0 {
-                                    let is_player = screen_handler.window_type().is_none();
-                                    let grid_size = if is_player { 4 } else { 9 };
-                                    let slot_base = if is_player { 28 } else { 32 };
+                                let is_player = screen_handler.window_type().is_none();
+                                let grid_size = if is_player { 4 } else { 9 };
+                                let slot_base = if is_player { 28 } else { 32 };
 
-                                    for (i, ingredient) in
-                                        ingredients.iter().take(grid_size).enumerate()
+                                for (i, ingredient) in
+                                    ingredients.iter().take(grid_size).enumerate()
+                                {
+                                    if ingredient.count > 0
+                                        && u8::try_from(ingredient.count).is_ok()
                                     {
-                                        if ingredient.count > 0
-                                            && u8::try_from(ingredient.count).is_ok()
+                                        let item_stack = if let Some(id_str) =
+                                            &ingredient.identifier
                                         {
-                                            let item_stack = if let Some(id_str) =
-                                                &ingredient.identifier
+                                            if let Some(java_item) =
+                                                pumpkin_data::item::Item::from_registry_key(id_str)
                                             {
-                                                if let Some(java_item) =
-                                                    pumpkin_data::item::Item::from_registry_key(
-                                                        id_str,
-                                                    )
-                                                {
-                                                    ItemStack::new(
-                                                        ingredient.count as u8,
-                                                        java_item,
-                                                    )
-                                                } else {
-                                                    tracing::warn!(
-                                                        "Failed to map bedrock item identifier '{}' to Java item",
-                                                        id_str
-                                                    );
-                                                    continue;
-                                                }
+                                                ItemStack::new(ingredient.count as u8, java_item)
                                             } else {
                                                 tracing::warn!(
-                                                    "Auto-craft ingredient has no identifier"
+                                                    "Failed to map bedrock item identifier '{}' to Java item",
+                                                    id_str
                                                 );
                                                 continue;
-                                            };
-
-                                            let slot_id = (slot_base + i) as u8;
-                                            update_slot_stack(
-                                                player,
-                                                &mut *screen_handler,
-                                                &ItemStackRequestSlotInfo {
-                                                    container_name: FullContainerName {
-                                                        container_name:
-                                                            ContainerName::CraftingInput,
-                                                        dynamic_id: None,
-                                                    },
-                                                    slot_id,
-                                                    stack_id: 0,
-                                                },
-                                                item_stack,
+                                            }
+                                        } else {
+                                            tracing::warn!(
+                                                "Auto-craft ingredient has no identifier"
                                             );
-                                        }
+                                            continue;
+                                        };
+
+                                        let slot_id = (slot_base + i) as u8;
+                                        update_slot_stack(
+                                            player,
+                                            &mut *screen_handler,
+                                            &ItemStackRequestSlotInfo {
+                                                container_name: FullContainerName {
+                                                    container_name: ContainerName::CraftingInput,
+                                                    dynamic_id: None,
+                                                },
+                                                slot_id,
+                                                stack_id: 0,
+                                            },
+                                            item_stack,
+                                        );
                                     }
                                 }
                             }
