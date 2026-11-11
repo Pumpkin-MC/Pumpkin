@@ -1,5 +1,7 @@
 use super::{
-    Entity, EntityBase, GearDamage, LeashTick, ai::pathfinder::Navigator, living::LivingEntity,
+    Entity, EntityBase, GearDamage, LeashTick,
+    ai::pathfinder::{Navigator, NavigatorGoal},
+    living::LivingEntity,
 };
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
@@ -850,6 +852,20 @@ impl MobEntity {
         self.target_selector.add_goal(priority, Box::new(goal));
     }
 
+    pub fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.steered()
+            .navigator()
+            .set_progress(NavigatorGoal::new(from, to, speed));
+    }
+
+    pub fn stop_navigation(&self) {
+        self.steered().navigator().stop();
+    }
+
+    pub fn set_navigation_speed(&self, speed: f64) {
+        self.steered().navigator().set_speed(speed);
+    }
+
     #[expect(
         clippy::needless_pass_by_value,
         reason = "matches Mob::apply_mob_target and Wasm host callers"
@@ -1532,6 +1548,18 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Takes the navigation lock, so callers must not already hold it.
     fn is_navigator_idle(&self) -> bool {
         self.get_mob_entity().steered().navigator().is_idle()
+    }
+
+    fn navigate_to(&self, from: Vector3<f64>, to: Vector3<f64>, speed: f64) {
+        self.get_mob_entity().navigate_to(from, to, speed);
+    }
+
+    fn stop_navigation(&self) {
+        self.get_mob_entity().stop_navigation();
+    }
+
+    fn set_navigation_speed(&self, speed: f64) {
+        self.get_mob_entity().set_navigation_speed(speed);
     }
 
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
