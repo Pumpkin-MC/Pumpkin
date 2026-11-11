@@ -36,6 +36,14 @@ pub struct StackRequestItem {
     pub extra_data: Vec<u8>,
 }
 
+/// Simplified ingredient format used in CraftRecipeAuto action
+#[derive(Debug)]
+pub struct AutocraftIngredient {
+    pub identifier: Option<String>,
+    pub aux_value: VarInt,
+    pub count: u16,
+}
+
 impl PacketRead for StackRequestItem {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let descriptor_type = VarUInt::read(reader)?.0;
@@ -67,6 +75,40 @@ impl PacketRead for StackRequestItem {
             count,
             block_runtime_id,
             extra_data,
+        })
+    }
+}
+
+impl PacketRead for AutocraftIngredient {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let descriptor_type = VarUInt::read(reader)?.0;
+        let _legacy_type = u8::read(reader)?;
+        let (identifier, aux_value) = match descriptor_type {
+            0 => (None, VarInt(0)),
+            1 => (Some(String::read(reader)?), VarInt::read(reader)?),
+            2 => {
+                // Molang expression - skip the expression string and version
+                let _expression = String::read(reader)?;
+                let _version = i16::read(reader)?;
+                (None, VarInt(0))
+            }
+            3 => {
+                // Item tag - skip the tag string
+                let _tag = String::read(reader)?;
+                (None, VarInt(0))
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("unknown autocraft ingredient descriptor type {descriptor_type}"),
+                ));
+            }
+        };
+        let count = i16::read(reader)? as u16;
+        Ok(Self {
+            identifier,
+            aux_value,
+            count,
         })
     }
 }
@@ -120,7 +162,7 @@ pub enum ItemStackRequestAction {
     CraftRecipeAuto {
         recipe_id: VarUInt,
         repetitions: u8,
-        ingredients: Vec<StackRequestItem>,
+        ingredients: Vec<AutocraftIngredient>,
     },
     CraftCreative {
         creative_item_id: VarUInt,
@@ -206,7 +248,7 @@ impl PacketRead for ItemStackRequestAction {
                 let ingredients_len = collection_length(buf, "auto-craft ingredients")?;
                 let mut ingredients = Vec::with_capacity(ingredients_len);
                 for _ in 0..ingredients_len {
-                    ingredients.push(StackRequestItem::read(buf)?);
+                    ingredients.push(AutocraftIngredient::read(buf)?);
                 }
                 Ok(Self::CraftRecipeAuto {
                     recipe_id,
