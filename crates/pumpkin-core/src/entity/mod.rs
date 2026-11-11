@@ -4887,11 +4887,14 @@ impl Entity {
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
-        *self
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *leashed_to = Some(Arc::downgrade(holder));
+        // Sent under the same lock, so clients get leash changes in the order they happened.
         self.send_leash_attached(holder);
+        drop(leashed_to);
     }
 
     /// Resets the leash motion and tells clients about the new holder. Does not lock `leashed_to`.
@@ -4947,16 +4950,18 @@ impl Entity {
             }
         }
 
-        let old_holder = self
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if old_holder.is_none() {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(old_holder) = leashed_to.take() else {
             return;
-        }
+        };
+        // Sent under the same lock, so clients get leash changes in the order they happened.
+        self.send_leash_removed();
+        drop(leashed_to);
 
-        if let Some(holder) = old_holder.as_ref().and_then(Weak::upgrade)
+        if let Some(holder) = old_holder.upgrade()
             && let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
@@ -4968,19 +4973,17 @@ impl Entity {
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-
-        self.send_leash_removed();
     }
 
     pub fn remove_leash(&self) {
-        let old_holder = self
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if old_holder.is_some() {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if leashed_to.take().is_some() {
             self.send_leash_removed();
         }
+        drop(leashed_to);
     }
 
     fn send_leash_removed(&self) {
