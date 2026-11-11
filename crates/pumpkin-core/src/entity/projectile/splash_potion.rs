@@ -91,32 +91,6 @@ fn rehydrates_axolotls(stack: &ItemStack) -> bool {
     )
 }
 
-/// Vanilla `AbstractThrownPotion.affectEntitiesAround`: a potion that rehydrates axolotls gives
-/// air back to those within 4 blocks sideways and 2 blocks up and down of the thrown potion.
-/// `excluded` are entity ids a plugin took out of the splash (`PotionSplashEvent`), which the
-/// potion then leaves alone.
-pub(crate) fn rehydrate_axolotls_around(
-    world: &Arc<crate::world::World>,
-    potion_bounds: &BoundingBox,
-    stack: &ItemStack,
-    excluded: &[i32],
-) {
-    if !rehydrates_axolotls(stack) {
-        return;
-    }
-    for entity in world.get_entities_at_box(&potion_bounds.expand(4.0, 2.0, 4.0)) {
-        if excluded.contains(&entity.get_entity().entity_id) {
-            continue;
-        }
-        if let Some(axolotl) = entity
-            .cast_any()
-            .downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>()
-        {
-            axolotl.rehydrate();
-        }
-    }
-}
-
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
 fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
     let air_state_id = Block::AIR.default_state.id;
@@ -267,10 +241,20 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
+        let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
+        if rehydrates_axolotls(&stack) {
+            for entity in world.get_all_at_box(&search_box) {
+                if let Some(axolotl) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>(
+                ) {
+                    axolotl.rehydrate();
+                }
+            }
+        }
         if self.hurts_water_sensitive_entities() {
             let owner = self.thrown.owner.get(&world);
             let potion_pos = self.get_entity().pos.load();
-            let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
             for entity in world.get_all_at_box(&search_box) {
                 if entity.get_living_entity().is_some()
                     && entity.is_sensitive_to_water()
@@ -294,9 +278,7 @@ impl EntityBase for SplashPotionEntity {
         }
 
         // If no effects, just splash (like water bottles)
-        let potion_bounds = self.get_entity().bounding_box.load();
         if effects.is_empty() {
-            rehydrate_axolotls_around(&world, &potion_bounds, &stack, &[]);
             return;
         }
 
@@ -327,7 +309,6 @@ impl EntityBase for SplashPotionEntity {
             }
         }
 
-        let mut removed_by_plugin: Vec<i32> = Vec::new();
         let affected_ids: Vec<i32> = affected
             .iter()
             .map(|(c, _)| c.get_entity().entity_id)
@@ -344,16 +325,8 @@ impl EntityBase for SplashPotionEntity {
             if event.cancelled {
                 return;
             }
-            removed_by_plugin = affected
-                .iter()
-                .map(|(c, _)| c.get_entity().entity_id)
-                .filter(|id| !event.affected_entities.contains(id))
-                .collect();
             affected.retain(|(c, _)| event.affected_entities.contains(&c.get_entity().entity_id));
         }
-        // Only a splash that no plugin cancelled rehydrates, and not the entities a plugin took
-        // out of it (a water potion with a custom effect goes through the event above).
-        rehydrate_axolotls_around(&world, &potion_bounds, &stack, &removed_by_plugin);
 
         let owner = self.thrown.owner.get(&world);
         for (cand, scale) in affected {
@@ -384,7 +357,6 @@ mod tests {
 
     use super::*;
     use crate::entity::{ai::test_support::world, passive::axolotl::AxolotlEntity};
-    use crate::item::items::glass_bottle::water_bottle;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -416,52 +388,6 @@ mod tests {
             .store(100, Ordering::Relaxed);
         world.spawn_entity(axolotl.clone());
         axolotl
-    }
-
-    /// Only the water potion is in the `rehydrates_axolotls` tag: not another potion, not a splash
-    /// potion without potion contents.
-    #[test]
-    fn only_the_water_potion_rehydrates_axolotls() {
-        assert!(rehydrates_axolotls(&potion_stack(&Potion::WATER)));
-        assert!(rehydrates_axolotls(&water_bottle()));
-        assert!(!rehydrates_axolotls(&potion_stack(&Potion::AWKWARD)));
-        assert!(!rehydrates_axolotls(&ItemStack::new(
-            1,
-            &Item::SPLASH_POTION
-        )));
-    }
-
-    /// A water potion gives 1800 air to the axolotls within 4 blocks sideways and 2 up or down of
-    /// it and to no others, and another potion gives none.
-    #[tokio::test]
-    async fn splash_water_rehydrates_the_axolotls_around_it() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let near = axolotl_at(&world, 3.0, 64.0);
-        let above = axolotl_at(&world, 0.0, 65.5);
-        let too_high = axolotl_at(&world, 0.0, 68.0);
-        let too_far = axolotl_at(&world, 8.0, 64.0);
-        let potion = BoundingBox::new(
-            Vector3::new(-0.125, 64.0, -0.125),
-            Vector3::new(0.125, 64.25, 0.125),
-        );
-
-        rehydrate_axolotls_around(&world, &potion, &potion_stack(&Potion::AWKWARD), &[]);
-        for axolotl in [&near, &above, &too_high, &too_far] {
-            assert_eq!(axolotl.get_entity().air_supply.load(Ordering::Relaxed), 100);
-        }
-
-        let left_out = [above.get_entity().entity_id];
-        rehydrate_axolotls_around(&world, &potion, &potion_stack(&Potion::WATER), &left_out);
-        let airs: Vec<i32> = [&near, &above, &too_high, &too_far]
-            .iter()
-            .map(|axolotl| axolotl.get_entity().air_supply.load(Ordering::Relaxed))
-            .collect();
-        assert_eq!(airs, [1900, 100, 100, 100]);
-        rehydrate_axolotls_around(&world, &potion, &potion_stack(&Potion::WATER), &[]);
-        assert_eq!(above.get_entity().air_supply.load(Ordering::Relaxed), 1900);
-        world.level.shutdown().await;
-        Ok(())
     }
 
     /// A water potion that hits the ground rehydrates the axolotls around it through the real
