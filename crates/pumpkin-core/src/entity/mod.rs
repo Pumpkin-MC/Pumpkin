@@ -4859,8 +4859,9 @@ impl Entity {
             return false;
         }
         *leashed_to = Some(Arc::downgrade(holder));
+        // The effects go out under the same lock, so a later unleash is applied and sent after them.
+        self.send_leash_attached(holder);
         drop(leashed_to);
-        self.attach_leash(holder);
         true
     }
 
@@ -4886,16 +4887,21 @@ impl Entity {
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
+        *self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
+        self.send_leash_attached(holder);
+    }
+
+    /// Resets the leash motion and tells clients about the new holder. Does not lock `leashed_to`.
+    fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
         self.leash_angular_momentum.store(0.0);
         *self
             .delayed_leash
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        *self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
 
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,
