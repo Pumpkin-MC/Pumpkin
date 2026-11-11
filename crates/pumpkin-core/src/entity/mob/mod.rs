@@ -1261,6 +1261,49 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+/// Vanilla `LivingEntity.dropFromGiftLootTable`: rolls the table at the mob and hands each
+/// stack a plugin did not cancel to `drop`. Returns whether anything was dropped.
+pub(crate) fn drop_from_gift_loot_table(
+    mob: &dyn Mob,
+    key: &str,
+    mut drop: impl FnMut(ItemStack),
+) -> bool {
+    let entity = mob.get_entity();
+    let world = entity.world.load_full();
+    let Some(table) = world.get_loot_table(key) else {
+        return false;
+    };
+    let this_entity: &dyn EntityBase = mob;
+    let params = crate::world::loot::LootContextParameters {
+        world: Some(&world),
+        position: Some(entity.pos.load()),
+        this_entity: Some(this_entity),
+        ..Default::default()
+    };
+    let drops =
+        crate::world::loot::generate_loot_from_handle(&table, mob.get_random().random(), &params);
+    let mut dropped = false;
+    for stack in drops {
+        let mut drop_event =
+            crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+                entity.entity_id,
+                format!("minecraft:{}", stack.item.registry_key),
+                stack.item_count,
+            );
+        if let Some(server) = world.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut drop_event);
+        }
+        if drop_event.cancelled {
+            continue;
+        }
+        drop(stack);
+        dropped = true;
+    }
+    dropped
+}
+
 pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
     let living = &mob.get_mob_entity().living_entity;
     let entity = &living.entity;
@@ -1852,6 +1895,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_on_flap(&self) {}
 
     /// See [`EntityBase::play_step_sound`].
+    fn mob_next_step(&self) -> f32 {
+        self.get_entity().default_next_step()
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         self.play_block_step_sound(state);
     }
@@ -2191,6 +2238,15 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    /// Vanilla `PathNavigation.isStableDestination`, for navigations a mob customizes.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_stable_destination(world, pos)
+    }
+
     fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
         self.as_animal()
             .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
@@ -2754,6 +2810,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn sound_source(&self) -> SoundCategory {
         self.mob_sound_source()
+    }
+
+    fn next_step(&self) -> f32 {
+        self.mob_next_step()
     }
 
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {

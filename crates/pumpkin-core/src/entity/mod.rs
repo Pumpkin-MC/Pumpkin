@@ -665,7 +665,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Vanilla `nextStep`: the `move_dist` at which the next step sound and event happen.
     fn next_step(&self) -> f32 {
-        (self.get_entity().move_dist.load() as i32 + 1) as f32
+        self.get_entity().default_next_step()
     }
 
     /// Vanilla `playStepSound`.
@@ -2006,6 +2006,12 @@ impl Entity {
                 },
             )
             .collect()
+    }
+
+    /// Vanilla `Entity.nextStep`: one block of walking past the current distance.
+    #[must_use]
+    pub fn default_next_step(&self) -> f32 {
+        (self.move_dist.load() as i32 + 1) as f32
     }
 
     /// The type's baby size for babies, its adult size otherwise.
