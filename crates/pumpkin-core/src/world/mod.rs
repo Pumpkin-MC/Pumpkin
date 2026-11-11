@@ -28,6 +28,7 @@ pub mod brightness;
 pub mod chunker;
 mod entity_index;
 pub(crate) use entity_index::EntityIndex;
+pub mod cat_spawner;
 pub mod entity_islands;
 pub mod explosion;
 pub mod game_event;
@@ -171,7 +172,7 @@ use pumpkin_world::{
     tick::{TickPriority, order},
 };
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::seq::SliceRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
@@ -270,6 +271,7 @@ pub struct World {
     poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
     pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
+    pub cat_spawner: cat_spawner::CatSpawner,
     pub village_siege: village_siege::VillageSiege,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
@@ -433,6 +435,7 @@ impl World {
             portal_poi: std::sync::Mutex::new(portal_poi),
             poi_chunk_receiver: std::sync::Mutex::new(poi_chunk_receiver),
             wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
+            cat_spawner: cat_spawner::CatSpawner::default(),
             village_siege: village_siege::VillageSiege::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
@@ -2318,6 +2321,7 @@ impl World {
         }
 
         if spawn_mobs && self.dimension == Dimension::OVERWORLD {
+            self.cat_spawner.tick(self);
             self.village_siege.tick(self, spawn_enemies);
             self.wandering_trader_spawner.tick(self);
         }
@@ -6463,6 +6467,19 @@ impl World {
             .world_gen
             .load()
             .has_structure_piece_at(pos, &wanted)
+    }
+
+    /// A random living player in this world.
+    #[must_use]
+    pub fn get_random_player(&self) -> Option<Arc<Player>> {
+        let players: Vec<_> = self
+            .players
+            .load()
+            .iter()
+            .filter(|player| player.living_entity.entity.is_alive())
+            .cloned()
+            .collect();
+        players.choose(&mut rng()).cloned()
     }
 
     pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
