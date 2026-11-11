@@ -176,7 +176,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
 impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> MoveToTargetPos
     for StepAndDestroyBlockGoal<S, M>
 {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         world.get_block(&block_pos).id == self.target_block.id
             && world.get_block_state(&block_pos.up()).is_air()
             && world.get_block_state(&block_pos.up_height(2)).is_air()

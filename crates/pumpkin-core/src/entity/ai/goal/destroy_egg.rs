@@ -93,7 +93,7 @@ impl Stepping for DestroyEggGoal {
 }
 
 impl MoveToTargetPos for DestroyEggGoal {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         self.step_and_destroy_block_goal
             .is_target_pos(world, block_pos)
     }
