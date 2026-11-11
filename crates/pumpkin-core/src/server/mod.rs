@@ -34,6 +34,8 @@ use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
+use pumpkin_util::GameMode;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
@@ -52,7 +54,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub mod builtin_game_tests;
+pub mod builtin_test_functions;
 mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
@@ -756,6 +758,15 @@ impl Server {
             advancements.player = Arc::downgrade(&player);
         };
 
+        self.admit_new_player(player, world, config)
+    }
+
+    fn admit_new_player(
+        self: &Arc<Self>,
+        player: Arc<Player>,
+        world: Arc<World>,
+        config: Option<PlayerConfig>,
+    ) -> Option<(Arc<Player>, Arc<World>)> {
         send_cancellable_blocking! {{
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
@@ -801,6 +812,66 @@ impl Server {
                 None
             }
         }}
+    }
+
+    /// Admits a server-controlled player without a network connection.
+    pub async fn spawn_simulated_player(
+        self: &Arc<Self>,
+        world: &Arc<World>,
+        name: &str,
+        position: Vector3<f64>,
+        gamemode: GameMode,
+    ) -> Result<Arc<Player>, String> {
+        if name.is_empty() || name.len() > 16 || name.chars().any(char::is_control) {
+            return Err("Invalid simulated player name".to_string());
+        }
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            return Err("Invalid simulated player position".to_string());
+        }
+        if !self
+            .worlds
+            .load()
+            .iter()
+            .any(|candidate| Arc::ptr_eq(candidate, world))
+        {
+            return Err("Simulated player world is not loaded by this server".to_string());
+        }
+        if self.get_player_by_name(name).is_some() {
+            return Err(format!("Player '{name}' is already online"));
+        }
+
+        let profile = GameProfile {
+            id: uuid::Uuid::new_v4(),
+            name: name.to_string(),
+            properties: ArcSwap::new(Arc::new(Vec::new())),
+            profile_actions: None,
+        };
+        let config = PlayerConfig {
+            server_listing: true,
+            ..PlayerConfig::default()
+        };
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::simulated()),
+            profile,
+            config.clone(),
+            world,
+            gamemode,
+        ));
+        player.living_entity.entity.set_pos(position);
+        player.has_played_before.store(true, Ordering::Relaxed);
+        player.on_screen_handler_opened(&player.player_screen_handler);
+        player
+            .advancements
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .player = Arc::downgrade(&player);
+
+        let Some((player, world)) = self.admit_new_player(player, world.clone(), Some(config))
+        else {
+            return Err("Simulated player login was cancelled".to_string());
+        };
+        world.announce_player_join(&player, self).await;
+        Ok(player)
     }
 
     pub fn remove_player(&self, player: &Player) {

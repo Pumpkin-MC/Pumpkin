@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_8x4x5",
+  "function": "pumpkin:comparator_dispenser_and_dropper_signal",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

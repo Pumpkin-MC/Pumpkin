@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:allay_interaction",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

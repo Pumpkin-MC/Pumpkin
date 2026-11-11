@@ -571,6 +571,13 @@ impl DatapackManager {
             .insert(key, table);
     }
 
+    pub fn remove_loot_table(&self, key: &str) {
+        self.loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(key);
+    }
+
     #[must_use]
     pub fn get_damage_type(&self, id: &str) -> Option<DamageType> {
         let guard = self

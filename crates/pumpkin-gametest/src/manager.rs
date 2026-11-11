@@ -674,6 +674,15 @@ impl GameTestRunner {
 
             managed.run.tick().await;
             if managed.run.state.is_finished() {
+                if let Err(error) = managed.run.disconnect_simulated_players().await {
+                    let tick = match &managed.run.state {
+                        GameTestState::Passed { tick } | GameTestState::Failed { tick, .. } => {
+                            *tick
+                        }
+                        _ => 0,
+                    };
+                    managed.run.state = GameTestState::Failed { tick, error };
+                }
                 managed.handle_completion();
                 if managed.rerun_scheduled {
                     managed.rerun_order = Some(self.next_rerun_order);

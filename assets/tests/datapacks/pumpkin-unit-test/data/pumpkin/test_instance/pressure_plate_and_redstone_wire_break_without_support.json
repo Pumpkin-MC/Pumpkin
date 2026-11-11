@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:pressure_plate_and_redstone_wire_break_without_support",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

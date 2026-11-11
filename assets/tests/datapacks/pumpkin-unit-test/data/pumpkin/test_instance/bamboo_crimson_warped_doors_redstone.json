@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_7x4x4",
+  "function": "pumpkin:bamboo_crimson_warped_doors_redstone",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

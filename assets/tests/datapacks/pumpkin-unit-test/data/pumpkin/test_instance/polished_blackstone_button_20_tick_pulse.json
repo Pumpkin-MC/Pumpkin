@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:polished_blackstone_button_20_tick_pulse",
+  "max_ticks": 35,
+  "setup_ticks": 0
+}

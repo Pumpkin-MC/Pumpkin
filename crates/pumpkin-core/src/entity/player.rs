@@ -945,6 +945,7 @@ impl Player {
         let supports_player_loaded = match client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
+            ClientPlatform::Simulated(_) => false,
         };
         let initially_loaded = !supports_player_loaded;
 
@@ -1439,6 +1440,10 @@ impl Player {
         let world = self.world();
         world.remove_player(self, true).await;
 
+        if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
+            return;
+        }
+
         let cylindrical = self.watched_section.load();
         self.clean_up_chunk_tickets(&world.level);
         if let Ok(mut sender) = self.chunk_sender.lock() {
@@ -1883,6 +1888,8 @@ impl Player {
                     send_bedrock_inventory_slot(bedrock, target, &packet.item.0);
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -3000,6 +3007,9 @@ impl Player {
             }
         }
 
+        if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
+            return;
+        }
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -3059,6 +3069,8 @@ impl Player {
                         tracing::error!("Failed to handle Bedrock play packet: {err}");
                     }
                 }
+
+                ClientPlatform::Simulated(_) => {}
             }
 
             count += 1;
@@ -3168,12 +3180,17 @@ impl Player {
         let version = match self.client.as_ref() {
             ClientPlatform::Java(java_client) => java_client.version.load(),
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
+            ClientPlatform::Simulated(_) => JavaMinecraftVersion::Unknown,
         };
 
         let view_distance = self.watched_section.load().view_distance;
-        let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
-        });
+        let prepared_batch = if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
+            None
+        } else {
+            self.chunk_sender.try_lock().ok().and_then(|mut sender| {
+                sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
+            })
+        };
 
         let total_sent_chunks = prepared_batch.map_or_else(
             || {
@@ -3231,6 +3248,8 @@ impl Player {
                     }
                     total_sent_chunks
                 }
+
+                ClientPlatform::Simulated(_) => 0,
             },
         );
 
@@ -3638,6 +3657,7 @@ impl Player {
         match self.client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
+            ClientPlatform::Simulated(_) => false,
         }
     }
 
@@ -3873,6 +3893,8 @@ impl Player {
                     bedrock.try_enqueue_packet(data);
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -4682,6 +4704,8 @@ impl Player {
                         }
                         self.bedrock_spawned.store(false, Ordering::Relaxed);
                     }
+
+                    ClientPlatform::Simulated(_) => {}
                 }
 
                 self.send_permission_lvl_update();
@@ -4771,6 +4795,12 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
+            }
+            ClientPlatform::Simulated(_) => {
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             }
         }
     }
@@ -4913,11 +4943,22 @@ impl Player {
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
             let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
-                player_arc,
+                player_arc.clone(),
                 message.clone().to_pretty_console(),
             );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
+                return;
+            }
+            if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
+                if !self.client.begin_simulated_disconnect() {
+                    return;
+                }
+                let server_clone = server.clone();
+                server.spawn_task(async move {
+                    player_arc.remove().await;
+                    server_clone.remove_player(&player_arc);
+                });
                 return;
             }
         }
@@ -8708,6 +8749,8 @@ impl InventoryPlayer for Player {
                     }
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -8779,6 +8822,8 @@ impl InventoryPlayer for Player {
                     }
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -8810,6 +8855,8 @@ impl InventoryPlayer for Player {
                     bedrock.try_enqueue_packet(data);
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -8881,6 +8928,8 @@ impl InventoryPlayer for Player {
                     _ => {}
                 }
             }
+
+            ClientPlatform::Simulated(_) => {}
         }
     }
 

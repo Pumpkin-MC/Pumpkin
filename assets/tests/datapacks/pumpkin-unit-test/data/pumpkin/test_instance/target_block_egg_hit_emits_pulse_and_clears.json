@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:target_block_egg_hit_emits_pulse_and_clears",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

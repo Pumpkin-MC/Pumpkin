@@ -1,19 +1,21 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex as StdMutex, Weak};
 
 use async_trait::async_trait;
-use pumpkin_data::translation::java;
 use pumpkin_data::{BlockState, BlockStateId};
+use pumpkin_data::{data_component_impl::EquipmentSlot, item_stack::ItemStack, translation::java};
 use pumpkin_gametest::{
     BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
     GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
-    TestStructureInstance, TestType, clear_placed_test, place_existing_structure, remove_barriers,
+    SimulatedPlayer, TestStructureInstance, TestType, clear_placed_test, place_existing_structure,
+    remove_barriers,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
@@ -25,6 +27,8 @@ use crate::{
         test_instance_block::TestInstanceBlockBlockEntity,
     },
     command::CommandSource,
+    entity::player::{ClientMove, ClientMoveOutcome, Player},
+    plugin::player::item_held::PlayerItemHeldEvent,
     server::Server,
     world::World,
 };
@@ -312,11 +316,6 @@ impl GameTestQueueEntry {
             .server
             .upgrade()
             .and_then(|server| server.datapack_manager.get_test_instance(&test_id))
-            .or_else(|| {
-                pumpkin_gametest::registered_test_definitions()
-                    .into_iter()
-                    .find_map(|(id, definition)| (id == test_id).then_some(definition))
-            })
             .is_none_or(|definition| definition.required);
         Self {
             test_id,
@@ -889,6 +888,7 @@ async fn clear_test_instance(
     let adapter = ServerGameTestWorld {
         world,
         forced_chunks: StdMutex::new(HashSet::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     };
     clear_placed_test(&adapter, &placement, padding).await?;
     Ok(true)
@@ -937,6 +937,7 @@ pub async fn reset_test_instance(
     let adapter = ServerGameTestWorld {
         world: world.clone(),
         forced_chunks: StdMutex::new(HashSet::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     };
     let placed = async {
         remove_barriers(&adapter, &placement, definition.sky_access).await?;
@@ -1047,15 +1048,10 @@ pub async fn prepare_test_run_with_reporter(
     request: GameTestQueueEntry,
     report_sink: Arc<dyn GameTestReporter>,
 ) -> GameTestResult<GameTestManager> {
-    crate::server::builtin_game_tests::ensure_builtin_game_tests_registered();
+    crate::server::builtin_test_functions::ensure_builtin_test_functions_registered();
     let test_instance = server
         .datapack_manager
         .get_test_instance(&request.test_id)
-        .or_else(|| {
-            pumpkin_gametest::registered_test_definitions()
-                .into_iter()
-                .find_map(|(id, def)| (id == request.test_id).then_some(def))
-        })
         .ok_or_else(|| {
             GameTestError::World(format!("Unknown test instance '{}'", request.test_id))
         })?;
@@ -1087,6 +1083,7 @@ pub async fn prepare_test_run_with_reporter(
     let adapter_world: Arc<dyn GameTestWorld> = Arc::new(ServerGameTestWorld {
         world: request.world,
         forced_chunks: StdMutex::new(HashSet::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     });
     let extra_rotation = GameTestRotation::from_steps(request.rotation_steps);
     let run = GameTestSession::new_with_extra_rotation(
@@ -1112,6 +1109,175 @@ pub(crate) struct ServerGameTestWorld {
     world: Arc<World>,
     /// Chunks leased by this test across copy-reset retries.
     forced_chunks: StdMutex<HashSet<(i32, i32)>>,
+    simulated_players: StdMutex<Vec<(String, Arc<ServerSimulatedPlayer>)>>,
+}
+
+static NEXT_SIMULATED_PLAYER_NAME: AtomicU64 = AtomicU64::new(1);
+
+fn unique_simulated_player_name(requested: &str) -> GameTestResult<String> {
+    if requested.is_empty() || requested.len() > 16 || requested.chars().any(char::is_control) {
+        return Err(GameTestError::World(
+            "Invalid simulated player name".to_string(),
+        ));
+    }
+    let suffix = format!(
+        "_{:x}",
+        NEXT_SIMULATED_PLAYER_NAME.fetch_add(1, Ordering::Relaxed)
+    );
+    let Some(max_prefix_bytes) = 16usize
+        .checked_sub(suffix.len())
+        .filter(|length| *length > 0)
+    else {
+        return Err(GameTestError::World(
+            "Simulated player name IDs are exhausted".to_string(),
+        ));
+    };
+    let mut prefix_bytes = requested.len().min(max_prefix_bytes);
+    while !requested.is_char_boundary(prefix_bytes) {
+        prefix_bytes -= 1;
+    }
+    if prefix_bytes == 0 {
+        return Err(GameTestError::World(
+            "Simulated player name cannot fit a unique suffix".to_string(),
+        ));
+    }
+    Ok(format!("{}{}", &requested[..prefix_bytes], suffix))
+}
+
+pub(crate) struct ServerSimulatedPlayer {
+    player: Arc<Player>,
+    server: Weak<Server>,
+}
+
+impl ServerSimulatedPlayer {
+    pub(crate) const fn player(&self) -> &Arc<Player> {
+        &self.player
+    }
+}
+
+#[async_trait]
+impl SimulatedPlayer for ServerSimulatedPlayer {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        &self.player.gameprofile.name
+    }
+
+    fn position(&self) -> pumpkin_util::math::vector3::Vector3<f64> {
+        self.player.position()
+    }
+
+    fn selected_hotbar_slot(&self) -> u8 {
+        self.player.inventory.get_selected_slot()
+    }
+
+    fn set_selected_hotbar_slot(&self, slot: u8) -> GameTestResult<()> {
+        if self.player.client.closed() {
+            return Err(GameTestError::World(
+                "Simulated player is disconnected".to_string(),
+            ));
+        }
+        if slot > 8 {
+            return Err(GameTestError::World("Invalid held slot".to_string()));
+        }
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let mut event = PlayerItemHeldEvent::new(
+            self.player.clone(),
+            self.player.inventory.get_selected_slot(),
+            slot,
+        );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return Err(GameTestError::World(
+                "Held slot change was cancelled".to_string(),
+            ));
+        }
+        self.player.inventory.set_selected_slot(slot);
+        self.player.living_entity.send_equipment_changes(&[(
+            EquipmentSlot::MAIN_HAND,
+            self.player.inventory.held_item(),
+        )]);
+        Ok(())
+    }
+
+    fn held_item(&self, hand: Hand) -> ItemStack {
+        self.player.inventory.get_stack_in_hand(hand)
+    }
+
+    fn set_held_item(&self, hand: Hand, stack: ItemStack) -> GameTestResult<()> {
+        if self.player.client.closed() {
+            return Err(GameTestError::World(
+                "Simulated player is disconnected".to_string(),
+            ));
+        }
+        self.player.inventory.set_stack_in_hand(hand, stack.clone());
+        let slot = match hand {
+            Hand::Right => EquipmentSlot::MAIN_HAND,
+            Hand::Left => EquipmentSlot::OFF_HAND,
+        };
+        self.player
+            .living_entity
+            .send_equipment_changes(&[(slot, stack)]);
+        Ok(())
+    }
+
+    async fn move_to(
+        &self,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<()> {
+        if self.player.client.closed() {
+            return Err(GameTestError::World(
+                "Simulated player is disconnected".to_string(),
+            ));
+        }
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let movement = ClientMove {
+            position: Some(position),
+            yaw: None,
+            pitch: None,
+            head_yaw: None,
+            on_ground: self
+                .player
+                .living_entity
+                .entity
+                .on_ground
+                .load(Ordering::Relaxed),
+            horizontal_collision: false,
+        };
+        match self.player.apply_client_move(&server, movement) {
+            ClientMoveOutcome::Applied => Ok(()),
+            ClientMoveOutcome::Rejected | ClientMoveOutcome::Ignored => Err(GameTestError::World(
+                "Simulated player movement was not applied".to_string(),
+            )),
+        }
+    }
+
+    async fn disconnect(&self) -> GameTestResult<()> {
+        if !self.player.client.begin_simulated_disconnect() {
+            return Ok(());
+        }
+        if self
+            .player
+            .world()
+            .get_player_by_uuid(self.player.gameprofile.id)
+            .is_none()
+        {
+            return Ok(());
+        }
+        self.player.remove().await;
+        if let Some(server) = self.server.upgrade() {
+            server.remove_player(&self.player);
+        }
+        Ok(())
+    }
 }
 
 impl ServerGameTestWorld {
@@ -1119,6 +1285,7 @@ impl ServerGameTestWorld {
         Self {
             world,
             forced_chunks: StdMutex::new(HashSet::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         }
     }
 
@@ -1565,6 +1732,69 @@ impl GameTestWorld for ServerGameTestWorld {
         Ok(())
     }
 
+    async fn spawn_simulated_player(
+        &self,
+        name: &str,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+        gamemode: GameMode,
+    ) -> GameTestResult<Arc<dyn SimulatedPlayer>> {
+        self.ensure_chunk_loaded(&BlockPos::floored_v(position))
+            .await;
+        let server = self
+            .world
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let unique_name = unique_simulated_player_name(name)?;
+        let player = server
+            .spawn_simulated_player(&self.world, &unique_name, position, gamemode)
+            .await
+            .map_err(GameTestError::World)?;
+        let simulated = Arc::new(ServerSimulatedPlayer {
+            player,
+            server: Arc::downgrade(&server),
+        });
+        self.simulated_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((name.to_string(), simulated.clone()));
+        Ok(simulated)
+    }
+
+    async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        let players = std::mem::take(
+            &mut *self
+                .simulated_players
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for (_, player) in players {
+            player.disconnect().await?;
+        }
+        Ok(())
+    }
+
+    async fn simulated_player_position(
+        &self,
+        name: &str,
+    ) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
+        let players = self
+            .simulated_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        players
+            .iter()
+            .rev()
+            .filter(|(requested, simulated)| {
+                requested.eq_ignore_ascii_case(name) || simulated.name().eq_ignore_ascii_case(name)
+            })
+            .find_map(|(_, simulated)| {
+                self.world
+                    .get_player_by_uuid(simulated.player.gameprofile.id)
+                    .map(|player| player.position())
+            })
+    }
+
     async fn spawn_item(
         &self,
         item_name: &str,
@@ -1847,6 +2077,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         let min = BlockPos::new(0, 64, 0);
         let max = BlockPos::new(16, 65, 16);
@@ -1883,6 +2114,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         adapter
             .spawn_entity("minecraft:pig", Vector3::new(8.5, 65.0, 8.5))
@@ -1911,6 +2143,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         adapter.clear_non_player_entities(&min, &max).await?;
         assert!(world.entities.load().is_empty());
@@ -1948,6 +2181,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", "minecraft:unknown_block_entity".to_string());

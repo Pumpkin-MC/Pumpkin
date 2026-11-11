@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_3x4x12",
+  "function": "pumpkin:powered_rail_deenergizes_beyond_8_blocks",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

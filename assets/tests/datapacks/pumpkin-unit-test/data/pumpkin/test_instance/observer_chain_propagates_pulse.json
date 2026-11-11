@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_7x4x5",
+  "function": "pumpkin:observer_chain_propagates_pulse",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

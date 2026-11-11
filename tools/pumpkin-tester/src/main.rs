@@ -1,24 +1,11 @@
 mod bot;
 mod bot_tests;
-mod gametests;
 mod harness;
 
-use std::{net::SocketAddr, process::ExitCode, sync::Arc, time::Instant};
+use std::{process::ExitCode, time::Instant};
 
-use pumpkin_core::server::Server;
-use pumpkin_gametest::GameTestRunner;
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-
-async fn run_all_suites(server: &Arc<Server>, addr: SocketAddr) -> Result<Vec<String>, String> {
-    let mut summary_lines = Vec::new();
-    let mut runner = GameTestRunner::new();
-
-    bot_tests::run_bot_tests(server, addr, &mut summary_lines).await?;
-    gametests::run_gametests(server, &mut runner, &mut summary_lines).await?;
-
-    Ok(summary_lines)
-}
 
 #[expect(
     clippy::print_stdout,
@@ -33,7 +20,7 @@ async fn main() -> ExitCode {
         .build_global();
 
     let start = Instant::now();
-    println!("Starting pumpkin-tester (single server + headless bots + Mojang GameTests)...");
+    println!("Starting pumpkin-tester (single server + headless bots)...");
 
     let temp_dir = match tempfile::tempdir() {
         Ok(dir) => dir,
@@ -72,7 +59,8 @@ async fn main() -> ExitCode {
     let tasks = TaskTracker::new();
     harness::spawn_java_listener(listener, server.clone(), cancel.clone(), &tasks);
 
-    let result = run_all_suites(&server, local_addr).await;
+    let mut summary_lines = Vec::new();
+    let result = bot_tests::run_bot_tests(&server, local_addr, &mut summary_lines).await;
 
     cancel.cancel();
     for player in server.get_all_players() {
@@ -84,12 +72,12 @@ async fn main() -> ExitCode {
     server.shutdown().await;
 
     match result {
-        Ok(lines) => {
-            for line in lines {
+        Ok(()) => {
+            for line in summary_lines {
                 println!("{line}");
             }
             println!(
-                "All bot integration tests and Mojang GameTests passed in {}ms!",
+                "All bot integration tests passed in {}ms!",
                 start.elapsed().as_millis()
             );
             ExitCode::SUCCESS

@@ -8,10 +8,10 @@ use std::time::Instant;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::block_based::BlockBasedTest;
-use crate::error::{GameTestError, GameTestResult};
-use crate::helper::{
-    GameTestControllerState, GameTestHelper, SequenceEvent, SequenceEventKind, get_test_function,
+use crate::context::{
+    GameTestContext, GameTestControllerState, SequenceEvent, SequenceEventKind, get_test_function,
 };
+use crate::error::{GameTestError, GameTestResult};
 use crate::model::{GameTestRotation, TestType};
 use crate::structure::clear_placed_test;
 use crate::structure::{
@@ -141,6 +141,7 @@ impl GameTestSession {
     }
 
     pub async fn clear_placement(&self) -> GameTestResult<()> {
+        self.world.disconnect_simulated_players().await?;
         if let Some(placement) = &self.placement {
             clear_placed_test(
                 self.world.as_ref(),
@@ -150,6 +151,10 @@ impl GameTestSession {
             .await?;
         }
         Ok(())
+    }
+
+    pub async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        self.world.disconnect_simulated_players().await
     }
 
     #[must_use]
@@ -373,7 +378,6 @@ impl GameTestSession {
                             .as_deref()
                             .and_then(get_test_function)
                     })
-                    .or_else(|| get_test_function(self.test.id()))
                     .ok_or_else(|| {
                         let name = self
                             .test
@@ -386,17 +390,17 @@ impl GameTestSession {
                         ))
                     })?;
 
-                let helper = self.make_helper(tick)?;
-                function.run(helper).await
+                let test = self.make_test_context(tick)?;
+                function.run(test).await
             }
         }
     }
 
-    fn make_helper(&self, tick: u32) -> GameTestResult<GameTestHelper> {
+    fn make_test_context(&self, tick: u32) -> GameTestResult<GameTestContext> {
         let placement = self.placement.ok_or_else(|| {
             GameTestError::World("GameTest has no placed structure instance".to_string())
         })?;
-        Ok(GameTestHelper::with_controller(
+        Ok(GameTestContext::with_controller(
             self.world.clone(),
             placement,
             tick,
@@ -410,7 +414,7 @@ impl GameTestSession {
         tick: u32,
         fail_if_not_complete: bool,
     ) -> GameTestResult<RunningEvaluation> {
-        let helper = self.make_helper(tick)?;
+        let test = self.make_test_context(tick)?;
 
         if let Some(eval) = self.check_controller_outcome() {
             return Ok(eval);
@@ -435,7 +439,7 @@ impl GameTestSession {
         };
 
         for mut callback in due_callbacks {
-            if let Err(error) = callback(helper.with_tick(tick)).await {
+            if let Err(error) = callback(test.with_tick(tick)).await {
                 self.controller
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -455,7 +459,7 @@ impl GameTestSession {
 
         for seq_idx in 0..sequence_count {
             if let Some(eval) = self
-                .tick_sequence(seq_idx, tick, &helper, fail_if_not_complete)
+                .tick_sequence(seq_idx, tick, &test, fail_if_not_complete)
                 .await
             {
                 return Ok(eval);
@@ -477,7 +481,7 @@ impl GameTestSession {
         &self,
         seq_idx: usize,
         tick: u32,
-        helper: &GameTestHelper,
+        test: &GameTestContext,
         fail_if_not_complete: bool,
     ) -> Option<RunningEvaluation> {
         loop {
@@ -496,7 +500,7 @@ impl GameTestSession {
 
             match event.kind {
                 SequenceEventKind::WaitUntil(mut callback) => {
-                    match callback(helper.with_tick(tick)).await {
+                    match callback(test.with_tick(tick)).await {
                         Ok(()) => {
                             if let Some(failure) = self.advance_sequence_tick(
                                 seq_idx,
@@ -525,7 +529,7 @@ impl GameTestSession {
                     }
                 }
                 SequenceEventKind::Execute(mut callback) => {
-                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                    if let Err(error) = callback(test.with_tick(tick)).await {
                         return Some(RunningEvaluation::Failed(error));
                     }
                     if let Some(failure) = self.advance_sequence_tick(
@@ -560,7 +564,7 @@ impl GameTestSession {
                         }
                         return None;
                     }
-                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                    if let Err(error) = callback(test.with_tick(tick)).await {
                         return Some(RunningEvaluation::Failed(error));
                     }
                     if let Some(failure) = self.advance_sequence_tick(
@@ -578,7 +582,7 @@ impl GameTestSession {
                     mut callback,
                 } => {
                     if tick < last_tick.saturating_add(delta) {
-                        if let Err(error) = callback(helper.with_tick(tick)).await {
+                        if let Err(error) = callback(test.with_tick(tick)).await {
                             return Some(RunningEvaluation::Failed(error));
                         }
                         self.push_front_sequence_event(

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_7x5x7",
+  "function": "pumpkin:shearing_tool_loot_and_item_events",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

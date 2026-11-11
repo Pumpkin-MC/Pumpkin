@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:hopper_feeds_furnace_top_and_side",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

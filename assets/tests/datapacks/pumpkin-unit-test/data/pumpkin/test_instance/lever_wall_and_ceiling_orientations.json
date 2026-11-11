@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_6x5x5",
+  "function": "pumpkin:lever_wall_and_ceiling_orientations",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

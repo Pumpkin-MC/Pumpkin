@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x5x5",
+  "function": "pumpkin:redstone_torch_inverter",
+  "max_ticks": 40,
+  "setup_ticks": 0
+}

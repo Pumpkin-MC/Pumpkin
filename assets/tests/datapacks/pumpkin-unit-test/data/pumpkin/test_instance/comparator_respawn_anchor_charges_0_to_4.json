@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_8x4x5",
+  "function": "pumpkin:comparator_respawn_anchor_charges_0_to_4",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_26x9x26",
+  "function": "pumpkin:polar_bear_cub_defense_and_target_lifecycle",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

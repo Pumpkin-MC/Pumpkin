@@ -651,6 +651,7 @@ impl TrackedEntity {
                         client.try_enqueue_packet(data);
                     }
                 }
+                ClientPlatform::Simulated(_) => {}
             }
         }
 
@@ -766,6 +767,7 @@ impl TrackedEntity {
                                 }
                             }
                         }
+                        ClientPlatform::Simulated(_) => {}
                     }
                 }
             }
@@ -810,6 +812,7 @@ impl TrackedEntity {
                                 client.try_enqueue_packet(data);
                             }
                         }
+                        ClientPlatform::Simulated(_) => {}
                     }
                 }
             }
@@ -846,6 +849,7 @@ impl TrackedEntity {
                         }
                     }
                 }
+                ClientPlatform::Simulated(_) => {}
             }
         }
 
@@ -885,6 +889,7 @@ impl TrackedEntity {
                         }
                     }
                 }
+                ClientPlatform::Simulated(_) => {}
             }
         }
     }
@@ -904,6 +909,7 @@ impl TrackedEntity {
                     client.try_enqueue_packet(data);
                 }
             }
+            ClientPlatform::Simulated(_) => {}
         }
     }
 
@@ -929,6 +935,7 @@ impl TrackedEntity {
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
         let recipients_by_version =
@@ -1035,6 +1042,7 @@ impl TrackedEntity {
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
         let recipients_by_version =
@@ -1113,6 +1121,7 @@ impl TrackedEntity {
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Simulated(_) => {}
             }
         }
         let recipients_by_version =

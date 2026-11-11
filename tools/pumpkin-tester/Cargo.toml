@@ -10,7 +10,6 @@ bytes.workspace = true
 pumpkin-config.workspace = true
 pumpkin-core.workspace = true
 pumpkin-data.workspace = true
-pumpkin-gametest.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-util.workspace = true
 rayon.workspace = true

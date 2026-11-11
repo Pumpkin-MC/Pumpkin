@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_8x4x4",
+  "function": "pumpkin:acacia_dark_oak_mangrove_cherry_doors_redstone",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

@@ -171,6 +171,12 @@ impl Player {
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
             }
+            ClientPlatform::Simulated(_) => {
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+            }
         }
     }
 

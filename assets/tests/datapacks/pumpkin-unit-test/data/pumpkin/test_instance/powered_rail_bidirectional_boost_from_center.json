@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_3x4x11",
+  "function": "pumpkin:powered_rail_bidirectional_boost_from_center",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

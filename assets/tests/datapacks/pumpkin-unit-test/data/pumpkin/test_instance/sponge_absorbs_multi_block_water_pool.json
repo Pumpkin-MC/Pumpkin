@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x4x5",
+  "function": "pumpkin:sponge_absorbs_multi_block_water_pool",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

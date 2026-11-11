@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_4x4x4",
+  "function": "pumpkin:farmland_turns_to_dirt_under_solid_block",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

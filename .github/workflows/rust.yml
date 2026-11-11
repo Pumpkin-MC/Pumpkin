@@ -185,8 +185,8 @@ jobs:
           python .github/scripts/ci_packages.py run --
           cargo test --doc --verbose
 
-  gametest:
-    name: GameTest and Bot Harness
+  bot:
+    name: Bot Harness
     needs: [prepare, format, machete, clippy, check_wit]
     if: >-
       !cancelled() &&
@@ -204,7 +204,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: debug-${{ runner.os }}-${{ runner.arch }}
-      - name: Run pumpkin-tester (headless bots + Mojang GameTests)
+      - name: Run pumpkin-tester (headless bots)
         run: cargo run -p pumpkin-tester
 
   test_android:

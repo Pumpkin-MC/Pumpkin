@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_6x4x6",
+  "function": "pumpkin:piston_pushes_west_and_east",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

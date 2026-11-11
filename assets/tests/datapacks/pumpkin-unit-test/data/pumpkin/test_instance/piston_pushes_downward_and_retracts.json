@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "pumpkin:empty_5x6x5",
+  "function": "pumpkin:piston_pushes_downward_and_retracts",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}
