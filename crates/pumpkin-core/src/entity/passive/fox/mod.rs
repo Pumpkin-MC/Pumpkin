@@ -349,7 +349,7 @@ impl FoxEntity {
         if !self.mob_entity.is_no_ai() {
             let in_water = entity.touching_water.load(Ordering::Relaxed);
             if self.is_sleeping()
-                && (in_water || self.mob_entity.get_target().is_some() || is_thundering(&world))
+                && (in_water || self.mob_entity.get_target().is_some() || world.is_thundering())
             {
                 self.set_sleeping(false);
             }
@@ -420,15 +420,6 @@ impl Animal for FoxEntity {
         });
         baby
     }
-}
-
-/// Vanilla `Level.isThundering`.
-fn is_thundering(world: &World) -> bool {
-    let weather = world
-        .weather
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    weather.thunder_level * weather.rain_level > 0.9
 }
 
 impl Mob for FoxEntity {

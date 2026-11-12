@@ -285,6 +285,18 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(clear_weather_time) = data.get_int("clearWeatherTime") {
         level_data.clear_weather_time = clear_weather_time;
     }
+    if let Some(raining) = data.get_bool("raining") {
+        level_data.raining = raining;
+    }
+    if let Some(rain_time) = data.get_int("rainTime") {
+        level_data.rain_time = rain_time;
+    }
+    if let Some(thundering) = data.get_bool("thundering") {
+        level_data.thundering = thundering;
+    }
+    if let Some(thunder_time) = data.get_int("thunderTime") {
+        level_data.thunder_time = thunder_time;
+    }
     if let Some(spawn_delay) = data.get_int("WanderingTraderSpawnDelay") {
         level_data.wandering_trader_spawn_delay = spawn_delay;
     }
@@ -420,6 +432,11 @@ impl WorldInfoReader for AnvilLevelInfo {
         {
             let weather = read_weather(level_folder);
             level_data.clear_weather_time = weather.clear_weather_time;
+            level_data.raining = weather.raining;
+            level_data.rain_time = weather.rain_time;
+            level_data.thundering = weather.thundering;
+            level_data.thunder_time = weather.thunder_time;
+            level_data.weather_phases = weather.custom_phases;
         }
 
         if minecraft_data_dir(level_folder)
@@ -504,6 +521,11 @@ impl WorldInfoWriter for AnvilLevelInfo {
         // weather.dat
         let mut weather = read_weather(level_folder);
         weather.clear_weather_time = info.clear_weather_time;
+        weather.raining = info.raining;
+        weather.rain_time = info.rain_time;
+        weather.thundering = info.thundering;
+        weather.thunder_time = info.thunder_time;
+        weather.custom_phases.clone_from(&info.weather_phases);
         weather.data_version = data_version;
         if let Err(e) = write_weather(level_folder, &weather) {
             error!("Failed to write weather.dat: {e}");
@@ -913,6 +935,11 @@ mod test {
             border_warning_blocks: 5.0,
             border_warning_time: 15.0,
             clear_weather_time: 0,
+            raining: false,
+            rain_time: 0,
+            thundering: false,
+            thunder_time: 0,
+            weather_phases: Vec::new(),
             wandering_trader_spawn_delay: 24_000,
             wandering_trader_spawn_chance: 25,
             data_packs: DataPacks {
@@ -1083,6 +1110,15 @@ mod test {
         level_data.data_version = 5023;
         level_data.day_time = 24000;
         level_data.clear_weather_time = 100;
+        level_data.raining = true;
+        level_data.rain_time = 4321;
+        level_data.thundering = true;
+        level_data.thunder_time = 1234;
+        level_data.weather_phases = vec![crate::world_info::data_files::SavedWeatherPhase {
+            id: "blood_moon".to_owned(),
+            time: 55,
+            active: true,
+        }];
         level_data.world_gen_settings = WorldGenSettings::new(Seed(9999));
 
         AnvilLevelInfo
@@ -1119,6 +1155,16 @@ mod test {
         // Verify weather.dat read
         let loaded_weather = crate::world_info::data_files::read_weather(temp_dir.path());
         assert_eq!(loaded_weather.clear_weather_time, 100);
+        assert!(loaded_weather.raining && loaded_weather.thundering);
+        assert_eq!(loaded_weather.rain_time, 4321);
+        assert_eq!(loaded_weather.thunder_time, 1234);
+
+        // The weather comes back with the world, too.
+        let reloaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+        assert!(reloaded.raining && reloaded.thundering);
+        assert_eq!(reloaded.rain_time, 4321);
+        assert_eq!(reloaded.thunder_time, 1234);
+        assert_eq!(reloaded.weather_phases, level_data.weather_phases);
 
         // Verify world_clocks.dat read
         let loaded_clocks = crate::world_info::data_files::read_world_clocks(temp_dir.path());

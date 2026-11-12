@@ -1,7 +1,7 @@
 interface server {
     use player.{player, ban-player-options, ban-ip-options, server-link, known-server-link, server-link-label};
     use common.{game-mode};
-    use %world.{%world};
+    use %world.{%world, world-weather-settings};
     use text.{text-component};
     use uuid.{uuid};
     use recipe.{recipe-manager};
@@ -194,6 +194,16 @@ interface server {
         /// Creates or loads a world by its name and dimension.
         /// If a world with the given name already exists, it will be returned.
         create-world: async func(name: string, dimension: dimension) -> %world;
+
+        /// Creates or loads a world with its own weather handling.
+        /// Returns an error for an unknown weather profile.
+        create-world-with-weather: async func(name: string, dimension: dimension, weather: world-weather-settings) -> result<%world, string>;
+
+        /// Registers a weather profile from JSON, replacing one with the same id.
+        /// Profiles are also loaded from `weather_profiles/<id>.json` in the world folder at startup.
+        /// A profile with the id `default` shapes the weather cycle the worlds share, but only when
+        /// it is loaded from the folder.
+        register-weather-profile: func(id: string, json: string) -> result<_, string>;
 
         /// Unloads and saves a world by its name or dimension.
         /// Returns an error if the world cannot be found, is the primary/default world, or still has players inside.
