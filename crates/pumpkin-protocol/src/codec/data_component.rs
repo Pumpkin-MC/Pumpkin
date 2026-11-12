@@ -294,7 +294,7 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
         for _ in 0..len {
             let id = seq.get_var_int()?.0 as u8;
             let level = seq.get_var_int()?.0;
-            if !(0..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+            if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
                 return Err(ReadingError::Message(format!(
                     "Enchantment level {level} out of range"
                 )));
@@ -901,7 +901,7 @@ impl DataComponentCodec<Self> for StoredEnchantmentsImpl {
         for _ in 0..len {
             let id = seq.get_var_int()?.0 as u8;
             let level = seq.get_var_int()?.0;
-            if !(0..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+            if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
                 return Err(ReadingError::Message(format!(
                     "Enchantment level {level} out of range"
                 )));
@@ -3635,7 +3635,7 @@ mod tests {
 
     #[test]
     fn enchantment_levels_outside_the_vanilla_range_are_rejected() {
-        for level in [0, 255] {
+        for level in [1, 255] {
             assert!(
                 EnchantmentsImpl::deserialize(
                     &mut enchantment_wire_bytes(Enchantment::RIPTIDE.id, level).as_slice()
@@ -3644,7 +3644,7 @@ mod tests {
                 "level {level} was rejected"
             );
         }
-        for level in [-1, 256, 2000] {
+        for level in [-1, 0, 256, 2000] {
             assert!(
                 EnchantmentsImpl::deserialize(
                     &mut enchantment_wire_bytes(Enchantment::RIPTIDE.id, level).as_slice()

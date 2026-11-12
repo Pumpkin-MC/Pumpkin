@@ -431,7 +431,6 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let stack = accessor.get_res(&res)?;
         let mut stack = stack.lock().await;
         let enc = from_wit_enchantment(enchantment);
-        let level = level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32;
 
         let mut current_encs = if let Some((_, Some(data))) = stack
             .patch
@@ -447,7 +446,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         };
 
         current_encs.retain(|(e, _)| e.id != enc.id);
-        current_encs.push((enc, level));
+        if level > 0 {
+            current_encs.push((enc, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+        }
 
         if let Some((_, data)) = stack
             .patch
@@ -548,7 +549,6 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         );
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
-            let level = level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32;
             let mut current_encs = if let Some((_, Some(data))) = stack
                 .patch
                 .iter()
@@ -563,7 +563,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
             };
 
             current_encs.retain(|(e, _)| e.id != vanilla.id);
-            current_encs.push((vanilla, level));
+            if level > 0 {
+                current_encs.push((vanilla, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+            }
 
             if let Some((_, data)) = stack
                 .patch
