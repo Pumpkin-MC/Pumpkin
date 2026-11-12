@@ -73,8 +73,11 @@ impl MangrovePropaguleBlock {
         } else {
             use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, bone_meal);
-            if !world.fire_block_event(pos, block, &mut event) {
-                return;
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
             }
             let mut random =
                 RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::random::<u64>()));

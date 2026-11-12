@@ -135,14 +135,17 @@ impl ItemBehaviour for BrushItem {
             return BlockActionResult::Consume;
         }
 
-        if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
             let mut event = crate::plugin::api::events::block::block_brush::BlockBrushEvent::new(
                 location,
                 world.clone(),
                 player_arc,
                 item.clone(),
             );
-            if !world.fire_block_event(&location, block, &mut event) {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
                 return BlockActionResult::Fail;
             }
         }

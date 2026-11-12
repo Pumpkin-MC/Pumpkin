@@ -839,7 +839,6 @@ impl BedrockClient {
                 let client = self.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                // TODO: commands write the world off-tick, racing tick read-then-write, run them in the tick
                 player.spawn_task(async move {
                     client.handle_chat_command(&player_c, &server_c, req).await;
                 });

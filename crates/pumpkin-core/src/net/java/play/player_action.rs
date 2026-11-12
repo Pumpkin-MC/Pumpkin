@@ -63,15 +63,21 @@ impl JavaClient {
                             return;
                         }
                     }
-                    // interact and damage events may move the player or change it
-                    if !Arc::ptr_eq(&player.world(), &world) {
-                        self.update_sequence(player_action.sequence.0);
-                        return;
-                    }
-                    let (block, state) = world.get_block_and_state(&position);
 
+                    let inventory = player.inventory();
+                    let held = inventory.held_item();
                     let gamemode = player.gamemode.load();
-                    if player.block_action_restricted(block) {
+                    let cannot_mine = !server.item_registry.can_mine(held.item, player)
+                        || gamemode == GameMode::Spectator
+                        || (gamemode == GameMode::Creative
+                            && held
+                                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+                                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+                        || (gamemode == GameMode::Adventure
+                            && !held
+                                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                                .is_some_and(|c| c.matches_block(block)));
+                    if cannot_mine {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
@@ -84,10 +90,9 @@ impl JavaClient {
                     // TODO: Config
                     if gamemode == GameMode::Creative {
                         // Block break & play sound
-                        let new_state = player.destroy_block(
-                            server,
-                            &world,
+                        let new_state = world.break_block(
                             &position,
+                            Some(player),
                             BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
@@ -110,15 +115,14 @@ impl JavaClient {
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {
-                            // fresh block: attack may change it
-                            let (block, broken_state) = world.get_block_and_state(&position);
+                            let broken_state = world.get_block_state(&position);
                             let can_harvest = player.can_harvest(broken_state, block);
                             let flags = if can_harvest {
                                 BlockFlags::NOTIFY_ALL
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
-                            let new_state = player.destroy_block(server, &world, &position, flags);
+                            let new_state = world.break_block(&position, Some(player), flags);
                             if new_state.is_some() {
                                 server.block_registry.broken(
                                     &world,
@@ -220,10 +224,9 @@ impl JavaClient {
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block);
 
-                    let new_state = player.destroy_block(
-                        server,
-                        &world,
+                    let new_state = world.break_block(
                         &location,
+                        Some(player),
                         if block_drop {
                             BlockFlags::NOTIFY_ALL
                         } else {
@@ -299,7 +302,6 @@ impl JavaClient {
         );
     }
 
-    // TODO: skip when the player left `world` (event world transfer)
     fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
         self.try_send_packet(&CBlockUpdate::new(

@@ -94,19 +94,21 @@ impl BlockBehaviour for FarmlandBlock {
             || is_water_nearby(args.world, args.position)
         {
             if props.moisture < 7 {
-                let mut event =
-                    crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
-                        *args.position,
-                        args.world.clone(),
-                        7,
-                    );
-                if !args
-                    .world
-                    .fire_block_event(args.position, args.block, &mut event)
-                {
-                    return;
+                let mut new_moisture = 7;
+                if let Some(server) = args.world.server.upgrade() {
+                    let mut event =
+                        crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                            *args.position,
+                            args.world.clone(),
+                            new_moisture,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_moisture = event.new_moisture;
                 }
-                props.moisture = event.new_moisture.clamp(0, 7) as u8;
+                props.moisture = new_moisture.clamp(0, 7) as u8;
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
@@ -127,19 +129,21 @@ impl BlockBehaviour for FarmlandBlock {
                 );
             }
         } else {
-            let mut event =
-                crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
-                    *args.position,
-                    args.world.clone(),
-                    (props.moisture as i32 - 1).clamp(0, 7),
-                );
-            if !args
-                .world
-                .fire_block_event(args.position, args.block, &mut event)
-            {
-                return;
+            let mut new_moisture = (props.moisture as i32 - 1).clamp(0, 7);
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                        new_moisture,
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+                new_moisture = event.new_moisture;
             }
-            props.moisture = event.new_moisture.clamp(0, 7) as u8;
+            props.moisture = new_moisture.clamp(0, 7) as u8;
             args.world.set_block_state(
                 args.position,
                 props.to_state_id(args.block),

@@ -60,11 +60,6 @@ impl JavaClient {
                 }
             }}
 
-            // event may move the player or change it
-            if !Arc::ptr_eq(&player.world(), &world) {
-                return Ok(());
-            }
-            let block = world.get_block(&position);
             if let Some(factory) = server
                 .block_registry
                 .get_screen_handler_factory(block, player, &position, server, &world)
@@ -73,6 +68,17 @@ impl JavaClient {
             }
             return Ok(());
         }
+
+        let inventory = player.inventory();
+        let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item();
+        let held_item_empty = held_item.is_empty();
+        let off_hand_item_empty = off_hand_item.is_empty();
+
+        let mut item = inventory.get_stack_in_hand(hand);
+        let before = item.clone();
+        let item_id = item.item.id;
+        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
@@ -98,25 +104,6 @@ impl JavaClient {
             }
         }}
 
-        // event may move the player or change the block and hand
-        if !Arc::ptr_eq(&player.world(), &world) {
-            return Ok(());
-        }
-        let block = world.get_block(&position);
-
-        let inventory = player.inventory();
-        let held_item = inventory.held_item();
-        let off_hand_item = inventory.off_hand_item();
-        let held_item_empty = held_item.is_empty();
-        let off_hand_item_empty = off_hand_item.is_empty();
-
-        let mut item = inventory.get_stack_in_hand(hand);
-        let before = item.clone();
-        // TODO: stat event may move the player or change block and hand, recheck after it
-        if !item.is_empty() {
-            player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
-        }
-
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
         } else {
@@ -139,8 +126,6 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
-                // advancement reads the result
-                let (block, state_id) = world.get_block_and_state_id(&position);
                 let state =
                     pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                         block.id,
@@ -148,7 +133,7 @@ impl JavaClient {
                     .then(|| {
                         let props =
                             pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                                state_id,
+                                world.get_block_state(&position).id,
                             );
                         ("lit".to_string(), props.r#lit.to_string())
                     });
@@ -199,9 +184,6 @@ impl JavaClient {
             return Ok(());
         }
 
-        // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
-        // fresh block: event and block handlers may change it
-        let block = world.get_block(&position);
         let item_result = server
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
@@ -226,14 +208,12 @@ impl JavaClient {
         let after = item.clone();
 
         if item_result.consumes_action() || !item.are_equal(&before) {
-            // fresh block: advancement reads the result
-            let (block, state_id) = world.get_block_and_state_id(&position);
             let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                 block.id,
             )
             .then(|| {
                 let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                    state_id,
+                    world.get_block_state(&position).id,
                 );
                 ("lit".to_string(), props.r#lit.to_string())
             });

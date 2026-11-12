@@ -797,7 +797,6 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                // TODO: commands write the world off-tick, racing tick read-then-write, run them in the tick
                 server.spawn_task(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         let packet = SChatCommand { command: &cmd };
@@ -820,7 +819,6 @@ impl JavaClient {
                 let client_platform = player.client.clone();
                 let player_c = player.clone();
                 let server_c = server.clone();
-                // TODO: commands write the world off-tick, racing tick read-then-write; run them in the tick
                 server.spawn_task(async move {
                     if let ClientPlatform::Java(client) = client_platform.as_ref() {
                         let packet = SChatCommand { command: &cmd };
