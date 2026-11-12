@@ -55,11 +55,22 @@ impl ItemBehaviour for GoatHornItem {
         let volume = instrument.range() / 16.0;
         let world = player.world();
         let pos = player.position();
-
+        // Mirrors InstrumentItem#use: cooldown matches the instrument's use duration.
+        // The client identifies the default group by the item's namespaced id, so
+        // normalize the component value the same way or a datapack group like
+        // "minecraft:goat_horn" would get a different server key than the default.
         let cooldown_group = stack
             .get_use_cooldown()
             .and_then(|c| c.cooldown_group.clone())
-            .unwrap_or_else(|| item.registry_key.to_string());
+            .map_or_else(
+                || format!("minecraft:{}", item.registry_key),
+                |group| {
+                    let name = group
+                        .rsplit_once(':')
+                        .map_or(group.as_str(), |(_, name)| name);
+                    format!("minecraft:{name}")
+                },
+            );
         if player.is_on_cooldown(&cooldown_group) {
             return;
         }
