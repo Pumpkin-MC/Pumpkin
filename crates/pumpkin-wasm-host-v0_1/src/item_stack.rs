@@ -277,11 +277,15 @@ impl HostItemStack for PluginHostState {
         let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
 
-        stack.set_custom_data(
-            "pumpkin:enchantments",
-            &enchantment_id,
-            NbtTag::Int(level as i32),
-        );
+        if level == 0 {
+            stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
+        } else {
+            stack.set_custom_data(
+                "pumpkin:enchantments",
+                &enchantment_id,
+                NbtTag::Int(level as i32),
+            );
+        }
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
             let mut current_encs = if let Some((_, Some(data))) = stack
